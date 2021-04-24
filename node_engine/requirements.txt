@@ -1,0 +1,10 @@
+psutil
+Flask
+Flask-MQTT
+docker==3.4.1
+APScheduler
+python-socketio[client]
+GPUtil
+tabulate
+requests
+gitpython

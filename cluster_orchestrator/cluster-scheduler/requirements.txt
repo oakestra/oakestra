@@ -1,0 +1,6 @@
+flask
+flask_pymongo
+celery
+redis
+requests
+pymongo

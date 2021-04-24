@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="BranchesTreeState">
+    <expand>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="LOCAL_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="REMOTE_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="REMOTE_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="GROUP_NODE:origin" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+    </expand>
+    <select />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="ff6393a1-bf71-48b0-89f3-675963c7d80b" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/../../../latex/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/../../../latex/Makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../../latex/build/main.pdf" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../../latex/chapters/03_mainpart.tex" beforeDir="false" afterPath="$PROJECT_DIR$/../../../latex/chapters/03_mainpart.tex" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../../latex/chapters/04_evaluation.tex" beforeDir="false" afterPath="$PROJECT_DIR$/../../../latex/chapters/04_evaluation.tex" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../../latex/main.pdf" beforeDir="false" afterPath="$PROJECT_DIR$/../../../latex/main.pdf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../../latex/main.tex" beforeDir="false" afterPath="$PROJECT_DIR$/../../../latex/main.tex" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../../latex/settings.tex" beforeDir="false" afterPath="$PROJECT_DIR$/../../../latex/settings.tex" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../system-manager-python/start-up.sh" beforeDir="false" afterPath="$PROJECT_DIR$/../system-manager-python/start-up.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../cluster/edge/node-engine/start-up.sh" beforeDir="false" afterPath="$PROJECT_DIR$/../../cluster/edge/node-engine/start-up.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../deploy_image_detection.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../../deploy_image_detection.yaml" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="FlaskConsoleOptions" custom-start-script="import sys&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;from flask.cli import ScriptInfo&#10;locals().update(ScriptInfo(create_app=None).load_app().make_shell_context())&#10;print(&quot;Python %s on %s\nApp: %s [%s]\nInstance: %s&quot; % (sys.version, sys.platform, app.import_name, app.env, app.instance_path))">
+    <envs>
+      <env key="FLASK_APP" value="app" />
+    </envs>
+    <option name="myCustomStartScript" value="import sys&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;from flask.cli import ScriptInfo&#10;locals().update(ScriptInfo(create_app=None).load_app().make_shell_context())&#10;print(&quot;Python %s on %s\nApp: %s [%s]\nInstance: %s&quot; % (sys.version, sys.platform, app.import_name, app.env, app.instance_path))" />
+    <option name="myEnvs">
+      <map>
+        <entry key="FLASK_APP" value="app" />
+      </map>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/../../.." />
+  </component>
+  <component name="JupyterTrust" id="ad03d616-8bd2-46d1-9a62-13cbeb2e4faa" />
+  <component name="ProjectId" id="1i0Syr7ZLhfsctLBmMOOy0vDIru" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">
+    <property name="ASKED_MARK_IGNORED_FILES_AS_EXCLUDED" value="true" />
+    <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
+    <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="add_unversioned_files" value="true" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="restartRequiresConfirmation" value="false" />
+    <property name="settings.editor.selected.configurable" value="tasks.servers" />
+  </component>
+  <component name="RunManager" selected="Python.cloud-scheduler">
+    <configuration name="celery" type="PythonConfigurationType" factoryName="Python">
+      <module name="cloud-scheduler" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="CLOUD_MONGO_URL" value="3.120.37.66" />
+        <env name="CLOUD_MONGO_PORT" value="10007" />
+        <env name="SYSTEM_MANAGER_URL" value="localhost" />
+        <env name="SYSTEM_MANAGER_PORT" value="10000" />
+        <env name="REDIS_ADDR" value="redis://:cloudRedis@3.120.37.66:6379" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.venv/bin" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/.venv/bin/celery" />
+      <option name="PARAMETERS" value="-A cloud_scheduler.celeryapp worker --concurrency=3 --loglevel=DEBUG" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="celery_cluster_screener" type="PythonConfigurationType" factoryName="Python">
+      <module name="cloud-scheduler" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="CLOUD_MONGO_URL" value="3.120.37.66" />
+        <env name="CLOUD_MONGO_PORT" value="10007" />
+        <env name="SYSTEM_MANAGER_URL" value="localhost" />
+        <env name="SYSTEM_MANAGER_PORT" value="10000" />
+        <env name="REDIS_ADDR" value="redis://:cloudRedis@3.120.37.66:6379" />
+      </envs>
+      <option name="SDK_HOME" value="$PROJECT_DIR$/.venv/bin/python" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.venv/bin" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/.venv/bin/celery" />
+      <option name="PARAMETERS" value="-A cloud_scheduler.celeryapp beat --loglevel=DEBUG" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="cloud-scheduler" type="PythonConfigurationType" factoryName="Python">
+      <module name="cloud-scheduler" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="CLOUD_MONGO_URL" value="3.120.37.66" />
+        <env name="CLOUD_MONGO_PORT" value="10007" />
+        <env name="SYSTEM_MANAGER_URL" value="localhost" />
+        <env name="SYSTEM_MANAGER_PORT" value="10000" />
+        <env name="REDIS_ADDR" value="redis://:cloudRedis@3.120.37.66:6379" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/cloud_scheduler.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="Python.cloud-scheduler" />
+      <item itemvalue="Python.celery" />
+      <item itemvalue="Python.celery_cluster_screener" />
+    </list>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="SvnConfiguration">
+    <configuration />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="ff6393a1-bf71-48b0-89f3-675963c7d80b" name="Default Changelist" comment="" />
+      <created>1601043274518</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1601043274518</updated>
+      <workItem from="1601043275663" duration="3662000" />
+      <workItem from="1601306608437" duration="596000" />
+      <workItem from="1606955713633" duration="14304000" />
+      <workItem from="1607430508963" duration="30301000" />
+      <workItem from="1607694094356" duration="599000" />
+      <workItem from="1607814314650" duration="1284000" />
+      <workItem from="1607873482901" duration="4246000" />
+      <workItem from="1607988654352" duration="3201000" />
+      <workItem from="1608775185923" duration="2583000" />
+      <workItem from="1608939042576" duration="1849000" />
+      <workItem from="1610240024464" duration="12622000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="2" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="oldMeFiltersMigrated" value="true" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/cloud_scheduler.py</url>
+          <line>92</line>
+          <option name="timeStamp" value="10" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/cloud_scheduler.py</url>
+          <line>90</line>
+          <option name="timeStamp" value="12" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/cloud_scheduler.py</url>
+          <line>47</line>
+          <option name="timeStamp" value="13" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/cloud_scheduler.py</url>
+          <line>51</line>
+          <option name="timeStamp" value="14" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/calculation.py</url>
+          <line>6</line>
+          <option name="timeStamp" value="15" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/cloud_scheduler.py</url>
+          <line>87</line>
+          <option name="timeStamp" value="16" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+</project>
