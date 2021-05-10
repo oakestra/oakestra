@@ -54,18 +54,19 @@ func (t *TableManager) Add(entry TableEntry) error {
 	return errors.New("InvalidEntry")
 }
 
-func (t *TableManager) SearchByServiceIP(ip ServiceIP) (TableEntry, error) {
+func (t *TableManager) SearchByServiceIP(ip net.IP) []TableEntry {
+	result := make([]TableEntry, 0)
 	t.rwlock.Lock()
 	defer t.rwlock.Unlock()
 	for _, tableElement := range t.translationTable {
 		for _, elemip := range tableElement.serviceIP {
-			if elemip.address.Equal(ip.address) {
+			if elemip.address.Equal(ip) {
 				returnEntry := tableElement
-				return returnEntry, nil
+				result = append(result, returnEntry)
 			}
 		}
 	}
-	return TableEntry{}, errors.New("EntryNotFound")
+	return result
 }
 
 //Sanity chceck for appname and namespace

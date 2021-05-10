@@ -30,6 +30,7 @@ type Environment struct {
 	nextVethNumber    int
 	proxyName         string
 	config            Configuration
+	translationTable  TableManager
 }
 
 // current network interfaces in the system
@@ -52,6 +53,7 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 		nextVethNumber:    0,
 		proxyName:         proxyname,
 		config:            customConfig,
+		translationTable:  NewTableManager(),
 	}
 
 	//create bridge
@@ -398,13 +400,16 @@ func (env *Environment) CreateHostBridge() (string, error) {
 	return env.config.HostBridgeName, nil
 }
 
-func nextIP(ip net.IP, inc uint) net.IP {
-	i := ip.To4()
-	v := uint(i[0])<<24 + uint(i[1])<<16 + uint(i[2])<<8 + uint(i[3])
-	v += inc
-	v3 := byte(v & 0xFF)
-	v2 := byte((v >> 8) & 0xFF)
-	v1 := byte((v >> 16) & 0xFF)
-	v0 := byte((v >> 24) & 0xFF)
-	return net.IPv4(v0, v1, v2, v3)
+//ServiceIP translation table entry fetch
+//Given a ServiceIP this method performs a search in the local ServiceCache
+//If the entry is not present a TableQuery is performed and the interest registered
+func (env *Environment) getTableEntryByServiceIP(ip net.IP) []TableEntry {
+	//If entry already available
+	table := env.translationTable.SearchByServiceIP(ip)
+	if len(table) > 0 {
+		return table
+	}
+	//If no entry available -> TableQuery
+	//TODO
+	return table
 }

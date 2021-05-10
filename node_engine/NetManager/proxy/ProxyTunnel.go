@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"../env"
 	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -33,6 +34,7 @@ type GoProxyTunnel struct {
 	TunnelPort        int
 	listenConnection  *net.UDPConn
 	bufferPort        int
+	environment       env.Environment
 }
 
 // create a  new GoProxyTunnel as a Tun device that listen for packets and forward them to an handler function
@@ -62,6 +64,10 @@ func New() GoProxyTunnel {
 	log.Printf("Created ProxyTun device: %s\n", proxy.ifce.Name())
 
 	return proxy
+}
+
+func (proxy *GoProxyTunnel) setEnvironment(env env.Environment) {
+	proxy.environment = env
 }
 
 //handler function for all outgoing messages that are received by the TUN device
