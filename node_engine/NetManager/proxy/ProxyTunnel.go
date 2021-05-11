@@ -119,7 +119,6 @@ func (proxy *GoProxyTunnel) ingoingMessage(packet gopacket.Packet) {
 
 			//proxyConversion
 			newPacket := proxy.ingoingProxy(packet)
-			//newTcpLayer := newPacket.Layer(layers.LayerTypeTCP)
 
 			//send message to TUN
 			_, err := proxy.ifce.Write(packetToByte(newPacket))
@@ -144,7 +143,6 @@ func (proxy *GoProxyTunnel) outgoingProxy(packet gopacket.Packet) gopacket.Packe
 				log.Println("Received proxy packet for the subnetwork ", proxy.ProxyIpSubnetwork.IP.String())
 				log.Println("From src ip ", ipv4.SrcIP, " to dst ip ", ipv4.DstIP)
 
-				//TODO ADD IP CONVERSION LOGIC, buffer port is just a placeholder
 				//Check proxy cache
 				entry, exist := proxy.cache.RetrieveByServiceIP(ipv4.SrcIP, int(tcp.SrcPort), ipv4.DstIP)
 				if !exist {
