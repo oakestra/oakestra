@@ -15,6 +15,7 @@ const NamespaceAlreadyDeclared string = "namespace already declared"
 
 type EnvironmentManager interface {
 	GetTableEntryByServiceIP(ip net.IP) []TableEntry
+	GetTableEntryByNsIP(ip net.IP) (TableEntry, bool)
 }
 
 // Config
@@ -404,7 +405,6 @@ func (env *Environment) CreateHostBridge() (string, error) {
 	return env.config.HostBridgeName, nil
 }
 
-//ServiceIP translation table entry fetch
 //Given a ServiceIP this method performs a search in the local ServiceCache
 //If the entry is not present a TableQuery is performed and the interest registered
 func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
@@ -414,6 +414,31 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 		return table
 	}
 	//If no entry available -> TableQuery
-	//TODO
+
+	//TODO: table query
+
 	return table
+}
+
+//Given a ServiceIP this method performs a search in the local ServiceCache
+//If the entry is not present a TableQuery is performed and the interest registered
+func (env *Environment) GetTableEntryByNsIP(ip net.IP) (TableEntry, bool) {
+	//If entry already available
+	entry, exist := env.translationTable.SearchByNsIP(ip)
+	if exist {
+		return entry, true
+	}
+	//If no entry available -> TableQuery
+
+	//TODO: table query
+
+	return entry, false
+}
+
+//Debug method to add Table query entry
+func (env *Environment) AddTableQueryEntry(entry TableEntry) {
+	err := env.translationTable.Add(entry)
+	if err != nil {
+		log.Println("[ERROR] ", err)
+	}
 }

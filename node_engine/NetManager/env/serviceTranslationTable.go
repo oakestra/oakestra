@@ -2,6 +2,7 @@ package env
 
 import (
 	"errors"
+	"log"
 	"net"
 	"sync"
 )
@@ -14,6 +15,7 @@ type TableEntry struct {
 	Instancenumber   int
 	Cluster          int
 	Nodeip           net.IP
+	Nodeport         int
 	Nsip             net.IP
 	ServiceIP        []ServiceIP
 }
@@ -55,6 +57,7 @@ func (t *TableManager) Add(entry TableEntry) error {
 }
 
 func (t *TableManager) SearchByServiceIP(ip net.IP) []TableEntry {
+	log.Println("Table research, table length: ", len(t.translationTable))
 	result := make([]TableEntry, 0)
 	t.rwlock.Lock()
 	defer t.rwlock.Unlock()
@@ -69,6 +72,18 @@ func (t *TableManager) SearchByServiceIP(ip net.IP) []TableEntry {
 	return result
 }
 
+func (t *TableManager) SearchByNsIP(ip net.IP) (TableEntry, bool) {
+	t.rwlock.Lock()
+	defer t.rwlock.Unlock()
+	for _, tableElement := range t.translationTable {
+		if tableElement.Nsip.Equal(ip) {
+			returnEntry := tableElement
+			return returnEntry, true
+		}
+	}
+	return TableEntry{}, false
+}
+
 //Sanity chceck for Appname and namespace
 // 0<len(Appname)<11
 // 0<len(Appns)<11
@@ -81,30 +96,39 @@ func (t *TableManager) SearchByServiceIP(ip net.IP) []TableEntry {
 // len(entry.ServiceIP)>0
 func (t *TableManager) isValid(entry TableEntry) bool {
 	if l := len(entry.Appname); l < 1 || l > 10 {
+		log.Println("TranslationTable: Invalid Entry, wrong appname")
 		return false
 	}
 	if l := len(entry.Appns); l < 1 || l > 10 {
+		log.Println("TranslationTable: Invalid Entry, wrong appns")
 		return false
 	}
 	if l := len(entry.Servicename); l < 1 || l > 10 {
+		log.Println("TranslationTable: Invalid Entry, wrong servicename")
 		return false
 	}
 	if l := len(entry.Servicenamespace); l < 1 || l > 10 {
+		log.Println("TranslationTable: Invalid Entry, wrong servicens")
 		return false
 	}
 	if entry.Instancenumber < 0 {
+		log.Println("TranslationTable: Invalid Entry, wrong instancenumber")
 		return false
 	}
 	if entry.Cluster < 0 {
+		log.Println("TranslationTable: Invalid Entry, wrong cluster")
 		return false
 	}
 	if entry.Nodeip == nil {
+		log.Println("TranslationTable: Invalid Entry, wrong nodeip")
 		return false
 	}
 	if entry.Nsip == nil {
+		log.Println("TranslationTable: Invalid Entry, wrong nsip")
 		return false
 	}
 	if len(entry.ServiceIP) < 1 {
+		log.Println("TranslationTable: Invalid Entry, wrong serviceip")
 		return false
 	}
 	return true

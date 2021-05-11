@@ -68,7 +68,7 @@ func New() GoProxyTunnel {
 	return proxy
 }
 
-func (proxy *GoProxyTunnel) setEnvironment(env env.EnvironmentManager) {
+func (proxy *GoProxyTunnel) SetEnvironment(env env.EnvironmentManager) {
 	proxy.environment = env
 }
 
@@ -169,7 +169,7 @@ func (proxy *GoProxyTunnel) outgoingProxy(packet gopacket.Packet) gopacket.Packe
 					}
 					proxy.cache.Add(entry)
 				}
-				return OutgoingConversion(entry.dstip, proxy.TunnelPort, packet)
+				return OutgoingConversion(entry.dstip, entry.srcport, packet)
 
 			}
 		}
@@ -184,22 +184,20 @@ func (proxy *GoProxyTunnel) ingoingProxy(packet gopacket.Packet) gopacket.Packet
 		if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 			ipv4, _ := ipLayer.(*layers.IPv4)
 			tcp, _ := tcpLayer.(*layers.TCP)
-			//If tcp destination port is tunnel port
-			if tcp.DstPort.String() == layers.TCPPort(proxy.TunnelPort).String() {
-				log.Println("Received a proxy packet to port ", proxy.TunnelPort)
-				log.Println("From src ip ", ipv4.SrcIP, " to dst ip ", ipv4.DstIP)
 
-				//Check proxy cache for REVERSE entry conversion
-				//Dstip->srcip, srcport->dstport, SrcIP -> dstIP
-				entry, exist := proxy.cache.RetrieveByIp(ipv4.DstIP, int(tcp.SrcPort), ipv4.SrcIP)
-				if !exist {
-					//No proxy entry, just discard
-					return packet
-				}
-				//Reverse conversion
-				return IngoingConversion(entry.dstServiceIp, entry.srcport, packet)
-
+			//Check proxy cache for REVERSE entry conversion
+			//Dstip->srcip, DstPort->srcport, SrcIP -> dstIP
+			entry, exist := proxy.cache.RetrieveByIp(ipv4.DstIP, int(tcp.DstPort), ipv4.SrcIP)
+			if !exist {
+				//No proxy cache entry, no translation needed
+				return packet
 			}
+
+			log.Println("Received a proxy packet to port ", proxy.TunnelPort)
+			log.Println("From src ip ", ipv4.SrcIP, " to dst ip ", ipv4.DstIP)
+			//Reverse conversion
+			return IngoingConversion(entry.dstServiceIp, entry.srcport, packet)
+
 		}
 	}
 	return packet
@@ -355,8 +353,19 @@ func (proxy *GoProxyTunnel) tunIngoingListen() {
 
 //Given a network namespace IP find the machine IP and port for the tunneling
 func (proxy *GoProxyTunnel) locateRemoteAddress(nsIP net.IP) (net.IP, int) {
-	return net.ParseIP("192.168.0.10"), proxy.TunnelPort
-	//TODO: implement logic
+
+	log.Println("Locating Remote host address for NsIp: ", nsIP.String())
+
+	//convert namespace IP to host IP
+	tableElement, found := proxy.environment.GetTableEntryByNsIP(nsIP)
+	if found {
+		log.Println("Remote NS IP", nsIP.String(), " translated to ", tableElement.Nodeip.String())
+		return tableElement.Nodeip, tableElement.Nodeport
+	}
+
+	//If nothing found, just let the packet to be dropped
+	return nsIP, -1
+
 }
 
 // read output from an interface and wrap the read operation with a channel
