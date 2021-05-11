@@ -8,9 +8,9 @@ import (
 	"github.com/songgao/water"
 	"github.com/tkanos/gonfig"
 	"log"
+	"math/rand"
 	"net"
 	"os/exec"
-	"strconv"
 )
 
 // Config
@@ -34,7 +34,8 @@ type GoProxyTunnel struct {
 	TunnelPort        int
 	listenConnection  *net.UDPConn
 	bufferPort        int
-	environment       env.Environment
+	environment       env.EnvironmentManager
+	cache             ProxyCache
 }
 
 // create a  new GoProxyTunnel as a Tun device that listen for packets and forward them to an handler function
@@ -44,6 +45,7 @@ func New() GoProxyTunnel {
 		errorChannel:  make(chan error),
 		finishChannel: make(chan bool),
 		stopChannel:   make(chan bool),
+		cache:         NewProxyCache(),
 	}
 
 	//parse confgiuration file
@@ -66,7 +68,7 @@ func New() GoProxyTunnel {
 	return proxy
 }
 
-func (proxy *GoProxyTunnel) setEnvironment(env env.Environment) {
+func (proxy *GoProxyTunnel) setEnvironment(env env.EnvironmentManager) {
 	proxy.environment = env
 }
 
@@ -141,10 +143,36 @@ func (proxy *GoProxyTunnel) outgoingProxy(packet gopacket.Packet) gopacket.Packe
 			if sameSubnetwork {
 				log.Println("Received proxy packet for the subnetwork ", proxy.ProxyIpSubnetwork.IP.String())
 				log.Println("From src ip ", ipv4.SrcIP, " to dst ip ", ipv4.DstIP)
+
 				//TODO ADD IP CONVERSION LOGIC, buffer port is just a placeholder
-				portint, _ := strconv.Atoi(tcp.SrcPort.String())
-				proxy.bufferPort = portint
-				return OutgoingConversion(net.ParseIP("172.19.2.12"), proxy.TunnelPort, packet)
+				//Check proxy cache
+				entry, exist := proxy.cache.RetrieveByServiceIP(ipv4.SrcIP, int(tcp.SrcPort), ipv4.DstIP)
+				if !exist {
+					//If no cache entry ask to the environment for a TableQuery
+					tableEntryList := proxy.environment.GetTableEntryByServiceIP(ipv4.DstIP)
+
+					//If no table entry available
+					if len(tableEntryList) < 1 {
+						//discard packet
+						return packet
+					}
+
+					//Choose between the table entry according to the ServiceIP algorithm
+					tableEntry := tableEntryList[rand.Intn(len(tableEntryList))]
+					//TODO smart ServiceIP algorithms
+
+					//Update cache
+					entry = ConversionEntry{
+						srcip:        ipv4.SrcIP,
+						dstip:        tableEntry.Nsip,
+						dstServiceIp: ipv4.DstIP,
+						srcport:      int(tcp.SrcPort),
+						dstport:      int(tcp.DstPort),
+					}
+					proxy.cache.Add(entry)
+				}
+				return OutgoingConversion(entry.dstip, proxy.TunnelPort, packet)
+
 			}
 		}
 	}
@@ -162,8 +190,17 @@ func (proxy *GoProxyTunnel) ingoingProxy(packet gopacket.Packet) gopacket.Packet
 			if tcp.DstPort.String() == layers.TCPPort(proxy.TunnelPort).String() {
 				log.Println("Received a proxy packet to port ", proxy.TunnelPort)
 				log.Println("From src ip ", ipv4.SrcIP, " to dst ip ", ipv4.DstIP)
-				//TODO ADD IP CONVERSION LOGIC, buffer port is just a placeholder
-				return IngoingConversion(net.ParseIP("172.30.255.255"), proxy.bufferPort, packet)
+
+				//Check proxy cache for REVERSE entry conversion
+				//Dstip->srcip, srcport->dstport, SrcIP -> dstIP
+				entry, exist := proxy.cache.RetrieveByIp(ipv4.DstIP, int(tcp.SrcPort), ipv4.SrcIP)
+				if !exist {
+					//No proxy entry, just discard
+					return packet
+				}
+				//Reverse conversion
+				return IngoingConversion(entry.dstServiceIp, entry.srcport, packet)
+
 			}
 		}
 	}
@@ -300,7 +337,7 @@ func (proxy *GoProxyTunnel) tunIngoingListen() {
 		case stopmsg := <-proxy.stopChannel:
 			if stopmsg {
 				fmt.Println("Ingoing listener received stop message")
-				proxy.listenConnection.Close()
+				_ = proxy.listenConnection.Close()
 				proxy.isListening = false
 				proxy.finishChannel <- true
 				return

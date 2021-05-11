@@ -13,6 +13,10 @@ import (
 // Return errors
 const NamespaceAlreadyDeclared string = "namespace already declared"
 
+type EnvironmentManager interface {
+	GetTableEntryByServiceIP(ip net.IP) []TableEntry
+}
+
 // Config
 type Configuration struct {
 	HostBridgeName             string
@@ -403,7 +407,7 @@ func (env *Environment) CreateHostBridge() (string, error) {
 //ServiceIP translation table entry fetch
 //Given a ServiceIP this method performs a search in the local ServiceCache
 //If the entry is not present a TableQuery is performed and the interest registered
-func (env *Environment) getTableEntryByServiceIP(ip net.IP) []TableEntry {
+func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 	//If entry already available
 	table := env.translationTable.SearchByServiceIP(ip)
 	if len(table) > 0 {

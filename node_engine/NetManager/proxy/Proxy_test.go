@@ -1,25 +1,53 @@
 package proxy
 
 import (
+	"../env"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"net"
 	"testing"
 )
 
+type FakeEnv struct {
+}
+
+func (fakeenv *FakeEnv) GetTableEntryByServiceIP(ip net.IP) []env.TableEntry {
+	entrytable := make([]env.TableEntry, 0)
+	//If entry already available
+	entry := env.TableEntry{
+		Appname:          "a",
+		Appns:            "a",
+		Servicename:      "b",
+		Servicenamespace: "b",
+		Instancenumber:   0,
+		Cluster:          0,
+		Nodeip:           net.ParseIP("10.0.0.1"),
+		Nsip:             net.ParseIP("172.19.2.12"),
+		ServiceIP: []env.ServiceIP{{
+			IpType:  env.Closest,
+			Address: net.ParseIP("172.30.255.255"),
+		}},
+	}
+	entrytable = append(entrytable, entry)
+	return entrytable
+}
+
 func getFakeTunnel() GoProxyTunnel {
-	return GoProxyTunnel{
+	tunnel := GoProxyTunnel{
 		tunNetIP:    "172.19.1.254/16",
 		ifce:        nil,
 		isListening: true,
 		ProxyIpSubnetwork: net.IPNet{
-			IP:   net.ParseIP("172.32.0.0"),
+			IP:   net.ParseIP("172.30.0.0"),
 			Mask: net.IPMask(net.ParseIP("255.255.0.0").To4()),
 		},
 		HostTUNDeviceName: "goProxyTun",
 		TunnelPort:        50011,
 		listenConnection:  nil,
+		cache:             NewProxyCache(),
 	}
+	tunnel.setEnvironment(&FakeEnv{})
+	return tunnel
 }
 
 func getFakePacket(srcIP string, dstIP string, srcPort int, dstPort int) gopacket.Packet {
@@ -42,58 +70,10 @@ func getFakePacket(srcIP string, dstIP string, srcPort int, dstPort int) gopacke
 	return gopacket.NewPacket(buf.Bytes(), layers.LayerTypeIPv4, gopacket.Default)
 }
 
-func TestOutgoingProxyConversion(t *testing.T) {
-	packet := getFakePacket("172.19.1.1", "172.32.1.1", 666, 80)
-
-	dstIp := net.ParseIP("172.19.8.12")
-	sourcePort := 50011
-
-	newpacket := OutgoingConversion(dstIp, sourcePort, packet)
-
-	if ipLayer := newpacket.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-		if tcpLayer := newpacket.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-
-			ipv4, _ := ipLayer.(*layers.IPv4)
-			if !ipv4.DstIP.Equal(dstIp) {
-				t.Error("dstIP = ", ipv4.DstIP.String(), "; want =", dstIp)
-			}
-
-			tcp, _ := tcpLayer.(*layers.TCP)
-			if !(tcp.SrcPort == layers.TCPPort(sourcePort)) {
-				t.Error("srcPort = ", tcp.SrcPort.String(), "; want = ", sourcePort)
-			}
-		}
-	}
-}
-
-func TestIngoingProxyConversion(t *testing.T) {
-	packet := getFakePacket("172.19.8.12", "172.19.1.1", 4376, 50011)
-
-	srcIp := net.ParseIP("172.32.1.1")
-	dstPort := 666
-
-	newpacket := IngoingConversion(srcIp, dstPort, packet)
-
-	if ipLayer := newpacket.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-		if tcpLayer := newpacket.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-
-			ipv4, _ := ipLayer.(*layers.IPv4)
-			if !ipv4.SrcIP.Equal(srcIp) {
-				t.Error("srcIp = ", ipv4.SrcIP.String(), "; want =", srcIp)
-			}
-
-			tcp, _ := tcpLayer.(*layers.TCP)
-			if !(tcp.DstPort == layers.TCPPort(dstPort)) {
-				t.Error("dstPort = ", tcp.DstPort.String(), "; want = ", dstPort)
-			}
-		}
-	}
-}
-
 func TestOutgoingProxy(t *testing.T) {
 	proxy := getFakeTunnel()
 
-	proxypacket := getFakePacket("172.19.1.1", "172.32.255.255", 666, 80)
+	proxypacket := getFakePacket("172.19.1.1", "172.30.255.255", 666, 80)
 	noproxypacket := getFakePacket("172.19.1.1", "172.20.1.1", 666, 80)
 
 	newpacketproxy := proxy.outgoingProxy(proxypacket)
@@ -133,10 +113,19 @@ func TestOutgoingProxy(t *testing.T) {
 
 func TestIngoingProxy(t *testing.T) {
 	proxy := getFakeTunnel()
-	proxy.bufferPort = 666
 
 	proxypacket := getFakePacket("172.19.2.1", "172.19.1.15", 666, proxy.TunnelPort)
 	noproxypacket := getFakePacket("172.19.2.1", "172.19.1.12", 666, 80)
+
+	//update proxy cache
+	entry := ConversionEntry{
+		srcip:        net.ParseIP("172.19.1.15"),
+		dstip:        net.ParseIP("172.19.2.1"),
+		dstServiceIp: net.ParseIP("172.30.255.255"),
+		srcport:      777,
+		dstport:      666,
+	}
+	proxy.cache.Add(entry)
 
 	newpacketproxy := proxy.ingoingProxy(proxypacket)
 	newpacketnoproxy := proxy.ingoingProxy(noproxypacket)
@@ -145,14 +134,14 @@ func TestIngoingProxy(t *testing.T) {
 		if tcpLayer := newpacketproxy.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 
 			ipv4, _ := ipLayer.(*layers.IPv4)
-			srcexpected := net.ParseIP("172.32.255.255")
+			srcexpected := net.ParseIP("172.30.255.255")
 			if !ipv4.SrcIP.Equal(srcexpected) {
 				t.Error("srcIp = ", ipv4.SrcIP.String(), "; want =", srcexpected)
 			}
 
 			tcp, _ := tcpLayer.(*layers.TCP)
-			if !(tcp.DstPort == layers.TCPPort(proxy.bufferPort)) {
-				t.Error("dstPort = ", tcp.DstPort.String(), "; want = ", proxy.bufferPort)
+			if !(int(tcp.DstPort) == entry.srcport) {
+				t.Error("dstPort = ", int(tcp.DstPort), "; want = ", entry.srcport)
 			}
 		}
 	}
