@@ -13,13 +13,24 @@ import (
 )
 
 func main() {
+	//create the tunnel
 	fmt.Println("Create the goProxy tun device")
-	myproxy := proxy.New()
+
+	tunconfig := proxy.Configuration{
+		HostTUNDeviceName:   "goProxyTun",
+		ProxySubnetwork:     "172.30.0.0",
+		ProxySubnetworkMask: "255.255.0.0",
+		TunNetIP:            "172.19.1.254",
+		TunnelPort:          50011,
+	}
+
+	myproxy := proxy.NewCustom(tunconfig)
 	myproxy.Listen()
 	errch := myproxy.GetErrCh()
 	stopch := myproxy.GetStopCh()
 	finishch := myproxy.GetFinishCh()
 
+	//create the env and the namespaces
 	config := env.Configuration{
 		HostBridgeName:             "goProxyBridge",
 		HostBridgeIP:               "172.19.1.1",
@@ -74,6 +85,9 @@ func main() {
 		ServiceIP: []env.ServiceIP{{
 			IpType:  env.Closest,
 			Address: net.ParseIP("172.30.0.0"),
+		}, {
+			IpType:  env.InstanceNumber,
+			Address: net.ParseIP("172.30.0.2"),
 		}},
 	})
 	myenv.AddTableQueryEntry(env.TableEntry{
@@ -89,6 +103,9 @@ func main() {
 		ServiceIP: []env.ServiceIP{{
 			IpType:  env.Closest,
 			Address: net.ParseIP("172.30.0.0"),
+		}, {
+			IpType:  env.InstanceNumber,
+			Address: net.ParseIP("172.30.0.3"),
 		}},
 	})
 	myenv.AddTableQueryEntry(env.TableEntry{
@@ -104,6 +121,9 @@ func main() {
 		ServiceIP: []env.ServiceIP{{
 			IpType:  env.Closest,
 			Address: net.ParseIP("172.30.0.1"),
+		}, {
+			IpType:  env.InstanceNumber,
+			Address: net.ParseIP("172.30.0.4"),
 		}},
 	})
 	myenv.AddTableQueryEntry(env.TableEntry{
@@ -119,6 +139,9 @@ func main() {
 		ServiceIP: []env.ServiceIP{{
 			IpType:  env.Closest,
 			Address: net.ParseIP("172.30.0.1"),
+		}, {
+			IpType:  env.InstanceNumber,
+			Address: net.ParseIP("172.30.0.5"),
 		}},
 	})
 

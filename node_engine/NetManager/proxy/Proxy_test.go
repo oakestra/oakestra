@@ -26,19 +26,45 @@ func (fakeenv *FakeEnv) GetTableEntryByServiceIP(ip net.IP) []env.TableEntry {
 		ServiceIP: []env.ServiceIP{{
 			IpType:  env.Closest,
 			Address: net.ParseIP("172.30.255.255"),
-		}},
+		},
+			{
+				IpType:  env.InstanceNumber,
+				Address: net.ParseIP("172.30.255.254"),
+			}},
 	}
 	entrytable = append(entrytable, entry)
 	return entrytable
 }
 
 func (fakeenv *FakeEnv) GetTableEntryByNsIP(ip net.IP) (env.TableEntry, bool) {
+	entry := env.TableEntry{
+		Appname:          "a",
+		Appns:            "a",
+		Servicename:      "c",
+		Servicenamespace: "b",
+		Instancenumber:   0,
+		Cluster:          0,
+		Nodeip:           net.ParseIP("10.0.0.1"),
+		Nsip:             net.ParseIP("172.19.1.1"),
+		ServiceIP: []env.ServiceIP{{
+			IpType:  env.Closest,
+			Address: net.ParseIP("172.30.255.252"),
+		},
+			{
+				IpType:  env.InstanceNumber,
+				Address: net.ParseIP("172.30.255.253"),
+			}},
+	}
+	return entry, true
+}
+
+func (fakeenv *FakeEnv) GetTableEntryByInstanceIP(ip net.IP) (env.TableEntry, bool) {
 	return env.TableEntry{}, false
 }
 
 func getFakeTunnel() GoProxyTunnel {
 	tunnel := GoProxyTunnel{
-		tunNetIP:    "172.19.1.254/16",
+		tunNetIP:    "172.19.1.254",
 		ifce:        nil,
 		isListening: true,
 		ProxyIpSubnetwork: net.IPNet{
@@ -48,7 +74,7 @@ func getFakeTunnel() GoProxyTunnel {
 		HostTUNDeviceName: "goProxyTun",
 		TunnelPort:        50011,
 		listenConnection:  nil,
-		cache:             NewProxyCache(),
+		proxycache:        NewProxyCache(),
 	}
 	tunnel.SetEnvironment(&FakeEnv{})
 	return tunnel
@@ -117,18 +143,19 @@ func TestOutgoingProxy(t *testing.T) {
 func TestIngoingProxy(t *testing.T) {
 	proxy := getFakeTunnel()
 
-	proxypacket := getFakePacket("172.19.2.1", "172.19.1.15", 666, 777)
+	proxypacket := getFakePacket("172.30.0.5", "172.19.1.15", 666, 777)
 	noproxypacket := getFakePacket("172.19.2.1", "172.19.1.12", 666, 80)
 
-	//update proxy cache
+	//update proxy proxycache
 	entry := ConversionEntry{
-		srcip:        net.ParseIP("172.19.1.15"),
-		dstip:        net.ParseIP("172.19.2.1"),
-		dstServiceIp: net.ParseIP("172.30.255.255"),
-		srcport:      777,
-		dstport:      666,
+		srcip:         net.ParseIP("172.19.1.15"),
+		dstip:         net.ParseIP("172.19.2.1"),
+		dstServiceIp:  net.ParseIP("172.30.255.255"),
+		srcInstanceIp: net.ParseIP("172.30.0.50"),
+		srcport:       777,
+		dstport:       666,
 	}
-	proxy.cache.Add(entry)
+	proxy.proxycache.Add(entry)
 
 	newpacketproxy := proxy.ingoingProxy(proxypacket)
 	newpacketnoproxy := proxy.ingoingProxy(noproxypacket)

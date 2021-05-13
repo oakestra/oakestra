@@ -16,6 +16,7 @@ const NamespaceAlreadyDeclared string = "namespace already declared"
 type EnvironmentManager interface {
 	GetTableEntryByServiceIP(ip net.IP) []TableEntry
 	GetTableEntryByNsIP(ip net.IP) (TableEntry, bool)
+	GetTableEntryByInstanceIP(ip net.IP) (TableEntry, bool)
 }
 
 // Config
@@ -225,7 +226,6 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 		cleanup()
 		return "", err
 	}
-
 	//add rules on default namespace for routing to the new namespace
 	log.Println("adding routing rule for default namespace to " + netname)
 	cmd = exec.Command("ip", "route", "add", ip.String(), "via", env.config.HostBridgeIP)
@@ -418,6 +418,21 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 	//TODO: table query
 
 	return table
+}
+
+//Given a ServiceIP this method performs a search in the local ServiceCache
+//If the entry is not present a TableQuery is performed and the interest registered
+func (env *Environment) GetTableEntryByInstanceIP(ip net.IP) (TableEntry, bool) {
+	//If entry already available
+	table := env.translationTable.SearchByServiceIP(ip)
+	if len(table) > 0 {
+		return table[0], true
+	}
+	//If no entry available -> TableQuery
+
+	//TODO: table query
+
+	return TableEntry{}, false
 }
 
 //Given a ServiceIP this method performs a search in the local ServiceCache
