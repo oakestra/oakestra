@@ -401,6 +401,7 @@ func (proxy *GoProxyTunnel) tunIngoingListen() {
 func (proxy *GoProxyTunnel) locateRemoteAddress(nsIP net.IP) (net.IP, int) {
 
 	//check local Host Cache
+	//TODO populate local host cache
 	hostentry, exist := proxy.HostCache.Get(nsIP)
 	if exist {
 		return hostentry.host.IP, hostentry.host.Port
