@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net"
 	"os/exec"
+	"sync"
 )
 
 // Config
@@ -38,6 +39,8 @@ type GoProxyTunnel struct {
 	proxycache        ProxyCache
 	HostCache         HostCache
 	localIP           net.IP
+	udpwrite          sync.RWMutex
+	tunwrite          sync.RWMutex
 }
 
 //incoming message from UDP channel
@@ -66,6 +69,8 @@ func NewCustom(configuration Configuration) GoProxyTunnel {
 		stopChannel:   make(chan bool),
 		proxycache:    NewProxyCache(),
 		HostCache:     NewHostCache(),
+		udpwrite:      sync.RWMutex{},
+		tunwrite:      sync.RWMutex{},
 	}
 
 	//parse confgiuration file
@@ -95,31 +100,27 @@ func (proxy *GoProxyTunnel) SetEnvironment(env env.EnvironmentManager) {
 func (proxy *GoProxyTunnel) outgoingMessage(packet gopacket.Packet) {
 	//If this is an IP packet
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
+		if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 
-		l4layer := packet.Layer(layers.LayerTypeTCP)
-		if l4layer == nil {
-			l4layer := packet.Layer(layers.LayerTypeUDP)
-			if l4layer == nil {
-				return
-			}
+			fmt.Println("TCP packet received")
+			ipv4, _ := ipLayer.(*layers.IPv4)
+			fmt.Printf("From src ip %d to dst ip %d\n", ipv4.SrcIP, ipv4.DstIP)
+			tcp, _ := tcpLayer.(*layers.TCP)
+			fmt.Printf("From src port %d to dst port %d\n", tcp.SrcPort, tcp.DstPort)
+
+			//proxyConversion
+			newPacket := proxy.outgoingProxy(packet)
+
+			//newTcpLayer := newPacket.Layer(layers.LayerTypeTCP)
+			newIpLayer := newPacket.Layer(layers.LayerTypeIPv4)
+
+			//fetch remote address
+			dstHost, dstPort := proxy.locateRemoteAddress(newIpLayer.(*layers.IPv4).DstIP)
+			log.Println("Sending incoming packet to: ", dstHost.String(), ":", dstPort)
+
+			//packetForwarding
+			proxy.forward(dstHost, dstPort, newPacket)
 		}
-
-		fmt.Println("L4 packet received")
-		ipv4, _ := ipLayer.(*layers.IPv4)
-		fmt.Printf("From src ip %d to dst ip %d\n", ipv4.SrcIP, ipv4.DstIP)
-
-		//proxyConversion
-		newPacket := proxy.outgoingProxy(packet)
-
-		//newTcpLayer := newPacket.Layer(layers.LayerTypeTCP)
-		newIpLayer := newPacket.Layer(layers.LayerTypeIPv4)
-
-		//fetch remote address
-		dstHost, dstPort := proxy.locateRemoteAddress(newIpLayer.(*layers.IPv4).DstIP)
-		log.Println("Sending incoming packet to: ", dstHost.String(), ":", dstPort)
-
-		//packetForwarding
-		proxy.forward(dstHost, dstPort, newPacket)
 	}
 }
 
@@ -138,12 +139,16 @@ func (proxy *GoProxyTunnel) ingoingMessage(packet gopacket.Packet, from net.UDPA
 			newPacket := proxy.ingoingProxy(packet)
 
 			//cache host connection
-			proxy.HostCache.Add(HostEntry{
-				srcip: ipv4.SrcIP,
-				host:  from,
-			})
+			//proxy.HostCache.Add(HostEntry{
+			//	srcip: ipv4.SrcIP,
+			//	host:  from,
+			//})
+			//TODO: cache host connection
+			//TODO: optimize for paraller traffic
 
 			//send message to TUN
+			proxy.tunwrite.Lock()
+			defer proxy.tunwrite.Unlock()
 			_, err := proxy.ifce.Write(packetToByte(newPacket))
 			if err != nil {
 				fmt.Println("[ERROR]", err)
@@ -163,8 +168,6 @@ func (proxy *GoProxyTunnel) outgoingProxy(packet gopacket.Packet) gopacket.Packe
 			sameSubnetwork := proxy.ProxyIpSubnetwork.IP.Mask(proxy.ProxyIpSubnetwork.Mask).
 				Equal(ipv4.DstIP.Mask(proxy.ProxyIpSubnetwork.Mask))
 			if sameSubnetwork {
-				log.Println("Received proxy packet to:", proxy.ProxyIpSubnetwork.IP.String())
-				log.Println("From src ip ", ipv4.SrcIP, " to dst ip ", ipv4.DstIP)
 
 				//Check proxy proxycache
 				entry, exist := proxy.proxycache.RetrieveByServiceIP(ipv4.SrcIP, int(tcp.SrcPort), ipv4.DstIP, int(tcp.DstPort))
@@ -230,12 +233,8 @@ func (proxy *GoProxyTunnel) ingoingProxy(packet gopacket.Packet) gopacket.Packet
 			entry, exist := proxy.proxycache.RetrieveByInstanceIp(ipv4.DstIP, int(tcp.DstPort), int(tcp.SrcPort))
 			if !exist {
 				//No proxy proxycache entry, no translation needed
-				log.Println("No entry found for incoming packet by: ", ipv4.SrcIP.String(), " to ", ipv4.DstIP)
 				return packet
 			}
-
-			log.Println("Received a proxy packet to port ", proxy.TunnelPort)
-			log.Println("From src ip ", ipv4.SrcIP, " to dst ip ", ipv4.DstIP)
 			//Reverse conversion
 			return IngoingConversion(entry.dstServiceIp, entry.srcip, packet)
 
@@ -334,7 +333,10 @@ func (proxy *GoProxyTunnel) createTun() {
 func (proxy *GoProxyTunnel) tunOutgoingListen() {
 	readoutput := make(chan []byte)
 	readerror := make(chan error)
-	go ifaceread(proxy.ifce, readoutput, readerror)
+	//3 parallel tun listeners
+	for i := 0; i < 3; i++ {
+		go ifaceread(proxy.ifce, readoutput, readerror)
+	}
 	proxy.isListening = true
 	log.Println("GoProxyTunnel outgoing listening started")
 	for {
@@ -366,7 +368,10 @@ func (proxy *GoProxyTunnel) tunOutgoingListen() {
 func (proxy *GoProxyTunnel) tunIngoingListen() {
 	readoutput := make(chan incomingMessage)
 	readerror := make(chan error)
-	go udpread(proxy.listenConnection, readoutput, readerror)
+	//5 parallel udp listeners
+	for i := 0; i < 5; i++ {
+		go udpread(proxy.listenConnection, readoutput, readerror)
+	}
 	proxy.isListening = true
 	log.Println("GoProxyTunnel ingoing listening started")
 	for {
@@ -395,8 +400,6 @@ func (proxy *GoProxyTunnel) tunIngoingListen() {
 //Given a network namespace IP find the machine IP and port for the tunneling
 func (proxy *GoProxyTunnel) locateRemoteAddress(nsIP net.IP) (net.IP, int) {
 
-	log.Println("Locating Remote host address for NsIp: ", nsIP.String())
-
 	//check local Host Cache
 	hostentry, exist := proxy.HostCache.Get(nsIP)
 	if exist {
@@ -417,16 +420,21 @@ func (proxy *GoProxyTunnel) locateRemoteAddress(nsIP net.IP) (net.IP, int) {
 
 //forward message to final destination via UDP tunneling
 func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket.Packet) {
-	remoteAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%v", dstHost, dstPort))
+	proxy.udpwrite.Lock()
+	defer proxy.udpwrite.Unlock()
+	//remoteAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%v", dstHost, dstPort))
+	con, err := net.Dial("udp", fmt.Sprintf("%s:%v", dstHost, dstPort))
 	if nil != err {
 		log.Println("[ERROR] Unable to resolve remote addr:", err)
 		//TODO: add fallback mechanism
 		return
 	}
-	_, err = proxy.listenConnection.WriteToUDP(packetToByte(packet), remoteAddr)
+	//_, err = proxy.listenConnection.WriteToUDP(packetToByte(packet), remoteAddr)
+	_, err = con.Write(packetToByte(packet))
 	if err != nil {
 		log.Println("[ERROR]", err)
 	}
+	_ = con.Close()
 }
 
 // read output from an interface and wrap the read operation with a channel

@@ -98,6 +98,7 @@ func (cache *ProxyCache) addExisting(entry ConversionEntry) {
 		if elementry.srcport == entry.srcport {
 			alreadyExistPosition = i
 			alreadyExist = true
+			break
 		}
 	}
 	if alreadyExist {
