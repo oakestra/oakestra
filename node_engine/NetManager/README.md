@@ -87,8 +87,10 @@ Run the flask app on Host1:
 Now on Host2 try reaching the app deployed on the Host1/myapp1
 `sudo netns exec myapp2 curl 172.19.1.12`
 
-Now let's try from Host2 to reach Host1/myapp1 using the proxy. In this example setup the proxy address 172.30.255.255 will map to 172.19.1.12.
-`sudo netns exec myapp1 curl 172.30.255.255`
+Now let's try from Host2 to load balance between all the myapp2 instances across Host1 and Host2 using the proxy address. In this example setup the proxy address 172.30.0.0 will map to myapp1.
+`sudo netns exec myapp1 curl 172.30.0.0`
+
+If there is nothing deployed behind the myapp2 namespace you probably will only get a connection refused error. That error is sent by the linux kernel but this means that you actually reached the namesapce correctly. 
 
 ### Subnetworks
 With this default test configuration the Subnetwork hierarchy is:
