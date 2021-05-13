@@ -36,6 +36,7 @@ type GoProxyTunnel struct {
 	bufferPort        int
 	environment       env.EnvironmentManager
 	cache             ProxyCache
+	localIP           net.IP
 }
 
 // create a  new GoProxyTunnel as a Tun device that listen for packets and forward them to an handler function
@@ -63,6 +64,9 @@ func New() GoProxyTunnel {
 	//create the TUN device
 	proxy.createTun()
 
+	//set local ip
+	proxy.localIP = net.ParseIP(getLocalIP())
+
 	log.Printf("Created ProxyTun device: %s\n", proxy.ifce.Name())
 
 	return proxy
@@ -76,33 +80,27 @@ func (proxy *GoProxyTunnel) SetEnvironment(env env.EnvironmentManager) {
 func (proxy *GoProxyTunnel) outgoingMessage(packet gopacket.Packet) {
 	//If this is an IP packet
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-		if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-			fmt.Println("TCP packet received")
-			ipv4, _ := ipLayer.(*layers.IPv4)
-			fmt.Printf("From src ip %d to dst ip %d\n", ipv4.SrcIP, ipv4.DstIP)
-
-			//proxyConversion
-			newPacket := proxy.outgoingProxy(packet)
-
-			//newTcpLayer := newPacket.Layer(layers.LayerTypeTCP)
-			newIpLayer := newPacket.Layer(layers.LayerTypeIPv4)
-
-			//fetch remote address
-			dstHost, dstPort := proxy.locateRemoteAddress(newIpLayer.(*layers.IPv4).DstIP)
-			log.Println("Sending incoming packet to: ", dstHost.String(), ":", dstPort)
-
-			//packetForwarding
-			remoteAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%v", dstHost, dstPort))
-			if nil != err {
-				log.Println("[ERROR] Unable to resolve remote addr:", err)
-				//TODO: add fallback mechanism
+		if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer == nil {
+			if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer == nil {
 				return
 			}
-			_, err = proxy.listenConnection.WriteToUDP(packetToByte(newPacket), remoteAddr)
-			if err != nil {
-				log.Println("[ERROR]", err)
-			}
 		}
+		fmt.Println("L4 packet received")
+		ipv4, _ := ipLayer.(*layers.IPv4)
+		fmt.Printf("From src ip %d to dst ip %d\n", ipv4.SrcIP, ipv4.DstIP)
+
+		//proxyConversion
+		newPacket := proxy.outgoingProxy(packet)
+
+		//newTcpLayer := newPacket.Layer(layers.LayerTypeTCP)
+		newIpLayer := newPacket.Layer(layers.LayerTypeIPv4)
+
+		//fetch remote address
+		dstHost, dstPort := proxy.locateRemoteAddress(newIpLayer.(*layers.IPv4).DstIP)
+		log.Println("Sending incoming packet to: ", dstHost.String(), ":", dstPort)
+
+		//packetForwarding
+		proxy.forward(dstHost, dstPort, newPacket)
 	}
 }
 
@@ -368,6 +366,44 @@ func (proxy *GoProxyTunnel) locateRemoteAddress(nsIP net.IP) (net.IP, int) {
 
 }
 
+//forward message to final destination
+func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket.Packet) {
+
+	//ipLayer := packet.Layer(layers.LayerTypeIPv4);
+	l4Layer := packet.Layer(layers.LayerTypeTCP)
+	istcp := true
+	if l4Layer == nil {
+		l4Layer = packet.Layer(layers.LayerTypeUDP)
+		if l4Layer == nil {
+			return
+		}
+		istcp = false
+	}
+
+	//If destination address is local machine no need for tunneling
+	if dstHost.Equal(proxy.localIP) {
+		log.Println("Forwarding packet locally")
+		//convert srcip
+		if istcp {
+			//
+		} else {
+
+		}
+	}
+
+	//If destination address is a rmeote machine -> tunneling
+	remoteAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%v", dstHost, dstPort))
+	if nil != err {
+		log.Println("[ERROR] Unable to resolve remote addr:", err)
+		//TODO: add fallback mechanism
+		return
+	}
+	_, err = proxy.listenConnection.WriteToUDP(packetToByte(packet), remoteAddr)
+	if err != nil {
+		log.Println("[ERROR]", err)
+	}
+}
+
 // read output from an interface and wrap the read operation with a channel
 // out channel gives back the byte array of the output
 // errchannel is the channel where in case of error the error is routed
@@ -462,4 +498,21 @@ func serializeTcpPacket(tcp *layers.TCP, ip *layers.IPv4, packet gopacket.Packet
 	}
 
 	return gopacket.NewPacket(newBuffer.Bytes(), layers.LayerTypeIPv4, gopacket.Default)
+}
+
+// GetLocalIP returns the non loopback local IP of the host
+func getLocalIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, address := range addrs {
+		// check the address type and if it is not a loopback the display it
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return ""
 }
