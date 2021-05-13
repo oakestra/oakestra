@@ -22,6 +22,7 @@ type ConversionList struct {
 }
 
 type ProxyCache struct {
+	//todo map by address and not by destination port, this will cause troubles.
 	cache                 map[int]ConversionList //--> map[dstport]conversionlist
 	conversionListMaxSize int
 	rwlock                sync.RWMutex
