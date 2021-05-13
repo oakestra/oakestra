@@ -1,4 +1,4 @@
-# go-proxy
+# NetManager
 This component enables the communication between services distributed across multiple nodes.
 
 The Network manager is divided in 4 main components: 
