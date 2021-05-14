@@ -421,6 +421,19 @@ func (proxy *GoProxyTunnel) locateRemoteAddress(nsIP net.IP) (net.IP, int) {
 
 //forward message to final destination via UDP tunneling
 func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket.Packet) {
+
+	//If destination host is this machine, forward packet directly to the ingoing traffic method
+	if dstHost.Equal(proxy.localIP) {
+		log.Println("Packet forwarded locally")
+		go proxy.ingoingMessage(packet, net.UDPAddr{
+			IP:   proxy.localIP,
+			Port: proxy.TunnelPort,
+			Zone: "",
+		})
+		return
+	}
+
+	//Send packet via UDP tunnel
 	proxy.udpwrite.Lock()
 	defer proxy.udpwrite.Unlock()
 	//remoteAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%v", dstHost, dstPort))
