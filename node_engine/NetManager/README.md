@@ -1,4 +1,4 @@
-# go-proxy
+# NetManager
 This component enables the communication between services distributed across multiple nodes.
 
 The Network manager is divided in 4 main components: 
@@ -53,7 +53,7 @@ The development setup can be used to test locally the tunneling mechanism withou
 
 ### Host1
 use: `sudo go run testEnvironment/TwoNetnsDev1.go`
-when prompted insert the *Host2* IP address used to resolve the tunneling.
+when prompted insert the address of the current machine ( *Host 1* ) and then the address of *Host2* used to resolve the tunneling.
 
 This script will create the local subnetwork `172.19.1.0/24` with 2 network namespaces deployed `myapp1` and `myapp2`
 
@@ -66,7 +66,7 @@ This command will show the current interfaces inside this namespace and the curr
 
 ### Host2
 use: `sudo go run testEnvironment/TwoNetnsDev2.go`
-when prompted insert the *Host1* IP address used to resolve the tunneling.
+when prompted insert the address of the current machine ( *Host 2* ) and then the address of *Host1* used to resolve the tunneling.
 
 This script will create the local subnetwork `172.19.2.0/24` with 2 network namespaces deployed `myapp1` and `myapp2`
 
@@ -87,8 +87,10 @@ Run the flask app on Host1:
 Now on Host2 try reaching the app deployed on the Host1/myapp1
 `sudo netns exec myapp2 curl 172.19.1.12`
 
-Now let's try from Host2 to reach Host1/myapp1 using the proxy. In this example setup the proxy address 172.30.255.255 will map to 172.19.1.12.
-`sudo netns exec myapp1 curl 172.30.255.255`
+Now let's try from Host2 to load balance between all the myapp2 instances across Host1 and Host2 using the proxy address. In this example setup the proxy address 172.30.0.0 will map to myapp1.
+`sudo netns exec myapp1 curl 172.30.0.0`
+
+If there is nothing deployed behind the myapp2 namespace you probably will only get a connection refused error. That error is sent by the linux kernel but this means that you actually reached the namesapce correctly. 
 
 ### Subnetworks
 With this default test configuration the Subnetwork hierarchy is:

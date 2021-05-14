@@ -13,6 +13,12 @@ import (
 // Return errors
 const NamespaceAlreadyDeclared string = "namespace already declared"
 
+type EnvironmentManager interface {
+	GetTableEntryByServiceIP(ip net.IP) []TableEntry
+	GetTableEntryByNsIP(ip net.IP) (TableEntry, bool)
+	GetTableEntryByInstanceIP(ip net.IP) (TableEntry, bool)
+}
+
 // Config
 type Configuration struct {
 	HostBridgeName             string
@@ -30,6 +36,7 @@ type Environment struct {
 	nextVethNumber    int
 	proxyName         string
 	config            Configuration
+	translationTable  TableManager
 }
 
 // current network interfaces in the system
@@ -52,6 +59,7 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 		nextVethNumber:    0,
 		proxyName:         proxyname,
 		config:            customConfig,
+		translationTable:  NewTableManager(),
 	}
 
 	//create bridge
@@ -218,7 +226,6 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 		cleanup()
 		return "", err
 	}
-
 	//add rules on default namespace for routing to the new namespace
 	log.Println("adding routing rule for default namespace to " + netname)
 	cmd = exec.Command("ip", "route", "add", ip.String(), "via", env.config.HostBridgeIP)
@@ -398,13 +405,55 @@ func (env *Environment) CreateHostBridge() (string, error) {
 	return env.config.HostBridgeName, nil
 }
 
-func nextIP(ip net.IP, inc uint) net.IP {
-	i := ip.To4()
-	v := uint(i[0])<<24 + uint(i[1])<<16 + uint(i[2])<<8 + uint(i[3])
-	v += inc
-	v3 := byte(v & 0xFF)
-	v2 := byte((v >> 8) & 0xFF)
-	v1 := byte((v >> 16) & 0xFF)
-	v0 := byte((v >> 24) & 0xFF)
-	return net.IPv4(v0, v1, v2, v3)
+//Given a ServiceIP this method performs a search in the local ServiceCache
+//If the entry is not present a TableQuery is performed and the interest registered
+func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
+	//If entry already available
+	table := env.translationTable.SearchByServiceIP(ip)
+	if len(table) > 0 {
+		return table
+	}
+	//If no entry available -> TableQuery
+
+	//TODO: table query
+
+	return table
+}
+
+//Given a ServiceIP this method performs a search in the local ServiceCache
+//If the entry is not present a TableQuery is performed and the interest registered
+func (env *Environment) GetTableEntryByInstanceIP(ip net.IP) (TableEntry, bool) {
+	//If entry already available
+	table := env.translationTable.SearchByServiceIP(ip)
+	if len(table) > 0 {
+		return table[0], true
+	}
+	//If no entry available -> TableQuery
+
+	//TODO: table query
+
+	return TableEntry{}, false
+}
+
+//Given a ServiceIP this method performs a search in the local ServiceCache
+//If the entry is not present a TableQuery is performed and the interest registered
+func (env *Environment) GetTableEntryByNsIP(ip net.IP) (TableEntry, bool) {
+	//If entry already available
+	entry, exist := env.translationTable.SearchByNsIP(ip)
+	if exist {
+		return entry, true
+	}
+	//If no entry available -> TableQuery
+
+	//TODO: table query
+
+	return entry, false
+}
+
+//Debug method to add Table query entry
+func (env *Environment) AddTableQueryEntry(entry TableEntry) {
+	err := env.translationTable.Add(entry)
+	if err != nil {
+		log.Println("[ERROR] ", err)
+	}
 }
