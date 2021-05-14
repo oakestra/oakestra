@@ -53,7 +53,7 @@ The development setup can be used to test locally the tunneling mechanism withou
 
 ### Host1
 use: `sudo go run testEnvironment/TwoNetnsDev1.go`
-when prompted insert the *Host2* IP address used to resolve the tunneling.
+when prompted insert the address of the current machine ( *Host 1* ) and then the address of *Host2* used to resolve the tunneling.
 
 This script will create the local subnetwork `172.19.1.0/24` with 2 network namespaces deployed `myapp1` and `myapp2`
 
@@ -66,7 +66,7 @@ This command will show the current interfaces inside this namespace and the curr
 
 ### Host2
 use: `sudo go run testEnvironment/TwoNetnsDev2.go`
-when prompted insert the *Host1* IP address used to resolve the tunneling.
+when prompted insert the address of the current machine ( *Host 2* ) and then the address of *Host1* used to resolve the tunneling.
 
 This script will create the local subnetwork `172.19.2.0/24` with 2 network namespaces deployed `myapp1` and `myapp2`
 
