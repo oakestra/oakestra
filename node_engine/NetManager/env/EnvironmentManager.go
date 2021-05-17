@@ -202,6 +202,12 @@ func (env *Environment) AttachDockerContainer(containername string, ip net.IP) e
 		return err
 	}
 
+	err = env.Update()
+	if err != nil {
+		cleanup()
+		return err
+	}
+
 	return nil
 }
 
