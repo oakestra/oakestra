@@ -152,16 +152,6 @@ func (env *Environment) AttachDockerContainer(containername string, ip net.IP) e
 		return err
 	}
 
-	// Assigning ip to host veth
-	//vethHostIp, vethHostIpNet, err := net.ParseCIDR("10.0.41.2/16")
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-
-	//if err := veth.SetLinkIp(vethHostIp, vethHostIpNet); err != nil {
-	//	fmt.Println(err)
-	//}
-
 	// add veth1 to the bridge
 	myveth01, err := net.InterfaceByName(veth1name)
 	if err != nil {
