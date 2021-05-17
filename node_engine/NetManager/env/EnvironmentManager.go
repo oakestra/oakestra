@@ -179,6 +179,7 @@ func (env *Environment) AttachDockerContainer(containername string, ip net.IP) e
 	}
 
 	// Attach veth2 to the docker container
+	log.Println("Attaching cointainer ", containername, " with custom veth ", veth2name)
 	pid, err := tenus.DockerPidByName(containername, "/var/run/docker.sock")
 	if err != nil {
 		cleanup()
@@ -191,7 +192,8 @@ func (env *Environment) AttachDockerContainer(containername string, ip net.IP) e
 	}
 
 	// set ip to the container veth
-	vethGuestIp, vethGuestIpNet, err := net.ParseCIDR(ip.String())
+	log.Println("Assigning ip ", ip.String()+env.config.HostBridgeMask, " to container ", containername)
+	vethGuestIp, vethGuestIpNet, err := net.ParseCIDR(ip.String() + env.config.HostBridgeMask)
 	if err != nil {
 		cleanup()
 		return err
