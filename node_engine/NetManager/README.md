@@ -35,9 +35,9 @@ The Network manager is divided in 4 main components:
 ├── api/
 │			Description:
 │				This is where the exposed api is implemented
-├── setup.sh
+├── build-arm.sh
 │			Description:
-│				Used to install al the dependencies
+│				Script that generates the binaries with go-arm7 
 └──  NetManager.go
 			Description:
 				Entry point to startup the NetworkManager
