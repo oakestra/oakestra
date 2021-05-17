@@ -2,6 +2,8 @@ package env
 
 import (
 	"errors"
+	"fmt"
+	"github.com/milosgajdos/tenus"
 	"github.com/tkanos/gonfig"
 	"log"
 	"net"
@@ -123,6 +125,84 @@ func NewStatic(proxyname string) Environment {
 		log.Fatal(err)
 	}
 	return NewCustom(proxyname, config)
+}
+
+// Attach a Docker container to the bridge and the current network environment
+func (env *Environment) AttachDockerContainer(containername string, ip net.IP) error {
+
+	// Retrieve current bridge
+	br, err := tenus.BridgeFromName(env.config.HostBridgeName)
+	if err != nil {
+		return err
+	}
+
+	//create veth pair to connect the namespace to the host bridge
+	veth1name := "veth" + "00" + strconv.Itoa(env.nextVethNumber)
+	veth2name := "veth" + "01" + strconv.Itoa(env.nextVethNumber)
+	log.Println("creating veth pair: " + veth1name + "@" + veth2name)
+
+	cleanup := func() {
+		cmd := exec.Command("ip", "link", "delete", veth1name)
+		_, _ = cmd.Output()
+	}
+
+	veth, err := tenus.NewVethPairWithOptions(veth1name, tenus.VethOptions{PeerName: veth2name})
+	if err != nil {
+		cleanup()
+		return err
+	}
+
+	// Assigning ip to host veth
+	//vethHostIp, vethHostIpNet, err := net.ParseCIDR("10.0.41.2/16")
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+
+	//if err := veth.SetLinkIp(vethHostIp, vethHostIpNet); err != nil {
+	//	fmt.Println(err)
+	//}
+
+	// add veth1 to the bridge
+	myveth01, err := net.InterfaceByName(veth1name)
+	if err != nil {
+		cleanup()
+		return err
+	}
+
+	if err = br.AddSlaveIfc(myveth01); err != nil {
+		cleanup()
+		return err
+	}
+
+	if err = veth.SetLinkUp(); err != nil {
+		fmt.Println(err)
+	}
+
+	// Attach veth2 to the docker container
+	pid, err := tenus.DockerPidByName(containername, "/var/run/docker.sock")
+	if err != nil {
+		cleanup()
+		return err
+	}
+
+	if err := veth.SetPeerLinkNsPid(pid); err != nil {
+		cleanup()
+		return err
+	}
+
+	// set ip to the container veth
+	vethGuestIp, vethGuestIpNet, err := net.ParseCIDR(ip.String())
+	if err != nil {
+		cleanup()
+		return err
+	}
+
+	if err := veth.SetPeerLinkNetInNs(pid, vethGuestIp, vethGuestIpNet, nil); err != nil {
+		cleanup()
+		return err
+	}
+
+	return nil
 }
 
 // creates a new namespace and link it to the host bridge
