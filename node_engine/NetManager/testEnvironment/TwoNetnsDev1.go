@@ -1,8 +1,8 @@
 package main
 
 import (
-	"../env"
-	"../proxy"
+	"NetManager/env"
+	"NetManager/proxy"
 	"bufio"
 	"fmt"
 	"log"
