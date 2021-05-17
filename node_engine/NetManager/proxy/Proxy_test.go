@@ -1,7 +1,7 @@
 package proxy
 
 import (
-	"../env"
+	"NetManager/env"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"net"
