@@ -8,10 +8,11 @@ MONGO_PORT = os.environ.get('CLOUD_MONGO_PORT')
 
 MONGO_ADDR_CLUSTERS = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/clusters'
 MONGO_ADDR_JOBS = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/jobs'
+MONGO_ADDR_NET = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/netcache'
 
 mongo_clusters = None
 mongo_jobs = None
-
+mongo_net = None
 
 app = None
 
@@ -20,13 +21,14 @@ CLUSTERS_FRESHNESS_INTERVAL = 45
 
 def mongo_init(flask_app):
     global app
-    global mongo_clusters, mongo_jobs
+    global mongo_clusters, mongo_jobs, mongo_net
 
     app = flask_app
 
     # app.config["MONGO_URI"] = MONGO_ADDR
     mongo_clusters = PyMongo(app, uri=MONGO_ADDR_CLUSTERS)
     mongo_jobs = PyMongo(app, uri=MONGO_ADDR_JOBS)
+    mongo_net = PyMongo(app, uri=MONGO_ADDR_NET)
     app.logger.info("MONGODB - init mongo")
 
 
@@ -119,12 +121,13 @@ def mongo_update_cluster_information(cluster_id, data):
     datetime_now = datetime.now()
     datetime_now_timestamp = datetime.timestamp(datetime_now)
 
-    mongo_clusters.db.clusters.\
+    mongo_clusters.db.clusters. \
         find_one_and_update({'_id': ObjectId(cluster_id)},
                             {'$set': {'aggregated_cpu_percent': cpu_percent, 'total_cpu_cores': cpu_cores,
                                       'aggregated_memory_percent': memory_percent, 'memory_in_mb': memory_in_mb,
                                       'active_nodes': nodes, 'technology': technology, 'more': more,
-                                      'last_modified': datetime_now, 'last_modified_timestamp': datetime_now_timestamp}},
+                                      'last_modified': datetime_now,
+                                      'last_modified_timestamp': datetime_now_timestamp}},
                             upsert=True)
 
 
@@ -171,6 +174,89 @@ def mongo_find_job_by_id(job_id):
 
 def mongo_find_cluster_of_job(job_id):
     app.logger.info('Find job by Id and return cluster...')
-    job_obj = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)}, {'cluster': 1})  # return just the assgined cluster of the job
+    job_obj = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)},
+                                          {'cluster': 1})  # return just the assgined cluster of the job
     cluster_id = job_obj.get('cluster')
     return mongo_find_cluster_by_id(cluster_id)
+
+
+# ........... SERVICE MANAGER OPERATIONS  ............
+######################################################
+
+def mongo_get_service_address_from_cache():
+    """
+    Pop an available Service address, if any, from the free addresses cache
+    @return: int[4] in the shape [172,30,x,y]
+    """
+    global mongo_net
+    netdb = mongo_net.db.net
+
+    entry = netdb.find_one({'type': 'free_service_ip'})
+
+    if entry is not None:
+        netdb.delete_one({"_id": entry["_id"]})
+        return entry["ipv4"]
+    else:
+        return None
+
+
+def mongo_free_address_to_cache(address):
+    """
+    Add back an address to the cache
+    @param address: int[4] in the shape [172,30,x,y]
+    """
+    global mongo_net
+    netdb = mongo_net.db.net
+
+    assert len(address) is 4
+    for n in address:
+        assert 0 <= n < 254
+
+    netdb.insert({
+        'type': 'free_service_ip',
+        'ipv4': address
+    })
+
+
+def mongo_get_next_service_ip():
+    """
+    Returns the next available ip address from the addressing space 172.30.x.y/16
+    @return: int[4] in the shape [172,30,x,y,]
+    """
+    global mongo_net
+    netdb = mongo_net.db.net
+
+    next_addr = netdb.find_one({'type': 'next_service_ip'})
+
+    if next_addr is not None:
+        return next_addr["ipv4"]
+    else:
+        ip4arr = [172, 30, 0, 0]
+        id = netdb.insert({
+            'type': 'next_service_ip',
+            'ipv4': ip4arr
+        })
+        return ip4arr
+
+
+def mongo_update_next_service_ip(address):
+    """
+    Update the value for the next service ip available
+    @param address: int[4] in the form [172,30,x,y] monotonically increasing with respect to the previous address
+    """
+    global mongo_net
+    netdb = mongo_net.db.net
+
+    # sanity check for the address
+    assert len(address) is 4
+    for n in address:
+        assert 0 <= n < 254
+    assert address[0] is 172
+    assert address[0] is 30
+
+    next_addr = netdb.find_one({'type': 'next_service_ip'})
+
+    # assert that the next address is actually increasing the old available one
+    assert int(str(next_addr['ipv4'][2])+str(next_addr['ipv4'][3])) <= int(str(address[2])+str(address[3]))
+
+    netdb.update_one({'type': 'next_service_ip'}, {'ipv4': address})
