@@ -200,7 +200,7 @@ def mongo_get_service_address_from_cache():
         return None
 
 
-def mongo_free_address_to_cache(address):
+def mongo_free_service_address_to_cache(address):
     """
     Add back an address to the cache
     @param address: int[4] in the shape [172,30,x,y]
@@ -250,13 +250,82 @@ def mongo_update_next_service_ip(address):
     # sanity check for the address
     assert len(address) is 4
     for n in address:
-        assert 0 <= n < 254
+        assert 0 <= n < 256
     assert address[0] is 172
-    assert address[0] is 30
-
-    next_addr = netdb.find_one({'type': 'next_service_ip'})
-
-    # assert that the next address is actually increasing the old available one
-    assert int(str(next_addr['ipv4'][2])+str(next_addr['ipv4'][3])) <= int(str(address[2])+str(address[3]))
+    assert address[1] is 30
 
     netdb.update_one({'type': 'next_service_ip'}, {'ipv4': address})
+
+
+def mongo_get_next_subnet_ip():
+    """
+    Returns the next available subnetwork ip address from the addressing space 172.16.y.z/12
+    @return: int[4] in the shape [172,x,y,z]
+    """
+    global mongo_net
+    netdb = mongo_net.db.net
+
+    next_addr = netdb.find_one({'type': 'next_subnet_ip'})
+
+    if next_addr is not None:
+        return next_addr["ipv4"]
+    else:
+        ip4arr = [172, 18, 0, 0]
+        id = netdb.insert({
+            'type': 'next_subnet_ip',
+            'ipv4': ip4arr
+        })
+        return ip4arr
+
+
+def mongo_update_next_subnet_ip(address):
+    """
+    Update the value for the next subnet ip available
+    @param address: int[4] in the form [172,x,y,z] monotonically increasing with respect to the previous address
+    """
+    global mongo_net
+    netdb = mongo_net.db.net
+
+    # sanity check for the address
+    assert len(address) is 4
+    for n in address:
+        assert 0 <= n < 256
+    assert address[0] is 172
+    assert 17 < address[1] < 30
+
+    netdb.update_one({'type': 'next_subnet_ip'}, {'ipv4': address})
+
+
+def mongo_get_subnet_address_from_cache():
+    """
+    Pop an available Subnet address, if any, from the free addresses cache
+    @return: int[4] in the shape [172,x,y,z]
+    """
+    global mongo_net
+    netdb = mongo_net.db.net
+
+    entry = netdb.find_one({'type': 'free_subnet_ip'})
+
+    if entry is not None:
+        netdb.delete_one({"_id": entry["_id"]})
+        return entry["ipv4"]
+    else:
+        return None
+
+
+def mongo_free_subnet_address_to_cache(address):
+    """
+    Add back a subnetwork address to the cache
+    @param address: int[4] in the shape [172,30,x,y]
+    """
+    global mongo_net
+    netdb = mongo_net.db.net
+
+    assert len(address) is 4
+    for n in address:
+        assert 0 <= n < 256
+
+    netdb.insert({
+        'type': 'free_subnet_ip',
+        'ipv4': address
+    })
