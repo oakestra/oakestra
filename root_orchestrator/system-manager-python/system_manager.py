@@ -7,18 +7,12 @@ from markupsafe import escape
 import time
 import threading
 from bson import json_util
-
-
-from mongodb_client import mongo_init, mongo_upsert_cluster, mongo_insert_job, mongo_find_cluster_by_id_and_incr_node, \
-    mongo_find_cluster_by_id_and_decr_node, mongo_get_job_status, mongo_update_job_status, mongo_update_cluster_information, \
-    mongo_find_cluster_by_id_and_set_number_of_nodes, mongo_find_cluster_of_job, mongo_find_job_by_id, \
-    mongo_find_cluster_by_location, mongo_get_all_jobs, mongo_get_all_clusters, mongo_find_all_active_clusters
+from service_manager import new_instance_ip, clear_instance_ip
+from mongodb_client import *
 from yamlfile_parser import yaml_reader
-from cluster_requests import cluster_request_to_deploy, cluster_request_to_delete_job, cluster_request_to_replicate_up, \
-    cluster_request_to_replicate_down, cluster_request_to_move_within_cluster
+from cluster_requests import *
 from scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from sm_logging import configure_logging
-
 
 my_logger = configure_logging()
 
@@ -67,12 +61,31 @@ def receive_scheduler_result_and_propagate_to_cluster():
     data = json.loads(request.json)
     app.logger.info(data)
     system_job_id = data.get('job_id')
-    job = data.get('job')
-    job.__setitem__('system_job_id', system_job_id)
+    replicas = data.get('replicas')
+    #job = data.get('job')
+    #job.__setitem__('system_job_id', system_job_id) #why?
     resulting_cluster = data.get('cluster')
-    # mongo_update_job_status(job_id, 'SCHEDULED')  # done in cloud-scheduler already
 
-    cluster_request_to_deploy(resulting_cluster, job)
+    # Updating status and instances
+    instance_list = []
+    for i in range(replicas):
+        instance_info = {
+            'instance_ip': new_instance_ip(),
+            'cluster_id': resulting_cluster.get('_id'),
+            'instance_number': i,
+            'namespace_ip': '',
+            'host_ip': '',
+            'host_port': '',
+        }
+        instance_list.append(instance_info)
+    mongo_update_job_status_and_instances(
+        job_id=system_job_id,
+        status='CLUSTER_SCHEDULED',
+        replicas=replicas,
+        instance_list=instance_list
+    )
+
+    cluster_request_to_deploy(resulting_cluster, mongo_find_job_by_id(system_job_id))
     return "ok"
 
 
@@ -121,15 +134,27 @@ def deploy_task():
             flash('No selected file')
             return "empty file", 400
         if file:
+            # Reading config file
             data = yaml_reader(file)
             app.logger.info(data)
-            job_id = mongo_insert_job({'file_content': data, 'status': 'SCHUEDLING REQUESTED'})  # insert job into database
-
+            # Assigning a Service IP for RR Load Balancing
+            s_ip = [{
+                "IpType": 'RR',
+                "Address": new_instance_ip(),
+            }]
+            # Insert job into database
+            job_id = mongo_insert_job(
+                {
+                    'file_content': data,
+                    'service_ip_list': s_ip
+                })
+            # Request scheduling
             threading.Thread(group=None, target=scheduler_request_deploy, args=(data, str(job_id),)).start()
+            # Job status to scheduling REQUESTED
             mongo_update_job_status(job_id, 'REQUESTED')
             return {'job_id': str(job_id)}, 200
 
-    return("/api/deploy request wihout a yaml file\n", 200)
+    return ("/api/deploy request wihout a yaml file\n", 200)
 
 
 # ................ Scheduler Test .....................#
@@ -140,7 +165,6 @@ def deploy_task():
 def scheduler_test():
     app.logger.info('Incoming Request /api/jobs - to get all jobs')
     return scheduler_request_status()
-
 
 
 # ................ Jobs Endpoints .....................#
@@ -165,6 +189,7 @@ def delete_task(job_id):
     cluster_obj = mongo_find_cluster_of_job(job_id)
     cluster_request_to_delete_job(cluster_obj, job_id)
     return "ok\n", 200
+
 
 # ................ Clusters Endpoints ................#
 # ....................................................#
@@ -305,15 +330,14 @@ def on_connect():
 
 @socketio.on('cs1', namespace='/register')
 def handle_init_client(message):
-    
     app.logger.info('SocketIO - Received Cluster_Manager_to_System_Manager_1: {}:{}'.
                     format(request.remote_addr, request.environ.get('REMOTE_PORT')))
     app.logger.info(message)
-    
+
     cid = mongo_upsert_cluster(cluster_ip=request.remote_addr, message=message)
-    
+
     x = {
-      'id': str(cid)
+        'id': str(cid)
     }
 
     emit('sc2', json.dumps(x), namespace='/register')
@@ -323,9 +347,9 @@ def handle_init_client(message):
 def disconnect():
     app.logger.info('SocketIO - Client disconnected')
 
+
 # ............... Finish WebSocket handling ............#
 # ......................................................#
-
 
 
 if __name__ == '__main__':
@@ -334,4 +358,5 @@ if __name__ == '__main__':
 
     # socketio.run(app, debug=True, host='0.0.0.0', port=MY_PORT)
     import eventlet
+
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)

@@ -137,14 +137,25 @@ def mongo_update_cluster_information(cluster_id, data):
 def mongo_insert_job(obj):
     global mongo_jobs
     app.logger.info("MONGODB - insert job...")
+    file = obj['file_content']
 
-    job_description = obj.get('file_content')
-    job_name = job_description.get('job_name')
+    # jobname and details generation
+    job_name = file['app_name'] + "." + file['app_ns'] + "." + file['service_name'] + "." + file['service_ns']
+    file['job_name'] = job_name
+    job_content = {
+        'job_name': job_name,
+        'file_content': file,
+        'service_ip_list': obj.get('service_ip_list')
+    }
 
+    # job insertion
     jobs = mongo_jobs.db.jobs
-    new_job = jobs.find_one_and_update({'job_name': job_name},
-                                       {'$set': {'job_name': job_name, 'file_content': job_description}},
-                                       upsert=True, return_document=True)
+    new_job = jobs.find_one_and_update(
+        {'job_name': job_name},
+        {'$set': job_content},
+        upsert=True,
+        return_document=True
+    )
     app.logger.info("MONGODB - job {} inserted".format(str(new_job.get('_id'))))
     return str(new_job.get('_id'))
 
@@ -167,6 +178,13 @@ def mongo_update_job_status(job_id, status):
 def mongo_find_job_by_id(job_id):
     global mongo_jobs
     return mongo_jobs.db.jobs.find_one(ObjectId(job_id))
+
+
+def mongo_update_job_status_and_instances(job_id, status, replicas, instance_list):
+    global mongo_jobs
+    print('Updating Job Status and assigning a cluster for this job...')
+    mongo_jobs.db.jobs.update_one({'_id': job_id},
+                                  {'$set': {'status': status, 'replicas': replicas, 'instance_list': instance_list}})
 
 
 # .......... BOTH CLUSTER and JOB OPERATIONS .........
