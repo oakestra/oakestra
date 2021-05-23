@@ -88,8 +88,11 @@ def clear_subnetwork_ip(addr):
         mongodb_client.mongo_free_subnet_address_to_cache(addr)
 
 
-def service_resolution():
-    pass
+def service_resolution(name):
+    job = mongodb_client.mongo_find_job_by_name(name)
+    if job is not None:
+        return job['instance_list']
+    return []
 
 
 def _increase_service_address(addr):

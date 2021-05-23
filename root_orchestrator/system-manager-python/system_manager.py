@@ -7,7 +7,7 @@ from markupsafe import escape
 import time
 import threading
 from bson import json_util
-from service_manager import new_instance_ip, clear_instance_ip
+from service_manager import new_instance_ip, clear_instance_ip, service_resolution
 from mongodb_client import *
 from yamlfile_parser import yaml_reader
 from cluster_requests import *
@@ -62,17 +62,17 @@ def receive_scheduler_result_and_propagate_to_cluster():
     app.logger.info(data)
     system_job_id = data.get('job_id')
     replicas = data.get('replicas')
-    #job = data.get('job')
-    #job.__setitem__('system_job_id', system_job_id) #why?
+    # job = data.get('job')
+    # job.__setitem__('system_job_id', system_job_id) #why?
     resulting_cluster = data.get('cluster')
 
     # Updating status and instances
     instance_list = []
     for i in range(replicas):
         instance_info = {
+            'instance_number': i,
             'instance_ip': new_instance_ip(),
             'cluster_id': resulting_cluster.get('_id'),
-            'instance_number': i,
             'namespace_ip': '',
             'host_ip': '',
             'host_port': '',
@@ -87,6 +87,32 @@ def receive_scheduler_result_and_propagate_to_cluster():
 
     cluster_request_to_deploy(resulting_cluster, mongo_find_job_by_id(system_job_id))
     return "ok"
+
+
+@app.route('/api/result/cluster_deploy')
+def get_cluster_feedback():
+    """
+    Result of the deploy operation in a cluster
+    json file structure:{
+        'job_id':string
+        'instances:[{
+            'instance_number':int
+            'namespace_ip':string
+            'host_ip':string
+            'host_port':string
+        }]
+    }
+    """
+    app.logger.info("Incoming Request /api/result/cluster_deploy")
+    data = json.loads(request.json)
+    app.logger.info(data)
+
+    mongo_update_job_net_status(
+        job_id=data.get('job_id'),
+        instances=data.get('instances')
+    )
+
+    return "roger that"
 
 
 @app.route('/api/result/replicate', methods=['POST'])
@@ -155,6 +181,18 @@ def deploy_task():
             return {'job_id': str(job_id)}, 200
 
     return ("/api/deploy request wihout a yaml file\n", 200)
+
+
+# ............. Network management Endpoint ............#
+# ......................................................#
+
+@app.route('/api/job/<job_name>/instances')
+def table_query_resolution(job_name):
+    """
+    Get all the instances of a job given the complete name
+    """
+    app.logger.info("Incoming Request /api/job/" + str(job_name) + "/instances")
+    return {'instance_list': service_resolution(job_name)}
 
 
 # ................ Scheduler Test .....................#

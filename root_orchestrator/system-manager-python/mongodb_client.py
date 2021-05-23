@@ -175,9 +175,28 @@ def mongo_update_job_status(job_id, status):
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)}, {'$set': {'status': status}})
 
 
+def mongo_update_job_net_status(job_id, instances):
+    global mongo_jobs
+    job = mongo_jobs.db.jobs.find_one({'_id': 'job_id'})
+    instance_list = job['instance_list']
+    for instance in instances:
+        instance_num = instance['instance_number']
+        elem = instance_list[instance_num]
+        elem['namespace_ip'] = instance['namespace_ip']
+        elem['host_ip'] = instance['host_ip']
+        elem['host_port'] = instance['host_port']
+        instance_list[instance_num] = elem
+    mongo_jobs.db.jobs.update_one({'_id': 'job_id'}, {'$set': {'instance_list': instance_list}})
+
+
 def mongo_find_job_by_id(job_id):
     global mongo_jobs
     return mongo_jobs.db.jobs.find_one(ObjectId(job_id))
+
+
+def mongo_find_job_by_name(job_name):
+    global mongo_jobs
+    return mongo_jobs.db.jobs.find_one({'job_name': job_name})
 
 
 def mongo_update_job_status_and_instances(job_id, status, replicas, instance_list):
