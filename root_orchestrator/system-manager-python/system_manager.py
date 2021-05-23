@@ -7,7 +7,7 @@ from markupsafe import escape
 import time
 import threading
 from bson import json_util
-from service_manager import new_instance_ip, clear_instance_ip, service_resolution
+from service_manager import new_instance_ip, clear_instance_ip, service_resolution, new_subnetwork_addr
 from mongodb_client import *
 from yamlfile_parser import yaml_reader
 from cluster_requests import *
@@ -89,7 +89,7 @@ def receive_scheduler_result_and_propagate_to_cluster():
     return "ok"
 
 
-@app.route('/api/result/cluster_deploy')
+@app.route('/api/result/cluster_deploy', methods=['POST'])
 def get_cluster_feedback():
     """
     Result of the deploy operation in a cluster
@@ -186,13 +186,22 @@ def deploy_task():
 # ............. Network management Endpoint ............#
 # ......................................................#
 
-@app.route('/api/job/<job_name>/instances')
+@app.route('/api/job/<job_name>/instances', methods=['GET'])
 def table_query_resolution(job_name):
     """
     Get all the instances of a job given the complete name
     """
     app.logger.info("Incoming Request /api/job/" + str(job_name) + "/instances")
     return {'instance_list': service_resolution(job_name)}
+
+
+@app.route('/api/net/subnet', methods=['GET'])
+def table_query_resolution(job_name):
+    """
+    Returns a new subnetwork address
+    """
+    addr = new_subnetwork_addr()
+    return {'subnet_addr': addr}
 
 
 # ................ Scheduler Test .....................#
