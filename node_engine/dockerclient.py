@@ -2,23 +2,20 @@
 import docker
 
 docker_client = docker.from_env()
-node_info = {}
 
 
-def start_container(image, name, port, job_id):
+def start_container(image, name, port):
     try:
         # start container
         container = docker_client.containers.run(image, name=name, ports={port: None}, detach=True)
         # assign address to the container
         # TODO
         address = '172.19.0.1'  # placeholder
-        mqtt_client.publish_deploy_status(node_info.id,job_id,'DEPLOYED',address)
         print(container.id)
-        return "ok"
+        return address
     except docker.errors.APIError:
-        mqtt_client.publish_deploy_status(node_info.id, job_id, 'FAILED', '')
         print("Oopps.. Docker API Error. {}")
-        return -1
+        return None
 
 
 def stop_container(container):

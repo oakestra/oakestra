@@ -10,6 +10,7 @@ from mirageosclient import run_unikernel_mirageos
 
 mqtt = None
 app = None
+node_info = {}
 
 
 def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
@@ -46,11 +47,16 @@ def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
 
         if re_nodes_topic_control_deploy is not None:
             app.logger.info("MQTT - Received .../control/deploy command")
+            address = None
             if image_technology == 'docker':
-                start_container(image=image_url, name=job_name, port=port, id=payload.get('_id'))
+                address = start_container(image=image_url, name=job_name, port=port)
             if image_technology == 'mirage':
                 commands = payload.get('commands')
                 run_unikernel_mirageos(image_url, job_name, job_name, commands)
+            if address is not None:
+                publish_deploy_status(node_info.id, payload.get('_id'), 'DEPLOYED', address)
+            else:
+                publish_deploy_status(node_info.id, payload.get('_id'), 'FAILED', '')
         elif re_nodes_topic_control_delete is not None:
             app.logger.info('MQTT - Received .../control/delete command')
             if image_technology == 'docker':

@@ -13,7 +13,7 @@ from mongodb_client import mongo_init, mongo_upsert_node, mongo_upsert_job, mong
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
 from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from cm_logging import configure_logging
-from system_manager_requests import send_aggregated_info_to_sm
+from system_manager_requests import send_aggregated_info_to_sm, system_manager_get_subnet
 from analyzing_workers import looking_for_dead_workers
 from my_prometheus_client import prometheus_init_gauge_metrics, prometheus_set_metrics
 

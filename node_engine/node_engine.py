@@ -8,18 +8,18 @@ import os
 
 from hardware_info import HardwareInfo
 import dockerclient
-from mqtt_client import mqtt_init, publish_cpu_mem
+import mqtt_client
 from ne_logging import configure_logging
 from technology_support import verify_technology_support
 from my_utils import deprecated
-
 
 MY_PORT = os.environ.get('MY_PORT') or 3000
 
 # PUSHING_INFO_DATA_JOB_INTERVAL: publish cpu/mem values regularly in seconds
 PUSHING_INFO_DATA_JOB_INTERVAL = 8
 
-clustermanager_addr = 'http://' + os.environ.get('CLUSTER_MANAGER_IP') + ':' + str(os.environ.get('CLUSTER_MANAGER_PORT'))
+clustermanager_addr = 'http://' + os.environ.get('CLUSTER_MANAGER_IP') + ':' + str(
+    os.environ.get('CLUSTER_MANAGER_PORT'))
 
 my_logger = configure_logging()
 
@@ -67,7 +67,7 @@ def stop_all():
 @sio.on('sc1', namespace='/init')
 def handle_init_greeting(jsonarg):
     app.logger.info('SocketIO - Received Cluster_Manager_to_Node_Engine_1 : ' + str(jsonarg))
-    
+
     # print(node_info.uname)
     # print(node_info.cpu_count_physical)
     # print(node_info.cpu_count_total)
@@ -89,12 +89,12 @@ def handle_init_final(jsonarg):
     mqtt_port = data["MQTT_BROKER_PORT"]
     node_info.id = data["id"]
     node_info.subnetwork = data["SUBNETWORK"]
-    dockerclient.node_info=node_info
+    mqtt_client.node_info = node_info
     app.logger.info("Received mqtt_port: {}".format(mqtt_port))
     app.logger.info("My received ID is: {}\n\n\n".format(node_info.id))
 
-    mqtt_init(app, mqtt_port, node_info.id)
-    publish_cpu_mem(node_info.id)
+    mqtt_client.mqtt_init(app, mqtt_port, node_info.id)
+    mqtt_client.publish_cpu_mem(node_info.id)
     publish_cpu_memory(node_info.id)
     sio.sleep(1)
     sio.disconnect()
@@ -122,7 +122,8 @@ def connect_error(message):
 def publish_cpu_memory(id):
     scheduler = BackgroundScheduler()
 
-    job_send_info = scheduler.add_job(publish_cpu_mem, 'interval', seconds=PUSHING_INFO_DATA_JOB_INTERVAL, args={id})
+    job_send_info = scheduler.add_job(mqtt_client.publish_cpu_mem, 'interval', seconds=PUSHING_INFO_DATA_JOB_INTERVAL,
+                                      args={id})
     scheduler.start()
 
 
