@@ -245,7 +245,7 @@ def mongo_free_service_address_to_cache(address):
     global mongo_net
     netdb = mongo_net.db.net
 
-    assert len(address) is 4
+    assert len(address) == 4
     for n in address:
         assert 0 <= n < 254
 
@@ -285,11 +285,11 @@ def mongo_update_next_service_ip(address):
     netdb = mongo_net.db.net
 
     # sanity check for the address
-    assert len(address) is 4
+    assert len(address) == 4
     for n in address:
         assert 0 <= n < 256
-    assert address[0] is 172
-    assert address[1] is 30
+    assert address[0] == 172
+    assert address[1] == 30
 
     netdb.update_one({'type': 'next_service_ip'}, {'ipv4': address})
 
@@ -324,10 +324,10 @@ def mongo_update_next_subnet_ip(address):
     netdb = mongo_net.db.net
 
     # sanity check for the address
-    assert len(address) is 4
+    assert len(address) == 4
     for n in address:
         assert 0 <= n < 256
-    assert address[0] is 172
+    assert address[0] == 172
     assert 17 < address[1] < 30
 
     netdb.update_one({'type': 'next_subnet_ip'}, {'ipv4': address})
@@ -358,7 +358,7 @@ def mongo_free_subnet_address_to_cache(address):
     global mongo_net
     netdb = mongo_net.db.net
 
-    assert len(address) is 4
+    assert len(address) == 4
     for n in address:
         assert 0 <= n < 256
 

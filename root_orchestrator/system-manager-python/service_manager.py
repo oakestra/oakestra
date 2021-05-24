@@ -98,9 +98,9 @@ def service_resolution(name):
 def _increase_service_address(addr):
     new2 = addr[2]
     new3 = (addr[3] + 1) % 254
-    if new3 is 0:
+    if new3 == 0:
         new2 = (addr[2] + 1) % 254
-        if new2 is 0:
+        if new2 == 0:
             raise RuntimeError("Exhausted Address Space")
     return [addr[0], addr[1], new2, new3]
 
@@ -114,7 +114,7 @@ def _increase_subnetwork_address(addr):
         new2 = (new2 + 1) % 256
     if new2 == 0 and new2 != addr[2]:
         new1 = (new1 + 1) % 30
-        if new1 is 0:
+        if new1 == 0:
             raise RuntimeError("Exhausted Address Space")
     return [addr[0], new1, new2, new3]
 
