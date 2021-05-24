@@ -88,6 +88,7 @@ def handle_init_final(jsonarg):
     data = json.loads(jsonarg)
     mqtt_port = data["MQTT_BROKER_PORT"]
     node_info.id = data["id"]
+    node_info.subnetwork = data["SUBNETWORK"]
     app.logger.info("Received mqtt_port: {}".format(mqtt_port))
     app.logger.info("My received ID is: {}\n\n\n".format(node_info.id))
 

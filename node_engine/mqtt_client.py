@@ -47,7 +47,7 @@ def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
         if re_nodes_topic_control_deploy is not None:
             app.logger.info("MQTT - Received .../control/deploy command")
             if image_technology == 'docker':
-                start_container(image=image_url, name=job_name, port=port)
+                start_container(image=image_url, name=job_name, port=port, id=payload.get('_id'))
             if image_technology == 'mirage':
                 commands = payload.get('commands')
                 run_unikernel_mirageos(image_url, job_name, job_name, commands)
@@ -64,3 +64,10 @@ def publish_cpu_mem(my_id):
     topic = 'nodes/' + my_id + '/information'
     mqtt.publish(topic, json.dumps({'cpu': cpu_used, 'free_cores': free_cores,
                                     'memory': memory_used, 'memory_free_in_MB': free_memory_in_MB}))
+
+
+def publish_deploy_status(my_id, job_id, status, ns_ip):
+    app.logger.info('Publishing Deployment status... my ID: {0}'.format(my_id))
+    topic = 'nodes/' + my_id + '/job'
+    mqtt.publish(topic, json.dumps({'job_id': job_id, 'status': status,
+                                    'ns_ip': ns_ip}))
