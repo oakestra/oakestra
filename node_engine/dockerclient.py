@@ -1,10 +1,8 @@
 #!/usr/bin/python
-
 import docker
-import mqtt_client
-import node_engine
 
 docker_client = docker.from_env()
+node_info = {}
 
 
 def start_container(image, name, port, job_id):
@@ -14,11 +12,11 @@ def start_container(image, name, port, job_id):
         # assign address to the container
         # TODO
         address = '172.19.0.1'  # placeholder
-        mqtt_client.publish_deploy_status(node_engine.node_info.id,job_id,'DEPLOYED',address)
+        mqtt_client.publish_deploy_status(node_info.id,job_id,'DEPLOYED',address)
         print(container.id)
         return "ok"
     except docker.errors.APIError:
-        mqtt_client.publish_deploy_status(node_engine.node_info.id, job_id, 'FAILED', '')
+        mqtt_client.publish_deploy_status(node_info.id, job_id, 'FAILED', '')
         print("Oopps.. Docker API Error. {}")
         return -1
 

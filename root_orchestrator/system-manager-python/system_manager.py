@@ -72,7 +72,7 @@ def receive_scheduler_result_and_propagate_to_cluster():
         instance_info = {
             'instance_number': i,
             'instance_ip': new_instance_ip(),
-            'cluster_id': resulting_cluster.get('_id'),
+            'cluster_id': str(resulting_cluster.get('_id')),
             'namespace_ip': '',
             'host_ip': '',
             'host_port': '',

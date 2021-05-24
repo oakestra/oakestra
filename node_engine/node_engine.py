@@ -7,7 +7,7 @@ import json
 import os
 
 from hardware_info import HardwareInfo
-from dockerclient import start_container, stop_all_running_containers
+import dockerclient
 from mqtt_client import mqtt_init, publish_cpu_mem
 from ne_logging import configure_logging
 from technology_support import verify_technology_support
@@ -52,13 +52,13 @@ def start_docker_container():
     app.logger.info('Incoming Request /docker/start')
     app.logger.info('Starting docker container......')
     # app.logger.error('Processing default request')
-    return start_container("library/nginx:alpine")  # as first example start an nginx
+    # return start_container("library/nginx:alpine")  # as first example start an nginx
 
 
 @app.route('/docker/stop_all')
 def stop_all():
     app.logger.info('Incoming Request /docker/stop_all - Stop all...')
-    return stop_all_running_containers()
+    return dockerclient.stop_all_running_containers()
 
 
 # ........ Websocket INIT begin with Cluster Manager .......
@@ -89,6 +89,7 @@ def handle_init_final(jsonarg):
     mqtt_port = data["MQTT_BROKER_PORT"]
     node_info.id = data["id"]
     node_info.subnetwork = data["SUBNETWORK"]
+    dockerclient.node_info=node_info
     app.logger.info("Received mqtt_port: {}".format(mqtt_port))
     app.logger.info("My received ID is: {}\n\n\n".format(node_info.id))
 
