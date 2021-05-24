@@ -186,7 +186,7 @@ def mongo_update_job_net_status(job_id, instances):
         elem['host_ip'] = instance['host_ip']
         elem['host_port'] = instance['host_port']
         instance_list[instance_num] = elem
-    mongo_jobs.db.jobs.update_one({'_id': 'job_id'}, {'$set': {'instance_list': instance_list}})
+    mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)}, {'$set': {'instance_list': instance_list}})
 
 
 def mongo_find_job_by_id(job_id):
@@ -202,7 +202,7 @@ def mongo_find_job_by_name(job_name):
 def mongo_update_job_status_and_instances(job_id, status, replicas, instance_list):
     global mongo_jobs
     print('Updating Job Status and assigning a cluster for this job...')
-    mongo_jobs.db.jobs.update_one({'_id': job_id},
+    mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
                                   {'$set': {'status': status, 'replicas': replicas, 'instance_list': instance_list}})
 
 

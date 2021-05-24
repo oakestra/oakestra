@@ -8,7 +8,6 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import time
 from prometheus_client import start_http_server
 
-
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_upsert_job, mongo_find_job_by_system_id, \
     mongo_update_job_status, mongo_find_node_by_name
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
@@ -26,11 +25,9 @@ MY_ASSIGNED_CLUSTER_ID = None
 
 SYSTEM_MANAGER_ADDR = 'http://' + os.environ.get('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
 
-
 my_logger = configure_logging()
 
 app = Flask(__name__)
-
 
 # socketioserver = SocketIO(app, async_mode='eventlet', logger=, engineio_logger=logging)
 socketioserver = SocketIO(app, logger=True, engineio_logger=True)
@@ -80,7 +77,7 @@ def get_scheduler_result_and_propagate_to_edge():
     job = data.get('job')
     resulting_node_id = data.get('node').get('_id')
 
-    # mongo_update_job_status(job.get('id'), 'NODE_SCHEDULED')  # Done in Cluster_Scheduler
+    job = mongo_update_job_status(job.get('id'), 'NODE_SCHEDULED', data.get('node'))
     mqtt_publish_edge_deploy(resulting_node_id, job)
     return "ok"
 
@@ -159,11 +156,13 @@ def handle_init_worker(message):
     app.logger.info('Websocket - Received Edge_to_Cluster_Manager_1: {}'.format(request.remote_addr))
     app.logger.info(message)
 
-    client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": message})
+    client_subnetwork = system_manager_get_subnet()
+    client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": message, "node_subnet": client_subnetwork})
 
     init_packet = {
         "id": str(client_id),
-        "MQTT_BROKER_PORT": os.environ.get('MQTT_BROKER_PORT')
+        "MQTT_BROKER_PORT": os.environ.get('MQTT_BROKER_PORT'),
+        "SUBNETWORK": client_subnetwork,
     }
 
     # create ID and send it along with MQTT_Broker info to the client. save id into database
@@ -239,6 +238,7 @@ def init_cm_to_sm():
         app.logger.error('SocketIO - Connection Establishment with System Manager failed!')
     time.sleep(1)
 
+
 # ......... FINISH - register at System Manager ........#
 # ......................................................#
 
@@ -247,19 +247,20 @@ def background_job_send_aggregated_information_to_sm():
     app.logger.info("Set up Background Jobs...")
     scheduler = BackgroundScheduler()
     job_send_info = scheduler.add_job(send_aggregated_info_to_sm, 'interval', seconds=BACKGROUND_JOB_INTERVAL,
-                                      kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID, 'time_interval': BACKGROUND_JOB_INTERVAL})
-    job_dead_nodes = scheduler.add_job(looking_for_dead_workers, 'interval', seconds=2*BACKGROUND_JOB_INTERVAL,
+                                      kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID,
+                                              'time_interval': BACKGROUND_JOB_INTERVAL})
+    job_dead_nodes = scheduler.add_job(looking_for_dead_workers, 'interval', seconds=2 * BACKGROUND_JOB_INTERVAL,
                                        kwargs={'interval': BACKGROUND_JOB_INTERVAL})
     scheduler.start()
 
 
 if __name__ == '__main__':
-
     # socketioserver.run(app, debug=True, host='0.0.0.0', port=MY_PORT)
     # app.run(debug=True, host='0.0.0.0', port=MY_PORT)
 
     start_http_server(10001)  # start prometheus server
 
     import eventlet
+
     init_cm_to_sm()
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)  # see README for logging notes

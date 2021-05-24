@@ -90,7 +90,7 @@ def receive_scheduler_result_and_propagate_to_cluster():
 
 
 @app.route('/api/result/cluster_deploy', methods=['POST'])
-def get_cluster_feedback():
+def get_cluster_deployment_status_feedback():
     """
     Result of the deploy operation in a cluster
     json file structure:{
@@ -196,7 +196,7 @@ def table_query_resolution(job_name):
 
 
 @app.route('/api/net/subnet', methods=['GET'])
-def table_query_resolution(job_name):
+def subnet_request():
     """
     Returns a new subnetwork address
     """

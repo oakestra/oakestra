@@ -31,3 +31,38 @@ def cloud_request_incr_node(my_id):
         requests.get(request_addr)
     except requests.exceptions.RequestException as e:
         print('Calling System Manager /api/cluster/../incr_node not successful.')
+
+
+def system_manager_get_subnet():
+    print('Asking the System Manager for a subnet')
+    try:
+        response = requests.get(SYSTEM_MANAGER_ADDR + '/api/net/subnet')
+        addr = json.loads(response.text).get('subnet_addr')
+        if len(addr) > 0:
+            return addr
+        else:
+            raise requests.exceptions.RequestException('No address found')
+    except requests.exceptions.RequestException as e:
+        print('Calling System Manager /api/information not successful.')
+
+
+def system_manager_notify_deployment_status(job, worker_id):
+    print('Sending deployment status information to System Manager.')
+    data = {
+        'job_id': job.get('_id'),
+        'instances': [],
+    }
+    # prepare json data information
+    for instance in job['instance_list']:
+        if instance['worker_id'] is worker_id:
+            elem = {
+                'instance_number': instance['instance_number'],
+                'namespace_ip': instance['namespace_ip'],
+                'host_ip': instance['host_ip'],
+                'host_port': instance['host_port'],
+            }
+            data['instances'].append(elem)
+    try:
+        requests.post(SYSTEM_MANAGER_ADDR + '/api/result/cluster_deploy', json=data)
+    except requests.exceptions.RequestException as e:
+        print('Calling System Manager /api/result/cluster_deploy not successful.')
