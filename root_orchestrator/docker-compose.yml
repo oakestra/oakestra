@@ -72,7 +72,7 @@ services:
       - SYSTEM_MANAGER_PORT=10000
       - CLOUD_MONGO_URL=mongo
       - CLOUD_MONGO_PORT=10007
-      - REDIS_ADDR=redis://:cloudRedis@3.120.37.66:6379
+      - REDIS_ADDR=redis://:cloudRedis@redis:6379
     depends_on:
       - redis
       - mongo

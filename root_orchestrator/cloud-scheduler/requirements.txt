@@ -1,5 +1,6 @@
 flask
 flask_pymongo
-celery
+celery==4.4.2
+click
 redis
 requests
