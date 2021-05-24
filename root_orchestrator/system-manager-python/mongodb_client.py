@@ -291,7 +291,7 @@ def mongo_update_next_service_ip(address):
     assert address[0] == 172
     assert address[1] == 30
 
-    netdb.update_one({'type': 'next_service_ip'}, {'ipv4': address})
+    netdb.update_one({'type': 'next_service_ip'}, {'$set': {'ipv4': address}})
 
 
 def mongo_get_next_subnet_ip():
@@ -330,7 +330,7 @@ def mongo_update_next_subnet_ip(address):
     assert address[0] == 172
     assert 17 < address[1] < 30
 
-    netdb.update_one({'type': 'next_subnet_ip'}, {'ipv4': address})
+    netdb.update_one({'type': 'next_subnet_ip'}, {'$set': {'ipv4': address}})
 
 
 def mongo_get_subnet_address_from_cache():
