@@ -160,7 +160,7 @@ def mongo_find_all_jobs():
 
 def mongo_update_job_status(job_id, status, node):
     global mongo_jobs
-    job = mongo_jobs.db.jobs.find_one({'_id': 'job_id'})
+    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
     instance_list = job['instance_list']
     for instance in instance_list:
         if instance.get('host_ip') is None:

@@ -77,7 +77,7 @@ def get_scheduler_result_and_propagate_to_edge():
     job = data.get('job')
     resulting_node_id = data.get('node').get('_id')
 
-    job = mongo_update_job_status(job.get('id'), 'NODE_SCHEDULED', data.get('node'))
+    job = mongo_update_job_status(job.get('_id'), 'NODE_SCHEDULED', data.get('node'))
     mqtt_publish_edge_deploy(resulting_node_id, job)
     return "ok"
 
