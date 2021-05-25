@@ -140,6 +140,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
 
 def mongo_upsert_job(job):
     print('insert/upsert requested job')
+    job['_id'] = ObjectId(job['_id'])
     return mongo_jobs.db.jobs.find_one_and_update(job, {'$set': job}, upsert=True,
                                                   return_document=True)  # if job does not exist, insert it
 
@@ -171,8 +172,8 @@ def mongo_update_job_status(job_id, status, node):
             instance['worker_id'] = node.get('_id')
             break
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
-                                  {'$set': {'status': status, 'instance_list': instance_list}},
-                                  return_document=True)
+                                         {'$set': {'status': status, 'instance_list': instance_list}},
+                                         return_document=True)
 
 
 def mongo_update_job_deployed(job_id, status, ns_ip, node_id):
@@ -184,5 +185,5 @@ def mongo_update_job_deployed(job_id, status, ns_ip, node_id):
             instance['namespace_ip'] = ns_ip
             break
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
-                                  {'$set': {'status': status, 'instance_list': instance_list}},
-                                  return_document=True)
+                                         {'$set': {'status': status, 'instance_list': instance_list}},
+                                         return_document=True)
