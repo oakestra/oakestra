@@ -8,6 +8,7 @@ def cluster_request_to_deploy(cluster_obj, job):
     print(cluster_obj)
     cluster_addr = 'http://' + cluster_obj.get('ip') + ':' + str(cluster_obj.get('port')) + '/api/deploy'
     try:
+        job['_id'] = str(job['_id'])
         resp = requests.post(cluster_addr, json=job)
         print(resp)
     except requests.exceptions.RequestException as e:
