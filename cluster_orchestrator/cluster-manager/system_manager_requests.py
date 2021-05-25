@@ -50,7 +50,7 @@ def system_manager_get_subnet():
 def system_manager_notify_deployment_status(job, worker_id):
     print('Sending deployment status information to System Manager.')
     data = {
-        'job_id': job.get('_id'),
+        'job_id': job.get('system_job_id'),
         'instances': [],
     }
     # prepare json data information
