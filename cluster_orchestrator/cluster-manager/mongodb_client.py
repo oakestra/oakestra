@@ -141,9 +141,11 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
 def mongo_upsert_job(job):
     print('insert/upsert requested job')
     job['system_job_id'] = job['_id']
-    job['_id'] = ''
-    return mongo_jobs.db.jobs.find_one_and_update({'system_job_id': job['system_job_id']}, {'$set': job}, upsert=True,
-                                                  return_document=True)  # if job does not exist, insert it
+    del job['_id']
+    result = mongo_jobs.db.jobs.find_one_and_update({'system_job_id': job['system_job_id']}, {'$set': job}, upsert=True,
+                                                    return_document=True)  # if job does not exist, insert it
+    result['_id'] = str(result['_id'])
+    return result
 
 
 def mongo_find_job_by_system_id(system_job_id):
