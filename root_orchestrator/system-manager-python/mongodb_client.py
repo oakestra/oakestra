@@ -177,7 +177,7 @@ def mongo_update_job_status(job_id, status):
 
 def mongo_update_job_net_status(job_id, instances):
     global mongo_jobs
-    job = mongo_jobs.db.jobs.find_one({'_id': 'job_id'})
+    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
     instance_list = job['instance_list']
     for instance in instances:
         instance_num = instance['instance_number']
