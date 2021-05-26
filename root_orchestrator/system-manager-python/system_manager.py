@@ -104,7 +104,7 @@ def get_cluster_deployment_status_feedback():
     }
     """
     app.logger.info("Incoming Request /api/result/cluster_deploy")
-    data = json.loads(request.json)
+    data = request.json
     app.logger.info(data)
 
     mongo_update_job_net_status(
