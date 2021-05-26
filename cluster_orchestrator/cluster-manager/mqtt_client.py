@@ -86,8 +86,10 @@ def mqtt_publish_edge_delete(worker_id, job):
 
 
 def deployment_info_from_worker_node(job_id, status, NsIp, node_id):
+    app.logger.debug('JOB-DEPLOYMENT-UPDATE: sending job info to the root')
     # Update mongo job
     mongo_update_job_deployed(job_id, status, NsIp, node_id)
     job = mongo_find_job_by_id(job_id)
+    app.logger.debug(job)
     # Notify System manager
     system_manager_notify_deployment_status(job, node_id)
