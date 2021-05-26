@@ -38,7 +38,6 @@ def clear_instance_ip(addr):
     assert 0 <= addr[3] < 256
 
     with instance_ip_lock:
-
         next_addr = mongodb_client.mongo_get_next_service_ip()
 
         # Ensure that the give address is actually before the next address from the pool
@@ -78,7 +77,6 @@ def clear_subnetwork_ip(addr):
     assert addr[3] in [0, 64, 128]
 
     with subnetip_ip_lock:
-
         next_addr = mongodb_client.mongo_get_next_subnet_ip()
 
         # Ensure that the give address is actually before the next address from the pool
@@ -90,6 +88,13 @@ def clear_subnetwork_ip(addr):
 
 def service_resolution(name):
     job = mongodb_client.mongo_find_job_by_name(name)
+    if job is not None:
+        return job['instance_list']
+    return []
+
+
+def service_resolution_ip(ip):
+    job = mongodb_client.mongo_find_job_by_ip(ip)
     if job is not None:
         return job['instance_list']
     return []

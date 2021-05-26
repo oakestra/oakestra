@@ -7,7 +7,8 @@ from markupsafe import escape
 import time
 import threading
 from bson import json_util
-from service_manager import new_instance_ip, clear_instance_ip, service_resolution, new_subnetwork_addr
+from service_manager import new_instance_ip, clear_instance_ip, service_resolution, new_subnetwork_addr, \
+    service_resolution_ip
 from mongodb_client import *
 from yamlfile_parser import yaml_reader
 from cluster_requests import *
@@ -187,12 +188,22 @@ def deploy_task():
 # ......................................................#
 
 @app.route('/api/job/<job_name>/instances', methods=['GET'])
-def table_query_resolution(job_name):
+def table_query_resolution_by_jobname(job_name):
     """
     Get all the instances of a job given the complete name
     """
     app.logger.info("Incoming Request /api/job/" + str(job_name) + "/instances")
     return {'instance_list': service_resolution(job_name)}
+
+
+@app.route('/api/job/ip/<service_ip>/instances', methods=['GET'])
+def table_query_resolution_by_ip(service_ip):
+    """
+    Get all the instances of a job given a Service IP in 172_30_x_y notation
+    """
+    service_ip = service_ip.replace("_", ".")
+    app.logger.info("Incoming Request /api/job/ip/" + str(service_ip) + "/instances")
+    return {'instance_list': service_resolution_ip(service_ip)}
 
 
 @app.route('/api/net/subnet', methods=['GET'])

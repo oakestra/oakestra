@@ -199,6 +199,16 @@ def mongo_find_job_by_name(job_name):
     return mongo_jobs.db.jobs.find_one({'job_name': job_name})
 
 
+def mongo_find_job_by_ip(ip):
+    global mongo_jobs
+    # Search by Service Ip
+    job = mongo_jobs.db.jobs.find_one({'ervice_ip_list.Address': ip})
+    if job is None:
+        # Search by instance ip
+        job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip': ip})
+    return job
+
+
 def mongo_update_job_status_and_instances(job_id, status, replicas, instance_list):
     global mongo_jobs
     print('Updating Job Status and assigning a cluster for this job...')
