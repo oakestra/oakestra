@@ -156,6 +156,11 @@ def mongo_find_job_by_system_id(system_job_id):
     return job_obj
 
 
+def mongo_find_job_by_id(id):
+    print('Find job by Id')
+    return mongo_jobs.db.jobs.find_one({'_id': ObjectId(id)})
+
+
 def mongo_find_all_jobs():
     global mongo_jobs
     # list (= going into RAM) okey for small result sets (not clean for large data sets!)
@@ -176,8 +181,7 @@ def mongo_update_job_status(job_id, status, node):
             instance['worker_id'] = node.get('_id')
             break
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
-                                         {'$set': {'status': status, 'instance_list': instance_list}},
-                                         upsert=True, return_document=True)
+                                         {'$set': {'status': status, 'instance_list': instance_list}})
 
 
 def mongo_update_job_deployed(job_id, status, ns_ip, node_id):
@@ -189,5 +193,4 @@ def mongo_update_job_deployed(job_id, status, ns_ip, node_id):
             instance['namespace_ip'] = ns_ip
             break
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
-                                         {'$set': {'status': status, 'instance_list': instance_list}},
-                                         upsert=True, return_document=True)
+                                         {'$set': {'status': status, 'instance_list': instance_list}})

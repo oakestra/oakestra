@@ -9,7 +9,7 @@ import time
 from prometheus_client import start_http_server
 
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_upsert_job, mongo_find_job_by_system_id, \
-    mongo_update_job_status, mongo_find_node_by_name
+    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
 from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from cm_logging import configure_logging
@@ -77,7 +77,8 @@ def get_scheduler_result_and_propagate_to_edge():
     job = data.get('job')
     resulting_node_id = data.get('node').get('_id')
 
-    job = mongo_update_job_status(job.get('_id'), 'NODE_SCHEDULED', data.get('node'))
+    mongo_update_job_status(job.get('_id'), 'NODE_SCHEDULED', data.get('node'))
+    job = mongo_find_job_by_id(job.get('_id'))
     mqtt_publish_edge_deploy(resulting_node_id, job)
     return "ok"
 

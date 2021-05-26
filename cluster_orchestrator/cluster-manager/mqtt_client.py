@@ -4,7 +4,8 @@ import json
 from datetime import datetime
 
 from flask_mqtt import Mqtt
-from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem
+from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem, mongo_update_job_deployed, mongo_find_job_by_id
+from system_manager_requests import system_manager_notify_deployment_status
 
 mqtt = None
 app = None
@@ -86,6 +87,7 @@ def mqtt_publish_edge_delete(worker_id, job):
 
 def deployment_info_from_worker_node(job_id, status, NsIp, node_id):
     # Update mongo job
-    job = mongo_update_job_deployed(job_id, status, NsIp, node_id)
+    mongo_update_job_deployed(job_id, status, NsIp, node_id)
+    job = mongo_find_job_by_id(job_id)
     # Notify System manager
     system_manager_notify_deployment_status(job, node_id)
