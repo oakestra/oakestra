@@ -13,8 +13,9 @@ def start_container(image, name, port):
         address = '172.19.0.1'  # placeholder
         print(container.id)
         return address
-    except docker.errors.APIError:
+    except docker.errors.APIError as e:
         print("Oopps.. Docker API Error. {}")
+        print(e)
         return None
 
 
