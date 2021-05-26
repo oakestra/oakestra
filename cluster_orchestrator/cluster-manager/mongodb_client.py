@@ -172,7 +172,7 @@ def mongo_update_job_status(job_id, status, node):
     job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
     instance_list = job['instance_list']
     for instance in instance_list:
-        if instance.get('host_ip') is None:
+        if instance.get('host_ip') == '':
             instance['host_ip'] = node['node_address']
             port = node['node_info'].get('node_port')
             if port is None:
