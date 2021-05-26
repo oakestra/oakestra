@@ -142,6 +142,7 @@ def mongo_upsert_job(job):
     print('insert/upsert requested job')
     job['system_job_id'] = job['_id']
     del job['_id']
+    ## REMOVE ENTRY FROM DB
     result = mongo_jobs.db.jobs.find_one_and_update({'system_job_id': job['system_job_id']}, {'$set': job}, upsert=True,
                                                     return_document=True)  # if job does not exist, insert it
     result['_id'] = str(result['_id'])
@@ -176,7 +177,7 @@ def mongo_update_job_status(job_id, status, node):
             break
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
                                          {'$set': {'status': status, 'instance_list': instance_list}},
-                                         return_document=True)
+                                         upsert=True, return_document=True)
 
 
 def mongo_update_job_deployed(job_id, status, ns_ip, node_id):
@@ -189,4 +190,4 @@ def mongo_update_job_deployed(job_id, status, ns_ip, node_id):
             break
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
                                          {'$set': {'status': status, 'instance_list': instance_list}},
-                                         return_document=True)
+                                         upsert=True, return_document=True)
