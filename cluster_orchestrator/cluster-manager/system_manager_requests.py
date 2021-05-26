@@ -55,7 +55,7 @@ def system_manager_notify_deployment_status(job, worker_id):
     }
     # prepare json data information
     for instance in job['instance_list']:
-        if instance['worker_id'] is worker_id:
+        if instance['worker_id'] == worker_id:
             elem = {
                 'instance_number': instance['instance_number'],
                 'namespace_ip': instance['namespace_ip'],
