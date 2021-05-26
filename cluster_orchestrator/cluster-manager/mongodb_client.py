@@ -186,7 +186,7 @@ def mongo_update_job_status(job_id, status, node):
 
 def mongo_update_job_deployed(job_id, status, ns_ip, node_id):
     global mongo_jobs
-    job = mongo_jobs.db.jobs.find_one({'_id': 'job_id'})
+    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
     instance_list = job['instance_list']
     for instance in instance_list:
         if str(instance.get('worker_id')) is str(node_id) and instance.get('namespace_ip') is '':
