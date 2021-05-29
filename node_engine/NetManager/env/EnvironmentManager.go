@@ -127,6 +127,19 @@ func NewStatic(proxyname string) Environment {
 	return NewCustom(proxyname, config)
 }
 
+// Creates a new environment using the static configuration files
+func NewDefault(proxyname string, network string) Environment {
+	log.Println("Creating with default config")
+	config := Configuration{
+		HostBridgeName:             "goProxyBridge",
+		HostBridgeIP:               network,
+		HostBridgeMask:             "/26",
+		HostTunName:                "goProxyTun",
+		ConnectedInternetInterface: "",
+	}
+	return NewCustom(proxyname, config)
+}
+
 // Attach a Docker container to the bridge and the current network environment
 func (env *Environment) AttachDockerContainer(containername string, ip net.IP) error {
 
