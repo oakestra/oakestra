@@ -16,6 +16,7 @@ def net_manager_docker_deploy(containerid):
 
     try:
         response = requests.post(request_address, json=request)
+        print(response.text)
         response = json.loads(response.text)
         return response.get('nsAddress')
     except requests.exceptions.RequestException as e:
