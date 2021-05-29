@@ -11,21 +11,21 @@ import (
 )
 
 type deployRequest struct {
-	serviceName string
-	containerid string
+	ServiceName string `json:"serviceName"`
+	Containerid string `json:"containerid"`
 }
 
 type deployResponse struct {
-	serviceName string
-	nsAddress   string
+	ServiceName string `json:"serviceName"`
+	NsAddress   string `json:"nsAddress"`
 }
 
 type undeployRequest struct {
-	servicename string
+	Servicename string `json:"servicename"`
 }
 
 type registerRequest struct {
-	subnetwork string
+	Subnetwork string `json:"subnetwork"`
 }
 
 func handleRequests() {
@@ -67,7 +67,7 @@ func dockerUndeploy(writer http.ResponseWriter, request *http.Request) {
 
 	log.Println(requestStruct)
 
-	Env.DetachDockerContainer(requestStruct.servicename)
+	Env.DetachDockerContainer(requestStruct.Servicename)
 
 	writer.WriteHeader(http.StatusOK)
 }
@@ -104,15 +104,15 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 	log.Println(requestStruct)
 
 	//attach network to the container
-	addr, err := Env.AttachDockerContainer(requestStruct.containerid)
+	addr, err := Env.AttachDockerContainer(requestStruct.Containerid)
 	if err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	response := deployResponse{
-		serviceName: requestStruct.serviceName,
-		nsAddress:   addr.String(),
+		ServiceName: requestStruct.ServiceName,
+		NsAddress:   addr.String(),
 	}
 
 	log.Println("Response to /docker/deploy: ", response)
@@ -150,7 +150,7 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	Proxy = proxy.New()
 
 	//initialize the Env Manager
-	Env = env.NewDefault(Proxy.HostTUNDeviceName, requestStruct.subnetwork)
+	Env = env.NewDefault(Proxy.HostTUNDeviceName, requestStruct.Subnetwork)
 
 	//set initialization flag
 	InitializationCompleted = true
