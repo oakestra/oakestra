@@ -16,8 +16,11 @@ def net_manager_docker_deploy(containerid):
 
     try:
         response = requests.post(request_address, json=request)
-        print(response.text)
-        response = json.loads(response.text)
+        if response.status_code == 200:
+            print(response.text)
+            response = json.loads(response.text)
+        else:
+            raise Exception("Error during netcall, code: "+str(response.status_code))
         return response.get('nsAddress')
     except requests.exceptions.RequestException as e:
         print('Calling NetManager not successful.')

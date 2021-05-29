@@ -117,6 +117,7 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 
 	log.Println("Response to /docker/deploy: ", response)
 
+	writer.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(writer).Encode(response)
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
