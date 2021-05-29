@@ -3,6 +3,7 @@
   <component name="Go" enabled="true">
     <buildTags>
       <option name="os" value="linux" />
+      <option name="arch" value="amd64" />
       <option name="goVersion" value="go1.13" />
     </buildTags>
   </component>

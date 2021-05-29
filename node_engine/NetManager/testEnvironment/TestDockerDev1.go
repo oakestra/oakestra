@@ -36,7 +36,7 @@ func main() {
 		HostBridgeIP:               "172.19.1.1",
 		HostBridgeMask:             "/24",
 		HostTunName:                "goProxyTun",
-		ConnectedInternetInterface: "wlan0",
+		ConnectedInternetInterface: "",
 	}
 
 	time.Sleep(4 * time.Second)

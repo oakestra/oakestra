@@ -64,6 +64,11 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 		translationTable:  NewTableManager(),
 	}
 
+	//Get Connected Internet Interface
+	if e.config.ConnectedInternetInterface == "" {
+		_, e.config.ConnectedInternetInterface = GetLocalIPandIface()
+	}
+
 	//create bridge
 	log.Println("Creation of goProxyBridge")
 	_, err := e.CreateHostBridge()
