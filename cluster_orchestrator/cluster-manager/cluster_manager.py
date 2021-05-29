@@ -8,6 +8,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import time
 from prometheus_client import start_http_server
 
+from cluster_balancer import service_resolution, service_resolution_ip
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_upsert_job, mongo_find_job_by_system_id, \
     mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
@@ -142,6 +143,28 @@ def scheduler_test():
     app.logger.info('Incoming Request /api/jobs - to get all jobs')
     return scheduler_request_status()
 
+
+# ............. Network management Endpoint ............#
+# ......................................................#
+
+@app.route('/api/job/<job_name>/instances', methods=['GET'])
+def table_query_resolution_by_jobname(job_name):
+    """
+    Get all the instances of a job given the complete name
+    """
+    service_ip = job_name.replace("_", ".")
+    app.logger.info("Incoming Request /api/job/" + str(job_name) + "/instances")
+    return {'instance_list': service_resolution(job_name)}
+
+
+@app.route('/api/job/ip/<service_ip>/instances', methods=['GET'])
+def table_query_resolution_by_ip(service_ip):
+    """
+    Get all the instances of a job given a Service IP in 172_30_x_y notation
+    """
+    service_ip = service_ip.replace("_", ".")
+    app.logger.info("Incoming Request /api/job/ip/" + str(service_ip) + "/instances")
+    return {'instance_list': service_resolution_ip(service_ip)}
 
 # ...... Websocket INIT Handling with edge nodes .......#
 # ......................................................#

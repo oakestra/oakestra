@@ -67,3 +67,25 @@ def system_manager_notify_deployment_status(job, worker_id):
         requests.post(SYSTEM_MANAGER_ADDR + '/api/result/cluster_deploy', json=data)
     except requests.exceptions.RequestException as e:
         print('Calling System Manager /api/result/cluster_deploy not successful.')
+
+
+def cloud_table_query_ip(ip):
+    print('table query to the System Manager...')
+    job_ip = ip.replace(".", "_")
+    request_addr = SYSTEM_MANAGER_ADDR + '/api/job/ip/' + str(job_ip) + '/instances'
+    print(request_addr)
+    try:
+        return requests.get(request_addr).json
+    except requests.exceptions.RequestException as e:
+        print('Calling System Manager /api/job/ip/../instances not successful.')
+
+
+def cloud_table_query_service_name(name):
+    print('table query to the System Manager...')
+    job_name = name.replace(".", "_")
+    request_addr = SYSTEM_MANAGER_ADDR + '/api/job/' + str(job_name) + '/instances'
+    print(request_addr)
+    try:
+        return requests.get(request_addr).json
+    except requests.exceptions.RequestException as e:
+        print('Calling System Manager /api/job/../instances not successful.')

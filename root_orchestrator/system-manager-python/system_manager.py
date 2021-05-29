@@ -192,6 +192,7 @@ def table_query_resolution_by_jobname(job_name):
     """
     Get all the instances of a job given the complete name
     """
+    job_name = job_name.replace("_", ".")
     app.logger.info("Incoming Request /api/job/" + str(job_name) + "/instances")
     return {'instance_list': service_resolution(job_name)}
 

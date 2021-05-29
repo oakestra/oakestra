@@ -167,6 +167,21 @@ def mongo_find_all_jobs():
     return list(mongo_jobs.db.jobs.find({}, {'_id': 0, 'system_job_id': 1, 'status': 1}))
 
 
+def mongo_find_job_by_name(job_name):
+    global mongo_jobs
+    return mongo_jobs.db.jobs.find_one({'job_name': job_name})
+
+
+def mongo_find_job_by_ip(ip):
+    global mongo_jobs
+    # Search by Service Ip
+    job = mongo_jobs.db.jobs.find_one({'service_ip_list.Address': ip})
+    if job is None:
+        # Search by instance ip
+        job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip': ip})
+    return job
+
+
 def mongo_update_job_status(job_id, status, node):
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})

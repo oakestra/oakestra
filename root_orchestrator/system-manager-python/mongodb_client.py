@@ -202,7 +202,7 @@ def mongo_find_job_by_name(job_name):
 def mongo_find_job_by_ip(ip):
     global mongo_jobs
     # Search by Service Ip
-    job = mongo_jobs.db.jobs.find_one({'ervice_ip_list.Address': ip})
+    job = mongo_jobs.db.jobs.find_one({'service_ip_list.Address': ip})
     if job is None:
         # Search by instance ip
         job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip': ip})
