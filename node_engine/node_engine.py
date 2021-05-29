@@ -10,6 +10,7 @@ from hardware_info import HardwareInfo
 import dockerclient
 import mqtt_client
 from ne_logging import configure_logging
+from net_manager_requests import net_manager_register
 from technology_support import verify_technology_support
 from my_utils import deprecated
 
@@ -84,6 +85,7 @@ def handle_init_greeting(jsonarg):
 
 @sio.on('sc2', namespace='/init')
 def handle_init_final(jsonarg):
+    # get initial node config
     app.logger.info('SocketIO - Received Cluster_Manager_to_Node_Engine_2:')
     data = json.loads(jsonarg)
     mqtt_port = data["MQTT_BROKER_PORT"]
@@ -93,9 +95,15 @@ def handle_init_final(jsonarg):
     app.logger.info("Received mqtt_port: {}".format(mqtt_port))
     app.logger.info("My received ID is: {}\n\n\n".format(node_info.id))
 
+    # register to the netManager
+    net_manager_register(node_info.subnetwork)
+
+    # publish node info
     mqtt_client.mqtt_init(app, mqtt_port, node_info.id)
     mqtt_client.publish_cpu_mem(node_info.id)
     publish_cpu_memory(node_info.id)
+
+    # disconnect the Socket
     sio.sleep(1)
     sio.disconnect()
 
