@@ -4,11 +4,9 @@ import (
 	"NetManager/env"
 	"NetManager/proxy"
 	"encoding/json"
-	"fmt"
 	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
 )
 
@@ -40,10 +38,11 @@ func handleRequests() {
 
 var Env env.Environment
 var Proxy proxy.GoProxyTunnel
+var InitializationCompleted = false
 
 /*
 Endpoint: /docker/undeploy
-Usage: used to remove the network from a docker container
+Usage: used to remove the network from a docker container. This method can be used only after the registration
 Method: POST
 Request Json:
 	{
@@ -52,12 +51,30 @@ Request Json:
 Response: 200 OK or Failure code
 */
 func dockerUndeploy(writer http.ResponseWriter, request *http.Request) {
+	log.Println("Received HTTP request - /docker/undeploy ")
 
+	if !InitializationCompleted {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	reqBody, _ := ioutil.ReadAll(request.Body)
+	var requestStruct undeployRequest
+	err := json.Unmarshal(reqBody, &requestStruct)
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+	}
+
+	log.Println(requestStruct)
+
+	Env.DetachDockerContainer(requestStruct.servicename)
+
+	writer.WriteHeader(http.StatusOK)
 }
 
 /*
 Endpoint: /docker/deploy
-Usage: used to assign a network to a docker container
+Usage: used to assign a network to a docker container. This method can be used only after the registration
 Method: POST
 Request Json:
 	{
@@ -70,6 +87,13 @@ Response Json:
 	}
 */
 func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
+	log.Println("Received HTTP request - /docker/deploy ")
+
+	if !InitializationCompleted {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	reqBody, _ := ioutil.ReadAll(request.Body)
 	var requestStruct deployRequest
 	err := json.Unmarshal(reqBody, &requestStruct)
@@ -77,23 +101,27 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusBadRequest)
 	}
 
+	log.Println(requestStruct)
+
 	//attach network to the container
-	newAddr := generateAddr()
-	Env.AttachDockerContainer(requestStruct.containerid, newAddr)
+	addr, err := Env.AttachDockerContainer(requestStruct.containerid)
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	response := deployResponse{
 		serviceName: requestStruct.serviceName,
-		nsAddress:   "",
+		nsAddress:   addr.String(),
 	}
+
+	log.Println("Response to /docker/deploy: ", response)
 
 	err = json.NewEncoder(writer).Encode(response)
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
+		return
 	}
-}
-
-func generateAddr() net.IP {
-	return net.ParseIP("")
 }
 
 /*
@@ -107,6 +135,8 @@ Request Json:
 Response: 200 or Failure code
 */
 func register(writer http.ResponseWriter, request *http.Request) {
+	log.Println("Received HTTP request - /register ")
+
 	reqBody, _ := ioutil.ReadAll(request.Body)
 	var requestStruct registerRequest
 	err := json.Unmarshal(reqBody, &requestStruct)
@@ -114,21 +144,21 @@ func register(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusBadRequest)
 	}
 
-	//initialize the node
-	envconfig := env.Configuration{
-		HostBridgeName:             "goProxyBridge",
-		HostBridgeIP:               requestStruct.subnetwork,
-		HostBridgeMask:             "/26",
-		HostTunName:                "goProxyTun",
-		ConnectedInternetInterface: "wlan0",
-	}
+	log.Println(requestStruct)
 
-	//assign the network
+	//initialize the proxy tunnel
+	Proxy = proxy.New()
+
+	//initialize the Env Manager
+	Env = env.NewDefault(Proxy.HostTUNDeviceName, requestStruct.subnetwork)
+
+	//set initialization flag
+	InitializationCompleted = true
 
 	writer.WriteHeader(http.StatusOK)
 }
 
 func main() {
-	fmt.Println("Rest API v2.0 - Mux Routers")
+	log.Println("NetManager started. Waiting for registration.")
 	handleRequests()
 }

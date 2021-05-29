@@ -32,6 +32,7 @@ type Configuration struct {
 
 // env class
 type Environment struct {
+	//### Environment management variables
 	nodeNetwork       net.IPNet
 	nameSpaces        []string
 	networkInterfaces []networkInterface
@@ -39,6 +40,11 @@ type Environment struct {
 	proxyName         string
 	config            Configuration
 	translationTable  TableManager
+	//### Deployment management variables
+	deployedServices map[string]net.IP //all the deployed services with the ip
+	nextContainerIP  net.IP            //next address for the next container to be deployed
+	totNextAddr      int               //number of addresses currently generated, max 62
+	addrCache        []net.IP          //Cache used to store the free addresses available for new containers
 }
 
 // current network interfaces in the system
@@ -62,6 +68,10 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 		proxyName:         proxyname,
 		config:            customConfig,
 		translationTable:  NewTableManager(),
+		nextContainerIP:   nextIP(net.ParseIP(customConfig.HostBridgeIP), 1),
+		totNextAddr:       1,
+		addrCache:         make([]net.IP, 0),
+		deployedServices:  make(map[string]net.IP, 0),
 	}
 
 	//Get Connected Internet Interface
@@ -69,9 +79,14 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 		_, e.config.ConnectedInternetInterface = GetLocalIPandIface()
 	}
 
+	err := e.Update()
+	if err == nil {
+		e.Destroy()
+	}
+
 	//create bridge
 	log.Println("Creation of goProxyBridge")
-	_, err := e.CreateHostBridge()
+	_, err = e.CreateHostBridge()
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -132,12 +147,12 @@ func NewStatic(proxyname string) Environment {
 	return NewCustom(proxyname, config)
 }
 
-// Creates a new environment using the static configuration files
+// Creates a new environment using the default configuration
 func NewDefault(proxyname string, network string) Environment {
 	log.Println("Creating with default config")
 	config := Configuration{
 		HostBridgeName:             "goProxyBridge",
-		HostBridgeIP:               network,
+		HostBridgeIP:               net.ParseIP(network).String(),
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
@@ -145,13 +160,21 @@ func NewDefault(proxyname string, network string) Environment {
 	return NewCustom(proxyname, config)
 }
 
+func (env *Environment) DetachDockerContainer(containername string) {
+	ip, ok := env.deployedServices[containername]
+	if ok {
+		delete(env.deployedServices, containername)
+		env.freeContainerAddress(ip)
+	}
+}
+
 // Attach a Docker container to the bridge and the current network environment
-func (env *Environment) AttachDockerContainer(containername string, ip net.IP) error {
+func (env *Environment) AttachDockerContainer(containername string) (net.IP, error) {
 
 	// Retrieve current bridge
 	br, err := tenus.BridgeFromName(env.config.HostBridgeName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	//create veth pair to connect the namespace to the host bridge
@@ -167,19 +190,19 @@ func (env *Environment) AttachDockerContainer(containername string, ip net.IP) e
 	veth, err := tenus.NewVethPairWithOptions(veth1name, tenus.VethOptions{PeerName: veth2name})
 	if err != nil {
 		cleanup()
-		return err
+		return nil, err
 	}
 
 	// add veth1 to the bridge
 	myveth01, err := net.InterfaceByName(veth1name)
 	if err != nil {
 		cleanup()
-		return err
+		return nil, err
 	}
 
 	if err = br.AddSlaveIfc(myveth01); err != nil {
 		cleanup()
-		return err
+		return nil, err
 	}
 
 	if err = veth.SetLinkUp(); err != nil {
@@ -191,12 +214,19 @@ func (env *Environment) AttachDockerContainer(containername string, ip net.IP) e
 	pid, err := tenus.DockerPidByName(containername, "/var/run/docker.sock")
 	if err != nil {
 		cleanup()
-		return err
+		return nil, err
 	}
 
 	if err := veth.SetPeerLinkNsPid(pid); err != nil {
 		cleanup()
-		return err
+		return nil, err
+	}
+
+	//generate a new ip for this container
+	ip, err := env.containerGenerateAddress()
+	if err != nil {
+		cleanup()
+		return nil, err
 	}
 
 	// set ip to the container veth
@@ -204,21 +234,26 @@ func (env *Environment) AttachDockerContainer(containername string, ip net.IP) e
 	vethGuestIp, vethGuestIpNet, err := net.ParseCIDR(ip.String() + env.config.HostBridgeMask)
 	if err != nil {
 		cleanup()
-		return err
+		env.freeContainerAddress(ip)
+		return nil, err
 	}
 
 	if err := veth.SetPeerLinkNetInNs(pid, vethGuestIp, vethGuestIpNet, nil); err != nil {
 		cleanup()
-		return err
+		env.freeContainerAddress(ip)
+		return nil, err
 	}
 
 	err = env.Update()
 	if err != nil {
 		cleanup()
-		return err
+		env.freeContainerAddress(ip)
+		return nil, err
 	}
 
-	return nil
+	env.deployedServices[containername] = ip
+
+	return nil, nil
 }
 
 // creates a new namespace and link it to the host bridge
@@ -552,4 +587,37 @@ func (env *Environment) AddTableQueryEntry(entry TableEntry) {
 	if err != nil {
 		log.Println("[ERROR] ", err)
 	}
+}
+
+func (env *Environment) containerGenerateAddress() (net.IP, error) {
+	var result net.IP
+	if len(env.addrCache) > 0 {
+		result, env.addrCache = env.addrCache[0], env.addrCache[1:]
+	} else {
+		result = env.nextContainerIP
+		if env.totNextAddr < 62 {
+			env.totNextAddr++
+		} else {
+			log.Println("[ERROR] exhausted address space")
+			return result, errors.New("address space exhausted")
+		}
+		env.nextContainerIP = nextIP(env.nextContainerIP, 1)
+	}
+	return result, nil
+}
+
+func (env *Environment) freeContainerAddress(ip net.IP) {
+	env.addrCache = append(env.addrCache, ip)
+}
+
+//Given an ipv4, gives the next IP
+func nextIP(ip net.IP, inc uint) net.IP {
+	i := ip.To4()
+	v := uint(i[0])<<24 + uint(i[1])<<16 + uint(i[2])<<8 + uint(i[3])
+	v += inc
+	v3 := byte(v & 0xFF)
+	v2 := byte((v >> 8) & 0xFF)
+	v1 := byte((v >> 16) & 0xFF)
+	v0 := byte((v >> 24) & 0xFF)
+	return net.IPv4(v0, v1, v2, v3)
 }
