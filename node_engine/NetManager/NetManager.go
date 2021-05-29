@@ -106,6 +106,7 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 	//attach network to the container
 	addr, err := Env.AttachDockerContainer(requestStruct.Containerid)
 	if err != nil {
+		log.Println("[ERROR]:", err)
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
