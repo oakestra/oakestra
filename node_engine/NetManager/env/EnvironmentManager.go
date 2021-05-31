@@ -253,7 +253,7 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 
 	env.deployedServices[containername] = ip
 
-	return nil, nil
+	return ip, nil
 }
 
 // creates a new namespace and link it to the host bridge
