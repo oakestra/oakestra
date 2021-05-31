@@ -170,7 +170,7 @@ def deploy_task():
             # Insert job into database
             job_id = mongo_insert_job(
                 {
-                    # 'file_content': data,
+                    'file_content': data,
                     'service_ip_list': s_ip
                 })
             # Request scheduling
