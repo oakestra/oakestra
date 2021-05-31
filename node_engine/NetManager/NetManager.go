@@ -12,7 +12,6 @@ import (
 
 type deployRequest struct {
 	ServiceName string `json:"serviceName"`
-	Containerid string `json:"containerid"`
 }
 
 type deployResponse struct {
@@ -78,7 +77,7 @@ Usage: used to assign a network to a docker container. This method can be used o
 Method: POST
 Request Json:
 	{
-		serviceName:string #name used to register the service in the first place
+		serviceName:string #name of the container or containerid
 	}
 Response Json:
 	{
@@ -104,7 +103,7 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 	log.Println(requestStruct)
 
 	//attach network to the container
-	addr, err := Env.AttachDockerContainer(requestStruct.Containerid)
+	addr, err := Env.AttachDockerContainer(requestStruct.ServiceName)
 	if err != nil {
 		log.Println("[ERROR]:", err)
 		writer.WriteHeader(http.StatusBadRequest)
