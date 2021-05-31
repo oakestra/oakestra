@@ -63,8 +63,6 @@ def receive_scheduler_result_and_propagate_to_cluster():
     app.logger.info(data)
     system_job_id = data.get('job_id')
     replicas = data.get('replicas')
-    # job = data.get('job')
-    # job.__setitem__('system_job_id', system_job_id) #why?
     resulting_cluster = data.get('cluster')
 
     # Updating status and instances
@@ -73,7 +71,7 @@ def receive_scheduler_result_and_propagate_to_cluster():
         instance_info = {
             'instance_number': i,
             'instance_ip': new_instance_ip(),
-            'cluster_id': str(resulting_cluster.get('_id')),
+            'cluster_id': resulting_cluster.get('_id').toString(),
             'namespace_ip': '',
             'host_ip': '',
             'host_port': '',
@@ -172,7 +170,7 @@ def deploy_task():
             # Insert job into database
             job_id = mongo_insert_job(
                 {
-                    'file_content': data,
+                    # 'file_content': data,
                     'service_ip_list': s_ip
                 })
             # Request scheduling
