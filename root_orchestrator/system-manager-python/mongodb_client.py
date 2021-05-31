@@ -222,8 +222,8 @@ def mongo_update_job_status_and_instances(job_id, status, replicas, instance_lis
 def mongo_find_cluster_of_job(job_id):
     app.logger.info('Find job by Id and return cluster...')
     job_obj = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)},
-                                          {'cluster': 1})  # return just the assgined cluster of the job
-    cluster_id = job_obj.get('cluster')
+                                          {'instance_list': 1})  # return just the assgined cluster of the job
+    cluster_id = job_obj.get('instance_list')[0].get('cluster_id')
     return mongo_find_cluster_by_id(cluster_id)
 
 
