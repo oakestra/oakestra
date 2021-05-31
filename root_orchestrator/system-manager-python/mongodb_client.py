@@ -224,7 +224,6 @@ def mongo_find_cluster_of_job(job_id):
     job_obj = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)},
                                           {'instance_list': 1})  # return just the assgined cluster of the job
     cluster_id = ObjectId(job_obj.get('instance_list')[0].get('cluster_id'))
-    print("CLUSTER ID:", cluster_id)
     return mongo_find_cluster_by_id(cluster_id)
 
 

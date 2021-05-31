@@ -90,7 +90,7 @@ def delete_task(system_job_id):
     app.logger.info('Incoming Request /api/delete/ - to delete task...')
     # job_id is the system_job_id assigned by System Manager
     job = mongo_find_job_by_system_id(system_job_id)
-    node_id = job.get('scheduled_node')
+    node_id = job.get('instance_list')[0].get('worker_id')  # undeploy the first instance available
     job_id = str(job.get('_id'))
     job.__setitem__('_id', job_id)
     mqtt_publish_edge_delete(node_id, job)
