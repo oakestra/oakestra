@@ -91,7 +91,7 @@ def start_calc(job_id, job):
         mongo_update_job_status(job_id, scheduling_result)
     else:
         cluster_id = scheduling_result.get('_id')
-        mongo_update_job_status_and_cluster(job_id, 'CLUSTER_SCHEDULED', cluster_id)
+        #mongo_update_job_status_and_cluster(job_id, 'CLUSTER_SCHEDULED', cluster_id)
         manager_request(scheduling_result, job_id, job, replicas=1)  # scheduling_result is a target cluster
 
 

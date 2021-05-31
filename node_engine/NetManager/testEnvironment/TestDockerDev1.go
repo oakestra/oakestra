@@ -65,9 +65,10 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println("Binding Docker container ", containername, " with ip 172.19.1.15")
-	ip2 := net.ParseIP("172.19.1.15")
-	err = myenv.AttachDockerContainer(containername, ip2)
+	fmt.Println("Binding Docker container ", containername)
+	ip2, err := myenv.AttachDockerContainer(containername)
+	fmt.Println("Deployed container with ip ", ip2.String())
+
 	if err != nil {
 		fmt.Println(err)
 	}

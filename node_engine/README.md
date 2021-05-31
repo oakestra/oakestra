@@ -21,8 +21,10 @@ The Node Engine software can run on any hardware with an operating system. Curre
 
 ## Start the Node Engine
 
-The Node Engine can be started with the startup script: `./start-up.sh`.
+The Node Engine can be started with the startup script: `./start-up.sh <architecture>`.
 A virtualenv will be started and the component will start up.
+The architecture currently supported are: amd64 or arm-7
+The superuser password will be asked
 
 Use `nohup` if you want Node-Engine to run a SSH server after logged out.
 

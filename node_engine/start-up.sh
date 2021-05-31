@@ -1,5 +1,20 @@
 #!/bin/bash
 
+#Requiring target architecture
+if [ "$1" == "" ]; then
+    echo "Please run the command specifying the current architecture"
+    echo "Supported architectures: amd64, arm-7"
+    echo "Example: ./start-up.sh amd64"
+    exit 1
+fi
+
+# Run the netmanager in backgruond
+sudo echo "Requiring SU"
+cd NetManager/ && sudo ./bin/$1-NetManager &>> netmanager.log &
+# Registering trap to kill the NetManager on exit
+trap "ps -ax | grep NetManager | awk {'print $1'} | xargs sudo kill > /dev/null 2>&1" SIGINT SIGTERM EXIT
+sleep 2
+
 # create virtualenv
 virtualenv --clear -p python3.8 .venv
 source .venv/bin/activate
