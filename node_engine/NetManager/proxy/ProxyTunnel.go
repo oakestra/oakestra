@@ -265,8 +265,8 @@ func (proxy *GoProxyTunnel) createTun() {
 		log.Fatal(err)
 	}
 
-	log.Println("Bringing tun up with addr " + proxy.tunNetIP + "/12")
-	cmd := exec.Command("ip", "addr", "add", proxy.tunNetIP+"/12", "dev", ifce.Name())
+	log.Println("Bringing tun up with addr " + proxy.tunNetIP + "/16")
+	cmd := exec.Command("ip", "addr", "add", proxy.tunNetIP+"/16", "dev", ifce.Name())
 	_, err = cmd.Output()
 	if err != nil {
 		log.Fatal(err)
@@ -295,7 +295,7 @@ func (proxy *GoProxyTunnel) createTun() {
 
 	//Add network routing rule, Done by default by the system
 	log.Println("adding routing rule for 172.19.0.0/16 to " + ifce.Name())
-	cmd = exec.Command("ip", "route", "add", "172.19.0.0/16", "dev", ifce.Name())
+	cmd = exec.Command("ip", "route", "add", "172.30.0.0/16", "dev", ifce.Name())
 	_, _ = cmd.Output()
 
 	//add firewalls rules
