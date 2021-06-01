@@ -114,6 +114,7 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	reqBody, _ := ioutil.ReadAll(request.Body)
+	log.Println("ReqBody received :", reqBody)
 	var requestStruct deployRequest
 	err := json.Unmarshal(reqBody, &requestStruct)
 	if err != nil {
