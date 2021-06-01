@@ -198,6 +198,7 @@ func register(writer http.ResponseWriter, request *http.Request) {
 
 	//initialize the proxy tunnel
 	Proxy = proxy.New()
+	Proxy.Listen()
 
 	//initialize the Env Manager
 	Env = env.NewDefault(Proxy.HostTUNDeviceName, requestStruct.Subnetwork)
