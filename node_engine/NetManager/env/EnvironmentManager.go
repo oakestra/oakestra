@@ -251,6 +251,17 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 		return nil, err
 	}
 
+	//Add route to bridge
+	//sudo nsenter -n -t 5565 ip route add 172.16.0.0/12 via 172.18.8.193 dev veth013
+	cmd := exec.Command("nsenter", "-n", "-t", strconv.Itoa(pid), "ip", "route", "add", "172.16.0.0/12", "via", env.config.HostBridgeIP, "dev", veth2name)
+	_, err = cmd.Output()
+	if err != nil {
+		log.Println("Impossible to setup route inside the netns")
+		cleanup()
+		env.freeContainerAddress(ip)
+		return nil, err
+	}
+
 	err = env.Update()
 	if err != nil {
 		cleanup()

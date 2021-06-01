@@ -88,6 +88,7 @@ func (t *TableManager) RemoveByNsip(nsip net.IP) error {
 
 func (t *TableManager) SearchByServiceIP(ip net.IP) []TableEntry {
 	log.Println("Table research, table length: ", len(t.translationTable))
+	log.Println(t.translationTable)
 	result := make([]TableEntry, 0)
 	t.rwlock.Lock()
 	defer t.rwlock.Unlock()

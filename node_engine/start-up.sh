@@ -8,9 +8,13 @@ if [ "$1" == "" ]; then
     exit 1
 fi
 
+export CLUSTER_MANAGER_IP=192.168.42.170
+# export CLUSTER_MANAGER_IP=localhost
+export CLUSTER_MANAGER_PORT=10000
+
 # Run the netmanager in backgruond
 sudo echo "Requiring SU"
-cd NetManager/ && sudo ./bin/$1-NetManager &>> netmanager.log &
+cd NetManager/ && sudo CLUSTER_MANAGER_IP=$CLUSTER_MANAGER_IP CLUSTER_MANAGER_PORT=$CLUSTER_MANAGER_PORT ./bin/$1-NetManager &>> netmanager.log &
 # Registering trap to kill the NetManager on exit
 trap "ps -ax | grep NetManager | awk {'print $1'} | xargs sudo kill > /dev/null 2>&1" SIGINT SIGTERM EXIT
 sleep 2
@@ -23,9 +27,5 @@ source .venv/bin/activate
 
 # export FLASK_ENV=development
 export FLASK_DEBUG=FALSE # TRUE for verbose logging #when True, MQTT logs twice because Flask opens second reloader thread
-
-export CLUSTER_MANAGER_IP=131.159.24.210
-# export CLUSTER_MANAGER_IP=localhost
-export CLUSTER_MANAGER_PORT=10000
 
 .venv/bin/python node_engine.py
