@@ -294,7 +294,7 @@ func (proxy *GoProxyTunnel) createTun() {
 	}
 
 	//Add network routing rule, Done by default by the system
-	log.Println("adding routing rule for 172.30.0.0/11 to " + ifce.Name())
+	log.Println("adding routing rule for 172.30.0.0/12 to " + ifce.Name())
 	cmd = exec.Command("ip", "route", "add", "172.30.0.0/12", "dev", ifce.Name())
 	_, _ = cmd.Output()
 

@@ -158,7 +158,7 @@ func NewDefault(proxyname string, network string) Environment {
 	log.Println("Creating with default config")
 	config := Configuration{
 		HostBridgeName:             "goProxyBridge",
-		HostBridgeIP:               net.ParseIP(network).String(),
+		HostBridgeIP:               nextIP(net.ParseIP(network), 1).String(),
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
@@ -230,7 +230,7 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 	}
 
 	//generate a new ip for this container
-	ip, err := env.containerGenerateAddress()
+	ip, err := env.generateAddress()
 	if err != nil {
 		cleanup()
 		return nil, err
@@ -266,7 +266,7 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 // creates a new namespace and link it to the host bridge, the ip is going to be generated from the default space
 func (env *Environment) CreateNetworkNamespaceNewIp(netname string) (string, error) {
 	//generate a new ip for this container
-	ip, _ := env.containerGenerateAddress()
+	ip, _ := env.generateAddress()
 	return env.CreateNetworkNamespace(netname, ip)
 }
 
@@ -608,7 +608,7 @@ func (env *Environment) AddTableQueryEntry(entry TableEntry) {
 	}
 }
 
-func (env *Environment) containerGenerateAddress() (net.IP, error) {
+func (env *Environment) generateAddress() (net.IP, error) {
 	var result net.IP
 	if len(env.addrCache) > 0 {
 		result, env.addrCache = env.addrCache[0], env.addrCache[1:]
