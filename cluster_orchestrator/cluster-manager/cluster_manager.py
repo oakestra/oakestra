@@ -161,10 +161,28 @@ def table_query_resolution_by_jobname(job_name):
 def table_query_resolution_by_ip(service_ip):
     """
     Get all the instances of a job given a Service IP in 172_30_x_y notation
+    returns {
+                app_name: string
+                instance_list: [
+                    {
+                        instance_number: int
+                        namespace_ip: string
+                        host_ip: string
+                        host_port: string
+                        service_ip: [
+                            {
+                                IpType: string
+                                Address: string
+                            }
+                        ]
+                    }
+                ]
     """
     service_ip = service_ip.replace("_", ".")
     app.logger.info("Incoming Request /api/job/ip/" + str(service_ip) + "/instances")
-    return {'instance_list': service_resolution_ip(service_ip)}
+    name, instances = service_resolution_ip(service_ip)
+    return {'app_name': name, 'instance_list': instances}
+
 
 # ...... Websocket INIT Handling with edge nodes .......#
 # ......................................................#

@@ -23,14 +23,40 @@ def service_resolution_ip(ip_string):
     """
     Resolves the service instance list by service ServiceIP with the local DB,
     if no result found the query is propagated to the System Manager
+
+    returns:
+        name: string #service name
+        instances: {
+                        instance_number: int
+                        namespace_ip: string
+                        host_ip: string
+                        host_port: string
+                        service_ip: [
+                            {
+                                IpType: string
+                                Address: string
+                            }
+                        ]
+                    }
     """
     # resolve it locally
-    instances = mongo_find_job_by_ip(ip_string)
-    # if no results, ask the root orc
-    if instances is None:
-        instances = cloud_table_query_ip(ip_string)
-        instances = instances['instance_list']
-    else:
-        instances=instances['instance_list']
+    job = mongo_find_job_by_ip(ip_string)
 
-    return instances
+    # if no results, ask the root orc
+    if job is None:
+        job = cloud_table_query_ip(ip_string)
+        if job is None:
+            return "", []
+
+    instances = job['instance_list']
+    service_ip_list = job['service_ip_list']
+    for elem in instances:
+        elem['service_ip'] = service_ip_list
+        elem['service_ip'].append({
+            "IpType": "instance_ip",
+            "Address": elem['instance_ip']
+        })
+
+    name = job.get('job_name')
+
+    return name, instances
