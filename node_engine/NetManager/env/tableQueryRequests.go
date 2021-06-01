@@ -28,7 +28,8 @@ type sip struct {
 }
 
 func tableQueryByIP(addr string, port string, ip string) ([]TableEntry, bool) {
-	queryAddress := "http://" + addr + ":" + port + "/api/job/ip/" + ip + "/instances"
+
+	queryAddress := "http://" + addr + ":" + port + "/api/job/ip/" + strings.Replace(ip, ".", "_", -1) + "/instances"
 	log.Println("[TABLE QUERY]", queryAddress, " ip:", ip)
 
 	resp, err := http.Get(queryAddress)
