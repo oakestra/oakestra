@@ -11,7 +11,7 @@ def net_manager_docker_deploy(job,containerid):
 
     request = {
         'containerId': containerid,
-        'appName': containerid,
+        'appName': job['job_name'],
         'instanceNumber': 0,
         'nodeIp': job['instance_list'][0]['host_ip'],
         'nodePort': job['instance_list'][0]['host_port'],
