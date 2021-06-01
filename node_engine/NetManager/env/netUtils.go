@@ -30,3 +30,22 @@ func GetLocalIPandIface() (string, string) {
 
 	return "", ""
 }
+
+func ToServiceIP(Type string, Addr string) ServiceIP {
+	ip := ServiceIP{
+		IpType:  0,
+		Address: net.ParseIP(Addr),
+	}
+
+	if Type == "RR" {
+		ip.IpType = RoundRobin
+	}
+	if Type == "Closest" {
+		ip.IpType = Closest
+	}
+	if Type == "InstanceNumber" {
+		ip.IpType = InstanceNumber
+	}
+
+	return ip
+}

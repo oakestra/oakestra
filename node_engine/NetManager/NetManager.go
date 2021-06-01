@@ -7,11 +7,23 @@ import (
 	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
+	"strings"
 )
 
 type deployRequest struct {
-	ServiceName string `json:"serviceName"`
+	ContainerId    string `json:"containerId"`
+	AppFullName    string `json:"appName"`
+	Instancenumber int    `json:"instanceNumber"`
+	Nodeip         string `json:"nodeIp"`
+	Nodeport       int    `json:"nodePort"`
+	ServiceIP      []sip  `json:"serviceIp"`
+}
+
+type sip struct {
+	Type    string `json:"IpType"` //RR, Closest or InstanceNumber
+	Address string `json:"Address"`
 }
 
 type deployResponse struct {
@@ -77,7 +89,15 @@ Usage: used to assign a network to a docker container. This method can be used o
 Method: POST
 Request Json:
 	{
-		serviceName:string #name of the container or containerid
+		containerId:string #name of the container or containerid
+		appName:string
+		instanceNumber:int
+		nodeIp:string
+		nodePort:int
+		serviceIp:[{
+					IpType:string //RR, Closest or InstanceNumber
+					Address:string
+					}]
 	}
 Response Json:
 	{
@@ -102,16 +122,43 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 
 	log.Println(requestStruct)
 
+	//get app full name
+	appCompleteName := strings.Split(requestStruct.AppFullName, ".")
+	if len(appCompleteName) != 4 {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	//attach network to the container
-	addr, err := Env.AttachDockerContainer(requestStruct.ServiceName)
+	addr, err := Env.AttachDockerContainer(requestStruct.ContainerId)
 	if err != nil {
 		log.Println("[ERROR]:", err)
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
+	//update internal table entry
+	siplist := make([]env.ServiceIP, 0)
+	for _, ip := range requestStruct.ServiceIP {
+		siplist = append(siplist, env.ToServiceIP(ip.Type, ip.Address))
+	}
+	entry := env.TableEntry{
+		Appname:          appCompleteName[0],
+		Appns:            appCompleteName[1],
+		Servicename:      appCompleteName[2],
+		Servicenamespace: appCompleteName[3],
+		Instancenumber:   requestStruct.Instancenumber,
+		Cluster:          0,
+		Nodeip:           net.ParseIP(requestStruct.Nodeip),
+		Nodeport:         requestStruct.Nodeport,
+		Nsip:             addr,
+		ServiceIP:        siplist,
+	}
+	Env.AddTableQueryEntry(entry)
+
+	//answer the caller
 	response := deployResponse{
-		ServiceName: requestStruct.ServiceName,
+		ServiceName: requestStruct.AppFullName,
 		NsAddress:   addr.String(),
 	}
 

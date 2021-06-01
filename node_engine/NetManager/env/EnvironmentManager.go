@@ -7,6 +7,7 @@ import (
 	"github.com/tkanos/gonfig"
 	"log"
 	"net"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -45,6 +46,9 @@ type Environment struct {
 	nextContainerIP  net.IP            //next address for the next container to be deployed
 	totNextAddr      int               //number of addresses currently generated, max 62
 	addrCache        []net.IP          //Cache used to store the free addresses available for new containers
+	//### Communication variables
+	clusterPort string
+	clusterAddr string
 }
 
 // current network interfaces in the system
@@ -72,6 +76,8 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 		totNextAddr:       1,
 		addrCache:         make([]net.IP, 0),
 		deployedServices:  make(map[string]net.IP, 0),
+		clusterAddr:       os.Getenv("CLUSTER_MANAGER_IP"),
+		clusterPort:       os.Getenv("CLUSTER_MANAGER_PORT"),
 	}
 
 	//Get Connected Internet Interface
@@ -163,6 +169,7 @@ func NewDefault(proxyname string, network string) Environment {
 func (env *Environment) DetachDockerContainer(containername string) {
 	ip, ok := env.deployedServices[containername]
 	if ok {
+		_ = env.translationTable.RemoveByNsip(ip)
 		delete(env.deployedServices, containername)
 		env.freeContainerAddress(ip)
 	}
@@ -544,9 +551,16 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 	if len(table) > 0 {
 		return table
 	}
-	//If no entry available -> TableQuery
 
-	//TODO: table query
+	//if no entry available -> TableQuery
+	entryList, found := tableQueryByIP(env.clusterAddr, env.clusterPort, ip.String())
+
+	if found {
+		for _, tableEntry := range entryList {
+			env.AddTableQueryEntry(tableEntry)
+		}
+		table = env.translationTable.SearchByServiceIP(ip)
+	}
 
 	return table
 }
@@ -560,8 +574,7 @@ func (env *Environment) GetTableEntryByInstanceIP(ip net.IP) (TableEntry, bool) 
 		return table[0], true
 	}
 	//If no entry available -> TableQuery
-
-	//TODO: table query
+	// TODO: table query
 
 	return TableEntry{}, false
 }
@@ -575,13 +588,12 @@ func (env *Environment) GetTableEntryByNsIP(ip net.IP) (TableEntry, bool) {
 		return entry, true
 	}
 	//If no entry available -> TableQuery
-
-	//TODO: table query
+	// TODO: table query, needed?
 
 	return entry, false
 }
 
-//Debug method to add Table query entry
+//Add new entry to the resolution table
 func (env *Environment) AddTableQueryEntry(entry TableEntry) {
 	err := env.translationTable.Add(entry)
 	if err != nil {
