@@ -4,6 +4,7 @@ import (
 	"NetManager/env"
 	"NetManager/proxy"
 	"encoding/json"
+	"fmt"
 	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
@@ -207,7 +208,7 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	//create debug netns
 	_, err = Env.CreateNetworkNamespaceNewIp("debugAppNs")
 	if err != nil {
-		log.Println(err)
+		fmt.Println(err)
 	}
 
 	writer.WriteHeader(http.StatusOK)
