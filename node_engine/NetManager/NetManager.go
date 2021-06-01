@@ -202,6 +202,7 @@ func register(writer http.ResponseWriter, request *http.Request) {
 
 	//initialize the Env Manager
 	Env = env.NewDefault(Proxy.HostTUNDeviceName, requestStruct.Subnetwork)
+	Proxy.SetEnvironment(&Env)
 
 	//set initialization flag
 	InitializationCompleted = true
