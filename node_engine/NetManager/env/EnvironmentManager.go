@@ -263,6 +263,13 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 	return ip, nil
 }
 
+// creates a new namespace and link it to the host bridge, the ip is going to be generated from the default space
+func (env *Environment) CreateNetworkNamespaceNewIp(netname string) (string, error) {
+	//generate a new ip for this container
+	ip, _ := env.containerGenerateAddress()
+	return env.CreateNetworkNamespace(netname, ip)
+}
+
 // creates a new namespace and link it to the host bridge
 // netname: short name representative of the namespace, better if a short unique name of the service, max 10 char
 func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (string, error) {

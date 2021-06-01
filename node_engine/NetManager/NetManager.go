@@ -204,6 +204,9 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	//set initialization flag
 	InitializationCompleted = true
 
+	//create debug netns
+	_, _ = Env.CreateNetworkNamespaceNewIp("debugAppNs")
+
 	writer.WriteHeader(http.StatusOK)
 }
 
