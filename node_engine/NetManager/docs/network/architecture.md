@@ -42,9 +42,59 @@ With the net manager we use 3 main components:
 ![](./diagrams/NetManagerFlowchart.png)
 
 * Worker Reigstration
-	* 	Registration of the node with the Cluster Orc. 
+	*  Registration of the node with the Cluster Orc. 
 	*  A container subnetwork is assigned to the node
+	*  The internal container private addresses are going to be assigned from this subnetwork
 
+* API
+   * The REST api interface is enabled after a succesfull call of the `/register` endpoint. 
+   * This API is intended for the exclusive use from the node_egine and currently exposes only
+   the `/docker/deploy` and `/docker/undeploy` methods. 
+   
+```json
+Endpoint: /docker/deploy
+Usage: used to assign a network to a docker container. This method can be used only after the registration
+Method: POST
+Request Json:
+	{
+		containerId:string #name of the container or containerid
+		appName:string
+		instanceNumber:int
+		nodeIp:string
+		nodePort:int
+		serviceIp:[{
+					IpType:string //RR, Closest or InstanceNumber
+					Address:string
+					}]
+	}
+Response Json:
+	{
+		serviceName:    string
+		nsAddress:  	string # address assigned to this container
+	}
+``` 
+
+```json
+Endpoint: /docker/undeploy
+Usage: used to remove the network from a docker container. This method can be used only after the registration
+Method: POST
+Request Json:
+	{
+		serviceName:string #name used to register the service in the first place
+	}
+Response: 200 OK or Failure code
+``` 
+
+```json
+Endpoint: /register
+Usage: used to initialize the Network manager. The network manager must know his local subnetwork.
+Method: POST
+Request Json:
+	{
+		subnetwork:string # IP address of the assigned subnetwork
+	}
+Response: 200 or Failure code
+``` 
 
 ## North South traffic handling
 [NS traffic documentation](NStraffic.md)
@@ -57,7 +107,4 @@ With the net manager we use 3 main components:
 
 
 ## TODOs
-* Docker already creates his own namespaces and bridges. How do we deal with them?
-* Sequence diagram of the messages between all these components
-* Find routing techniques: open research field
-* Define deployment scheme yaml file for the service and exposed service  deployment with respect to the network.
+Refer to the issue list of github: [Github project board](https://github.com/edgeIO/src/projects/1)
