@@ -72,6 +72,20 @@ The message format is not used/ implemented currently. Feel free to edit/extend 
   - GPUtil
   - tabulate
   - requests
+- Golang 1.13 
+  - github.com/ghodss/yaml 
+  -	github.com/google/gopacket 
+  -	github.com/gorilla/mux 
+  -	github.com/milosgajdos/tenus 
+  -	github.com/songgao/water 
+  -	github.com/tkanos/gonfig 
+  -	gopkg.in/yaml.v2 
+
+## NetManager
+
+The net manager is the component that carries out the network configuration and create the overlay across all the instances. 
+This component install a proprietary bridge in the system and place the proxy-bridge process as a TUN device. It maintains internally a se of caches that are 
+used to resolve the network call of the containers. More info are available in `NetManager/docs`. 
 
 ## Misc
 
