@@ -49,7 +49,7 @@ def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
             app.logger.info("MQTT - Received .../control/deploy command")
             address = None
             if image_technology == 'docker':
-                address = start_container(image=image_url, name=job_name, port=port)
+                address = start_container(job=payload)
             if image_technology == 'mirage':
                 commands = payload.get('commands')
                 run_unikernel_mirageos(image_url, job_name, job_name, commands)

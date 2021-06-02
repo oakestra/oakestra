@@ -7,6 +7,7 @@ import (
 	"github.com/tkanos/gonfig"
 	"log"
 	"net"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -45,6 +46,9 @@ type Environment struct {
 	nextContainerIP  net.IP            //next address for the next container to be deployed
 	totNextAddr      int               //number of addresses currently generated, max 62
 	addrCache        []net.IP          //Cache used to store the free addresses available for new containers
+	//### Communication variables
+	clusterPort string
+	clusterAddr string
 }
 
 // current network interfaces in the system
@@ -72,6 +76,8 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 		totNextAddr:       1,
 		addrCache:         make([]net.IP, 0),
 		deployedServices:  make(map[string]net.IP, 0),
+		clusterAddr:       os.Getenv("CLUSTER_MANAGER_IP"),
+		clusterPort:       os.Getenv("CLUSTER_MANAGER_PORT"),
 	}
 
 	//Get Connected Internet Interface
@@ -152,7 +158,7 @@ func NewDefault(proxyname string, network string) Environment {
 	log.Println("Creating with default config")
 	config := Configuration{
 		HostBridgeName:             "goProxyBridge",
-		HostBridgeIP:               net.ParseIP(network).String(),
+		HostBridgeIP:               nextIP(net.ParseIP(network), 1).String(),
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
@@ -163,6 +169,7 @@ func NewDefault(proxyname string, network string) Environment {
 func (env *Environment) DetachDockerContainer(containername string) {
 	ip, ok := env.deployedServices[containername]
 	if ok {
+		_ = env.translationTable.RemoveByNsip(ip)
 		delete(env.deployedServices, containername)
 		env.freeContainerAddress(ip)
 	}
@@ -223,7 +230,7 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 	}
 
 	//generate a new ip for this container
-	ip, err := env.containerGenerateAddress()
+	ip, err := env.generateAddress()
 	if err != nil {
 		cleanup()
 		return nil, err
@@ -244,6 +251,17 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 		return nil, err
 	}
 
+	//Add route to bridge
+	//sudo nsenter -n -t 5565 ip route add 172.16.0.0/12 via 172.18.8.193 dev veth013
+	cmd := exec.Command("nsenter", "-n", "-t", strconv.Itoa(pid), "ip", "route", "add", "172.16.0.0/12", "via", env.config.HostBridgeIP, "dev", veth2name)
+	_, err = cmd.Output()
+	if err != nil {
+		log.Println("Impossible to setup route inside the netns")
+		cleanup()
+		env.freeContainerAddress(ip)
+		return nil, err
+	}
+
 	err = env.Update()
 	if err != nil {
 		cleanup()
@@ -254,6 +272,13 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 	env.deployedServices[containername] = ip
 
 	return ip, nil
+}
+
+// creates a new namespace and link it to the host bridge, the ip is going to be generated from the default space
+func (env *Environment) CreateNetworkNamespaceNewIp(netname string) (string, error) {
+	//generate a new ip for this container
+	ip, _ := env.generateAddress()
+	return env.CreateNetworkNamespace(netname, ip)
 }
 
 // creates a new namespace and link it to the host bridge
@@ -544,9 +569,16 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 	if len(table) > 0 {
 		return table
 	}
-	//If no entry available -> TableQuery
 
-	//TODO: table query
+	//if no entry available -> TableQuery
+	entryList, found := tableQueryByIP(env.clusterAddr, env.clusterPort, ip.String())
+
+	if found {
+		for _, tableEntry := range entryList {
+			env.AddTableQueryEntry(tableEntry)
+		}
+		table = env.translationTable.SearchByServiceIP(ip)
+	}
 
 	return table
 }
@@ -560,8 +592,7 @@ func (env *Environment) GetTableEntryByInstanceIP(ip net.IP) (TableEntry, bool) 
 		return table[0], true
 	}
 	//If no entry available -> TableQuery
-
-	//TODO: table query
+	// TODO: table query
 
 	return TableEntry{}, false
 }
@@ -575,13 +606,12 @@ func (env *Environment) GetTableEntryByNsIP(ip net.IP) (TableEntry, bool) {
 		return entry, true
 	}
 	//If no entry available -> TableQuery
-
-	//TODO: table query
+	// TODO: table query, needed?
 
 	return entry, false
 }
 
-//Debug method to add Table query entry
+//Add new entry to the resolution table
 func (env *Environment) AddTableQueryEntry(entry TableEntry) {
 	err := env.translationTable.Add(entry)
 	if err != nil {
@@ -589,7 +619,7 @@ func (env *Environment) AddTableQueryEntry(entry TableEntry) {
 	}
 }
 
-func (env *Environment) containerGenerateAddress() (net.IP, error) {
+func (env *Environment) generateAddress() (net.IP, error) {
 	var result net.IP
 	if len(env.addrCache) > 0 {
 		result, env.addrCache = env.addrCache[0], env.addrCache[1:]

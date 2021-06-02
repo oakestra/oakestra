@@ -56,8 +56,39 @@ func (t *TableManager) Add(entry TableEntry) error {
 	return errors.New("InvalidEntry")
 }
 
+func (t *TableManager) RemoveByNsip(nsip net.IP) error {
+
+	t.rwlock.Lock()
+	defer t.rwlock.Unlock()
+
+	found := -1
+	for i, tableElement := range t.translationTable {
+		if tableElement.Nsip.Equal(nsip) {
+			found = i
+			break
+		}
+	}
+
+	if found > -1 {
+		if found == 0 {
+			t.translationTable = make([]TableEntry, 0)
+			return nil
+		}
+		if found == len(t.translationTable)-1 {
+			t.translationTable = t.translationTable[:found-1]
+			return nil
+		} else {
+			t.translationTable = append(t.translationTable[0:found], t.translationTable[found+1:]...)
+			return nil
+		}
+	}
+
+	return nil
+}
+
 func (t *TableManager) SearchByServiceIP(ip net.IP) []TableEntry {
 	log.Println("Table research, table length: ", len(t.translationTable))
+	log.Println(t.translationTable)
 	result := make([]TableEntry, 0)
 	t.rwlock.Lock()
 	defer t.rwlock.Unlock()

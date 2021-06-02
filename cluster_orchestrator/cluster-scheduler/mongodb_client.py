@@ -54,7 +54,7 @@ def mongo_find_node_by_name(name):
     """Finds first cluster occurrence"""
     global mongo_nodes
     try:
-        return mongo_nodes.db.nodes.find({'node_info.host': name})
+        return mongo_nodes.db.nodes.find_one({'node_info.host': name})
     except Exception as e:
         return "Error"
 

@@ -5,12 +5,15 @@ from net_manager_requests import net_manager_docker_deploy,net_manager_docker_un
 docker_client = docker.from_env()
 
 
-def start_container(image, name, port):
+def start_container(job):
+    image = job.get('image')
+    name = job.get('job_name')
+    port = job.get('port')
     try:
         # start container
         container = docker_client.containers.run(image, name=name, ports={port: None}, detach=True)
         # assign address to the container
-        address = net_manager_docker_deploy(str(container.id))
+        address = net_manager_docker_deploy(job, str(container.id))
         if address == '':
             raise Exception("Bad Address")
         print(container.id)
