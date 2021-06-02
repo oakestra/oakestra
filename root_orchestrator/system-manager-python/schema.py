@@ -23,6 +23,10 @@ deploy_schema = {
         'required': True,
         'type': 'string',
     },
+    'RR_ip': {
+        'required': False,
+        'type': 'string',
+    },
     'image': {
         'required': True,
         'type': 'string'

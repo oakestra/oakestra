@@ -8,7 +8,7 @@ import time
 import threading
 from bson import json_util
 from service_manager import new_instance_ip, clear_instance_ip, service_resolution, new_subnetwork_addr, \
-    service_resolution_ip
+    service_resolution_ip, new_job_rr_address
 from mongodb_client import *
 from yamlfile_parser import yaml_reader
 from cluster_requests import *
@@ -165,7 +165,7 @@ def deploy_task():
             # Assigning a Service IP for RR Load Balancing
             s_ip = [{
                 "IpType": 'RR',
-                "Address": new_instance_ip(),
+                "Address": new_job_rr_address(data),
             }]
             # Insert job into database
             job_id = mongo_insert_job(

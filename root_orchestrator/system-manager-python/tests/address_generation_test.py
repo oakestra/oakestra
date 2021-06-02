@@ -11,6 +11,7 @@ mongodb_client = sys.modules['mongodb_client']
 def test_instance_address_base():
     mongodb_client.mongo_get_service_address_from_cache = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[172, 30, 0, 0])
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
     mongodb_client.mongo_update_next_service_ip = MagicMock()
 
     ip1 = service_manager.new_instance_ip()
@@ -23,6 +24,7 @@ def test_instance_address_complex():
     mongodb_client.mongo_get_service_address_from_cache = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[172, 30, 0, 253])
     mongodb_client.mongo_update_next_service_ip = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     ip1 = service_manager.new_instance_ip()
     assert ip1 == "172.30.0.253"
@@ -36,6 +38,7 @@ def test_instance_address_recycle():
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[172, 30, 0, 0])
     mongodb_client.mongo_update_next_service_ip = MagicMock()
     mongodb_client.mongo_free_service_address_to_cache = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     # test address generation
     ip1 = service_manager.new_instance_ip()
@@ -56,6 +59,7 @@ def test_instance_address_recycle_failure_1():
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[172, 30, 0, 0])
     mongodb_client.mongo_update_next_service_ip = MagicMock()
     mongodb_client.mongo_free_service_address_to_cache = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     # test address generation
     ip1 = service_manager.new_instance_ip()
@@ -80,6 +84,7 @@ def test_instance_address_recycle_failure_2():
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[172, 30, 0, 0])
     mongodb_client.mongo_update_next_service_ip = MagicMock()
     mongodb_client.mongo_free_service_address_to_cache = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     # test address generation
     ip1 = service_manager.new_instance_ip()
@@ -102,6 +107,7 @@ def test_subnet_address_base():
     mongodb_client.mongo_get_subnet_address_from_cache = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_subnet_ip = MagicMock(return_value=[172, 18, 0, 0])
     mongodb_client.mongo_update_next_subnet_ip = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     ip1 = service_manager.new_subnetwork_addr()
     assert ip1 == "172.18.0.0"
@@ -113,6 +119,7 @@ def test_subnet_address_complex_1():
     mongodb_client.mongo_get_subnet_address_from_cache = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_subnet_ip = MagicMock(return_value=[172, 18, 255, 192])
     mongodb_client.mongo_update_next_subnet_ip = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     ip1 = service_manager.new_subnetwork_addr()
     assert ip1 == "172.18.255.192"
@@ -124,6 +131,7 @@ def test_subnet_address_complex_2():
     mongodb_client.mongo_get_subnet_address_from_cache = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_subnet_ip = MagicMock(return_value=[172, 18, 254, 128])
     mongodb_client.mongo_update_next_subnet_ip = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     ip1 = service_manager.new_subnetwork_addr()
     assert ip1 == "172.18.254.128"
@@ -135,6 +143,7 @@ def test_subnet_address_exhausted():
     mongodb_client.mongo_get_subnet_address_from_cache = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_subnet_ip = MagicMock(return_value=[172, 29, 255, 192])
     mongodb_client.mongo_update_next_subnet_ip = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     try:
         ip1 = service_manager.new_subnetwork_addr()
@@ -149,6 +158,7 @@ def test_subnet_address_recycle():
     mongodb_client.mongo_get_next_subnet_ip = MagicMock(return_value=[172, 20, 0, 0])
     mongodb_client.mongo_update_next_subnet_ip = MagicMock()
     mongodb_client.mongo_free_subnet_address_to_cache = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     # test address generation
     ip1 = service_manager.new_subnetwork_addr()
@@ -169,6 +179,7 @@ def test_subnet_address_recycle_failure_1():
     mongodb_client.mongo_get_next_subnet_ip = MagicMock(return_value=[172, 20, 0, 0])
     mongodb_client.mongo_update_next_subnet_ip = MagicMock()
     mongodb_client.mongo_free_subnet_address_to_cache = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     # test address generation
     ip1 = service_manager.new_subnetwork_addr()
@@ -192,6 +203,7 @@ def test_subnet_address_recycle_failure_2():
     mongodb_client.mongo_get_next_subnet_ip = MagicMock(return_value=[172, 20, 0, 0])
     mongodb_client.mongo_update_next_subnet_ip = MagicMock()
     mongodb_client.mongo_free_subnet_address_to_cache = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     # test address generation
     ip1 = service_manager.new_subnetwork_addr()
@@ -207,3 +219,93 @@ def test_subnet_address_recycle_failure_2():
     except:
         pass
     assert passed is False
+
+
+def test_new_job_rr_address():
+    mongodb_client.mongo_get_subnet_address_from_cache = MagicMock(return_value=None)
+    mongodb_client.mongo_get_next_subnet_ip = MagicMock(return_value=[172, 20, 0, 0])
+    mongodb_client.mongo_update_next_subnet_ip = MagicMock()
+    mongodb_client.mongo_free_subnet_address_to_cache = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
+
+    file = {
+        'RR_ip': '172.30.0.1',
+        'app_name': 's1',
+        'app_ns': 'test',
+        'service_name': 's1',
+        'service_ns': 'test'
+    }
+
+    addr = service_manager.new_job_rr_address(file)
+
+    assert '172.30.0.1' == addr
+
+
+def test_new_job_rr_address_fail1():
+    mongodb_client.mongo_get_subnet_address_from_cache = MagicMock(return_value=None)
+    mongodb_client.mongo_get_next_subnet_ip = MagicMock(return_value=[172, 20, 0, 0])
+    mongodb_client.mongo_update_next_subnet_ip = MagicMock()
+    mongodb_client.mongo_free_subnet_address_to_cache = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
+
+    file = {
+        'RR_ip': '172.20.0.1',
+        'app_name': 's1',
+        'app_ns': 'test',
+        'service_name': 's1',
+        'service_ns': 'test'
+    }
+
+    passed = False
+    try:
+        addr = service_manager.new_job_rr_address(file)
+        passed = True
+    except:
+        pass
+
+    assert passed is False
+
+
+def test_new_job_rr_address_fail2():
+    mongodb_client.mongo_get_subnet_address_from_cache = MagicMock(return_value=None)
+    mongodb_client.mongo_get_next_subnet_ip = MagicMock(return_value=[172, 20, 0, 0])
+    mongodb_client.mongo_update_next_subnet_ip = MagicMock()
+    mongodb_client.mongo_free_subnet_address_to_cache = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
+
+    file = {
+        'RR_ip': '173.30.0.1',
+        'app_name': 's1',
+        'app_ns': 'test',
+        'service_name': 's1',
+        'service_ns': 'test'
+    }
+
+    passed = False
+    try:
+        addr = service_manager.new_job_rr_address(file)
+        passed = True
+    except:
+        pass
+
+    assert passed is False
+
+
+def test_new_job_rr_address_fail3():
+    mongodb_client.mongo_get_service_address_from_cache = MagicMock(return_value=None)
+    mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[172, 30, 0, 0])
+    mongodb_client.mongo_update_next_service_ip = MagicMock()
+    mongodb_client.mongo_free_service_address_to_cache = MagicMock()
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
+
+    file = {
+        'app_name': 's1',
+        'app_ns': 'test',
+        'service_name': 's1',
+        'service_ns': 'test'
+    }
+
+    addr = service_manager.new_job_rr_address(file)
+
+    assert addr == '172.30.0.0'
+
