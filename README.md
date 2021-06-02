@@ -122,4 +122,4 @@ The addresses currently can be retrieved with the ```job/list``` command. Each s
 - Instance address is bounded to the specific instance of a service. THis address will always refer to that instance.
 - The RR address instead can be used to balance across all the instaces of the same service, "one address to rule them all".
 
-The addresses right now are assigned at deploy time randomly. 
+The addresses right now are assigned at deploy time randomly or can be assigned with the field RR_ip in the deployment descriptor. 
