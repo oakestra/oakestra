@@ -101,13 +101,22 @@ func (proxy *GoProxyTunnel) SetEnvironment(env env.EnvironmentManager) {
 func (proxy *GoProxyTunnel) outgoingMessage(packet gopacket.Packet) {
 	//If this is an IP packet
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-		if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 
+		tcpLayer := packet.Layer(layers.LayerTypeTCP)
+		udpLayer := packet.Layer(layers.LayerTypeUDP)
+
+		if tcpLayer != nil {
 			fmt.Println("TCP packet received")
+		}
+		if udpLayer != nil {
+			fmt.Println("UDP packet received")
+		}
+
+		// continue only if the packet is udp or tcp, otherwise just drop it
+		if tcpLayer != nil || udpLayer != nil {
+
 			ipv4, _ := ipLayer.(*layers.IPv4)
 			fmt.Printf("From src ip %d to dst ip %d\n", ipv4.SrcIP, ipv4.DstIP)
-			tcp, _ := tcpLayer.(*layers.TCP)
-			fmt.Printf("From src port %d to dst port %d\n", tcp.SrcPort, tcp.DstPort)
 
 			//proxyConversion
 			newPacket := proxy.outgoingProxy(packet)
@@ -129,12 +138,24 @@ func (proxy *GoProxyTunnel) outgoingMessage(packet gopacket.Packet) {
 func (proxy *GoProxyTunnel) ingoingMessage(packet gopacket.Packet, from net.UDPAddr) {
 	//If this is an IP packet
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-		if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+
+		tcpLayer := packet.Layer(layers.LayerTypeTCP)
+		udpLayer := packet.Layer(layers.LayerTypeUDP)
+
+		if tcpLayer != nil {
 			fmt.Println("TCP packet received")
+		}
+		if udpLayer != nil {
+			fmt.Println("UDP packet received")
+		}
+
+		// continue only if the packet is udp or tcp, otherwise just drop it
+		if tcpLayer != nil || udpLayer != nil {
+
+			//if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+
 			ipv4, _ := ipLayer.(*layers.IPv4)
 			fmt.Printf("From src ip %d to dst ip %d\n", ipv4.SrcIP, ipv4.DstIP)
-			tcp, _ := tcpLayer.(*layers.TCP)
-			fmt.Printf("From src port %d to dst port %d\n", tcp.SrcPort, tcp.DstPort)
 
 			//proxyConversion
 			newPacket := proxy.ingoingProxy(packet)
@@ -154,6 +175,7 @@ func (proxy *GoProxyTunnel) ingoingMessage(packet gopacket.Packet, from net.UDPA
 			if err != nil {
 				fmt.Println("[ERROR]", err)
 			}
+
 		}
 	}
 }
@@ -162,61 +184,71 @@ func (proxy *GoProxyTunnel) ingoingMessage(packet gopacket.Packet, from net.UDPA
 //then find enable load balancing policy and find out the actual dstIP address
 func (proxy *GoProxyTunnel) outgoingProxy(packet gopacket.Packet) gopacket.Packet {
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
+		ipv4, _ := ipLayer.(*layers.IPv4)
+		srcport, dstport := -1, -1
 		if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-			ipv4, _ := ipLayer.(*layers.IPv4)
 			tcp, _ := tcpLayer.(*layers.TCP)
-			//If packet destination is part of the ProxyIP subnetwork Make the proxy handle it
-			sameSubnetwork := proxy.ProxyIpSubnetwork.IP.Mask(proxy.ProxyIpSubnetwork.Mask).
-				Equal(ipv4.DstIP.Mask(proxy.ProxyIpSubnetwork.Mask))
-			if sameSubnetwork {
-
-				//Check proxy proxycache
-				entry, exist := proxy.proxycache.RetrieveByServiceIP(ipv4.SrcIP, int(tcp.SrcPort), ipv4.DstIP, int(tcp.DstPort))
-				if !exist {
-					//If no proxycache entry ask to the environment for a TableQuery
-					tableEntryList := proxy.environment.GetTableEntryByServiceIP(ipv4.DstIP)
-
-					//If no table entry available
-					if len(tableEntryList) < 1 {
-						//discard packet
-						return packet
-					}
-
-					//Choose between the table entry according to the ServiceIP algorithm
-					tableEntry := tableEntryList[rand.Intn(len(tableEntryList))]
-
-					//Find the instanceIP of the current service
-					instanceTableEntry, instanceexist := proxy.environment.GetTableEntryByNsIP(ipv4.SrcIP)
-					instanceIP := net.IP{}
-					if instanceexist {
-						for _, sip := range instanceTableEntry.ServiceIP {
-							if sip.IpType == env.InstanceNumber {
-								instanceIP = sip.Address
-							}
-						}
-					} else {
-						//Error
-						log.Println("[Error] Unable to find instance IP for service: ", ipv4.SrcIP)
-						return packet
-					}
-
-					//TODO smart ServiceIP algorithms
-
-					//Update proxycache
-					entry = ConversionEntry{
-						srcip:         ipv4.SrcIP,
-						dstip:         tableEntry.Nsip,
-						dstServiceIp:  ipv4.DstIP,
-						srcInstanceIp: instanceIP,
-						srcport:       int(tcp.SrcPort),
-						dstport:       int(tcp.DstPort),
-					}
-					proxy.proxycache.Add(entry)
-				}
-				return OutgoingConversion(entry.dstip, entry.srcInstanceIp, packet)
-
-			}
+			srcport = int(tcp.SrcPort)
+			dstport = int(tcp.DstPort)
 		}
+		if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
+			udp, _ := udpLayer.(*layers.UDP)
+			srcport = int(udp.SrcPort)
+			dstport = int(udp.DstPort)
+		}
+
+		//If packet destination is part of the ProxyIP subnetwork Make the proxy handle it
+		sameSubnetwork := proxy.ProxyIpSubnetwork.IP.Mask(proxy.ProxyIpSubnetwork.Mask).
+			Equal(ipv4.DstIP.Mask(proxy.ProxyIpSubnetwork.Mask))
+		if sameSubnetwork {
+
+			//Check proxy proxycache
+			entry, exist := proxy.proxycache.RetrieveByServiceIP(ipv4.SrcIP, srcport, ipv4.DstIP, dstport)
+			if !exist {
+				//If no proxycache entry ask to the environment for a TableQuery
+				tableEntryList := proxy.environment.GetTableEntryByServiceIP(ipv4.DstIP)
+
+				//If no table entry available
+				if len(tableEntryList) < 1 {
+					//discard packet
+					return packet
+				}
+
+				//Choose between the table entry according to the ServiceIP algorithm
+				tableEntry := tableEntryList[rand.Intn(len(tableEntryList))]
+
+				//Find the instanceIP of the current service
+				instanceTableEntry, instanceexist := proxy.environment.GetTableEntryByNsIP(ipv4.SrcIP)
+				instanceIP := net.IP{}
+				if instanceexist {
+					for _, sip := range instanceTableEntry.ServiceIP {
+						if sip.IpType == env.InstanceNumber {
+							instanceIP = sip.Address
+						}
+					}
+				} else {
+					log.Println("[Error] Unable to find instance IP for service: ", ipv4.SrcIP)
+					return packet
+				}
+
+				//TODO smart ServiceIP algorithms
+
+				//Update proxycache
+				entry = ConversionEntry{
+					srcip:         ipv4.SrcIP,
+					dstip:         tableEntry.Nsip,
+					dstServiceIp:  ipv4.DstIP,
+					srcInstanceIp: instanceIP,
+					srcport:       srcport,
+					dstport:       dstport,
+				}
+				proxy.proxycache.Add(entry)
+			}
+
+			return OutgoingConversion(entry.dstip, entry.srcInstanceIp, packet)
+
+		}
+
 	}
 	return packet
 }
@@ -521,26 +553,45 @@ func OutgoingConversion(dstIp net.IP, srcIp net.IP, packet gopacket.Packet) gopa
 	ip.DstIP = dstIp
 	ip.SrcIP = srcIp
 
-	tcp := packet.Layer(layers.LayerTypeTCP).(*layers.TCP)
-	//tcp.SrcPort = layers.TCPPort(sourcePort)
+	if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+		return serializeTcpPacket(tcpLayer.(*layers.TCP), ip, packet)
+	} else {
+		udpLayer := packet.Layer(layers.LayerTypeUDP)
+		return serializeUdpPacket(udpLayer.(*layers.UDP), ip, packet)
+	}
 
-	return serializeTcpPacket(tcp, ip, packet)
 }
 
 func IngoingConversion(srcIP net.IP, dstIP net.IP, packet gopacket.Packet) gopacket.Packet {
-
 	ip := packet.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
 	ip.SrcIP = srcIP
 	ip.DstIP = dstIP
 
-	tcp := packet.Layer(layers.LayerTypeTCP).(*layers.TCP)
-	//tcp.DstPort = layers.TCPPort(dstPort)
-
-	return serializeTcpPacket(tcp, ip, packet)
+	if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+		return serializeTcpPacket(tcpLayer.(*layers.TCP), ip, packet)
+	} else {
+		udpLayer := packet.Layer(layers.LayerTypeUDP)
+		return serializeUdpPacket(udpLayer.(*layers.UDP), ip, packet)
+	}
 }
 
 func serializeTcpPacket(tcp *layers.TCP, ip *layers.IPv4, packet gopacket.Packet) gopacket.Packet {
 	err := tcp.SetNetworkLayerForChecksum(ip)
+	if err != nil {
+		log.Println("[ERROR] ", err)
+	}
+
+	newBuffer := gopacket.NewSerializeBuffer()
+	err = gopacket.SerializePacket(newBuffer, gopacket.SerializeOptions{FixLengths: true, ComputeChecksums: true}, packet)
+	if err != nil {
+		log.Println("[ERROR] ", err)
+	}
+
+	return gopacket.NewPacket(newBuffer.Bytes(), layers.LayerTypeIPv4, gopacket.Default)
+}
+
+func serializeUdpPacket(udp *layers.UDP, ip *layers.IPv4, packet gopacket.Packet) gopacket.Packet {
+	err := udp.SetNetworkLayerForChecksum(ip)
 	if err != nil {
 		log.Println("[ERROR] ", err)
 	}
