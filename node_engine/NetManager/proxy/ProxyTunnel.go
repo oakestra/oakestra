@@ -105,14 +105,18 @@ func (proxy *GoProxyTunnel) outgoingMessage(packet gopacket.Packet) {
 		tcpLayer := packet.Layer(layers.LayerTypeTCP)
 		udpLayer := packet.Layer(layers.LayerTypeUDP)
 
+		if tcpLayer != nil {
+			fmt.Println("TCP packet received")
+		}
+		if udpLayer != nil {
+			fmt.Println("UDP packet received")
+		}
+
 		// continue only if the packet is udp or tcp, otherwise just drop it
 		if tcpLayer != nil || udpLayer != nil {
 
-			fmt.Println("TCP packet received")
 			ipv4, _ := ipLayer.(*layers.IPv4)
 			fmt.Printf("From src ip %d to dst ip %d\n", ipv4.SrcIP, ipv4.DstIP)
-			//tcp, _ := tcpLayer.(*layers.TCP)
-			//fmt.Printf("From src port %d to dst port %d\n", tcp.SrcPort, tcp.DstPort)
 
 			//proxyConversion
 			newPacket := proxy.outgoingProxy(packet)
@@ -138,16 +142,20 @@ func (proxy *GoProxyTunnel) ingoingMessage(packet gopacket.Packet, from net.UDPA
 		tcpLayer := packet.Layer(layers.LayerTypeTCP)
 		udpLayer := packet.Layer(layers.LayerTypeUDP)
 
+		if tcpLayer != nil {
+			fmt.Println("TCP packet received")
+		}
+		if udpLayer != nil {
+			fmt.Println("UDP packet received")
+		}
+
 		// continue only if the packet is udp or tcp, otherwise just drop it
 		if tcpLayer != nil || udpLayer != nil {
 
 			//if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 
-			fmt.Println("TCP packet received")
 			ipv4, _ := ipLayer.(*layers.IPv4)
 			fmt.Printf("From src ip %d to dst ip %d\n", ipv4.SrcIP, ipv4.DstIP)
-			//tcp, _ := tcpLayer.(*layers.TCP)
-			//fmt.Printf("From src port %d to dst port %d\n", tcp.SrcPort, tcp.DstPort)
 
 			//proxyConversion
 			newPacket := proxy.ingoingProxy(packet)
