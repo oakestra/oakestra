@@ -269,6 +269,23 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 		return nil, err
 	}
 
+	//Adding firewall roule
+	// iptables -A FORWARD -o goProxyBridge -i veth -j ACCEPT
+	cmd = exec.Command("iptables", "-A", "FORWARD", "-o", env.config.HostBridgeName, "-i", veth1name, "-j", "ACCEPT")
+	_, err = cmd.Output()
+	if err != nil {
+		cleanup()
+		env.freeContainerAddress(ip)
+		return nil, err
+	}
+	cmd = exec.Command("iptables", "-A", "FORWARD", "-i", env.config.HostBridgeName, "-o", veth1name, "-j", "ACCEPT")
+	_, err = cmd.Output()
+	if err != nil {
+		cleanup()
+		env.freeContainerAddress(ip)
+		return nil, err
+	}
+
 	env.deployedServices[containername] = ip
 
 	return ip, nil
