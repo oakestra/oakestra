@@ -108,10 +108,10 @@ func (proxy *GoProxyTunnel) outgoingMessage(packet gopacket.Packet) {
 		udpLayer := packet.Layer(layers.LayerTypeUDP)
 
 		if tcpLayer != nil {
-			//fmt.Println("TCP packet received")
+			fmt.Println("TCP packet received")
 		}
 		if udpLayer != nil {
-			//fmt.Println("UDP packet received")
+			fmt.Println("UDP packet received")
 		}
 
 		// continue only if the packet is udp or tcp, otherwise just drop it
@@ -143,6 +143,13 @@ func (proxy *GoProxyTunnel) ingoingMessage(packet gopacket.Packet, from net.UDPA
 
 		tcpLayer := packet.Layer(layers.LayerTypeTCP)
 		udpLayer := packet.Layer(layers.LayerTypeUDP)
+
+		if tcpLayer != nil {
+			fmt.Println("TCP packet received")
+		}
+		if udpLayer != nil {
+			fmt.Println("UDP packet received")
+		}
 
 		// continue only if the packet is udp or tcp, otherwise just drop it
 		if tcpLayer != nil || udpLayer != nil {
