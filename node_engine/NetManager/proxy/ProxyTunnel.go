@@ -124,7 +124,7 @@ func (proxy *GoProxyTunnel) outgoingMessage(packet gopacket.Packet) {
 			//log.Println("Sending incoming packet to: ", dstHost.String(), ":", dstPort)
 
 			//packetForwarding
-			proxy.forward(dstHost, dstPort, newPacket)
+			proxy.forward(dstHost, dstPort, newPacket, 0)
 		}
 	}
 }
@@ -369,7 +369,7 @@ func (proxy *GoProxyTunnel) tunOutgoingListen() {
 			}
 		case errormsg := <-readerror:
 			proxy.errorChannel <- errormsg
-			go ifaceread(proxy.ifce, readoutput, readerror)
+			//go ifaceread(proxy.ifce, readoutput, readerror)
 		case msg := <-readoutput:
 			//restart the interface read
 			//go ifaceread(proxy.ifce, readoutput, readerror)
@@ -404,7 +404,7 @@ func (proxy *GoProxyTunnel) tunIngoingListen() {
 			}
 		case errormsg := <-readerror:
 			proxy.errorChannel <- errormsg
-			go udpread(proxy.listenConnection, readoutput, readerror)
+			//go udpread(proxy.listenConnection, readoutput, readerror)
 		case msg := <-readoutput:
 			//restart the interface read
 			//go udpread(proxy.listenConnection, readoutput, readerror)
@@ -438,9 +438,11 @@ func (proxy *GoProxyTunnel) locateRemoteAddress(nsIP net.IP) (net.IP, int) {
 }
 
 //forward message to final destination via UDP tunneling
-func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket.Packet) {
-	proxy.udpwrite.Lock()
-	defer proxy.udpwrite.Unlock()
+func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket.Packet, attemptNumber int) {
+
+	if attemptNumber > 10 {
+		return
+	}
 
 	//If destination host is this machine, forward packet directly to the ingoing traffic method
 	if dstHost.Equal(proxy.localIP) {
@@ -458,10 +460,10 @@ func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket
 	con, exist := proxy.connectionBuffer[hoststring]
 	//TODO: flush connection buffer by time to time
 	if !exist {
+		log.Println("Establishing a new connection to node ", hoststring)
 		connection, err := net.Dial("udp", hoststring)
 		if nil != err {
 			log.Println("[ERROR] Unable to resolve remote addr:", err)
-			proxy.udpwrite.Unlock()
 			//TODO: add fallback mechanism
 			return
 		}
@@ -470,16 +472,19 @@ func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket
 	}
 	_, err := con.Write(packetToByte(packet))
 	if err != nil {
+		_ = con.Close()
 		log.Println("[ERROR]", err)
 		//proxy.udpwrite.Lock()
 		connection, err := net.Dial("udp", hoststring)
 		if nil != err {
 			log.Println("[ERROR] Unable to resolve remote addr:", err)
-			proxy.udpwrite.Unlock()
-			//TODO: add fallback mechanism
 			return
 		}
 		proxy.connectionBuffer[hoststring] = connection
+
+		//Try again
+		attemptNumber++
+		proxy.forward(dstHost, dstPort, packet, attemptNumber)
 	}
 }
 
