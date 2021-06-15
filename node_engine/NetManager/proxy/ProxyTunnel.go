@@ -107,13 +107,6 @@ func (proxy *GoProxyTunnel) outgoingMessage(packet gopacket.Packet) {
 		tcpLayer := packet.Layer(layers.LayerTypeTCP)
 		udpLayer := packet.Layer(layers.LayerTypeUDP)
 
-		if tcpLayer != nil {
-			fmt.Println("TCP packet received")
-		}
-		if udpLayer != nil {
-			fmt.Println("UDP packet received")
-		}
-
 		// continue only if the packet is udp or tcp, otherwise just drop it
 		if tcpLayer != nil || udpLayer != nil {
 
@@ -144,18 +137,10 @@ func (proxy *GoProxyTunnel) ingoingMessage(packet gopacket.Packet, from net.UDPA
 		tcpLayer := packet.Layer(layers.LayerTypeTCP)
 		udpLayer := packet.Layer(layers.LayerTypeUDP)
 
-		if tcpLayer != nil {
-			fmt.Println("TCP packet received")
-		}
-		if udpLayer != nil {
-			fmt.Println("UDP packet received")
-		}
-
 		// continue only if the packet is udp or tcp, otherwise just drop it
 		if tcpLayer != nil || udpLayer != nil {
 
 			//if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-
 			//ipv4, _ := ipLayer.(*layers.IPv4)
 			//fmt.Printf("From src ip %d to dst ip %d\n", ipv4.SrcIP, ipv4.DstIP)
 
@@ -454,6 +439,8 @@ func (proxy *GoProxyTunnel) locateRemoteAddress(nsIP net.IP) (net.IP, int) {
 
 //forward message to final destination via UDP tunneling
 func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket.Packet) {
+	proxy.udpwrite.Lock()
+	defer proxy.udpwrite.Unlock()
 
 	//If destination host is this machine, forward packet directly to the ingoing traffic method
 	if dstHost.Equal(proxy.localIP) {
@@ -467,12 +454,9 @@ func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket
 	}
 
 	//Send packet via UDP tunnel
-	//proxy.udpwrite.Lock()
-	//defer proxy.udpwrite.Unlock()
-	//remoteAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%v", dstHost, dstPort))
 	hoststring := fmt.Sprintf("%s:%v", dstHost, dstPort)
-	proxy.udpwrite.Lock()
 	con, exist := proxy.connectionBuffer[hoststring]
+	//TODO: flush connection buffer by time to time
 	if !exist {
 		connection, err := net.Dial("udp", hoststring)
 		if nil != err {
@@ -484,12 +468,10 @@ func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket
 		proxy.connectionBuffer[hoststring] = connection
 		con = connection
 	}
-	proxy.udpwrite.Unlock()
-	//_, err = proxy.listenConnection.WriteToUDP(packetToByte(packet), remoteAddr)
 	_, err := con.Write(packetToByte(packet))
 	if err != nil {
 		log.Println("[ERROR]", err)
-		proxy.udpwrite.Lock()
+		//proxy.udpwrite.Lock()
 		connection, err := net.Dial("udp", hoststring)
 		if nil != err {
 			log.Println("[ERROR] Unable to resolve remote addr:", err)
@@ -498,9 +480,7 @@ func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket
 			return
 		}
 		proxy.connectionBuffer[hoststring] = connection
-		proxy.udpwrite.Unlock()
 	}
-	//_ = con.Close()
 }
 
 // read output from an interface and wrap the read operation with a channel
