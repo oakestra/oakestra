@@ -16,15 +16,17 @@ func main() {
 	//setup
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("Current Dev IP address for demonstrative purpose: \n")
-	host1, _ := reader.ReadString('\n')
+	host1, _ := env.GetLocalIPandIface()
 	host1 = strings.TrimSuffix(host1, "\n")
 	fmt.Println("Current Host ip set to: ", host1)
 	fmt.Print("Input Client machine IP address for demonstrative purpose: \n")
-	host2, _ := reader.ReadString('\n')
+	//host2, _ := reader.ReadString('\n')
+	host2 := "192.168.42.165"
 	host2 = strings.TrimSuffix(host2, "\n")
 	fmt.Println("Dev2 Host ip set to: ", host2)
 	fmt.Print("Name of the docker container currently deployed that must be plugged into NetManager: \n")
-	containername, _ := reader.ReadString('\n')
+	//containername, _ := reader.ReadString('\n')
+	containername := "mynginx1"
 	containername = strings.TrimSuffix(containername, "\n")
 	fmt.Println("Docker container used: ", containername)
 	fmt.Print("Instance number: \n")
