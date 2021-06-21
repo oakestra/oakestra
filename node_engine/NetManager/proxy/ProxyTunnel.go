@@ -16,7 +16,7 @@ import (
 )
 
 //const
-var BUFFER_SIZE = 64 * 1024
+var BUFFER_SIZE = (64 * 1024)
 
 // Config
 type Configuration struct {
@@ -48,8 +48,6 @@ type GoProxyTunnel struct {
 	tunwrite          sync.RWMutex
 	incomingChannel   chan incomingMessage
 	outgoingChannel   chan []byte
-	readUdpBuffer     []byte
-	readTunBuffer     []byte
 }
 
 //incoming message from UDP channel
@@ -83,8 +81,6 @@ func NewCustom(configuration Configuration) GoProxyTunnel {
 		tunwrite:         sync.RWMutex{},
 		incomingChannel:  make(chan incomingMessage),
 		outgoingChannel:  make(chan []byte),
-		readUdpBuffer:    make([]byte, BUFFER_SIZE),
-		readTunBuffer:    make([]byte, BUFFER_SIZE),
 	}
 
 	//parse confgiuration file
@@ -333,7 +329,7 @@ func (proxy *GoProxyTunnel) createTun() {
 
 	//Increasing the MTU on the TUN dev
 	log.Println("Changing TUN's MTU")
-	cmd = exec.Command("ip", "link", "set", "dev", ifce.Name(), "mtu", "1472")
+	cmd = exec.Command("ip", "link", "set", "dev", ifce.Name(), "mtu", "65000")
 	_, err = cmd.Output()
 	if err != nil {
 		log.Fatal(err.Error())
@@ -553,14 +549,15 @@ func createUDPChannel(hoststring string) (*net.UDPConn, error) {
 // out channel gives back the byte array of the output
 // errchannel is the channel where in case of error the error is routed
 func (proxy *GoProxyTunnel) ifaceread(ifce *water.Interface, out chan<- []byte, errchannel chan<- error) {
+	buffer := make([]byte, BUFFER_SIZE)
 	for true {
-		packet := proxy.readTunBuffer
-		n, err := ifce.Read(packet)
-		log.Println("ifaceread Packet size ", n)
+		n, err := ifce.Read(buffer)
 		if err != nil {
 			errchannel <- err
 		} else {
-			out <- packet[:n]
+			res := make([]byte, n)
+			copy(res, buffer[:n])
+			out <- res
 		}
 	}
 }
@@ -569,16 +566,18 @@ func (proxy *GoProxyTunnel) ifaceread(ifce *water.Interface, out chan<- []byte, 
 // out channel gives back the byte array of the output
 // errchannel is the channel where in case of error the error is routed
 func (proxy *GoProxyTunnel) udpread(conn *net.UDPConn, out chan<- incomingMessage, errchannel chan<- error) {
+	buffer := make([]byte, BUFFER_SIZE)
 	for true {
-		packet := proxy.readUdpBuffer
+		packet := buffer
 		n, from, err := conn.ReadFromUDP(packet)
-		log.Println("udp Packet size ", n)
 		if err != nil {
 			errchannel <- err
 		} else {
+			res := make([]byte, n)
+			copy(res, buffer[:n])
 			out <- incomingMessage{
 				from:    *from,
-				content: packet[:n],
+				content: res,
 			}
 		}
 	}

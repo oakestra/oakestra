@@ -138,6 +138,14 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 		log.Fatal(err.Error())
 	}
 
+	//Increasing bridge MTU
+	log.Println("Changing Bridge's MTU")
+	cmd = exec.Command("ip", "link", "set", "dev", e.config.HostBridgeName, "mtu", "10000")
+	_, err = cmd.Output()
+	if err != nil {
+		log.Println("Impossible to set bridge MTU rn: ", err.Error())
+	}
+
 	return e
 }
 
@@ -216,6 +224,31 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 		fmt.Println(err)
 	}
 
+	//Increasing MTUs
+	log.Println("Changing Veth1's MTU")
+	cmd := exec.Command("ip", "link", "set", "dev", veth1name, "mtu", "65000")
+	_, err = cmd.Output()
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	log.Println("Changing Veth2's MTU")
+	cmd = exec.Command("ip", "link", "set", "dev", veth2name, "mtu", "65000")
+	_, err = cmd.Output()
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	//Increasing bridge MTU
+	log.Println("Changing Bridge's MTU")
+	cmd = exec.Command("ip", "link", "set", "dev", env.config.HostBridgeName, "mtu", "65000")
+	_, err = cmd.Output()
+	if err != nil {
+		log.Println("Impossible to set bridge MTU rn: ", err.Error())
+		cleanup()
+		return nil, err
+	}
+
 	// Attach veth2 to the docker container
 	log.Println("Attaching cointainer ", containername, " with custom veth ", veth2name)
 	pid, err := tenus.DockerPidByName(containername, "/var/run/docker.sock")
@@ -253,7 +286,7 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 
 	//Add route to bridge
 	//sudo nsenter -n -t 5565 ip route add 172.16.0.0/12 via 172.18.8.193 dev veth013
-	cmd := exec.Command("nsenter", "-n", "-t", strconv.Itoa(pid), "ip", "route", "add", "172.16.0.0/12", "via", env.config.HostBridgeIP, "dev", veth2name)
+	cmd = exec.Command("nsenter", "-n", "-t", strconv.Itoa(pid), "ip", "route", "add", "172.16.0.0/12", "via", env.config.HostBridgeIP, "dev", veth2name)
 	_, err = cmd.Output()
 	if err != nil {
 		log.Println("Impossible to setup route inside the netns")
