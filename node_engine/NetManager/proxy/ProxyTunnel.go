@@ -559,8 +559,9 @@ func (proxy *GoProxyTunnel) ifaceread(ifce *water.Interface, out chan<- []byte, 
 		log.Println("ifaceread Packet size ", n)
 		if err != nil {
 			errchannel <- err
+		} else {
+			out <- packet[:n]
 		}
-		out <- packet[:n]
 	}
 }
 

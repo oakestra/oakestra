@@ -128,6 +128,7 @@ func main() {
 		case _ = <-finishch:
 			return
 		case cherror := <-errch:
+			print("Client Error! ")
 			print(cherror)
 		}
 	}
