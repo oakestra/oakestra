@@ -15,10 +15,16 @@ docker-compose up -d
 
 ## Cluster Orchestrator(s) setup
 
-On a second Linux machine with public IP address or DNS name, first install Docker and Docker-compose. Then, run the following commands to set up the Root Orchestrator components. Open port 10000 for the cluster manager.
+On a second Linux machine with public IP address or DNS name
 
-Set a cluster_name, cluster_location, and the system_manager port in the docker-compose.yml.
+- Install Docker and Docker-compose. 
 
+- Export the required parameters:
+  - export SYSTEM_MANAGER_URL=" < ip address of the root orchestrator > "
+  - export CLUSTER_NAME=" < name of the cluster > "
+  - export CLUSTER_LOCATION=" < location of the cluster > "
+
+- Then, run the following commands to set up the Root Orchestrator components. Open port 10000 for the cluster manager.
 
 ```bash
 cd cluster_orchestrator/
