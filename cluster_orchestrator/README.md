@@ -69,5 +69,9 @@ HTTP scheduling answer from scheduler back to cluster manager. A list of workers
 
 ## Usage
 
+- First export the required parameters
+	- export SYSTEM_MANAGER_URL="<ip address of the root orchestrator>"
+	- export CLUSTER_NAME="<name of the cluster>"
+	- export CLUSTER_LOCATION="<location of the cluster>"
 - Use the docker-compose.yml with `docker-compose up` to start the mqtt broker and the database of the cluster-orchestrator.
  
