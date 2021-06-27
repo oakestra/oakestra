@@ -45,7 +45,7 @@ services:
       - "10001:10001"
     environment:
       - MY_PORT=10000
-      - SYSTEM_MANAGER_URL=3.120.37.66
+      - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_MONGO_URL=mongo
       - CLUSTER_MONGO_PORT=10007
@@ -53,8 +53,8 @@ services:
       - CLUSTER_SCHEDULER_PORT=10005
       - MQTT_BROKER_URL=mqtt
       - MQTT_BROKER_PORT=10003
-      - CLUSTER_NAME=
-      - CLUSTER_LOCATION=
+      - CLUSTER_NAME=${CLUSTER_NAME}
+      - CLUSTER_LOCATION=${CLUSTER_LOCATION}
     depends_on:
       - mongo
       - mqtt
