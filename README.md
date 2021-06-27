@@ -37,7 +37,8 @@ On an arbitrary Linux machine, install Python3.8 and virtualenv. Set the IP addr
 
 ```bash
 cd node_engine/
-./start-up.sh
+export CLUSTER_MANAGER_IP=" < IP OF THE CLUSTER MANAGER WHERE THIS NODE BELONGS >"
+./start-up.sh <architecture: amd64 arm7>
 ```
 
 # Application Deployment

@@ -8,7 +8,7 @@ if [ "$1" == "" ]; then
     exit 1
 fi
 
-export CLUSTER_MANAGER_IP=192.168.42.170
+# export CLUSTER_MANAGER_IP=192.168.42.170
 # export CLUSTER_MANAGER_IP=localhost
 export CLUSTER_MANAGER_PORT=10000
 
@@ -20,7 +20,7 @@ trap "ps -ax | grep NetManager | awk {'print $1'} | xargs sudo kill > /dev/null 
 sleep 2
 
 # create virtualenv
-virtualenv --clear -p python3.8 .venv
+virtualenv -p python3.8 .venv
 source .venv/bin/activate
 
 .venv/bin/pip install -r requirements.txt
