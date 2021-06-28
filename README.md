@@ -10,7 +10,7 @@ On a Linux machine with public IP address or DNS name, first install Docker and 
 
 ```bash
 cd root_orchestrator/
-docker-compose up -d
+docker-compose up --build -d
 ```
 
 ## Cluster Orchestrator(s) setup
@@ -28,7 +28,7 @@ On a second Linux machine with public IP address or DNS name
 
 ```bash
 cd cluster_orchestrator/
-docker-compose up -d
+docker-compose up --build -d
 ```
 
 ## Add worker nodes (run Node Engine)
