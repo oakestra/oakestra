@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var Hosts = []string{
@@ -57,6 +58,8 @@ func main() {
 		Mtusize:                    mtusize,
 	}
 
+	time.Sleep(4)
+	reader = bufio.NewReader(os.Stdin)
 	fmt.Print("Current Dev IP address for demonstrative purpose: \n")
 	host1, _ := reader.ReadString('\n')
 	host1 = strings.TrimSuffix(host1, "\n")
