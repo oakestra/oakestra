@@ -29,6 +29,7 @@ type Configuration struct {
 	HostBridgeMask             string
 	HostTunName                string
 	ConnectedInternetInterface string
+	Mtusize                    string
 }
 
 // env class
@@ -49,6 +50,7 @@ type Environment struct {
 	//### Communication variables
 	clusterPort string
 	clusterAddr string
+	mtusize     string
 }
 
 // current network interfaces in the system
@@ -78,6 +80,7 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 		deployedServices:  make(map[string]net.IP, 0),
 		clusterAddr:       os.Getenv("CLUSTER_MANAGER_IP"),
 		clusterPort:       os.Getenv("CLUSTER_MANAGER_PORT"),
+		mtusize:           customConfig.Mtusize,
 	}
 
 	//Get Connected Internet Interface
@@ -140,7 +143,7 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 
 	//Increasing bridge MTU
 	log.Println("Changing Bridge's MTU")
-	cmd = exec.Command("ip", "link", "set", "dev", e.config.HostBridgeName, "mtu", "10000")
+	cmd = exec.Command("ip", "link", "set", "dev", e.config.HostBridgeName, "mtu", e.mtusize)
 	_, err = cmd.Output()
 	if err != nil {
 		log.Println("Impossible to set bridge MTU rn: ", err.Error())
@@ -170,6 +173,7 @@ func NewDefault(proxyname string, network string) Environment {
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
+		Mtusize:                    "10000",
 	}
 	return NewCustom(proxyname, config)
 }
@@ -226,14 +230,14 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 
 	//Increasing MTUs
 	log.Println("Changing Veth1's MTU")
-	cmd := exec.Command("ip", "link", "set", "dev", veth1name, "mtu", "65000")
+	cmd := exec.Command("ip", "link", "set", "dev", veth1name, "mtu", env.mtusize)
 	_, err = cmd.Output()
 	if err != nil {
 		cleanup()
 		return nil, err
 	}
 	log.Println("Changing Veth2's MTU")
-	cmd = exec.Command("ip", "link", "set", "dev", veth2name, "mtu", "65000")
+	cmd = exec.Command("ip", "link", "set", "dev", veth2name, "mtu", env.mtusize)
 	_, err = cmd.Output()
 	if err != nil {
 		cleanup()
@@ -241,7 +245,7 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 	}
 	//Increasing bridge MTU
 	log.Println("Changing Bridge's MTU")
-	cmd = exec.Command("ip", "link", "set", "dev", env.config.HostBridgeName, "mtu", "65000")
+	cmd = exec.Command("ip", "link", "set", "dev", env.config.HostBridgeName, "mtu", env.mtusize)
 	_, err = cmd.Output()
 	if err != nil {
 		log.Println("Impossible to set bridge MTU rn: ", err.Error())

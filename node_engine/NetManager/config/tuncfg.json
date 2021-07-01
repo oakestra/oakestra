@@ -3,5 +3,6 @@
   "TunNetIP": "172.19.1.254",
   "ProxySubnetwork": "172.30.0.0",
   "ProxySubnetworkMask": "255.255.0.0",
-  "TunnelPort": 50011
+  "TunnelPort": 50011,
+  "Mtusize": 10000
 }

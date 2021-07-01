@@ -9,7 +9,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 var Hosts = []string{
@@ -28,12 +27,18 @@ func main() {
 	//create the tunnel
 	fmt.Println("Create the goProxy tun device")
 
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("MTU size: \n")
+	mtusize, _ := reader.ReadString('\n')
+	mtusize = strings.TrimSuffix(mtusize, "\n")
+
 	tunconfig := proxy.Configuration{
 		HostTUNDeviceName:   "goProxyTun",
 		ProxySubnetwork:     "172.30.0.0",
 		ProxySubnetworkMask: "255.255.0.0",
 		TunNetIP:            "172.20.1.254",
 		TunnelPort:          50011,
+		Mtusize:             mtusize,
 	}
 
 	myproxy := proxy.NewCustom(tunconfig)
@@ -49,10 +54,9 @@ func main() {
 		HostBridgeMask:             "/24",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
+		Mtusize:                    mtusize,
 	}
 
-	time.Sleep(4 * time.Second)
-	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("Current Dev IP address for demonstrative purpose: \n")
 	host1, _ := reader.ReadString('\n')
 	host1 = strings.TrimSuffix(host1, "\n")

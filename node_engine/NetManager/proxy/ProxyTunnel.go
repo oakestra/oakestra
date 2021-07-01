@@ -16,7 +16,7 @@ import (
 )
 
 //const
-var BUFFER_SIZE = (64 * 1024)
+var BUFFER_SIZE = 64 * 1024
 
 // Config
 type Configuration struct {
@@ -25,6 +25,7 @@ type Configuration struct {
 	ProxySubnetworkMask string
 	TunNetIP            string
 	TunnelPort          int
+	Mtusize             string
 }
 
 type GoProxyTunnel struct {
@@ -48,6 +49,7 @@ type GoProxyTunnel struct {
 	tunwrite          sync.RWMutex
 	incomingChannel   chan incomingMessage
 	outgoingChannel   chan []byte
+	mtusize           string
 }
 
 //incoming message from UDP channel
@@ -81,6 +83,7 @@ func NewCustom(configuration Configuration) GoProxyTunnel {
 		tunwrite:         sync.RWMutex{},
 		incomingChannel:  make(chan incomingMessage),
 		outgoingChannel:  make(chan []byte),
+		mtusize:          configuration.Mtusize,
 	}
 
 	//parse confgiuration file
@@ -329,7 +332,7 @@ func (proxy *GoProxyTunnel) createTun() {
 
 	//Increasing the MTU on the TUN dev
 	log.Println("Changing TUN's MTU")
-	cmd = exec.Command("ip", "link", "set", "dev", ifce.Name(), "mtu", "65000")
+	cmd = exec.Command("ip", "link", "set", "dev", ifce.Name(), "mtu", proxy.mtusize)
 	_, err = cmd.Output()
 	if err != nil {
 		log.Fatal(err.Error())

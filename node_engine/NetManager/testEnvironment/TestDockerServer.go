@@ -20,13 +20,13 @@ func main() {
 	host1 = strings.TrimSuffix(host1, "\n")
 	fmt.Println("Current Host ip set to: ", host1)
 	fmt.Print("Input Client machine IP address for demonstrative purpose: \n")
-	//host2, _ := reader.ReadString('\n')
-	host2 := "192.168.42.165"
+	host2, _ := reader.ReadString('\n')
+	//host2 := "192.168.42.165"
 	host2 = strings.TrimSuffix(host2, "\n")
 	fmt.Println("Dev2 Host ip set to: ", host2)
 	fmt.Print("Name of the docker container currently deployed that must be plugged into NetManager: \n")
-	//containername, _ := reader.ReadString('\n')
-	containername := "mynginx1"
+	containername, _ := reader.ReadString('\n')
+	//containername := "mynginx1"
 	containername = strings.TrimSuffix(containername, "\n")
 	fmt.Println("Docker container used: ", containername)
 	fmt.Print("Instance number: \n")
@@ -34,6 +34,9 @@ func main() {
 	instance = strings.TrimSuffix(instance, "\n")
 	fmt.Println("Instance: ", instance)
 	intinstance, _ := strconv.Atoi(instance)
+	fmt.Print("MTU size: \n")
+	mtusize, _ := reader.ReadString('\n')
+	mtusize = strings.TrimSuffix(mtusize, "\n")
 
 	//create the tunnel
 	fmt.Println("Create the goProxy tun device")
@@ -44,6 +47,7 @@ func main() {
 		ProxySubnetworkMask: "255.255.0.0",
 		TunNetIP:            "172.19." + instance + ".254",
 		TunnelPort:          50011,
+		Mtusize:             mtusize,
 	}
 
 	myproxy := proxy.NewCustom(tunconfig)
@@ -59,6 +63,7 @@ func main() {
 		HostBridgeMask:             "/24",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
+		Mtusize:                    mtusize,
 	}
 
 	time.Sleep(4 * time.Second)
