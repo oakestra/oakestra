@@ -165,7 +165,7 @@ func NewDefault(proxyname string, network string) Environment {
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
-		Mtusize:                    "10000",
+		Mtusize:                    "5000",
 	}
 	return NewCustom(proxyname, config)
 }
@@ -349,6 +349,22 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	}
 
 	cmd = exec.Command("ip", "link", "add", veth1name, "type", "veth", "peer", "name", veth2name)
+	_, err = cmd.Output()
+	if err != nil {
+		cleanup()
+		return "", err
+	}
+
+	//Increasing MTUs
+	log.Println("Changing Veth1's MTU")
+	cmd = exec.Command("ip", "link", "set", "dev", veth1name, "mtu", env.mtusize)
+	_, err = cmd.Output()
+	if err != nil {
+		cleanup()
+		return "", err
+	}
+	log.Println("Changing Veth2's MTU")
+	cmd = exec.Command("ip", "link", "set", "dev", veth2name, "mtu", env.mtusize)
 	_, err = cmd.Output()
 	if err != nil {
 		cleanup()
