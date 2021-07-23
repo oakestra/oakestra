@@ -24,7 +24,7 @@ services:
 
   # MongoDB in Root Orchestrator
   mongo:
-    image: mongo
+    image: mongo:3.6
     container_name: mongo
     hostname: mongo
     ports:
