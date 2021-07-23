@@ -67,7 +67,7 @@ while IFS=, read hostname ip; do
 	echo "ip: $ip"
 	echo "hostname: $hostname"
 	scp -r EdgeIO_deployment/ $username@$ip:/home/$username/
-        ssh -tt $username@$ip "chmod 777 EdgeIO_deployment; cd EdgeIO_deployment; chmod -R 777 cluster*"
+        ssh -oStrictHostKeyChecking=no -tt $username@$ip "chmod 777 EdgeIO_deployment; cd EdgeIO_deployment; chmod -R 777 cluster*"
 	break 
 done < node.txt
 
@@ -82,7 +82,7 @@ done < node.txt
 for ip in $list; do
         echo "ip: $ip"
         echo "hostname: $hostname"
-        ssh -tt $username@$ip "sudo apt install -y python3.8; sudo apt install -y python3-pip;sudo pip3 install virtualenv; alias pip=pip3; alias python=python3"
+        ssh -oStrictHostKeyChecking=no -tt $username@$ip "sudo apt install -y python3.8; sudo apt install -y python3-pip;sudo pip3 install virtualenv; alias pip=pip3; alias python=python3"
 done
 
 echo "Node setup finished successfully!!"

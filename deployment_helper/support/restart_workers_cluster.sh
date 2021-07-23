@@ -38,14 +38,14 @@ for cluster in $clusterlist; do
 		hostname_to_ip
 		
 		echo "Stopping: <$hostname,$ip> [If any error shows up... don't worry :D"
-                ssh $1@$ip "num=\$(ps aux | grep start-up | grep -v grep | awk '{print \$2}'); sudo kill \$num"
-                ssh $1@$ip "num=\$(ps aux | grep NetManager | grep -v grep | awk '{print \$2}'); sudo kill -9 \$num"
-                ssh $1@$ip "num=\$(ps aux | grep node_engine | grep -v grep | awk '{print \$2}'); sudo kill -9 \$num"
+                ssh -oStrictHostKeyChecking=no $1@$ip "num=\$(ps aux | grep start-up | grep -v grep | awk '{print \$2}'); sudo kill \$num"
+                ssh -oStrictHostKeyChecking=no $1@$ip "num=\$(ps aux | grep NetManager | grep -v grep | awk '{print \$2}'); sudo kill -9 \$num"
+                ssh -oStrictHostKeyChecking=no $1@$ip "num=\$(ps aux | grep node_engine | grep -v grep | awk '{print \$2}'); sudo kill -9 \$num"
                 echo "Done!"
 		
 		echo "Restarting: <$hostname,$ip>"
 		echo "Clusterip: $clusterip"
-		ssh $1@$ip "cd EdgeIO_deployment/worker$workernum/node_engine/; export CLUSTER_MANAGER_IP='$clusterip'; sh -c 'nohup ./start-up.sh amd64 > logs.log 2>&1 &'"
+		ssh -oStrictHostKeyChecking=no $1@$ip "cd EdgeIO_deployment/worker$workernum/node_engine/; export CLUSTER_MANAGER_IP='$clusterip'; sh -c 'nohup ./start-up.sh amd64 > logs.log 2>&1 &'"
 		woerkernum=$((workernum+1))
 	done
 done

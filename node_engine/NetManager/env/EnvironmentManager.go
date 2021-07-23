@@ -141,14 +141,6 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 		log.Fatal(err.Error())
 	}
 
-	//Increasing bridge MTU
-	log.Println("Changing Bridge's MTU")
-	cmd = exec.Command("ip", "link", "set", "dev", e.config.HostBridgeName, "mtu", e.mtusize)
-	_, err = cmd.Output()
-	if err != nil {
-		log.Println("Impossible to set bridge MTU rn: ", err.Error())
-	}
-
 	return e
 }
 
@@ -212,22 +204,6 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 		return nil, err
 	}
 
-	// add veth1 to the bridge
-	myveth01, err := net.InterfaceByName(veth1name)
-	if err != nil {
-		cleanup()
-		return nil, err
-	}
-
-	if err = br.AddSlaveIfc(myveth01); err != nil {
-		cleanup()
-		return nil, err
-	}
-
-	if err = veth.SetLinkUp(); err != nil {
-		fmt.Println(err)
-	}
-
 	//Increasing MTUs
 	log.Println("Changing Veth1's MTU")
 	cmd := exec.Command("ip", "link", "set", "dev", veth1name, "mtu", env.mtusize)
@@ -243,14 +219,21 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 		cleanup()
 		return nil, err
 	}
-	//Increasing bridge MTU
-	log.Println("Changing Bridge's MTU")
-	cmd = exec.Command("ip", "link", "set", "dev", env.config.HostBridgeName, "mtu", env.mtusize)
-	_, err = cmd.Output()
+
+	// add veth1 to the bridge
+	myveth01, err := net.InterfaceByName(veth1name)
 	if err != nil {
-		log.Println("Impossible to set bridge MTU rn: ", err.Error())
 		cleanup()
 		return nil, err
+	}
+
+	if err = br.AddSlaveIfc(myveth01); err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	if err = veth.SetLinkUp(); err != nil {
+		fmt.Println(err)
 	}
 
 	// Attach veth2 to the docker container
@@ -583,7 +566,7 @@ func (env *Environment) CreateHostBridge() (string, error) {
 	}
 
 	//otherwise create it
-	createbridgeCmd := exec.Command("ip", "link", "add", "name", env.config.HostBridgeName, "type", "bridge")
+	createbridgeCmd := exec.Command("ip", "link", "add", "name", env.config.HostBridgeName, "mtu", env.mtusize, "type", "bridge")
 	_, err = createbridgeCmd.Output()
 	if err != nil {
 		return "", err
