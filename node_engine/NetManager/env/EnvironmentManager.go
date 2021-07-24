@@ -165,7 +165,7 @@ func NewDefault(proxyname string, network string) Environment {
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
-		Mtusize:                    "1450",
+		Mtusize:                    "3000",
 	}
 	return NewCustom(proxyname, config)
 }
