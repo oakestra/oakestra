@@ -4,5 +4,5 @@
   "ProxySubnetwork": "172.30.0.0",
   "ProxySubnetworkMask": "255.255.0.0",
   "TunnelPort": 50011,
-  "Mtusize": 5000
+  "Mtusize": 1450
 }
