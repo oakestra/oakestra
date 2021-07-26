@@ -9,7 +9,7 @@ def calculate(job_id, job):
     if job.get('cluster_location'):
         return location_based_scheduling(job)  # tuple of (negative|positive, cluster|negative_description)
     else:
-        return first_fit_algorithm(job=job)
+        return greedy_load_balanced_algorithm(job=job)
 
 
 def location_based_scheduling(job):
@@ -67,8 +67,9 @@ def greedy_load_balanced_algorithm(job):
     qualified_clusters = []
 
     for cluster in active_clusters:
-        available_cpu = float(cluster.get('current_cpu_cores_free'))
-        available_memory = int(re.sub("[^0-9]", "", cluster.get('current_free_memory_in_MB')))
+        print(cluster)
+        available_cpu = float(cluster.get('total_cpu_cores'))
+        available_memory = float(cluster.get('memory_in_mb'))
 
         if available_cpu >= job_req.get('cpu') and available_memory >= job_req.get('memory'):
             qualified_clusters.append(cluster)
@@ -83,10 +84,12 @@ def greedy_load_balanced_algorithm(job):
 
     # return the cluster with the most cpu+ram
     for cluster in qualified_clusters:
-        cpu = float(cluster.get('current_cpu_cores_free'))
-        mem = int(re.sub("[^0-9]", "", cluster.get('current_free_memory_in_MB')))
+        cpu = float(cluster.get('total_cpu_cores'))
+        mem = float(cluster.get('memory_in_mb'))
 
-        if cpu > target_cpu and target_mem > mem:
+        if cpu >= target_cpu and mem >= target_mem:
+            target_cpu = cpu
+            target_mem = mem
             target_cluster = cluster
 
     return 'positive', target_cluster

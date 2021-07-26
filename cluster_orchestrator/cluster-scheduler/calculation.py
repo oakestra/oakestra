@@ -1,5 +1,4 @@
 import time
-import re
 
 from mongodb_client import mongo_find_one_node, mongo_find_all_active_nodes, mongo_find_node_by_name
 
@@ -66,7 +65,7 @@ def greedy_load_balanced_algorithm(job):
     for node in active_nodes:
         print(node)
         available_cpu = float(node.get('current_cpu_cores_free'))
-        available_memory = int(re.sub("[^0-9]", "", node.get('current_free_memory_in_MB')))
+        available_memory = float(node.get('current_free_memory_in_MB'))
         node_info = node.get('node_info')
         technology = node_info.get('technology')
 
@@ -86,9 +85,11 @@ def greedy_load_balanced_algorithm(job):
     # return the cluster with the most cpu+ram
     for node in qualified_nodes:
         cpu = float(node.get('current_cpu_cores_free'))
-        mem = int(re.sub("[^0-9]", "", node.get('current_free_memory_in_MB')))
-        if cpu > target_cpu and target_mem > mem:
-            target_node = cluster
+        mem = float(node.get('current_free_memory_in_MB'))
+        if cpu >= target_cpu and mem >= target_mem:
+            target_cpu = cpu
+            target_mem = target_cpu
+            target_node = node
 
     return 'positive', target_node
 
