@@ -57,6 +57,45 @@ def first_fit_algorithm(job):
     return 'negative', 'NoActiveClusterWithCapacity'
 
 
+def greedy_load_balanced_algorithm(job):
+    """Which of the clusters have the most capacity for a given job"""
+
+    job_req = job.get('requirements')
+
+
+    active clusters = mongo_find_all_active_clusters()
+    qualified_clusters = []
+
+    result = 'negative', 'NoActiveClusterWithCapacity'
+
+    for cluster in active_clusters:
+        available_cpu = cluster.get('current_cpu_cores_free')
+        available_memory = cluster.get('current_free_memory_in_MB')
+        
+        if available_cpu >= job_req.get('cpu') and available_memory >= job_req.get('memory'):
+            qualified_clusters.append(cluster)
+    
+    target_cluster
+    target_cpu = 0
+    target_mem = 0
+
+    # return if no qualified clusters found
+    if not qualified_clusters:
+        return 'negative', 'NoActiveClusterWithCapacity'
+
+
+    # return the cluster with the most cpu+ram
+    for cluster in qualified_clusters:
+        cpu = cluster.get('current_cpu_cores_free')
+        mem = cluster.get('current_free_memory_in_MB')
+
+        if cpu > target_cpu and target_mem > mem:
+            target_cluster = cluster
+
+    return 'positive', target_cluster
+        
+
+
 def same_cluster_replication(job_obj, cluster_obj, replicas):
 
     job_description = job_obj.get('file_content')
