@@ -41,7 +41,8 @@ for cluster in $clusterlist; do
                 ssh -oStrictHostKeyChecking=no $1@$ip "num=\$(ps aux | grep start-up | grep -v grep | awk '{print \$2}'); sudo kill \$num"
                 ssh -oStrictHostKeyChecking=no $1@$ip "num=\$(ps aux | grep NetManager | grep -v grep | awk '{print \$2}'); sudo kill -9 \$num"
                 ssh -oStrictHostKeyChecking=no $1@$ip "num=\$(ps aux | grep node_engine | grep -v grep | awk '{print \$2}'); sudo kill -9 \$num"
-                echo "Done!"
+		ssh -oStrictHostKeyChecking=no $1@$ip "docker container prune -f"
+		echo "Done!"
 		
 		echo "Restarting: <$hostname,$ip>"
 		echo "Clusterip: $clusterip"
