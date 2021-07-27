@@ -42,7 +42,7 @@ def deploy_on_desired_node(job):
     desired_node = job_req.get('node')
     node = mongo_find_node_by_name(desired_node)
 
-    if node == 'Error':
+    if node is None or node == "Error":
         return 'negative', 'FAILED_Node_Not_Found'
 
     available_cpu = node.get('current_cpu_cores_free')
