@@ -29,6 +29,7 @@ type Configuration struct {
 	HostBridgeMask             string
 	HostTunName                string
 	ConnectedInternetInterface string
+	Mtusize                    string
 }
 
 // env class
@@ -49,6 +50,7 @@ type Environment struct {
 	//### Communication variables
 	clusterPort string
 	clusterAddr string
+	mtusize     string
 }
 
 // current network interfaces in the system
@@ -78,6 +80,7 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 		deployedServices:  make(map[string]net.IP, 0),
 		clusterAddr:       os.Getenv("CLUSTER_MANAGER_IP"),
 		clusterPort:       os.Getenv("CLUSTER_MANAGER_PORT"),
+		mtusize:           customConfig.Mtusize,
 	}
 
 	//Get Connected Internet Interface
@@ -162,6 +165,7 @@ func NewDefault(proxyname string, network string) Environment {
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
+		Mtusize:                    "3000",
 	}
 	return NewCustom(proxyname, config)
 }
@@ -195,6 +199,22 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 	}
 
 	veth, err := tenus.NewVethPairWithOptions(veth1name, tenus.VethOptions{PeerName: veth2name})
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	//Increasing MTUs
+	log.Println("Changing Veth1's MTU")
+	cmd := exec.Command("ip", "link", "set", "dev", veth1name, "mtu", env.mtusize)
+	_, err = cmd.Output()
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	log.Println("Changing Veth2's MTU")
+	cmd = exec.Command("ip", "link", "set", "dev", veth2name, "mtu", env.mtusize)
+	_, err = cmd.Output()
 	if err != nil {
 		cleanup()
 		return nil, err
@@ -253,7 +273,7 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 
 	//Add route to bridge
 	//sudo nsenter -n -t 5565 ip route add 172.16.0.0/12 via 172.18.8.193 dev veth013
-	cmd := exec.Command("nsenter", "-n", "-t", strconv.Itoa(pid), "ip", "route", "add", "172.16.0.0/12", "via", env.config.HostBridgeIP, "dev", veth2name)
+	cmd = exec.Command("nsenter", "-n", "-t", strconv.Itoa(pid), "ip", "route", "add", "172.16.0.0/12", "via", env.config.HostBridgeIP, "dev", veth2name)
 	_, err = cmd.Output()
 	if err != nil {
 		log.Println("Impossible to setup route inside the netns")
@@ -329,6 +349,22 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	}
 
 	cmd = exec.Command("ip", "link", "add", veth1name, "type", "veth", "peer", "name", veth2name)
+	_, err = cmd.Output()
+	if err != nil {
+		cleanup()
+		return "", err
+	}
+
+	//Increasing MTUs
+	log.Println("Changing Veth1's MTU")
+	cmd = exec.Command("ip", "link", "set", "dev", veth1name, "mtu", env.mtusize)
+	_, err = cmd.Output()
+	if err != nil {
+		cleanup()
+		return "", err
+	}
+	log.Println("Changing Veth2's MTU")
+	cmd = exec.Command("ip", "link", "set", "dev", veth2name, "mtu", env.mtusize)
 	_, err = cmd.Output()
 	if err != nil {
 		cleanup()
@@ -546,7 +582,7 @@ func (env *Environment) CreateHostBridge() (string, error) {
 	}
 
 	//otherwise create it
-	createbridgeCmd := exec.Command("ip", "link", "add", "name", env.config.HostBridgeName, "type", "bridge")
+	createbridgeCmd := exec.Command("ip", "link", "add", "name", env.config.HostBridgeName, "mtu", env.mtusize, "type", "bridge")
 	_, err = createbridgeCmd.Output()
 	if err != nil {
 		return "", err

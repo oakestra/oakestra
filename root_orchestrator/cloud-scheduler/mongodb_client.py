@@ -89,7 +89,7 @@ def mongo_find_all_active_clusters():
     global mongo_clusters
     app.logger.info('Finding the active cluster orchestrators...')
     now_timestamp = datetime.now().timestamp()
-    return mongo_clusters.db.nodes.find(
+    return mongo_clusters.db.clusters.find(
         {'last_modified_timestamp': {'$gt': now_timestamp - CLUSTERS_FRESHNESS_INTERVAL}})
 
 
