@@ -37,7 +37,8 @@ On an arbitrary Linux machine, install Python3.8 and virtualenv. Set the IP addr
 
 ```bash
 cd node_engine/
-./start-up.sh
+export CLUSTER_MANAGER_IP=" < IP OF THE CLUSTER MANAGER WHERE THIS NODE BELONGS >"
+./start-up.sh <architecture: amd64 arm7>
 ```
 
 # Application Deployment
@@ -95,6 +96,8 @@ curl -F file=@'deploy.yaml' http://localhost:10000/api/deploy -v
 ```
 
 deploy.yaml is the deployment descriptor file
+
+Once you have a running edgeIO setup, use the API of the System Manager to deploy applications.
 
 If the call is successful you'll receive the job name for this service. Save this name for future call.
 
