@@ -28,7 +28,7 @@ echo "Please insert username: "
 read username
 
 echo "cloning the repo..."
-git clone https://github.com/edgeIO/src -b communication-channel
+git clone https://github.com/edgeIO/src -b release-0.1
 echo "repo clone successfull or already present!"
 
 mkdir EdgeIO_deployment
