@@ -3,10 +3,13 @@ import uuid
 from flask_mqtt import Mqtt
 import json
 import re
+import time
 
 from cpu_mem import get_cpu_memory, get_memory
 from dockerclient import start_container, stop_container
 from mirageosclient import run_unikernel_mirageos
+from coordinates import get_coordinates
+
 
 mqtt = None
 app = None
@@ -15,6 +18,7 @@ app = None
 def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
     global mqtt
     global app
+    global req
 
     app = flask_app
 
@@ -24,6 +28,7 @@ def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
     mqtt = Mqtt(app)
     app.logger.info('initialized mqtt')
     mqtt.subscribe('nodes/' + my_id + '/control/+')
+    mqtt.subscribe('nodes/' + my_id + '/ack')
 
     @mqtt.on_message()
     def handle_mqtt_message(client, userdata, message):
@@ -37,12 +42,19 @@ def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
         # if topic starts with nodes and ends with controls
         re_nodes_topic_control_deploy = re.search("^nodes/" + my_id + "/control/deploy$", topic)
         re_nodes_topic_control_delete = re.search("^nodes/" + my_id + "/control/delete$", topic)
-
-        payload = data.get('payload')
-        image_technology = payload.get('image_runtime')
-        image_url = payload.get('image')
-        job_name = payload.get('job_name')
-        port = payload.get('port')
+        re_nodes_topic_ack = re.search("^nodes/" + my_id + "/ack$", topic)
+        if re_nodes_topic_ack is not None:
+            payload = data.get('payload')
+            req = payload.get('request_time')
+            resp = time.time()
+            latency = (resp - req) * 1000 # in ms
+            app.logger.info('CO - Worker latency: {}'.format(latency))
+        else:
+            payload = data.get('payload')
+            image_technology = payload.get('image_runtime')
+            image_url = payload.get('image')
+            job_name = payload.get('job_name')
+            port = payload.get('port')
 
         if re_nodes_topic_control_deploy is not None:
             app.logger.info("MQTT - Received .../control/deploy command")
@@ -62,5 +74,7 @@ def publish_cpu_mem(my_id):
     cpu_used, free_cores, memory_used, free_memory_in_MB = get_cpu_memory()
     mem_value = get_memory()
     topic = 'nodes/' + my_id + '/information'
+    lat, long = get_coordinates()
     mqtt.publish(topic, json.dumps({'cpu': cpu_used, 'free_cores': free_cores,
-                                    'memory': memory_used, 'memory_free_in_MB': free_memory_in_MB}))
+                                    'memory': memory_used, 'memory_free_in_MB': free_memory_in_MB,
+                                    'lat': lat, 'long': long, 'request_time': time.time()}))
