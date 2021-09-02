@@ -110,6 +110,7 @@ def mongo_update_cluster_information(cluster_id, data):
     nodes = data.get('number_of_nodes')
     technology = data.get('technology')
     more = data.get('more')
+    worker_groups = data.get('worker_groups')
 
     jobs = data.get('jobs')
     for j in jobs:
@@ -119,13 +120,14 @@ def mongo_update_cluster_information(cluster_id, data):
     datetime_now = datetime.now()
     datetime_now_timestamp = datetime.timestamp(datetime_now)
 
-    mongo_clusters.db.clusters.\
-        find_one_and_update({'_id': ObjectId(cluster_id)},
-                            {'$set': {'aggregated_cpu_percent': cpu_percent, 'total_cpu_cores': cpu_cores,
-                                      'aggregated_memory_percent': memory_percent, 'memory_in_mb': memory_in_mb,
-                                      'active_nodes': nodes, 'technology': technology, 'more': more,
-                                      'last_modified': datetime_now, 'last_modified_timestamp': datetime_now_timestamp}},
-                            upsert=True)
+    mongo_clusters.db.clusters.find_one_and_update(
+        {'_id': ObjectId(cluster_id)},
+        {'$set': {'aggregated_cpu_percent': cpu_percent, 'total_cpu_cores': cpu_cores,
+                  'aggregated_memory_percent': memory_percent, 'memory_in_mb': memory_in_mb,
+                  'active_nodes': nodes, 'technology': technology, 'more': more,
+                  'last_modified': datetime_now, 'last_modified_timestamp': datetime_now_timestamp,
+                  'worker_groups': worker_groups}},
+        upsert=True)
 
 
 # ......... JOB OPERATIONS .........................

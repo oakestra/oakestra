@@ -7,3 +7,6 @@ PyYAML
 requests
 Cerberus
 prometheus-client
+matplotlib
+shapely
+geopy

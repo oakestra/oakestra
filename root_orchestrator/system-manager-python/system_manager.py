@@ -1,5 +1,5 @@
 import os
-from flask import Flask, flash, request, jsonify
+from flask import Flask, flash, request, jsonify, render_template
 from flask_socketio import SocketIO, emit
 import json
 from bson.objectid import ObjectId
@@ -7,6 +7,10 @@ from markupsafe import escape
 import time
 import threading
 from bson import json_util
+import geopy.distance
+from matplotlib.figure import Figure
+from shapely.geometry import Point, Polygon, MultiPolygon, shape
+from shapely.ops import nearest_points
 
 
 from mongodb_client import mongo_init, mongo_upsert_cluster, mongo_insert_job, mongo_find_cluster_by_id_and_incr_node, \
@@ -18,6 +22,7 @@ from cluster_requests import cluster_request_to_deploy, cluster_request_to_delet
     cluster_request_to_replicate_down, cluster_request_to_move_within_cluster
 from scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from sm_logging import configure_logging
+from geolocation.geolocation import query_geolocation_for_ip, user_in_cluster
 
 
 my_logger = configure_logging()
@@ -55,6 +60,52 @@ def sample():
 def status():
     app.logger.info("Incoming Request /status")
     return "ok", 200
+
+
+@app.route('/closest_clusters')
+def show_png():
+    # Draw figures
+    fig = Figure()
+    axis = fig.add_subplot(1, 1, 1)
+
+    clusters = mongo_find_all_active_clusters()
+    lat, long = query_geolocation_for_ip(request.remote_addr)
+    app.logger.info(f"Lat: {lat}, Long: {long}")
+    user = Point(float(lat), float(long))
+    axis.scatter(float(lat), float(long), color='black')
+    axis.annotate("user", (float(lat), float(long)))
+
+    containing_clusters = []
+    distances = []
+    for c in clusters:
+        cluster_name = c.get('cluster_name')
+        geo = shape(c.get('worker_groups'))
+        plot_shapely_object(axis, geo, cluster_name)
+        # If the user is located within the cluster add it to the list of clusters containing the user
+        if user_in_cluster(user, geo):
+            containing_clusters.append(cluster_name)
+        # Otherwise calculate shortest distance between user and cluster and add to list of distance
+        else:
+            p1, _ = nearest_points(geo, user)
+            user_cluster_dist = geopy.distance.distance((p1.x, p1.y), (user.x, user.y)).km
+            distances.append((cluster_name, user_cluster_dist))
+
+    axis.figure.savefig('/static/images/cluster.png')
+
+    return render_template("index.html", cluster_png='/static/images/cluster.png',
+                           containing_clusters=containing_clusters, distances=distances)
+
+
+def plot_shapely_object(axis, geo, cluster_name):
+    if isinstance(geo, Polygon):
+        axis.fill(*geo.exterior.xy, alpha=0.5, edgecolor='black')
+        axis.annotate(cluster_name, (geo.centroid.x, geo.centroid.y))
+    elif isinstance(geo, MultiPolygon):
+        for poly in geo:
+            axis.fill(*poly.exterior.xy, alpha=0.5, edgecolor='black')
+            axis.annotate(cluster_name, (poly.centroid.x, poly.centroid.y))
+
+
 
 
 # ......... Deployment Endpoints .......................#
