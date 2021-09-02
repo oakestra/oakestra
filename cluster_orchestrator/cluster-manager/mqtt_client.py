@@ -53,7 +53,13 @@ def mqtt_init(flask_app):
             mem_used = payload.get('memory')
             cpu_cores_free = payload.get('free_cores')
             memory_free_in_MB = payload.get('memory_free_in_MB')
-            mongo_find_node_by_id_and_update_cpu_mem(client_id, cpu_used, cpu_cores_free, mem_used, memory_free_in_MB)
+            lat = payload.get('lat')
+            long = payload.get('long')
+            mongo_find_node_by_id_and_update_cpu_mem(client_id, cpu_used, cpu_cores_free, mem_used, memory_free_in_MB, lat, long)
+
+            # Send ack to publisher for latency measuremtn
+            request_time = payload.get('request_time')
+            mqtt_publish_ack_message(client_id, request_time)
 
 
 def mqtt_publish_edge_deploy(worker_id, job):
@@ -70,3 +76,12 @@ def mqtt_publish_edge_delete(worker_id, job):
     job_id = str(job.get('_id'))
     job.__setitem__('_id', job_id)
     mqtt.publish(topic, json.dumps(data))
+
+
+def mqtt_publish_ack_message(worker_id,request_time):
+    app.logger.info('MQTT - Send to worker: ' + worker_id)
+    topic = 'nodes/' + worker_id + '/ack'
+    request_dict = {'request_time': request_time}
+    mqtt.publish(topic, json.dumps(request_dict))
+
+

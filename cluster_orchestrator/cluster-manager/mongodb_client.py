@@ -3,6 +3,9 @@ from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
 import json
 from datetime import datetime
+from geometry import create_obfuscated_polygons_based_on_concave_hull
+from shapely.geometry import mapping
+import numpy as np
 
 MONGO_URL  = os.environ.get('CLUSTER_MONGO_URL')
 MONGO_PORT = os.environ.get('CLUSTER_MONGO_PORT')
@@ -59,7 +62,7 @@ def mongo_find_node_by_name(node_name):
         return 'Error'
 
 
-def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_cpu_used, cpu_cores_free, node_mem_used, node_memory_free_in_MB):
+def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_cpu_used, cpu_cores_free, node_mem_used, node_memory_free_in_MB, lat, long, latency):
     global app, mongo_nodes
     app.logger.info('MONGODB - update cpu and memory of worker node {0} ...'.format(node_id))
     # o = mongo.db.nodes.find_one({'_id': node_id})
@@ -71,7 +74,8 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_cpu_used, cpu_cores_f
         {'_id': ObjectId(node_id)},
         {'$set': {'current_cpu_percent': node_cpu_used, 'current_cpu_cores_free': cpu_cores_free,
                   'current_memory_percent': node_mem_used, 'current_free_memory_in_MB': node_memory_free_in_MB,
-                  'last_modified': time_now, 'last_modified_timestamp': datetime.timestamp(time_now)}},
+                  'last_modified': time_now, 'last_modified_timestamp': datetime.timestamp(time_now),
+                  'lat': lat, 'long': long, 'latency': latency}},
         upsert=True)
 
     return 1
@@ -104,7 +108,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     cumulative_memory_in_mb = 0
     number_of_active_nodes = 0
     technology = []
-
+    worker_names_coords = []
     nodes = find_all_nodes()
     for n in nodes:
         # print(n)
@@ -119,6 +123,13 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
             for t in n.get('node_info').get('technology'):
                technology.append(t) if t not in technology else technology
 
+            # TODO: For research just send the actual coordinates of the worker nodes. In the future we want to
+            # obfuscate these information
+            name = n.get('node_info').get('host')
+            lat = n.get('lat')
+            long = n.get('long')
+            worker_names_coords.append((name, lat, long))
+
         else:
             print('Node {0} is inactive.'.format(n.get('_id')))
 
@@ -126,9 +137,23 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     for j in jobs:
         print(j)
 
+    # Todo: For test: add some fake nodes with coordinates
+    coords = np.array([[48.18421811072683, 11.402119834791652],[48.134835255213574, 11.460970659486515],
+                       [48.133871887072495, 11.512936454716328],[48.17065970816805, 11.526794000110945],
+                       [48.196453223703244, 11.564613551083756],[48.24684782558337, 11.393992523412535],
+                       [48.18625286244226, 11.438163449357877],[48.21646312592766, 11.45519668223876],
+                       [48.198954889015155, 11.506873778606185],[48.18317310909199, 11.49676931842261],
+                       [48.1473573962702, 11.499945005908877],[48.16064678840494, 11.471652517394867],
+                       [48.15486921474199, 11.442782631156081],[48.287076963526665, 11.61930569383532],
+                       [48.303228017580054, 11.65037972115945],[48.28901535977508, 11.653778442898027],
+                       [48.07275523896466, 11.714955434192408],[48.07502616856267, 11.741659676424081],
+                      [48.10389067870083, 11.293513938608891]])
+
+    geo = create_obfuscated_polygons_based_on_concave_hull(coords)
     return {'cpu_percent': cumulative_cpu, 'memory_percent': cumulative_memory,
             'cpu_cores': cumulative_cpu_cores, 'cumulative_memory_in_mb': cumulative_memory_in_mb,
-            'number_of_nodes': number_of_active_nodes, 'jobs': jobs, 'technology': technology, 'more': 0}
+            'number_of_nodes': number_of_active_nodes, 'jobs': jobs, 'technology': technology, 'more': 0,
+            'worker_groups': mapping(geo)}
 
 
 # ................. Job Operations .......................#
