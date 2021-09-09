@@ -4,11 +4,15 @@ import json
 from datetime import datetime
 
 from flask_mqtt import Mqtt
-from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem
+from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem, find_all_nodes
 
 
 mqtt = None
 app = None
+
+VIVALDI_VECTOR = 'vivaldi_vector'
+VIVALDI_HEIGHT = 'vivaldi_height'
+PUBLIC_IP = 'public_ip'
 
 
 def mqtt_init(flask_app):
@@ -55,11 +59,28 @@ def mqtt_init(flask_app):
             memory_free_in_MB = payload.get('memory_free_in_MB')
             lat = payload.get('lat')
             long = payload.get('long')
-            mongo_find_node_by_id_and_update_cpu_mem(client_id, cpu_used, cpu_cores_free, mem_used, memory_free_in_MB, lat, long)
+            rtt = payload.get('rtt')
+            public_ip = payload.get(PUBLIC_IP)
+            vivaldi_vector = payload.get(VIVALDI_VECTOR)
+            vivaldi_height = payload.get(VIVALDI_HEIGHT)
+            mongo_find_node_by_id_and_update_cpu_mem(client_id, cpu_used, cpu_cores_free, mem_used, memory_free_in_MB,
+                                                     lat, long, rtt, public_ip, vivaldi_vector, vivaldi_height)
 
-            # Send ack to publisher for latency measuremtn
+            # Send ack to publisher for latency measurement
             request_time = payload.get('request_time')
             mqtt_publish_ack_message(client_id, request_time)
+
+            # Tell node what nodes it should ping to update vivaldi coordinates
+            # TODO: for now just send every other nodes id
+            nodes_vivaldi_information = []
+            nodes = find_all_nodes()
+            for node in nodes:
+                node_ip = node.get(PUBLIC_IP)
+                vector = node.get(VIVALDI_VECTOR)
+                height = node.get(VIVALDI_HEIGHT)
+                if node_ip is not public_ip:
+                    nodes_vivaldi_information.append([node_ip, vector, height])
+            mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information)
 
 
 def mqtt_publish_edge_deploy(worker_id, job):
@@ -78,10 +99,22 @@ def mqtt_publish_edge_delete(worker_id, job):
     mqtt.publish(topic, json.dumps(data))
 
 
-def mqtt_publish_ack_message(worker_id,request_time):
+def mqtt_publish_ack_message(worker_id, request_time):
     app.logger.info('MQTT - Send to worker: ' + worker_id)
     topic = 'nodes/' + worker_id + '/ack'
     request_dict = {'request_time': request_time}
     mqtt.publish(topic, json.dumps(request_dict))
 
 
+def mqtt_publish_ping_message(worker_id, target_ip):
+    app.logger.info('MQTT - Send to worker: ' + worker_id)
+    topic = 'nodes/' + worker_id + '/ping'
+    target_ip_dict = {'target_ip': target_ip}
+    mqtt.publish(topic, json.dumps(target_ip_dict))
+
+
+def mqtt_publish_vivaldi_message(worker_id, nodes_vivaldi_information):
+    app.logger.info('MQTT - Send to worker: ' + worker_id)
+    topic = 'nodes/' + worker_id + '/vivaldi'
+    vivaldi_info_dict = {'vivaldi_info': nodes_vivaldi_information}
+    mqtt.publish(topic, json.dumps(vivaldi_info_dict))
