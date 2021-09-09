@@ -8,3 +8,4 @@ GPUtil
 tabulate
 requests
 gitpython
+numpy

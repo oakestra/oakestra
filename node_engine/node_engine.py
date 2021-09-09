@@ -12,7 +12,7 @@ from mqtt_client import mqtt_init, publish_cpu_mem
 from ne_logging import configure_logging
 from technology_support import verify_technology_support
 from my_utils import deprecated
-
+from vivaldi_coordinate import VivaldiCoordinate
 
 MY_PORT = os.environ.get('MY_PORT') or 3000
 
@@ -129,5 +129,6 @@ def publish_cpu_memory(id):
 
 if __name__ == '__main__':
     node_info = init()
+    vivaldi_coordinate = VivaldiCoordinate(3)
     sio.connect(clustermanager_addr, namespaces=['/init'])
     app.run(debug=False, host='0.0.0.0', port=MY_PORT)
