@@ -1,4 +1,6 @@
 import os
+import socket
+
 import numpy as np
 from ast import literal_eval
 
@@ -114,8 +116,11 @@ def publish_cpu_mem(my_id):
     lat, long = get_coordinates()
     app.logger.info(f"RTT: {rtt}")
     app.logger.info(f"Vivaldi: {vivaldi_coordinate.vector} {vivaldi_coordinate.height}")
-    ip = get('https://api.ipify.org').text
-
+    # TODO: how do we know whether nodes are within a network (i.e. don't ping the public ip but the local ips of the nodes)
+    #  or distributed accross several networks (i.e. ping punblic ip)?
+    #  -> for the latency test in FSOC lab just send the local ip
+    # ip = get('https://api.ipify.org').text
+    ip = socket.gethostbyname(socket.gethostname())
     mqtt.publish(topic, json.dumps({'cpu': cpu_used, 'free_cores': free_cores,
                                     'memory': memory_used, 'memory_free_in_MB': free_memory_in_MB,
                                     'lat': lat, 'long': long, 'request_time': time.time(),

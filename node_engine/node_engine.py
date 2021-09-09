@@ -129,6 +129,6 @@ def publish_cpu_memory(id):
 
 if __name__ == '__main__':
     node_info = init()
-    vivaldi_coordinate = VivaldiCoordinate(3)
+    vivaldi_coordinate = VivaldiCoordinate(3) # remove if not required here
     sio.connect(clustermanager_addr, namespaces=['/init'])
     app.run(debug=False, host='0.0.0.0', port=MY_PORT)
