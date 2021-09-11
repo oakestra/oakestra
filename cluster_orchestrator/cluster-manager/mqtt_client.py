@@ -1,4 +1,5 @@
 import os
+import random
 import re
 import json
 from datetime import datetime
@@ -80,7 +81,9 @@ def mqtt_init(flask_app):
                 height = node.get(VIVALDI_HEIGHT)
                 if node_ip != public_ip:
                     nodes_vivaldi_information.append([node_ip, vector, height])
-            mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information)
+            # Shuffle the vivaldi information array and only pick first two nodes for ping measurements
+            random.shuffle(nodes_vivaldi_information)
+            mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information[:2])
 
 
 def mqtt_publish_edge_deploy(worker_id, job):
