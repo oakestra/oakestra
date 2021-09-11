@@ -78,7 +78,7 @@ def mqtt_init(flask_app):
                 node_ip = node.get(PUBLIC_IP)
                 vector = node.get(VIVALDI_VECTOR)
                 height = node.get(VIVALDI_HEIGHT)
-                if node_ip is not public_ip:
+                if node_ip != public_ip:
                     nodes_vivaldi_information.append([node_ip, vector, height])
             mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information)
 
