@@ -83,7 +83,10 @@ def mqtt_init(flask_app):
                     nodes_vivaldi_information.append([node_ip, vector, height])
             # Shuffle the vivaldi information array and only pick first two nodes for ping measurements
             random.shuffle(nodes_vivaldi_information)
-            mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information[:2])
+            if len(nodes_vivaldi_information) >= 2:
+                mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information[:2])
+            else:
+                mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information)
 
 
 def mqtt_publish_edge_deploy(worker_id, job):
