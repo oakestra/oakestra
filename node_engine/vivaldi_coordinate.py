@@ -92,7 +92,14 @@ class VivaldiCoordinate:
 
     def distance(self, remote_coordinate: 'VivaldiCoordinate'):
         """
-        Returns the Vivaldi distance to the remote node in estimated RTT
+        Returns the Vivaldi distance to the remote node in estimated RTT.
+        Since we are using heigh vectors the norm disatance has to be calculated accordingly:
+        Let [x,x_h] and [y,y_h] be height vectors.
+        ||[x,x_h]|| = ||x|| + x_h
+        [x,x_h] - [y,y_h] = [(x-y),x_h + y_h]
+        -> ||[x,x_h] - [y,y_h]|| = ||x-y|| + x_h + y_h
+                                 = euclidean_distance(x,y) + x_h + y_h
+
         :param remote_coordinate: Remote node
         """
         euclidean_dist = np.linalg.norm(self.vector - remote_coordinate.vector)
@@ -104,25 +111,24 @@ class VivaldiCoordinate:
         If the force is positive, this 'Coordinate' will be pushed away from remote.
         If the force is negative, this 'Coordinate' will be pulled closer to remote.
         """
-        unit_vector = self.unit_vector(self.vector, remote_coordinate.vector)
-        diff = self.vector - remote_coordinate.vector
-        mag = np.linalg.norm(diff)
-
-        unit_vector *= force
-        self.vector += unit_vector
+        unit_vector = self.unit_vector(self.vector, remote_coordinate.vector)  # u(x_i - X_j)
+        unit_vector *= force  # delta * (rtt - ||x_i - x_j||) * u(x_i - x_j) = force * u(x_i, x_j)
+        self.vector += unit_vector  # x_i = x_i + delta * (rtt - ||x_i - x_j||) * u(x_i - x_j)
 
         # Since we are working with height vectors we have to adjust the height accordingly
         # cf. section 5.4 Height vectors
+        diff = self.vector - remote_coordinate.vector
+        mag = np.linalg.norm(diff)
         self.height = max(
             (self.height + remote_coordinate.height) * force / (mag + self.height + remote_coordinate.height),
             self.min_height)
 
-    def unit_vector(self, dest: np.ndarray, src: np.ndarray) -> np.ndarray:
-        diff = dest - src
+    def unit_vector(self, src: np.ndarray, dest: np.ndarray) -> np.ndarray:
+        diff = src - dest
         mag = np.linalg.norm(diff)
 
         # Push apart if the vectors aren't too close
-        if mag > sys.float_info.min:
+        if not np.isclose(mag, 0):
             diff /= mag
             return diff
 
