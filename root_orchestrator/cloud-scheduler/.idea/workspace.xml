@@ -22,23 +22,7 @@
     <select />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ff6393a1-bf71-48b0-89f3-675963c7d80b" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/../../cluster_orchestrator/cluster-manager/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../../cluster_orchestrator/cluster-manager/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../cluster_orchestrator/cluster-manager/.idea/node-engine.iml" beforeDir="false" afterPath="$PROJECT_DIR$/../../cluster_orchestrator/cluster-manager/.idea/node-engine.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../cluster_orchestrator/cluster-manager/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../../cluster_orchestrator/cluster-manager/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../cluster_orchestrator/cluster-scheduler/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../../cluster_orchestrator/cluster-scheduler/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../cluster_orchestrator/cluster-scheduler/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../../cluster_orchestrator/cluster-scheduler/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../node_engine/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../../node_engine/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../node_engine/.idea/node-engine.iml" beforeDir="false" afterPath="$PROJECT_DIR$/../../node_engine/.idea/node-engine.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../node_engine/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../../node_engine/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../system-manager-python/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../system-manager-python/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../system-manager-python/.idea/system-manager-python.iml" beforeDir="false" afterPath="$PROJECT_DIR$/../system-manager-python/.idea/system-manager-python.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../system-manager-python/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../system-manager-python/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../system-manager-python/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../system-manager-python/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../system-manager-python/system_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/../system-manager-python/system_manager.py" afterDir="false" />
-    </list>
+    <list default="true" id="ff6393a1-bf71-48b0-89f3-675963c7d80b" name="Default Changelist" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -194,6 +178,7 @@
       <workItem from="1621955275613" duration="500000" />
       <workItem from="1621957980701" duration="812000" />
       <workItem from="1622047049787" duration="134000" />
+      <workItem from="1627572413385" duration="1000" />
     </task>
     <servers />
   </component>

@@ -22,7 +22,7 @@ func main() {
 		ProxySubnetworkMask: "255.255.0.0",
 		TunNetIP:            "172.19.1.254",
 		TunnelPort:          50011,
-		Mtusize:             "10000",
+		Mtusize:             "1450",
 	}
 
 	myproxy := proxy.NewCustom(tunconfig)
@@ -38,7 +38,7 @@ func main() {
 		HostBridgeMask:             "/24",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
-		Mtusize:                    "10000",
+		Mtusize:                    "1450",
 	}
 
 	time.Sleep(4 * time.Second)
