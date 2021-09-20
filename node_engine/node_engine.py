@@ -79,9 +79,6 @@ def handle_init_greeting(jsonarg):
     node_info.technology = verify_technology_support()
 
     time.sleep(1)  # Wait to avoid Race Condition between sending first message and receiving connection establishment
-    # Transform each entry in list 'gpus' from type GPUtil.GPU to a dict, because GPU cannot be serialized.
-    for gpu in node_info.gpus:
-        node_info.gpus[node_info.gpus.index(gpu)] = gpu.__dict__
     sio.emit('cs1', data=json.dumps(node_info.__dict__), namespace='/init')
 
 
@@ -129,6 +126,5 @@ def publish_cpu_memory(id):
 
 if __name__ == '__main__':
     node_info = init()
-    vivaldi_coordinate = VivaldiCoordinate(3) # remove if not required here
     sio.connect(clustermanager_addr, namespaces=['/init'])
     app.run(debug=False, host='0.0.0.0', port=MY_PORT)

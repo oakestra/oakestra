@@ -9,3 +9,4 @@ tabulate
 requests
 gitpython
 numpy
+numpy

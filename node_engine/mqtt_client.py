@@ -82,18 +82,22 @@ def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
             payload = data.get('payload')
             vivaldi_info = payload.get('vivaldi_info')
             app.logger.info(f"Received vivaldi infos: {vivaldi_info}")
+            ip_vivaldi_dict = {}
             for info in vivaldi_info:
                 ip = info[0]
                 vector = info[1]
                 height = info[2]
-                remote_vivaldi = VivaldiCoordinate(3)
-                remote_vivaldi.vector = np.array(literal_eval(vector))
+                error = info[3]
+                remote_vivaldi = VivaldiCoordinate(5)
+                remote_vivaldi.vector = np.array(vector)
                 remote_vivaldi.height = float(height)
+                remote_vivaldi.error = float(error)
+                ip_vivaldi_dict[ip] = remote_vivaldi
 
-                # Ping the ip to get RTT
-                remote_rtt = float(ping(ip))
-                app.logger.info(f"RTT: {remote_rtt}, Vivaldi: {remote_vivaldi.vector} {remote_vivaldi.height}")
-                vivaldi_coordinate.update(remote_rtt, remote_vivaldi)
+            # Ping received IPs in parallel
+            statistics = parallel_ping(ip_vivaldi_dict.keys())
+            for ip, rtt in statistics.items():
+                vivaldi_coordinate.update(rtt, ip_vivaldi_dict[ip])
 
         if re_nodes_topic_control_deploy is not None:
             app.logger.info("MQTT - Received .../control/deploy command")
@@ -124,8 +128,11 @@ def publish_cpu_mem(my_id):
     mqtt.publish(topic, json.dumps({'cpu': cpu_used, 'free_cores': free_cores,
                                     'memory': memory_used, 'memory_free_in_MB': free_memory_in_MB,
                                     'lat': lat, 'long': long, 'request_time': time.time(),
-                                    'rtt': rtt, 'vivaldi_vector': np.array2string(vivaldi_coordinate.vector, separator=','),
-                                    'vivaldi_height': str(vivaldi_coordinate.height), 'public_ip': ip}))
+                                    'rtt': rtt,
+                                    'vivaldi_vector': vivaldi_coordinate.vector.tolist(),
+                                    'vivaldi_height': vivaldi_coordinate.height,
+                                    'vivaldi_error': vivaldi_coordinate.error, 'public_ip': ip,
+                                    'netem_delay': get_netem_delay()}))
 
 
 def ping(target_ip):
@@ -134,12 +141,59 @@ def ping(target_ip):
     # Parameter for number of packets differs between the operating systems
     param = '-n' if platform.system().lower() == 'windows' else '-c'
     # TODO: how many packets should we send?
-    command = ['ping', param, '1', target_ip]
+    command = ['ping', param, '3', target_ip]
     response = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-    app.logger.info(f"Ping {target_ip} with response: {response}")
     regex_pattern = "rtt min/avg/max/mdev = (\d+.\d+)/(\d+.\d+)/(\d+.\d+)/(\d+.\d+)"
     # times = min,avg,max,mdev
+    # TODO: use min rtt. for some reason first ping in docker is twice as expected latency
     times = re.findall(regex_pattern, str(response))[0]
-    avg_rtt = times[1]
+    avg_rtt = times[0]
+    app.logger.info(f"Ping {target_ip} RTT:{avg_rtt}ms")
 
     return avg_rtt
+
+def parallel_ping(target_ips):
+    import io
+    import os
+    import sys
+    from itertools import islice
+    from subprocess import Popen
+    import re
+    ON_POSIX = 'posix' in sys.builtin_module_names
+    # Create a pipi to get data
+    input_fd, output_fd = os.pipe()
+    # start several subprocesses
+    processes = [Popen(['ping', '-c', '3', ip], stdout=output_fd, close_fds=ON_POSIX) for ip in target_ips]
+    os.close(output_fd)
+    statistics = {}
+    ip_pattern = "\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    rtt_pattern = "rtt min/avg/max/mdev = (\d+.\d+)/(\d+.\d+)/(\d+.\d+)/(\d+.\d+)"
+
+    with io.open(input_fd, 'r', buffering=1) as file:
+        for line in file:
+            if 'ping statistics' in line:
+                # Find target ip
+                ip_match = re.search(ip_pattern, line)
+                # Find RTTs
+                statistic = ''.join(islice(file, 2))
+                statistic_match = re.findall(rtt_pattern, statistic)
+                if len(statistic_match) != 0 and ip_match is not None:
+                    ip = ip_match[0]
+                    stat = statistic_match[0]
+                    min_rtt = float(stat[0])
+                    avg_rtt = float(stat[1])
+                    statistics[ip] = min_rtt
+
+    for p in processes:
+        p.wait()
+
+    return statistics
+
+def get_netem_delay():
+    import subprocess
+    command = ['tc', 'qdisc']
+    response = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+    resp = str(response[0])
+    delay_idx = resp.index('delay')
+    netem_delay = resp[delay_idx + 6 : -5]
+    return netem_delay
