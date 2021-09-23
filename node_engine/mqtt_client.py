@@ -1,3 +1,4 @@
+import ipaddress
 import os
 import socket
 
@@ -18,24 +19,29 @@ from vivaldi_coordinate import VivaldiCoordinate
 
 mqtt = None
 app = None
-rtt = None
 vivaldi_coordinate = None
+public_ip = None
+private_ip = None
+router_rtt = None
 
 def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
     global mqtt
     global app
     global req
     global vivaldi_coordinate
+    global public_ip
+    global private_ip
+    global router_rtt
 
     app = flask_app
     vivaldi_coordinate = VivaldiCoordinate(3)
-    app.config['MQTT_BROKER_URL'] = os.environ.get('CLUSTER_MANAGER_IP')
+    public_ip, private_ip, router_rtt = get_ip_info()
+    app.config['MQTT_BROKER_URL'] = os.environ.get('MQTT_IP')
     app.config['MQTT_BROKER_PORT'] = int(mqtt_port)
     app.config['MQTT_REFRESH_TIME'] = 3.0  # refresh time in seconds
     mqtt = Mqtt(app)
     app.logger.info('initialized mqtt')
     mqtt.subscribe('nodes/' + my_id + '/control/+')
-    mqtt.subscribe('nodes/' + my_id + '/ack')
     # Subscribe to the ping channel. If a worker receives a message via that channel it should ping the IP contained in the message
     mqtt.subscribe('nodes/' + my_id + '/ping')
     mqtt.subscribe('nodes/' + my_id + '/vivaldi')
@@ -52,22 +58,14 @@ def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
         # if topic starts with nodes and ends with controls
         re_nodes_topic_control_deploy = re.search("^nodes/" + my_id + "/control/deploy$", topic)
         re_nodes_topic_control_delete = re.search("^nodes/" + my_id + "/control/delete$", topic)
-        re_nodes_topic_ack = re.search("^nodes/" + my_id + "/ack$", topic)
         re_nodes_topic_ping = re.search("^nodes/" + my_id + "/ping$", topic)
         re_nodes_topic_vivaldi = re.search("^nodes/" + my_id + "/vivaldi", topic)
-        if re_nodes_topic_ack is not None:
-            payload = data.get('payload')
-            req = payload.get('request_time')
-            resp = time.time()
-            global rtt
-            rtt = (resp - req) * 1000 # in ms
-            app.logger.info('CO - Worker RTT: {}'.format(rtt))
-        else:
-            payload = data.get('payload')
-            image_technology = payload.get('image_runtime')
-            image_url = payload.get('image')
-            job_name = payload.get('job_name')
-            port = payload.get('port')
+
+        payload = data.get('payload')
+        image_technology = payload.get('image_runtime')
+        image_url = payload.get('image')
+        job_name = payload.get('job_name')
+        port = payload.get('port')
 
         # If the node received a message via the ping channel it should ping the IP contained in the received message
         if re_nodes_topic_ping is not None:
@@ -82,22 +80,34 @@ def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
             payload = data.get('payload')
             vivaldi_info = payload.get('vivaldi_info')
             app.logger.info(f"Received vivaldi infos: {vivaldi_info}")
+            # Dict has target IP as key and a tuple consisting of the remote VivaldiCoordinate and the router_rtt if required
             ip_vivaldi_dict = {}
             for info in vivaldi_info:
-                ip = info[0]
-                vector = info[1]
-                height = info[2]
-                error = info[3]
+                # vivaldi_info = (public_ip, private_ip, router_rtt, vector, height, error)
+                remote_public_ip = info[0]
+                remote_private_ip = info[1]
+                remote_router_rtt = float(info[2])
+                remote_vector = info[3]
+                remote_height = info[4]
+                remote_error = info[5]
                 remote_vivaldi = VivaldiCoordinate(5)
-                remote_vivaldi.vector = np.array(vector)
-                remote_vivaldi.height = float(height)
-                remote_vivaldi.error = float(error)
-                ip_vivaldi_dict[ip] = remote_vivaldi
+                remote_vivaldi.vector = np.array(remote_vector)
+                remote_vivaldi.height = float(remote_height)
+                remote_vivaldi.error = float(remote_error)
+                # this node is in same network as remote and both behind router -> same public ip and private ip not null -> ping private ip
+                if public_ip == remote_public_ip:
+                    ip_vivaldi_dict[remote_private_ip] = (remote_vivaldi, None)
+                # This node and the remote node are not within the same network
+                if public_ip != remote_public_ip:
+                    ip_vivaldi_dict[remote_public_ip] = (remote_vivaldi, remote_router_rtt)
 
             # Ping received IPs in parallel
             statistics = parallel_ping(ip_vivaldi_dict.keys())
             for ip, rtt in statistics.items():
-                vivaldi_coordinate.update(rtt, ip_vivaldi_dict[ip])
+                viv, r_rtt = ip_vivaldi_dict[ip] # TODO: Naming!
+                if r_rtt is not None:
+                    rtt += r_rtt
+                vivaldi_coordinate.update(rtt, viv)
 
         if re_nodes_topic_control_deploy is not None:
             app.logger.info("MQTT - Received .../control/deploy command")
@@ -118,22 +128,40 @@ def publish_cpu_mem(my_id):
     mem_value = get_memory()
     topic = 'nodes/' + my_id + '/information'
     lat, long = get_coordinates()
-    app.logger.info(f"RTT: {rtt}")
-    app.logger.info(f"Vivaldi: {vivaldi_coordinate.vector} {vivaldi_coordinate.height}")
-    # TODO: how do we know whether nodes are within a network (i.e. don't ping the public ip but the local ips of the nodes)
-    #  or distributed accross several networks (i.e. ping punblic ip)?
-    #  -> for the latency test in FSOC lab just send the local ip
-    # ip = get('https://api.ipify.org').text
-    ip = socket.gethostbyname(socket.gethostname())
+    # If ip address of this node is private, the node has to ping the network router such that this RTT can be added
+    # to nodes pinging this network. Otherwise the Vivaldi network coordinates would update themself with respect to
+    # the router and not the nodes within the network
+
+    is_netem_configured = os.environ.get('IS_NETEM_CONFIGURED') == 'TRUE'
     mqtt.publish(topic, json.dumps({'cpu': cpu_used, 'free_cores': free_cores,
                                     'memory': memory_used, 'memory_free_in_MB': free_memory_in_MB,
                                     'lat': lat, 'long': long, 'request_time': time.time(),
-                                    'rtt': rtt,
                                     'vivaldi_vector': vivaldi_coordinate.vector.tolist(),
                                     'vivaldi_height': vivaldi_coordinate.height,
-                                    'vivaldi_error': vivaldi_coordinate.error, 'public_ip': ip,
-                                    'netem_delay': get_netem_delay()}))
+                                    'vivaldi_error': vivaldi_coordinate.error,
+                                    'public_ip': public_ip, 'private_ip': private_ip, 'router_rtt': router_rtt,
+                                    'netem_delay': get_netem_delay(is_netem_configured)}))
 
+
+def get_ip_info():
+    #ip = socket.gethostbyname(socket.gethostname())
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    ip = s.getsockname()[0]
+    s.close()
+    # TODO: can the IP address obtained via socket even be a public ip?
+    if ipaddress.ip_address(ip).is_private:
+        public_ip = get('https://api.ipify.org').text
+        router_rtt = ping(public_ip)
+        private_ip = ip
+        app.logger.info(f"is_private: public={public_ip}, private={private_ip}, router_rtt={router_rtt}")
+    else:
+        public_ip = ip
+        private_ip = None
+        router_rtt = None
+        app.logger.info(f"is_public: public={public_ip}, private={private_ip}, router_rtt={router_rtt}")
+
+    return public_ip, private_ip, router_rtt
 
 def ping(target_ip):
     import platform
@@ -189,11 +217,14 @@ def parallel_ping(target_ips):
 
     return statistics
 
-def get_netem_delay():
-    import subprocess
-    command = ['tc', 'qdisc']
-    response = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-    resp = str(response[0])
-    delay_idx = resp.index('delay')
-    netem_delay = resp[delay_idx + 6 : -5]
-    return netem_delay
+def get_netem_delay(is_netem_configured):
+    if is_netem_configured:
+        import subprocess
+        command = ['tc', 'qdisc']
+        response = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+        resp = str(response[0])
+        delay_idx = resp.index('delay')
+        netem_delay = resp[delay_idx + 6 : -5]
+        return netem_delay
+    else:
+        return "0.0"
