@@ -275,3 +275,4 @@ dmypy.json
 cython_debug/
 
 sm.log*
+/geolocation/GeoLite2-City-Blocks-IPv4.csv
