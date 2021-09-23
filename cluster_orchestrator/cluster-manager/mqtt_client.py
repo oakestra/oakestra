@@ -5,8 +5,8 @@ import json
 from datetime import datetime
 
 from flask_mqtt import Mqtt
-from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem, find_all_nodes
-
+from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem, mongo_update_job_deployed, mongo_find_job_by_id, find_all_nodes
+from system_manager_requests import system_manager_notify_deployment_status
 
 mqtt = None
 app = None
@@ -31,6 +31,7 @@ def mqtt_init(flask_app):
     def handle_connect(client, userdata, flags, rc):
         app.logger.info("MQTT - Connected to MQTT Broker")
         mqtt.subscribe('nodes/+/information')
+        mqtt.subscribe('nodes/+/job')
 
     @mqtt.on_log()
     def handle_logging(client, userdata, level, buf):
@@ -47,8 +48,11 @@ def mqtt_init(flask_app):
         app.logger.info(data)
 
         topic = data['topic']
-        # if topic starts with nodes and ends with information
+
         re_nodes_information_topic = re.search("^nodes/.*/information$", topic)
+        re_job_deployment_topic = re.search("^nodes/.*/job$", topic)
+
+        # if topic starts with nodes and ends with information
         if re_nodes_information_topic is not None:
             # print(topic)
             topic_split = topic.split('/')
@@ -93,6 +97,16 @@ def mqtt_init(flask_app):
                mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information[:6])
             else:
                mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information)
+            mongo_find_node_by_id_and_update_cpu_mem(client_id, cpu_used, cpu_cores_free, mem_used, memory_free_in_MB)
+        if re_job_deployment_topic is not None:
+            # print(topic)
+            topic_split = topic.split('/')
+            client_id = topic_split[1]
+            payload = json.loads(data['payload'])
+            job_id = payload.get('job_id')
+            status = payload.get('status')
+            NsIp = payload.get('ns_ip')
+            deployment_info_from_worker_node(job_id, status, NsIp, client_id)
 
 
 def mqtt_publish_edge_deploy(worker_id, job):
@@ -130,3 +144,13 @@ def mqtt_publish_vivaldi_message(worker_id, nodes_vivaldi_information):
     topic = 'nodes/' + worker_id + '/vivaldi'
     vivaldi_info_dict = {'vivaldi_info': nodes_vivaldi_information}
     mqtt.publish(topic, json.dumps(vivaldi_info_dict))
+
+
+def deployment_info_from_worker_node(job_id, status, NsIp, node_id):
+    app.logger.debug('JOB-DEPLOYMENT-UPDATE: sending job info to the root')
+    # Update mongo job
+    mongo_update_job_deployed(job_id, status, NsIp, node_id)
+    job = mongo_find_job_by_id(job_id)
+    app.logger.debug(job)
+    # Notify System manager
+    system_manager_notify_deployment_status(job, node_id)

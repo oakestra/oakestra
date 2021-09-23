@@ -8,13 +8,13 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import time
 from prometheus_client import start_http_server
 
-
+from cluster_balancer import service_resolution, service_resolution_ip
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_upsert_job, mongo_find_job_by_system_id, \
-    mongo_update_job_status, mongo_find_node_by_name
+    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
 from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from cm_logging import configure_logging
-from system_manager_requests import send_aggregated_info_to_sm
+from system_manager_requests import send_aggregated_info_to_sm, system_manager_get_subnet
 from analyzing_workers import looking_for_dead_workers
 from my_prometheus_client import prometheus_init_gauge_metrics, prometheus_set_metrics
 
@@ -26,11 +26,9 @@ MY_ASSIGNED_CLUSTER_ID = None
 
 SYSTEM_MANAGER_ADDR = 'http://' + os.environ.get('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
 
-
 my_logger = configure_logging()
 
 app = Flask(__name__)
-
 
 # socketioserver = SocketIO(app, async_mode='eventlet', logger=, engineio_logger=logging)
 socketioserver = SocketIO(app, logger=True, engineio_logger=True)
@@ -80,7 +78,8 @@ def get_scheduler_result_and_propagate_to_edge():
     job = data.get('job')
     resulting_node_id = data.get('node').get('_id')
 
-    # mongo_update_job_status(job.get('id'), 'NODE_SCHEDULED')  # Done in Cluster_Scheduler
+    mongo_update_job_status(job.get('_id'), 'NODE_SCHEDULED', data.get('node'))
+    job = mongo_find_job_by_id(job.get('_id'))
     mqtt_publish_edge_deploy(resulting_node_id, job)
     return "ok"
 
@@ -91,7 +90,7 @@ def delete_task(system_job_id):
     app.logger.info('Incoming Request /api/delete/ - to delete task...')
     # job_id is the system_job_id assigned by System Manager
     job = mongo_find_job_by_system_id(system_job_id)
-    node_id = job.get('scheduled_node')
+    node_id = job.get('instance_list')[0].get('worker_id')  # undeploy the first instance available
     job_id = str(job.get('_id'))
     job.__setitem__('_id', job_id)
     mqtt_publish_edge_delete(node_id, job)
@@ -145,6 +144,46 @@ def scheduler_test():
     return scheduler_request_status()
 
 
+# ............. Network management Endpoint ............#
+# ......................................................#
+
+@app.route('/api/job/<job_name>/instances', methods=['GET'])
+def table_query_resolution_by_jobname(job_name):
+    """
+    Get all the instances of a job given the complete name
+    """
+    service_ip = job_name.replace("_", ".")
+    app.logger.info("Incoming Request /api/job/" + str(job_name) + "/instances")
+    return {'instance_list': service_resolution(job_name)}
+
+
+@app.route('/api/job/ip/<service_ip>/instances', methods=['GET'])
+def table_query_resolution_by_ip(service_ip):
+    """
+    Get all the instances of a job given a Service IP in 172_30_x_y notation
+    returns {
+                app_name: string
+                instance_list: [
+                    {
+                        instance_number: int
+                        namespace_ip: string
+                        host_ip: string
+                        host_port: string
+                        service_ip: [
+                            {
+                                IpType: string
+                                Address: string
+                            }
+                        ]
+                    }
+                ]
+    """
+    service_ip = service_ip.replace("_", ".")
+    app.logger.info("Incoming Request /api/job/ip/" + str(service_ip) + "/instances")
+    name, instances = service_resolution_ip(service_ip)
+    return {'app_name': name, 'instance_list': instances}
+
+
 # ...... Websocket INIT Handling with edge nodes .......#
 # ......................................................#
 
@@ -159,11 +198,13 @@ def handle_init_worker(message):
     app.logger.info('Websocket - Received Edge_to_Cluster_Manager_1: {}'.format(request.remote_addr))
     app.logger.info(message)
 
-    client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": message})
+    client_subnetwork = system_manager_get_subnet()
+    client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": message, "node_subnet": client_subnetwork})
 
     init_packet = {
         "id": str(client_id),
-        "MQTT_BROKER_PORT": os.environ.get('MQTT_BROKER_PORT')
+        "MQTT_BROKER_PORT": os.environ.get('MQTT_BROKER_PORT'),
+        "SUBNETWORK": client_subnetwork,
     }
 
     # create ID and send it along with MQTT_Broker info to the client. save id into database
@@ -239,6 +280,7 @@ def init_cm_to_sm():
         app.logger.error('SocketIO - Connection Establishment with System Manager failed!')
     time.sleep(1)
 
+
 # ......... FINISH - register at System Manager ........#
 # ......................................................#
 
@@ -247,19 +289,20 @@ def background_job_send_aggregated_information_to_sm():
     app.logger.info("Set up Background Jobs...")
     scheduler = BackgroundScheduler()
     job_send_info = scheduler.add_job(send_aggregated_info_to_sm, 'interval', seconds=BACKGROUND_JOB_INTERVAL,
-                                      kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID, 'time_interval': BACKGROUND_JOB_INTERVAL})
-    job_dead_nodes = scheduler.add_job(looking_for_dead_workers, 'interval', seconds=2*BACKGROUND_JOB_INTERVAL,
+                                      kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID,
+                                              'time_interval': BACKGROUND_JOB_INTERVAL})
+    job_dead_nodes = scheduler.add_job(looking_for_dead_workers, 'interval', seconds=2 * BACKGROUND_JOB_INTERVAL,
                                        kwargs={'interval': BACKGROUND_JOB_INTERVAL})
     scheduler.start()
 
 
 if __name__ == '__main__':
-
     # socketioserver.run(app, debug=True, host='0.0.0.0', port=MY_PORT)
     # app.run(debug=True, host='0.0.0.0', port=MY_PORT)
 
     start_http_server(10001)  # start prometheus server
 
     import eventlet
+
     init_cm_to_sm()
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)  # see README for logging notes

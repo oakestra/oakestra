@@ -1,7 +1,31 @@
-{
+deploy_schema = {
+    'app_name': {
+        'required': True,
+        'type': 'string',
+        'regex': '^[a-z]{2,12}'
+    },
+    'app_ns': {
+        'required': True,
+        'type': 'string',
+        'regex': '^[a-z]{2,12}'
+    },
+    'service_name': {
+        'required': True,
+        'type': 'string',
+        'regex': '^[a-z]{2,12}'
+    },
+    'service_ns': {
+        'required': True,
+        'type': 'string',
+        'regex': '^[a-z]{2,12}'
+    },
     'api_version': {
         'required': True,
-        'type': 'string'
+        'type': 'string',
+    },
+    'RR_ip': {
+        'required': False,
+        'type': 'string',
     },
     'image': {
         'required': True,

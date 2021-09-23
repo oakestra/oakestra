@@ -23,6 +23,8 @@ vivaldi_coordinate = None
 public_ip = None
 private_ip = None
 router_rtt = None
+node_info = {}
+
 
 def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
     global mqtt
@@ -111,11 +113,16 @@ def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
 
         if re_nodes_topic_control_deploy is not None:
             app.logger.info("MQTT - Received .../control/deploy command")
+            address = None
             if image_technology == 'docker':
-                start_container(image=image_url, name=job_name, port=port)
+                address = start_container(job=payload)
             if image_technology == 'mirage':
                 commands = payload.get('commands')
                 run_unikernel_mirageos(image_url, job_name, job_name, commands)
+            if address is not None:
+                publish_deploy_status(node_info.id, payload.get('_id'), 'DEPLOYED', address)
+            else:
+                publish_deploy_status(node_info.id, payload.get('_id'), 'FAILED', '')
         elif re_nodes_topic_control_delete is not None:
             app.logger.info('MQTT - Received .../control/delete command')
             if image_technology == 'docker':
@@ -228,3 +235,10 @@ def get_netem_delay(is_netem_configured):
         return netem_delay
     else:
         return "0.0"
+
+
+def publish_deploy_status(my_id, job_id, status, ns_ip):
+    app.logger.info('Publishing Deployment status... my ID: {0}'.format(my_id))
+    topic = 'nodes/' + my_id + '/job'
+    mqtt.publish(topic, json.dumps({'job_id': job_id, 'status': status,
+                                    'ns_ip': ns_ip}))

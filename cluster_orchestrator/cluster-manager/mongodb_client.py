@@ -7,12 +7,11 @@ from geometry import create_obfuscated_polygons_based_on_concave_hull
 from shapely.geometry import mapping
 import numpy as np
 
-MONGO_URL  = os.environ.get('CLUSTER_MONGO_URL')
+MONGO_URL = os.environ.get('CLUSTER_MONGO_URL')
 MONGO_PORT = os.environ.get('CLUSTER_MONGO_PORT')
 
 MONGO_ADDR_NODES = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/nodes'
 MONGO_ADDR_JOBS = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/jobs'
-
 
 mongo_nodes = None
 mongo_jobs = None
@@ -43,7 +42,11 @@ def mongo_upsert_node(obj):
     nodes = mongo_nodes.db.nodes
     # find node by hostname and if it exists, just upsert
     node_id = nodes.find_one_and_update({'node_info.host': node_info_hostname},
-                                        {'$set': {'node_info': json_node_info}},
+                                        {'$set': {
+                                            'node_info': json_node_info,
+                                            'node_address': obj.get('ip'),
+                                            'node_subnet': obj.get('node_subnet'),
+                                        }},
                                         upsert=True, return_document=True).get('_id')
     app.logger.info(node_id)
     return node_id
@@ -117,41 +120,34 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
         # print(n)
 
         # if it is not older than TIME_INTERVAL
-        if n.get('last_modified_timestamp') >= (datetime.now().timestamp() - TIME_INTERVAL):
-            cumulative_cpu += n.get('current_cpu_percent')
-            cumulative_cpu_cores += n.get('current_cpu_cores_free')
-            cumulative_memory += n.get('current_memory_percent')
-            cumulative_memory_in_mb += n.get('current_free_memory_in_MB')
-            number_of_active_nodes += 1
-            for t in n.get('node_info').get('technology'):
-               technology.append(t) if t not in technology else technology
+        try:
+            if n.get('last_modified_timestamp') >= (datetime.now().timestamp() - TIME_INTERVAL):
+                cumulative_cpu += n.get('current_cpu_percent')
+                cumulative_cpu_cores += n.get('current_cpu_cores_free')
+                cumulative_memory += n.get('current_memory_percent')
+                cumulative_memory_in_mb += n.get('current_free_memory_in_MB')
+                number_of_active_nodes += 1
+                for t in n.get('node_info').get('technology'):
+                    technology.append(t) if t not in technology else technology
 
-            # TODO: For research just send the actual coordinates of the worker nodes. In the future we want to
-            # obfuscate these information
-            name = n.get('node_info').get('host')
-            lat = n.get('lat')
-            long = n.get('long')
-            worker_names_coords.append((name, lat, long))
-
-        else:
-            print('Node {0} is inactive.'.format(n.get('_id')))
+                # TODO: For research just send the actual coordinates of the worker nodes. In the future we want to
+                # obfuscate these information
+                name = n.get('node_info').get('host')
+                lat = n.get('lat')
+                long = n.get('long')
+                worker_names_coords.append((name, lat, long))
+            else:
+                print('Node {0} is inactive.'.format(n.get('_id')))
+        except Exception as e:
+            print("Problem during the aggregation of the data, skipping the node: ", str(n), " - because - ", str(e))
 
     jobs = mongo_find_all_jobs()
     for j in jobs:
         print(j)
 
     # Todo: For test: add some fake nodes with coordinates
-    coords = np.array([[48.18421811072683, 11.402119834791652],[48.134835255213574, 11.460970659486515],
-                       [48.133871887072495, 11.512936454716328],[48.17065970816805, 11.526794000110945],
-                       [48.196453223703244, 11.564613551083756],[48.24684782558337, 11.393992523412535],
-                       [48.18625286244226, 11.438163449357877],[48.21646312592766, 11.45519668223876],
-                       [48.198954889015155, 11.506873778606185],[48.18317310909199, 11.49676931842261],
-                       [48.1473573962702, 11.499945005908877],[48.16064678840494, 11.471652517394867],
-                       [48.15486921474199, 11.442782631156081],[48.287076963526665, 11.61930569383532],
-                       [48.303228017580054, 11.65037972115945],[48.28901535977508, 11.653778442898027],
-                       [48.07275523896466, 11.714955434192408],[48.07502616856267, 11.741659676424081],
-                      [48.10389067870083, 11.293513938608891]])
-
+    # coords = np.array([])
+    coords = []
     geo = create_obfuscated_polygons_based_on_concave_hull(coords)
     return {'cpu_percent': cumulative_cpu, 'memory_percent': cumulative_memory,
             'cpu_cores': cumulative_cpu_cores, 'cumulative_memory_in_mb': cumulative_memory_in_mb,
@@ -164,7 +160,13 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
 
 def mongo_upsert_job(job):
     print('insert/upsert requested job')
-    return mongo_jobs.db.jobs.find_one_and_update(job, {'$set': job}, upsert=True, return_document=True)  # if job does not exist, insert it
+    job['system_job_id'] = job['_id']
+    del job['_id']
+    ## REMOVE ENTRY FROM DB
+    result = mongo_jobs.db.jobs.find_one_and_update({'system_job_id': job['system_job_id']}, {'$set': job}, upsert=True,
+                                                    return_document=True)  # if job does not exist, insert it
+    result['_id'] = str(result['_id'])
+    return result
 
 
 def mongo_find_job_by_system_id(system_job_id):
@@ -174,12 +176,56 @@ def mongo_find_job_by_system_id(system_job_id):
     return job_obj
 
 
+def mongo_find_job_by_id(id):
+    print('Find job by Id')
+    return mongo_jobs.db.jobs.find_one({'_id': ObjectId(id)})
+
+
 def mongo_find_all_jobs():
     global mongo_jobs
     # list (= going into RAM) okey for small result sets (not clean for large data sets!)
     return list(mongo_jobs.db.jobs.find({}, {'_id': 0, 'system_job_id': 1, 'status': 1}))
 
 
-def mongo_update_job_status(job_id, status):
+def mongo_find_job_by_name(job_name):
     global mongo_jobs
-    mongo_jobs.db.jobs.find_one_and_update({'_id': ObjectId(job_id)}, {'$set': {'status': status}})
+    return mongo_jobs.db.jobs.find_one({'job_name': job_name})
+
+
+def mongo_find_job_by_ip(ip):
+    global mongo_jobs
+    # Search by Service Ip
+    job = mongo_jobs.db.jobs.find_one({'service_ip_list.Address': ip})
+    if job is None:
+        # Search by instance ip
+        job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip': ip})
+    return job
+
+
+def mongo_update_job_status(job_id, status, node):
+    global mongo_jobs
+    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
+    instance_list = job['instance_list']
+    for instance in instance_list:
+        if instance.get('host_ip') == '':
+            instance['host_ip'] = node['node_address']
+            port = node['node_info'].get('node_port')
+            if port is None:
+                port = 50011
+            instance['host_port'] = port
+            instance['worker_id'] = node.get('_id')
+            break
+    return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
+                                         {'$set': {'status': status, 'instance_list': instance_list}})
+
+
+def mongo_update_job_deployed(job_id, status, ns_ip, node_id):
+    global mongo_jobs
+    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
+    instance_list = job['instance_list']
+    for instance in instance_list:
+        if str(instance.get('worker_id')) == str(node_id) and instance.get('namespace_ip') is '':
+            instance['namespace_ip'] = ns_ip
+            break
+    return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
+                                         {'$set': {'status': status, 'instance_list': instance_list}})

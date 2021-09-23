@@ -19,5 +19,5 @@ done < node.txt
 
 for ip in $list; do
 	echo "Enabling sudo with no pass on $ip"
-    	ssh $1@$ip "echo '$password'|./sudonopass.sh $1"
+    	ssh -oStrictHostKeyChecking=no $1@$ip "echo '$password'|./sudonopass.sh $1"
 done

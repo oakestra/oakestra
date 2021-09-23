@@ -14,7 +14,7 @@ def verify_technology_support():
 def verify_technology_support_docker():
     try:
         result = subprocess.run(['docker', '--version'], stdout=subprocess.PIPE).stdout.decode('utf-8')
-        if result.startswith('Docker version 19'):
+        if result.startswith('Docker version'):
             print('Docker support')
             return True
     except Exception as e:
