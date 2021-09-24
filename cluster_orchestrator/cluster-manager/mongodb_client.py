@@ -66,22 +66,23 @@ def mongo_find_node_by_name(node_name):
 
 
 def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_cpu_used, cpu_cores_free, node_mem_used,
-                                             node_memory_free_in_MB, lat, long, rtt, public_ip, vivaldi_vector,
-                                             vivaldi_height, vivaldi_error, netem_delay):
+                                             node_memory_free_in_MB, lat, long, public_ip, private_ip, router_rtt,
+                                             vivaldi_vector, vivaldi_height, vivaldi_error, netem_delay):
     global app, mongo_nodes
     app.logger.info('MONGODB - update cpu and memory of worker node {0} ...'.format(node_id))
     # o = mongo.db.nodes.find_one({'_id': node_id})
     # print(o)
 
     time_now = datetime.now()
-
+    app.logger.info(f"UPDATING NODE: {mongo_nodes.db.nodes.find_one(node_id)}")
     mongo_nodes.db.nodes.find_one_and_update(
         {'_id': ObjectId(node_id)},
         {'$set': {'current_cpu_percent': node_cpu_used, 'current_cpu_cores_free': cpu_cores_free,
                   'current_memory_percent': node_mem_used, 'current_free_memory_in_MB': node_memory_free_in_MB,
                   'last_modified': time_now, 'last_modified_timestamp': datetime.timestamp(time_now),
-                  'lat': lat, 'long': long, 'rtt': rtt, 'public_ip': public_ip, 'vivaldi_vector': vivaldi_vector,
-                  'vivaldi_height': vivaldi_height, 'vivaldi_error': vivaldi_error, 'netem_delay': netem_delay}},
+                  'lat': lat, 'long': long, 'public_ip': public_ip, 'private_ip': private_ip, 'router_rtt': router_rtt,
+                  'vivaldi_vector': vivaldi_vector, 'vivaldi_height': vivaldi_height, 'vivaldi_error': vivaldi_error,
+                  'netem_delay': netem_delay}},
         upsert=True)
 
     return 1
@@ -146,8 +147,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
         print(j)
 
     # Todo: For test: add some fake nodes with coordinates
-    # coords = np.array([])
-    coords = []
+    coords = np.array([[48.0, 11.0], [48.1, 11.1], [48.2, 11.0]])
     geo = create_obfuscated_polygons_based_on_concave_hull(coords)
     return {'cpu_percent': cumulative_cpu, 'memory_percent': cumulative_memory,
             'cpu_cores': cumulative_cpu_cores, 'cumulative_memory_in_mb': cumulative_memory_in_mb,

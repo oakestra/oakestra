@@ -15,6 +15,9 @@ VIVALDI_VECTOR = 'vivaldi_vector'
 VIVALDI_HEIGHT = 'vivaldi_height'
 VIVALDI_ERROR = 'vivaldi_error'
 PUBLIC_IP = 'public_ip'
+PRIVATE_IP = 'private_ip'
+ROUTER_RTT = 'router_rtt'
+NEIGHBORS = 6
 
 
 def mqtt_init(flask_app):
@@ -65,39 +68,44 @@ def mqtt_init(flask_app):
             memory_free_in_MB = payload.get('memory_free_in_MB')
             lat = payload.get('lat')
             long = payload.get('long')
-            rtt = payload.get('rtt')
             public_ip = payload.get(PUBLIC_IP)
+            private_ip = payload.get(PRIVATE_IP)
+            router_rtt = payload.get(ROUTER_RTT)
             vivaldi_vector = payload.get(VIVALDI_VECTOR)
             vivaldi_height = payload.get(VIVALDI_HEIGHT)
             vivaldi_error = payload.get(VIVALDI_ERROR)
+            app.logger.info(f"VIVALDI: {vivaldi_vector}")
             # TODO: Remove later. Currently just required for accuracy evaluation
             netem_delay = payload.get('netem_delay')
             mongo_find_node_by_id_and_update_cpu_mem(client_id, cpu_used, cpu_cores_free, mem_used, memory_free_in_MB,
-                                                     lat, long, rtt, public_ip, vivaldi_vector, vivaldi_height,
-                                                     vivaldi_error, netem_delay)
+                                                     lat, long, public_ip, private_ip, router_rtt, vivaldi_vector,
+                                                     vivaldi_height, vivaldi_error, netem_delay)
 
-            # Send ack to publisher for latency measurement
-            request_time = payload.get('request_time')
-            mqtt_publish_ack_message(client_id, request_time)
-
-            # Tell node what nodes it should ping to update vivaldi coordinates
+            # Tell the node what other nodes it should ping to update vivaldi coordinates
             nodes_vivaldi_information = []
             nodes = find_all_nodes()
             for node in nodes:
-                node_ip = node.get(PUBLIC_IP)
-                vector = node.get(VIVALDI_VECTOR)
-                height = node.get(VIVALDI_HEIGHT)
-                error = node.get(VIVALDI_ERROR)
-                if node_ip != public_ip and node_ip is not None and vector is not None and height is not None and error is not None:
-                    nodes_vivaldi_information.append([node_ip, vector, height, error])
+                node_public_ip = node.get(PUBLIC_IP)
+                node_private_ip = node.get(PRIVATE_IP)
+                node_router_rtt = node.get(ROUTER_RTT)
+                node_vector = node.get(VIVALDI_VECTOR)
+                node_height = node.get(VIVALDI_HEIGHT)
+                node_error = node.get(VIVALDI_ERROR)
+                if validate_vivaldi_not_none(node_vector, node_height, node_error):
+                    # Case 1: If node is in same network check private_ip to avoid self-ping
+                    if public_ip == node_public_ip and private_ip != node_private_ip:
+                        nodes_vivaldi_information.append(
+                            (node_public_ip, node_private_ip, node_router_rtt, node_vector, node_height, node_error))
+                    # Case 2: Node has public_ip so just check that ip to avoid self-ping
+                    elif public_ip != node_public_ip:
+                        nodes_vivaldi_information.append(
+                            (node_public_ip, node_private_ip, node_router_rtt, node_vector, node_height, node_error))
+
             # Shuffle the vivaldi information array and only pick first two nodes for ping measurements
             random.shuffle(nodes_vivaldi_information)
-            if len(nodes_vivaldi_information) >= 6:
-                # order nodes by distance
-               mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information[:6])
-            else:
-               mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information)
-            mongo_find_node_by_id_and_update_cpu_mem(client_id, cpu_used, cpu_cores_free, mem_used, memory_free_in_MB)
+            mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information[:NEIGHBORS])
+
+
         if re_job_deployment_topic is not None:
             # print(topic)
             topic_split = topic.split('/')
@@ -125,13 +133,6 @@ def mqtt_publish_edge_delete(worker_id, job):
     mqtt.publish(topic, json.dumps(data))
 
 
-def mqtt_publish_ack_message(worker_id, request_time):
-    app.logger.info('MQTT - Send to worker: ' + worker_id)
-    topic = 'nodes/' + worker_id + '/ack'
-    request_dict = {'request_time': request_time}
-    mqtt.publish(topic, json.dumps(request_dict))
-
-
 def mqtt_publish_ping_message(worker_id, target_ip):
     app.logger.info('MQTT - Send to worker: ' + worker_id)
     topic = 'nodes/' + worker_id + '/ping'
@@ -154,3 +155,6 @@ def deployment_info_from_worker_node(job_id, status, NsIp, node_id):
     app.logger.debug(job)
     # Notify System manager
     system_manager_notify_deployment_status(job, node_id)
+
+def validate_vivaldi_not_none(vector, height, error):
+    return vector is not None and height is not None and error is not None

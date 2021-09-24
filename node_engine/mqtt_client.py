@@ -36,6 +36,7 @@ def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
     global router_rtt
 
     app = flask_app
+    # TODO: first check if node already exists in mongodb an get coords if thats the case
     vivaldi_coordinate = VivaldiCoordinate(3)
     public_ip, private_ip, router_rtt = get_ip_info()
     app.config['MQTT_BROKER_URL'] = os.environ.get('MQTT_IP')
@@ -98,18 +99,24 @@ def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
                 remote_vivaldi.error = float(remote_error)
                 # this node is in same network as remote and both behind router -> same public ip and private ip not null -> ping private ip
                 if public_ip == remote_public_ip:
-                    ip_vivaldi_dict[remote_private_ip] = (remote_vivaldi, None)
+                    ip_vivaldi_dict.setdefault(remote_private_ip, []).append((remote_vivaldi, None))
                 # This node and the remote node are not within the same network
                 if public_ip != remote_public_ip:
-                    ip_vivaldi_dict[remote_public_ip] = (remote_vivaldi, remote_router_rtt)
+                    ip_vivaldi_dict.setdefault(remote_public_ip, []).append((remote_vivaldi, remote_router_rtt))
 
             # Ping received IPs in parallel
             statistics = parallel_ping(ip_vivaldi_dict.keys())
+            app.logger.info(f"Ping statistics: {statistics}")
             for ip, rtt in statistics.items():
-                viv, r_rtt = ip_vivaldi_dict[ip] # TODO: Naming!
-                if r_rtt is not None:
-                    rtt += r_rtt
-                vivaldi_coordinate.update(rtt, viv)
+                viv_router_rtts = ip_vivaldi_dict[ip] # TODO: Naming!
+                for _viv, _router_rtt in viv_router_rtts:
+                    if _router_rtt is not None:
+                        app.logger.info(f"IF: update to {ip} with {rtt+_router_rtt}")
+                        total_rtt = rtt + _router_rtt
+                        vivaldi_coordinate.update(total_rtt, _viv)
+                    else:
+                        app.logger.info(f"ELSE: update to {ip} with {rtt}")
+                        vivaldi_coordinate.update(rtt, _viv)
 
         if re_nodes_topic_control_deploy is not None:
             app.logger.info("MQTT - Received .../control/deploy command")
@@ -131,6 +138,7 @@ def mqtt_init(flask_app, mqtt_port=1883, my_id=None):
 
 def publish_cpu_mem(my_id):
     app.logger.info('Publishing CPU+Memory usage... my ID: {0}'.format(my_id))
+    app.logger.info(f"Vivaldi: {vivaldi_coordinate.vector.tolist()}, {vivaldi_coordinate.height}, {vivaldi_coordinate.error}, {public_ip}, {private_ip}, {router_rtt}")
     cpu_used, free_cores, memory_used, free_memory_in_MB = get_cpu_memory()
     mem_value = get_memory()
     topic = 'nodes/' + my_id + '/information'
@@ -142,8 +150,7 @@ def publish_cpu_mem(my_id):
     is_netem_configured = os.environ.get('IS_NETEM_CONFIGURED') == 'TRUE'
     mqtt.publish(topic, json.dumps({'cpu': cpu_used, 'free_cores': free_cores,
                                     'memory': memory_used, 'memory_free_in_MB': free_memory_in_MB,
-                                    'lat': lat, 'long': long, 'request_time': time.time(),
-                                    'vivaldi_vector': vivaldi_coordinate.vector.tolist(),
+                                    'lat': lat, 'long': long,'vivaldi_vector': vivaldi_coordinate.vector.tolist(),
                                     'vivaldi_height': vivaldi_coordinate.height,
                                     'vivaldi_error': vivaldi_coordinate.error,
                                     'public_ip': public_ip, 'private_ip': private_ip, 'router_rtt': router_rtt,
