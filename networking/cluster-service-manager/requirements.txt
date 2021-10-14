@@ -1,0 +1,10 @@
+Flask
+Flask-MQTT
+bson
+Flask-PyMongo
+Flask-SocketIO
+eventlet
+requests
+pyyaml
+APScheduler
+prometheus-client
