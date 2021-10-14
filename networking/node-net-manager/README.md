@@ -13,9 +13,6 @@ The Network manager is divided in 4 main components:
 ```
 
 .
-├── docs/
-│			Description:
-│				Documentation and current proposals 
 ├── bin/
 │			Description:
 │				Binary executable compiled files 
