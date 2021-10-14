@@ -5,7 +5,7 @@ The Network manager is divided in 4 main components:
 
 * Environment Manager: Creates the Host Bridge, is responsible for the creation and destruction of network namespaces, and for the maintenance of the Translation Table used by the other components. 
 * ProxyTunnel: This is the communication channel. This component enables the service to service communication within the platform. In order to enable the communication the translation table must be kept up to date, otherwise this component asks the Environment manager for the "table query" resolution process. Refer to the official documentation for more details. 
-* mDNS: used for .local name resolution. Refer to the documentation for details.
+* mDNS: (To be implemented) used for .local name resolution. Refer to the documentation for details.
 * API: used to trigger a new deployment, the management operations on top of the already deployed services and to receive information about the services. 
 
 # Structure
