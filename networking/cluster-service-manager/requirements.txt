@@ -7,4 +7,3 @@ eventlet
 requests
 pyyaml
 APScheduler
-prometheus-client
