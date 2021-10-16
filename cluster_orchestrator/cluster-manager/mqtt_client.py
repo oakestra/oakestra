@@ -57,64 +57,10 @@ def mqtt_init(flask_app):
 
         # if topic starts with nodes and ends with information
         if re_nodes_information_topic is not None:
-            # print(topic)
-            topic_split = topic.split('/')
-            client_id = topic_split[1]
-            payload = json.loads(data['payload'])
-            # print(payload)
-            cpu_used = payload.get('cpu')
-            mem_used = payload.get('memory')
-            cpu_cores_free = payload.get('free_cores')
-            memory_free_in_MB = payload.get('memory_free_in_MB')
-            lat = payload.get('lat')
-            long = payload.get('long')
-            public_ip = payload.get(PUBLIC_IP)
-            private_ip = payload.get(PRIVATE_IP)
-            router_rtt = payload.get(ROUTER_RTT)
-            vivaldi_vector = payload.get(VIVALDI_VECTOR)
-            vivaldi_height = payload.get(VIVALDI_HEIGHT)
-            vivaldi_error = payload.get(VIVALDI_ERROR)
-            app.logger.info(f"VIVALDI: {vivaldi_vector}")
-            # TODO: Remove later. Currently just required for accuracy evaluation
-            netem_delay = payload.get('netem_delay')
-            mongo_find_node_by_id_and_update_cpu_mem(client_id, cpu_used, cpu_cores_free, mem_used, memory_free_in_MB,
-                                                     lat, long, public_ip, private_ip, router_rtt, vivaldi_vector,
-                                                     vivaldi_height, vivaldi_error, netem_delay)
-
-            # Tell the node what other nodes it should ping to update vivaldi coordinates
-            nodes_vivaldi_information = []
-            nodes = find_all_nodes()
-            for node in nodes:
-                node_public_ip = node.get(PUBLIC_IP)
-                node_private_ip = node.get(PRIVATE_IP)
-                node_router_rtt = node.get(ROUTER_RTT)
-                node_vector = node.get(VIVALDI_VECTOR)
-                node_height = node.get(VIVALDI_HEIGHT)
-                node_error = node.get(VIVALDI_ERROR)
-                if validate_vivaldi_not_none(node_vector, node_height, node_error):
-                    # Case 1: If node is in same network check private_ip to avoid self-ping
-                    if public_ip == node_public_ip and private_ip != node_private_ip:
-                        nodes_vivaldi_information.append(
-                            (node_public_ip, node_private_ip, node_router_rtt, node_vector, node_height, node_error))
-                    # Case 2: Node has public_ip so just check that ip to avoid self-ping
-                    elif public_ip != node_public_ip:
-                        nodes_vivaldi_information.append(
-                            (node_public_ip, node_private_ip, node_router_rtt, node_vector, node_height, node_error))
-
-            # Shuffle the vivaldi information array and only pick first two nodes for ping measurements
-            random.shuffle(nodes_vivaldi_information)
-            mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information[:NEIGHBORS])
-
-
+            handle_node_information_topic(data)
+        # if topic starts with nodes and ends with job
         if re_job_deployment_topic is not None:
-            # print(topic)
-            topic_split = topic.split('/')
-            client_id = topic_split[1]
-            payload = json.loads(data['payload'])
-            job_id = payload.get('job_id')
-            status = payload.get('status')
-            NsIp = payload.get('ns_ip')
-            deployment_info_from_worker_node(job_id, status, NsIp, client_id)
+            handle_job_deployment_topic(data)
 
 
 def mqtt_publish_edge_deploy(worker_id, job):
@@ -158,3 +104,70 @@ def deployment_info_from_worker_node(job_id, status, NsIp, node_id):
 
 def validate_vivaldi_not_none(vector, height, error):
     return vector is not None and height is not None and error is not None
+
+def handle_node_information_topic(data):
+    topic = data['topic']
+    # print(topic)
+    topic_split = topic.split('/')
+    client_id = topic_split[1]
+    payload = json.loads(data['payload'])
+    # print(payload)
+    cpu_used = payload.get('cpu')
+    mem_used = payload.get('memory')
+    cpu_cores_free = payload.get('free_cores')
+    memory_free_in_MB = payload.get('memory_free_in_MB')
+    lat = payload.get('lat')
+    long = payload.get('long')
+    public_ip = payload.get(PUBLIC_IP)
+    private_ip = payload.get(PRIVATE_IP)
+    router_rtt = payload.get(ROUTER_RTT)
+    vivaldi_vector = payload.get(VIVALDI_VECTOR)
+    vivaldi_height = payload.get(VIVALDI_HEIGHT)
+    vivaldi_error = payload.get(VIVALDI_ERROR)
+    app.logger.info(f"VIVALDI: {vivaldi_vector}")
+    # TODO: Remove later. Currently just required for accuracy evaluation
+    netem_delay = payload.get('netem_delay')
+    mongo_find_node_by_id_and_update_cpu_mem(client_id, cpu_used, cpu_cores_free, mem_used, memory_free_in_MB,
+                                             lat, long, public_ip, private_ip, router_rtt, vivaldi_vector,
+                                             vivaldi_height, vivaldi_error, netem_delay)
+
+    publish_vivaldi_message(client_id, public_ip, private_ip)
+
+
+
+def handle_job_deployment_topic(data):
+    topic = data['topic']
+    # print(topic)
+    topic_split = topic.split('/')
+    client_id = topic_split[1]
+    payload = json.loads(data['payload'])
+    job_id = payload.get('job_id')
+    status = payload.get('status')
+    NsIp = payload.get('ns_ip')
+    deployment_info_from_worker_node(job_id, status, NsIp, client_id)
+
+
+def publish_vivaldi_message(client_id, public_ip, private_ip):
+    # Tell the node what other nodes it should ping to update vivaldi coordinates
+    nodes_vivaldi_information = []
+    nodes = find_all_nodes()
+    for node in nodes:
+        node_public_ip = node.get(PUBLIC_IP)
+        node_private_ip = node.get(PRIVATE_IP)
+        node_router_rtt = node.get(ROUTER_RTT)
+        node_vector = node.get(VIVALDI_VECTOR)
+        node_height = node.get(VIVALDI_HEIGHT)
+        node_error = node.get(VIVALDI_ERROR)
+        if validate_vivaldi_not_none(node_vector, node_height, node_error):
+            # Case 1: If node is in same network check private_ip to avoid self-ping
+            if public_ip == node_public_ip and private_ip != node_private_ip:
+                nodes_vivaldi_information.append(
+                    (node_public_ip, node_private_ip, node_router_rtt, node_vector, node_height, node_error))
+            # Case 2: Node has public_ip so just check that ip to avoid self-ping
+            elif public_ip != node_public_ip:
+                nodes_vivaldi_information.append(
+                    (node_public_ip, node_private_ip, node_router_rtt, node_vector, node_height, node_error))
+
+    # Shuffle the vivaldi information array and only pick first two nodes for ping measurements
+    random.shuffle(nodes_vivaldi_information)
+    mqtt_publish_vivaldi_message(client_id, nodes_vivaldi_information[:NEIGHBORS])
