@@ -1,16 +1,14 @@
 import os
 from flask import Flask, request
+import eventlet
 
 from cluster_balancer import service_resolution, service_resolution_ip
 from mongodb_client import mongo_init, mongo_find_node_by_id_and_update_subnetwork, mongo_update_job_deployed, \
     mongo_find_job_by_id
-from cm_logging import configure_logging
+from net_logging import configure_logging
 from root_service_manager_requests import root_service_manager_get_subnet, system_manager_notify_deployment_status
 
-MY_PORT = os.environ.get('SERVICE_MANAGER_PORT')
-
-MY_CHOSEN_CLUSTER_NAME = os.environ.get('CLUSTER_NAME')
-MY_CLUSTER_LOCATION = os.environ.get('CLUSTER_LOCATION')
+MY_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
 
 my_logger = configure_logging()
 app = Flask(__name__)
@@ -98,3 +96,7 @@ def table_query_resolution_by_ip(service_ip):
 # TODO: job migration
 # TODO: job undeployment
 # TODO: job scale up
+
+
+if __name__ == '__main__':
+    eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)
