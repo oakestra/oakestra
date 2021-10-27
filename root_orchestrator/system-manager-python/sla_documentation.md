@@ -22,7 +22,7 @@ Example under *sla.json*
     - **code** : File containing the code; given as URL
     - **state** : File containing the state; given as URL; default empty
     - **port** : Port for exposure of the microservice chosen by the developer
-    - **addressess** : Optional - ***[Taken from Giovanni's and Mehdi's design; more details in On addressess]***
+    - **addresses** : Optional - ***[Taken from Giovanni's and Mehdi's design; more details in On addressess]***
       - **rr_ip** : Optional - IP chosen for round-robin addressation
       - **closest_ip** : Optional - The orchestrator may choose the closest IP to the given one
       - **instances** : Optional - Field of instances
@@ -81,6 +81,6 @@ This example of connectivity is "fleshed out" in the demo ***sla.json***
 
 **Note**: This way of defining connectivity always assumes bidirectional connections. In case there are contradictions in a connection, i.e. microservice 4 -> 1 is defined with maximum 30 ms; microservice 1 -> 4 is defined with maximum 50 ms (or not defined at all), the scheduler should assume connectivity and take the tighter constraint (30 ms).
 
-## On addressess
+## On addresses
 
 These fields are added on the account of Giovanni, who introduced them together with Mehdi to allow developers to choose an IP address their microservice should be available at, in case it is unoccupied.
