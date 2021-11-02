@@ -10,7 +10,7 @@ from bson import json_util
 from service_manager import new_instance_ip, clear_instance_ip, service_resolution, new_subnetwork_addr, \
     service_resolution_ip, new_job_rr_address
 from mongodb_client import *
-from yamlfile_parser import yaml_reader
+from sla_parser import parse_sla
 from cluster_requests import *
 from scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from sm_logging import configure_logging
@@ -160,12 +160,15 @@ def deploy_task():
             return "empty file", 400
         if file:
             # Reading config file
-            data = yaml_reader(file)
+            data = parse_sla(file)
             app.logger.info(data)
             # Assigning a Service IP for RR Load Balancing
             s_ip = [{
                 "IpType": 'RR',
                 "Address": new_job_rr_address(data),
+                # TODO with the new SLA design, this doesn't work anymore
+                #  (i talked with @Giovanni how to realize similar functionality with new fields in SLA)
+
             }]
             # Insert job into database
             job_id = mongo_insert_job(
