@@ -1,5 +1,3 @@
-import os
-
 import json
 import jsonschema
 from schema import sla_schema
