@@ -2,4 +2,5 @@
 system-manager-javascript/
 system-manager-quart/
 
-/system-manager-python/.idea/
+# PyCharm
+.idea
