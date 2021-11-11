@@ -26,7 +26,6 @@ source .venv/bin/activate
 # export FLASK_ENV=development
 export FLASK_DEBUG=FALSE # TRUE for verbose logging #when True, MQTT logs twice because Flask opens second reloader thread
 
-#export CLUSTER_MANAGER_IP=118.195.253.88
 export CLUSTER_MANAGER_IP=$MYIP
 export CLUSTER_MANAGER_PORT=10000
 export WORKER_PUBLIC_IP=$MYIP
