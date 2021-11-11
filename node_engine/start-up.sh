@@ -16,7 +16,9 @@ trap "ps -ax | grep NetManager | awk {'print $1'} | xargs sudo kill > /dev/null 
 sleep 2
 
 # create virtualenv
-virtualenv -clear -p python3.8 .venv
+#virtualenv --clear -p python3.8 .venv
+virtualenv -p python3.8 .venv
+
 source .venv/bin/activate
 
 .venv/bin/pip install -r requirements.txt
@@ -24,16 +26,23 @@ source .venv/bin/activate
 # export FLASK_ENV=development
 export FLASK_DEBUG=FALSE # TRUE for verbose logging #when True, MQTT logs twice because Flask opens second reloader thread
 
-export REDIS_ADDR=redis://:workerRedis@localhost:6380
 #export CLUSTER_MANAGER_IP=118.195.253.88
-export CLUSTER_MANAGER_IP=46.244.221.241
+export CLUSTER_MANAGER_IP=$MYIP
 export CLUSTER_MANAGER_PORT=10000
-export WORKER_PUBLIC_IP=46.244.221.241
-export SYSTEM_MANAGER_IP=46.244.221.241
+export WORKER_PUBLIC_IP=$MYIP
+export SYSTEM_MANAGER_IP=$MYIP
 export SYSTEM_MANAGER_PORT=10000
 export LAT=48.19349
 export LONG=11.63067
 export MY_PORT=3001
+export REDIS_ADDR=redis://:workerRedis@localhost:6380
+export MONITORING_PORT=4000
 
-#.venv/bin/celery -A Monitoring.monitoring.celeryapp worker --detach --logfile=worker.log --loglevel=DEBUG --concurrency=1
+# Run monitoring component in background (&) and redirect stdout+stderr to log file (overwrite content: %>)
+echo "Start monitoring component"
+.venv/bin/python Monitoring/app.py &> Monitoring/monitoring.log &
+#.venv/bin/celery -A Monitoring.monitoring.celeryapp worker --detach --logfile=Monitoring/celery.log --loglevel=DEBUG --concurrency=1
+
+# Start node engine
+echo "Start node engine"
 .venv/bin/python node_engine.py
