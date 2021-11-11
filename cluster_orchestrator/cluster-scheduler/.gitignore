@@ -275,3 +275,9 @@ dmypy.json
 cython_debug/
 
 cs.log*
+
+# IDEs
+# PyCharm
+.idea
+# VSCode
+.vscode

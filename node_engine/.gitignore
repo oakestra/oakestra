@@ -278,5 +278,9 @@ Dockerfile
 ne.log*
 
 
+# IDEs
 # PyCharm
 .idea
+NetManager/.idea
+# VSCode
+.vscode
