@@ -6,16 +6,15 @@ instance_ip_lock = threading.Lock()
 subnetip_ip_lock = threading.Lock()
 
 
-def new_job_rr_address(job_data):
+def new_job_rr_address(app_data, service_data):
     """
     This method is called at deploy time. Given the deployment descriptor check if a custom valid RR ip has been assigned
     by the user and returns that to the service. Otherwise a new RR address will be returned.
     @return: string, a new address
     @raise: exception if an invalid RR address has been provided by the user
     """
-    address = job_data.get('RR_ip')
-    job_name = job_data['app_name'] + "." + job_data['app_ns'] + "." + job_data['service_name'] + "." + job_data[
-        'service_ns']
+    address = service_data.get('RR_ip')
+    job_name = app_data['app_name'] + "." + app_data['app_ns'] + "." + service_data['service_name'] + "." + service_data['service_ns']
 
     if address is not None:
         address_arr = str(address).split(".")

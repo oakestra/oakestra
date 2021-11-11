@@ -1,26 +1,53 @@
-import csv
 import ipaddress
 import requests
 from flask import request
+import pandas as pd
+import time
+import numpy as np
 
+df = None
+
+def build_geolite_dataframe():
+    global df
+    print("Start building GeoLite2 dataframe...")
+    start = time.time()
+    chunk = pd.read_csv('geolocation/GeoLite2-City-Blocks-IPv4.csv', chunksize=500000,
+                        usecols=['network', 'latitude', 'longitude'],
+                        dtype={'network': 'str', 'latitude': np.float64, 'longitude': np.float64})
+    df = pd.concat(chunk)
+    end = time.time()
+    print(f"...done building the dataframe. Took {end-start}s")
 
 def query_geolocation_for_ip(ip_address):
+    global df
+
+    ip_address = ipaddress.ip_address(ip_address)
+
     # If IP Adress is private just return artificial coordinates contained in url params or 0 if no params were given
-    if ipaddress.ip_address(ip_address).is_private:
+    if ip_address.is_private:
         lat = request.args.get("lat") or 0
         long = request.args.get("long") or 0
-        return lat, long
+        return {'lat': lat, 'long': long}
 
-    # Geolite2 index:column names
-    # 0:network, 1:geoname_id, 2:registered_country_geoname_id, 3:represented_country_geoname_id, 4:is_anonymous_proxy,
-    # 5:is_satellite_provider, 6:postal_code, 7:latitude, 8:longitude, 9:accuracy_radius
-    geolite2 = csv.reader(open('GeoLite2-City-Blocks-IPv4.csv'), delimiter=",")
+    # Get first byte of IP
+    first_byte = str(ip_address).split(".")[0]
 
-    for row in geolite2:
-        ip_network = ipaddress.ip_network(row[0])
+    # In case the first byte is not contained in the GeoLite2 database, keep decrementing the first byte and check if it exists
+    start_idx = 0
+    for i in range(int(first_byte), -1, -1):
+        indices = df[df.network.str.startswith(f"{i}.")].index
+        if len(indices) >= 1:
+            start_idx = indices[0]
+            print(f"Start lookup at index {start_idx} with first byte {i}")
+            break
+
+    # Start at start_idx to speed up iteration
+    for i in range(start_idx, df['network'].size):
+        ip_network = ipaddress.ip_network(df.at[i, 'network'])
         if ip_address in ip_network:
-            # lat, long
-            return row[7], row[8]
+            lat = df.at[i, 'latitude']
+            long = df.at[i, 'longitude']
+            return {'lat': lat, 'long': long}
 
     raise EOFError(f"IP Address {ip_address} not in geolite2 database file.")
 

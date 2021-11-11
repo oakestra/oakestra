@@ -24,7 +24,7 @@ from yamlfile_parser import yaml_reader
 from cluster_requests import *
 from scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from sm_logging import configure_logging
-from geolocation.geolocation import query_geolocation_for_ip, user_in_cluster
+from geolocation.geolocation import query_geolocation_for_ip, user_in_cluster, build_geolite_dataframe
 
 my_logger = configure_logging()
 
@@ -61,6 +61,12 @@ def sample():
 def status():
     app.logger.info("Incoming Request /status")
     return "ok", 200
+
+
+@app.route('/geolocation/<ip>')
+def get_geolocation(ip):
+    app.logger.info(f"Incoming Request /geolocation/{ip}")
+    return query_geolocation_for_ip(ip)
 
 
 @app.route('/closest_clusters')
@@ -117,7 +123,10 @@ def plot_shapely_object(axis, geo, cluster_name):
 def receive_scheduler_result_and_propagate_to_cluster():
     app.logger.info('Incoming Request /api/result/deploy - received cloud_scheduler result')
     data = json.loads(request.json)
-    app.logger.info(data)
+    # Omit worker nodes coordinates to avoid flooding the log
+    data_without_worker_groups = data.copy()
+    data_without_worker_groups['cluster'].pop('worker_groups', None)
+    app.logger.info(data_without_worker_groups)
     system_job_id = data.get('job_id')
     replicas = data.get('replicas')
     resulting_cluster = data.get('cluster')
@@ -141,7 +150,6 @@ def receive_scheduler_result_and_propagate_to_cluster():
         replicas=replicas,
         instance_list=instance_list
     )
-
     cluster_request_to_deploy(resulting_cluster, mongo_find_job_by_id(system_job_id))
     return "ok"
 
@@ -196,7 +204,10 @@ def cluster_information(cluster_id):
     app.logger.info('Incoming Request /api/information/{0} to set aggregated cluster information'.format(cluster_id))
     # data = json.loads(request.json)
     data = request.json  # data contains cpu_percent, memory_percent, cpu_cores etc.
-    app.logger.info(data)
+    # Omit worker nodes coordinates to avoid flooding the log
+    data_without_worker_groups = data.copy()
+    data_without_worker_groups.pop('worker_groups', None)
+    app.logger.info(data_without_worker_groups)
     mongo_update_cluster_information(cluster_id, data)
     return "ok", 200
 
@@ -220,22 +231,37 @@ def deploy_task():
             # Reading config file
             data = yaml_reader(file)
             app.logger.info(data)
-            # Assigning a Service IP for RR Load Balancing
-            s_ip = [{
-                "IpType": 'RR',
-                "Address": new_job_rr_address(data),
-            }]
-            # Insert job into database
-            job_id = mongo_insert_job(
-                {
-                    'file_content': data,
-                    'service_ip_list': s_ip
-                })
-            # Request scheduling
-            threading.Thread(group=None, target=scheduler_request_deploy, args=(data, str(job_id),)).start()
-            # Job status to scheduling REQUESTED
-            mongo_update_job_status(job_id, 'REQUESTED')
-            return {'job_id': str(job_id)}, 200
+            user_coords = query_geolocation_for_ip(request.remote_addr)
+            app.logger.info(f"User location: {user_coords}")
+            job_ids = {}
+
+            applications = data.get('applications')
+
+            for application in applications:
+                application_name = application.get('app_name')
+                microservices = application.get('microservices')
+                for microservice in microservices:
+                    # Assigning a Service IP for RR Load Balancing
+                    s_ip = [{
+                        "IpType": 'RR',
+                        "Address": new_job_rr_address(application, microservice),
+                    }]
+                    # Insert job into database
+                    job_id = mongo_insert_job(
+                        {
+                            'file_content': {'application': application, 'microservice': microservice},
+                            'service_ip_list': s_ip
+                        })
+
+                    # Request scheduling
+                    threading.Thread(group=None, target=scheduler_request_deploy,
+                                     args=(microservice, str(job_id), user_coords)).start()
+                    # Job status to scheduling REQUESTED
+                    mongo_update_job_status(job_id, 'REQUESTED')
+
+                    job_ids.setdefault(application_name, []).append(job_id)
+
+            return job_ids, 200
 
     return ("/api/deploy request wihout a yaml file\n", 200)
 
@@ -450,7 +476,6 @@ def handle_init_client(message):
     app.logger.info(message)
 
     cid = mongo_upsert_cluster(cluster_ip=request.remote_addr, message=message)
-
     x = {
         'id': str(cid)
     }
@@ -474,4 +499,6 @@ if __name__ == '__main__':
     # socketio.run(app, debug=True, host='0.0.0.0', port=MY_PORT)
     import eventlet
 
+    # Build GeoLite2 dataframe to avoid rebuilding it for every user request
+    build_geolite_dataframe()
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)
