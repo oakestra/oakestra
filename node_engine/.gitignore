@@ -276,3 +276,7 @@ cython_debug/
 Dockerfile
 
 ne.log*
+
+
+# PyCharm
+.idea
