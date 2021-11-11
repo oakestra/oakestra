@@ -135,7 +135,7 @@ class VivaldiCoordinate:
         # Otherwise if they are very close (e.g. at the beginning) push in random direction
         # cf. "Two nodes occupying the same location will have a spring
         #      pushing them away from each other in some arbitrary direction."
-        rand_vector = np.random.rand(3)
+        rand_vector = np.random.rand(self.dims)
         rand_unit_vector = rand_vector / np.linalg.norm(rand_vector)
 
         return rand_unit_vector

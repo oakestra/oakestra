@@ -114,7 +114,8 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     cumulative_memory = 0
     cumulative_memory_in_mb = 0
     number_of_active_nodes = 0
-    technology = []
+    # technology = []
+    virtualization = []
     worker_names_coords = []
     nodes = find_all_nodes()
     for n in nodes:
@@ -128,15 +129,15 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
                 cumulative_memory += n.get('current_memory_percent')
                 cumulative_memory_in_mb += n.get('current_free_memory_in_MB')
                 number_of_active_nodes += 1
-                for t in n.get('node_info').get('technology'):
-                    technology.append(t) if t not in technology else technology
+                for t in n.get('node_info').get('virtualization'):
+                    virtualization.append(t) if t not in virtualization else virtualization
 
                 # TODO: For research just send the actual coordinates of the worker nodes. In the future we want to
                 # obfuscate these information
                 name = n.get('node_info').get('host')
                 lat = n.get('lat')
                 long = n.get('long')
-                worker_names_coords.append((name, lat, long))
+                worker_names_coords.append((name, float(lat), float(long)))
             else:
                 print('Node {0} is inactive.'.format(n.get('_id')))
         except Exception as e:
@@ -146,13 +147,13 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     for j in jobs:
         print(j)
 
-    # Todo: For test: add some fake nodes with coordinates
-    coords = np.array([[48.0, 11.0], [48.1, 11.1], [48.2, 11.0]])
+    coords = [[lat, long] for _, lat, long in worker_names_coords]
     geo = create_obfuscated_polygons_based_on_concave_hull(coords)
+    worker_groups = mapping(geo) if geo is not None else None
     return {'cpu_percent': cumulative_cpu, 'memory_percent': cumulative_memory,
             'cpu_cores': cumulative_cpu_cores, 'cumulative_memory_in_mb': cumulative_memory_in_mb,
-            'number_of_nodes': number_of_active_nodes, 'jobs': jobs, 'technology': technology, 'more': 0,
-            'worker_groups': mapping(geo)}
+            'number_of_nodes': number_of_active_nodes, 'jobs': jobs, 'virtualization': virtualization, 'more': 0,
+            'worker_groups': worker_groups}
 
 
 # ................. Job Operations .......................#

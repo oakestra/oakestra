@@ -55,9 +55,19 @@ def deploy_task():
 def replicate_task():
     app.logger.info('Request /api/calculate/replicate\n')
 
-    job = request.json  # contains job_id and job_description
+    data = request.json  # contains job_id and job_description
+    job = data.get('job')
     app.logger.info(job)
     start_calc_replicate.delay(job)
+    return "ok"
+
+@app.route('/api/calculate/vivaldi/replicate', methods=['POST'])
+def vialdi_replicate_task():
+    app.logger.info('Request /api/caluclate/vivaldi/replicate')
+
+    job = request.json
+    app.logger.info(job)
+    start_calc_vivaldi_replicate.delay(job)
     return "ok"
 
 
@@ -68,7 +78,7 @@ def start_calc_deploy(job):
     app.logger.info("App.logger.info Received Task")
     print("print Received Task")
 
-    scheduling_status, scheduling_result = calculate(app, job)  # scheduling_result can be a node object
+    scheduling_status, scheduling_result = calculate(job)  # scheduling_result can be a node object
 
     if scheduling_status == 'negative':
         app.logger.info('No active node found to schedule this job.')
@@ -81,6 +91,16 @@ def start_calc_deploy(job):
 @celeryapp.task()
 def start_calc_replicate(job):
     print(job)
+    scheduling_status, scheduling_result = calculate(job)
+    if scheduling_status == 'negative':
+        app.logger.info("Target node does not provide the required resources.")
+    else:
+        app.logger.info(f'Send scheduling result for node {scheduling_result}')
+        manager_request(app, scheduling_result, job)
+
+@celeryapp.task()
+def start_calc_vivaldi_replicate(job):
+    app.logger.info("Received celery task")
 
 
 @celeryapp.on_after_configure.connect

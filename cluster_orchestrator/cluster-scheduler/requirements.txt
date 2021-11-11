@@ -5,3 +5,5 @@ click
 redis
 requests
 pymongo
+shapely
+geopy

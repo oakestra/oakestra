@@ -5,6 +5,15 @@ import time
 CLUSTER_SCHEDULER_ADDR = 'http://' + os.environ.get('CLUSTER_SCHEDULER_URL') + ':' + str(os.environ.get('CLUSTER_SCHEDULER_PORT'))
 
 
+def scheduler_request_vivaldi_replicate(job):
+    print('Asking Cluster Scheduler to replicate based on Vivaldi network')
+    request_address = f"{CLUSTER_SCHEDULER_ADDR}/api/calculate/vivaldi/replicate"
+    try:
+        requests.post(request_address, json=job)
+    except requests.exceptions.RequestException as e:
+        print('Calling Cluster Scheduler /api/calculate/vialdi/replicate not successful')
+
+
 def scheduler_request_deploy(job):
     print('new job: asking cluster_scheduler...')
     print(job)

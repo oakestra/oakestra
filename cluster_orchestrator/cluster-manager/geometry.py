@@ -8,7 +8,6 @@ from functools import partial
 import pyproj
 from shapely.geometry import Point, LineString, Polygon, MultiPolygon
 from shapely.ops import unary_union
-from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
 import alphashape
@@ -67,14 +66,16 @@ def create_obfuscated_polygons_based_in_alphashapes(nodes):
 
     return unary_union(polygons)
 
-def create_obfuscated_polygons_based_on_concave_hull(nodes):
+def create_obfuscated_polygons_based_on_concave_hull(coords):
     # ImplNote: use fake coords for test
     # lat_long_coords = get_node_coords(nodes)
-    lat_log_coords = nodes
-    clusters = cluster_worker_nodes(lat_log_coords)
+    node_clusters = cluster_worker_nodes(coords)
+
+    if len(node_clusters) == 0:
+        return None
 
     polygons = []
-    for cluster in clusters:
+    for cluster in node_clusters:
         concave_hull = ConcaveHull(cluster)
         hull_array = concave_hull.calculate()
         # Cluster consists of single point -> Point
@@ -101,6 +102,9 @@ def cluster_worker_nodes(lat_long_coords):
     # Nothing will be classified as noise
     # Use haversince metric and ball tree algorithm to calculate great circle distances between points
     # epsilon and coordiantes get converted to radians, because scikit-learn's haversine metric needs radian units
+    if len(lat_long_coords) == 0:
+        return []
+    print(lat_long_coords)
     kms_per_radian = 6371.0088
     # TODO: what to chose for epsilon? fixed km or do we use some distances we can get from given node clusters
     epsilon = 10 / kms_per_radian

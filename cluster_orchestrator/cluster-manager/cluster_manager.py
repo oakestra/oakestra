@@ -1,4 +1,6 @@
 import os
+
+import requests
 from flask import Flask, request
 from flask_socketio import SocketIO, emit
 import json
@@ -72,15 +74,16 @@ def deploy_task():
 def get_scheduler_result_and_propagate_to_edge():
     # print(request)
     app.logger.info('Incoming Request /api/result - received cluster_scheduler result')
-    data = request.json  # get POST body
+    data = json.loads(request.json)  # get POST body
     app.logger.info(data)
 
     job = data.get('job')
+    constraints = data.get('constraints')
     resulting_node_id = data.get('node').get('_id')
 
     mongo_update_job_status(job.get('_id'), 'NODE_SCHEDULED', data.get('node'))
     job = mongo_find_job_by_id(job.get('_id'))
-    mqtt_publish_edge_deploy(resulting_node_id, job)
+    mqtt_publish_edge_deploy(resulting_node_id, job, constraints)
     return "ok"
 
 
@@ -184,6 +187,17 @@ def table_query_resolution_by_ip(service_ip):
     return {'app_name': name, 'instance_list': instances}
 
 
+# ...... Websocket PING Handling with edge nodes .......#
+# ......................................................#
+# @socketioserver.on('connect', namespace='/ping')
+# def on_connect_ping():
+#     app.logger.info(f"Websocket - Client connected: {request.remote_addr}")
+#
+# @socketioserver.on('cs1', namespace='/ping')
+# def handle_ping(message):
+#     app.logger.info(f"Websocket - Received ping result: {message}")
+
+@sio.on('')
 # ...... Websocket INIT Handling with edge nodes .......#
 # ......................................................#
 
