@@ -1,6 +1,7 @@
 psutil
 Flask
 Flask-MQTT
+Flask-SocketIO
 docker==3.4.1
 APScheduler
 python-socketio[client]
@@ -9,4 +10,7 @@ tabulate
 requests
 gitpython
 numpy
-numpy
+celery==4.4.2
+redis
+pyshark
+shapely

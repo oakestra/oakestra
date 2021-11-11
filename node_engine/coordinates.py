@@ -3,9 +3,9 @@ import os
 
 def get_coordinates():
     # Check whether static coordinates are defined
-    lat = os.environ.get("lat")
-    long = os.environ.get("long")
-
+    lat = os.environ.get("LAT")
+    long = os.environ.get("LONG")
+    print(lat, long)
     # If no coordinates are defined in start-up.sh check if device has GPS module
     if lat is None and long is None:
         gps_info()
@@ -20,4 +20,3 @@ def gps_info():
     long = 11.2
 
     return lat, long
-

@@ -8,10 +8,6 @@ if [ "$1" == "" ]; then
     exit 1
 fi
 
-# export CLUSTER_MANAGER_IP=192.168.42.170
-# export CLUSTER_MANAGER_IP=localhost
-export CLUSTER_MANAGER_PORT=10000
-
 # Run the netmanager in backgruond
 sudo echo "Requiring SU"
 cd NetManager/ && sudo CLUSTER_MANAGER_IP=$CLUSTER_MANAGER_IP CLUSTER_MANAGER_PORT=$CLUSTER_MANAGER_PORT ./bin/$1-NetManager &>> netmanager.log &
@@ -20,7 +16,7 @@ trap "ps -ax | grep NetManager | awk {'print $1'} | xargs sudo kill > /dev/null 
 sleep 2
 
 # create virtualenv
-virtualenv -p python3.8 .venv
+virtualenv -clear -p python3.8 .venv
 source .venv/bin/activate
 
 .venv/bin/pip install -r requirements.txt
@@ -28,4 +24,16 @@ source .venv/bin/activate
 # export FLASK_ENV=development
 export FLASK_DEBUG=FALSE # TRUE for verbose logging #when True, MQTT logs twice because Flask opens second reloader thread
 
+export REDIS_ADDR=redis://:workerRedis@localhost:6380
+#export CLUSTER_MANAGER_IP=118.195.253.88
+export CLUSTER_MANAGER_IP=46.244.221.241
+export CLUSTER_MANAGER_PORT=10000
+export WORKER_PUBLIC_IP=46.244.221.241
+export SYSTEM_MANAGER_IP=46.244.221.241
+export SYSTEM_MANAGER_PORT=10000
+export LAT=48.19349
+export LONG=11.63067
+export MY_PORT=3001
+
+#.venv/bin/celery -A Monitoring.monitoring.celeryapp worker --detach --logfile=worker.log --loglevel=DEBUG --concurrency=1
 .venv/bin/python node_engine.py
