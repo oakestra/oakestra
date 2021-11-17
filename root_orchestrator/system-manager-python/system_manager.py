@@ -72,9 +72,6 @@ def receive_scheduler_result_and_propagate_to_cluster():
             'instance_number': i,
             'instance_ip': new_instance_ip(),
             'cluster_id': str(resulting_cluster.get('_id').get('$oid')),
-            'namespace_ip': '',
-            'host_ip': '',
-            'host_port': '',
         }
         instance_list.append(instance_info)
     mongo_update_job_status_and_instances(
@@ -88,35 +85,12 @@ def receive_scheduler_result_and_propagate_to_cluster():
     return "ok"
 
 
-@app.route('/api/result/cluster_deploy', methods=['POST'])
-def get_cluster_deployment_status_feedback():
-    """
-    Result of the deploy operation in a cluster
-    json file structure:{
-        'job_id':string
-        'instances:[{
-            'instance_number':int
-            'namespace_ip':string
-            'host_ip':string
-            'host_port':string
-        }]
-    }
-    """
-    app.logger.info("Incoming Request /api/result/cluster_deploy")
-    data = request.json
-    app.logger.info(data)
-
-    mongo_update_job_net_status(
-        job_id=data.get('job_id'),
-        instances=data.get('instances')
-    )
-
-    return "roger that"
-
-
 @app.route('/api/result/replicate', methods=['POST'])
 def receive_scheduler_replicate_result_and_propagate_to_cluster():
-    app.logger.info('Incoming Request /api/result/deploy - received cloud_scheduler result')
+    """
+    Replication function not yet fully implemented
+    """
+    app.logger.info('Incoming Request /api/result/replicate - received cloud_scheduler result')
     data = json.loads(request.json)
     system_job_id = data.get('job_id')
     job = data.get('job')
@@ -143,43 +117,34 @@ def cluster_information(cluster_id):
     return "ok", 200
 
 
-@app.route('/api/deploy', methods=['GET', 'POST'])
+@app.route('/api/deploy', methods=['POST'])
 def deploy_task():
     app.logger.info('Incoming Request /api/deploy - deploying task...')
 
-    if request.method == 'POST':
-        app.logger.info('POST request')
-
-        if 'file' not in request.files:
-            flash('No file part')
-            return "no file", 400
-        file = request.files['file']
-        app.logger.info('file found')
-        if file.filename == '':
-            flash('No selected file')
-            return "empty file", 400
-        if file:
-            # Reading config file
-            data = yaml_reader(file)
-            app.logger.info(data)
-            # Assigning a Service IP for RR Load Balancing
-            s_ip = [{
-                "IpType": 'RR',
-                "Address": new_job_rr_address(data),
-            }]
-            # Insert job into database
-            job_id = mongo_insert_job(
-                {
-                    'file_content': data,
-                    'service_ip_list': s_ip
-                })
-            # Request scheduling
-            threading.Thread(group=None, target=scheduler_request_deploy, args=(data, str(job_id),)).start()
-            # Job status to scheduling REQUESTED
-            mongo_update_job_status(job_id, 'REQUESTED')
-            return {'job_id': str(job_id)}, 200
-
-    return ("/api/deploy request wihout a yaml file\n", 200)
+    if 'file' not in request.files:
+        flash('No file part')
+        return "no file", 400
+    file = request.files['file']
+    app.logger.info('file found')
+    if file.filename == '':
+        flash('No selected file')
+        return "empty file", 400
+    if file:
+        # Reading config file
+        data = yaml_reader(file)
+        app.logger.info(data)
+        # Insert job into database
+        job_id = mongo_insert_job(
+            {
+                'file_content': data
+            })
+        # Inform network plugin about the deployment
+        threading.Thread(group=None, target=net_inform_deploy, args=(data, str(job_id),)).start()
+        # Job status to scheduling REQUESTED
+        mongo_update_job_status(job_id, 'REQUESTED')
+        # Request scheduling
+        threading.Thread(group=None, target=scheduler_request_deploy, args=(data, str(job_id),)).start()
+        return {'job_id': str(job_id)}, 200
 
 
 # ............. Network management Endpoint ............#

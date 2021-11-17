@@ -144,7 +144,6 @@ def mongo_insert_job(obj):
     file['job_name'] = job_name
     job_content = {
         'job_name': job_name,
-        'service_ip_list': obj.get('service_ip_list'),
         **file  # The content of the input file
     }
 
