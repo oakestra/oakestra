@@ -32,7 +32,7 @@ def table_query_resolution_by_ip(node_id):
     return {'addr': addr}
 
 
-# TODO: node status update
+#TODO: node status report
 
 # ............. Job network management Endpoints ............#
 # ...........................................................#
@@ -56,6 +56,9 @@ def deploy_task():
     system_manager_notify_deployment_status(job, req_json["node_id"])
 
     return "ok"
+
+# ................. Table Query Endpoints ...................#
+# ...........................................................#
 
 @app.route('/api/job/<job_name>/instances', methods=['GET'])
 def table_query_resolution_by_jobname(job_name):
@@ -96,7 +99,6 @@ def table_query_resolution_by_ip(service_ip):
 # TODO: job migration
 # TODO: job undeployment
 # TODO: job scale up
-
 
 if __name__ == '__main__':
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)
