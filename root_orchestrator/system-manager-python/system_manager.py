@@ -63,17 +63,21 @@ def receive_scheduler_result_and_propagate_to_cluster():
     app.logger.info(data)
     system_job_id = data.get('job_id')
     replicas = data.get('replicas')
-    resulting_cluster = data.get('cluster')
+    cluster_id = str(data.get('cluster').get('_id').get('$oid'))
 
     # Updating status and instances
     instance_list = []
     for i in range(replicas):
         instance_info = {
             'instance_number': i,
-            'instance_ip': new_instance_ip(),
-            'cluster_id': str(resulting_cluster.get('_id').get('$oid')),
+            'cluster_id': cluster_id,
         }
         instance_list.append(instance_info)
+
+    # Inform network plugin about the deployment
+    threading.Thread(group=None, target=net_inform_instance_deploy, args=(str(system_job_id),replicas,cluster_id)).start()
+
+    #Update the current instance information
     mongo_update_job_status_and_instances(
         job_id=system_job_id,
         status='CLUSTER_SCHEDULED',
@@ -139,44 +143,13 @@ def deploy_task():
                 'file_content': data
             })
         # Inform network plugin about the deployment
-        threading.Thread(group=None, target=net_inform_deploy, args=(data, str(job_id),)).start()
+        threading.Thread(group=None, target=net_inform_service_deploy, args=(data, str(job_id),)).start()
         # Job status to scheduling REQUESTED
         mongo_update_job_status(job_id, 'REQUESTED')
         # Request scheduling
         threading.Thread(group=None, target=scheduler_request_deploy, args=(data, str(job_id),)).start()
         return {'job_id': str(job_id)}, 200
 
-
-# ............. Network management Endpoint ............#
-# ......................................................#
-
-@app.route('/api/job/<job_name>/instances', methods=['GET'])
-def table_query_resolution_by_jobname(job_name):
-    """
-    Get all the instances of a job given the complete name
-    """
-    job_name = job_name.replace("_", ".")
-    app.logger.info("Incoming Request /api/job/" + str(job_name) + "/instances")
-    return {'instance_list': service_resolution(job_name)}
-
-
-@app.route('/api/job/ip/<service_ip>/instances', methods=['GET'])
-def table_query_resolution_by_ip(service_ip):
-    """
-    Get all the instances of a job given a Service IP in 172_30_x_y notation
-    """
-    service_ip = service_ip.replace("_", ".")
-    app.logger.info("Incoming Request /api/job/ip/" + str(service_ip) + "/instances")
-    return {'instance_list': service_resolution_ip(service_ip)}
-
-
-@app.route('/api/net/subnet', methods=['GET'])
-def subnet_request():
-    """
-    Returns a new subnetwork address
-    """
-    addr = new_subnetwork_addr()
-    return {'subnet_addr': addr}
 
 
 # ................ Scheduler Test .....................#
