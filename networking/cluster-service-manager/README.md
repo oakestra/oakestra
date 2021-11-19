@@ -12,10 +12,10 @@ Each Node belongs to a subnetwork and upn deployment each job contains belongs t
 
 ## Incoming Endpoints which can be used e.g. by the System Manager
 
-- GET /api/job/<job_name>/instances table query by job name
-- GET /api/job/ip/<service_ip>/instances table query by service ip
-- GET /api/node/ip/newsubnet/<node_id> get subnet upn node deployment
-- POST /api/job/deployment/status update service deployment status 
+- GET /api/net/job/<job_name>/instances table query by job name
+- GET /api/net/job/ip/<service_ip>/instances table query by service ip
+- GET /api/net/subnet/<node_id> get subnet upn node deployment
+- POST /api/net/service/net_deploy_status update service deployment status 
 
 ## Outgoing Endpoints to other components
 

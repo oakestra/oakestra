@@ -2,11 +2,11 @@ import os
 from flask import Flask, request
 import eventlet
 
-from cluster_balancer import service_resolution, service_resolution_ip
-from mongodb_client import mongo_init, mongo_find_node_by_id_and_update_subnetwork, mongo_update_job_deployed, \
+from tablequery.resolution import service_resolution, service_resolution_ip
+from requests.mongodb_requests import mongo_init, mongo_find_node_by_id_and_update_subnetwork, mongo_update_job_deployed, \
     mongo_find_job_by_id
 from net_logging import configure_logging
-from root_service_manager_requests import root_service_manager_get_subnet, system_manager_notify_deployment_status
+from requests.root_service_manager_requests import root_service_manager_get_subnet, system_manager_notify_deployment_status
 
 MY_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
 
@@ -18,13 +18,10 @@ mongo_init(app)
 # ............. Node network management Endpoints ............#
 # ............................................................#
 
-@app.route('/api/node/ip/newsubnet/<node_id>', methods=['GET'])
+@app.route('/api/net/subnet/<node_id>', methods=['GET'])
 def table_query_resolution_by_ip(node_id):
     """
-    Get all the instances of a job given a Service IP in 172_30_x_y notation
-    returns {
-                addr: string
-            }
+    Endpoint used to require a new node's subnetwork
     """
     app.logger.info("Incoming Request /api/node/ip/newsubnet/" + str(node_id))
     addr = root_service_manager_get_subnet()
@@ -34,10 +31,10 @@ def table_query_resolution_by_ip(node_id):
 
 #TODO: node status report
 
-# ............. Job network management Endpoints ............#
+# ............. Deployment Endpoints ............#
 # ...........................................................#
 
-@app.route('/api/job/deployment/status', methods=['POST'])
+@app.route('/api/net/service/net_deploy_status', methods=['POST'])
 def deploy_task():
     """
        Update job status
@@ -60,7 +57,7 @@ def deploy_task():
 # ................. Table Query Endpoints ...................#
 # ...........................................................#
 
-@app.route('/api/job/<job_name>/instances', methods=['GET'])
+@app.route('/api/net/job/<job_name>/instances', methods=['GET'])
 def table_query_resolution_by_jobname(job_name):
     """
     Get all the instances of a job given the complete name
@@ -70,7 +67,7 @@ def table_query_resolution_by_jobname(job_name):
     return {'instance_list': service_resolution(job_name)}
 
 
-@app.route('/api/job/ip/<service_ip>/instances', methods=['GET'])
+@app.route('/api/net/job/ip/<service_ip>/instances', methods=['GET'])
 def table_query_resolution_by_ip(service_ip):
     """
     Get all the instances of a job given a Service IP in 172_30_x_y notation
