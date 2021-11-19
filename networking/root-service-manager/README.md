@@ -2,7 +2,7 @@
 
 This component is the point of reference for all the cluster service managers. 
 
-## Purpose and Tasks of System Manager
+## Purpose and Tasks of Root Service Manager
 
 - It generates the subnetworks for the nodes attached to each new cluster 
 - It generates the ServiceIP and InstanceIP for each service and the respective instances
