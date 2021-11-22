@@ -18,6 +18,7 @@ echo "#  4: Prepare all the nodes                    #"
 echo "#  5: Deploy EdgeIO with current config        #"
 echo "#  6: Undeploy with current configuration      #"
 echo "#  7: Restart all the worker nodes             #"
+echo "#  8: Stop only the worker nodes               #"
 echo "#                                              #"
 echo "################################################"
 
@@ -32,7 +33,7 @@ fi
 if [[ choice -eq 2 ]]; then
  echo "### 2: Configure nodes with wcfg.yaml ###"
  cd support
- pip3 install pyyaml
+ pip3 install --ignore-installed PyYAML
  python3 read_from_yaml.py 
  cd ../
 fi
@@ -64,6 +65,12 @@ if [[ choice -eq 7 ]]; then
  echo "### 7: Restart all the worker nodes         ###"
  cd support
  ./restart_workers_cluster.sh $username
+ cd ../
+fi
+if [[ choice -eq 8 ]];then
+ echo "### 8: Stopping workers                   ###"
+ cd support
+ ./stop_workers.sh $username
  cd ../
 fi
 

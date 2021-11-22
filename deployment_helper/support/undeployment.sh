@@ -24,8 +24,8 @@ for root in $rootlist; do
         hostname=$root
         hostname_to_ip
         echo "Executing docker-compose down on node: <$hostname,$ip>"
-	ssh $1@$ip "cd EdgeIO_deployment/root/root_orchestrator/; docker-compose down"
-	ssh $1@$ip "cd EdgeIO_deployment/root/root_orchestrator/; docker-compose rm"
+	ssh -oStrictHostKeyChecking=no $1@$ip "cd EdgeIO_deployment/root/root_orchestrator/; docker-compose down"
+	ssh -oStrictHostKeyChecking=no $1@$ip "cd EdgeIO_deployment/root/root_orchestrator/; docker-compose rm"
 	rootip=$ip
 done
 
@@ -45,8 +45,8 @@ for cluster in $clusterlist; do
         hostname=$cluster
         hostname_to_ip
         echo "Executing docker-compose down on cluster$clusternum node: <$hostname,$ip>"
-        ssh $1@$ip "cd EdgeIO_deployment/cluster$clusternum/cluster_orchestrator/;export SYSTEM_MANAGER_URL='$rootip'; export CLUSTER_NAME='cluster$clusternum'; export CLUSTER_LOCATION='cluster$clusternum'; docker-compose down"
-	ssh $1@$ip "cd EdgeIO_deployment/cluster$clusternum/cluster_orchestrator/;export SYSTEM_MANAGER_URL='$rootip'; export CLUSTER_NAME='cluster$clusternum'; export CLUSTER_LOCATION='cluster$clusternum'; docker-compose rm"
+        ssh -oStrictHostKeyChecking=no $1@$ip "cd EdgeIO_deployment/cluster$clusternum/cluster_orchestrator/;export SYSTEM_MANAGER_URL='$rootip'; export CLUSTER_NAME='cluster$clusternum'; export CLUSTER_LOCATION='cluster$clusternum'; docker-compose down"
+	ssh -oStrictHostKeyChecking=no $1@$ip "cd EdgeIO_deployment/cluster$clusternum/cluster_orchestrator/;export SYSTEM_MANAGER_URL='$rootip'; export CLUSTER_NAME='cluster$clusternum'; export CLUSTER_LOCATION='cluster$clusternum'; docker-compose rm"
         clusternum=$((clusternum+1))
         echo "Next cluster $clusternum"
 done
@@ -73,10 +73,11 @@ for cluster in $clusterlist; do
                 hostname=$host
                 hostname_to_ip
                 echo "Stopping: <$hostname,$ip> [If any error shows up... don't worry :D"
-                ssh $1@$ip "num=\$(ps aux | grep start-up | grep -v grep | awk '{print \$2}'); sudo kill \$num"
-		ssh $1@$ip "num=\$(ps aux | grep NetManager | grep -v grep | awk '{print \$2}'); sudo kill -9 \$num"
-		ssh $1@$ip "num=\$(ps aux | grep node_engine | grep -v grep | awk '{print \$2}'); sudo kill -9 \$num"
-                woerkernum=$((workernum+1))
+                ssh -oStrictHostKeyChecking=no $1@$ip "num=\$(ps aux | grep start-up | grep -v grep | awk '{print \$2}'); sudo kill \$num"
+		ssh -oStrictHostKeyChecking=no $1@$ip "num=\$(ps aux | grep NetManager | grep -v grep | awk '{print \$2}'); sudo kill -9 \$num"
+		ssh -oStrictHostKeyChecking=no $1@$ip "num=\$(ps aux | grep node_engine | grep -v grep | awk '{print \$2}'); sudo kill -9 \$num"
+		ssh -oStrictHostKeyChecking=no $1@$ip "docker container prune -f"
+		woerkernum=$((workernum+1))
 		echo "Done!"
         done
 done

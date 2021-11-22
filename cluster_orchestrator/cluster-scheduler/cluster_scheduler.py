@@ -9,7 +9,6 @@ from manager_requests import manager_request
 from calculation import calculate
 from cs_logging import configure_logging
 
-
 WORKER_SCREENING_INTERVAL = 30
 
 MY_PORT = os.environ.get("MY_PORT")
@@ -20,7 +19,6 @@ app = Flask(__name__)
 
 REDIS_ADDR = os.environ.get('REDIS_ADDR')
 celeryapp = Celery('cluster_scheduler', backend=REDIS_ADDR, broker=REDIS_ADDR)
-
 
 mongo_init(app)
 
@@ -77,7 +75,7 @@ def start_calc_deploy(job):
     else:
         app.logger.info('Chosen Node: {0}'.format(scheduling_result))
         manager_request(app, scheduling_result, job)
-        mongo_set_job_as_scheduled(job_id=job.get('_id'), node_id=scheduling_result.get('_id'))
+        # mongo_set_job_as_scheduled(job_id=job.get('_id'), node_id=scheduling_result.get('_id')) # DONE IN CLUSTER-MANAGER
 
 
 @celeryapp.task()

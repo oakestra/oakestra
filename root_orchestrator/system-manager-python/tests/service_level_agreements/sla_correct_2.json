@@ -1,0 +1,38 @@
+{
+  "customerID" : 10000000001,
+  "api_version" : "v0.3.0",
+  "applications" : [
+    {
+      "applicationID" : 1000010001,
+      "application_name" : "Example Application",
+      "application_namespace" : "dev",
+      "application_desc" : "No description here",
+      "microservices" : [
+        {
+          "microserviceID": 4,
+          "microservice_name": "Micro A (4)",
+          "microservice_name": "dev",
+          "virtualization": "container",
+          "memory": 4096,
+          "vcpus": 2,
+          "vgpus": 0,
+          "vtpus": 0,
+          "bandwidth_in": 1000000,
+          "bandwith_out": 8000,
+          "storage": 1000,
+          "code": "https://example.com/repositories/example/code.py",
+          "state": "https://path.to.root.orchestrator.customer.application/example/state_1.json",
+          "port": 80,
+          "addresses": {
+            "rr_ip": "192.168.178.4"
+          },
+          "added_files": [
+            "https://example.com/repositories/example/asset_1.jpg"
+          ],
+          "connectivity": [],
+          "constraints": []
+        }]
+    }
+  ],
+  "args" : []
+}

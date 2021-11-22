@@ -4,12 +4,11 @@ from bson.objectid import ObjectId
 import json
 from datetime import datetime
 
-MONGO_URL  = os.environ.get('CLUSTER_MONGO_URL')
+MONGO_URL = os.environ.get('CLUSTER_MONGO_URL')
 MONGO_PORT = os.environ.get('CLUSTER_MONGO_PORT')
 
 MONGO_ADDR_NODES = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/nodes'
 MONGO_ADDR_JOBS = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/jobs'
-
 
 mongo_nodes = None
 mongo_jobs = None
@@ -40,7 +39,11 @@ def mongo_upsert_node(obj):
     nodes = mongo_nodes.db.nodes
     # find node by hostname and if it exists, just upsert
     node_id = nodes.find_one_and_update({'node_info.host': node_info_hostname},
-                                        {'$set': {'node_info': json_node_info}},
+                                        {'$set': {
+                                            'node_info': json_node_info,
+                                            'node_address': obj.get('ip'),
+                                            'node_subnet': obj.get('node_subnet'),
+                                        }},
                                         upsert=True, return_document=True).get('_id')
     app.logger.info(node_id)
     return node_id
@@ -59,7 +62,8 @@ def mongo_find_node_by_name(node_name):
         return 'Error'
 
 
-def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_cpu_used, cpu_cores_free, node_mem_used, node_memory_free_in_MB):
+def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_cpu_used, cpu_cores_free, node_mem_used,
+                                             node_memory_free_in_MB):
     global app, mongo_nodes
     app.logger.info('MONGODB - update cpu and memory of worker node {0} ...'.format(node_id))
     # o = mongo.db.nodes.find_one({'_id': node_id})
@@ -110,17 +114,20 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
         # print(n)
 
         # if it is not older than TIME_INTERVAL
-        if n.get('last_modified_timestamp') >= (datetime.now().timestamp() - TIME_INTERVAL):
-            cumulative_cpu += n.get('current_cpu_percent')
-            cumulative_cpu_cores += n.get('current_cpu_cores_free')
-            cumulative_memory += n.get('current_memory_percent')
-            cumulative_memory_in_mb += n.get('current_free_memory_in_MB')
-            number_of_active_nodes += 1
-            for t in n.get('node_info').get('technology'):
-               technology.append(t) if t not in technology else technology
+        try:
+            if n.get('last_modified_timestamp') >= (datetime.now().timestamp() - TIME_INTERVAL):
+                cumulative_cpu += n.get('current_cpu_percent')
+                cumulative_cpu_cores += n.get('current_cpu_cores_free')
+                cumulative_memory += n.get('current_memory_percent')
+                cumulative_memory_in_mb += n.get('current_free_memory_in_MB')
+                number_of_active_nodes += 1
+                for t in n.get('node_info').get('technology'):
+                    technology.append(t) if t not in technology else technology
 
-        else:
-            print('Node {0} is inactive.'.format(n.get('_id')))
+            else:
+                print('Node {0} is inactive.'.format(n.get('_id')))
+        except Exception as e:
+            print("Problem during the aggregation of the data, skipping the node: ", str(n), " - because - ", str(e))
 
     jobs = mongo_find_all_jobs()
     for j in jobs:
@@ -136,7 +143,13 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
 
 def mongo_upsert_job(job):
     print('insert/upsert requested job')
-    return mongo_jobs.db.jobs.find_one_and_update(job, {'$set': job}, upsert=True, return_document=True)  # if job does not exist, insert it
+    job['system_job_id'] = job['_id']
+    del job['_id']
+    ## REMOVE ENTRY FROM DB
+    result = mongo_jobs.db.jobs.find_one_and_update({'system_job_id': job['system_job_id']}, {'$set': job}, upsert=True,
+                                                    return_document=True)  # if job does not exist, insert it
+    result['_id'] = str(result['_id'])
+    return result
 
 
 def mongo_find_job_by_system_id(system_job_id):
@@ -146,12 +159,56 @@ def mongo_find_job_by_system_id(system_job_id):
     return job_obj
 
 
+def mongo_find_job_by_id(id):
+    print('Find job by Id')
+    return mongo_jobs.db.jobs.find_one({'_id': ObjectId(id)})
+
+
 def mongo_find_all_jobs():
     global mongo_jobs
     # list (= going into RAM) okey for small result sets (not clean for large data sets!)
     return list(mongo_jobs.db.jobs.find({}, {'_id': 0, 'system_job_id': 1, 'status': 1}))
 
 
-def mongo_update_job_status(job_id, status):
+def mongo_find_job_by_name(job_name):
     global mongo_jobs
-    mongo_jobs.db.jobs.find_one_and_update({'_id': ObjectId(job_id)}, {'$set': {'status': status}})
+    return mongo_jobs.db.jobs.find_one({'job_name': job_name})
+
+
+def mongo_find_job_by_ip(ip):
+    global mongo_jobs
+    # Search by Service Ip
+    job = mongo_jobs.db.jobs.find_one({'service_ip_list.Address': ip})
+    if job is None:
+        # Search by instance ip
+        job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip': ip})
+    return job
+
+
+def mongo_update_job_status(job_id, status, node):
+    global mongo_jobs
+    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
+    instance_list = job['instance_list']
+    for instance in instance_list:
+        if instance.get('host_ip') == '':
+            instance['host_ip'] = node['node_address']
+            port = node['node_info'].get('node_port')
+            if port is None:
+                port = 50011
+            instance['host_port'] = port
+            instance['worker_id'] = node.get('_id')
+            break
+    return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
+                                         {'$set': {'status': status, 'instance_list': instance_list}})
+
+
+def mongo_update_job_deployed(job_id, status, ns_ip, node_id):
+    global mongo_jobs
+    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
+    instance_list = job['instance_list']
+    for instance in instance_list:
+        if str(instance.get('worker_id')) == str(node_id) and instance.get('namespace_ip') is '':
+            instance['namespace_ip'] = ns_ip
+            break
+    return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
+                                         {'$set': {'status': status, 'instance_list': instance_list}})

@@ -24,7 +24,7 @@ for root in $rootlist; do
         hostname=$root
         hostname_to_ip
         echo "Executing docker-compose up on node: <$hostname,$ip>"
-	ssh $1@$ip "cd EdgeIO_deployment/root/root_orchestrator/; docker-compose up --build -d"
+	ssh -oStrictHostKeyChecking=no $1@$ip "cd EdgeIO_deployment/root/root_orchestrator/; docker-compose up --build -d"
 	rootip=$ip
 done
 
@@ -46,7 +46,7 @@ for cluster in $clusterlist; do
         hostname=$cluster
         hostname_to_ip
         echo "Executing docker-compose up on cluster$clusternum node: <$hostname,$ip>"
-	ssh $1@$ip "cd EdgeIO_deployment/cluster$clusternum/cluster_orchestrator/ && export SYSTEM_MANAGER_URL='$rootip' && export CLUSTER_NAME='cluster$clusternum' && export CLUSTER_LOCATION='cluster$clusternum' && docker-compose up --build -d"
+	ssh -oStrictHostKeyChecking=no $1@$ip "cd EdgeIO_deployment/cluster$clusternum/cluster_orchestrator/ && export SYSTEM_MANAGER_URL='$rootip' && export CLUSTER_NAME='cluster$clusternum' && export CLUSTER_LOCATION='cluster$clusternum' && docker-compose up --build -d"
 	clusternum=$((clusternum+1))
 	echo "Next cluster $clusternum"
 done
@@ -73,7 +73,7 @@ for cluster in $clusterlist; do
 		hostname=$host
 		hostname_to_ip
 		echo "Running: <$hostname,$ip>"
-		ssh $1@$ip "cd EdgeIO_deployment/worker$workernum/node_engine/; export CLUSTER_MANAGER_IP='$clusterip'; sh -c 'nohup ./start-up.sh amd64 > logs.log 2>&1 &'"
+		ssh -oStrictHostKeyChecking=no $1@$ip "cd EdgeIO_deployment/worker$workernum/node_engine/; export CLUSTER_MANAGER_IP='$clusterip'; sh -c 'nohup ./start-up.sh amd64 > logs.log 2>&1 &'"
 		woerkernum=$((workernum+1))
 	done
 done

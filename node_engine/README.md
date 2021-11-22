@@ -21,8 +21,10 @@ The Node Engine software can run on any hardware with an operating system. Curre
 
 ## Start the Node Engine
 
-The Node Engine can be started with the startup script: `./start-up.sh`.
+The Node Engine can be started with the startup script: `./start-up.sh <architecture>`.
 A virtualenv will be started and the component will start up.
+The architecture currently supported are: amd64 or arm-7
+The superuser password will be asked
 
 Use `nohup` if you want Node-Engine to run a SSH server after logged out.
 
@@ -70,6 +72,20 @@ The message format is not used/ implemented currently. Feel free to edit/extend 
   - GPUtil
   - tabulate
   - requests
+- Golang 1.13 
+  - github.com/ghodss/yaml 
+  -	github.com/google/gopacket 
+  -	github.com/gorilla/mux 
+  -	github.com/milosgajdos/tenus 
+  -	github.com/songgao/water 
+  -	github.com/tkanos/gonfig 
+  -	gopkg.in/yaml.v2 
+
+## NetManager
+
+The net manager is the component that carries out the network configuration and create the overlay across all the instances. 
+This component install a proprietary bridge in the system and place the proxy-bridge process as a TUN device. It maintains internally a se of caches that are 
+used to resolve the network call of the containers. More info are available in `NetManager/docs`. 
 
 ## Misc
 
