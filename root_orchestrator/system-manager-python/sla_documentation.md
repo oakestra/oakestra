@@ -1,16 +1,18 @@
-# Documentation of EdgeIO-SLA (v0.3.0)
+# Documentation of EdgeIO-SLA (v0.3.1)
 Example under *sla.json*
 
-- **api_version** : Version of SLA API; v0.3.0 as of now
+- **api_version** : Version of SLA API; v0.3.1 as of now
 - **customerID** : ID of the customer
 - **args** : *see "On expandability"*
 - **applications** : List of applications run by the customer
   - **applicationID** : ID of the application described,
   - **application_name** : Name of the application
+  - **application_namespace** : (Optional) : Namespace of the application
   - **application_desc** : Description of the application
   - **microservices** : List of microservices this application needs
     - **microserviceID** : ID of a microservice; automatically generated (UUID)
-    - **microservice_name** : Optional - User may specify a name to be used in the address of the microservice (if it is still available)
+    - **microservice_name** : Name of the microservice; used for addressing
+    - **microservice_namespace** : Optional - User may specify a name to be used in the address of the microservice (if it is still available)
     - **virtualization** : type of virtualization chosen for the application, may be one of ["container", "unikernel", "vm"]
     - **memory** : Needed memory in MB,
     - **vcpus** : Needed vCPUs, default 1

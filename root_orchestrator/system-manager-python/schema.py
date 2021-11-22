@@ -77,6 +77,7 @@ sla_schema = {
                 "properties": {
                     "applicationID": {"type": "integer"},
                     "application_name": {"type": "string"},
+                    "application_namespace": {"type": "string"},
                     "application_desc": {"type": "string"},
                     "microservices": {
                         "type": "array",
@@ -85,6 +86,7 @@ sla_schema = {
                             "properties": {
                                 "microserviceID": {"type": "integer"},
                                 "microservice_name": {"type": "string"},
+                                "microservice_namespace": {"type": "string"},
                                 "virtualization": {"type": "string"},
                                 "memory": {"type": "integer"},
                                 "vcpus": {"type": "integer"},
