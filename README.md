@@ -1,3 +1,6 @@
+
+<center> ![](fig/edgeio-logo.png) </center>
+
 # EdgeIO Infrastructure Getting Started
 
 ## Root Orchestrator setup
