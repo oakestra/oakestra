@@ -1,7 +1,7 @@
 
-<center> 
-  ![](fig/edgeio-logo.png) 
-</center>
+<p align="center">
+  <img src="fig/edgeio-logo.png)">
+</p>
 
 # EdgeIO Infrastructure Getting Started
 
