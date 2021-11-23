@@ -8,15 +8,20 @@ def service_resolution(service_name):
     if no result found the query is propagated to the System Manager
     """
     # resolve it locally
-    instances = mongo_find_job_by_name(service_name)
-    # if no results, ask the root orc
-    if instances is None:
-        instances = cloud_table_query_service_name(service_name)
-        instances = instances['instance_list']
-    else:
-        instances = instances['instance_list']
+    jobs = mongo_find_job_by_name(service_name)
+    instances = None
+    siplist = None
 
-    return instances
+    # if no results, ask the root orc
+    if jobs is None:
+        query_result = cloud_table_query_service_name(service_name)
+        instances = query_result['instance_list']
+        siplist = query_result['service_ip_list']
+    else:
+        instances = jobs['instance_list']
+        siplist = jobs['service_ip_list']
+
+    return instances,siplist
 
 
 def service_resolution_ip(ip_string):
