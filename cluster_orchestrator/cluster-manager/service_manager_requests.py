@@ -1,11 +1,6 @@
 import requests
-import threading
 import os
-import json
-import traceback
 
-from mongodb_client import mongo_aggregate_node_information
-from my_prometheus_client import prometheus_set_metrics
 
 SERVICE_MANAGER_ADDR = 'http://' + os.environ.get('CLUSTER_SERVICE_MANAGER_ADDR') + ':' + os.environ.get(
     'CLUSTER_SERVICE_MANAGER_PORT')
