@@ -40,6 +40,30 @@ def mongo_find_node_by_id_and_update_subnetwork(node_id, addr):
     return 1
 
 
+# ........... Job Operations ............#
+#########################################
+
+def mongo_insert_job(job_name, job, sip_list, instances):
+    global mongo_jobs
+    app.logger.info("MONGODB - insert job...")
+    job_content = {
+        'system_job_id': job.get('system_job_id'),
+        'job_name': job_name,
+        'service_ip_list': sip_list,
+        'instance_list': instances,
+    }
+    # job insertion
+    jobs = mongo_jobs.db.jobs
+    new_job = jobs.find_one_and_update(
+        {'job_name': job_name},
+        {'$set': job_content},
+        upsert=True,
+        return_document=True
+    )
+    app.logger.info("MONGODB - job {} inserted".format(str(new_job.get('_id'))))
+    return str(new_job.get('_id'))
+
+
 def mongo_find_job_by_name(job_name):
     global mongo_jobs
     return mongo_jobs.db.jobs.find_one({'job_name': job_name})
@@ -54,6 +78,7 @@ def mongo_find_job_by_ip(ip):
         job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip': ip})
     return job
 
+
 def mongo_update_job_deployed(job_id, status, ns_ip, node_id):
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
@@ -65,9 +90,11 @@ def mongo_update_job_deployed(job_id, status, ns_ip, node_id):
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
                                          {'$set': {'status': status, 'instance_list': instance_list}})
 
+
 def mongo_find_job_by_id(id):
     print('Find job by Id')
     return mongo_jobs.db.jobs.find_one({'_id': ObjectId(id)})
+
 
 def mongo_update_job_status(job_id, status, node):
     global mongo_jobs

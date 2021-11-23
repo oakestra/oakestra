@@ -127,7 +127,8 @@ def table_query_resolution_by_jobname(service_name):
     """
     service_name = service_name.replace("_", ".")
     app.logger.info("Incoming Request /api/job/" + str(service_name) + "/instances")
-    return {'instance_list': service_resolution(service_name)}
+    instance,siplist = service_resolution(service_name)
+    return {'instance_list': instance, 'service_ip_list':siplist}
 
 
 @app.route('/api/net/service/ip/<service_ip>/instances', methods=['GET'])

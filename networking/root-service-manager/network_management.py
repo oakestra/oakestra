@@ -118,7 +118,7 @@ def clear_subnetwork_ip(addr):
 def service_resolution(name):
     job = mongodb_client.mongo_find_job_by_name(name)
     if job is not None:
-        return job['instance_list']
+        return job['instance_list'],job['service_ip_list']
     return []
 
 
