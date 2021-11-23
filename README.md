@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="edgeIO/edgeio/fig/edgeio-logo.png)">
+  <img src="https://github.com/edgeIO/edgeio/blob/main/fig/edgeio-logo.png">
 </p>
 
 # EdgeIO Infrastructure Getting Started
