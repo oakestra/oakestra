@@ -2,12 +2,14 @@ import requests
 import os
 import json
 
-ROOT_SERVICE_MANAGER_ADDR = 'http://' + os.environ.get('ROOT_SERVICE_MANAGER_URL') + ':' + os.environ.get('ROOT_SERVICE_MANAGER_PORT')
+ROOT_SERVICE_MANAGER_ADDR = 'http://' + os.environ.get('ROOT_SERVICE_MANAGER_URL') + ':' + os.environ.get(
+    'ROOT_SERVICE_MANAGER_PORT')
+
 
 def root_service_manager_get_subnet():
     print('Asking the System Manager for a subnet')
     try:
-        response = requests.get(ROOT_SERVICE_MANAGER_ADDR + '/api/net/subnet/' )
+        response = requests.get(ROOT_SERVICE_MANAGER_ADDR + '/api/net/subnet/')
         addr = json.loads(response.text).get('subnet_addr')
         if len(addr) > 0:
             return addr

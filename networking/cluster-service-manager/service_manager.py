@@ -2,6 +2,7 @@ import os
 from flask import Flask, request
 import eventlet
 
+from requests.mqtt_requests import mqtt_init
 from tablequery.interests import register_interest_sname
 from tablequery.resolution import service_resolution, service_resolution_ip
 from requests.mongodb_requests import mongo_init, mongo_find_node_by_id_and_update_subnetwork, \
@@ -16,21 +17,7 @@ MY_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
 my_logger = configure_logging()
 app = Flask(__name__)
 mongo_init(app)
-
-
-# ............. Node network management Endpoints ............#
-# ............................................................#
-
-@app.route('/api/net/subnet/<node_id>', methods=['GET'])
-def table_query_resolution_by_ip(node_id):
-    """
-    Endpoint used to require a new node's subnetwork
-    """
-    app.logger.info("Incoming Request /api/node/ip/newsubnet/" + str(node_id))
-    addr = root_service_manager_get_subnet()
-    mongo_find_node_by_id_and_update_subnetwork(node_id, addr)
-    return {'addr': addr}
-
+mqtt_init(app)
 
 # TODO: node status report
 
@@ -66,28 +53,8 @@ def deploy_task_status():
     return 500
 
 
-@app.route('/api/net/service/net_deploy_status', methods=['POST'])
-def deploy_task_status():
-    """
-       Update job status
-       receives {
-                   job_id: string
-                   status: string
-                   nsip: string
-                   node_id: string
-                }
-    """
-
-    app.logger.info('Incoming Request /api/job/deployment/status')
-    req_json = request.json
-    app.logger.debug(req_json)
-    deployment_status_report(req_json["job_id"], req_json["status"], req_json["nsip"], req_json["node_id"])
-
-    return "ok"
-
-
 # ................. Table Query Endpoints ...................#
-# ...........................................................#
+# ..................SOON TO BE DEPRECATED....................#
 
 @app.route('/api/net/job/<job_name>/instances', methods=['GET'])
 def table_query_resolution_by_jobname(job_name):
