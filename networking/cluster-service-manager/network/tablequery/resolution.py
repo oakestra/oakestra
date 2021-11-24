@@ -1,5 +1,5 @@
-from requests.mongodb_requests import mongo_find_job_by_ip, mongo_find_job_by_name
-from requests.root_service_manager_requests import cloud_table_query_ip, cloud_table_query_service_name
+from interfaces.mongodb_requests import mongo_find_job_by_ip, mongo_find_job_by_name
+from interfaces.root_service_manager_requests import cloud_table_query_ip, cloud_table_query_service_name
 
 
 def service_resolution(service_name):

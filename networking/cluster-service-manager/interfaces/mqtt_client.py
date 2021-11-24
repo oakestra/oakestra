@@ -1,11 +1,6 @@
-import os
 import re
-import json
 from network.deployment import *
-from datetime import datetime
 from flask_mqtt import Mqtt
-from tablequery.resolution import *
-from tablequery.interests import *
 
 mqtt = None
 app = None

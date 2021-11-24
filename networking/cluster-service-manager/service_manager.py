@@ -2,15 +2,11 @@ import os
 from flask import Flask, request
 import eventlet
 
-from requests.mqtt_requests import mqtt_init
-from tablequery.interests import register_interest_sname
-from tablequery.resolution import service_resolution, service_resolution_ip
-from requests.mongodb_requests import mongo_init, mongo_find_node_by_id_and_update_subnetwork, \
-    mongo_update_job_deployed, \
-    mongo_find_job_by_id, mongo_insert_job
+from interfaces.mqtt_client import mqtt_init
+from network.tablequery.interests import register_interest_sname
+from network.tablequery.resolution import service_resolution, service_resolution_ip
+from interfaces.mongodb_requests import mongo_init, mongo_insert_job
 from net_logging import configure_logging
-from requests.root_service_manager_requests import root_service_manager_get_subnet, \
-    system_manager_notify_deployment_status
 
 MY_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
 
@@ -18,8 +14,6 @@ my_logger = configure_logging()
 app = Flask(__name__)
 mongo_init(app)
 mqtt_init(app)
-
-# TODO: node status report
 
 # ............. Deployment Endpoints ............#
 # ...........................................................#

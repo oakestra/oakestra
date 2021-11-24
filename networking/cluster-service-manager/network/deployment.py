@@ -1,5 +1,5 @@
-from requests.mongodb_requests import *
-from requests.root_service_manager_requests import *
+from interfaces.mongodb_requests import *
+from interfaces.root_service_manager_requests import *
 
 def deployment_status_report(job_id,status,NsIp,node_id):
     # Update mongo job

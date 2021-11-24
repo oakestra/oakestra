@@ -1,4 +1,4 @@
-import requests
+import interfaces
 import os
 import json
 
@@ -9,13 +9,13 @@ ROOT_SERVICE_MANAGER_ADDR = 'http://' + os.environ.get('ROOT_SERVICE_MANAGER_URL
 def root_service_manager_get_subnet():
     print('Asking the System Manager for a subnet')
     try:
-        response = requests.get(ROOT_SERVICE_MANAGER_ADDR + '/api/net/subnet/')
+        response = interfaces.get(ROOT_SERVICE_MANAGER_ADDR + '/api/net/subnet/')
         addr = json.loads(response.text).get('subnet_addr')
         if len(addr) > 0:
             return addr
         else:
-            raise requests.exceptions.RequestException('No address found')
-    except requests.exceptions.RequestException as e:
+            raise interfaces.exceptions.RequestException('No address found')
+    except interfaces.exceptions.RequestException as e:
         print('Calling System Manager /api/information not successful.')
 
 
@@ -36,8 +36,8 @@ def system_manager_notify_deployment_status(job, worker_id):
             }
             data['instances'].append(elem)
     try:
-        requests.post(ROOT_SERVICE_MANAGER_ADDR + '/api/result/cluster_deploy', json=data)
-    except requests.exceptions.RequestException as e:
+        interfaces.post(ROOT_SERVICE_MANAGER_ADDR + '/api/result/cluster_deploy', json=data)
+    except interfaces.exceptions.RequestException as e:
         print('Calling System Manager /api/result/cluster_deploy not successful.')
 
 
@@ -47,8 +47,8 @@ def cloud_table_query_ip(ip):
     request_addr = ROOT_SERVICE_MANAGER_ADDR + '/api/job/ip/' + str(job_ip) + '/instances'
     print(request_addr)
     try:
-        return requests.get(request_addr).json()
-    except requests.exceptions.RequestException as e:
+        return interfaces.get(request_addr).json()
+    except interfaces.exceptions.RequestException as e:
         print('Calling System Manager /api/job/ip/../instances not successful.')
 
 
@@ -58,6 +58,6 @@ def cloud_table_query_service_name(name):
     request_addr = ROOT_SERVICE_MANAGER_ADDR + '/api/job/' + str(job_name) + '/instances'
     print(request_addr)
     try:
-        return requests.get(request_addr).json()
-    except requests.exceptions.RequestException as e:
+        return interfaces.get(request_addr).json()
+    except interfaces.exceptions.RequestException as e:
         print('Calling System Manager /api/job/../instances not successful.')
