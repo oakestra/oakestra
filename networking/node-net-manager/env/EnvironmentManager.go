@@ -1,6 +1,7 @@
 package env
 
 import (
+	"NetManager/mqtt"
 	"errors"
 	"fmt"
 	"github.com/milosgajdos/tenus"
@@ -159,12 +160,15 @@ func NewStatic(proxyname string) Environment {
 // Creates a new environment using the default configuration and asking the cluster for a new subnetwork
 func NewEnvironmentClusterConfigured(proxyname string) Environment {
 	log.Println("Asking the cluster for a new subnetwork")
-	//TODO
+	subnetwork, err := mqtt.RequestSubnetworkMqttBlocking()
+	if err != nil {
+		log.Fatal("Invalid subnetwork received. Can't proceed.")
+	}
 
 	log.Println("Creating with default config")
 	config := Configuration{
 		HostBridgeName:             "goProxyBridge",
-		HostBridgeIP:               nextIP(net.ParseIP(network), 1).String(),
+		HostBridgeIP:               nextIP(net.ParseIP(subnetwork), 1).String(),
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
