@@ -52,13 +52,13 @@ def net_manager_docker_undeploy(containerid):
         print('Calling NetManager not successful.')
 
 
-def net_manager_register(subnetwork):
+def net_manager_register(client_id):
     print('Initializing the NetManager')
-    print(subnetwork)
+    print(client_id)
     request_address = NET_MANAGER_ADDR + '/register'
 
     request = {
-        'subnetwork': subnetwork
+        'subnetclient_idwork': client_id
     }
     print(request)
 
