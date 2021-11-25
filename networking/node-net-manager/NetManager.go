@@ -2,6 +2,7 @@ package main
 
 import (
 	"NetManager/env"
+	"NetManager/mqtt"
 	"NetManager/proxy"
 	"encoding/json"
 	"fmt"
@@ -37,7 +38,7 @@ type undeployRequest struct {
 }
 
 type registerRequest struct {
-	Subnetwork string `json:"subnetwork"`
+	clientID string `json:"client_id"`
 }
 
 func handleRequests() {
@@ -196,12 +197,15 @@ func register(writer http.ResponseWriter, request *http.Request) {
 
 	log.Println(requestStruct)
 
+	//initialize mqtt connection to the broker
+	mqtt.InitMqtt(requestStruct.clientID)
+
 	//initialize the proxy tunnel
 	Proxy = proxy.New()
 	Proxy.Listen()
 
 	//initialize the Env Manager
-	Env = env.NewDefault(Proxy.HostTUNDeviceName, requestStruct.Subnetwork)
+	Env = env.NewEnvironmentClusterConfigured(Proxy.HostTUNDeviceName)
 	Proxy.SetEnvironment(&Env)
 
 	//set initialization flag

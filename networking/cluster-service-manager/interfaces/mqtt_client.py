@@ -1,5 +1,7 @@
 import re
 from network.deployment import *
+from network.tablequery.resolution import *
+from network.tablequery.interests import *
 from flask_mqtt import Mqtt
 
 mqtt = None
@@ -80,9 +82,9 @@ def _tablequery_handler(client_id, payload):
     instances = {}
 
     # resolve the query and register interest
-    if sip is not None:
+    if sip is not None or sip != "":
         sname, instances = service_resolution_ip(sip)
-    elif sname is not None:
+    elif sname is not None or sname != "":
         instances = service_resolution(sname)
 
     register_interest_sname(sname, client_id)

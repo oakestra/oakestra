@@ -1,50 +1,22 @@
 package env
 
 import (
-	"encoding/json"
-	"io/ioutil"
+	mqttifce "NetManager/mqtt"
 	"log"
 	"net"
-	"net/http"
 	"strings"
 )
 
-type tableQueryResponse struct {
-	AppName      string     `json:"app_name"`
-	InstanceList []instance `json:"instance_list"`
-}
-
-type instance struct {
-	InstanceNumber int    `json:"instance_number"`
-	NamespaceIp    string `json:"namespace_ip"`
-	HostIp         string `json:"host_ip"`
-	HostPort       int    `json:"host_port"`
-	ServiceIp      []sip  `json:"service_ip"`
-}
-
-type sip struct {
-	Type    string `json:"IpType"`
-	Address string `json:"Address"`
-}
-
+/*
+Asks the MQTT client for a table query and parses the result
+*/
 func tableQueryByIP(addr string, port string, ip string) ([]TableEntry, bool) {
 
-	queryAddress := "http://" + addr + ":" + port + "/api/job/ip/" + strings.Replace(ip, ".", "_", -1) + "/instances"
-	log.Println("[TABLE QUERY]", queryAddress, " ip:", ip)
+	log.Println("[MQTT TABLE QUERY] sip:", ip)
+	var mqttTablequery mqttifce.TablequeryMqttInterface = mqttifce.GetTableQueryRequestCacheInstance()
 
-	resp, err := http.Get(queryAddress)
+	responseStruct, err := mqttTablequery.TableQueryByIpRequestBlocking(ip)
 	if err != nil {
-		log.Println(err)
-		return nil, false
-	}
-
-	reqBody, _ := ioutil.ReadAll(resp.Body)
-	log.Println("[TABLE QUERY RESPONSE]", reqBody)
-
-	var responseStruct tableQueryResponse
-	err = json.Unmarshal(reqBody, &responseStruct)
-	if err != nil {
-		log.Println(err)
 		return nil, false
 	}
 

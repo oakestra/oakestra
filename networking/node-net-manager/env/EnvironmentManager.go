@@ -156,8 +156,11 @@ func NewStatic(proxyname string) Environment {
 	return NewCustom(proxyname, config)
 }
 
-// Creates a new environment using the default configuration
-func NewDefault(proxyname string, network string) Environment {
+// Creates a new environment using the default configuration and asking the cluster for a new subnetwork
+func NewEnvironmentClusterConfigured(proxyname string) Environment {
+	log.Println("Asking the cluster for a new subnetwork")
+	//TODO
+
 	log.Println("Creating with default config")
 	config := Configuration{
 		HostBridgeName:             "goProxyBridge",

@@ -3,6 +3,7 @@ module NetManager
 go 1.13
 
 require (
+	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/mux v1.8.0
