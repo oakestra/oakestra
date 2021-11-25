@@ -79,15 +79,15 @@ def mongo_find_job_by_ip(ip):
     return job
 
 
-def mongo_update_job_deployed(job_id, status, ns_ip, node_id):
+def mongo_update_job_deployed(job_name, status, ns_ip, node_id):
     global mongo_jobs
-    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
+    job = mongo_jobs.db.jobs.find_one({'job_name': job_name})
     instance_list = job['instance_list']
     for instance in instance_list:
         if str(instance.get('worker_id')) == str(node_id) and instance.get('namespace_ip') is '':
             instance['namespace_ip'] = ns_ip
             break
-    return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
+    return mongo_jobs.db.jobs.update_one({'job_name': job_name},
                                          {'$set': {'status': status, 'instance_list': instance_list}})
 
 

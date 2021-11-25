@@ -63,10 +63,10 @@ def mqtt_init(flask_app):
 
 
 def _deployment_handler(client_id, payload):
-    job_id = payload.get('job_id')
+    appname = payload.get('appname')
     status = payload.get('status')
     nsIp = payload.get('ns_ip')
-    deployment_status_report(job_id, status, nsIp, client_id)
+    deployment_status_report(appname, status, nsIp, client_id)
 
 
 def _undeployment_handler(client_id, payload):

@@ -159,6 +159,9 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 	}
 	Env.AddTableQueryEntry(entry)
 
+	//notify net-component
+	mqtt.NotifyDeploymentStatus(requestStruct.AppFullName,"DEPLOYED",addr.String())
+
 	//answer the caller
 	response := deployResponse{
 		ServiceName: requestStruct.AppFullName,
