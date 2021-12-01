@@ -15,7 +15,7 @@ services:
 
 # Cluster Manager
   root_service_manager:
-    image: root_service_manager
+    image: cluster_service_manager
     build: service-manager/
     container_name: cluster_service_manager
     hostname: cluster_service_manager
