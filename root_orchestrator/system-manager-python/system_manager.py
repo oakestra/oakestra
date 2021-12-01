@@ -6,9 +6,8 @@ from bson.objectid import ObjectId
 from markupsafe import escape
 import time
 import threading
+from net_plugin_requests import *
 from bson import json_util
-from service_manager import new_instance_ip, clear_instance_ip, service_resolution, new_subnetwork_addr, \
-    service_resolution_ip, new_job_rr_address
 from mongodb_client import *
 from yamlfile_parser import yaml_reader
 from cluster_requests import *
