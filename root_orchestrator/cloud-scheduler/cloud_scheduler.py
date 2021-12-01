@@ -49,8 +49,7 @@ def deploy_task():
     data = json.loads(request.json)
     job = data['job']
     job_id = data['system_job_id']
-    user_coords = data['user_coords']
-    start_calc.delay(job_id, job, user_coords)
+    start_calc.delay(job_id, job)
     return "ok"
 
 
@@ -82,10 +81,10 @@ def cluster_screening(arg):
 
 
 @celeryapp.task()
-def start_calc(job_id, job, user_coords):
+def start_calc(job_id, job):
     # i = celeryapp.control.inspect()
     # print(i)
-    scheduling_status, scheduling_result = calculate(job_id, job, user_coords)
+    scheduling_status, scheduling_result = calculate(job_id, job)
     print(scheduling_result)
     if scheduling_status == 'negative':
         mongo_update_job_status(job_id, scheduling_result)

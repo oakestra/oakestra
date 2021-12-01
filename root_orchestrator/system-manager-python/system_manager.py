@@ -14,17 +14,18 @@ from shapely.ops import nearest_points
 
 
 from mongodb_client import mongo_init, mongo_upsert_cluster, mongo_insert_job, mongo_find_cluster_by_id_and_incr_node, \
-    mongo_find_cluster_by_id_and_decr_node, mongo_get_job_status, mongo_update_job_status, mongo_update_cluster_information, \
+    mongo_find_cluster_by_id_and_decr_node, mongo_get_job_status, mongo_update_job_status, \
+    mongo_update_cluster_information, \
     mongo_find_cluster_by_id_and_set_number_of_nodes, mongo_find_cluster_of_job, mongo_find_job_by_id, \
-    mongo_find_cluster_by_location, mongo_get_all_jobs, mongo_get_all_clusters, mongo_find_all_active_clusters
+    mongo_find_cluster_by_location, mongo_get_all_jobs, mongo_get_all_clusters, mongo_find_all_active_clusters, \
+    mongo_update_job_status_and_instances, mongo_update_job_net_status
 from service_manager import new_instance_ip, clear_instance_ip, service_resolution, new_subnetwork_addr, \
     service_resolution_ip, new_job_rr_address
-from mongodb_client import *
 from yamlfile_parser import yaml_reader
 from cluster_requests import *
 from scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from sm_logging import configure_logging
-from geolocation.geolocation import query_geolocation_for_ip, user_in_cluster, build_geolite_dataframe
+from geolocation.geolocation import query_geolocation_for_ip, user_in_cluster
 
 my_logger = configure_logging()
 
@@ -61,58 +62,6 @@ def sample():
 def status():
     app.logger.info("Incoming Request /status")
     return "ok", 200
-
-
-@app.route('/geolocation/<ip>')
-def get_geolocation(ip):
-    app.logger.info(f"Incoming Request /geolocation/{ip}")
-    return query_geolocation_for_ip(ip)
-
-
-@app.route('/closest_clusters')
-def show_png():
-    # Draw figures
-    fig = Figure()
-    axis = fig.add_subplot(1, 1, 1)
-
-    clusters = mongo_find_all_active_clusters()
-    lat, long = query_geolocation_for_ip(request.remote_addr)
-    app.logger.info(f"Lat: {lat}, Long: {long}")
-    user = Point(float(lat), float(long))
-    axis.scatter(float(lat), float(long), color='black')
-    axis.annotate("user", (float(lat), float(long)))
-
-    containing_clusters = []
-    distances = []
-    for c in clusters:
-        cluster_name = c.get('cluster_name')
-        geo = shape(c.get('worker_groups'))
-        plot_shapely_object(axis, geo, cluster_name)
-        # If the user is located within the cluster add it to the list of clusters containing the user
-        if user_in_cluster(user, geo):
-            containing_clusters.append(cluster_name)
-        # Otherwise calculate shortest distance between user and cluster and add to list of distance
-        else:
-            p1, _ = nearest_points(geo, user)
-            user_cluster_dist = geopy.distance.distance((p1.x, p1.y), (user.x, user.y)).km
-            distances.append((cluster_name, user_cluster_dist))
-
-    axis.figure.savefig('/static/images/cluster.png')
-
-    return render_template("index.html", cluster_png='/static/images/cluster.png',
-                           containing_clusters=containing_clusters, distances=distances)
-
-
-def plot_shapely_object(axis, geo, cluster_name):
-    if isinstance(geo, Polygon):
-        axis.fill(*geo.exterior.xy, alpha=0.5, edgecolor='black')
-        axis.annotate(cluster_name, (geo.centroid.x, geo.centroid.y))
-    elif isinstance(geo, MultiPolygon):
-        for poly in geo:
-            axis.fill(*poly.exterior.xy, alpha=0.5, edgecolor='black')
-            axis.annotate(cluster_name, (poly.centroid.x, poly.centroid.y))
-
-
 
 
 # ......... Deployment Endpoints .......................#
@@ -231,8 +180,6 @@ def deploy_task():
             # Reading config file
             data = yaml_reader(file)
             app.logger.info(data)
-            user_coords = query_geolocation_for_ip(request.remote_addr)
-            app.logger.info(f"User location: {user_coords}")
             job_ids = {}
 
             applications = data.get('applications')
@@ -255,7 +202,7 @@ def deploy_task():
 
                     # Request scheduling
                     threading.Thread(group=None, target=scheduler_request_deploy,
-                                     args=(microservice, str(job_id), user_coords)).start()
+                                     args=(microservice, str(job_id))).start()
                     # Job status to scheduling REQUESTED
                     mongo_update_job_status(job_id, 'REQUESTED')
 
@@ -499,6 +446,4 @@ if __name__ == '__main__':
     # socketio.run(app, debug=True, host='0.0.0.0', port=MY_PORT)
     import eventlet
 
-    # Build GeoLite2 dataframe to avoid rebuilding it for every user request
-    build_geolite_dataframe()
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)

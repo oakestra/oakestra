@@ -5,18 +5,34 @@ import geopy.distance
 from shapely.geometry import Point, Polygon, MultiPolygon, shape
 from shapely.ops import nearest_points
 
-def calculate(job_id, job, deployment_request_coords):
+# TODO: Temporary area mapping until we know how we select area in SLA
+MUNICH = Polygon([[48.24819, 11.50406], [48.22807, 11.63521], [48.18093, 11.69083], [48.1369, 11.72242],
+                  [48.07689, 11.68534], [48.06221, 11.50818], [48.13008, 11.38871], [48.15757, 11.36124],
+                  [48.20107, 11.39077]])
+GARCHING = Polygon([[48.26122, 11.59742], [48.27013, 11.68445], [48.21720, 11.65063], [48.23013, 11.59862]])
+GERMANY = Polygon([[53.69039499952727, 7.19896078851138],[54.83252457729241, 9.022691264644848],[54.258998141984534, 13.17552331270781],
+                   [51.13131284515075, 14.625718631079001], [50.29656693243139, 12.120835808437851], [48.69842804429054, 13.768785033859663],
+                   [47.613790266506015, 12.208726433793686], [47.732154490129666, 7.638413915290528], [48.973220613985035, 8.209702980103422],
+                   [49.5040219286023, 6.320054534953079]])
+AREAS = {
+    "munich": MUNICH,
+    "garching": GARCHING,
+    "germany": GERMANY # Used for testing different latency measures from requests within geremany
+}
+
+def calculate(job_id, job):
     print('calculating...')
     print(job)
+    constraints = job.get('constraints')
     if job.get('cluster_location'):
         return location_based_scheduling(job)  # tuple of (negative|positive, cluster|negative_description)
     else:
-        # TODO: clarify if it even makes sense to filter out clusters that are not close to location of request. Wouldn't
-        #  it make more sense that we check if any constraints are speciefied and then filter out clusters that do not have
-        #  nodes in the specified locations?
-        #  Filter clusters based on location of the worker nodes belonging to the cluster
-        closest_clusters = filter_clusters_based_on_worker_locations(deployment_request_coords)
-        return greedy_load_balanced_algorithm(job=job, closest_clusters=closest_clusters)
+        if len(constraints) >= 1:
+            # Filter clusters that are not close to area specified in SLA constriants
+            clusters = filter_clusters_based_on_worker_locations(constraints)
+        else:
+            clusters = mongo_find_all_active_clusters()
+        return greedy_load_balanced_algorithm(job=job, filtered_clusters=clusters)
 
 
 def location_based_scheduling(job):
@@ -68,7 +84,7 @@ def first_fit_algorithm(job):
     return 'negative', 'NoActiveClusterWithCapacity'
 
 
-def greedy_load_balanced_algorithm(job, closest_clusters):
+def greedy_load_balanced_algorithm(job, filtered_clusters):
     """Which of the clusters have the most capacity for a given job"""
 
     # job_req = job.get('requirements')
@@ -76,9 +92,7 @@ def greedy_load_balanced_algorithm(job, closest_clusters):
 
     qualified_clusters = []
 
-    for cluster_name, cluster_dist_dict in closest_clusters.items():
-        print(cluster_name)
-        cluster = cluster_dist_dict['cluster']
+    for cluster in filtered_clusters:
         available_cpu = float(cluster.get('total_cpu_cores'))
         available_memory = float(cluster.get('memory_in_mb'))
 
@@ -116,33 +130,54 @@ def same_cluster_replication(job_obj, cluster_obj, replicas):
     cluster_memory_available = cluster_obj.get('memory_in_mb')
 
 
-def filter_clusters_based_on_worker_locations(user_coords):
+def filter_clusters_based_on_worker_locations(constraints):
     active_clusters = mongo_find_all_active_clusters()
-    lat = user_coords['lat']
-    long = user_coords['long']
-    user = Point(float(lat), float(long))
-
-    cluster_user_dists = {}
-    for c in active_clusters:
-        cluster_name = c.get('cluster_name')
-        geo = shape(c.get('worker_groups'))
-        # If the developer is located within the cluster add it to list of clusters containing the user
-        if user_in_cluster(user, geo):
-            cluster_user_dists[cluster_name] = {'cluster': c, 'dist': -1}
-        # Otherwise calculate shortest distance between user and cluster and add the distance to the list
+    constraint_locations = {}
+    for constraint in constraints:
+        constraint_type = constraint["type"]
+        if constraint_type == "geo":
+            lat, long = constraint["location"].split(",")
+            loc = Point(float(lat), float(long))
+            threshold = constraint["threshold"]
+            area = loc.buffer(threshold)
+            constraint_locations.setdefault("geo", []).append(area)
+        elif constraint_type == "latency":
+            area = constraint["area"]
+            if area in AREAS:
+                constraint_locations.setdefault("latency", []).append(AREAS[area])
+            else:
+                raise f"Area not supported: {area}"
         else:
-            p1, _ = nearest_points(geo, user)
-            user_cluster_dist = geopy.distance.distance((p1.x, p1.y), (user.x, user.y)).km
-            cluster_user_dists[cluster_name] = {'cluster': c, 'dist': user_cluster_dist}
+            raise f"Unsupported latency type: {constraint_type}"
 
-    return dict(sorted(cluster_user_dists.items(), key=lambda item: item[1]['dist']))
+    filtered_clusters = []
+    for c in active_clusters:
+        print(f"Cluster: {c}")
+        feasible = True
+        worker_area = shape(c.get("worker_groups"))
 
-# TODO: check if also needed in system manager
-def user_in_cluster(user, cluster):
+        # 1. Filter based on "geo" constraint, i.e., do not consider clusters that do not have nodes in every area
+        if "geo" in constraint_locations:
+            for area in constraint_locations["geo"]:
+                # If the cluster does not intersects with an constraint area continue with next cluster
+                if not cluster_intersects_area(worker_area, area):
+                    unfeasible = True
+                    break
+        # 2. Filter based on "latency" constraint
+        elif "latency" in constraint_locations:
+            # TODO: How close should the cluster be to the specified area?
+            pass
+        if feasible:
+            filtered_clusters.append(c)
+
+    return filtered_clusters
+
+
+def cluster_intersects_area(cluster, area):
     """
     Checks whether the 'user' is located within the cluster or its boundaries. Since shapely is coordinate-agnostic it
     will handle geographic coordinates expressed in latitudes and longitudes exactly the same way as coordinates on a
     Cartesian plane. But on a sphere the behavior is different and angles are not constant along a geodesic.
     For that reason we do a small distance correction here.
     """
-    return True if cluster.intersects(user) or user.within(cluster) or cluster.distance(user) < 1e-5 else False
+    return cluster.intersects(area) or cluster.distance(area) < 1e-5
