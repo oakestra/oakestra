@@ -1,13 +1,18 @@
 import os
+import random
 import time
+import numpy as np
+import requests
 from flask import Flask, request
 from celery import Celery
-from celery.schedules import crontab
-
-from mongodb_client import mongo_init, mongo_set_job_as_scheduled
+import json
+from mongodb_client import mongo_init, mongo_set_job_as_scheduled, mongo_find_all_nodes
 from manager_requests import manager_request
 from calculation import calculate
 from cs_logging import configure_logging
+from NetworkCoordinateSystem.network_measurements import parallel_ping
+from NetworkCoordinateSystem.vivaldi_coordinate import VivaldiCoordinate
+from NetworkCoordinateSystem.multilateration import multilateration
 
 WORKER_SCREENING_INTERVAL = 30
 
@@ -61,15 +66,53 @@ def replicate_task():
     start_calc_replicate.delay(job)
     return "ok"
 
-@app.route('/api/calculate/vivaldi/replicate', methods=['POST'])
-def vialdi_replicate_task():
-    app.logger.info('Request /api/caluclate/vivaldi/replicate')
+# TODO: naming?
+@app.route("/api/calculate/alarm", methods=["POST"])
+def handle_sla_alarm():
+    data = request.json
+    topic = data['topic']
+    payload = json.loads(data['payload'])
+    client_id = topic.split('/')[1]
 
-    job = request.json
-    app.logger.info(job)
-    start_calc_vivaldi_replicate.delay(job)
-    return "ok"
+    alarm_type = payload.get("alarm_type")
+    if alarm_type == "memory":
+        handle_memory_alarm()
+    elif alarm_type == "cpu":
+        handle_cpu_alarm()
+    elif alarm_type == "geo":
+        handle_geo_alarm()
+    elif alarm_type == "latency":
+        handle_latency_alarm.delay(client_id, payload)
+    else:
+        app.logger.info(f"Unknown SLA alarm type was triggered: {alarm_type}")
 
+    return "ok", 204
+
+
+def handle_memory_alarm():
+    pass
+
+
+def handle_cpu_alarm():
+    pass
+
+
+def handle_geo_alarm():
+    pass
+
+@celeryapp.task
+def handle_latency_alarm(client_id, payload):
+    job = payload["job"]
+    ip_rtt_stats = payload["ip_rtt_stats"]
+    # Deploy service to new target
+    scheduling_status, scheduling_result = calculate(job, is_sla_violation=True, source_client_id=client_id, worker_ip_rtt_stats=ip_rtt_stats)
+    # Undeploy service on violating node
+    if scheduling_status == 'negative':
+        app.logger.info('No active node found to schedule this job.')
+    else:
+        app.logger.info('Chosen Node: {0}'.format(scheduling_result))
+        manager_request(app, scheduling_result, job)
+        # mongo_set_job_as_scheduled(job_id=job.get('_id'), node_id=scheduling_result.get('_id')) # DONE IN CLUSTER-MANAGER
 
 @celeryapp.task()
 def start_calc_deploy(job):
@@ -98,9 +141,13 @@ def start_calc_replicate(job):
         app.logger.info(f'Send scheduling result for node {scheduling_result}')
         manager_request(app, scheduling_result, job)
 
-@celeryapp.task()
-def start_calc_vivaldi_replicate(job):
-    app.logger.info("Received celery task")
+
+@celeryapp.task
+def start_calc_migrate(job):
+    print(job)
+    # Deploy service to new target
+    scheduling_status, scheduling_result = calculate(job)
+    # Undeploy service on violating node
 
 
 @celeryapp.on_after_configure.connect

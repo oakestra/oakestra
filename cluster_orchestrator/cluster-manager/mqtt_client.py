@@ -3,18 +3,13 @@ import random
 import re
 import json
 
-import requests
-import socketio
-from datetime import datetime
-
 from flask_mqtt import Mqtt
 
-from NetworkCoordinateSystem.network_measurements import ping, parallel_ping
+from NetworkCoordinateSystem.network_measurements import ping
 from NetworkCoordinateSystem.vivaldi_coordinate import VivaldiCoordinate
-from NetworkCoordinateSystem.multilateration import multilateration
 from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem, mongo_update_job_deployed, mongo_find_job_by_id, find_all_nodes
 from system_manager_requests import system_manager_notify_deployment_status
-from cluster_scheduler_requests import scheduler_request_replicate
+from cluster_scheduler_requests import scheduler_request_replicate, scheduler_request_alarm
 
 mqtt = None
 app = None
@@ -57,6 +52,7 @@ def mqtt_init(flask_app):
         mqtt.subscribe('nodes/+/information')
         mqtt.subscribe('nodes/+/job')
         mqtt.subscribe('nodes/+/alarm')
+        mqtt.subscribe('nodes/+/test')
 
     @mqtt.on_log()
     def handle_logging(client, userdata, level, buf):
@@ -78,10 +74,14 @@ def mqtt_init(flask_app):
         re_nodes_information_topic = re.search("^nodes/.*/information$", topic)
         re_job_deployment_topic = re.search("^nodes/.*/job$", topic)
         re_nodes_alarm_topic = re.search("^nodes/.*/alarm$", topic)
+        re_nodes_test_topic = re.search("^nodes/.*/test$", topic)
 
         # if topic starts with nodes and ends with information
         if re_nodes_information_topic is not None:
             handle_node_information_topic(data)
+        # if topic starts with nodes and ends with information
+        if re_nodes_test_topic is not None:
+            handle_node_test_topic(data)
         # if topic starts with nodes and ends with job
         if re_job_deployment_topic is not None:
             handle_job_deployment_topic(data)
@@ -89,9 +89,20 @@ def mqtt_init(flask_app):
         if re_nodes_alarm_topic is not None:
             handle_nodes_alarm_topic(data)
 
-def mqtt_publish_edge_deploy(worker_id, job, constraints):
+def handle_node_test_topic(data):
+    topic = data['topic']
+    # print(topic)
+    topic_split = topic.split('/')
+    client_id = topic_split[1]
+    payload = json.loads(data['payload'])
+    # print(payload)
+    test = payload.get('test')
+    app.logger.info(f"Received {test}")
+
+
+def mqtt_publish_edge_deploy(worker_id, job):
     topic = 'nodes/' + worker_id + '/control/deploy'
-    data = {'job': job, 'constraints': constraints}
+    data = {'job': job}
     job_id = str(job.get('_id'))  # serialize ObjectId to string
     job.__setitem__('_id', job_id)
     mqtt.publish(topic, json.dumps(data))  # MQTT cannot send JSON, dump it to String here
@@ -173,80 +184,20 @@ def handle_job_deployment_topic(data):
     job_id = payload.get('job_id')
     status = payload.get('status')
     NsIp = payload.get('ns_ip')
+
+    # TODO: append node list to job db entry such that we can just try next node if deployment fails
+    # If the deployment failed try to deploy to next node in result lust
+
+    # If no nodes are left in list or deployment was successful, send the deployment info to the root
+
     deployment_info_from_worker_node(job_id, status, NsIp, client_id)
 
 
-sio = socketio.Client(app, logger=False, engineio_logger=False)
 def handle_nodes_alarm_topic(data):
     topic = data['topic']
-    payload = json.loads(data['payload'])
     client_id = topic.split('/')[1]
-    job = payload.get('job')
-    multilateration_data = []
-    worker_ip_rtt_stats = payload.get('violations')
     app.logger.info(f"Node {client_id} triggered an ALARM! Data: {data}")
-
-    nodes = list(find_all_nodes())
-
-    # Case 1: Cluster has only one worker node therefore we cannot replicate the service
-    if len(list(nodes)) == 1:
-        app.logger.info(f"Cannot replicate service because cluster only has one node.")
-    elif len(list(nodes)) >= 2:
-        target_node = random.choice([node for node in nodes if str(node.get('_id')) != client_id])
-        target_client_id = str(target_node.get('_id'))
-        # Case 2: Cluster has two nodes. Just ask scheduler if other node can run the service
-        if len(list(nodes)) == 2:
-            job['node'] = target_client_id
-            scheduler_request_replicate(job, replicas={})
-        # Case 3: Cluster has more than two nodes. In that case we have to send ping command to random node.
-        # The selected node answers with the result via socketio.
-        else:
-            # Add vivaldi and ping info of cluster orchestrator to data for multilateration
-            co_ip_rtt_stats = parallel_ping(worker_ip_rtt_stats.keys())
-            multilateration_data.append((co_vivaldi_coordinate.vector, co_ip_rtt_stats))
-            address = None
-            worker1_vivaldi_coords = None
-            worker2_vivaldi_coords = None
-            for n in nodes:
-                if str(n.get('_id')) == client_id:
-                    # Add vivaldi and ping info of first worker to data for multilateration
-                    worker1_ip_rtt_stats = payload.get('ip_rtt_stats')
-                    worker1_vivaldi_coords = n.get('vivaldi_vector')
-                    multilateration_data.append((worker1_vivaldi_coords, worker1_ip_rtt_stats))
-                if str(n.get('_id')) == target_client_id:
-                    address = f"http://{n.get('node_address')}:{n.get('node_info').get('port')}/ping"
-                    worker2_vivaldi_coords = n.get('vivaldi_vector')
-                    break
-            if address is None:
-                raise ValueError("No address found")
-
-            if worker1_vivaldi_coords is None or worker2_vivaldi_coords is None:
-                raise ValueError("No Vivaldi information available.")
-
-            # Add vivaldi and ping info of second worker to data for multilateration
-            app.logger.info(f"Get ping result for {list(worker_ip_rtt_stats.keys())} from {address}")
-            try:
-                response = requests.post(address, json=json.dumps(list(worker_ip_rtt_stats.keys())))
-                worker2_ip_rtt_stats = response.json()
-
-                multilateration_data.append((worker2_vivaldi_coords, worker2_ip_rtt_stats))
-
-                # Approximate locations of IPs in Vivaldi network
-                app.logger.info(f"Data for multilateration: {multilateration_data}")
-                # for coords, ip_rtt_stat in multilateration_data:
-
-
-                ip_locations = multilateration(multilateration_data)
-                app.logger.info(f"Multilateration result: {ip_locations}")
-
-                # For each IP, find the closest node to its location in the Vivaldi network.
-                # Check whether the closest node is closer than node that triggered the SLA warning
-                # replicate service to resulting node
-            except requests.exceptions.RequestException as e:
-                app.logger.info('Calling node /ping not successful')
-
-    else:
-        app.logger.info(f"No active nodes.")
+    scheduler_request_alarm(data)
 
 
 def publish_vivaldi_message(client_id, worker_public_ip, worker_private_ip):

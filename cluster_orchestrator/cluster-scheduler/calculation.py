@@ -1,11 +1,35 @@
+import json
+import random
 import time
 
-from mongodb_client import mongo_find_one_node, mongo_find_all_active_nodes, mongo_find_node_by_name
+import numpy as np
+import requests
+
+from mongodb_client import mongo_find_one_node, mongo_find_all_active_nodes, mongo_find_node_by_name, mongo_find_all_nodes, mongo_find_node_by_id
 from shapely.geometry import Point, Polygon
 from shapely.ops import nearest_points
 import geopy.distance
+from NetworkCoordinateSystem.network_measurements import parallel_ping
+from NetworkCoordinateSystem.vivaldi_coordinate import VivaldiCoordinate
+from NetworkCoordinateSystem.multilateration import multilateration
 
-def calculate(job):
+# TODO: Temporary area mapping until we know how we select area in SLA
+MUNICH = Polygon([[48.24819, 11.50406], [48.22807, 11.63521], [48.18093, 11.69083], [48.1369, 11.72242],
+                  [48.07689, 11.68534], [48.06221, 11.50818], [48.13008, 11.38871], [48.15757, 11.36124],
+                  [48.20107, 11.39077]])
+GARCHING = Polygon([[48.26122, 11.59742], [48.27013, 11.68445], [48.21720, 11.65063], [48.23013, 11.59862]])
+GERMANY = Polygon([[53.69039499952727, 7.19896078851138],[54.83252457729241, 9.022691264644848],[54.258998141984534, 13.17552331270781],
+                   [51.13131284515075, 14.625718631079001], [50.29656693243139, 12.120835808437851], [48.69842804429054, 13.768785033859663],
+                   [47.613790266506015, 12.208726433793686], [47.732154490129666, 7.638413915290528], [48.973220613985035, 8.209702980103422],
+                   [49.5040219286023, 6.320054534953079]])
+AREAS = {
+    "munich": MUNICH,
+    "garching": GARCHING,
+    "germany": GERMANY # Used for testing different latency measures from requests within geremany
+}
+
+
+def calculate(job, is_sla_violation=False, source_client_id=None, worker_ip_rtt_stats=None):
     print('calculating...')
     # check here if job has any user preferences, e.g. on a specific node, a specific cpu architecture,
     constraints = job.get('constraints')
@@ -15,9 +39,8 @@ def calculate(job):
     elif len(constraints) >= 1:
         # First filter out nodes that can't provide required resources
         qualified_nodes = filter_nodes_based_on_resources(job=job)
-        # Then choose node that best fulfills the SLA
-        # If there isn't a single node that can fulfill the SLA try to deploy to multiple nodes
-        return constraint_based_scheduling(qualified_nodes=qualified_nodes, job=job)
+        # Then find nodes that can fulfill the SLA constraints
+        return constraint_based_scheduling(qualified_nodes, job, is_sla_violation, source_client_id, worker_ip_rtt_stats)
     else:
         return greedy_load_balanced_algorithm(job=job)
 
@@ -130,53 +153,44 @@ def filter_nodes_based_on_resources(job):
     return qualified_nodes
 
 
-def constraint_based_scheduling(qualified_nodes, job):
+def constraint_based_scheduling(qualified_nodes, job, is_sla_violation, source_client_id, worker_ip_rtt_stats):
     constraints = job.get('constraints')
     target_nodes = []
     node_constraint_mapping = {}
     for constraint in constraints:
         constraint_type = constraint.get('type')
         if constraint_type == 'latency':
-            nodes = latency_based_scheduling(qualified_nodes, constraint)
+            # If this is the initial service deployment there are no user latency information available yet.
+            # Do an initial placement based on geographical proximity
+            if is_sla_violation:
+                nodes = latency_constraint_scheduling(qualified_nodes, source_client_id, worker_ip_rtt_stats)
+                print(f"latency scheduling result: {nodes}")
+            else:
+                nodes = initial_latency_constraint_scheduling(qualified_nodes, constraint)#
+                print(f"Initial latency scheduling result: {nodes}")
         elif constraint_type == 'geo':
             nodes = geo_based_scheduling(qualified_nodes, constraint)
         else:
-            print("no such constraint type")
-            #return 'negative', 'NoSuchConstraintType'
+            print(f"Unknown constraint type: {constraint_type}")
+            return 'negative', 'NoSuchConstraintType'
         for node in nodes:
             node_constraint_mapping.setdefault(node.get('_id'), []).append(constraint)
-            if node not in target_nodes:
-                target_nodes.append(node)
+            # if node not in target_nodes:
+            #     target_nodes.append(node)
 
+    print(f"NODE_CONSTRAINT_MAPPING: {node_constraint_mapping}")
+    # Ignore nodes that cannot fulfill all constraints
+    for key, value in node_constraint_mapping.items():
+        if len(value) == len(constraints):
+            node = [n for n in qualified_nodes if n.get('_id') == key]
+            target_nodes.append(*node)
 
-    # Sort by number of constraints fulfilled by the corresponding node
-    node_constraint_sorted_keys = sorted(node_constraint_mapping, key=lambda k: len(node_constraint_mapping[k]), reverse=True)
-    result_nodes_ids = []
-    for key in node_constraint_sorted_keys:
-        value = node_constraint_mapping[key]
-        # Remove constraints that are fulfilled by the node from the list of constraints
-        constraints = [con for con in constraints if con not in value]
-        # Add node id to result
-        result_nodes_ids.append(key)
-        # If remaining list of constraints is empty, we are done
-        if len(constraints) == 0:
-            break
+    if len(target_nodes) == 0:
+        return 'negative', 'NoNodeFulfillsSLAConstraints'
 
-    # If remaining list of constraints is not empty, there are not enough nodes to cover all constriants
-    if len(constraints) >= 1:
-        print("cannot fulfill constraints")
-        return 'negative', 'NodesCannotFulfillConstraints'
+    return 'positive', target_nodes
 
-    result_nodes_and_constraints = []
-    for node_id in result_nodes_ids:
-        for node in target_nodes:
-            if node_id == node.get('_id'):
-                result_nodes_and_constraints.append((node, node_constraint_mapping[node_id]))
-
-    print(f"target nodes {[(e[0].get('node_info').get('host'), e[1]) for e in result_nodes_and_constraints]}")
-    return 'positive', result_nodes_and_constraints
-
-def latency_based_scheduling(qualified_nodes, constraint):
+def initial_latency_constraint_scheduling(qualified_nodes, constraint):
     """
     The initial placement is done based on geographical proximity to have a good chance for a node with low latency.
     Once the service was deployed to one or more nodes, the respective nodes have to monitor whether they fulfill the
@@ -228,14 +242,122 @@ def geo_based_scheduling(qualified_nodes, constraint):
     # Return all nodes that are within the specified threshold
     return nodes
 
+def latency_constraint_scheduling(qualified_nodes, source_client_id, worker_ip_rtt_stats):
+    multilateration_data = []
+    # nodes = list(mongo_find_all_nodes())
+    nodes = qualified_nodes
+    nodes_size = len(nodes)
+    # Case 1: Cluster has only one worker node therefore we cannot replicate the service
+    if nodes_size == 1:
+        print(f"Cannot migrate service because cluster only has one worker.")
+    elif nodes_size >= 2:
+        target_node = random.choice([node for node in nodes if str(node.get('_id')) != source_client_id])
+        target_client_id = str(target_node.get('_id'))
+        # Case 2: Cluster has two nodes. Just ask scheduler if other node can run the service
+        if nodes_size == 2:
+            print(f"Cluster has only one other suitable worker. Try deploying service to that node.")
+            return [target_node]
+        # Case 3: Cluster has more than two nodes. In that case we have to tell a random node to ping the target IP
+        else:
+            print(f"Cluster has {nodes_size - 1} other suitable nodes. Find best target via NCS. ")
+            # Add vivaldi and ping info of cluster orchestrator to data for multilateration
+            co_ip_rtt_stats = parallel_ping(worker_ip_rtt_stats.keys())
+            # Cluster orchestartor is passive member of network coordinate systems and therefore always remains in the
+            # origin because it does not actively ping other nodes and updates its position.
+            multilateration_data.append((np.array([0.0, 0.0]), co_ip_rtt_stats))
+            address = None
+            worker1_vivaldi_coord = None
+            worker2_vivaldi_coord = None
+            # Build Vivaldi network to find closest node later
+            vivaldi_network = {}
+            for n in nodes:
+                # Add node to Vivaldi network
+                viv_vector = n.get('vivaldi_vector')
+                viv_height = n.get('vivaldi_height')
+                viv_error = n.get('vivaldi_error')
+                vivaldi_coord = VivaldiCoordinate(len(viv_vector))
+                vivaldi_coord.vector = viv_vector
+                vivaldi_coord.height = viv_height
+                vivaldi_coord.error = viv_error
+                vivaldi_network[n.get("_id")] = vivaldi_coord
 
-# TODO: Temporary area mapping until we know how we select area in SLA
-MUNICH = Polygon([[48.24819, 11.50406], [48.22807, 11.63521], [48.18093, 11.69083], [48.1369, 11.72242],
-                  [48.07689, 11.68534], [48.06221, 11.50818], [48.13008, 11.38871], [48.15757, 11.36124],
-                  [48.20107, 11.39077]])
-GARCHING = Polygon([[48.26122, 11.59742], [48.27013, 11.68445], [48.21720, 11.65063], [48.23013, 11.59862]])
+                if str(n.get('_id')) == source_client_id:
+                    # Add vivaldi and ping info of first worker to data for multilateration
+                    worker1_ip_rtt_stats = worker_ip_rtt_stats
+                    worker1_vivaldi_coord = vivaldi_coord
+                    print(f"Worker 1 Vivaldi: {worker1_vivaldi_coord}")
+                    multilateration_data.append((worker1_vivaldi_coord.vector, worker1_ip_rtt_stats))
+                elif str(n.get('_id')) == target_client_id:
+                    address = f"http://{n.get('node_address')}:{n.get('node_info').get('port')}/monitoring/ping"
+                    worker2_vivaldi_coord = vivaldi_coord
+                    print(f"Worker 2 Vivaldi: {worker2_vivaldi_coord}")
+                    # Add vivaldi and ping info of second worker to data for multilateration
+                    print(f"Get ping result for {list(worker_ip_rtt_stats.keys())} from {address}")
+                    try:
+                        if address is None:
+                            raise ValueError("No address found")
+                        response = requests.post(address, json=json.dumps(list(worker_ip_rtt_stats.keys())))
+                        worker2_ip_rtt_stats = response.json()
+                        multilateration_data.append((worker2_vivaldi_coord.vector, worker2_ip_rtt_stats))
+                    except requests.exceptions.RequestException as e:
+                        print('Calling node /ping not successful')
 
-AREAS = {
-    "munich": MUNICH,
-    "garching": GARCHING
-}
+            if worker1_vivaldi_coord is None or worker2_vivaldi_coord is None:
+                raise ValueError("No Vivaldi information available.")
+
+            # Approximate locations of IPs in Vivaldi network
+            print(f"Start multilateration: {multilateration_data}")
+            ip_locations = multilateration(multilateration_data)
+            print(f"Multilateration result: {ip_locations}")
+
+            # In case of multiple violating request locations, we want to the node closest to the point which minimizes
+            # the sum of distances to the violating request locations. This point is known as the Geometric Median and
+            # does not have a closed form solution but only approximation approaches. This implementation uses the
+            # Weiszfeld's algorithm which is a form of iteratively re-weighted least squares.
+            if len(ip_locations) == 1:
+                closest_worker_id = find_closest_vivaldi_coord(list(ip_locations.values())[0], vivaldi_network)
+            else:
+                min_dist_point = shortest_dists(list(ip_locations.values()))
+                closest_worker_id = find_closest_vivaldi_coord(min_dist_point, vivaldi_network)
+
+            print(f"Closest worker: {closest_worker_id}")
+            closest_worker = mongo_find_node_by_id(closest_worker_id)
+            return [closest_worker]
+
+    else:
+        print(f"No active nodes.")
+
+
+def shortest_dists(pts):
+    old = np.random.rand(2)
+    new = np.array([0, 0])
+    while np.linalg.norm(old - new) > 1e-6:
+        num = 0
+        denom = 0
+        for i in range(len(pts)):
+            dist = np.linalg.norm(new - pts[i, :])
+            num += pts[i, :] / dist
+            denom += 1 / dist
+        old = new
+        new = num / denom
+
+    print(f"Minimum distance point: {new}")
+    return new
+
+
+def find_closest_node(node, nodes):
+    nodes = np.asarray(nodes)
+    deltas = nodes - node
+    dist_2 = np.einsum('ij,ij->i', deltas, deltas)
+    return nodes[np.argmin(dist_2)]
+
+def find_closest_vivaldi_coord(point, candidates):
+    deltas = [v.vector for v in candidates.values()] - np.array(point)
+    # Calc euclidean distance
+    dist_2 = np.sum(deltas**2, axis=1)
+    dist = np.sqrt(dist_2)
+    # Add vivaldi heights
+    dist += np.array([v.height for v in candidates.values()])
+    return list(candidates.keys())[np.argmin(dist)]
+
+

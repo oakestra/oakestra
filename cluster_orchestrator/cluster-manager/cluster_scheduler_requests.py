@@ -39,6 +39,14 @@ def scheduler_request_replicate(job, replicas):
         print('Calling Cluster Scheduler /api/calculate/replicate not successful.')
 
 
+def scheduler_request_alarm(data):
+    print("Asking Cluster Scheduler... to migrate")
+    request_address = CLUSTER_SCHEDULER_ADDR + "/api/calculate/alarm"
+    try:
+        requests.post(request_address, json=data)
+    except requests.exceptions.RequestException as e:
+        print("Calling Cluster Scheduler /api/calculate/migrate not successful.")
+
 def scheduler_request_status():
     print('new job: asking cluster_scheduler status...')
     request_addr = CLUSTER_SCHEDULER_ADDR + '/status'

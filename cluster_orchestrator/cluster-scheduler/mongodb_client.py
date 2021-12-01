@@ -96,3 +96,8 @@ def mongo_find_node_by_id_and_update(id, key, value):
                                              {'$set': {key: value}},
                                              upsert=True)
     return 1
+
+def mongo_find_node_by_id(id):
+    global mongo_nodes
+    app.logger.info(f"Get node {id}")
+    return mongo_nodes.db.nodes.find_one({"_id": ObjectId(id)})

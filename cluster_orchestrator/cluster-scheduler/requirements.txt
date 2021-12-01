@@ -7,3 +7,6 @@ requests
 pymongo
 shapely
 geopy
+numpy
+scipy
+matplotlib

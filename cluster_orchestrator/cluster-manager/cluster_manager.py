@@ -1,6 +1,7 @@
 import os
 
 import requests
+from apscheduler.triggers.interval import IntervalTrigger
 from flask import Flask, request
 from flask_socketio import SocketIO, emit
 import json
@@ -12,14 +13,14 @@ from prometheus_client import start_http_server
 
 from cluster_balancer import service_resolution, service_resolution_ip
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_upsert_job, mongo_find_job_by_system_id, \
-    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id
+    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id, mongo_get_vivaldi_info_by_node_id
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
 from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from cm_logging import configure_logging
 from system_manager_requests import send_aggregated_info_to_sm, system_manager_get_subnet
 from analyzing_workers import looking_for_dead_workers
 from my_prometheus_client import prometheus_init_gauge_metrics, prometheus_set_metrics
-
+from geolocation.geolocation import query_geolocation_for_ips, user_in_cluster, build_geolite_dataframe
 MY_PORT = os.environ.get('MY_PORT')
 
 MY_CHOSEN_CLUSTER_NAME = os.environ.get('CLUSTER_NAME')
@@ -78,12 +79,15 @@ def get_scheduler_result_and_propagate_to_edge():
     app.logger.info(data)
 
     job = data.get('job')
-    constraints = data.get('constraints')
-    resulting_node_id = data.get('node').get('_id')
-
-    mongo_update_job_status(job.get('_id'), 'NODE_SCHEDULED', data.get('node'))
+    result_nodes = data.get('nodes')
+    # Add list of potential target nodes to job entry in database to redeploy the service to next node in list in case
+    # the deployment to current target node fails
+    resulting_node = result_nodes[0]
+    resulting_node_id = resulting_node.get('_id')
+    app.logger.info(f"Deploy to Node: {resulting_node_id}")
+    mongo_update_job_status(job.get('_id'), 'NODE_SCHEDULED', resulting_node, result_nodes[1:])
     job = mongo_find_job_by_id(job.get('_id'))
-    mqtt_publish_edge_deploy(resulting_node_id, job, constraints)
+    mqtt_publish_edge_deploy(resulting_node_id, job)
     return "ok"
 
 
@@ -137,6 +141,15 @@ def move_application_from_node_to_node():
     return "ok", 200
 
 
+@app.route('/geolocation/<ips>', methods=["GET"])
+def get_geolocation(ips):
+    app.logger.info(f"Incoming Request /geolocation/{ips}")
+    ips = ips.split(",")
+    ip_locations = query_geolocation_for_ips(ips)
+    app.logger.info(f"Locs: {ip_locations}")
+    return json.dumps(ip_locations), 200
+
+
 # ................ Scheduler Test ......................#
 # ......................................................#
 
@@ -187,17 +200,6 @@ def table_query_resolution_by_ip(service_ip):
     return {'app_name': name, 'instance_list': instances}
 
 
-# ...... Websocket PING Handling with edge nodes .......#
-# ......................................................#
-# @socketioserver.on('connect', namespace='/ping')
-# def on_connect_ping():
-#     app.logger.info(f"Websocket - Client connected: {request.remote_addr}")
-#
-# @socketioserver.on('cs1', namespace='/ping')
-# def handle_ping(message):
-#     app.logger.info(f"Websocket - Received ping result: {message}")
-
-@sio.on('')
 # ...... Websocket INIT Handling with edge nodes .......#
 # ......................................................#
 
@@ -214,11 +216,12 @@ def handle_init_worker(message):
 
     client_subnetwork = system_manager_get_subnet()
     client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": message, "node_subnet": client_subnetwork})
-
+    vivaldi_info = mongo_get_vivaldi_info_by_node_id(client_id)
     init_packet = {
         "id": str(client_id),
         "MQTT_BROKER_PORT": os.environ.get('MQTT_BROKER_PORT'),
         "SUBNETWORK": client_subnetwork,
+        "VIVALDI": vivaldi_info
     }
 
     # create ID and send it along with MQTT_Broker info to the client. save id into database
@@ -296,16 +299,20 @@ def init_cm_to_sm():
 
 
 # ......... FINISH - register at System Manager ........#
-# ......................................................#
+# ..................................MYIO....................#
 
 
 def background_job_send_aggregated_information_to_sm():
     app.logger.info("Set up Background Jobs...")
     scheduler = BackgroundScheduler()
-    job_send_info = scheduler.add_job(send_aggregated_info_to_sm, 'interval', seconds=BACKGROUND_JOB_INTERVAL,
-                                      kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID,
-                                              'time_interval': BACKGROUND_JOB_INTERVAL})
-    job_dead_nodes = scheduler.add_job(looking_for_dead_workers, 'interval', seconds=2 * BACKGROUND_JOB_INTERVAL,
+    # @implNote: Create trigger with specified timezone to avoid warning from apscheduler
+    # see https://stackoverflow.com/questions/69776414/pytzusagewarning-the-zone-attribute-is-specific-to-pytzs-interface-please-mig
+    trigger1 = IntervalTrigger(seconds=BACKGROUND_JOB_INTERVAL, timezone="Europe/Berlin")
+    trigger2 = IntervalTrigger(seconds=2 * BACKGROUND_JOB_INTERVAL, timezone="Europe/Berlin")
+
+    job_send_info = scheduler.add_job(send_aggregated_info_to_sm, trigger=trigger1,
+                                      kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID, 'time_interval': BACKGROUND_JOB_INTERVAL})
+    job_dead_nodes = scheduler.add_job(looking_for_dead_workers, trigger=trigger2,
                                        kwargs={'interval': BACKGROUND_JOB_INTERVAL})
     scheduler.start()
 
@@ -315,6 +322,9 @@ if __name__ == '__main__':
     # app.run(debug=True, host='0.0.0.0', port=MY_PORT)
 
     start_http_server(10001)  # start prometheus server
+
+    # Build GeoLite2 dataframe to avoid rebuilding it for every user request
+    build_geolite_dataframe()
 
     import eventlet
 

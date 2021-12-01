@@ -1,6 +1,6 @@
 import numpy as np
 import sys
-
+from typing import List
 
 class VivaldiCoordinate:
     """
@@ -139,3 +139,6 @@ class VivaldiCoordinate:
         rand_unit_vector = rand_vector / np.linalg.norm(rand_vector)
 
         return rand_unit_vector
+
+    def __str__(self):
+        return f"VivaldiCoordinate: Vector: {self.vector} Height: {self.height} Error: {self.error}"

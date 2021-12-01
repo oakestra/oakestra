@@ -32,6 +32,16 @@ def mongo_init(flask_app):
 
 # ................. Worker Node Operations ...............#
 ###########################################################
+def mongo_get_vivaldi_info_by_node_id(node_id):
+    global mongo_nodes
+    node = mongo_nodes.db.nodes.find_one({"_id": ObjectId(node_id)})
+    if all(key in node for key in ("vivaldi_vector", "vivaldi_error", "vivaldi_height")):
+        vector = node["vivaldi_vector"]
+        error = node["vivaldi_error"]
+        height = node["vivaldi_height"]
+        if all(v is not None for v in [vector, error, height]):
+            return {"vector": vector, "error": error, "height": height}
+    return {"vector": [0.0, 0.0], "error": 1.5, "height": 1e-5}
 
 def mongo_upsert_node(obj):
     global app, mongo_nodes
@@ -203,21 +213,22 @@ def mongo_find_job_by_ip(ip):
     return job
 
 
-def mongo_update_job_status(job_id, status, node):
+def mongo_update_job_status(job_id, status, target_node, remaining_feasible_nodes):
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
     instance_list = job['instance_list']
     for instance in instance_list:
         if instance.get('host_ip') == '':
-            instance['host_ip'] = node['node_address']
-            port = node['node_info'].get('node_port')
+            instance['host_ip'] = target_node['node_address']
+            port = target_node['node_info'].get('node_port')
             if port is None:
                 port = 50011
             instance['host_port'] = port
-            instance['worker_id'] = node.get('_id')
+            instance['worker_id'] = target_node.get('_id')
             break
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
-                                         {'$set': {'status': status, 'instance_list': instance_list}})
+                                         {'$set': {'status': status, 'instance_list': instance_list,
+                                          'deployment_list': remaining_feasible_nodes}})
 
 
 def mongo_update_job_deployed(job_id, status, ns_ip, node_id):

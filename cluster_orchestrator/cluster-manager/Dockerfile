@@ -3,6 +3,7 @@ FROM python:3.8.5-slim-buster
 ADD requirements.txt /
 
 RUN pip install -r requirements.txt
+# Required for docker container to be able to use the ping command
 RUN apt-get update && apt-get install software-properties-common -y && apt-get install iproute2 iputils-ping -y && apt-get install -y procps
 
 ADD . /

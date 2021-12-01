@@ -13,8 +13,4 @@ shapely
 alphashape
 scikit-learn
 pyproj
-matplotlib
-shapely
-alphashape
-scikit-learn
-pyproj
+pandas

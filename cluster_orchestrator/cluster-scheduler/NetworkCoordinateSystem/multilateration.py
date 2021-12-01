@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from scipy.optimize import minimize
 import math
@@ -103,7 +105,8 @@ def multilateration(data):
     # ax.set_ylim(-15, 30)
     # plt.xticks(np.arange(-40, 40 + 5, 5.0))
     # plt.yticks(np.arange(-15, 30 + 2, 2.0))
-    plt.savefig("multilaterationIP1+2.png")
+    # print(f"Save figure in {os.getcwd()}")
+    # plt.savefig("multilat.png")
 
     return ip_locations
 
@@ -143,14 +146,4 @@ def plot_progress(ax, color, positions, distances, point_progress):
 
     for circle in circles:
         ax.add_patch(circle)
-    print("Save figure")
     return ax
-
-if __name__ == '__main__':
-    co_vector = np.array([0.0, 0.0])
-    w1_vector = np.array([32.0, 18.0])
-    w2_vector = np.array([-25.3, 10.1])
-    data = [(co_vector, {'ip1': 30, 'ip2': 100}),
-            (w1_vector, {'ip1': 15, 'ip2': 70}),
-            (w2_vector, {'ip1': 20, 'ip2': 30})]
-    print(multilateration(data))
