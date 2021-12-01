@@ -1,0 +1,37 @@
+version: "3.3"
+services:
+
+  # cluster-level mongoDB
+  mongo:
+    image: mongo:3.6
+    container_name: mongo_net
+    hostname: mongo_net
+    ports:
+      - "10107:10107"
+    volumes:
+      - 'mongodb_data:/mongodb'
+    command: mongod --port 10107
+
+
+# Cluster Manager
+  root_service_manager:
+    image: root_service_manager
+    build: service-manager/
+    container_name: root_service_manager
+    hostname: root_service_manager
+    expose:
+      - "10100"
+    ports:
+      - "10100:10100"
+    environment:
+      - MY_PORT=10100
+      - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
+      - SYSTEM_MANAGER_PORT=10000
+      - CLUSTER_MONGO_URL=mongo_net
+      - CLUSTER_MONGO_PORT=10107
+    depends_on:
+      - mongo
+
+volumes:
+  mongodb_data:
+    driver: local

@@ -4,7 +4,7 @@ ADD requirements.txt /
 
 RUN pip install -r requirements.txt
 
-ADD . /
+ADD .. /
 
 # ENV FLASK_APP=cloud_scheduler.py
 ENV FLASK_ENV=development

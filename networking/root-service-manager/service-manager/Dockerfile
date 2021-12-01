@@ -4,7 +4,7 @@ ADD requirements.txt /
 
 RUN pip install -r requirements.txt
 
-ADD . /
+ADD .. /
 
 # TRUE for verbose logging
 ENV FLASK_DEBUG=FALSE
