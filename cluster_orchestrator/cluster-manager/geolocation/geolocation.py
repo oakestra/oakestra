@@ -39,7 +39,7 @@ def query_geolocation_for_ips(ip_addresses):
             indices = df[df.network.str.startswith(f"{i}.")].index
             if len(indices) >= 1:
                 start_idx = indices[0]
-                print(f"Start lookup at index {start_idx} with first byte {i}")
+                print(f"Start lookup at index {start_idx}/{df['network'].size} with first byte {i}")
                 break
 
         # Start at start_idx to reduce number of iterations
