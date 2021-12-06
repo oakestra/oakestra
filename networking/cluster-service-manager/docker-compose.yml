@@ -25,8 +25,10 @@ services:
       - "10200:10200"
     environment:
       - MY_PORT=10200
-      - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
-      - SYSTEM_MANAGER_PORT=10100
+      - ROOT_SERVICE_MANAGER_URL=${ROOT_SERVICE_MANAGER_URL}
+      - ROOT_SERVICE_MANAGER_PORT=10100
+      - SYSTEM_MANAGER_URL=cluster_manager
+      - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_MONGO_URL=cluster_mongo_net
       - CLUSTER_MONGO_PORT=10207
     depends_on:

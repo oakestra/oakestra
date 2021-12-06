@@ -10,18 +10,17 @@ from bson import json_util
 from network_management import new_instance_ip, clear_instance_ip, service_resolution, new_subnetwork_addr, \
     service_resolution_ip, new_job_rr_address
 from mongodb_client import *
-from sm_logging import configure_logging
+from net_logging import configure_logging
 
 my_logger = configure_logging()
 
 app = Flask(__name__)
 app.secret_key = b'\xc8I\xae\x85\x90E\x9aBxQP\xde\x8es\xfdY'
+app.logger.addHandler(my_logger)
 
 socketio = SocketIO(app, async_mode='eventlet', logger=True, engineio_logger=True, cors_allowed_origins='*')
 
-mongo_init(app)
-
-MY_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT') or 10034
+MY_PORT = os.environ.get('MY_PORT') or 10100
 
 
 # ......... Deployment Endpoints .......................#
@@ -53,6 +52,7 @@ def get_cluster_deployment_status_feedback():
 
     return "roger that"
 
+
 @app.route('/api/net/service/deploy', methods=['POST'])
 def new_service_deployment():
     """
@@ -83,8 +83,9 @@ def new_service_deployment():
 
     return "roger that"
 
+
 @app.route('/api/net/instance/deploy', methods=['POST'])
-def new_service_deployment():
+def new_instance_deployment():
     """
     Input:
         {
@@ -102,7 +103,7 @@ def new_service_deployment():
     instance_list = []
     for i in range(data.get('replicas')):
         instance_info = {
-            'instance_number': i, #number generation must be changed when scale up and down ops are implemented
+            'instance_number': i,  # number generation must be changed when scale up and down ops are implemented
             'instance_ip': new_instance_ip(),
             'cluster_id': str(data.get('cluster_id')),
         }
@@ -117,6 +118,7 @@ def new_service_deployment():
 
     return "roger that"
 
+
 # .............. Table query Endpoints .................#
 # ......................................................#
 
@@ -127,8 +129,8 @@ def table_query_resolution_by_jobname(service_name):
     """
     service_name = service_name.replace("_", ".")
     app.logger.info("Incoming Request /api/job/" + str(service_name) + "/instances")
-    instance,siplist = service_resolution(service_name)
-    return {'instance_list': instance, 'service_ip_list':siplist}
+    instance, siplist = service_resolution(service_name)
+    return {'instance_list': instance, 'service_ip_list': siplist}
 
 
 @app.route('/api/net/service/ip/<service_ip>/instances', methods=['GET'])
@@ -139,6 +141,7 @@ def table_query_resolution_by_ip(service_ip):
     service_ip = service_ip.replace("_", ".")
     app.logger.info("Incoming Request /api/job/ip/" + str(service_ip) + "/instances")
     return {'instance_list': service_resolution_ip(service_ip)}
+
 
 # ........ Subnetwork management endpoints .............#
 # ......................................................#
@@ -152,11 +155,11 @@ def subnet_request():
     return {'subnet_addr': addr}
 
 
-
 if __name__ == '__main__':
     # start_http_server(10008)
 
     # socketio.run(app, debug=True, host='0.0.0.0', port=MY_PORT)
     import eventlet
 
+    mongo_init(app)
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)

@@ -8,7 +8,7 @@ from network.tablequery.resolution import service_resolution, service_resolution
 from interfaces.mongodb_requests import mongo_init, mongo_insert_job
 from net_logging import configure_logging
 
-MY_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
+MY_PORT = os.environ.get('MY_PORT') or 10200
 
 my_logger = configure_logging()
 app = Flask(__name__)

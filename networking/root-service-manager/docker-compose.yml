@@ -25,13 +25,18 @@ services:
       - "10100:10100"
     environment:
       - MY_PORT=10100
-      - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
+      - SYSTEM_MANAGER_URL=system_manager
       - SYSTEM_MANAGER_PORT=10000
-      - CLUSTER_MONGO_URL=mongo_net
-      - CLUSTER_MONGO_PORT=10107
+      - CLOUD_MONGO_URL=mongo_net
+      - CLOUD_MONGO_PORT=10107
     depends_on:
       - mongo
 
 volumes:
   mongodb_data:
     driver: local
+
+networks:
+  default:
+    external:
+      name: rootorchestrator_default

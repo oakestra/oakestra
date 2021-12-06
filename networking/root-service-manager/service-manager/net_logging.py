@@ -9,7 +9,7 @@ def configure_logging():
     my_filename = 'sm.log'
 
     logging.basicConfig(filename=my_filename, format=format_str, level=logging.DEBUG)
-    my_logger = logging.getLogger("system_manager")
+    my_logger = logging.getLogger("root_service_manager")
 
     stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setLevel(logging.DEBUG)

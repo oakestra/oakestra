@@ -9,7 +9,7 @@ def configure_logging():
     my_filename = 'cm.log'
 
     logging.basicConfig(filename=my_filename, format=format_str, level=logging.DEBUG)
-    my_logger = logging.getLogger("cluster_manager")
+    my_logger = logging.getLogger("cluster_service_manager")
 
     stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setLevel(logging.DEBUG)

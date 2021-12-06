@@ -9,7 +9,6 @@ MONGO_PORT = os.environ.get('CLOUD_MONGO_PORT')
 MONGO_ADDR_JOBS = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/jobs'
 MONGO_ADDR_NET = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/netcache'
 
-mongo_clusters = None
 mongo_jobs = None
 mongo_net = None
 
@@ -24,10 +23,14 @@ def mongo_init(flask_app):
 
     app = flask_app
 
+    app.logger.info("Connecting to mongo...")
+
     # app.config["MONGO_URI"] = MONGO_ADDR
-    mongo_clusters = PyMongo(app, uri=MONGO_ADDR_CLUSTERS)
-    mongo_jobs = PyMongo(app, uri=MONGO_ADDR_JOBS)
-    mongo_net = PyMongo(app, uri=MONGO_ADDR_NET)
+    try:
+        mongo_jobs = PyMongo(app, uri=MONGO_ADDR_JOBS)
+        mongo_net = PyMongo(app, uri=MONGO_ADDR_NET)
+    except Exception as e:
+        app.logger.fatal(e)
     app.logger.info("MONGODB - init mongo")
 
 
@@ -44,7 +47,6 @@ def mongo_insert_job(obj):
                + "." + deployment_descriptor['app_ns'] \
                + "." + deployment_descriptor['service_name'] \
                + "." + deployment_descriptor['service_ns']
-    file['job_name'] = job_name
     job_content = {
         'system_job_id': obj.get('system_job_id'),
         'job_name': job_name,
@@ -117,16 +119,6 @@ def mongo_update_job_status_and_instances_by_system_job_id(system_job_id, status
     mongo_jobs.db.jobs.update_one({'system_job_id': system_job_id},
                                   {'$set': {'status': status, 'replicas': replicas, 'instance_list': instance_list}})
 
-
-# .......... BOTH CLUSTER and JOB OPERATIONS .........
-######################################################
-
-def mongo_find_cluster_of_job(job_id):
-    app.logger.info('Find job by Id and return cluster...')
-    job_obj = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)},
-                                          {'instance_list': 1})  # return just the assgined cluster of the job
-    cluster_id = ObjectId(job_obj.get('instance_list')[0].get('cluster_id'))
-    return mongo_find_cluster_by_id(cluster_id)
 
 
 # ........... SERVICE MANAGER OPERATIONS  ............
