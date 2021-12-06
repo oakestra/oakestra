@@ -20,7 +20,7 @@ services:
       - CLOUD_MONGO_PORT=10007
       - CLOUD_SCHEDULER_URL=cloud_scheduler
       - CLOUD_SCHEDULER_PORT=10004
-      - NET_PLUGIN_ADDR=localhost
+      - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10100
 
 

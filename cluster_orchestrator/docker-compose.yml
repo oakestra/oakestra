@@ -46,7 +46,7 @@ services:
     environment:
       - MY_PORT=10000
       - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
-      - CLUSTER_SERVICE_MANAGER_ADDR=localhost
+      - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
       - CLUSTER_SERVICE_MANAGER_PORT=10200
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_MONGO_URL=mongo
