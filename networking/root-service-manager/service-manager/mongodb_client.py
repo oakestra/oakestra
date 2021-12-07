@@ -19,7 +19,7 @@ CLUSTERS_FRESHNESS_INTERVAL = 45
 
 def mongo_init(flask_app):
     global app
-    global mongo_clusters, mongo_jobs, mongo_net
+    global mongo_jobs, mongo_net
 
     app = flask_app
 
@@ -130,7 +130,7 @@ def mongo_get_service_address_from_cache():
     @return: int[4] in the shape [172,30,x,y]
     """
     global mongo_net
-    netdb = mongo_net.db.net
+    netdb = mongo_net.db.netcache
 
     entry = netdb.find_one({'type': 'free_service_ip'})
 
@@ -147,13 +147,13 @@ def mongo_free_service_address_to_cache(address):
     @param address: int[4] in the shape [172,30,x,y]
     """
     global mongo_net
-    netdb = mongo_net.db.net
+    netcache = mongo_net.db.netcache
 
     assert len(address) == 4
     for n in address:
         assert 0 <= n < 254
 
-    netdb.insert({
+    netcache.insert_one({
         'type': 'free_service_ip',
         'ipv4': address
     })
@@ -165,15 +165,16 @@ def mongo_get_next_service_ip():
     @return: int[4] in the shape [172,30,x,y,]
     """
     global mongo_net
-    netdb = mongo_net.db.net
+    netcache = mongo_net.db.netcache
 
-    next_addr = netdb.find_one({'type': 'next_service_ip'})
+    next_addr = netcache.find_one({'type': 'next_service_ip'})
 
     if next_addr is not None:
         return next_addr["ipv4"]
     else:
         ip4arr = [172, 30, 0, 0]
-        id = netdb.insert({
+        netcache = mongo_net.db.netcache
+        id = netcache.insert_one({
             'type': 'next_service_ip',
             'ipv4': ip4arr
         })
@@ -186,7 +187,7 @@ def mongo_update_next_service_ip(address):
     @param address: int[4] in the form [172,30,x,y] monotonically increasing with respect to the previous address
     """
     global mongo_net
-    netdb = mongo_net.db.net
+    netcache = mongo_net.db.netcache
 
     # sanity check for the address
     assert len(address) == 4
@@ -195,7 +196,7 @@ def mongo_update_next_service_ip(address):
     assert address[0] == 172
     assert address[1] == 30
 
-    netdb.update_one({'type': 'next_service_ip'}, {'$set': {'ipv4': address}})
+    netcache.update_one({'type': 'next_service_ip'}, {'$set': {'ipv4': address}})
 
 
 def mongo_get_next_subnet_ip():
@@ -204,15 +205,16 @@ def mongo_get_next_subnet_ip():
     @return: int[4] in the shape [172,x,y,z]
     """
     global mongo_net
-    netdb = mongo_net.db.net
+    netcache = mongo_net.db.netcache
 
-    next_addr = netdb.find_one({'type': 'next_subnet_ip'})
+    next_addr = netcache.find_one({'type': 'next_subnet_ip'})
 
     if next_addr is not None:
         return next_addr["ipv4"]
     else:
         ip4arr = [172, 18, 0, 0]
-        id = netdb.insert({
+        netcache = mongo_net.db.netcache
+        id = netcache.insert_one({
             'type': 'next_subnet_ip',
             'ipv4': ip4arr
         })
@@ -225,7 +227,7 @@ def mongo_update_next_subnet_ip(address):
     @param address: int[4] in the form [172,x,y,z] monotonically increasing with respect to the previous address
     """
     global mongo_net
-    netdb = mongo_net.db.net
+    netcache = mongo_net.db.netcache
 
     # sanity check for the address
     assert len(address) == 4
@@ -234,7 +236,7 @@ def mongo_update_next_subnet_ip(address):
     assert address[0] == 172
     assert 17 < address[1] < 30
 
-    netdb.update_one({'type': 'next_subnet_ip'}, {'$set': {'ipv4': address}})
+    netcache.update_one({'type': 'next_subnet_ip'}, {'$set': {'ipv4': address}})
 
 
 def mongo_get_subnet_address_from_cache():
@@ -243,12 +245,12 @@ def mongo_get_subnet_address_from_cache():
     @return: int[4] in the shape [172,x,y,z]
     """
     global mongo_net
-    netdb = mongo_net.db.net
+    netcache = mongo_net.db.netcache
 
-    entry = netdb.find_one({'type': 'free_subnet_ip'})
+    entry = netcache.find_one({'type': 'free_subnet_ip'})
 
     if entry is not None:
-        netdb.delete_one({"_id": entry["_id"]})
+        netcache.delete_one({"_id": entry["_id"]})
         return entry["ipv4"]
     else:
         return None
@@ -260,13 +262,13 @@ def mongo_free_subnet_address_to_cache(address):
     @param address: int[4] in the shape [172,30,x,y]
     """
     global mongo_net
-    netdb = mongo_net.db.net
+    netcache = mongo_net.db.netcache
 
     assert len(address) == 4
     for n in address:
         assert 0 <= n < 256
 
-    netdb.insert({
+    netcache.insert_one({
         'type': 'free_subnet_ip',
         'ipv4': address
     })

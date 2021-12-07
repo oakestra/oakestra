@@ -25,6 +25,8 @@ services:
       - "10200:10200"
     environment:
       - MY_PORT=10200
+      - MQTT_BROKER_PORT=10003
+      - MQTT_BROKER_URL=mqtt
       - ROOT_SERVICE_MANAGER_URL=${ROOT_SERVICE_MANAGER_URL}
       - ROOT_SERVICE_MANAGER_PORT=10100
       - SYSTEM_MANAGER_URL=cluster_manager
@@ -37,3 +39,8 @@ services:
 volumes:
   mongodb_data:
     driver: local
+
+networks:
+  default:
+    external:
+      name: clusterorchestrator_default

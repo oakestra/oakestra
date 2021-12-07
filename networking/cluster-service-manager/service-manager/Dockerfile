@@ -4,7 +4,7 @@ ADD requirements.txt /
 
 RUN pip install -r requirements.txt
 
-ADD .. /
+ADD . /
 
 # ENV FLASK_APP=cloud_scheduler.py
 ENV FLASK_ENV=development
@@ -20,7 +20,7 @@ ENV CLUSTER_MONGO_URL=localhost
 ENV CLUSTER_MONGO_PORT=10007
 
 ENV MQTT_BROKER_URL=localhost
-ENV MQTT_BROKER_PORT=1883
+ENV MQTT_BROKER_PORT=10003
 
 EXPOSE 10015
 

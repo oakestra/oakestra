@@ -156,9 +156,6 @@ def subnet_request():
 
 
 if __name__ == '__main__':
-    # start_http_server(10008)
-
-    # socketio.run(app, debug=True, host='0.0.0.0', port=MY_PORT)
     import eventlet
 
     mongo_init(app)

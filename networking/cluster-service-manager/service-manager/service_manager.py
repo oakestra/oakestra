@@ -1,5 +1,6 @@
 import os
 from flask import Flask, request
+from flask_socketio import SocketIO, emit
 import eventlet
 
 from interfaces.mqtt_client import mqtt_init
@@ -12,6 +13,7 @@ MY_PORT = os.environ.get('MY_PORT') or 10200
 
 my_logger = configure_logging()
 app = Flask(__name__)
+socketio = SocketIO(app, async_mode='eventlet', logger=True, engineio_logger=True, cors_allowed_origins='*')
 mongo_init(app)
 mqtt_init(app)
 
@@ -92,4 +94,6 @@ def table_query_resolution_by_ip(service_ip):
 # TODO: job scale up
 
 if __name__ == '__main__':
+    import eventlet
+
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)
