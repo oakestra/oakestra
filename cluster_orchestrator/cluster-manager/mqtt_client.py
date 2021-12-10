@@ -5,7 +5,6 @@ from datetime import datetime
 
 from flask_mqtt import Mqtt
 from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem, mongo_update_job_deployed, mongo_find_job_by_id
-from system_manager_requests import system_manager_notify_deployment_status
 
 mqtt = None
 app = None
@@ -58,15 +57,6 @@ def mqtt_init(flask_app):
             cpu_cores_free = payload.get('free_cores')
             memory_free_in_MB = payload.get('memory_free_in_MB')
             mongo_find_node_by_id_and_update_cpu_mem(client_id, cpu_used, cpu_cores_free, mem_used, memory_free_in_MB)
-        if re_job_deployment_topic is not None:
-            # print(topic)
-            topic_split = topic.split('/')
-            client_id = topic_split[1]
-            payload = json.loads(data['payload'])
-            job_id = payload.get('job_id')
-            status = payload.get('status')
-            NsIp = payload.get('ns_ip')
-            deployment_info_from_worker_node(job_id, status, NsIp, client_id)
 
 
 def mqtt_publish_edge_deploy(worker_id, job):
@@ -83,13 +73,3 @@ def mqtt_publish_edge_delete(worker_id, job):
     job_id = str(job.get('_id'))
     job.__setitem__('_id', job_id)
     mqtt.publish(topic, json.dumps(data))
-
-
-def deployment_info_from_worker_node(job_id, status, NsIp, node_id):
-    app.logger.debug('JOB-DEPLOYMENT-UPDATE: sending job info to the root')
-    # Update mongo job
-    mongo_update_job_deployed(job_id, status, NsIp, node_id)
-    job = mongo_find_job_by_id(job_id)
-    app.logger.debug(job)
-    # Notify System manager
-    system_manager_notify_deployment_status(job, node_id)

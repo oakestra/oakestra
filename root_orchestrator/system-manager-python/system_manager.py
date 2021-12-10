@@ -12,6 +12,7 @@ from mongodb_client import *
 from yamlfile_parser import yaml_reader
 from cluster_requests import *
 from scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
+from net_plugin_requests import *
 from sm_logging import configure_logging
 
 my_logger = configure_logging()
@@ -84,7 +85,7 @@ def receive_scheduler_result_and_propagate_to_cluster():
         instance_list=instance_list
     )
 
-    cluster_request_to_deploy(resulting_cluster, mongo_find_job_by_id(system_job_id))
+    cluster_request_to_deploy(data.get('cluster'), mongo_find_job_by_id(system_job_id))
     return "ok"
 
 

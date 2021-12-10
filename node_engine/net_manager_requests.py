@@ -58,7 +58,7 @@ def net_manager_register(client_id):
     request_address = NET_MANAGER_ADDR + '/register'
 
     request = {
-        'subnetclient_idwork': client_id
+        'client_id': client_id
     }
     print(request)
 
