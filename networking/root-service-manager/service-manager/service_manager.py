@@ -128,7 +128,7 @@ def table_query_resolution_by_jobname(service_name):
     Get all the instances of a job given the complete name
     """
     service_name = service_name.replace("_", ".")
-    app.logger.info("Incoming Request /api/job/" + str(service_name) + "/instances")
+    app.logger.info("Incoming Request /api/net/service/" + str(service_name) + "/instances")
     instance, siplist = service_resolution(service_name)
     return {'instance_list': instance, 'service_ip_list': siplist}
 
@@ -139,7 +139,7 @@ def table_query_resolution_by_ip(service_ip):
     Get all the instances of a job given a Service IP in 172_30_x_y notation
     """
     service_ip = service_ip.replace("_", ".")
-    app.logger.info("Incoming Request /api/job/ip/" + str(service_ip) + "/instances")
+    app.logger.info("Incoming Request /api/net/service/ip/" + str(service_ip) + "/instances")
     return {'instance_list': service_resolution_ip(service_ip)}
 
 

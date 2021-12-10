@@ -38,7 +38,7 @@ type undeployRequest struct {
 }
 
 type registerRequest struct {
-	clientID string `json:"client_id"`
+	ClientID string `json:"client_id"`
 }
 
 func handleRequests() {
@@ -184,7 +184,7 @@ Usage: used to initialize the Network manager. The network manager must know his
 Method: POST
 Request Json:
 	{
-		subnetwork:string # IP address of the assigned subnetwork
+		client_id:string # id of the worker node
 	}
 Response: 200 or Failure code
 */
@@ -201,7 +201,7 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	log.Println(requestStruct)
 
 	//initialize mqtt connection to the broker
-	mqtt.InitMqtt(requestStruct.clientID)
+	mqtt.InitMqtt(requestStruct.ClientID)
 
 	//initialize the proxy tunnel
 	Proxy = proxy.New()

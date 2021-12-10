@@ -1,4 +1,4 @@
-import interfaces
+import requests
 import os
 import json
 
@@ -9,13 +9,13 @@ ROOT_SERVICE_MANAGER_ADDR = 'http://' + os.environ.get('ROOT_SERVICE_MANAGER_URL
 def root_service_manager_get_subnet():
     print('Asking the System Manager for a subnet')
     try:
-        response = interfaces.get(ROOT_SERVICE_MANAGER_ADDR + '/api/net/subnet/')
+        response = requests.get(ROOT_SERVICE_MANAGER_ADDR + '/api/net/subnet')
         addr = json.loads(response.text).get('subnet_addr')
         if len(addr) > 0:
             return addr
         else:
-            raise interfaces.exceptions.RequestException('No address found')
-    except interfaces.exceptions.RequestException as e:
+            raise requests.exceptions.RequestException('No address found')
+    except requests.exceptions.RequestException as e:
         print('Calling System Manager /api/information not successful.')
 
 
@@ -36,28 +36,28 @@ def system_manager_notify_deployment_status(job, worker_id):
             }
             data['instances'].append(elem)
     try:
-        interfaces.post(ROOT_SERVICE_MANAGER_ADDR + '/api/result/cluster_deploy', json=data)
-    except interfaces.exceptions.RequestException as e:
+        requests.post(ROOT_SERVICE_MANAGER_ADDR + '/api/result/cluster_deploy', json=data)
+    except requests.exceptions.RequestException as e:
         print('Calling System Manager /api/result/cluster_deploy not successful.')
 
 
 def cloud_table_query_ip(ip):
     print('table query to the System Manager...')
     job_ip = ip.replace(".", "_")
-    request_addr = ROOT_SERVICE_MANAGER_ADDR + '/api/job/ip/' + str(job_ip) + '/instances'
+    request_addr = ROOT_SERVICE_MANAGER_ADDR + '/api/net/service/ip/' + str(job_ip) + '/instances'
     print(request_addr)
     try:
-        return interfaces.get(request_addr).json()
-    except interfaces.exceptions.RequestException as e:
+        return requests.get(request_addr).json()
+    except requests.exceptions.RequestException as e:
         print('Calling System Manager /api/job/ip/../instances not successful.')
 
 
 def cloud_table_query_service_name(name):
     print('table query to the System Manager...')
     job_name = name.replace(".", "_")
-    request_addr = ROOT_SERVICE_MANAGER_ADDR + '/api/job/' + str(job_name) + '/instances'
+    request_addr = ROOT_SERVICE_MANAGER_ADDR + '/api/net/service/' + str(job_name) + '/instances'
     print(request_addr)
     try:
-        return interfaces.get(request_addr).json()
-    except interfaces.exceptions.RequestException as e:
+        return requests.get(request_addr).json()
+    except requests.exceptions.RequestException as e:
         print('Calling System Manager /api/job/../instances not successful.')

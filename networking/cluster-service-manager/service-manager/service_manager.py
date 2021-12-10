@@ -14,6 +14,7 @@ MY_PORT = os.environ.get('MY_PORT') or 10200
 my_logger = configure_logging()
 app = Flask(__name__)
 socketio = SocketIO(app, async_mode='eventlet', logger=True, engineio_logger=True, cors_allowed_origins='*')
+app.logger.addHandler(my_logger)
 mongo_init(app)
 mqtt_init(app)
 
@@ -26,14 +27,14 @@ def deploy_task_status():
        Deployment of a new service instance
        receives {
                    job_id: string
-                   job: {}object
+                   data: {}object
                 }
     """
 
     app.logger.info('Incoming Request /api/net/deployment')
     req_json = request.json
     app.logger.debug(req_json)
-    job_name = req_json['job']['job_name']
+    job_name = req_json['data']['job_name']
 
     # table query the root to get the instances
     instances, siplist = service_resolution(job_name)

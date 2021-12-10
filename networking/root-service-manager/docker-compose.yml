@@ -37,6 +37,5 @@ volumes:
     driver: local
 
 networks:
-  default:
-    external:
-      name: rootorchestrator_default
+  default:  
+    name: root_orchestrator_default

@@ -6,15 +6,18 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 )
 
 var DEFAULT_BROKER_PORT = 1883
 var DEFAULT_BROKER_URL = "localhost"
 var DEFAULT_MQTT_USERNAME = ""
 var DEFAULT_MQTT_PW = ""
+var TOPICS = make(map[string]mqtt.MessageHandler)
 
 var clientID = ""
 var client mqtt.Client
+
 var tableQueryRequestCache *TableQueryRequestCache
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
@@ -24,19 +27,25 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
 	log.Println("Connected to the MQTT broker")
 
-	//subscribe to tablequery topics
-	tqtopic := fmt.Sprintf("/nodes/%s/net/tablequery/result+", clientID)
-	tqtoken := client.Subscribe(tqtopic, 1, tableQueryRequestCache.TablequeryResultMqttHandler)
-	tqtoken.Wait()
-	fmt.Printf("Subscribed to topic %s", tqtoken)
+	topicsQosMap := make(map[string]byte)
+	for key, _ := range TOPICS {
+		topicsQosMap[key]=1
+	}
 
-	//subscribe to subnetwork assignment topics
-	sntopic := fmt.Sprintf("/nodes/%s/net/subnetwork/result+", clientID)
-	sntoken := client.Subscribe(sntopic, 1, subnetworkAssignmentMqttHandler)
-	sntoken.Wait()
-	fmt.Printf("Subscribed to topic %s", sntopic)
+	//subscribe to all the topics
+	tqtoken := client.SubscribeMultiple(topicsQosMap, subscribeHandlerDispatcher)
+	tqtoken.Wait()
+	log.Printf("Subscribed to topics \n")
 
 	//subscribe to network management topics (interests messages and related) TODO
+}
+
+var subscribeHandlerDispatcher = func(client mqtt.Client, msg mqtt.Message) {
+	for key, handler := range TOPICS {
+		if strings.Contains(msg.Topic(),key) {
+			handler(client,msg)
+		}
+	}
 }
 
 var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
@@ -71,6 +80,11 @@ func InitMqtt(clientid string) {
 		password = DEFAULT_MQTT_PW
 	}
 
+	TOPICS[fmt.Sprintf("nodes/%s/net/tablequery/result", clientID)]=
+		tableQueryRequestCache.TablequeryResultMqttHandler
+	TOPICS[fmt.Sprintf("nodes/%s/net/subnetwork/result", clientID)]=
+		subnetworkAssignmentMqttHandler
+
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", brokerurl, brokerport))
 	opts.SetClientID(clientid)
@@ -84,7 +98,7 @@ func InitMqtt(clientid string) {
 }
 
 func runMqttClient(opts *mqtt.ClientOptions) {
-	client := mqtt.NewClient(opts)
+	client = mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
