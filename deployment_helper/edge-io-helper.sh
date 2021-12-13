@@ -33,7 +33,7 @@ fi
 if [[ choice -eq 2 ]]; then
  echo "### 2: Configure nodes with wcfg.yaml ###"
  cd support
- pip3 install pyyaml
+ pip3 install --ignore-installed PyYAML
  python3 read_from_yaml.py 
  cd ../
 fi

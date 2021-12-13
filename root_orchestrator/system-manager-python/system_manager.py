@@ -99,6 +99,7 @@ def receive_scheduler_result_and_propagate_to_cluster():
         replicas=replicas,
         instance_list=instance_list
     )
+
     cluster_request_to_deploy(resulting_cluster, mongo_find_job_by_id(system_job_id))
     return "ok"
 
