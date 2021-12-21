@@ -17,9 +17,12 @@ type mqttSubnetworkRequest struct {
 	METHOD string `json:"METHOD"`
 }
 type mqttDeployNotification struct {
-	Appname string `json:"appname"`
-	Status 	string `json:"status"`
-	Nsip 	string `json:"nsip"`
+	Appname string 	`json:"appname"`
+	Status 	string 	`json:"status"`
+	Instancenumber int `json:"instance_number"`
+	Nsip 	string 	`json:"nsip"`
+	Hostport string	`json:"host_port"`
+	Hostip  string 	`json:"host_ip"`
 }
 
 func subnetworkAssignmentMqttHandler(client mqtt.Client, msg mqtt.Message) {
@@ -54,11 +57,14 @@ func RequestSubnetworkMqttBlocking() (string, error) {
 	return "", net.UnknownNetworkError("Invalid Subnetwork received")
 }
 
-func NotifyDeploymentStatus(appname string, status string, nsip string){
+func NotifyDeploymentStatus(appname string, status string, instance int, nsip string, hostip string, hostport string){
 	request := mqttDeployNotification{
 		Appname: appname,
 		Status: status,
+		Instancenumber: instance,
 		Nsip: nsip,
+		Hostip: hostip,
+		Hostport: hostport,
 	}
 	jsonreq, _ := json.Marshal(request)
 	PublishToBroker("service/deployed", string(jsonreq))

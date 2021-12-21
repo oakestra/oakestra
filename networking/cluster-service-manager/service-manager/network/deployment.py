@@ -1,9 +1,9 @@
 from interfaces.mongodb_requests import *
 from interfaces.root_service_manager_requests import *
 
-def deployment_status_report(appname,status,NsIp,node_id):
+def deployment_status_report(appname,status,NsIp,node_id,instance_number,host_ip,host_port):
     # Update mongo job
-    mongo_update_job_deployed(appname, status, NsIp, node_id)
+    mongo_update_job_deployed(appname, status, NsIp, node_id, instance_number,host_ip,host_port)
     job = mongo_find_job_by_name(appname)
     app.logger.debug(job)
     # Notify System manager

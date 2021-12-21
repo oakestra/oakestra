@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -48,6 +49,8 @@ func handleRequests() {
 var Env env.Environment
 var Proxy proxy.GoProxyTunnel
 var InitializationCompleted = false
+var PUBLIC_WORKER_IP = os.Getenv("PUBLIC_WORKER_IP")
+var PUBLIC_WORKER_PORT = os.Getenv("PUBLIC_WORKER_PORT")
 
 /*
 Endpoint: /docker/undeploy
@@ -131,7 +134,14 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	//notify net-component
-	mqtt.NotifyDeploymentStatus(requestStruct.AppFullName, "DEPLOYED", addr.String())
+	mqtt.NotifyDeploymentStatus(
+		requestStruct.AppFullName,
+		"DEPLOYED",
+		requestStruct.Instancenumber,
+		addr.String(),
+		PUBLIC_WORKER_IP,
+		PUBLIC_WORKER_PORT,
+		)
 
 	//update internal table entry
 	Env.RefreshServiceTable(requestStruct.AppFullName)
