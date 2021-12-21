@@ -84,7 +84,7 @@ def mongo_update_job_deployed(job_name, status, ns_ip, node_id, instance_number,
     job = mongo_jobs.db.jobs.find_one({'job_name': job_name})
     instance_list = job['instance_list']
     for instance in instance_list:
-        if instance["instance_number"] == instance_number:
+        if int(instance["instance_number"]) == int(instance_number):
             instance['namespace_ip'] = ns_ip
             instance['host_ip'] = host_ip
             instance['host_port'] = host_port
