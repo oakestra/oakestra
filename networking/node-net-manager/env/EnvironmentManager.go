@@ -631,9 +631,9 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 	}
 
 	//if no entry available -> TableQuery
-	entryList, found := tableQueryByIP(env.clusterAddr, env.clusterPort, ip.String())
+	entryList, err := tableQueryByIP(ip.String())
 
-	if found {
+	if err == nil {
 		for _, tableEntry := range entryList {
 			env.AddTableQueryEntry(tableEntry)
 		}
@@ -676,6 +676,16 @@ func (env *Environment) AddTableQueryEntry(entry TableEntry) {
 	err := env.translationTable.Add(entry)
 	if err != nil {
 		log.Println("[ERROR] ", err)
+	}
+}
+
+//force a table query refresh for a service
+func (env *Environment) RefreshServiceTable(sname string) {
+	entryList, err := tableQueryBySname(sname)
+	if err == nil {
+		for _, tableEntry := range entryList {
+			env.AddTableQueryEntry(tableEntry)
+		}
 	}
 }
 

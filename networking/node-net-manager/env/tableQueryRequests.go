@@ -2,6 +2,7 @@ package env
 
 import (
 	mqttifce "NetManager/mqtt"
+	"errors"
 	"log"
 	"net"
 	"strings"
@@ -10,20 +11,40 @@ import (
 /*
 Asks the MQTT client for a table query and parses the result
 */
-func tableQueryByIP(addr string, port string, ip string) ([]TableEntry, bool) {
+func tableQueryByIP(ip string) ([]TableEntry, error) {
 
 	log.Println("[MQTT TABLE QUERY] sip:", ip)
 	var mqttTablequery mqttifce.TablequeryMqttInterface = mqttifce.GetTableQueryRequestCacheInstance()
 
 	responseStruct, err := mqttTablequery.TableQueryByIpRequestBlocking(ip)
 	if err != nil {
-		return nil, false
+		return nil, err
 	}
 
+	return responseParser(responseStruct)
+}
+
+/*
+Asks the MQTT client for a table query and parses the result
+*/
+func tableQueryBySname(sname string) ([]TableEntry, error) {
+
+	log.Println("[MQTT TABLE QUERY] sname:", sname)
+	var mqttTablequery mqttifce.TablequeryMqttInterface = mqttifce.GetTableQueryRequestCacheInstance()
+
+	responseStruct, err := mqttTablequery.TableQueryBySnameRequestBlocking(sname)
+	if err != nil {
+		return nil, err
+	}
+
+	return responseParser(responseStruct)
+}
+
+func responseParser(responseStruct mqttifce.TableQueryResponse) ([]TableEntry, error) {
 	appCompleteName := strings.Split(responseStruct.AppName, ".")
 
 	if len(appCompleteName) != 4 {
-		return nil, false
+		return nil, errors.New("app complete name not of size 4")
 	}
 
 	result := make([]TableEntry, 0)
@@ -51,5 +72,5 @@ func tableQueryByIP(addr string, port string, ip string) ([]TableEntry, bool) {
 		result = append(result, entry)
 	}
 
-	return result, true
+	return result, nil
 }

@@ -20,6 +20,7 @@ var (
 /*----- Mqtt Table query cache classes and interfaces -----*/
 type TablequeryMqttInterface interface {
 	TableQueryByIpRequestBlocking(sip string) (TableQueryResponse, error)
+	TableQueryBySnameRequestBlocking(sname string) (TableQueryResponse, error)
 }
 
 type TableQueryRequestCache struct {
@@ -74,9 +75,9 @@ func GetTableQueryRequestCacheInstance() *TableQueryRequestCache {
 	Perform a table query by ServiceIp to the cluster manager
 	The call is blocking and awaits the response for a maximum of 5 seconds
 */
-func (cache *TableQueryRequestCache) TableQueryByIpRequestBlocking(sip string) (TableQueryResponse, error) {
-
-	requests := cache.siprequests[sip]
+func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname string) (TableQueryResponse, error) {
+	reqname := sip + sname
+	requests := cache.siprequests[reqname]
 	responseChannel := make(chan TableQueryResponse, 1)
 
 	if requests == nil {
@@ -85,12 +86,12 @@ func (cache *TableQueryRequestCache) TableQueryByIpRequestBlocking(sip string) (
 
 	//appending response channel used by the Mqtt handler
 	cache.requestadd.Lock()
-	cache.siprequests[sip] = append(requests, responseChannel)
+	cache.siprequests[reqname] = append(requests, responseChannel)
 	cache.requestadd.Unlock()
 
 	//publishing mqtt message
 	jsonreq, _ := json.Marshal(tableQueryRequest{
-		Sname: "",
+		Sname: sname,
 		Sip:   sip,
 	})
 	PublishToBroker("tablequery/request", string(jsonreq))
@@ -104,6 +105,22 @@ func (cache *TableQueryRequestCache) TableQueryByIpRequestBlocking(sip string) (
 	}
 
 	return TableQueryResponse{}, net.UnknownNetworkError("Mqtt Timeout")
+}
+
+/*
+	Perform a table query by ServiceIp to the cluster manager
+	The call is blocking and awaits the response for a maximum of 5 seconds
+*/
+func (cache *TableQueryRequestCache) TableQueryByIpRequestBlocking(sip string) (TableQueryResponse, error) {
+	return cache.tableQueryRequestBlocking(sip, "")
+}
+
+/*
+	Perform a table query by ServiceName to the cluster manager
+	The call is blocking and awaits the response for a maximum of 5 seconds
+*/
+func (cache *TableQueryRequestCache) TableQueryBySnameRequestBlocking(sname string) (TableQueryResponse, error) {
+	return cache.tableQueryRequestBlocking("", sname)
 }
 
 /*

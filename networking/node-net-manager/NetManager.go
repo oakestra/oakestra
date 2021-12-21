@@ -9,7 +9,6 @@ import (
 	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
 	"strings"
 )
@@ -18,9 +17,6 @@ type deployRequest struct {
 	ContainerId    string `json:"containerId"`
 	AppFullName    string `json:"appName"`
 	Instancenumber int    `json:"instanceNumber"`
-	Nodeip         string `json:"nodeIp"`
-	Nodeport       int    `json:"nodePort"`
-	ServiceIP      []sip  `json:"serviceIp"`
 }
 
 type sip struct {
@@ -94,12 +90,6 @@ Request Json:
 		containerId:string #name of the container or containerid
 		appName:string
 		instanceNumber:int
-		nodeIp:string
-		nodePort:int
-		serviceIp:[{
-					IpType:string //RR, Closest or InstanceNumber
-					Address:string
-					}]
 	}
 Response Json:
 	{
@@ -140,27 +130,11 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	//update internal table entry
-	siplist := make([]env.ServiceIP, 0)
-	for _, ip := range requestStruct.ServiceIP {
-		siplist = append(siplist, env.ToServiceIP(ip.Type, ip.Address))
-	}
-	entry := env.TableEntry{
-		Appname:          appCompleteName[0],
-		Appns:            appCompleteName[1],
-		Servicename:      appCompleteName[2],
-		Servicenamespace: appCompleteName[3],
-		Instancenumber:   requestStruct.Instancenumber,
-		Cluster:          0,
-		Nodeip:           net.ParseIP(requestStruct.Nodeip),
-		Nodeport:         requestStruct.Nodeport,
-		Nsip:             addr,
-		ServiceIP:        siplist,
-	}
-	Env.AddTableQueryEntry(entry)
-
 	//notify net-component
-	mqtt.NotifyDeploymentStatus(requestStruct.AppFullName,"DEPLOYED",addr.String())
+	mqtt.NotifyDeploymentStatus(requestStruct.AppFullName, "DEPLOYED", addr.String())
+
+	//update internal table entry
+	Env.RefreshServiceTable(requestStruct.AppFullName)
 
 	//answer the caller
 	response := deployResponse{
