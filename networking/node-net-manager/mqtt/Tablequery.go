@@ -94,7 +94,7 @@ func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname
 		Sname: sname,
 		Sip:   sip,
 	})
-	PublishToBroker("tablequery/request", string(jsonreq))
+	go PublishToBroker("tablequery/request", string(jsonreq))
 
 	//waiting for maximum 5 seconds the mqtt handler to receive a response. Otherwise fail the tableQuery.
 	select {
@@ -127,6 +127,8 @@ func (cache *TableQueryRequestCache) TableQueryBySnameRequestBlocking(sname stri
 	Handler used by the mqtt client to dispatch the table query result
 */
 func (cache *TableQueryRequestCache) TablequeryResultMqttHandler(client mqtt.Client, msg mqtt.Message) {
+
+	log.Printf("MQTT - Received mqtt table query message: %s",msg.Payload())
 
 	//response parsing
 	payload := msg.Payload()

@@ -42,7 +42,7 @@ func RequestSubnetworkMqttBlocking() (string, error) {
 
 	request := mqttSubnetworkRequest{METHOD: "GET"}
 	jsonreq, _ := json.Marshal(request)
-	PublishToBroker("subnet", string(jsonreq))
+	go PublishToBroker("subnet", string(jsonreq))
 
 	//waiting for maximum 10 seconds the mqtt handler to receive a response. Otherwise fail the subnetwork request.
 	select {

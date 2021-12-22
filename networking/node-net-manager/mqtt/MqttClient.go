@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var DEFAULT_BROKER_PORT = 1883
@@ -105,5 +106,9 @@ func runMqttClient(opts *mqtt.ClientOptions) {
 }
 
 func PublishToBroker(topic string, payload string) {
-	client.Publish(fmt.Sprintf("nodes/%s/net/%s", clientID, topic), 1, false, payload)
+	log.Printf("MQTT - publish to - %s - the payload - %s",topic,payload)
+	token := client.Publish(fmt.Sprintf("nodes/%s/net/%s", clientID, topic), 1, false, payload)
+	if token.WaitTimeout(time.Second*5) && token.Error() != nil {
+		log.Printf("ERROR: MQTT PUBLISH: %s",token.Error())
+	}
 }

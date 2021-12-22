@@ -21,7 +21,7 @@ def mqtt_init(flask_app):
     @mqtt.on_connect()
     def handle_connect(client, userdata, flags, rc):
         app.logger.info("MQTT - Connected to MQTT Broker")
-        mqtt.subscribe('nodes/+/net/+')
+        mqtt.subscribe('nodes/+/net/#')
 
     @mqtt.on_log()
     def handle_logging(client, userdata, level, buf):
@@ -39,8 +39,8 @@ def mqtt_init(flask_app):
 
         topic = data['topic']
 
-        re_job_deployment_topic = re.search("^nodes/.*/net/service/deployed$", topic)
-        re_job_undeployment_topic = re.search("^nodes/.*/net/service/undeployed$", topic)
+        re_job_deployment_topic = re.search("^nodes/.*/net/service/deployed", topic)
+        re_job_undeployment_topic = re.search("^nodes/.*/net/service/undeployed", topic)
         re_job_tablequery_topic = re.search("^nodes/.*/net/tablequery/request", topic)
         re_job_subnet_topic = re.search("^nodes/.*/net/subnet", topic)
 
@@ -85,9 +85,9 @@ def _tablequery_handler(client_id, payload):
     instances = {}
 
     # resolve the query and register interest
-    if sip is not None or sip != "":
+    if sip is not None and sip != "":
         sname, instances = service_resolution_ip(sip)
-    elif sname is not None or sname != "":
+    elif sname is not None and sname != "":
         instances = service_resolution(sname)
 
     register_interest_sname(sname, client_id)

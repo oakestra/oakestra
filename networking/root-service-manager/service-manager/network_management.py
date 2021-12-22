@@ -119,7 +119,7 @@ def service_resolution(name):
     job = mongodb_client.mongo_find_job_by_name(name)
     if job is not None:
         return job['instance_list'],job['service_ip_list']
-    return []
+    return [],[]
 
 
 def service_resolution_ip(ip):
