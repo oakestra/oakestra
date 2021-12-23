@@ -8,20 +8,20 @@ def service_resolution(service_name):
     if no result found the query is propagated to the System Manager
     """
     # resolve it locally
-    jobs = mongo_find_job_by_name(service_name)
+    job = mongo_find_job_by_name(service_name)
     instances = None
     siplist = None
 
     # if no results, ask the root orc
-    if jobs is None:
+    if job is None:
         query_result = cloud_table_query_service_name(service_name)
         instances = query_result['instance_list']
         siplist = query_result['service_ip_list']
     else:
-        instances = jobs['instance_list']
-        siplist = jobs['service_ip_list']
+        instances = job['instance_list']
+        siplist = job['service_ip_list']
 
-    return instances,siplist
+    return job.get('job_name'), format_instance_response(instances,siplist)
 
 
 def service_resolution_ip(ip_string):
@@ -53,15 +53,18 @@ def service_resolution_ip(ip_string):
         if job is None:
             return "", []
 
-    instances = job['instance_list']
-    service_ip_list = job['service_ip_list']
+    return job.get('job_name'), format_instance_response(job['instance_list'],job['service_ip_list'])
+
+
+def format_instance_response(instance_list, sip_list):
+    instances = instance_list
+
+    service_ip_list = sip_list
     for elem in instances:
         elem['service_ip'] = service_ip_list
-        elem['service_ip'].append({
-            "IpType": "instance_ip",
-            "Address": elem['instance_ip']
-        })
+    elem['service_ip'].append({
+        "IpType": "instance_ip",
+        "Address": elem['instance_ip']
+    })
 
-    name = job.get('job_name')
-
-    return name, instances
+    return instances

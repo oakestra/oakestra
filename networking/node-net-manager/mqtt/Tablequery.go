@@ -24,7 +24,7 @@ type TablequeryMqttInterface interface {
 }
 
 type TableQueryRequestCache struct {
-	siprequests map[string][]chan TableQueryResponse
+	siprequests map[string][]*chan TableQueryResponse
 	requestadd  sync.RWMutex
 }
 
@@ -63,7 +63,7 @@ func GetTableQueryRequestCacheInstance() *TableQueryRequestCache {
 	once.Do(func() { // <-- atomic, does not allow repeating
 
 		tableQueryRequestCacheInstance = TableQueryRequestCache{
-			siprequests: make(map[string][]chan TableQueryResponse),
+			siprequests: make(map[string][]*chan TableQueryResponse),
 			requestadd:  sync.RWMutex{},
 		}
 
@@ -81,12 +81,12 @@ func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname
 	responseChannel := make(chan TableQueryResponse, 1)
 
 	if requests == nil {
-		requests = make([]chan TableQueryResponse, 1)
+		requests = make([]*chan TableQueryResponse, 1)
 	}
 
 	//appending response channel used by the Mqtt handler
 	cache.requestadd.Lock()
-	cache.siprequests[reqname] = append(requests, responseChannel)
+	cache.siprequests[reqname] = append(requests, &responseChannel)
 	cache.requestadd.Unlock()
 
 	//publishing mqtt message
@@ -139,7 +139,7 @@ func (cache *TableQueryRequestCache) TablequeryResultMqttHandler(client mqtt.Cli
 	}
 
 	//extract sip and app names as query keys
-	querykeys := make([]string, 1)
+	querykeys := make([]string, 0)
 	querykeys = append(querykeys, responseStruct.AppName)
 	for _, instance := range responseStruct.InstanceList {
 		for _, sip := range instance.ServiceIp {
@@ -149,11 +149,12 @@ func (cache *TableQueryRequestCache) TablequeryResultMqttHandler(client mqtt.Cli
 
 	//notify hanging channels for each query key
 	for _, key := range querykeys {
+		log.Printf("TableQuery response - notifying channel %s",key)
 		cache.requestadd.Lock()
 		channelList := cache.siprequests[key]
 		if channelList != nil {
 			for _, channel := range channelList {
-				channel <- responseStruct
+				*channel <- responseStruct
 			}
 		}
 		cache.siprequests[key] = nil

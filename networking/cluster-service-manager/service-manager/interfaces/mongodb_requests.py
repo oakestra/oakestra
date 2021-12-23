@@ -85,9 +85,10 @@ def mongo_update_job_deployed(job_name, status, ns_ip, node_id, instance_number,
     instance_list = job['instance_list']
     for instance in instance_list:
         if int(instance["instance_number"]) == int(instance_number):
+            instance['worker_id'] = node_id
             instance['namespace_ip'] = ns_ip
             instance['host_ip'] = host_ip
-            instance['host_port'] = host_port
+            instance['host_port'] = int(host_port)
             break
     return mongo_jobs.db.jobs.update_one({'job_name': job_name},
                                          {'$set': {'status': status, 'instance_list': instance_list}})
@@ -108,7 +109,7 @@ def mongo_update_job_status(job_id, status, node):
             port = node['node_info'].get('node_port')
             if port is None:
                 port = 50011
-            instance['host_port'] = port
+            instance['host_port'] = int(port)
             instance['worker_id'] = node.get('_id')
             break
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},

@@ -65,7 +65,7 @@ def mqtt_init(flask_app):
 def _deployment_handler(client_id, payload):
     appname = payload.get('appname')
     status = payload.get('status')
-    nsIp = payload.get('ns_ip')
+    nsIp = payload.get('nsip')
     instance_number = payload.get('instance_number')
     host_ip = payload.get('host_ip')
     host_port = payload.get('host_port')
@@ -82,7 +82,8 @@ def _tablequery_handler(client_id, payload):
     sip = payload.get('sip')
 
     result = {}
-    instances = {}
+    instances = []
+    siplist = []
 
     # resolve the query and register interest
     if sip is not None and sip != "":
@@ -91,7 +92,7 @@ def _tablequery_handler(client_id, payload):
         instances = service_resolution(sname)
 
     register_interest_sname(sname, client_id)
-    result = {'app_name': sname, 'instance_list': instances}
+    result = {'app_name': sname, 'instance_list': instances, 'sip_list':siplist}
     mqtt_publish_tablequery_result(client_id, result)
 
 
