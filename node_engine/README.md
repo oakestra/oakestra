@@ -25,7 +25,7 @@ The Node Engine can be started with or without the networking component
 
 ### Start the Node Engine & NetManager
 
-**It is mandatory to install the NetManager first, checkout [edgeionet](https://github.com/edgeIO/edgeionet)**
+**It is mandatory to install the NetManager first, checkout [edgeionet](https://github.com/edgeIO/edgeionet/tree/main/node-net-manager)**
 
 export the following environment variables:
 - CLUSTER_MANAGER_IP: `export CLUSTER_MANAGER_IP=<cluster_orchestrator_ip>` - public address of the cluster orchestrator
