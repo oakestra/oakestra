@@ -62,9 +62,15 @@ type incomingMessage struct {
 func New() GoProxyTunnel {
 	//parse confgiuration file
 	tunconfig := Configuration{}
+	//fetch config file locally
 	err := gonfig.GetConf("config/tuncfg.json", &tunconfig)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("No local config file found, looking into /etc/netmanager/tuncfg.json")
+		//fetch config inside /etc/netmanager
+		err = gonfig.GetConf("/etc/netmanager/tuncfg.json", &tunconfig)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	return NewCustom(tunconfig)
 }

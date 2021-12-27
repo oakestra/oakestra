@@ -3,8 +3,11 @@ echo "supported architectures: amd64, arm-7"
 
 if [ "$1" == "" ]; then
     echo "Architecture not set"
-    extit 1
+    exit 1
 fi
 
-cp ./build/bin/$1-NetManager /bin/NetManager
-chmod 755 /bin/NetManager
+sudo cp ./build/bin/$1-NetManager /bin/NetManager
+sudo mkdir /etc/netmanager
+sudo cp ./config/tuncfg.json /etc/netmanager/tuncfg.json
+sudo cp ./config/envcfg.json /etc/netmanager/envcfg.json
+sudo chmod 755 /bin/NetManager
