@@ -17,7 +17,7 @@ if [ "$MQTT_BROKER_URL" == "" ]; then
     echo "MQTT_BROKER_URL NOT SET!"
     echo "Please run export MQTT_BROKER_URL=<ip or url of the mqtt broker> to set a custom one"
     echo "switching to default $CLUSTER_MANAGER_IP"
-    export $MQTT_BROKER_URL=$CLUSTER_MANAGER_IP
+    export MQTT_BROKER_URL=$CLUSTER_MANAGER_IP
 fi
 
 if [ "$MQTT_BROKER_PORT" == "" ]; then
@@ -43,7 +43,7 @@ fi
 
 # Run the netmanager in backgruond
 sudo echo "Requiring SU"
-cd NetManager/ && sudo -E NetManager &>> netmanager.log &
+sudo -E NetManager &>> netmanager.log &
 # Registering trap to kill the NetManager on exit
 trap "ps -ax | grep NetManager | awk {'print $1'} | xargs sudo kill > /dev/null 2>&1" SIGINT SIGTERM EXIT
 sleep 2
