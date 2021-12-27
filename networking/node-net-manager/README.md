@@ -13,9 +13,9 @@ The Network manager is divided in 4 main components:
 ```
 
 .
-├── bin/
+├── build/
 │			Description:
-│				Binary executable compiled files 
+│				Binary executable compiled files and build scripts
 ├── config/
 │			Description:
 │				Configuration files used by the environment maanger and the proxyTunnel. These configuration files are used only 
@@ -29,12 +29,15 @@ The Network manager is divided in 4 main components:
 ├── testEnvironment/
 │			Description:
 │				Executable files that can be used to test the Netowrk Manager locally. 
-├── api/
+├── mqtt/
 │			Description:
-│				This is where the exposed api is implemented
-├── build-arm.sh
+│				Mqtt interface witht he cluster service manager
+├── install.sh
 │			Description:
-│				Script that generates the binaries with go-arm7 
+│				installation script 
+├── start.sh
+│			Description:
+│				startup script for the NetManagger
 └──  NetManager.go
 			Description:
 				Entry point to startup the NetworkManager
@@ -42,6 +45,23 @@ The Network manager is divided in 4 main components:
 ```
 
 # Installation
+run `./install.sh <architecture>` specifying amd64 or arm-7
+
+# Run NetManager
+export the necessary environment variables:
+
+##Installed executables
+If you installed the executables then simply run
+
+- MQTT_BROKER_URL: `export MQTT_BROKER_URL=<ip or url of the cluster mqtt broker>` - IP address of the cluster's MQTT broker
+- MQTT_BROKER_PORT: `export MQTT_BROKER_PORT=<port of the cluster mqtt broker>` - OPTIONAL, default: 10003
+- PUBLIC_WORKER_IP: `export PUBLIC_WORKER_IP=<ip or hostname>` - address where the node is publicly accessible 
+- PUBLIC_WORKER_PORT: `export PUBLIC_WORKER_PORT=<public node port>` - port where the node is publicly accessible. OPTIONAL, default: 50103
+
+then run `NetManager`
+
+##Sh script
+If you didn't run the executables then configure the environment variables inside the `start.sh` script and run it manually.
 
 ## Development setup
 The development setup can be used to test locally the tunneling mechanism without the use of the Cluster orchestrator. This setup requires 2 different machines namely Host1 and Host2.

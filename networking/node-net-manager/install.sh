@@ -7,3 +7,4 @@ if [ "$1" == "" ]; then
 fi
 
 cp ./build/bin/$1-NetManager /bin/NetManager
+chmod 755 /bin/NetManager
