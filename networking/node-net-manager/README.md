@@ -50,7 +50,7 @@ run `./install.sh <architecture>` specifying amd64 or arm-7
 # Run NetManager
 export the necessary environment variables:
 
-##Installed executables
+## Installed executables
 If you installed the executables then simply run
 
 - MQTT_BROKER_URL: `export MQTT_BROKER_URL=<ip or url of the cluster mqtt broker>` - IP address of the cluster's MQTT broker
@@ -60,7 +60,7 @@ If you installed the executables then simply run
 
 then run `NetManager`
 
-##Sh script
+## Sh script
 If you didn't run the executables then configure the environment variables inside the `start.sh` script and run it manually.
 
 ## Development setup
