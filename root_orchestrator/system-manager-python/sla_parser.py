@@ -8,7 +8,7 @@ class SLAFormatError(BaseException):
 
 
 def parse_sla(file):
-    json_file = open(file, "r").read()
+    json_file = file.read()
     if validate_json(json_file):
         return json.loads(json_file)
     else:
@@ -29,4 +29,4 @@ def validate_json(json_file):
 
 
 if __name__ == "__main__":
-    print(parse_sla("tests/service_level_agreements/sla_correct_1.json"))
+    print(parse_sla(open("tests/service_level_agreements/sla_correct_1.json", 'r')))
