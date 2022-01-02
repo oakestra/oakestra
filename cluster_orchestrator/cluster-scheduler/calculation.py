@@ -395,7 +395,7 @@ def sla_alarm_latency_constraint_scheduling(constraint, qualified_nodes, source_
         else:
             print(f"Cluster has {qualified_nodes_size - 1} other suitable nodes. Find best target via NCS. ")
             # Add vivaldi and ping info of cluster orchestrator to data for multilateration
-            co_ip_rtt_stats = parallel_ping(worker_ip_rtt_stats.keys(), source_client_id)
+            co_ip_rtt_stats = parallel_ping(worker_ip_rtt_stats.keys())
             # TODO: for test -> remove when finished
             # address = "http://192.168.178.33:3001/monitoring/ping"
             # response = requests.post(address, json=json.dumps(
