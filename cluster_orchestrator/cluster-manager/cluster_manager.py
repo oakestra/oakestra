@@ -13,7 +13,7 @@ from prometheus_client import start_http_server
 
 from cluster_balancer import service_resolution, service_resolution_ip
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_upsert_job, mongo_find_job_by_system_id, \
-    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id, mongo_get_vivaldi_info_by_node_id
+    mongo_update_job, mongo_find_node_by_name, mongo_find_job_by_id, mongo_get_vivaldi_info_by_node_id, mongo_find_many_by_ids
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
 from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from cm_logging import configure_logging
@@ -66,7 +66,7 @@ def status():
 def deploy_task():
     app.logger.info('Incoming Request /api/deploy')
     job = request.json  # contains job_id and job_description
-    job_obj = mongo_upsert_job(job)
+    job_obj = mongo_upsert_job(job, from_root=True)
     scheduler_request_deploy(job_obj)
     return "ok"
 
@@ -79,13 +79,12 @@ def get_scheduler_result_and_propagate_to_edge():
     app.logger.info(data)
 
     job = data.get('job')
-    result_nodes = data.get('nodes')
-    # Add list of potential target nodes to job entry in database to redeploy the service to next node in list in case
-    # the deployment to current target node fails
-    resulting_node = result_nodes[0]
-    resulting_node_id = resulting_node.get('_id')
+    connectivity = job.get("connectivity")
+    result_node = data.get('node')
+    resulting_node_id = result_node.get('_id')
+
     app.logger.info(f"Deploy to Node: {resulting_node_id}")
-    mongo_update_job_status(job.get('_id'), 'NODE_SCHEDULED', resulting_node, result_nodes[1:])
+    mongo_update_job(job.get('_id'), 'NODE_SCHEDULED', result_node, connectivity)
     job = mongo_find_job_by_id(job.get('_id'))
     mqtt_publish_edge_deploy(resulting_node_id, job)
     return "ok"
@@ -93,16 +92,43 @@ def get_scheduler_result_and_propagate_to_edge():
 
 @app.route('/api/delete/<system_job_id>')
 def delete_task(system_job_id):
+    """find service in db and ask corresponding workers to delete task"""
+    app.logger.info('Incoming Request /api/delete/ - to delete task...')
+    # job_id is the system_job_id assigned by System Manager
+    job = mongo_find_job_by_system_id(system_job_id)
+    # Undeploy all service instances
+    job_id = str(job.get('_id'))
+    job.__setitem__('_id', job_id)
+    for instance in job['instance_list']:
+        node_id = instance.get('worker_id')
+        mqtt_publish_edge_delete(node_id, job)
+    # Remove workers from instance list
+    job["instance_list"] = []
+    mongo_upsert_job(job)
+
+    return "ok"
+
+
+@app.route('/api/delete/<system_job_id>/<instance_worker_id>')
+def delete_task_instance(system_job_id, instance_worker_id):
     """find service in db and ask corresponding worker to delete task"""
     app.logger.info('Incoming Request /api/delete/ - to delete task...')
     # job_id is the system_job_id assigned by System Manager
     job = mongo_find_job_by_system_id(system_job_id)
-    node_id = job.get('instance_list')[0].get('worker_id')  # undeploy the first instance available
+    # Undeploy service running on specified worker
     job_id = str(job.get('_id'))
     job.__setitem__('_id', job_id)
-    mqtt_publish_edge_delete(node_id, job)
-    return "ok"
+    instance_to_remove = None
+    for instance in job['instance_list']:
+        node_id = instance.get('worker_id')
+        if node_id == instance_worker_id:
+            mqtt_publish_edge_delete(node_id, job)
+            instance_to_remove = instance
 
+    # Remove undeployed instance from instance list
+    if instance_to_remove is not None:
+        job["instance_list"].remove(instance_to_remove)
+    return "ok"
 
 @app.route('/api/replicate/', methods=['GET', 'POST'])
 def replicate():
@@ -141,14 +167,31 @@ def move_application_from_node_to_node():
     return "ok", 200
 
 
-@app.route('/geolocation/<ips>', methods=["GET"])
-def get_geolocation(ips):
-    app.logger.info(f"Incoming Request /geolocation/{ips}")
-    ips = ips.split(",")
+@app.route('/api/geolocation', methods=['POST'])
+def get_geolocations():
+    """ Lookup coordinates for given IPs in GeoLite2 database. """
+    my_logger.info(f"Incoming Request /api/geolocations Body:{request.json}")
+    ips = json.loads(request.json)
     ip_locations = query_geolocation_for_ips(ips)
-    app.logger.info(f"Locs: {ip_locations}")
+    app.logger.info(f"IP Locations: {ip_locations}")
     return json.dumps(ip_locations), 200
 
+@app.route('/api/vivaldi-info', methods=['POST'])
+def get_vivaldi_info():
+    """ Retrieve Vivaldi coordinates for given workers. """
+    worker_ids = json.loads(request.json)
+    my_logger.info(f"Incoming Request /api/vivaldi_info Body:{worker_ids}")
+    nodes = mongo_find_many_by_ids(worker_ids)
+    response = {}
+    for node in nodes:
+        node_id = str(node.get("_id"))
+        if node_id in worker_ids:
+            vec = node.get("vivaldi_vector")
+            hgt = node.get("vivaldi_height")
+            err = node.get("vivaldi_error")
+            response[node_id] = {"vector": vec, "height": hgt, "error": err}
+
+    return json.dumps(response), 200
 
 # ................ Scheduler Test ......................#
 # ......................................................#

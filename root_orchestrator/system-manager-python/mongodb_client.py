@@ -144,13 +144,13 @@ def mongo_insert_job(obj):
     microservice = file['microservice']
     app.logger.info(file)
     # jobname and details generation
-    job_name = application['app_name'] + "." + application['app_ns'] + "." + microservice['service_name'] + "." + microservice['service_ns']
+    job_name = application['application_name'] + "." + application['application_namespace'] + "." + microservice['microservice_name'] + "." + microservice['microservice_namespace']
     file['job_name'] = job_name
     job_content = {
         'job_name': job_name,
         'service_ip_list': obj.get('service_ip_list'),
-        'app_name': application['app_name'],
-        'app_ns': application['app_ns'],
+        'application_name': application['application_name'],
+        'application_namespace': application['application_namespace'],
         'applicationID': application['applicationID'],
         **microservice  # The content of the input file
     }
@@ -266,7 +266,7 @@ def mongo_free_service_address_to_cache(address):
     for n in address:
         assert 0 <= n < 254
 
-    netdb.insert({
+    netdb.insert_one({
         'type': 'free_service_ip',
         'ipv4': address
     })
@@ -281,12 +281,12 @@ def mongo_get_next_service_ip():
     netdb = mongo_net.db.net
 
     next_addr = netdb.find_one({'type': 'next_service_ip'})
-
+    print(f"NEXT ADDR: {next_addr}")
     if next_addr is not None:
         return next_addr["ipv4"]
     else:
         ip4arr = [172, 30, 0, 0]
-        id = netdb.insert({
+        id = netdb.insert_one({
             'type': 'next_service_ip',
             'ipv4': ip4arr
         })
@@ -325,7 +325,7 @@ def mongo_get_next_subnet_ip():
         return next_addr["ipv4"]
     else:
         ip4arr = [172, 18, 0, 0]
-        id = netdb.insert({
+        id = netdb.insert_one({
             'type': 'next_subnet_ip',
             'ipv4': ip4arr
         })
@@ -359,7 +359,7 @@ def mongo_get_subnet_address_from_cache():
     netdb = mongo_net.db.net
 
     entry = netdb.find_one({'type': 'free_subnet_ip'})
-
+    print(f"ENTRY: {entry}")
     if entry is not None:
         netdb.delete_one({"_id": entry["_id"]})
         return entry["ipv4"]
@@ -379,7 +379,7 @@ def mongo_free_subnet_address_to_cache(address):
     for n in address:
         assert 0 <= n < 256
 
-    netdb.insert({
+    netdb.insert_one({
         'type': 'free_subnet_ip',
         'ipv4': address
     })

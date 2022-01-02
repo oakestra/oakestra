@@ -14,7 +14,7 @@ def new_job_rr_address(app_data, service_data):
     @raise: exception if an invalid RR address has been provided by the user
     """
     address = service_data.get('RR_ip')
-    job_name = app_data['app_name'] + "." + app_data['app_ns'] + "." + service_data['service_name'] + "." + service_data['service_ns']
+    job_name = app_data['application_name'] + "." + app_data['application_namespace'] + "." + service_data['microservice_name'] + "." + service_data['microservice_namespace']
 
     if address is not None:
         address_arr = str(address).split(".")
@@ -82,7 +82,7 @@ def new_subnetwork_addr():
     """
     with subnetip_ip_lock:
         addr = mongodb_client.mongo_get_subnet_address_from_cache()
-
+        print(f"SUBNET ADDR: {addr}")
         if addr is None:
             addr = mongodb_client.mongo_get_next_subnet_ip()
             next_addr = _increase_subnetwork_address(addr)

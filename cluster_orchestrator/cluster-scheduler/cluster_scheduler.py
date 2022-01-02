@@ -1,18 +1,11 @@
 import os
-import random
-import time
-import numpy as np
-import requests
 from flask import Flask, request
 from celery import Celery
 import json
-from mongodb_client import mongo_init, mongo_set_job_as_scheduled, mongo_find_all_nodes
+from mongodb_client import mongo_init, mongo_set_job_as_scheduled, mongo_find_all_nodes, mongo_find_node_by_id
 from manager_requests import manager_request
 from calculation import calculate
 from cs_logging import configure_logging
-from NetworkCoordinateSystem.network_measurements import parallel_ping
-from NetworkCoordinateSystem.vivaldi_coordinate import VivaldiCoordinate
-from NetworkCoordinateSystem.multilateration import multilateration
 
 WORKER_SCREENING_INTERVAL = 30
 
@@ -66,53 +59,36 @@ def replicate_task():
     start_calc_replicate.delay(job)
     return "ok"
 
-# TODO: naming?
-@app.route("/api/calculate/alarm", methods=["POST"])
+@app.route("/api/calculate/sla-alarm", methods=["POST"])
 def handle_sla_alarm():
-    data = request.json
+    data = json.loads(request.json)
     topic = data['topic']
-    payload = json.loads(data['payload'])
+    payload = data['payload']
     client_id = topic.split('/')[1]
 
-    alarm_type = payload.get("alarm_type")
-    if alarm_type == "memory":
-        handle_memory_alarm()
-    elif alarm_type == "cpu":
-        handle_cpu_alarm()
-    elif alarm_type == "geo":
-        handle_geo_alarm()
-    elif alarm_type == "latency":
-        handle_latency_alarm.delay(client_id, payload)
-    else:
-        app.logger.info(f"Unknown SLA alarm type was triggered: {alarm_type}")
+    handle_sla_alarm_task.delay(client_id, payload)
 
     return "ok", 204
 
-
-def handle_memory_alarm():
-    pass
-
-
-def handle_cpu_alarm():
-    pass
-
-
-def handle_geo_alarm():
-    pass
-
 @celeryapp.task
-def handle_latency_alarm(client_id, payload):
+def handle_sla_alarm_task(client_id, payload):
     job = payload["job"]
     ip_rtt_stats = payload["ip_rtt_stats"]
     # Deploy service to new target
-    scheduling_status, scheduling_result = calculate(job, is_sla_violation=True, source_client_id=client_id, worker_ip_rtt_stats=ip_rtt_stats)
+    from timeit import default_timer as timer
+    start = timer()
+    scheduling_status, scheduling_result, augmented_job = calculate(job, is_sla_violation=True, source_client_id=client_id, worker_ip_rtt_stats=ip_rtt_stats)
+    end = timer()
+    dur = end - start  # Time in seconds
+    file_object = open('sample.txt', 'a')
+    file_object.write(f"SLA-Alarm: {dur}\n")
+    file_object.close()
     # Undeploy service on violating node
     if scheduling_status == 'negative':
         app.logger.info('No active node found to schedule this job.')
     else:
-        app.logger.info('Chosen Node: {0}'.format(scheduling_result))
-        manager_request(app, scheduling_result, job)
-        # mongo_set_job_as_scheduled(job_id=job.get('_id'), node_id=scheduling_result.get('_id')) # DONE IN CLUSTER-MANAGER
+        app.logger.info('Chosen Node: {0}'.format(str(scheduling_result.get("_id"))))
+        manager_request(app, scheduling_result, augmented_job)
 
 @celeryapp.task()
 def start_calc_deploy(job):
@@ -121,33 +97,39 @@ def start_calc_deploy(job):
     app.logger.info("App.logger.info Received Task")
     print("print Received Task")
 
-    scheduling_status, scheduling_result = calculate(job)  # scheduling_result can be a node object
+    from timeit import default_timer as timer
+    start = timer()
+    scheduling_status, scheduling_result, augmented_job = calculate(job)  # scheduling_result can be a node object
+    end = timer()
+    dur = end - start  # Time in seconds
+    file_object = open('sample.txt', 'a')
+    file_object.write(f"Deployment: {dur}\n")
+    file_object.close()
 
     if scheduling_status == 'negative':
         app.logger.info('No active node found to schedule this job.')
     else:
-        app.logger.info('Chosen Node: {0}'.format(scheduling_result))
-        manager_request(app, scheduling_result, job)
+        app.logger.info('Chosen Node: {0}'.format(str(scheduling_result.get("_id"))))
+        manager_request(app, scheduling_result, augmented_job)
         # mongo_set_job_as_scheduled(job_id=job.get('_id'), node_id=scheduling_result.get('_id')) # DONE IN CLUSTER-MANAGER
 
 
 @celeryapp.task()
 def start_calc_replicate(job):
     print(job)
-    scheduling_status, scheduling_result = calculate(job)
+    from timeit import default_timer as timer
+    start = timer()
+    scheduling_status, scheduling_result, augmented_job = calculate(job)
+    end = timer()
+    dur = end - start  # Time in seconds
+    file_object = open('sample.txt', 'a')
+    file_object.write(f"Replication: {dur}\n")
+    file_object.close()
     if scheduling_status == 'negative':
         app.logger.info("Target node does not provide the required resources.")
     else:
         app.logger.info(f'Send scheduling result for node {scheduling_result}')
-        manager_request(app, scheduling_result, job)
-
-
-@celeryapp.task
-def start_calc_migrate(job):
-    print(job)
-    # Deploy service to new target
-    scheduling_status, scheduling_result = calculate(job)
-    # Undeploy service on violating node
+        manager_request(app, scheduling_result, augmented_job)
 
 
 @celeryapp.on_after_configure.connect

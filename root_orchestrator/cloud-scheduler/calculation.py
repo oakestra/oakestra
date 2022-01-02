@@ -1,6 +1,7 @@
 import time
 
-from mongodb_client import mongo_find_cluster_by_location, is_cluster_active, mongo_find_all_active_clusters
+from mongodb_client import mongo_find_cluster_by_location, is_cluster_active, mongo_find_all_active_clusters, \
+    mongo_find_job_by_microservice_id, mongo_find_cluster_by_id, mongo_find_cluster_by_name
 import geopy.distance
 from shapely.geometry import Point, Polygon, MultiPolygon, shape
 from shapely.ops import nearest_points
@@ -17,38 +18,37 @@ GERMANY = Polygon([[53.69039499952727, 7.19896078851138],[54.83252457729241, 9.0
 AREAS = {
     "munich": MUNICH,
     "garching": GARCHING,
-    "germany": GERMANY # Used for testing different latency measures from requests within geremany
+    "germany": GERMANY # Used for testing different latency measures from requests within germany
 }
 
 def calculate(job_id, job):
     print('calculating...')
-    print(job)
     constraints = job.get('constraints')
-    if job.get('cluster_location'):
-        return location_based_scheduling(job)  # tuple of (negative|positive, cluster|negative_description)
+    connectivity = job.get('connectivity')
+
+    if job.get('target_cluster'):
+        return check_suitability_of_target(job)  # tuple of (negative|positive, cluster|negative_description)
     else:
-        if len(constraints) >= 1:
-            # Filter clusters that are not close to area specified in SLA constriants
-            clusters = filter_clusters_based_on_worker_locations(constraints)
+        if len(constraints) >= 1 or len(connectivity) >= 1:
+            clusters = filter_clusters_based_on_constraints(job)
         else:
             clusters = mongo_find_all_active_clusters()
-        return greedy_load_balanced_algorithm(job=job, filtered_clusters=clusters)
+        return greedy_load_balanced_algorithm(job=job, clusters=clusters)
 
 
-def location_based_scheduling(job):
-    requested_location = job.get('cluster_location')
-    cluster = mongo_find_cluster_by_location(requested_location)  # can return None
+def check_suitability_of_target(job):
+    target_cluster = job.get('target_cluster')
+    cluster = mongo_find_cluster_by_name(target_cluster)
 
     if cluster is not None:  # cluster found by location exists
         if is_cluster_active(cluster):
             print('Cluster is active')
 
-            job_required_cpu_cores = job.get('requirements').get('cpu')
-            job_required_memory = job.get('requirements').get('memory')
+            job_required_cpu_cores = job.get('vcpus')
+            job_required_memory = job.get('memory')
 
             cluster_cores_available = cluster.get('total_cpu_cores')
             cluster_memory_available = cluster.get('memory_in_mb')
-
             if cluster_cores_available >= job_required_cpu_cores and cluster_memory_available >= job_required_memory:
                 return 'positive', cluster
             else:
@@ -83,8 +83,7 @@ def first_fit_algorithm(job):
     # no cluster found
     return 'negative', 'NoActiveClusterWithCapacity'
 
-
-def greedy_load_balanced_algorithm(job, filtered_clusters):
+def greedy_load_balanced_algorithm(job, clusters):
     """Which of the clusters have the most capacity for a given job"""
 
     # job_req = job.get('requirements')
@@ -92,7 +91,7 @@ def greedy_load_balanced_algorithm(job, filtered_clusters):
 
     qualified_clusters = []
 
-    for cluster in filtered_clusters:
+    for cluster in clusters:
         available_cpu = float(cluster.get('total_cpu_cores'))
         available_memory = float(cluster.get('memory_in_mb'))
 
@@ -130,8 +129,74 @@ def same_cluster_replication(job_obj, cluster_obj, replicas):
     cluster_memory_available = cluster_obj.get('memory_in_mb')
 
 
-def filter_clusters_based_on_worker_locations(constraints):
-    active_clusters = mongo_find_all_active_clusters()
+def filter_clusters_based_on_constraints(job):
+    # Filter clusters that are not close to area specified in SLA constraints
+    location_filter_result = filter_clusters_based_on_worker_locations(job)
+
+    connectivity = job.get("connectivity")
+    if connectivity is None or len(connectivity) == 0:
+        print("No connectivity constraints defined.")
+        #   Case 1a: location_filter_result = [] -> return location_filter_result
+        #   Case 2a: location_filter_result = [a,b,c] -> return location_filter_result
+        return location_filter_result
+    # Job contains connectivity constraints
+    else:
+        print("Connectivity constraints defined.")
+        # Filter clusters based on connectivity constraints
+        connectivity_filter_result = filter_clusters_based_on_connectivity_constraints(job)
+        if len(location_filter_result) == 0:
+            print("No cluster found that runs the referenced microservice.")
+            #   Case 1b: location_filter_result = [] and connectivity_filter_result = None -> return []
+            #   Case 2b: location_filter_result = [] and connectivity_filter_result = a -> return []
+            return []
+        else:
+            if connectivity_filter_result in location_filter_result:
+                print(f"Referenced microservice is deployed on cluster {str(connectivity_filter_result.get('_id'))}")
+                # Case 3b: location_filter_result = [a,b,c] and connectivity_filter_result = a -> return [a]
+                return [connectivity_filter_result]
+            else:
+                print("No cluster found that satisfies the location and connectivity constraints.")
+                # Case 4b: location_filter_result = [a,b,c] and connectivity_filter_result = None -> return []
+                # Case 5b: location_filter_result = [a,b,c] and connectivity_filter_result = z -> return []
+                return []
+
+
+def filter_clusters_based_on_connectivity_constraints(job):
+    connectivity = job.get("connectivity")
+    cluster_connectivity_mapping = {}
+    for con in connectivity:
+        # Find cluster where target microservice is deployed such that this service is placed in the same cluster
+        # allowing to use the Vivaldi network to approximate intra-cluster latencies. Placing this service in another
+        # cluster makes it impossible to use Vivaldi, because the clusters' Vivaldi networks are independent of each
+        # other.
+        target_microservice_id = con.get("target_microservice_id")
+        target_microservice_job = mongo_find_job_by_microservice_id(job.get("applicationID"), target_microservice_id)
+        instance_list = target_microservice_job.get("instance_list")
+        # If the instance list has at least one entry, that means the service is deployed on a cluster
+        if len(instance_list) != 0:
+            target_cluster_id = instance_list[0].get("cluster_id")
+            cluster_connectivity_mapping.setdefault(target_cluster_id, []).append(con)
+        # Otherwise, if the instance list is empty, the service is not deployed (yet) and hence the scheduling for this
+        # service cannot find a positive result
+        else:
+            return None
+
+    # Check if cluster connectivity mapping only contains one cluster, the target cluster.
+    if len(cluster_connectivity_mapping) == 1:
+        target_cluster_id = list(cluster_connectivity_mapping.keys())[0]
+        print(f"Target cluster of referenced microservice: {target_cluster_id}")
+        return mongo_find_cluster_by_id(target_cluster_id)
+    # If it contains multiple clusters, that means that the referenced microservices are deployed across different
+    # clusters meaning we cannot make use of Vivaldi network information. In that case return a negative scheduling
+    # result
+    else:
+        return None
+
+
+
+
+def filter_clusters_based_on_worker_locations(job):
+    constraints = job.get("constraints")
     constraint_locations = {}
     for constraint in constraints:
         constraint_type = constraint["type"]
@@ -150,9 +215,9 @@ def filter_clusters_based_on_worker_locations(constraints):
         else:
             raise f"Unsupported latency type: {constraint_type}"
 
+    active_clusters = list(mongo_find_all_active_clusters()).copy()
     filtered_clusters = []
     for c in active_clusters:
-        print(f"Cluster: {c}")
         feasible = True
         worker_area = shape(c.get("worker_groups"))
 
@@ -161,11 +226,12 @@ def filter_clusters_based_on_worker_locations(constraints):
             for area in constraint_locations["geo"]:
                 # If the cluster does not intersects with an constraint area continue with next cluster
                 if not cluster_intersects_area(worker_area, area):
-                    unfeasible = True
+                    print(f"Cluster has no workers in the specified area.")
+                    feasible = False
                     break
         # 2. Filter based on "latency" constraint
         elif "latency" in constraint_locations:
-            # TODO: How close should the cluster be to the specified area?
+            # TODO: How close should the cluster be to the specified area for a good guess regarding low latencies?
             pass
         if feasible:
             filtered_clusters.append(c)

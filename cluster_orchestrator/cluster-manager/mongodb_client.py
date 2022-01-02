@@ -61,6 +61,9 @@ def mongo_upsert_node(obj):
     app.logger.info(node_id)
     return node_id
 
+def mongo_find_many_by_ids(node_ids):
+    global mongo_nodes
+    return mongo_nodes.db.nodes.find({"_id": {"$in": [ObjectId(id) for id in node_ids]}})
 
 def mongo_find_node_by_id(node_id):
     global mongo_nodes
@@ -141,9 +144,6 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
                 number_of_active_nodes += 1
                 for t in n.get('node_info').get('virtualization'):
                     virtualization.append(t) if t not in virtualization else virtualization
-
-                # TODO: For research just send the actual coordinates of the worker nodes. In the future we want to
-                # obfuscate these information
                 name = n.get('node_info').get('host')
                 lat = n.get('lat')
                 long = n.get('long')
@@ -159,7 +159,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
 
     coords = [[lat, long] for _, lat, long in worker_names_coords]
     geo = create_obfuscated_polygons_based_on_concave_hull(coords)
-    worker_groups = mapping(geo) if geo is not None else None
+    worker_groups = mapping(geo) if geo is not None else {}
     return {'cpu_percent': cumulative_cpu, 'memory_percent': cumulative_memory,
             'cpu_cores': cumulative_cpu_cores, 'cumulative_memory_in_mb': cumulative_memory_in_mb,
             'number_of_nodes': number_of_active_nodes, 'jobs': jobs, 'virtualization': virtualization, 'more': 0,
@@ -169,11 +169,16 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
 # ................. Job Operations .......................#
 ###########################################################
 
-def mongo_upsert_job(job):
+def mongo_upsert_job(job, from_root=False):
     print('insert/upsert requested job')
-    job['system_job_id'] = job['_id']
+    # If from_root is True, the job comes from the root orchestrator. In that case the job's "system_job_id" attribute
+    # has to be set to the "_id" of the job in the ROs database to be able to update the job status later in the root.
+    if from_root:
+        job['system_job_id'] = job['_id']
+
+    ## Remove immutable field "_id" from job to avoid update issues
     del job['_id']
-    ## REMOVE ENTRY FROM DB
+
     result = mongo_jobs.db.jobs.find_one_and_update({'system_job_id': job['system_job_id']}, {'$set': job}, upsert=True,
                                                     return_document=True)  # if job does not exist, insert it
     result['_id'] = str(result['_id'])
@@ -213,7 +218,7 @@ def mongo_find_job_by_ip(ip):
     return job
 
 
-def mongo_update_job_status(job_id, status, target_node, remaining_feasible_nodes):
+def mongo_update_job(job_id, status, target_node, connectivity):
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
     instance_list = job['instance_list']
@@ -225,10 +230,11 @@ def mongo_update_job_status(job_id, status, target_node, remaining_feasible_node
                 port = 50011
             instance['host_port'] = port
             instance['worker_id'] = target_node.get('_id')
+            print(f"Update worker to {target_node.get('_id')}")
             break
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
                                          {'$set': {'status': status, 'instance_list': instance_list,
-                                          'deployment_list': remaining_feasible_nodes}})
+                                                   'connectivity': connectivity}})
 
 
 def mongo_update_job_deployed(job_id, status, ns_ip, node_id):

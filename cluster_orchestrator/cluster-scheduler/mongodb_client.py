@@ -101,3 +101,18 @@ def mongo_find_node_by_id(id):
     global mongo_nodes
     app.logger.info(f"Get node {id}")
     return mongo_nodes.db.nodes.find_one({"_id": ObjectId(id)})
+
+def mongo_find_job_by_microservice_id(application_id, microservice_id):
+    global mongo_jobs
+    app.logger.info(f"Get job with applicationID={application_id} and microserviceID={microservice_id}")
+    return mongo_jobs.db.jobs.find_one({"applicationID": application_id, "microserviceID": microservice_id})
+
+def mongo_get_vivaldi_data():
+    global mongo_nodes
+    app.logger.info(f"Query Vivaldi data from all workers")
+    return mongo_nodes.db.nodes.find({}, {"vivaldi_vector": 1, "vivaldi_height": 1, "vivaldi_error": 1})
+
+def mongo_get_geolocation_data():
+    global mongo_nodes
+    app.logger.info(f"Query geographic location data from all workers")
+    return mongo_nodes.db.nodes.find({}, {"lat": 1, "long": 1})

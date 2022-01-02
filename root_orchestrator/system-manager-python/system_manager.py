@@ -4,21 +4,12 @@ from flask_socketio import SocketIO, emit
 import json
 from bson.objectid import ObjectId
 from markupsafe import escape
-import time
 import threading
 from bson import json_util
-import geopy.distance
-from matplotlib.figure import Figure
-from shapely.geometry import Point, Polygon, MultiPolygon, shape
-from shapely.ops import nearest_points
 
+from mongodb_client import *
+from sla_parser import parse_sla
 
-from mongodb_client import mongo_init, mongo_upsert_cluster, mongo_insert_job, mongo_find_cluster_by_id_and_incr_node, \
-    mongo_find_cluster_by_id_and_decr_node, mongo_get_job_status, mongo_update_job_status, \
-    mongo_update_cluster_information, \
-    mongo_find_cluster_by_id_and_set_number_of_nodes, mongo_find_cluster_of_job, mongo_find_job_by_id, \
-    mongo_find_cluster_by_location, mongo_get_all_jobs, mongo_get_all_clusters, mongo_find_all_active_clusters, \
-    mongo_update_job_status_and_instances, mongo_update_job_net_status
 from service_manager import new_instance_ip, clear_instance_ip, service_resolution, new_subnetwork_addr, \
     service_resolution_ip, new_job_rr_address
 from yamlfile_parser import yaml_reader
@@ -179,16 +170,19 @@ def deploy_task():
             return "empty file", 400
         if file:
             # Reading config file
-            data = yaml_reader(file)
+            # data = yaml_reader(file)
+            # print(f"XXX: {json.loads(file.read())}")
+            data = parse_sla(file)
             app.logger.info(data)
             job_ids = {}
 
             applications = data.get('applications')
-
+            app.logger.info(f"SLA DATA: {data}")
             for application in applications:
-                application_name = application.get('app_name')
+                application_name = application.get('application_name')
                 microservices = application.get('microservices')
-                for microservice in microservices:
+                for i, microservice in enumerate(microservices):
+                    app.logger.info(f"Process microservice {i+1}/{len(microservices)}")
                     # Assigning a Service IP for RR Load Balancing
                     s_ip = [{
                         "IpType": 'RR',
@@ -200,10 +194,13 @@ def deploy_task():
                             'file_content': {'application': application, 'microservice': microservice},
                             'service_ip_list': s_ip
                         })
-
+                    app.logger.info(f"Inserted Job with ID: {str(job_id)}")
+                    # Remove other microservices from deployment job
+                    application.pop("microservices")
+                    job = {**application, **microservice}
                     # Request scheduling
                     threading.Thread(group=None, target=scheduler_request_deploy,
-                                     args=(microservice, str(job_id))).start()
+                                     args=(job, str(job_id))).start()
                     # Job status to scheduling REQUESTED
                     mongo_update_job_status(job_id, 'REQUESTED')
 

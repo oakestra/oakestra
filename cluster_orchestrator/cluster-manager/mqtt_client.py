@@ -7,9 +7,9 @@ from flask_mqtt import Mqtt
 
 from NetworkCoordinateSystem.network_measurements import ping
 from NetworkCoordinateSystem.vivaldi_coordinate import VivaldiCoordinate
-from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem, mongo_update_job_deployed, mongo_find_job_by_id, find_all_nodes
+from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem, mongo_update_job_deployed, mongo_find_job_by_id, find_all_nodes, mongo_upsert_job
 from system_manager_requests import system_manager_notify_deployment_status
-from cluster_scheduler_requests import scheduler_request_replicate, scheduler_request_alarm
+from cluster_scheduler_requests import scheduler_request_alarm
 
 mqtt = None
 app = None
@@ -110,8 +110,9 @@ def mqtt_publish_edge_deploy(worker_id, job):
 
 def mqtt_publish_edge_delete(worker_id, job):
     topic = 'nodes/' + worker_id + '/control/delete'
-    data = job
+    data = {'job': job}
     job_id = str(job.get('_id'))
+    app.logger.info(f"Send delete command for job {job_id} to worker {worker_id}")
     job.__setitem__('_id', job_id)
     mqtt.publish(topic, json.dumps(data))
 
@@ -184,19 +185,29 @@ def handle_job_deployment_topic(data):
     job_id = payload.get('job_id')
     status = payload.get('status')
     NsIp = payload.get('ns_ip')
-
-    # TODO: append node list to job db entry such that we can just try next node if deployment fails
-    # If the deployment failed try to deploy to next node in result lust
-
-    # If no nodes are left in list or deployment was successful, send the deployment info to the root
-
     deployment_info_from_worker_node(job_id, status, NsIp, client_id)
 
 
 def handle_nodes_alarm_topic(data):
-    topic = data['topic']
-    client_id = topic.split('/')[1]
-    app.logger.info(f"Node {client_id} triggered an ALARM! Data: {data}")
+    topic = data["topic"]
+    client_id = topic.split("/")[1]
+    payload = json.loads(data['payload'])
+    job = payload.get("job")
+    strategy = job.get("sla_violation_strategy")
+    app.logger.info(f"{strategy} violating service")
+    if strategy == "migrate":
+        # In case of a migration the instance has to be removed from the job's instance list
+        instance_list = job['instance_list']
+        app.logger.info(f"Remove node {client_id} from jobs instance list: {instance_list}")
+        for i, instance in enumerate(instance_list):
+            node_id = instance.get('worker_id')
+            if node_id == client_id:
+                # Remove worker id from instance
+                del job["instance_list"][i]["worker_id"]
+        app.logger.info(f"Update Job: {job}")
+        mongo_upsert_job(job)
+        mqtt_publish_edge_delete(client_id, job)
+
     scheduler_request_alarm(data)
 
 

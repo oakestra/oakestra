@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 from scipy.optimize import minimize
 import math
@@ -75,14 +73,8 @@ def multilateration(data):
         for ip, rtt in e.items():
             ip_rtts.setdefault(ip, []).append(rtt)
 
-    print(f"ip_rtts: {ip_rtts}")
     ip_locations = {}
-    fig = plt.figure()
-    fig.set_size_inches(10, 10)
-    ax = plt.gca()
-    colors = ["red", "blue", "green"]
     for i, (key, values) in enumerate(ip_rtts.items()):
-    # for i, (key, values) in enumerate([('ip1', ip_rtts['ip1'])]):
         ping_distances = values
         print(f"Start minimizing MSE for target IP {key}.")
         print(f"Initial location: {initial_locations[key]}")
@@ -96,7 +88,6 @@ def multilateration(data):
                 'ftol': 1e-5,
                 'maxiter': 1e+7
             })
-        plot_progress(ax, colors[i], vivaldi_locations, ping_distances, [initial_locations[key]] + point_progress)
         point_progress = []
 
         ip_locations[key] = result.x
@@ -124,26 +115,3 @@ def callbackF(Xi):
 # def callbackF(Xi):
 #     global point_progress
 #     point_progress.append(Xi)
-import matplotlib.pyplot as plt
-
-def plot_progress(ax, color, positions, distances, point_progress):
-
-    names = [f"Node {i+1}" for i in range(len(positions))]
-    circles = []
-    for name, pos, dist in zip(names, positions, distances):
-        ax.scatter(*pos)
-        circle = plt.Circle((pos[0], pos[1]), dist, color=color, fill=False)
-        circles.append(circle)
-        ax.annotate(name, pos)
-    for p in point_progress:
-        ax.scatter(*p)
-    xs = [p[0] for p in point_progress]
-    ys = [p[1] for p in point_progress]
-
-
-    ax.axis("equal")
-    ax.plot(xs, ys, color=color)
-
-    for circle in circles:
-        ax.add_patch(circle)
-    return ax

@@ -199,11 +199,12 @@ sla_schema = {
                                 "vgpus": {"type": "integer"},
                                 "vtpus": {"type": "integer"},
                                 "bandwidth_in": {"type": "integer"},
-                                "bandwith_out": {"type": "integer"},
+                                "bandwidth_out": {"type": "integer"},
                                 "storage": {"type": "integer"},
                                 "code": {"type": "string"},
                                 "state": {"type": "string"},
-                                "port": {"type": "integer"},
+                                "port": {"type": "string"},
+                                "sla_violation_strategy": {"type": "string"},
                                 "addresses": {
                                     "type": "object",
                                     "properties": {
@@ -274,7 +275,7 @@ sla_schema = {
                                 },
                             },
                             "required": ["microserviceID", "microservice_name", "virtualization", "memory", "vcpus",
-                                         "vgpus", "vtpus", "bandwidth_in",  "bandwith_out", "storage", "code", "state",
+                                         "vgpus", "vtpus", "bandwidth_in",  "bandwidth_out", "storage", "code", "state",
                                          "port", "added_files", "constraints", "connectivity"]
                         },
                         "exclusiveMinimum": 0,

@@ -3,51 +3,15 @@ import csv
 import time
 from unittest.mock import MagicMock
 
-import calculation
-
+from util import db_gen
 
 myPath = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, myPath + '/../')
 
-import pytest
-from calculation import *
+import calculation
 
 results = [["test_n", "component", "overhead", "setup"]]
 
-
-def db_gen(num):
-    cluster_list = []
-    for i in range(num):
-        elem = {
-            'total_cpu_cores': 12,
-            'memory_in_mb': 230,
-            '_id': str(i)
-        }
-        cluster_list.append(elem)
-    return cluster_list
-
-
-def test_banchemark_1():
-    current_setup = "1-45"
-    calculation.mongo_find_all_active_clusters = MagicMock(return_value=db_gen(1))
-    job = {
-        'requirements': {
-            "cpu": 1,
-            "memory": 100,
-        },
-        "id": 1
-    }
-    for i in range(100):
-        start = time.time()
-        res, mes = calculation.calculate("1", job)
-        if res != "positive":
-            raise Exception()
-        stop = time.time()
-        overhead = stop - start
-        overhead *= 1000
-        results.append([i, "root", overhead, current_setup])
-
-    print_csv()
 
 def test_banchemark_3():
     current_setup = "3-15"

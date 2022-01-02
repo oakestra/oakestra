@@ -5,18 +5,20 @@
     {
       "applicationID" : 1000010001,
       "application_name" : "Example Application",
+      "application_namespace" : "test",
       "application_desc" : "No description here",
       "microservices" : [
         {
           "microserviceID": 4,
           "microservice_name": "Micro A (4)",
+          "microservice_namespace": "test",
           "virtualization": "container",
           "memory": 4096,
           "vcpus": 2,
           "vgpus": 0,
           "vtpus": 0,
           "bandwidth_in": 1000000,
-          "bandwith_out": 8000,
+          "bandwidth_out": 8000,
           "storage": 1000,
           "code": "https://example.com/repositories/example/code.py",
           "state": "https://path.to.root.orchestrator.customer.application/example/state_1.json",

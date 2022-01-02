@@ -8,7 +8,6 @@ requests
 pyyaml
 APScheduler
 prometheus-client
-matplotlib
 shapely
 alphashape
 scikit-learn

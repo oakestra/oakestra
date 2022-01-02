@@ -50,27 +50,28 @@ def create_geo_of_node_locations(nodes):
         return Polygon(lat_long_coords)
 
 
-def create_obfuscated_polygons_based_in_alphashapes(nodes):
+def create_obfuscated_polygons_based_in_alphashapes(nodes, max_dist, buffer_size):
     # TODO: use fake coords for test
-    #lat_long_coords = get_node_coords(nodes)
+    # lat_long_coords = get_node_coords(nodes)
     lat_long_coords = nodes
-    clusters = cluster_worker_nodes(lat_long_coords)
+    clusters = cluster_worker_nodes(lat_long_coords, max_dist)
 
     polygons = []
     for cluster in clusters:
         # Create alpha shape
         alpha_shape = alphashape.alphashape(cluster, 0.5)
         # Add buffer to obfuscate node locations
-        buffered_shape = alpha_shape.buffer(0.03)
+        buffered_shape = alpha_shape.buffer(buffer_size)
         polygons.append(buffered_shape)
 
     return unary_union(polygons)
 
-def create_obfuscated_polygons_based_on_concave_hull(coords):
+
+def create_obfuscated_polygons_based_on_concave_hull(coords, max_dist=200, buffer_size=500):
     # ImplNote: use fake coords for test
     # lat_long_coords = get_node_coords(nodes)
-    node_clusters = cluster_worker_nodes(coords)
-
+    node_clusters = cluster_worker_nodes(coords, max_dist)
+    print(f"Node Clusters: {len(node_clusters)}")
     if len(node_clusters) == 0:
         return None
 
@@ -89,34 +90,57 @@ def create_obfuscated_polygons_based_on_concave_hull(coords):
             geo = Polygon(hull_array)
 
         # Obfuscate nodes located on concave hull by adding buffer to geometric object
-        # TODO: Use static method of ConcaveHull for buffering and think about good buffer value
-        buffered_geo = geo.buffer(0.03)
+        buffered_geo = buffer_in_meters(geo, buffer_size)
         polygons.append(buffered_geo)
 
     return unary_union(polygons)
 
+def cluster_worker_nodes(lat_long_coords, max_dist):
+    """
+    lat_long_coords: latitude and longitude coordinates
+    epsilon: max distance that points can be from each other to be considered a cluster.
 
-def cluster_worker_nodes(lat_long_coords):
-    # Cluster the given worker nodes
-    # Set min_samples to 1 so that every data point gets assigned to either a cluster or forms its own cluster.
-    # Nothing will be classified as noise
-    # Use haversince metric and ball tree algorithm to calculate great circle distances between points
-    # epsilon and coordiantes get converted to radians, because scikit-learn's haversine metric needs radian units
+    Cluster the given latitude, longitude coordinates.
+    Set min_samples to 1 so that every data point gets assigned to either a cluster or forms its own cluster.
+    Nothing will be classified as noise.
+    Use haversince metric and ball tree algorithm to calculate great circle distances between points.
+    epsilon and coordiantes get converted to radians, because scikit-learn's haversine metric needs radian units.
+
+    return: clustered coordianates: TODO add example return value
+    """
     if len(lat_long_coords) == 0:
         return []
-    print(lat_long_coords)
+    # print(lat_long_coords)
     kms_per_radian = 6371.0088
     # TODO: what to chose for epsilon? fixed km or do we use some distances we can get from given node clusters
-    epsilon = 10 / kms_per_radian
-    clustering = DBSCAN(eps=epsilon, min_samples=1, algorithm='ball_tree', metric='haversine').fit(np.radians(lat_long_coords))
+    epsilon = max_dist / kms_per_radian
+    clustering = DBSCAN(eps=epsilon, min_samples=1, algorithm='ball_tree', metric='haversine').fit(
+        np.radians(lat_long_coords))
     labels = clustering.labels_
 
     points_w_cluster = np.concatenate((lat_long_coords, labels[:, np.newaxis]), axis=1)
     clusters = []
     for label in set(labels):
         clusters.append(points_w_cluster[points_w_cluster[:, 2] == label][:, 0:2])
-
+    # print(f"Clusters: {clusters}")
     return clusters
+
+def buffer_in_meters(hull, meters):
+    # Shapely knows nothing about the units. Therefore, when calling the buffer(x) method, shapely will buffer
+    # the coordinates by x units. To buffer in meters, we first need to reproject the polygon into a Coordinate
+    # Reference System (CRS) that uses meters.
+    proj_meters = pyproj.Proj(init='epsg:3857')
+    proj_latlng = pyproj.Proj(init='epsg:4326')
+
+    project_to_meters = partial(pyproj.transform, proj_latlng, proj_meters)
+    project_to_latlng = partial(pyproj.transform, proj_meters, proj_latlng)
+
+    hull_meters = transform(project_to_meters, hull)
+
+    buffer_meters = hull_meters.buffer(meters)
+    buffer_latlng = transform(project_to_latlng, buffer_meters)
+    return buffer_latlng
+
 
 def write_line_string(hull):
     with open("data/line_{0}.csv".format(hull.shape[0]), "w") as file:
@@ -145,20 +169,6 @@ class ConcaveHull(object):
                                  47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97])
         self.prime_ix = prime_ix
 
-    @staticmethod
-    def buffer_in_meters(hull, meters):
-        proj_meters = pyproj.Proj(init='epsg:3857')
-        proj_latlng = pyproj.Proj(init='epsg:4326')
-
-        project_to_meters = partial(pyproj.transform, proj_latlng, proj_meters)
-        project_to_latlng = partial(pyproj.transform, proj_meters, proj_latlng)
-
-        hull_meters = transform(project_to_meters, hull)
-
-        buffer_meters = hull_meters.buffer(meters)
-        buffer_latlng = transform(project_to_latlng, buffer_meters)
-        return buffer_latlng
-
     def get_next_k(self):
         if self.prime_ix < len(self.prime_k):
             return self.prime_k[self.prime_ix]
@@ -173,9 +183,7 @@ class ConcaveHull(object):
         delta_lon = lon2 - lon1
         delta_lat = lat2 - lat1
 
-        a = np.square(np.sin(delta_lat / 2.0)) + \
-            np.cos(lat1) * np.cos(lat2) * np.square(np.sin(delta_lon / 2.0))
-
+        a = np.square(np.sin(delta_lat / 2.0)) + np.cos(lat1) * np.cos(lat2) * np.square(np.sin(delta_lon / 2.0))
         c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1.0 - a))
         meters = 6371000.0 * c
         return meters
@@ -283,7 +291,7 @@ class ConcaveHull(object):
                 candidate = candidates[i]
 
                 # Create a test hull to check if there are any self-intersections
-                next_point = np.reshape(self.data_set[knn[candidate]], (1,2))
+                next_point = np.reshape(self.data_set[knn[candidate]], (1, 2))
                 test_hull = np.append(hull, next_point, axis=0)
 
                 line = asLineString(test_hull)

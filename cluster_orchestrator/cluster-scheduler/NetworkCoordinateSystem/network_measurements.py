@@ -44,8 +44,8 @@ def ping(target_ip):
 
     return avg_rtt
 
-
-def parallel_ping(target_ips):
+# TODO: remove client_id after test
+def parallel_ping(target_ips, client_id):
     ON_POSIX = 'posix' in sys.builtin_module_names
     # Create a pipe to get data
     input_fd, output_fd = os.pipe()
