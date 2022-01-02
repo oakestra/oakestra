@@ -28,11 +28,7 @@ AREAS = {
     "germany": GERMANY # Used for testing different latency measures from requests within geremany
 }
 
-# TODO: remove session param after test
-sess = None
-def calculate(job, is_sla_violation=False, source_client_id=None, worker_ip_rtt_stats=None, session=None):
-    global sess
-    sess = session
+def calculate(job, is_sla_violation=False, source_client_id=None, worker_ip_rtt_stats=None):
     print('calculating...')
     # check here if job has any user preferences, e.g. on a specific node, a specific cpu architecture,
     constraints = job.get('constraints')
@@ -435,10 +431,7 @@ def sla_alarm_latency_constraint_scheduling(constraint, qualified_nodes, source_
                         try:
                             if address is None:
                                 raise ValueError("No address found")
-                            # response = requests.post(address, json=json.dumps(list(worker_ip_rtt_stats.keys())))
-                            response = sess.post(address, json=json.dumps(list(worker_ip_rtt_stats.keys())))
-                            # TODO: for test -> remove when finished
-                            # response = requests.post(address, json=json.dumps({"src": str(n.get('_id')), "dsts": list(worker_ip_rtt_stats.keys())}))
+                            response = requests.post(address, json=json.dumps(list(worker_ip_rtt_stats.keys())))
                             rnd_worker_ip_rtt_stats = response.json()
                             multilateration_data[str(n.get("_id"))] = (rnd_worker_vivaldi_coord.vector, rnd_worker_ip_rtt_stats)
                         except requests.exceptions.RequestException as e:
