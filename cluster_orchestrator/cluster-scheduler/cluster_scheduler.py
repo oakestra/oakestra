@@ -80,8 +80,8 @@ def handle_sla_alarm_task(client_id, payload):
     scheduling_status, scheduling_result, augmented_job = calculate(job, is_sla_violation=True, source_client_id=client_id, worker_ip_rtt_stats=ip_rtt_stats)
     end = timer()
     dur = end - start  # Time in seconds
-    file_object = open('sample.txt', 'a')
-    file_object.write(f"SLA-Alarm: {dur}\n")
+    file_object = open('sla_alarm_durations.txt', 'a')
+    file_object.write(f"{dur}\n")
     file_object.close()
     # Undeploy service on violating node
     if scheduling_status == 'negative':
@@ -102,8 +102,8 @@ def start_calc_deploy(job):
     scheduling_status, scheduling_result, augmented_job = calculate(job)  # scheduling_result can be a node object
     end = timer()
     dur = end - start  # Time in seconds
-    file_object = open('sample.txt', 'a')
-    file_object.write(f"Deployment: {dur}\n")
+    file_object = open('co_deployment_durations.txt', 'a')
+    file_object.write(f"{dur}\n")
     file_object.close()
 
     if scheduling_status == 'negative':
@@ -122,8 +122,8 @@ def start_calc_replicate(job):
     scheduling_status, scheduling_result, augmented_job = calculate(job)
     end = timer()
     dur = end - start  # Time in seconds
-    file_object = open('sample.txt', 'a')
-    file_object.write(f"Replication: {dur}\n")
+    file_object = open('co_replicateion_durations.txt', 'a')
+    file_object.write(f"{dur}\n")
     file_object.close()
     if scheduling_status == 'negative':
         app.logger.info("Target node does not provide the required resources.")

@@ -84,7 +84,14 @@ def cluster_screening(arg):
 def start_calc(job_id, job):
     # i = celeryapp.control.inspect()
     # print(i)
+    start = timer()
     scheduling_status, scheduling_result = calculate(job_id, job)
+    end = timer()
+    dur = end - start  # Time in seconds
+    file_object = open('ro_deployment.txt', 'a')
+    file_object.write(f"{dur}\n")
+    file_object.close()
+
     print(scheduling_result)
     if scheduling_status == 'negative':
         mongo_update_job_status(job_id, scheduling_result)
