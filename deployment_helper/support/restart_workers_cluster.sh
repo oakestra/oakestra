@@ -47,7 +47,7 @@ for cluster in $clusterlist; do
 		echo "Restarting: <$hostname,$ip>"
 		echo "Clusterip: $clusterip"
 		ssh -oStrictHostKeyChecking=no $1@$ip "cd EdgeIO_deployment/worker$workernum/node_engine/; export CLUSTER_MANAGER_IP='$clusterip'; sh -c 'nohup ./start-up.sh amd64 > logs.log 2>&1 &'"
-		woerkernum=$((workernum+1))
+		workernum=$((workernum+1))
 	done
 done
 
