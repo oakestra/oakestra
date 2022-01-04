@@ -1,4 +1,5 @@
 import os
+import time
 
 import numpy as np
 from flask_mqtt import Mqtt
@@ -107,6 +108,11 @@ def handle_nodes_topic_control_deploy(payload):
     virtualization = job['virtualization']
     image_url = job['code']
     port = job['port']
+    end = time.time()
+    file_object = open('deploy_ts.txt', 'a')
+    file_object.write(f"{end}\n")
+    file_object.close()
+
     if virtualization == 'docker':
         address, container_id, port = dockerclient.start_container(job=job)
         mqtt.app.logger.info(f"DEPLOYMENT: Address: {address}, Container ID: {container_id}")

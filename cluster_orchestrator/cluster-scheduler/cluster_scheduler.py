@@ -83,7 +83,7 @@ def handle_sla_alarm_task(client_id, payload):
     dur = end - start
     dur *= 1000 # Time in ms
     file_object = open('sla_alarm_durations.txt', 'a')
-    file_object.write(f"{dur}\n")
+    file_object.write(f"{start}, {end}, {dur}\n")
     file_object.close()
     # Undeploy service on violating node
     if scheduling_status == 'negative':
@@ -106,7 +106,7 @@ def start_calc_deploy(job):
     dur = end - start
     dur *= 1000 # Time in ms
     file_object = open('co_deployment_durations.txt', 'a')
-    file_object.write(f"{dur}\n")
+    file_object.write(f"{start}, {end}, {dur}\n")
     file_object.close()
 
     if scheduling_status == 'negative':
@@ -126,7 +126,7 @@ def start_calc_replicate(job):
     dur = end - start
     dur *= 1000 # Time in ms
     file_object = open('co_replication_durations.txt', 'a')
-    file_object.write(f"{dur}\n")
+    file_object.write(f"{start}, {end}, {dur}\n")
     file_object.close()
     if scheduling_status == 'negative':
         app.logger.info("Target node does not provide the required resources.")

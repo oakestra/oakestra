@@ -90,7 +90,7 @@ def start_calc(job_id, job):
     dur = end - start
     dur *= 1000 # Time in ms
     file_object = open('ro_deployment.txt', 'a')
-    file_object.write(f"{dur}\n")
+    file_object.write(f"{start}, {end}, {dur}\n")
     file_object.close()
 
     print(scheduling_result)

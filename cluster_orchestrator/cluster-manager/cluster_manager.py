@@ -266,7 +266,6 @@ def handle_init_worker(message):
         "SUBNETWORK": client_subnetwork,
         "VIVALDI": vivaldi_info
     }
-    app.logger.info(f"Send {init_packet} to Worker")
     # create ID and send it along with MQTT_Broker info to the client. save id into database
     emit('sc2', json.dumps(init_packet), namespace='/init')
 
