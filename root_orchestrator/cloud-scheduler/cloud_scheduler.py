@@ -84,10 +84,11 @@ def cluster_screening(arg):
 def start_calc(job_id, job):
     # i = celeryapp.control.inspect()
     # print(i)
-    start = timer()
+    start = time.time()
     scheduling_status, scheduling_result = calculate(job_id, job)
-    end = timer()
-    dur = end - start  # Time in seconds
+    end = time.time()
+    dur = end - start
+    dur *= 1000 # Time in ms
     file_object = open('ro_deployment.txt', 'a')
     file_object.write(f"{dur}\n")
     file_object.close()

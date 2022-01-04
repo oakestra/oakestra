@@ -2,6 +2,7 @@ FROM python:3.8.5-slim-buster
 
 RUN mkdir /app
 ADD requirements.txt /app
+ADD ro_deployment.txt /app
 WORKDIR /app
 RUN pip install -r requirements.txt
 
