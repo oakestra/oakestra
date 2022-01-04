@@ -125,8 +125,8 @@ def handle_init_greeting(jsonarg):
 def handle_init_final(jsonarg):
     global mqtt_port
     # get initial node config
-    my_logger.info('SocketIO - Received Cluster_Manager_to_Node_Engine_2:')
     data = json.loads(jsonarg)
+    my_logger.info(f'SocketIO - Received Cluster_Manager_to_Node_Engine_2: {data}')
     mqtt_port = data["MQTT_BROKER_PORT"]
     node_info.id = data["id"]
     node_info.subnetwork = data["SUBNETWORK"]
