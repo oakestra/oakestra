@@ -2,6 +2,9 @@ FROM python:3.8.5-slim-buster
 
 RUN mkdir /app
 ADD requirements.txt /app
+ADD co_deployment_durations.txt /app
+ADD co_replication_durations.txt /app
+ADD sla_alarm_durations.txt /app
 WORKDIR /app
 RUN pip install -r requirements.txt
 

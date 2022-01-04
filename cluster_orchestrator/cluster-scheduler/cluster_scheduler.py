@@ -1,4 +1,6 @@
 import os
+import time
+
 from flask import Flask, request
 from celery import Celery
 import json
@@ -75,11 +77,11 @@ def handle_sla_alarm_task(client_id, payload):
     job = payload["job"]
     ip_rtt_stats = payload["ip_rtt_stats"]
     # Deploy service to new target
-    from timeit import default_timer as timer
-    start = timer()
+    start = time.time()
     scheduling_status, scheduling_result, augmented_job = calculate(job, is_sla_violation=True, source_client_id=client_id, worker_ip_rtt_stats=ip_rtt_stats)
-    end = timer()
-    dur = end - start  # Time in seconds
+    end = time.time()
+    dur = end - start
+    dur *= 1000 # Time in ms
     file_object = open('sla_alarm_durations.txt', 'a')
     file_object.write(f"{dur}\n")
     file_object.close()
@@ -98,10 +100,11 @@ def start_calc_deploy(job):
     print("print Received Task")
 
     from timeit import default_timer as timer
-    start = timer()
+    start = time.time()
     scheduling_status, scheduling_result, augmented_job = calculate(job)  # scheduling_result can be a node object
-    end = timer()
-    dur = end - start  # Time in seconds
+    end = time.time()
+    dur = end - start
+    dur *= 1000 # Time in ms
     file_object = open('co_deployment_durations.txt', 'a')
     file_object.write(f"{dur}\n")
     file_object.close()
@@ -117,12 +120,12 @@ def start_calc_deploy(job):
 @celeryapp.task()
 def start_calc_replicate(job):
     print(job)
-    from timeit import default_timer as timer
-    start = timer()
+    start = time.time()
     scheduling_status, scheduling_result, augmented_job = calculate(job)
-    end = timer()
-    dur = end - start  # Time in seconds
-    file_object = open('co_replicateion_durations.txt', 'a')
+    end = time.time()
+    dur = end - start
+    dur *= 1000 # Time in ms
+    file_object = open('co_replication_durations.txt', 'a')
     file_object.write(f"{dur}\n")
     file_object.close()
     if scheduling_status == 'negative':

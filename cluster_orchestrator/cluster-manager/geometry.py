@@ -8,7 +8,6 @@ from functools import partial
 import pyproj
 from shapely.geometry import Point, LineString, Polygon, MultiPolygon
 from shapely.ops import unary_union
-import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
 import alphashape
 
