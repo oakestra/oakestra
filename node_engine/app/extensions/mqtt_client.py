@@ -18,14 +18,6 @@ node_info = {}
 mqtt_logger = None
 vivaldi_coordinate = None
 
-def xxx():
-    global mqtt
-    mqtt.publish("nodes/619a58bcb4e0db6068eb6cc3/ping", json.dumps({"ping": "pong"}))
-
-    # global vivaldi_coordinate
-    # vivaldi_coordinate = mqtt.app.config['VIVALDI_COORDS']
-    mqtt.app.logger.info(f"mqtt app  {mqtt.app} port {mqtt.app.config['MQTT_BROKER_PORT']}")
-
 
 def mqtt_init(info, vivaldi_coord, node_ip_info):
     global mqtt

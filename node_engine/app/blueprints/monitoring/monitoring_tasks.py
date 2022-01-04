@@ -56,7 +56,7 @@ def publish_sla_alarm(node_id, alarm_type, violated_job, ip_rtt_stats=None):
 
 
 @celeryapp.task
-def monitor_docker_container(job, container_id, port, node_id):
+def monitor_docker_container(job, container_id, container_port, node_id):
     print(f"Start monitoring container {node_id} {container_id}")
     # Initialize violation counters
     s2u_latency_violations_ctr = Counter()
@@ -75,7 +75,7 @@ def monitor_docker_container(job, container_id, port, node_id):
             print("###################### CPU Constraint ######################")
             cpu_violations_ctr = check_cpu_constraint(job, node_id, cpu_used, cpu_violations_ctr)
             print("###################### Service-2-User Constraints ######################")
-            s2u_geo_violations_ctr, s2u_latency_violations_ctr = check_service_to_user_constraints(job, node_id, container_id, port, coord_ip_mapping, s2u_geo_violations_ctr, s2u_latency_violations_ctr)
+            s2u_geo_violations_ctr, s2u_latency_violations_ctr = check_service_to_user_constraints(job, node_id, container_id, container_port, coord_ip_mapping, s2u_geo_violations_ctr, s2u_latency_violations_ctr)
             print("###################### Service-2-Service Constraints ######################")
             s2s_geo_violations_ctr, s2s_latency_violations_ctr = check_service_to_service_constraints(job, node_id, s2s_geo_violations_ctr, s2s_latency_violations_ctr)
             # Remove entries exceeding the allowed number of violations from monitoring

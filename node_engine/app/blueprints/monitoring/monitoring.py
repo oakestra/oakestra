@@ -29,8 +29,8 @@ def handle_register_service():
     job = data.get("job")
     node_id = data.get("node_id")
     container_id = data.get("container_id")
-    port = data.get("port")
-    monitor_docker_container.delay(job, container_id, port, node_id)
+    container_port = data.get("port")
+    monitor_docker_container.delay(job, container_id, container_port, node_id)
     return "ok", 200
 
 def register_service(node_id, container_id, port, job):

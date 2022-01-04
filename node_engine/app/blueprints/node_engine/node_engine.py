@@ -137,7 +137,7 @@ def handle_init_final(jsonarg):
     vivaldi_info = data["VIVALDI"]
     my_logger.info(f"Vivaldi info received from CO: {vivaldi_info}")
     # register to the netManager
-    # TODO: analyse why pyshark only listens to GoProdyTun when we register the netmanager
+    # TODO: analyse why pyshark only listens to GoProdyTun when we register the netmanager -> specify desired interface?
     net_manager_register(node_info.subnetwork)
 
 
