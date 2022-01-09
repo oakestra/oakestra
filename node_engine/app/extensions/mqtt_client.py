@@ -103,14 +103,12 @@ def handle_nodes_topic_control_deploy(payload):
     mqtt.app.logger.info("MQTT - Received .../control/deploy command")
     address = None
     job = payload.get('job')
-    job_id = job['_id']
     job_name = job['job_name']
     virtualization = job['virtualization']
     image_url = job['code']
-    port = job['port']
     end = time.time()
     file_object = open('deploy_ts.txt', 'a')
-    file_object.write(f"{end}\n")
+    file_object.write(f"{end}, {node_info.id}, {os.environ.get('LAT')}\n")
     file_object.close()
 
     if virtualization == 'docker':

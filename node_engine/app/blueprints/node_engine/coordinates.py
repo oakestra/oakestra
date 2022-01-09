@@ -2,7 +2,7 @@ import os
 
 def get_coordinates():
     use_gps = os.environ.get("GPS")
-    if use_gps:
+    if use_gps.lower() == "true":
         return gps_info()
     else:
         # get static coordinates from env vars

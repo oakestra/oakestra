@@ -9,11 +9,11 @@ if [ "$1" == "" ]; then
 fi
 
 # Run the netmanager in backgruond
-#sudo echo "Requiring SU"
-#cd NetManager/ && sudo CLUSTER_MANAGER_IP=$CLUSTER_MANAGER_IP CLUSTER_MANAGER_PORT=$CLUSTER_MANAGER_PORT ./bin/$1-NetManager &>> netmanager.log &
+sudo echo "Requiring SU"
+cd app/NetManager/ && sudo CLUSTER_MANAGER_IP=$CLUSTER_MANAGER_IP CLUSTER_MANAGER_PORT=$CLUSTER_MANAGER_PORT ./bin/$1-NetManager &>> netmanager.log &
 # Registering trap to kill the NetManager on exit
-#trap "ps -ax | grep NetManager | awk {'print $1'} | xargs sudo kill > /dev/null 2>&1" SIGINT SIGTERM EXIT
-#sleep 2
+trap "ps -ax | grep NetManager | awk {'print $1'} | xargs sudo kill > /dev/null 2>&1" SIGINT SIGTERM EXIT
+sleep 2
 
 # create virtualenv
 #virtualenv --clear -p python3.8 .venv
