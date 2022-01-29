@@ -8,15 +8,12 @@ class SLAFormatError(BaseException):
 
 
 def parse_sla(file):
-    # json_file = open(file, "r").read()
-    file_content = file.read()
-    validate_json(file_content)
-    return json.loads(file_content)
+    json_file = file.read()
+    if validate_json(json_file):
+        return json.loads(json_file)
+    else:
+        raise SLAFormatError
 
-def read_from_file(file):
-    json_file = open(file, "r").read()
-    validate_json(json_file)
-    return json.loads(json_file)
 
 def validate_json(json_file):
     try:
@@ -24,11 +21,12 @@ def validate_json(json_file):
         jsonschema.validate(instance=json_data, schema=sla_schema)
     except ValueError as err:
         print(err)
-        raise SLAFormatError
+        return False
     except jsonschema.exceptions.ValidationError as err:
         print(err.message)
-        raise SLAFormatError
+        return False
+    return True
 
 
 if __name__ == "__main__":
-    print(read_from_file("tests/service_level_agreements/sla_correct_1.json"))
+    print(parse_sla(open("tests/service_level_agreements/sla_correct_1.json", 'r')))
