@@ -27,4 +27,3 @@ def get_memory():
     
     print('memory: {0:5f}'.format(mem_used))
     return mem_used
-

@@ -130,6 +130,7 @@ def delete_task_instance(system_job_id, instance_worker_id):
         job["instance_list"].remove(instance_to_remove)
     return "ok"
 
+
 @app.route('/api/replicate/', methods=['GET', 'POST'])
 def replicate():
     """Replicate the amount of services"""
@@ -266,6 +267,7 @@ def handle_init_worker(message):
         "SUBNETWORK": client_subnetwork,
         "VIVALDI": vivaldi_info
     }
+
     # create ID and send it along with MQTT_Broker info to the client. save id into database
     emit('sc2', json.dumps(init_packet), namespace='/init')
 
@@ -341,7 +343,7 @@ def init_cm_to_sm():
 
 
 # ......... FINISH - register at System Manager ........#
-# ..................................MYIO....................#
+# ......................................................#
 
 
 def background_job_send_aggregated_information_to_sm():

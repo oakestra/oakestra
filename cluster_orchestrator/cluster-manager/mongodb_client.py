@@ -87,7 +87,7 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_cpu_used, cpu_cores_f
     # print(o)
 
     time_now = datetime.now()
-    app.logger.info(f"UPDATING NODE: {mongo_nodes.db.nodes.find_one(node_id)}")
+
     mongo_nodes.db.nodes.find_one_and_update(
         {'_id': ObjectId(node_id)},
         {'$set': {'current_cpu_percent': node_cpu_used, 'current_cpu_cores_free': cpu_cores_free,
@@ -127,7 +127,6 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     cumulative_memory = 0
     cumulative_memory_in_mb = 0
     number_of_active_nodes = 0
-    # technology = []
     virtualization = []
     worker_names_coords = []
     nodes = find_all_nodes()

@@ -9,4 +9,3 @@ shapely
 geopy
 numpy
 scipy
-matplotlib

@@ -3,8 +3,6 @@ import os
 from flask import Flask
 from app.extensions.mqtt_client import mqtt as flask_mqtt
 from app.extensions.celery import celery
-# from celery import Celery
-# celery = Celery(__name__)
 
 def create_app(logger=True):
     """
