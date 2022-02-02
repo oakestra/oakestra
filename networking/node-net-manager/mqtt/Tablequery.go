@@ -24,7 +24,7 @@ type TablequeryMqttInterface interface {
 }
 
 type TableQueryRequestCache struct {
-	siprequests map[string][]*chan TableQueryResponse
+	siprequests map[string]*[]chan TableQueryResponse
 	requestadd  sync.RWMutex
 }
 
@@ -63,7 +63,7 @@ func GetTableQueryRequestCacheInstance() *TableQueryRequestCache {
 	once.Do(func() { // <-- atomic, does not allow repeating
 
 		tableQueryRequestCacheInstance = TableQueryRequestCache{
-			siprequests: make(map[string][]*chan TableQueryResponse),
+			siprequests: make(map[string]*[]chan TableQueryResponse),
 			requestadd:  sync.RWMutex{},
 		}
 
@@ -77,16 +77,17 @@ func GetTableQueryRequestCacheInstance() *TableQueryRequestCache {
 */
 func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname string) (TableQueryResponse, error) {
 	reqname := sip + sname
-	requests := cache.siprequests[reqname]
 	responseChannel := make(chan TableQueryResponse, 1)
-
-	if requests == nil {
-		requests = make([]*chan TableQueryResponse, 1)
-	}
+	var updatedRequests []chan TableQueryResponse
 
 	//appending response channel used by the Mqtt handler
 	cache.requestadd.Lock()
-	cache.siprequests[reqname] = append(requests, &responseChannel)
+	siprequests := cache.siprequests[reqname]
+	if siprequests != nil {
+		updatedRequests = *siprequests
+	}
+	updatedRequests = append(updatedRequests, responseChannel)
+	cache.siprequests[reqname] = &updatedRequests
 	cache.requestadd.Unlock()
 
 	//publishing mqtt message
@@ -97,6 +98,7 @@ func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname
 	go PublishToBroker("tablequery/request", string(jsonreq))
 
 	//waiting for maximum 5 seconds the mqtt handler to receive a response. Otherwise fail the tableQuery.
+	log.Printf("waiting for table query %s", reqname)
 	select {
 	case result := <-responseChannel:
 		return result, nil
@@ -127,8 +129,7 @@ func (cache *TableQueryRequestCache) TableQueryBySnameRequestBlocking(sname stri
 	Handler used by the mqtt client to dispatch the table query result
 */
 func (cache *TableQueryRequestCache) TablequeryResultMqttHandler(client mqtt.Client, msg mqtt.Message) {
-
-	log.Printf("MQTT - Received mqtt table query message: %s",msg.Payload())
+	log.Printf("MQTT - Received mqtt table query message: %s", msg.Payload())
 
 	//response parsing
 	payload := msg.Payload()
@@ -149,16 +150,15 @@ func (cache *TableQueryRequestCache) TablequeryResultMqttHandler(client mqtt.Cli
 
 	//notify hanging channels for each query key
 	for _, key := range querykeys {
-		log.Printf("TableQuery response - notifying channel %s",key)
 		cache.requestadd.Lock()
 		channelList := cache.siprequests[key]
 		if channelList != nil {
-			for _, channel := range channelList {
-				*channel <- responseStruct
+			for _, channel := range *channelList {
+				log.Printf("TableQuery response - notifying a channel regarding %s", key)
+				channel <- responseStruct
 			}
 		}
 		cache.siprequests[key] = nil
 		cache.requestadd.Unlock()
 	}
-
 }

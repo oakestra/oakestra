@@ -16,7 +16,7 @@ def root_service_manager_get_subnet():
         else:
             raise requests.exceptions.RequestException('No address found')
     except requests.exceptions.RequestException as e:
-        print('Calling System Manager /api/information not successful.')
+        print('Calling System Manager /api/net/subnet not successful.')
 
 
 def system_manager_notify_deployment_status(job, worker_id):

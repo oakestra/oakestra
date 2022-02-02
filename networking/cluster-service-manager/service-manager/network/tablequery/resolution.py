@@ -21,7 +21,7 @@ def service_resolution(service_name):
         instances = job['instance_list']
         siplist = job['service_ip_list']
 
-    return job.get('job_name'), format_instance_response(instances,siplist)
+    return instances, siplist
 
 
 def service_resolution_ip(ip_string):
@@ -53,7 +53,7 @@ def service_resolution_ip(ip_string):
         if job is None:
             return "", []
 
-    return job.get('job_name'), format_instance_response(job['instance_list'],job['service_ip_list'])
+    return job.get('job_name'), format_instance_response(job['instance_list'], job['service_ip_list'])
 
 
 def format_instance_response(instance_list, sip_list):
@@ -62,9 +62,9 @@ def format_instance_response(instance_list, sip_list):
     service_ip_list = sip_list
     for elem in instances:
         elem['service_ip'] = service_ip_list
-    elem['service_ip'].append({
-        "IpType": "instance_ip",
-        "Address": elem['instance_ip']
-    })
+        elem['service_ip'].append({
+            "IpType": "instance_ip",
+            "Address": elem['instance_ip']
+        })
 
     return instances

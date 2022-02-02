@@ -208,6 +208,7 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 	veth, err := tenus.NewVethPairWithOptions(veth1name, tenus.VethOptions{PeerName: veth2name})
 	if err != nil {
 		cleanup()
+		env.nextVethNumber = env.nextVethNumber + 1
 		return nil, err
 	}
 
