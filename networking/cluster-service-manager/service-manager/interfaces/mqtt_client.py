@@ -81,18 +81,17 @@ def _tablequery_handler(client_id, payload):
     sname = payload.get('sname')
     sip = payload.get('sip')
 
-    result = {}
     instances = []
     siplist = []
 
     # resolve the query and register interest
     if sip is not None and sip != "":
-        sname, instances = service_resolution_ip(sip)
+        instances, siplist = service_resolution_ip(sip)
     elif sname is not None and sname != "":
-        instances = service_resolution(sname)
+        instances, siplist = service_resolution(sname)
 
     register_interest_sname(sname, client_id)
-    result = {'app_name': sname, 'instance_list': instances, 'sip_list':siplist}
+    result = {'app_name': sname, 'instance_list': format_instance_response(instances,siplist)}
     mqtt_publish_tablequery_result(client_id, result)
 
 
