@@ -92,12 +92,6 @@ def multilateration(data):
 
         ip_locations[key] = result.x
         print(f"Finished minimizing MSE.")
-    # ax.set_xlim(-40, 40)
-    # ax.set_ylim(-15, 30)
-    # plt.xticks(np.arange(-40, 40 + 5, 5.0))
-    # plt.yticks(np.arange(-15, 30 + 2, 2.0))
-    # print(f"Save figure in {os.getcwd()}")
-    # plt.savefig("multilat.png")
 
     return ip_locations
 
@@ -111,7 +105,3 @@ def callbackF(Xi):
         f"{it:<10}{round(Xi[0], 4):^10}{round(Xi[1], 4):^10}{round(mean_squared_error(Xi, vivaldi_locations, ping_distances), 4):>5}")
     point_progress.append(Xi)
     it += 1
-
-# def callbackF(Xi):
-#     global point_progress
-#     point_progress.append(Xi)

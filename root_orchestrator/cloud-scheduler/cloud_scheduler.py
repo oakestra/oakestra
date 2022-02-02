@@ -3,10 +3,8 @@ import time
 from flask import Flask, request
 import json
 from celery import Celery
-from celery.schedules import crontab
 
-from mongodb_client import mongo_init, mongo_update_job_status, mongo_update_job_status_and_cluster, \
-    mongo_find_job_by_id, find_cluster_by_job
+from mongodb_client import mongo_init, mongo_update_job_status, mongo_find_job_by_id, find_cluster_by_job
 from manager_requests import manager_request
 from calculation import calculate, same_cluster_replication
 from cs_logging import configure_logging
@@ -69,12 +67,6 @@ def replicate():
         manager_request(cluster_obj_of_job, job_id, job_obj, desired_replicas)
 
 
-#  @celeryapp.on_after_configure.connect
-#  def setup_periodic_tasks(sender, **kwargs):
-    # Calls test('hello') every 10 seconds.
-    # sender.add_periodic_task(CLUSTER_SCREENING_INTERVAL, cluster_screening.s('hello'), name='screen clusters')
-
-
 @celeryapp.task
 def cluster_screening(arg):
     app.logger.info(arg)
@@ -84,14 +76,7 @@ def cluster_screening(arg):
 def start_calc(job_id, job):
     # i = celeryapp.control.inspect()
     # print(i)
-    start = time.time()
     scheduling_status, scheduling_result = calculate(job_id, job)
-    end = time.time()
-    dur = end - start
-    dur *= 1000 # Time in ms
-    file_object = open('ro_deployment.txt', 'a')
-    file_object.write(f"{start}, {end}, {dur}\n")
-    file_object.close()
 
     print(scheduling_result)
     if scheduling_status == 'negative':

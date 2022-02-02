@@ -1,12 +1,10 @@
 import os
 
-import requests
 from apscheduler.triggers.interval import IntervalTrigger
 from flask import Flask, request
 from flask_socketio import SocketIO, emit
 import json
 import socketio
-import sys
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
 from prometheus_client import start_http_server
@@ -19,8 +17,8 @@ from cluster_scheduler_requests import scheduler_request_deploy, scheduler_reque
 from cm_logging import configure_logging
 from system_manager_requests import send_aggregated_info_to_sm, system_manager_get_subnet
 from analyzing_workers import looking_for_dead_workers
-from my_prometheus_client import prometheus_init_gauge_metrics, prometheus_set_metrics
-from geolocation.geolocation import query_geolocation_for_ips, user_in_cluster, build_geolite_dataframe
+from my_prometheus_client import prometheus_init_gauge_metrics
+from geolocation.geolocation import query_geolocation_for_ips, build_geolite_dataframe
 MY_PORT = os.environ.get('MY_PORT')
 
 MY_CHOSEN_CLUSTER_NAME = os.environ.get('CLUSTER_NAME')

@@ -16,7 +16,7 @@ trap "ps -ax | grep NetManager | awk {'print $1'} | xargs sudo kill > /dev/null 
 sleep 2
 
 # create virtualenv
-#virtualenv --clear -p python3.8 .venv
+virtualenv --clear -p python3.8 .venv
 virtualenv -p python3.8 .venv
 source .venv/bin/activate
 .venv/bin/pip install -r requirements.txt
@@ -36,7 +36,10 @@ export REDIS_ADDR=redis://:workerRedis@localhost:6380
 export VIVALDI_DIM=2
 export GPS=TRUE
 
-# Start worker
-echo "Start Worker node"
+# Start celery worker
+.venv/bin/celery worker -A celery_app:celery
+
+# Start node engine
+echo "Start Node Engine"
 .venv/bin/python app.py
 

@@ -11,7 +11,6 @@ from shapely.ops import unary_union
 from sklearn.cluster import DBSCAN
 import alphashape
 
-
 def get_node_coords(nodes):
     lat_long_coords = []
     for n in nodes:
@@ -21,23 +20,8 @@ def get_node_coords(nodes):
 
     return lat_long_coords
 
-
-def plot_geo(geo):
-    if isinstance(geo, Point) or isinstance(geo, LineString):
-        plt.plot(*geo.xy)
-    elif isinstance(geo, Polygon):
-        plt.fill(*geo.exterior.xy, alpha=0.5, edgecolor='black')
-    elif isinstance(geo, MultiPolygon):
-        for poly in geo:
-            if isinstance(poly, Point) or isinstance(poly, LineString):
-                plt.plot(*poly.xy)
-            elif isinstance(poly, Polygon):
-                plt.fill(*poly.exterior.xy, alpha=0.5, edgecolor='black')
-
-
 def create_geo_of_node_locations(nodes):
     lat_long_coords = get_node_coords(nodes)
-
     # Number of nodes = 1 -> Point
     if len(lat_long_coords) == 1:
         return Point(*lat_long_coords)
@@ -49,11 +33,8 @@ def create_geo_of_node_locations(nodes):
         return Polygon(lat_long_coords)
 
 
-def create_obfuscated_polygons_based_in_alphashapes(nodes, max_dist, buffer_size):
-    # TODO: use fake coords for test
-    # lat_long_coords = get_node_coords(nodes)
-    lat_long_coords = nodes
-    clusters = cluster_worker_nodes(lat_long_coords, max_dist)
+def create_obfuscated_polygons_based_in_alphashapes(coords, max_dist, buffer_size):
+    clusters = cluster_worker_nodes(coords, max_dist)
 
     polygons = []
     for cluster in clusters:
@@ -67,8 +48,6 @@ def create_obfuscated_polygons_based_in_alphashapes(nodes, max_dist, buffer_size
 
 
 def create_obfuscated_polygons_based_on_concave_hull(coords, max_dist=200, buffer_size=500):
-    # ImplNote: use fake coords for test
-    # lat_long_coords = get_node_coords(nodes)
     node_clusters = cluster_worker_nodes(coords, max_dist)
     print(f"Node Clusters: {len(node_clusters)}")
     if len(node_clusters) == 0:
@@ -105,13 +84,12 @@ def cluster_worker_nodes(lat_long_coords, max_dist):
     Use haversince metric and ball tree algorithm to calculate great circle distances between points.
     epsilon and coordiantes get converted to radians, because scikit-learn's haversine metric needs radian units.
 
-    return: clustered coordianates: TODO add example return value
+    return: clustered coordianates:
     """
     if len(lat_long_coords) == 0:
         return []
     # print(lat_long_coords)
     kms_per_radian = 6371.0088
-    # TODO: what to chose for epsilon? fixed km or do we use some distances we can get from given node clusters
     epsilon = max_dist / kms_per_radian
     clustering = DBSCAN(eps=epsilon, min_samples=1, algorithm='ball_tree', metric='haversine').fit(
         np.radians(lat_long_coords))
@@ -139,13 +117,6 @@ def buffer_in_meters(hull, meters):
     buffer_meters = hull_meters.buffer(meters)
     buffer_latlng = transform(project_to_latlng, buffer_meters)
     return buffer_latlng
-
-
-def write_line_string(hull):
-    with open("data/line_{0}.csv".format(hull.shape[0]), "w") as file:
-        file.write('\"line\"\n')
-        text = asLineString(hull).wkt
-        file.write('\"' + text + '\"\n')
 
 # Code base from https://github.com/joaofig/uk-accidents/blob/master/geomath/hulls.py
 class ConcaveHull(object):

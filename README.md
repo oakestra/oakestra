@@ -38,6 +38,9 @@ On an arbitrary Linux machine, install Python3.8 and virtualenv. Set the IP addr
 ```bash
 cd node_engine/
 export CLUSTER_MANAGER_IP=" < IP OF THE CLUSTER MANAGER WHERE THIS NODE BELONGS >"
+export CLUSTER_MANAGER_PORT="<PORT OF CLUSTER MANAGER>"
+export MQTT_BROKER_PORT="<MQTT PORT OF CLUSTER MANAGER"
+export MYIP="<PUBLIC IP OF WORKER TO BE REACHABLE BY PING FOR VIVALDI NETWORK>"
 ./start-up.sh <architecture: amd64 arm7>
 ```
 

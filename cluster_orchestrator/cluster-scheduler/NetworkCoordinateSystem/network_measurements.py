@@ -11,13 +11,7 @@ import re
 
 def get_ip_info():
     ip = socket.gethostbyname(socket.gethostname())
-    # s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    # s.connect(("8.8.8.8", 80))
-    # ip = s.getsockname()[0]
-    # s.close()
-    # TODO: can the IP address obtained via socket even be a public ip?
     if ipaddress.ip_address(ip).is_private:
-        # TODO: check how to use netmanager to contact nodes in another network
         public_ip = get('https://api.ipify.org').text
         router_rtt = ping(public_ip)
         private_ip = ip
@@ -32,15 +26,13 @@ def get_ip_info():
 def ping(target_ip):
     # Parameter for number of packets differs between the operating systems
     param = "-n" if platform.system().lower() == "windows" else "-c"
-    # TODO: how many packets should we send?
     command = ["ping", param, "3", target_ip]
     print(f"Execute command: {command}")
     response = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
     regex_pattern = "rtt min/avg/max/mdev = (\d+.\d+)/(\d+.\d+)/(\d+.\d+)/(\d+.\d+)"
     # times = min,avg,max,mdev
-    # TODO: use min rtt. for some reason first ping in docker is twice as expected latency
     times = re.findall(regex_pattern, str(response))[0]
-    avg_rtt = times[0]
+    avg_rtt = times[1]
 
     return avg_rtt
 
@@ -74,17 +66,3 @@ def parallel_ping(target_ips):
         p.wait()
 
     return statistics
-
-
-def get_netem_delay(is_netem_configured):
-    if is_netem_configured:
-        import subprocess
-        command = ['tc', 'qdisc']
-        response = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-        resp = str(response[0])
-        delay_idx = resp.index('delay')
-        ms_idx = resp.index('ms')
-        netem_delay = resp[delay_idx + 6 : ms_idx]
-        return netem_delay
-    else:
-        return "0.0"

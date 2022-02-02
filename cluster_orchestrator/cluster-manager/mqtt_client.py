@@ -165,12 +165,9 @@ def handle_node_information_topic(data):
     worker_vivaldi_height = payload.get(VIVALDI_HEIGHT)
     worker_vivaldi_error = payload.get(VIVALDI_ERROR)
     app.logger.info(f"VIVALDI: {worker_vivaldi_vector}")
-    # TODO: Remove later. Currently just required for accuracy evaluation
-    netem_delay = payload.get('netem_delay')
     mongo_find_node_by_id_and_update_cpu_mem(client_id, cpu_used, cpu_cores_free, mem_used, memory_free_in_MB,
                                              lat, long, worker_public_ip, worker_private_ip, worker_router_rtt,
-                                             worker_vivaldi_vector, worker_vivaldi_height, worker_vivaldi_error,
-                                             netem_delay)
+                                             worker_vivaldi_vector, worker_vivaldi_height, worker_vivaldi_error)
 
     publish_vivaldi_message(client_id, worker_public_ip, worker_private_ip)
 

@@ -26,8 +26,8 @@ def create_app(logger=True):
 
     app.config['MQTT_BROKER_URL'] = os.environ.get("CLUSTER_MANAGER_IP")
     app.config['MQTT_REFRESH_TIME'] = 3.0  # refresh time in seconds
-
-    # from app.extensions.mqtt_client import mqtt
+    # MQTT port is required for monitoring component to send alarm via (Paho) MQTT
+    # Paho MQTT because celery task is not within a flask context and hence cannot use flask mqtt context
     app.config['MQTT_BROKER_PORT'] = int(os.environ.get('MQTT_BROKER_PORT'))
     flask_mqtt.init_app(app)
     flask_mqtt.app = app

@@ -2,15 +2,11 @@ FROM python:3.8.5-slim-buster
 
 RUN mkdir /app
 ADD requirements.txt /app
-ADD co_deployment_durations.txt /app
-ADD co_replication_durations.txt /app
-ADD sla_alarm_durations.txt /app
 WORKDIR /app
 RUN pip install -r requirements.txt
 
 # Required for docker container to be able to use the ping command
 RUN apt-get update && apt-get install software-properties-common -y && apt-get install iproute2 iputils-ping -y && apt-get install -y procps
-
 
 ADD . /app
 

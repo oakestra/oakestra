@@ -1,6 +1,5 @@
 import numpy as np
 import sys
-from typing import List
 
 class VivaldiCoordinate:
     """
@@ -50,8 +49,8 @@ class VivaldiCoordinate:
 
         :param rtt: Round-trip time to 'remote'
         :param remote: 'Coordinate' of another node in the Vivaldi network
-        :param local_adjustment: TODO
-        :param remote_adjustment: TODO
+        :param local_adjustment: tuning parameter
+        :param remote_adjustment: tuning parameter
         """
         # Estimate the RTT by calculating the Vivaldi distance
         dist = self.distance(remote)
@@ -77,18 +76,18 @@ class VivaldiCoordinate:
         # Apply the force exerted by the remote node
         self.apply_force(remote, force)
 
-        # TODO: add gravity effect to slightly pull nodes towards origin to avoid drifting away
-        origin = VivaldiCoordinate(self.dims)
+        # Uncomment to add gravity effect
+        #origin = VivaldiCoordinate(self.dims)
 
-        dist = self.distance(origin)
-        dist = max(dist, dist + local_adjustment)
+        #dist = self.distance(origin)
+        #dist = max(dist, dist + local_adjustment)
 
         # Gravity towards the origin exerts a pulling force which is a small fraction of the expected diameter
         # of the network. "Network Coordinates in the Wild", Sec. 7.2
-        force = -1.0 * pow(dist / self.rho, 2.0)
+        #force = -1.0 * pow(dist / self.rho, 2.0)
 
         # Apply the force of gravity exerted by the origin
-        self.apply_force(origin, force)
+        #self.apply_force(origin, force)
 
     def distance(self, remote_coordinate: 'VivaldiCoordinate'):
         """

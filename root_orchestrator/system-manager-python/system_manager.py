@@ -1,8 +1,6 @@
-import os
-from flask import Flask, flash, request, jsonify, render_template
+from flask import Flask, flash, request
 from flask_socketio import SocketIO, emit
 import json
-from bson.objectid import ObjectId
 from markupsafe import escape
 import threading
 from bson import json_util
@@ -12,11 +10,9 @@ from sla_parser import parse_sla
 
 from service_manager import new_instance_ip, clear_instance_ip, service_resolution, new_subnetwork_addr, \
     service_resolution_ip, new_job_rr_address
-from yamlfile_parser import yaml_reader
 from cluster_requests import *
 from scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from sm_logging import configure_logging
-from geolocation.geolocation import query_geolocation_for_ip, user_in_cluster
 
 my_logger = configure_logging()
 

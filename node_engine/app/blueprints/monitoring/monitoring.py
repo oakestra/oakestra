@@ -12,7 +12,6 @@ def hello_world():
     my_logger.info('Hello World Request')
     return "Hello, World! This is the monitoring component's REST API"
 
-
 @monitoring.route('/ping', methods=['POST'])
 def ping():
     my_logger.info(f"Incoming Request /ping Body: {request.json}")

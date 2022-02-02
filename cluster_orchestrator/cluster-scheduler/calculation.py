@@ -1,6 +1,5 @@
 import json
 import random
-import time
 
 import numpy as np
 import requests
@@ -13,7 +12,6 @@ from NetworkCoordinateSystem.network_measurements import parallel_ping
 from NetworkCoordinateSystem.vivaldi_coordinate import VivaldiCoordinate
 from NetworkCoordinateSystem.multilateration import multilateration
 
-# TODO: Temporary area mapping until we know how we select area in SLA
 MUNICH = Polygon([[48.24819, 11.50406], [48.22807, 11.63521], [48.18093, 11.69083], [48.1369, 11.72242],
                   [48.07689, 11.68534], [48.06221, 11.50818], [48.13008, 11.38871], [48.15757, 11.36124],
                   [48.20107, 11.39077]])
@@ -346,7 +344,6 @@ def geo_based_scheduling(qualified_nodes, constraint):
     shapely_location = Point(float(lat), float(long))
     threshold = constraint.get('threshold')
 
-    # TODO: adapt naming for qualified_nodes in previous filtering -> nodes with resources
     nodes = []
     for node in qualified_nodes:
         node_location = Point(float(node.get('lat')), float(node.get('long')))

@@ -4,7 +4,7 @@ import time
 from flask import Flask, request
 from celery import Celery
 import json
-from mongodb_client import mongo_init, mongo_set_job_as_scheduled, mongo_find_all_nodes, mongo_find_node_by_id
+from mongodb_client import mongo_init
 from manager_requests import manager_request
 from calculation import calculate
 from cs_logging import configure_logging
@@ -77,14 +77,7 @@ def handle_sla_alarm_task(client_id, payload):
     job = payload["job"]
     ip_rtt_stats = payload["ip_rtt_stats"]
     # Deploy service to new target
-    start = time.time()
     scheduling_status, scheduling_result, augmented_job = calculate(job, is_sla_violation=True, source_client_id=client_id, worker_ip_rtt_stats=ip_rtt_stats)
-    end = time.time()
-    dur = end - start
-    dur *= 1000 # Time in ms
-    file_object = open('sla_alarm_durations.txt', 'a')
-    file_object.write(f"{start}, {end}, {dur}\n")
-    file_object.close()
     # Undeploy service on violating node
     if scheduling_status == 'negative':
         app.logger.info('No active node found to schedule this job.')
@@ -99,15 +92,7 @@ def start_calc_deploy(job):
     app.logger.info("App.logger.info Received Task")
     print("print Received Task")
 
-    from timeit import default_timer as timer
-    start = time.time()
     scheduling_status, scheduling_result, augmented_job = calculate(job)  # scheduling_result can be a node object
-    end = time.time()
-    dur = end - start
-    dur *= 1000 # Time in ms
-    file_object = open('co_deployment_durations.txt', 'a')
-    file_object.write(f"{start}, {end}, {dur}\n")
-    file_object.close()
 
     if scheduling_status == 'negative':
         app.logger.info('No active node found to schedule this job.')
@@ -120,14 +105,9 @@ def start_calc_deploy(job):
 @celeryapp.task()
 def start_calc_replicate(job):
     print(job)
-    start = time.time()
+
     scheduling_status, scheduling_result, augmented_job = calculate(job)
-    end = time.time()
-    dur = end - start
-    dur *= 1000 # Time in ms
-    file_object = open('co_replication_durations.txt', 'a')
-    file_object.write(f"{start}, {end}, {dur}\n")
-    file_object.close()
+
     if scheduling_status == 'negative':
         app.logger.info("Target node does not provide the required resources.")
     else:

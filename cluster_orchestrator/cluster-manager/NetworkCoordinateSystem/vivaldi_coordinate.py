@@ -50,8 +50,8 @@ class VivaldiCoordinate:
 
         :param rtt: Round-trip time to 'remote'
         :param remote: 'Coordinate' of another node in the Vivaldi network
-        :param local_adjustment: TODO
-        :param remote_adjustment: TODO
+        :param local_adjustment: tuning parameter
+        :param remote_adjustment: tuning parameter
         """
         # Estimate the RTT by calculating the Vivaldi distance
         dist = self.distance(remote)
@@ -77,7 +77,7 @@ class VivaldiCoordinate:
         # Apply the force exerted by the remote node
         self.apply_force(remote, force)
 
-        # TODO: add gravity effect to slightly pull nodes towards origin to avoid drifting away
+        # Uncomment to add gravity effect
         # origin = Coordinate(self.dims)
         #
         # dist = self.distance(origin)

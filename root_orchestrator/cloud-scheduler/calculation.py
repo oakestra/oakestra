@@ -1,12 +1,9 @@
-import time
-
-from mongodb_client import mongo_find_cluster_by_location, is_cluster_active, mongo_find_all_active_clusters, \
-    mongo_find_job_by_microservice_id, mongo_find_cluster_by_id, mongo_find_cluster_by_name
-import geopy.distance
-from shapely.geometry import Point, Polygon, MultiPolygon, shape
+from mongodb_client import is_cluster_active, mongo_find_all_active_clusters, mongo_find_job_by_microservice_id, \
+    mongo_find_cluster_by_id, mongo_find_cluster_by_name
+from shapely.geometry import Point, Polygon, shape
 from shapely.ops import nearest_points
+import geopy.distance
 
-# TODO: Temporary area mapping until we know how we select area in SLA
 MUNICH = Polygon([[48.24819, 11.50406], [48.22807, 11.63521], [48.18093, 11.69083], [48.1369, 11.72242],
                   [48.07689, 11.68534], [48.06221, 11.50818], [48.13008, 11.38871], [48.15757, 11.36124],
                   [48.20107, 11.39077]])
@@ -231,8 +228,12 @@ def filter_clusters_based_on_worker_locations(job):
                     break
         # 2. Filter based on "latency" constraint
         elif "latency" in constraint_locations:
-            # TODO: How close should the cluster be to the specified area for a good guess regarding low latencies?
-            pass
+            for area in constraint_locations["geo"]:
+                # If the cluster is not close enough to constraint area continue with next cluster
+                if not cluster_intersects_or_max_distance(worker_area, area, 100): # Adapt if 100km is to small
+                    print(f"Cluster has no workers close to latency constraint area.")
+                    feasible = False
+                    break
         if feasible:
             filtered_clusters.append(c)
 
@@ -247,3 +248,16 @@ def cluster_intersects_area(cluster, area):
     For that reason we do a small distance correction here.
     """
     return cluster.intersects(area) or cluster.distance(area) < 1e-5
+
+
+def cluster_intersects_or_max_distance(cluster, area, max_dist):
+    # Check if areas intersect
+    feasible = cluster_intersects_area(cluster, area)
+    if feasible: return
+    # If not, check if nearest points are less than max_dist apart
+    nearest = nearest_points(cluster, area)
+    p1 = (nearest[0].x, nearest[0].y)
+    p2 = (nearest[1].x, nearest[1].y)
+    if geopy.distance.distance(p1, p2).km <= max_dist:
+        feasible = True
+    return feasible

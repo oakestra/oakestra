@@ -7,7 +7,6 @@ import time
 import json
 import os
 
-# from app.extensions import paho_mqtt_client as mqtt_client
 from app.blueprints.node_engine.net_manager_requests import net_manager_register
 from app.extensions import mqtt_client as mqtt_client
 from app.blueprints.node_engine import hardware_info, dockerclient, net_manager_requests, my_utils, technology_support
@@ -87,7 +86,6 @@ def get_node_infos():
 
 def publish_cpu_memory():
     scheduler = BackgroundScheduler()
-
     #job_send_info = scheduler.add_job(mqtt_client.publish_cpu_mem, 'interval', seconds=PUSHING_INFO_DATA_JOB_INTERVAL)
     # @implNote: Create trigger with specified timezone to avoid warning from apscheduler
     # see https://stackoverflow.com/questions/69776414/pytzusagewarning-the-zone-attribute-is-specific-to-pytzs-interface-please-mig
@@ -137,7 +135,6 @@ def handle_init_final(jsonarg):
     vivaldi_info = data["VIVALDI"]
     my_logger.info(f"Vivaldi info received from CO: {vivaldi_info}")
     # register to the netManager
-    # TODO: analyse why pyshark only listens to GoProdyTun when we register the netmanager -> specify desired interface?
     net_manager_register(node_info.subnetwork)
 
 

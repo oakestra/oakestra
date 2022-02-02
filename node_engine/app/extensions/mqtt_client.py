@@ -71,7 +71,6 @@ def publish_cpu_mem():
     # If ip address of this node is private, the node has to ping the network router such that this RTT can be added
     # to nodes pinging this network. Otherwise the Vivaldi network coordinates would update themself with respect to
     # the router and not the nodes within the network
-    is_netem_configured = os.environ.get('IS_NETEM_CONFIGURED') == 'TRUE'
     mqtt.publish(topic, json.dumps({'cpu': cpu_used, 'free_cores': free_cores,
                                     'memory': memory_used, 'memory_free_in_MB': free_memory_in_MB,
                                     'lat': lat, 'long': long,
@@ -79,7 +78,7 @@ def publish_cpu_mem():
                                     'vivaldi_height': vivaldi_coordinate.height,
                                     'vivaldi_error': vivaldi_coordinate.error,
                                     'public_ip': ip_info["public"], 'private_ip': ip_info["private"],
-                                    'router_rtt': ip_info["router_rtt"], 'netem_delay': network_measurement.get_netem_delay(is_netem_configured)}))
+                                    'router_rtt': ip_info["router_rtt"]}))
 
 
 def publish_sla_alarm(alarm_type, violated_job, ip_rtt_stats=None):
@@ -106,10 +105,6 @@ def handle_nodes_topic_control_deploy(payload):
     job_name = job['job_name']
     virtualization = job['virtualization']
     image_url = job['code']
-    end = time.time()
-    file_object = open('deploy_ts.txt', 'a')
-    file_object.write(f"{end}, {node_info.id}, {os.environ.get('LAT')}\n")
-    file_object.close()
 
     if virtualization == 'docker':
         address, container_id, port = dockerclient.start_container(job=job)
@@ -120,9 +115,7 @@ def handle_nodes_topic_control_deploy(payload):
     if virtualization == 'mirage':
         commands = payload.get('commands')
         mirageosclient.run_unikernel_mirageos(image_url, job_name, job_name, commands)
-    #if address is not None:
-    # TODO: reactivate netman call -> on ec2s install GO etc
-    if container_id is not None:
+    if address is not None:
         publish_deploy_status(node_info.id, job.get('_id'), 'DEPLOYED', address)
     else:
         publish_deploy_status(node_info.id, job.get('_id'), 'FAILED', '')
@@ -168,7 +161,7 @@ def handle_nodes_topic_vivaldi(payload):
     statistics = network_measurement.parallel_ping(ip_vivaldi_dict.keys())
     mqtt.app.logger.info(f"Ping statistics: {statistics}")
     for ip, rtt in statistics.items():
-        viv_router_rtts = ip_vivaldi_dict[ip] # TODO: Naming!
+        viv_router_rtts = ip_vivaldi_dict[ip]
         for _viv, _router_rtt in viv_router_rtts:
             if _router_rtt is not None:
                 total_rtt = rtt + _router_rtt

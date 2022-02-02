@@ -80,7 +80,7 @@ def mongo_find_node_by_name(node_name):
 
 def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_cpu_used, cpu_cores_free, node_mem_used,
                                              node_memory_free_in_MB, lat, long, public_ip, private_ip, router_rtt,
-                                             vivaldi_vector, vivaldi_height, vivaldi_error, netem_delay):
+                                             vivaldi_vector, vivaldi_height, vivaldi_error):
     global app, mongo_nodes
     app.logger.info('MONGODB - update cpu and memory of worker node {0} ...'.format(node_id))
     # o = mongo.db.nodes.find_one({'_id': node_id})
@@ -94,8 +94,7 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_cpu_used, cpu_cores_f
                   'current_memory_percent': node_mem_used, 'current_free_memory_in_MB': node_memory_free_in_MB,
                   'last_modified': time_now, 'last_modified_timestamp': datetime.timestamp(time_now),
                   'lat': lat, 'long': long, 'public_ip': public_ip, 'private_ip': private_ip, 'router_rtt': router_rtt,
-                  'vivaldi_vector': vivaldi_vector, 'vivaldi_height': vivaldi_height, 'vivaldi_error': vivaldi_error,
-                  'netem_delay': netem_delay}},
+                  'vivaldi_vector': vivaldi_vector, 'vivaldi_height': vivaldi_height, 'vivaldi_error': vivaldi_error}},
         upsert=True)
 
     return 1

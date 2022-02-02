@@ -72,6 +72,15 @@ The message format is not used/ implemented currently. Feel free to edit/extend 
   - GPUtil
   - tabulate
   - requests
+  - gitpython
+  - numpy
+  - celery==4.4.2
+  - redis
+  - pyshark
+  - shapely
+  - eventlet
+  - geopy
+  - paho-mqtt
 - Golang 1.13 
   - github.com/ghodss/yaml 
   -	github.com/google/gopacket 
@@ -86,6 +95,12 @@ The message format is not used/ implemented currently. Feel free to edit/extend 
 The net manager is the component that carries out the network configuration and create the overlay across all the instances. 
 This component install a proprietary bridge in the system and place the proxy-bridge process as a TUN device. It maintains internally a se of caches that are 
 used to resolve the network call of the containers. More info are available in `NetManager/docs`. 
+
+## Monitoring Component
+
+The monitoring component requires tshark to be installed on the system in order to be able to listen for incoming traffic 
+on the port specified for the microservice. The celery task that continuously checks whether the SLA is staisfied, is 
+in 'start-up.sh'
 
 ## Misc
 

@@ -15,7 +15,6 @@ from app.extensions.celery import celery as celeryapp
 from app.models.vivaldi_coordinate import VivaldiCoordinate
 
 TYPE = 'type'
-# TODO: Temporary area mapping until we know how we select area in SLA
 MUNICH = Polygon([[48.24819, 11.50406], [48.22807, 11.63521], [48.18093, 11.69083], [48.1369, 11.72242],
                   [48.07689, 11.68534], [48.06221, 11.50818], [48.13008, 11.38871], [48.15757, 11.36124],
                   [48.20107, 11.39077]])
@@ -147,7 +146,6 @@ def check_service_to_service_constraints(job, node_id, geo_violations_ctr, laten
     return geo_violations_ctr, latency_violations_ctr
 
 def check_s2s_geo_constraint(node_id, target_worker_info, threshold, counter, job):
-    # TODO: Alle infos in target_worker_info, die sich ändern müssen über endpoint von CO geholt werden (später mit netman direkt von target worker)
     target_worker_id = target_worker_info.get("id")
     target_worker_coords = target_worker_info.get("loc")
     target_worker_lat = target_worker_coords[0]
