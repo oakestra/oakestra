@@ -40,6 +40,9 @@ cd node_engine/
 export CLUSTER_MANAGER_IP=" < IP OF THE CLUSTER MANAGER WHERE THIS NODE BELONGS >"
 export CLUSTER_MANAGER_PORT="<PORT OF CLUSTER MANAGER>"
 export MQTT_BROKER_PORT="<MQTT PORT OF CLUSTER MANAGER"
+# Either configure coordinates in environment variables or set them in gps_mock.txt (allows dynamic changes during runtime)
+export LAT=<LATITUDE COORDS OF WORKER>
+export LONG=<LONGITUDE COORDS OF WORKER> 
 export MYIP="<PUBLIC IP OF WORKER TO BE REACHABLE BY PING FOR VIVALDI NETWORK>"
 ./start-up.sh <architecture: amd64 arm7>
 ```
