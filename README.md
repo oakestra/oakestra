@@ -47,6 +47,8 @@ export LAT=<LATITUDE COORDS OF WORKER>
 export LONG=<LONGITUDE COORDS OF WORKER> 
 export MYIP="<PUBLIC IP OF WORKER TO BE REACHABLE BY PING FOR VIVALDI NETWORK>"
 ./start-up.sh <architecture: amd64 arm7>
+# Run redis server used by celery worker for service SLA monitoring
+docker run -p 6380:6379 --name workerRedis -d redis redis-server --requirepass workerRedis
 ```
 
 # Application Deployment
