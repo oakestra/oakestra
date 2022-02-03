@@ -5,7 +5,7 @@ import eventlet
 
 from interfaces.mqtt_client import mqtt_init
 from network.tablequery.interests import register_interest_sname
-from network.tablequery.resolution import service_resolution, service_resolution_ip
+from network.tablequery.resolution import service_resolution, service_resolution_ip, format_instance_response
 from interfaces.mongodb_requests import mongo_init, mongo_insert_job
 from net_logging import configure_logging
 
@@ -17,6 +17,7 @@ socketio = SocketIO(app, async_mode='eventlet', logger=True, engineio_logger=Tru
 app.logger.addHandler(my_logger)
 mongo_init(app)
 mqtt_init(app)
+
 
 # ............. Deployment Endpoints ............#
 # ...........................................................#
@@ -86,8 +87,8 @@ def table_query_resolution_by_ip(service_ip):
     """
     service_ip = service_ip.replace("_", ".")
     app.logger.info("Incoming Request /api/job/ip/" + str(service_ip) + "/instances")
-    name, instances = service_resolution_ip(service_ip)
-    return {'app_name': name, 'instance_list': instances}
+    name, instances, serviceip = service_resolution_ip(service_ip)
+    return {'app_name': name, 'instance_list': format_instance_response(instances, serviceip)}
 
 
 # TODO: job migration

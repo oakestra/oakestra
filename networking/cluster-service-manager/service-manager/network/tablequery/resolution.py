@@ -50,21 +50,16 @@ def service_resolution_ip(ip_string):
     # if no results, ask the root orc
     if job is None:
         job = cloud_table_query_ip(ip_string)
-        if job is None:
-            return "", []
 
-    return job.get('job_name'), format_instance_response(job['instance_list'], job['service_ip_list'])
+    return job["job_name"], job['instance_list'], job['service_ip_list']
 
 
 def format_instance_response(instance_list, sip_list):
-    instances = instance_list
-
     service_ip_list = sip_list
-    for elem in instances:
+    for elem in instance_list:
         elem['service_ip'] = service_ip_list
         elem['service_ip'].append({
             "IpType": "instance_ip",
             "Address": elem['instance_ip']
         })
-
-    return instances
+    return instance_list

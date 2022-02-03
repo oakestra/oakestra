@@ -69,7 +69,7 @@ def _deployment_handler(client_id, payload):
     instance_number = payload.get('instance_number')
     host_ip = payload.get('host_ip')
     host_port = payload.get('host_port')
-    deployment_status_report(appname, status, nsIp, client_id,instance_number,host_ip,host_port)
+    deployment_status_report(appname, status, nsIp, client_id, instance_number, host_ip, host_port)
 
 
 def _undeployment_handler(client_id, payload):
@@ -78,7 +78,7 @@ def _undeployment_handler(client_id, payload):
 
 
 def _tablequery_handler(client_id, payload):
-    sname = payload.get('sname')
+    serviceName = payload.get('sname')
     sip = payload.get('sip')
 
     instances = []
@@ -86,12 +86,12 @@ def _tablequery_handler(client_id, payload):
 
     # resolve the query and register interest
     if sip is not None and sip != "":
-        instances, siplist = service_resolution_ip(sip)
-    elif sname is not None and sname != "":
-        instances, siplist = service_resolution(sname)
+        serviceName, instances, siplist = service_resolution_ip(sip)
+    elif serviceName is not None and serviceName != "":
+        instances, siplist = service_resolution(serviceName)
 
-    register_interest_sname(sname, client_id)
-    result = {'app_name': sname, 'instance_list': format_instance_response(instances,siplist)}
+    register_interest_sname(serviceName, client_id)
+    result = {'app_name': serviceName, 'instance_list': format_instance_response(instances, siplist)}
     mqtt_publish_tablequery_result(client_id, result)
 
 
