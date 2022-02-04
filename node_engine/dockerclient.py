@@ -9,15 +9,20 @@ def start_container(job):
     image = job.get('image')
     name = job.get('job_name')
     port = job.get('port')
+    commands = job.get('commands')
+
     try:
         # start container
-        container = docker_client.containers.run(image, name=name, ports={port: None}, detach=True)
+        container = docker_client.containers.run(image, name=name, command=commands,
+                                                 detach=True)
+        container.pause()
         # assign address to the container
         address = net_manager_docker_deploy(job, str(container.id))
         if address == '':
-            raise Exception("Bad Address")
-        print(container.id)
-        print(address)
+            container.kill()
+            raise Exception("Bad Network Address - NetManager error")
+        container.unpause()
+
         return address
     except docker.errors.APIError as e:
         print("Oopps.. Docker API Error. {}")

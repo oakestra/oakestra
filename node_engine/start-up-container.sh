@@ -38,25 +38,10 @@ if [ "$PUBLIC_WORKER_PORT" == "" ]; then
     export PUBLIC_WORKER_PORT=50103
 fi
 
-#check NetManager installation
-#TODO
-
 # Run the netmanager in backgruond
-sudo echo "Requiring SU"
-sudo -E NetManager &>> netmanager.log &
+NetManager &>> netmanager.log &
 # Registering trap to kill the NetManager on exit
-trap "ps -ax | grep NetManager | awk {'print $1'} | xargs sudo kill > /dev/null 2>&1" SIGINT SIGTERM EXIT
-sleep 2
-
-# create virtualenv
-#virtualenv -p python3.8 .venv
-#source .venv/bin/activate
-
-#.venv/bin/
-pip3 install -r requirements.txt
-
-# export FLASK_ENV=development
-export FLASK_DEBUG=FALSE # TRUE for verbose logging #when True, MQTT logs twice because Flask opens second reloader thread
+sleep 1
 
 #.venv/bin/
 python3 node_engine.py

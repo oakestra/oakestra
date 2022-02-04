@@ -79,3 +79,6 @@ deployment_helper/support/src
 deployment_helper/support/*.txt
 deployment_helper/support/EdgeIO*
 /cluster_orchestrator/cluster-manager/.idea/
+
+# releases
+*.zip
