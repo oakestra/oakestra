@@ -64,18 +64,19 @@ def replicate_task():
 @app.route("/api/calculate/sla-alarm", methods=["POST"])
 def handle_sla_alarm():
     data = request.json
-    topic = data['topic']
-    payload = data['payload']
+    topic = data.get('topic')
+    payload = data.get('payload')
     client_id = topic.split('/')[1]
-
+    print(f"Payload {payload}")
     handle_sla_alarm_task.delay(client_id, payload)
 
     return "ok", 204
 
 @celeryapp.task
 def handle_sla_alarm_task(client_id, payload):
-    job = payload["job"]
-    ip_rtt_stats = payload["ip_rtt_stats"]
+    print(f"Payload {payload}")
+    job = payload.get("job")
+    ip_rtt_stats = payload.get("ip_rtt_stats")
     # Deploy service to new target
     scheduling_status, scheduling_result, augmented_job = calculate(job, is_sla_violation=True, source_client_id=client_id, worker_ip_rtt_stats=ip_rtt_stats)
     # Undeploy service on violating node
