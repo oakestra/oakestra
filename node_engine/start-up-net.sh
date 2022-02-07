@@ -48,11 +48,6 @@ sudo -E NetManager &>> netmanager.log &
 trap "ps -ax | grep NetManager | awk {'print $1'} | xargs sudo kill > /dev/null 2>&1" SIGINT SIGTERM EXIT
 sleep 2
 
-# create virtualenv
-#virtualenv -p python3.8 .venv
-#source .venv/bin/activate
-
-#.venv/bin/
 pip3 install -r requirements.txt
 
 # export FLASK_ENV=development
