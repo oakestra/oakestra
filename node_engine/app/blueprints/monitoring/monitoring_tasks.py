@@ -29,7 +29,7 @@ AREAS = {
     "germany": GERMANY # Used for testing different latency measures from requests within geremany
 }
 
-PUBLIC_IP = os.environ.get('MYIP')
+PUBLIC_IP = os.environ.get("WORKER_PUBLIC_IP")
 ALLOWED_VIOLATIONS = 3
 
 # Note: use of redis causes warning "redis-py works best with hiredis. Please consider installing
@@ -47,7 +47,7 @@ def publish_sla_alarm(node_id, alarm_type, violated_job, ip_rtt_stats=None):
     # topic = f"nodes/{my_id}/alarm"
     topic = f"nodes/{node_id}/alarm"
     mqtt = Client()
-    mqtt.connect(os.environ.get("CLUSTER_MANAGER_IP"), 10003, 10)
+    mqtt.connect(os.environ.get("CLUSTER_MANAGER_IP"), os.environ.get("MQTT_BROKER_PORT"), 10)
     # ip_rtt_stats = {<violating ip>: <violating rtt>,...} only required for latency constraint violations
     mqtt.publish(topic, json.dumps({"job": violated_job, "ip_rtt_stats": ip_rtt_stats}))
     mqtt.disconnect()
@@ -271,7 +271,6 @@ def listen_to_port(container, port):
     global geolocation_cache
     print(f"Cache: {geolocation_cache}")
     interface = 'any'
-    # worker_public_ip = os.environ.get("WORKER_PUBLIC_IP")
     worker_public_ip = PUBLIC_IP
     display_filter = f'http.host == {worker_public_ip}:{port} and http'
     capture = LiveCapture(interface=interface, display_filter=display_filter)
