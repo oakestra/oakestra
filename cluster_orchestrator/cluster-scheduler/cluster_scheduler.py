@@ -65,7 +65,7 @@ def replicate_task():
 def handle_sla_alarm():
     data = request.json
     topic = data.get('topic')
-    payload = data.get('payload')
+    payload = json.loads(data.get('payload'))
     client_id = topic.split('/')[1]
     print(f"Payload {payload}")
     handle_sla_alarm_task.delay(client_id, payload)
@@ -74,7 +74,6 @@ def handle_sla_alarm():
 
 @celeryapp.task
 def handle_sla_alarm_task(client_id, payload):
-    print(f"Payload {payload}")
     job = payload.get("job")
     ip_rtt_stats = payload.get("ip_rtt_stats")
     # Deploy service to new target
