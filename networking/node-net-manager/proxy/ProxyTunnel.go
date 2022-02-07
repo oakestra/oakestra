@@ -6,12 +6,13 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/songgao/water"
-	"github.com/tkanos/gonfig"
 	"log"
 	"math/rand"
 	"net"
+	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"sync"
 )
 
@@ -60,17 +61,38 @@ type incomingMessage struct {
 
 // create a  new GoProxyTunnel with the configuration from the custom local file
 func New() GoProxyTunnel {
-	//parse confgiuration file
-	tunconfig := Configuration{}
-	//fetch config file locally
-	err := gonfig.GetConf("config/tuncfg.json", &tunconfig)
+	port, err := strconv.Atoi(os.Getenv("PUBLIC_WORKER_PORT"))
 	if err != nil {
-		log.Printf("No local config file found, looking into /etc/netmanager/tuncfg.json")
-		//fetch config inside /etc/netmanager
-		err = gonfig.GetConf("/etc/netmanager/tuncfg.json", &tunconfig)
-		if err != nil {
-			log.Fatal(err)
-		}
+		log.Printf("Default to tunport 50103")
+		port = 50103
+	}
+	mtusize := os.Getenv("TUN_MTU_SIZE")
+	if len(mtusize) == 0 {
+		log.Printf("Default to mtusize 3000")
+		mtusize = "3000"
+	}
+	proxySubnetworkMask := os.Getenv("PROXY_SUBNETWORK_MASK")
+	if len(proxySubnetworkMask) == 0 {
+		log.Printf("Default proxy subnet mask to 255.255.0.0")
+		proxySubnetworkMask = "255.255.0.0"
+	}
+	proxySubnetwork := os.Getenv("PROXY_SUBNETWORK")
+	if len(proxySubnetwork) == 0 {
+		log.Printf("Default proxy subnetwork to 172.30.0.0")
+		proxySubnetwork = "172.30.0.0"
+	}
+	tunNetIP := os.Getenv("TUN_NET_IP")
+	if len(tunNetIP) == 0 {
+		log.Printf("Default to tunNetIP 172.19.1.254")
+		tunNetIP = "172.19.1.254"
+	}
+	tunconfig := Configuration{
+		HostTUNDeviceName:   "goProxyTun",
+		ProxySubnetwork:     proxySubnetwork,
+		ProxySubnetworkMask: proxySubnetworkMask,
+		TunNetIP:            tunNetIP,
+		TunnelPort:          port,
+		Mtusize:             mtusize,
 	}
 	return NewCustom(tunconfig)
 }
@@ -304,6 +326,10 @@ func (proxy *GoProxyTunnel) Listen() {
 	}
 }
 
+func (proxy *GoProxyTunnel) IsListening() bool {
+	return proxy.isListening
+}
+
 //create an instance of the proxy TUN device and setup the environment
 func (proxy *GoProxyTunnel) createTun() {
 	//create tun device
@@ -333,7 +359,7 @@ func (proxy *GoProxyTunnel) createTun() {
 	cmd = exec.Command("echo", "0", ">", "/proc/sys/net/ipv4/conf/"+ifce.Name()+"/rp_filter")
 	_, err = cmd.Output()
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Printf("Error disabling tun dev reverse path filtering: %s ", err.Error())
 	}
 
 	//Increasing the MTU on the TUN dev

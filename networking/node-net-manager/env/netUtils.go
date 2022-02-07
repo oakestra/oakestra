@@ -9,6 +9,7 @@ import (
 func GetLocalIPandIface() (string, string) {
 	list, err := net.Interfaces()
 	if err != nil {
+		log.Printf("not net Interfaces found")
 		panic(err)
 	}
 

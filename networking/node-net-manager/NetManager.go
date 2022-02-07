@@ -48,7 +48,7 @@ func handleRequests() {
 
 var Env env.Environment
 var Proxy proxy.GoProxyTunnel
-var InitializationCompleted = false
+var WorkerID = ""
 var PUBLIC_WORKER_IP = os.Getenv("PUBLIC_WORKER_IP")
 var PUBLIC_WORKER_PORT = os.Getenv("PUBLIC_WORKER_PORT")
 
@@ -65,7 +65,8 @@ Response: 200 OK or Failure code
 func dockerUndeploy(writer http.ResponseWriter, request *http.Request) {
 	log.Println("Received HTTP request - /docker/undeploy ")
 
-	if !InitializationCompleted {
+	if WorkerID == "" {
+		log.Printf("[ERROR] Node not initialized")
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -103,7 +104,8 @@ Response Json:
 func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 	log.Println("Received HTTP request - /docker/deploy ")
 
-	if !InitializationCompleted {
+	if WorkerID == "" {
+		log.Printf("[ERROR] Node not initialized")
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -141,7 +143,7 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 		addr.String(),
 		PUBLIC_WORKER_IP,
 		PUBLIC_WORKER_PORT,
-		)
+	)
 
 	//update internal table entry
 	Env.RefreshServiceTable(requestStruct.AppFullName)
@@ -181,8 +183,21 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	if err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
 	}
-
 	log.Println(requestStruct)
+
+	//drop the request if the node is already initialized
+	if WorkerID != "" {
+		if WorkerID == requestStruct.ClientID {
+			log.Printf("Node already initialized")
+			writer.WriteHeader(http.StatusOK)
+		} else {
+			log.Printf("Attempting to re-initialize a node with a different worker ID")
+			writer.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	}
+
+	WorkerID = requestStruct.ClientID
 
 	//initialize mqtt connection to the broker
 	mqtt.InitMqtt(requestStruct.ClientID)
@@ -194,9 +209,6 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	//initialize the Env Manager
 	Env = env.NewEnvironmentClusterConfigured(Proxy.HostTUNDeviceName)
 	Proxy.SetEnvironment(&Env)
-
-	//set initialization flag
-	InitializationCompleted = true
 
 	//create debug netns
 	_, err = Env.CreateNetworkNamespaceNewIp("debugAppNs")

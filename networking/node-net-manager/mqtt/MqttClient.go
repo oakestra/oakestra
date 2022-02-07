@@ -30,7 +30,7 @@ var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
 
 	topicsQosMap := make(map[string]byte)
 	for key, _ := range TOPICS {
-		topicsQosMap[key]=1
+		topicsQosMap[key] = 1
 	}
 
 	//subscribe to all the topics
@@ -43,8 +43,8 @@ var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
 
 var subscribeHandlerDispatcher = func(client mqtt.Client, msg mqtt.Message) {
 	for key, handler := range TOPICS {
-		if strings.Contains(msg.Topic(),key) {
-			handler(client,msg)
+		if strings.Contains(msg.Topic(), key) {
+			handler(client, msg)
 		}
 	}
 }
@@ -54,6 +54,12 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 }
 
 func InitMqtt(clientid string) {
+
+	if clientID != "" {
+		log.Printf("Mqtt already initialized no need for any further initialization")
+		return
+	}
+
 	//platform's assigned client ID
 	clientID = clientid
 	tableQueryRequestCache = GetTableQueryRequestCacheInstance()
@@ -81,9 +87,9 @@ func InitMqtt(clientid string) {
 		password = DEFAULT_MQTT_PW
 	}
 
-	TOPICS[fmt.Sprintf("nodes/%s/net/tablequery/result", clientID)]=
+	TOPICS[fmt.Sprintf("nodes/%s/net/tablequery/result", clientID)] =
 		tableQueryRequestCache.TablequeryResultMqttHandler
-	TOPICS[fmt.Sprintf("nodes/%s/net/subnetwork/result", clientID)]=
+	TOPICS[fmt.Sprintf("nodes/%s/net/subnetwork/result", clientID)] =
 		subnetworkAssignmentMqttHandler
 
 	opts := mqtt.NewClientOptions()
@@ -106,9 +112,9 @@ func runMqttClient(opts *mqtt.ClientOptions) {
 }
 
 func PublishToBroker(topic string, payload string) {
-	log.Printf("MQTT - publish to - %s - the payload - %s",topic,payload)
+	log.Printf("MQTT - publish to - %s - the payload - %s", topic, payload)
 	token := client.Publish(fmt.Sprintf("nodes/%s/net/%s", clientID, topic), 1, false, payload)
 	if token.WaitTimeout(time.Second*5) && token.Error() != nil {
-		log.Printf("ERROR: MQTT PUBLISH: %s",token.Error())
+		log.Printf("ERROR: MQTT PUBLISH: %s", token.Error())
 	}
 }
