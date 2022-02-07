@@ -5,12 +5,13 @@ import (
 	"NetManager/mqtt"
 	"NetManager/proxy"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
+	"github.com/tkanos/gonfig"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 )
 
@@ -38,6 +39,13 @@ type registerRequest struct {
 	ClientID string `json:"client_id"`
 }
 
+type netConfiguration struct {
+	NodePublicAddress string
+	NodePublicPort    string
+	ClusterUrl        string
+	ClusterMqttPort   string
+}
+
 func handleRequests() {
 	netRouter := mux.NewRouter().StrictSlash(true)
 	netRouter.HandleFunc("/register", register).Methods("POST")
@@ -48,9 +56,8 @@ func handleRequests() {
 
 var Env env.Environment
 var Proxy proxy.GoProxyTunnel
-var WorkerID = ""
-var PUBLIC_WORKER_IP = os.Getenv("PUBLIC_WORKER_IP")
-var PUBLIC_WORKER_PORT = os.Getenv("PUBLIC_WORKER_PORT")
+var WorkerID string
+var Configuration netConfiguration
 
 /*
 Endpoint: /docker/undeploy
@@ -141,8 +148,8 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 		"DEPLOYED",
 		requestStruct.Instancenumber,
 		addr.String(),
-		PUBLIC_WORKER_IP,
-		PUBLIC_WORKER_PORT,
+		Configuration.NodePublicAddress,
+		Configuration.NodePublicPort,
 	)
 
 	//update internal table entry
@@ -200,7 +207,7 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	WorkerID = requestStruct.ClientID
 
 	//initialize mqtt connection to the broker
-	mqtt.InitMqtt(requestStruct.ClientID)
+	mqtt.InitMqtt(requestStruct.ClientID, Configuration.ClusterUrl, Configuration.ClusterMqttPort)
 
 	//initialize the proxy tunnel
 	Proxy = proxy.New()
@@ -220,6 +227,14 @@ func register(writer http.ResponseWriter, request *http.Request) {
 }
 
 func main() {
+	cfgFile := flag.String("cfg", "/etc/netmanager/netcfg.json", "Set a cluster IP")
+	flag.Parse()
+
+	err := gonfig.GetConf(*cfgFile, &Configuration)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	log.Println("NetManager started. Waiting for registration.")
 	handleRequests()
 }

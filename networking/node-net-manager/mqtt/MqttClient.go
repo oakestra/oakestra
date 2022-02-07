@@ -4,16 +4,10 @@ import (
 	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
 	"log"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 )
 
-var DEFAULT_BROKER_PORT = 1883
-var DEFAULT_BROKER_URL = "localhost"
-var DEFAULT_MQTT_USERNAME = ""
-var DEFAULT_MQTT_PW = ""
 var TOPICS = make(map[string]mqtt.MessageHandler)
 
 var clientID = ""
@@ -53,7 +47,7 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 	log.Printf("Connect lost: %v", err)
 }
 
-func InitMqtt(clientid string) {
+func InitMqtt(clientid string, brokerurl string, brokerport string) {
 
 	if clientID != "" {
 		log.Printf("Mqtt already initialized no need for any further initialization")
@@ -64,29 +58,6 @@ func InitMqtt(clientid string) {
 	clientID = clientid
 	tableQueryRequestCache = GetTableQueryRequestCacheInstance()
 
-	brokerurl := os.Getenv("MQTT_BROKER_URL")
-	if brokerurl == "" {
-		log.Printf("INFO - mqtt broker url not found, switching to default %s", DEFAULT_BROKER_URL)
-	}
-
-	brokerport, porterr := strconv.Atoi(os.Getenv("MQTT_BROKER_PORT"))
-	if porterr != nil {
-		log.Printf("INFO - mqtt broker port not found, switching to default %d", DEFAULT_BROKER_PORT)
-		brokerport = 1883
-	}
-
-	username := os.Getenv("MQTT_USERNAME")
-	if username == "" {
-		log.Printf("INFO - mqtt broker username not found, switching to default %d", DEFAULT_MQTT_USERNAME)
-		username = DEFAULT_MQTT_USERNAME
-	}
-
-	password := os.Getenv("MQTT_PASSWORD")
-	if password == "" {
-		log.Printf("INFO - mqtt broker password not found, switching to default")
-		password = DEFAULT_MQTT_PW
-	}
-
 	TOPICS[fmt.Sprintf("nodes/%s/net/tablequery/result", clientID)] =
 		tableQueryRequestCache.TablequeryResultMqttHandler
 	TOPICS[fmt.Sprintf("nodes/%s/net/subnetwork/result", clientID)] =
@@ -95,8 +66,8 @@ func InitMqtt(clientid string) {
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", brokerurl, brokerport))
 	opts.SetClientID(clientid)
-	opts.SetUsername(username)
-	opts.SetPassword(password)
+	opts.SetUsername("")
+	opts.SetPassword("")
 	opts.SetDefaultPublishHandler(messagePubHandler)
 	opts.OnConnect = connectHandler
 	opts.OnConnectionLost = connectLostHandler

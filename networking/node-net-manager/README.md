@@ -48,20 +48,38 @@ The Network manager is divided in 4 main components:
 run `./install.sh <architecture>` specifying amd64 or arm-7
 
 # Run NetManager
-export the necessary environment variables:
 
-## Installed executables
-If you installed the executables then simply run
 
-- MQTT_BROKER_URL: `export MQTT_BROKER_URL=<ip or url of the cluster mqtt broker>` - IP address of the cluster's MQTT broker
-- MQTT_BROKER_PORT: `export MQTT_BROKER_PORT=<port of the cluster mqtt broker>` - OPTIONAL, default: 10003
-- PUBLIC_WORKER_IP: `export PUBLIC_WORKER_IP=<ip or hostname>` - address where the node is publicly accessible 
-- PUBLIC_WORKER_PORT: `export PUBLIC_WORKER_PORT=<public node port>` - port where the node is publicly accessible. OPTIONAL, default: 50103
+## 1) Prepare a config file
 
-then run `NetManager`
+You can edit the default one placed in `/etc/netmanager/netcfg.json`
+or you can create a custom one a pass the location at startup using the flag `--cfg="file location path"`
 
-## Sh script
-If you didn't run the executables then configure the environment variables inside the `start.sh` script and run it manually.
+The netcfg file must contain the following fields
+
+```
+
+{
+  "NodePublicAddress": "address",
+  "NodePublicPort": "port",
+  "ClusterUrl": "url",
+  "ClusterMqttPort": "port"
+}
+
+```
+
+## 2) Run the netmanager
+
+The net manager must have root privileges. The host machine must have the *ip* command line tool installed.
+
+Run the netmanager using:
+
+`sudo NetManager`
+
+## 3) supported startup flags
+
+- `--cfg="file path"` allows you to set a custom location for a different net configuration file. 
+
 
 ## Development setup
 The development setup can be used to test locally the tunneling mechanism without the use of the Cluster orchestrator. This setup requires 2 different machines namely Host1 and Host2.
