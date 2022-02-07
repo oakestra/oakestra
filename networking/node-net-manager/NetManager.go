@@ -235,6 +235,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	log.Print(Configuration)
+
 	log.Println("NetManager started. Waiting for registration.")
 	handleRequests()
 }

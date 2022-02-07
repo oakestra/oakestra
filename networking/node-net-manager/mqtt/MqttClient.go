@@ -64,7 +64,7 @@ func InitMqtt(clientid string, brokerurl string, brokerport string) {
 		subnetworkAssignmentMqttHandler
 
 	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", brokerurl, brokerport))
+	opts.AddBroker(fmt.Sprintf("tcp://%s:%s", brokerurl, brokerport))
 	opts.SetClientID(clientid)
 	opts.SetUsername("")
 	opts.SetPassword("")
