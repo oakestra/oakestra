@@ -156,7 +156,7 @@ def check_s2s_geo_constraint(node_id, target_worker_info, threshold, counter, jo
     distance = geopy.distance.distance([worker_lat, worker_long], [target_worker_lat, target_worker_long]).km
     print(f"Distance between node ({worker_lat},{worker_long}) and target worker ({target_worker_coords}): {distance}km")
     if distance > threshold:
-        print("Distance larger than threshold. Increment violation counter.")
+        print(f"Distance larger than threshold. Increment violation counter: {counter}")
         counter[f"{target_worker_coords[0]},{target_worker_id[1]}"] += 1
     if counter[f"{target_worker_coords[0]},{target_worker_coords[1]}"] >= ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
@@ -181,7 +181,7 @@ def check_s2s_latency_constraint(node_id, target_worker_info, threshold, counter
     tol = 0.2
     print(f"Latency to target: {dist} Threshold: {threshold + (threshold * tol)}")
     if dist >= threshold + (threshold * tol):
-        print("Latency larger than threshold. Increment violation counter.")
+        print(f"Latency larger than threshold. Increment violation counter: {counter}")
         counter[target_worker_id] += 1
     if counter[target_worker_id] >= ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
@@ -228,7 +228,7 @@ def check_s2u_geo_constraint(node_id, counter, job, constraint):
     distance = geopy.distance.distance((constraint_lat, constraint_long), (float(node_lat), float(node_long))).km
     print(f"Distance between node ({node_lat},{node_long}) and constraint location: {distance}km")
     if distance > threshold:
-        print("Distance larger than threshold. Increment violation counter.")
+        print(f"Distance larger than threshold. Increment violation counter: {counter}")
         counter[f"{constraint_lat},{constraint_long}"] += 1
     if counter[f"{constraint_lat},{constraint_long}"] >= ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
@@ -311,7 +311,8 @@ def listen_to_port(container, port):
         if len(public_src_ips) >= 1:
             # Geolocation
             cluster_ip = os.environ.get("CLUSTER_MANAGER_IP")
-            request_address = f"http://{cluster_ip}:10000/api/geolocation"
+            cluster_port = os.environ.get("CLUSTER_MANAGER_PORT")
+            request_address = f"http://{cluster_ip}:{cluster_port}/api/geolocation"
             response = requests.post(request_address, json=json.dumps(public_src_ips))
             ip_locations = {**ip_locations, **json.loads(response.text)}
             geolocation_cache = {**geolocation_cache, **ip_locations}
@@ -361,8 +362,8 @@ def measure_s2u_latency_violations(node_id, job, ips, constraint, violation_ctr)
 
 
 def remove_violations_from_counter(counter):
-    # Remove violating IPs from monitoring
-    # Note that list(data.items()) creates a shallow copy of the items of the dictionary, i.e.a new list containing
+    # Remove entries that already triggered an alarm
+    # Note that list(data.items()) creates a shallow copy of the items of the dictionary, i.e., a new list containing
     # references to all keys and values, so it's safe to modify the original dict inside the loop.
     for k, v in list(counter.items()):
         if v > ALLOWED_VIOLATIONS:
