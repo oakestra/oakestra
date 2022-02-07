@@ -63,7 +63,7 @@ def replicate_task():
 
 @app.route("/api/calculate/sla-alarm", methods=["POST"])
 def handle_sla_alarm():
-    data = json.loads(request.json)
+    data = request.json
     topic = data['topic']
     payload = data['payload']
     client_id = topic.split('/')[1]
