@@ -45,7 +45,9 @@ def publish_sla_alarm(node_id, alarm_type, violated_job, ip_rtt_stats=None):
     print(f"Publishing SLA violation alarm of type '{alarm_type}'... my ID: {node_id}\n")
     topic = f"nodes/{node_id}/alarm"
     mqtt = Client()
-    mqtt.connect(os.environ.get("CLUSTER_MANAGER_IP"), os.environ.get("MQTT_BROKER_PORT"), 10)
+    mqtt_url = os.environ.get("CLUSTER_MANAGER_IP")
+    mqtt_port = int(os.environ.get("MQTT_BROKER_PORT"))
+    mqtt.connect(mqtt_url, mqtt_port, 10)
     # ip_rtt_stats = {<violating ip>: <violating rtt>,...} only required for latency constraint violations
     print(f"MQTT publish: {violated_job} {ip_rtt_stats}")
     mqtt.publish(topic, json.dumps({"job": violated_job, "ip_rtt_stats": ip_rtt_stats}))
@@ -99,9 +101,9 @@ def check_memory_constraint(job, node_id, container_id, mem_used, counter):
 
     print(f"Container: required: {required_memory_in_mb} used: {used_memory_in_mb}")
     print(f"System: used: {mem_used}")
-    print(f"Counter: {counter}")
     if used_memory_in_mb > required_memory_in_mb and mem_used >= 0.95:
         counter["mem"] += 1
+        print(f"Counter: {counter['mem']}")
     if counter["mem"] >= ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
         # Send alarm to cluster orchestrator
@@ -113,9 +115,9 @@ def check_memory_constraint(job, node_id, container_id, mem_used, counter):
 def check_cpu_constraint(job, node_id, cpu_used, counter):
     print("Check CPU usage")
     print(f"used: {cpu_used}% ")
-    print(f"Counter: {counter} ")
     if cpu_used >= 95:
         counter["cpu"] += 1
+        print(f"Counter: {counter['cpu']} ")
     if counter["cpu"] >= ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
         # Send alarm to cluster orchestrator
@@ -154,8 +156,8 @@ def check_s2s_geo_constraint(node_id, target_worker_info, threshold, counter, jo
     distance = geopy.distance.distance([worker_lat, worker_long], [target_worker_lat, target_worker_long]).km
     print(f"Distance between node ({worker_lat},{worker_long}) and target worker ({target_worker_coords}): {distance}km")
     if distance > threshold:
-        print(f"Distance larger than threshold. Increment violation counter: {counter}")
         counter[f"{target_worker_coords[0]},{target_worker_id[1]}"] += 1
+        print(f"Distance larger than threshold. Increment violation counter: {counter[f'{target_worker_coords[0]},{target_worker_id[1]}']}")
     if counter[f"{target_worker_coords[0]},{target_worker_coords[1]}"] >= ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
         # Send alarm to cluster orchestrator
@@ -179,8 +181,8 @@ def check_s2s_latency_constraint(node_id, target_worker_info, threshold, counter
     tol = 0.2
     print(f"Latency to target: {dist} Threshold: {threshold + (threshold * tol)}")
     if dist >= threshold + (threshold * tol):
-        print(f"Latency larger than threshold. Increment violation counter: {counter}")
         counter[target_worker_id] += 1
+        print(f"Latency larger than threshold. Increment violation counter: {counter[target_worker_id]}")
     if counter[target_worker_id] >= ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
         # Send alarm to cluster orchestrator
@@ -226,8 +228,8 @@ def check_s2u_geo_constraint(node_id, counter, job, constraint):
     distance = geopy.distance.distance((constraint_lat, constraint_long), (float(node_lat), float(node_long))).km
     print(f"Distance between node ({node_lat},{node_long}) and constraint location: {distance}km")
     if distance > threshold:
-        print(f"Distance larger than threshold. Increment violation counter: {counter}")
         counter[f"{constraint_lat},{constraint_long}"] += 1
+        print(f"Distance larger than threshold. Increment violation counter: {counter[f'{constraint_lat},{constraint_long}']}")
     if counter[f"{constraint_lat},{constraint_long}"] >= ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
         # Send alarm to cluster orchestrator
