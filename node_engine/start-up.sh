@@ -36,9 +36,6 @@ export REDIS_ADDR=redis://:workerRedis@localhost:6380
 export VIVALDI_DIM=2
 export GPS=TRUE
 
-# Start celery worker
-.venv/bin/celery worker -A celery_app:celery --autoscale=10,0
-
 # Start node engine
 echo "Start Node Engine#"
 .venv/bin/python app.py

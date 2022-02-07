@@ -336,7 +336,7 @@ def initial_latency_constraint_scheduling(constraint, qualified_nodes):
         return workers_inside_area
     # otherwise, return the closest worker
     else:
-        return [dist_node_tuple[1] for dist_node_tuple in node_area_distances][0]
+        return [node_area_distances[0][1]]
 
 def geo_based_scheduling(qualified_nodes, constraint):
     location = constraint.get('location')  # lat,long

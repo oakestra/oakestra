@@ -205,6 +205,7 @@ sla_schema = {
                                 "state": {"type": "string"},
                                 "port": {"type": "string"},
                                 "sla_violation_strategy": {"type": "string"},
+                                "target_node": {"type": "string"},
                                 "addresses": {
                                     "type": "object",
                                     "properties": {
