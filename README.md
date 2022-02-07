@@ -38,7 +38,7 @@ On an arbitrary Linux machine, install Python3.8 and virtualenv, then check [Nod
 or run a containerized NodeEngine with 
 
 ```
-docker run --env CLUSTER_MANAGER_IP=<cluster manager ip> --env MQTT_BROKER_URL=<url or ip of the cluster mqtt broker, usually==cluster manager ip> --env PUBLIC_WORKER_IP=<public network address of the worker node> -p 50103:50103 --device=/dev/net/tun --cap-add=net_admin node-engine
+docker run --env CLUSTER_MANAGER_IP=<cluster manager ip> --env MQTT_BROKER_URL=<url or ip of the cluster mqtt broker, usually==cluster manager ip> --env PUBLIC_WORKER_IP=<public network address of the worker node> -p 50103:50103 --device=/dev/net/tun --cap-add=net_admin ghcr.io/edgeio/edgeio/node-engine:v0.01-experimental
 ```
 # Application Deployment
 
