@@ -42,9 +42,7 @@ geolocation_cache = {}
 
 
 def publish_sla_alarm(node_id, alarm_type, violated_job, ip_rtt_stats=None):
-    # logger.info(f"Publishing SLA violation alarm... my ID: {my_id}")
     print(f"Publishing SLA violation alarm of type '{alarm_type}'... my ID: {node_id}\n")
-    # topic = f"nodes/{my_id}/alarm"
     topic = f"nodes/{node_id}/alarm"
     mqtt = Client()
     mqtt.connect(os.environ.get("CLUSTER_MANAGER_IP"), os.environ.get("MQTT_BROKER_PORT"), 10)
@@ -52,7 +50,6 @@ def publish_sla_alarm(node_id, alarm_type, violated_job, ip_rtt_stats=None):
     print(f"MQTT publish: {violated_job} {ip_rtt_stats}")
     mqtt.publish(topic, json.dumps({"job": violated_job, "ip_rtt_stats": ip_rtt_stats}))
     mqtt.disconnect()
-    # mqtt.loop_start()
 
 
 @celeryapp.task
