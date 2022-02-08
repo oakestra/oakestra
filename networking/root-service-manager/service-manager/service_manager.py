@@ -1,15 +1,8 @@
-import os
-from flask import Flask, flash, request, jsonify
-from flask_socketio import SocketIO, emit
-import json
-from bson.objectid import ObjectId
-from markupsafe import escape
-import time
-import threading
-from bson import json_util
-from network_management import new_instance_ip, clear_instance_ip, service_resolution, new_subnetwork_addr, \
-    service_resolution_ip, new_job_rr_address
-from mongodb_client import *
+from flask import Flask, request
+from flask_socketio import SocketIO
+from network.tablequery import *
+from network.subnetwork_management import *
+from interfaces.mongodb_requests import *
 from net_logging import configure_logging
 
 my_logger = configure_logging()
@@ -129,8 +122,11 @@ def table_query_resolution_by_jobname(service_name):
     """
     service_name = service_name.replace("_", ".")
     app.logger.info("Incoming Request /api/net/service/" + str(service_name) + "/instances")
-    instance, siplist = service_resolution(service_name)
-    return {'instance_list': instance, 'service_ip_list': siplist}
+    job = service_resolution(name=service_name)
+    return {
+        "instance_list": job.get("instance_list"),
+        "service_ip_list": job.get("instance_list")
+    }
 
 
 @app.route('/api/net/service/ip/<service_ip>/instances', methods=['GET'])
@@ -140,7 +136,12 @@ def table_query_resolution_by_ip(service_ip):
     """
     service_ip = service_ip.replace("_", ".")
     app.logger.info("Incoming Request /api/net/service/ip/" + str(service_ip) + "/instances")
-    return {'instance_list': service_resolution_ip(service_ip)}
+    job = service_resolution(ip=service_ip)
+    return {
+        "job_name": job.get("job_name"),
+        "instance_list": job.get("instance_list"),
+        "service_ip_list": job.get("instance_list")
+    }
 
 
 # ........ Subnetwork management endpoints .............#

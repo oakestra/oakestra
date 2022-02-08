@@ -51,7 +51,7 @@ def service_resolution_ip(ip_string):
     if job is None:
         job = cloud_table_query_ip(ip_string)
 
-    return job["job_name"], job['instance_list'], job['service_ip_list']
+    return job.get("job_name"), job.get('instance_list'), job.get('service_ip_list')
 
 
 def format_instance_response(instance_list, sip_list):

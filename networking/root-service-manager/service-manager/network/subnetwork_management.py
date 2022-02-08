@@ -1,6 +1,6 @@
 import threading
 
-import mongodb_client
+from interfaces import mongodb_requests
 
 instance_ip_lock = threading.Lock()
 subnetip_ip_lock = threading.Lock()
@@ -22,7 +22,7 @@ def new_job_rr_address(job_data):
         if len(address_arr) == 4:
             if address_arr[0] != "172" or address_arr[1] != "30":
                 raise Exception("RR ip address must be in the form 172.30.x.y")
-            job = mongodb_client.mongo_find_job_by_ip(address)
+            job = mongodb_requests.mongo_find_job_by_ip(address)
             if job is not None:
                 if job['job_name'] != job_name:
                     raise Exception("RR ip address already used by another service")
@@ -40,13 +40,13 @@ def new_instance_ip():
         A new address from the address pool. This address is now removed from the pool of available addresses
     """
     with instance_ip_lock:
-        addr = mongodb_client.mongo_get_service_address_from_cache()
+        addr = mongodb_requests.mongo_get_service_address_from_cache()
 
         while addr is None:
-            addr = mongodb_client.mongo_get_next_service_ip()
+            addr = mongodb_requests.mongo_get_next_service_ip()
             next_addr = _increase_service_address(addr)
-            mongodb_client.mongo_update_next_service_ip(next_addr)
-            job = mongodb_client.mongo_find_job_by_ip(addr)
+            mongodb_requests.mongo_update_next_service_ip(next_addr)
+            job = mongodb_requests.mongo_find_job_by_ip(addr)
             if job is not None:
                 addr = None
 
@@ -67,12 +67,12 @@ def clear_instance_ip(addr):
     assert 0 <= addr[3] < 256
 
     with instance_ip_lock:
-        next_addr = mongodb_client.mongo_get_next_service_ip()
+        next_addr = mongodb_requests.mongo_get_next_service_ip()
 
         # Ensure that the give address is actually before the next address from the pool
         assert int(str(addr[2]) + str(addr[3])) < int(str(next_addr[2]) + str(next_addr[3]))
 
-        mongodb_client.mongo_free_service_address_to_cache(addr)
+        mongodb_requests.mongo_free_service_address_to_cache(addr)
 
 
 def new_subnetwork_addr():
@@ -82,12 +82,12 @@ def new_subnetwork_addr():
         A new address from the address pool. This address is now removed from the pool of available addresses
     """
     with subnetip_ip_lock:
-        addr = mongodb_client.mongo_get_subnet_address_from_cache()
+        addr = mongodb_requests.mongo_get_subnet_address_from_cache()
 
         if addr is None:
-            addr = mongodb_client.mongo_get_next_subnet_ip()
+            addr = mongodb_requests.mongo_get_next_subnet_ip()
             next_addr = _increase_subnetwork_address(addr)
-            mongodb_client.mongo_update_next_subnet_ip(next_addr)
+            mongodb_requests.mongo_update_next_subnet_ip(next_addr)
 
         return _addr_stringify(addr)
 
@@ -106,28 +106,13 @@ def clear_subnetwork_ip(addr):
     assert addr[3] in [0, 64, 128]
 
     with subnetip_ip_lock:
-        next_addr = mongodb_client.mongo_get_next_subnet_ip()
+        next_addr = mongodb_requests.mongo_get_next_subnet_ip()
 
         # Ensure that the give address is actually before the next address from the pool
         assert int(str(addr[1]) + str(addr[2]) + str(addr[3])) < int(
             str(next_addr[1]) + str(next_addr[2]) + str(next_addr[3]))
 
-        mongodb_client.mongo_free_subnet_address_to_cache(addr)
-
-
-def service_resolution(name):
-    job = mongodb_client.mongo_find_job_by_name(name)
-    if job is not None:
-        return job['instance_list'],job['service_ip_list']
-    return [],[]
-
-
-def service_resolution_ip(ip):
-    job = mongodb_client.mongo_find_job_by_ip(ip)
-    if job is not None:
-        return job['instance_list']
-    return []
-
+        mongodb_requests.mongo_free_subnet_address_to_cache(addr)
 
 def _increase_service_address(addr):
     new2 = addr[2]

@@ -90,6 +90,9 @@ def _tablequery_handler(client_id, payload):
     elif serviceName is not None and serviceName != "":
         instances, siplist = service_resolution(serviceName)
 
+    if instances is None:
+        return
+
     register_interest_sname(serviceName, client_id)
     result = {'app_name': serviceName, 'instance_list': format_instance_response(instances, siplist)}
     mqtt_publish_tablequery_result(client_id, result)
