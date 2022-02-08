@@ -1,6 +1,6 @@
 {
-  "NodePublicAddress": "address",
-  "NodePublicPort": "port",
-  "ClusterUrl": "url",
-  "ClusterMqttPort": "port"
+  "NodePublicAddress": "",
+  "NodePublicPort": "",
+  "ClusterUrl": "",
+  "ClusterMqttPort": ""
 }
