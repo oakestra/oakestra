@@ -6,10 +6,9 @@ from bson.objectid import ObjectId
 from markupsafe import escape
 import time
 import threading
-from net_plugin_requests import *
 from bson import json_util
 from mongodb_client import *
-from yamlfile_parser import yaml_reader
+from sla_parser import parse_sla
 from cluster_requests import *
 from scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from net_plugin_requests import *
@@ -135,7 +134,7 @@ def deploy_task():
         return "empty file", 400
     if file:
         # Reading config file
-        data = yaml_reader(file)
+        data = parse_sla(file)
         app.logger.info(data)
         # Insert job into database
         job_id = mongo_insert_job(
@@ -149,7 +148,6 @@ def deploy_task():
         # Request scheduling
         threading.Thread(group=None, target=scheduler_request_deploy, args=(data, str(job_id),)).start()
         return {'job_id': str(job_id)}, 200
-
 
 
 # ................ Scheduler Test .....................#

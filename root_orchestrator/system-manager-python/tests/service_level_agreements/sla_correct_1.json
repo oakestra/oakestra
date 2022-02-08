@@ -1,0 +1,67 @@
+{
+  "api_version" : "v0.3.0",
+  "customerID" : 10000000001,
+  "applications" : [
+    {
+      "applicationID" : 1000010001,
+      "application_name" : "Example Application",
+      "application_desc" : "No description here",
+      "microservices" : [
+        {
+          "microserviceID": 4,
+          "microservice_name": "Micro A (4)",
+          "virtualization": "container",
+          "memory": 4096,
+          "vcpus": 2,
+          "vgpus": 0,
+          "vtpus": 0,
+          "bandwidth_in": 1000000,
+          "bandwith_out": 8000,
+          "storage": 1000,
+          "code": "https://example.com/repositories/example/code.py",
+          "state": "https://path.to.root.orchestrator.customer.application/example/state_1.json",
+          "port": 80,
+          "addresses": {
+            "rr_ip": "192.168.178.4"
+          },
+          "added_files": [
+            "https://example.com/repositories/example/asset_1.jpg",
+            "https://example.com/repositories/example/asset_2.png"
+          ],
+          "constraints": [
+            {
+              "type": "latency",
+              "area": "munich-1",
+              "threshold": 100,
+              "rigidness": 0.99,
+              "convergence_time": 300
+            },
+            {
+              "type": "latency",
+              "area": "berlin-1",
+              "threshold": 100,
+              "rigidness": 0.99,
+              "convergence_time": 300
+            }
+          ],
+          "connectivity": [
+            {
+              "target_microservice_id": 1,
+              "con_constraints": []
+            },
+            {
+              "target_microservice_id": 2,
+              "con_constraints": [{
+                "type" : "latency",
+                "threshold" : 50,
+                "rigidness" : 0.90,
+                "convergence_time" : 300
+              }
+              ]
+            }
+          ]
+        }]
+    }
+  ],
+  "args" : []
+}
