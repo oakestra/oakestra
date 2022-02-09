@@ -35,9 +35,6 @@ The Network manager is divided in 4 main components:
 ├── install.sh
 │			Description:
 │				installation script 
-├── start.sh
-│			Description:
-│				startup script for the NetManagger
 └──  NetManager.go
 			Description:
 				Entry point to startup the NetworkManager
@@ -45,10 +42,10 @@ The Network manager is divided in 4 main components:
 ```
 
 # Installation
+download the latest release from [here](https://github.com/edgeIO/edgeionet/releases)
 run `./install.sh <architecture>` specifying amd64 or arm-7
 
 # Run NetManager
-
 
 ## 1) Prepare a config file
 
