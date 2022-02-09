@@ -8,7 +8,9 @@ import time
 import threading
 from bson import json_util
 from mongodb_client import *
-from sla_parser import parse_sla
+from sla_parser import *
+from yamlfile_parser import *
+
 from cluster_requests import *
 from scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from net_plugin_requests import *
@@ -74,9 +76,10 @@ def receive_scheduler_result_and_propagate_to_cluster():
         instance_list.append(instance_info)
 
     # Inform network plugin about the deployment
-    threading.Thread(group=None, target=net_inform_instance_deploy, args=(str(system_job_id),replicas,cluster_id)).start()
+    threading.Thread(group=None, target=net_inform_instance_deploy,
+                     args=(str(system_job_id), replicas, cluster_id)).start()
 
-    #Update the current instance information
+    # Update the current instance information
     mongo_update_job_status_and_instances(
         job_id=system_job_id,
         status='CLUSTER_SCHEDULED',
@@ -134,7 +137,14 @@ def deploy_task():
         return "empty file", 400
     if file:
         # Reading config file
-        data = parse_sla(file)
+        sla = file.read()
+        data = ""
+        try:
+            data = parse_sla(sla)
+        except SLAFormatError as e:
+            # The developer is using the old yaml schema. Let's keep it for compatibility.
+            data = yaml_reader(sla)
+
         app.logger.info(data)
         # Insert job into database
         job_id = mongo_insert_job(

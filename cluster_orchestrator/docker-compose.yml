@@ -1,4 +1,4 @@
-version: "3.3"
+version: "3"
 services:
 
   # MQTT 
@@ -14,8 +14,11 @@ services:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
       - /mosquitto/data
       - /mosquitto/log
-    networks:
-      - default
+    healthcheck:
+      test: [ "CMD-SHELL", "timeout -t 5 mosquitto_sub -t '$$SYS/#' -C 1 | grep -v Error || exit 1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 6
 
       
   # cluster-level mongoDB
@@ -43,7 +46,7 @@ services:
 
 # Cluster Manager
   cluster_service_manager:
-    image: giobart/edgeionet:cluster-service-manager-v0.01
+    image: ghcr.io/edgeio/edgeionet/cluster-service-manager:v0.01-experimental
     container_name: cluster_service_manager
     hostname: cluster_service_manager
     expose:
@@ -54,14 +57,15 @@ services:
       - MY_PORT=10200
       - MQTT_BROKER_PORT=10003
       - MQTT_BROKER_URL=mqtt
-      - ROOT_SERVICE_MANAGER_URL=${ROOT_SERVICE_MANAGER_URL}
+      - ROOT_SERVICE_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - ROOT_SERVICE_MANAGER_PORT=10100
       - SYSTEM_MANAGER_URL=cluster_manager
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_MONGO_URL=cluster_mongo_net
       - CLUSTER_MONGO_PORT=10207
     depends_on:
-      - mongo-clusternet
+      - mongo_clusternet
+      - mqtt
 
 # Cluster Manager
   cluster_manager:

@@ -1,7 +1,7 @@
 version: "3.3"
 
 services:
-  
+
   # System Manager REST API of Root Orchestrator
   system_manager:
     image: system_manager
@@ -12,10 +12,11 @@ services:
       - "10000"
     ports:
       - "10000:10000"
-    depends_on: 
+    depends_on:
       - mongo_root
       - cloud_scheduler
       - root_service_manager
+      - mqtt
     environment:
       - CLOUD_MONGO_URL=mongo
       - CLOUD_MONGO_PORT=10007
@@ -52,13 +53,12 @@ services:
 
   # Cluster Manager
   root_service_manager:
-     image: root_service_manager
-     build: service-manager/
-     container_name: root_service_manager
-     hostname: root_service_manager
-     expose:
+    image: ghcr.io/edgeio/edgeionet/root-service-manager:v0.01-experimental
+    container_name: root_service_manager
+    hostname: root_service_manager
+    expose:
       - "10100"
-     ports:
+    ports:
       - "10100:10100"
     environment:
       - MY_PORT=10100
@@ -109,7 +109,7 @@ services:
       - REDIS_ADDR=redis://:cloudRedis@redis:6379
     depends_on:
       - redis
-      - mongo
+      - mongo_root
 
 
 volumes:
