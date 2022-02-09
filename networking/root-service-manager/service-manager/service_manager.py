@@ -125,7 +125,7 @@ def table_query_resolution_by_jobname(service_name):
     job = service_resolution(name=service_name)
     return {
         "instance_list": job.get("instance_list"),
-        "service_ip_list": job.get("instance_list")
+        "service_ip_list": job.get("service_ip_list")
     }
 
 
