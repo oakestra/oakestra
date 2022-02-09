@@ -15,7 +15,8 @@ def mqtt_init(flask_app):
 
     app.config['MQTT_BROKER_URL'] = os.environ.get('MQTT_BROKER_URL')
     app.config['MQTT_BROKER_PORT'] = int(os.environ.get('MQTT_BROKER_PORT'))
-    app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
+    app.config['MQTT_KEEPALIVE'] = 5
+    app.config['MQTT_REFRESH_TIME'] = 1.0
     mqtt = Mqtt(app)
 
     @mqtt.on_connect()
