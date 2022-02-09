@@ -140,7 +140,7 @@ def table_query_resolution_by_ip(service_ip):
     return {
         "job_name": job.get("job_name"),
         "instance_list": job.get("instance_list"),
-        "service_ip_list": job.get("instance_list")
+        "service_ip_list": job.get("service_ip_list")
     }
 
 
