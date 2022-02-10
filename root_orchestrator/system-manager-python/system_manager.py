@@ -7,11 +7,11 @@ from bson import json_util
 
 from mongodb_client import *
 from sla_parser import parse_sla
+from yamlfile_parser import *
 
-from service_manager import new_instance_ip, clear_instance_ip, service_resolution, new_subnetwork_addr, \
-    service_resolution_ip, new_job_rr_address
 from cluster_requests import *
 from scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
+from net_plugin_requests import *
 from sm_logging import configure_logging
 
 my_logger = configure_logging()
@@ -65,21 +65,22 @@ def receive_scheduler_result_and_propagate_to_cluster():
     app.logger.info(data_without_worker_groups)
     system_job_id = data.get('job_id')
     replicas = data.get('replicas')
-    resulting_cluster = data.get('cluster')
-    # mongo_update_job_status(job_id, 'SCHEDULED')  # done in cloud-scheduler already
+    cluster_id = str(data.get('cluster').get('_id').get('$oid'))
 
     # Updating status and instances
     instance_list = []
     for i in range(replicas):
         instance_info = {
             'instance_number': i,
-            'instance_ip': new_instance_ip(),
-            'cluster_id': str(resulting_cluster.get('_id').get('$oid')),
-            'namespace_ip': '',
-            'host_ip': '',
-            'host_port': '',
+            'cluster_id': cluster_id,
         }
         instance_list.append(instance_info)
+
+    # Inform network plugin about the deployment
+    threading.Thread(group=None, target=net_inform_instance_deploy,
+                     args=(str(system_job_id), replicas, cluster_id)).start()
+
+    # Update the current instance information
     mongo_update_job_status_and_instances(
         job_id=system_job_id,
         status='CLUSTER_SCHEDULED',
@@ -87,39 +88,16 @@ def receive_scheduler_result_and_propagate_to_cluster():
         instance_list=instance_list
     )
 
-    cluster_request_to_deploy(resulting_cluster, mongo_find_job_by_id(system_job_id))
+    cluster_request_to_deploy(data.get('cluster'), mongo_find_job_by_id(system_job_id))
     return "ok"
-
-
-@app.route('/api/result/cluster_deploy', methods=['POST'])
-def get_cluster_deployment_status_feedback():
-    """
-    Result of the deploy operation in a cluster
-    json file structure:{
-        'job_id':string
-        'instances:[{
-            'instance_number':int
-            'namespace_ip':string
-            'host_ip':string
-            'host_port':string
-        }]
-    }
-    """
-    app.logger.info("Incoming Request /api/result/cluster_deploy")
-    data = request.json
-    app.logger.info(data)
-
-    mongo_update_job_net_status(
-        job_id=data.get('job_id'),
-        instances=data.get('instances')
-    )
-
-    return "roger that"
 
 
 @app.route('/api/result/replicate', methods=['POST'])
 def receive_scheduler_replicate_result_and_propagate_to_cluster():
-    app.logger.info('Incoming Request /api/result/deploy - received cloud_scheduler result')
+    """
+    Replication function not yet fully implemented
+    """
+    app.logger.info('Incoming Request /api/result/replicate - received cloud_scheduler result')
     data = json.loads(request.json)
     system_job_id = data.get('job_id')
     job = data.get('job')
@@ -149,94 +127,61 @@ def cluster_information(cluster_id):
     return "ok", 200
 
 
-@app.route('/api/deploy', methods=['GET', 'POST'])
+@app.route('/api/deploy', methods=['POST'])
 def deploy_task():
     app.logger.info('Incoming Request /api/deploy - deploying task...')
 
-    if request.method == 'POST':
-        app.logger.info('POST request')
-
-        if 'file' not in request.files:
-            flash('No file part')
-            return "no file", 400
-        file = request.files['file']
-        app.logger.info('file found')
-        if file.filename == '':
-            flash('No selected file')
-            return "empty file", 400
-        if file:
-            # Reading config file
-            # data = yaml_reader(file)
-            # print(f"XXX: {json.loads(file.read())}")
-            data = parse_sla(file)
-            app.logger.info(data)
-            job_ids = {}
-
-            applications = data.get('applications')
-            app.logger.info(f"SLA DATA: {data}")
-            for application in applications:
-                application_name = application.get('application_name')
-                microservices = application.get('microservices')
-                for i, microservice in enumerate(microservices):
-                    app.logger.info(f"Process microservice {i+1}/{len(microservices)}")
-                    # Assigning a Service IP for RR Load Balancing
-                    s_ip = [{
-                        "IpType": 'RR',
-                        "Address": new_job_rr_address(application, microservice),
-                    }]
-                    # Insert job into database
-                    job_id = mongo_insert_job(
-                        {
-                            'file_content': {'application': application, 'microservice': microservice},
-                            'service_ip_list': s_ip
-                        })
-                    app.logger.info(f"Inserted Job with ID: {str(job_id)}")
-                    # Remove other microservices from deployment job
-                    application.pop("microservices")
-                    job = {**application, **microservice}
-                    # Request scheduling
-                    threading.Thread(group=None, target=scheduler_request_deploy,
-                                     args=(job, str(job_id))).start()
-                    # Job status to scheduling REQUESTED
-                    mongo_update_job_status(job_id, 'REQUESTED')
-
-                    job_ids.setdefault(application_name, []).append(job_id)
-
-            return job_ids, 200
-
-    return ("/api/deploy request wihout a yaml file\n", 200)
+    if 'file' not in request.files:
+        flash('No file part')
+        return "no file", 400
+    file = request.files['file']
+    app.logger.info('file found')
+    if file.filename == '':
+        flash('No selected file')
+        return "empty file", 400
+    if file:
+        # Reading config file
+        sla = file.read()
+        data = ""
+        try:
+            data = parse_sla(sla)
+        except SLAFormatError as e:
+            # The developer is uising the old yaml schema. Let's keep it for compatibility.
+            data = yaml_reader(sla)
+        job_ids = {}
+        applications = data.get('applications')
+        app.logger.info(f"SLA DATA: {data}")
+        for application in applications:
+            application_name = application.get('application_name')
+            microservices = application.get('microservices')
+            for i, microservice in enumerate(microservices):
+                app.logger.info(f"Process microservice {i + 1}/{len(microservices)}")
+                app.logger.info(data)
+                # Insert job into database
+                job_id = mongo_insert_job(
+                    {
+                        'file_content': {'application': application, 'microservice': microservice},
+                        'service_ip_list': s_ip
+                    })
+                app.logger.info(f"Inserted Job with ID: {str(job_id)}")
+                # Remove other microservices from deployment job
+                application.pop("microservices")
+                job = {**application, **microservice}
+                # Inform network plugin about the deployment
+                threading.Thread(group=None, target=net_inform_service_deploy, args=(data, str(job_id),)).start()
+                # Job status to scheduling REQUESTED
+                mongo_update_job_status(job_id, 'REQUESTED')
 
 
-# ............. Network management Endpoint ............#
-# ......................................................#
+                # Request scheduling
+                threading.Thread(group=None, target=scheduler_request_deploy,
+                                 args=(job, str(job_id))).start()
+                # Job status to scheduling REQUESTED
+                mongo_update_job_status(job_id, 'REQUESTED')
 
-@app.route('/api/job/<job_name>/instances', methods=['GET'])
-def table_query_resolution_by_jobname(job_name):
-    """
-    Get all the instances of a job given the complete name
-    """
-    job_name = job_name.replace("_", ".")
-    app.logger.info("Incoming Request /api/job/" + str(job_name) + "/instances")
-    return {'instance_list': service_resolution(job_name)}
+                job_ids.setdefault(application_name, []).append(job_id)
 
-
-@app.route('/api/job/ip/<service_ip>/instances', methods=['GET'])
-def table_query_resolution_by_ip(service_ip):
-    """
-    Get all the instances of a job given a Service IP in 172_30_x_y notation
-    """
-    service_ip = service_ip.replace("_", ".")
-    app.logger.info("Incoming Request /api/job/ip/" + str(service_ip) + "/instances")
-    return {'instance_list': service_resolution_ip(service_ip)}
-
-
-@app.route('/api/net/subnet', methods=['GET'])
-def subnet_request():
-    """
-    Returns a new subnetwork address
-    """
-    addr = new_subnetwork_addr()
-    return {'subnet_addr': addr}
+        return {'job_id': str(job_id)}, 200
 
 
 # ................ Scheduler Test .....................#
@@ -417,6 +362,7 @@ def handle_init_client(message):
     app.logger.info(message)
 
     cid = mongo_upsert_cluster(cluster_ip=request.remote_addr, message=message)
+
     x = {
         'id': str(cid)
     }

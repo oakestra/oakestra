@@ -6,7 +6,7 @@ from schema import deploy_schema
 
 def yaml_reader(file):
     """Load yaml file"""
-    yaml_content = yaml.load(file, Loader=yaml.FullLoader)
+    yaml_content = yaml.safe_load(file)
     print(yaml_content.get('image'))
     yaml_validator(yaml_content)
     return yaml_content

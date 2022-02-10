@@ -1,7 +1,7 @@
-# Documentation of EdgeIO-SLA (v0.3.1)
+# Documentation of EdgeIO-SLA (v0.3.2)
 Example under *sla.json*
 
-- **api_version** : Version of SLA API; v0.3.1 as of now
+- **api_version** : Version of SLA API; v0.3.2 as of now
 - **customerID** : ID of the customer
 - **args** : *see "On expandability"*
 - **applications** : List of applications run by the customer
@@ -49,16 +49,11 @@ Example under *sla.json*
     - **connectivity** : List of connections this microservice needs to make to other microservices of the application and constraints that have to be satisfied; for more information read ***On conectivity***
       - **target_microservice_id** : ID of the microservice this microservice needs to communicate with.
       - **con_constraints** : List of connectivity constraints
-        - **type** : Type of constraint; one of ["latency", "geo"]
-          - ***For type "latency"***
-          - **threshold** : Maximum latency in [ms],
+        - **type** : Type of constraint; one of ["latency", "bandwidth"]
+          - **threshold** : For "latency" maximum latency of the connection in [ms]; for "bandwidth" minimum bandwidth in [kbit/s]
           - **rigidness** : Rigidness of constraint; see definition in constraint.
           - **convergence_time** : Time the orchestration framework has to find the optimal solution, before the [**rigidness**] of the constraint gets measured. In [s], default 300 (5 min)
-          - ***For type "geo", see "About geo"***
-          - **threshold** : Maximum distance from location in [km],
-          - **rigidness** : Rigidness of constraint; see definition in constraint.
-          - **convergence_time** : Time the orchestration framework has to find the optimal solution, before the [**rigidness**] of the constraint gets measured. In [s], default 300 (5 min)
-
+          
 ## On expandability
 
 There are multiple points for this design to be expanded upon:

@@ -176,7 +176,7 @@ def mongo_upsert_job(job, from_root=False):
 
     ## Remove immutable field "_id" from job to avoid update issues
     del job['_id']
-
+    ## REMOVE ENTRY FROM DB
     result = mongo_jobs.db.jobs.find_one_and_update({'system_job_id': job['system_job_id']}, {'$set': job}, upsert=True,
                                                     return_document=True)  # if job does not exist, insert it
     result['_id'] = str(result['_id'])
@@ -221,7 +221,7 @@ def mongo_update_job(job_id, status, target_node, connectivity):
     job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
     instance_list = job['instance_list']
     for instance in instance_list:
-        if instance.get('host_ip') == '':
+        if instance.get('host_ip') == '' or instance.get('host_ip') is None:
             instance['host_ip'] = target_node['node_address']
             port = target_node['node_info'].get('node_port')
             if port is None:
@@ -235,13 +235,9 @@ def mongo_update_job(job_id, status, target_node, connectivity):
                                                    'connectivity': connectivity}})
 
 
-def mongo_update_job_deployed(job_id, status, ns_ip, node_id):
+def mongo_update_job_deployed(job_id, status, node_id):
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
     instance_list = job['instance_list']
-    for instance in instance_list:
-        if str(instance.get('worker_id')) == str(node_id) and instance.get('namespace_ip') is '':
-            instance['namespace_ip'] = ns_ip
-            break
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
                                          {'$set': {'status': status, 'instance_list': instance_list}})

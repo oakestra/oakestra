@@ -2,6 +2,7 @@ import os
 import random
 import re
 import json
+from datetime import datetime
 
 from flask_mqtt import Mqtt
 
@@ -69,7 +70,6 @@ def mqtt_init(flask_app):
         app.logger.info(data)
 
         topic = data['topic']
-        app.logger.info(f"TOPIC: {topic}")
 
         re_nodes_information_topic = re.search("^nodes/.*/information$", topic)
         re_job_deployment_topic = re.search("^nodes/.*/job$", topic)

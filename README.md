@@ -33,6 +33,8 @@ docker-compose up --build -d
 
 ## Add worker nodes (run Node Engine)
 
+On an arbitrary Linux machine, install Python3.8 and virtualenv, then check [NodeEngine](node_engine/README.md) to startup the worker node. 
+TODO: move to worker readme
 On an arbitrary Linux machine, install Python3.8 and virtualenv. Set the IP address of the cluster orchestrator which should take care of the worker node in the start-up.sh file, and run the following:
 
 ```bash

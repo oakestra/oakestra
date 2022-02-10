@@ -21,17 +21,31 @@ The Node Engine software can run on any hardware with an operating system. Curre
 
 ## Start the Node Engine
 
-The Node Engine can be started with the startup script: `./start-up.sh <architecture>`.
-A virtualenv will be started and the component will start up.
-The architecture currently supported are: amd64 or arm-7
+The Node Engine can be started with or without the networking component
+
+### Start the Node Engine & NetManager
+
+**It is mandatory to install the NetManager first, checkout [edgeionet](https://github.com/edgeIO/edgeionet/tree/main/node-net-manager)**
+
+export the following environment variables:
+- CLUSTER_MANAGER_IP: `export CLUSTER_MANAGER_IP=<cluster_orchestrator_ip>` - public address of the cluster orchestrator
+- CLUSTER_MANAGER_PORT: `export CLUSTER_MANAGER_IP=<cluster_orchestrator_ip>` - OPTIONAL, default: 10000
+- MQTT_BROKER_URL: `export MQTT_BROKER_URL=<ip or url of the cluster mqtt broker>` - OPTIONAL, default==CLUSTER_MANAGER_IP
+- MQTT_BROKER_PORT: `export MQTT_BROKER_PORT=<port of the cluster mqtt broker>` - OPTIONAL, default: 10003
+- PUBLIC_WORKER_IP: `export PUBLIC_WORKER_IP=<ip or hostname>` - address where the node is publicly accessible 
+- PUBLIC_WORKER_PORT: `export PUBLIC_WORKER_PORT=<public node port>` - port where the node is publicly accessible. OPTIONAL, default: 50103
+
+Then startup the node engine and the NetManager together using: `./start-up-net.sh`.
+A virtualenv will be started and the components will start up.
 The superuser password will be asked
 
-Use `nohup` if you want Node-Engine to run a SSH server after logged out.
+### Start the Node Engine alone
+export the following environment variables:
+- CLUSTER_MANAGER_IP: `export CLUSTER_MANAGER_IP=<cluster_orchestrator_ip>` - public address of the cluster orchestrator
+- CLUSTER_MANAGER_PORT: `export CLUSTER_MANAGER_IP=<cluster_orchestrator_ip>` - OPTIONAL, default: 10000
 
-
-E.g. `nohup ./start-up >/dev/null 2>&1 & ` to run `./start-up` in background (also after logging out from ssh connection) and not to create any nohup log files. 
-See here https://stackoverflow.com/questions/10408816/how-do-i-use-the-nohup-command-without-getting-nohup-out
-
+Then startup the node engine and the NetManager together using: `./start-up-no-net.sh`.
+A virtualenv will be started and the components will start up.
 
 ## Get GPU Informtion of a Node
 

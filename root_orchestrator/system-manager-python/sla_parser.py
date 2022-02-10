@@ -7,8 +7,7 @@ class SLAFormatError(BaseException):
     message = "The given SLA was not formatted correctly"
 
 
-def parse_sla(file):
-    json_file = file.read()
+def parse_sla(json_file):
     if validate_json(json_file):
         return json.loads(json_file)
     else:
