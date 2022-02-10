@@ -131,16 +131,6 @@ def mqtt_publish_vivaldi_message(worker_id, nodes_vivaldi_information):
     mqtt.publish(topic, json.dumps(vivaldi_info_dict))
 
 
-def deployment_info_from_worker_node(job_id, status, NsIp, node_id):
-    app.logger.debug('JOB-DEPLOYMENT-UPDATE: sending job info to the root')
-    # Update mongo job
-    mongo_update_job_deployed(job_id, status, NsIp, node_id)
-    job = mongo_find_job_by_id(job_id)
-    app.logger.debug(job)
-    # Notify System manager
-    system_manager_notify_deployment_status(job, node_id)
-
-
 def validate_vivaldi_not_none(vector, height, error):
     return vector is not None and height is not None and error is not None
 
@@ -181,9 +171,7 @@ def handle_job_deployment_topic(data):
     payload = json.loads(data['payload'])
     job_id = payload.get('job_id')
     status = payload.get('status')
-    NsIp = payload.get('ns_ip')
-    deployment_info_from_worker_node(job_id, status, NsIp, client_id)
-
+    mongo_update_job_deployed(job_id, status, client_id)
 
 def handle_nodes_alarm_topic(data):
     topic = data["topic"]
