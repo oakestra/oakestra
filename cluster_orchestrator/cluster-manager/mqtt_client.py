@@ -185,8 +185,10 @@ def handle_nodes_alarm_topic(data):
         for i, instance in enumerate(instance_list):
             node_id = instance.get('worker_id')
             if node_id == client_id:
-                # Remove worker id from instance
+                # Remove worker id, host ip, host port from instance
                 del job["instance_list"][i]["worker_id"]
+                del job["instance_list"][i]["host_ip"]
+                del job["instance_list"][i]["host_port"]
         app.logger.info(f"Update Job: {job}")
         mongo_upsert_job(job)
         mqtt_publish_edge_delete(client_id, job)
