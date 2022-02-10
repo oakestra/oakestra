@@ -49,7 +49,6 @@ def publish_sla_alarm(node_id, alarm_type, violated_job, ip_rtt_stats=None):
     mqtt_port = int(os.environ.get("MQTT_BROKER_PORT"))
     mqtt.connect(mqtt_url, mqtt_port, 10)
     # ip_rtt_stats = {<violating ip>: <violating rtt>,...} only required for latency constraint violations
-    print(f"MQTT publish: {violated_job} {ip_rtt_stats}")
     mqtt.publish(topic, json.dumps({"job": violated_job, "ip_rtt_stats": ip_rtt_stats}))
     mqtt.disconnect()
 
