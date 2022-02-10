@@ -30,7 +30,7 @@ AREAS = {
 }
 
 PUBLIC_IP = os.environ.get("WORKER_PUBLIC_IP")
-ALLOWED_VIOLATIONS = 3
+ALLOWED_VIOLATIONS = 2
 
 # Note: use of redis causes warning "redis-py works best with hiredis. Please consider installing
 # Open issue: https://github.com/redis/redis-py/issues/1725
@@ -104,7 +104,7 @@ def check_memory_constraint(job, node_id, container_id, mem_used, counter):
     if used_memory_in_mb > required_memory_in_mb and mem_used >= 0.95:
         counter["mem"] += 1
         print(f"Counter: {counter['mem']}")
-    if counter["mem"] >= ALLOWED_VIOLATIONS:
+    if counter["mem"] > ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
         # Send alarm to cluster orchestrator
         publish_sla_alarm(node_id, "memory", job)
@@ -118,7 +118,7 @@ def check_cpu_constraint(job, node_id, cpu_used, counter):
     if cpu_used >= 95:
         counter["cpu"] += 1
         print(f"Counter: {counter['cpu']} ")
-    if counter["cpu"] >= ALLOWED_VIOLATIONS:
+    if counter["cpu"] > ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
         # Send alarm to cluster orchestrator
         publish_sla_alarm(node_id, "cpu", job)
@@ -158,7 +158,7 @@ def check_s2s_geo_constraint(node_id, target_worker_info, threshold, counter, jo
     if distance > threshold:
         counter[f"{target_worker_coords[0]},{target_worker_coords[1]}"] += 1
         print(f"Distance larger than threshold. Increment violation counter: {counter[f'{target_worker_coords[0]},{target_worker_coords[1]}']}")
-    if counter[f"{target_worker_coords[0]},{target_worker_coords[1]}"] >= ALLOWED_VIOLATIONS:
+    if counter[f"{target_worker_coords[0]},{target_worker_coords[1]}"] > ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
         # Send alarm to cluster orchestrator
         publish_sla_alarm(node_id, "s2s-geo", job)
@@ -183,7 +183,7 @@ def check_s2s_latency_constraint(node_id, target_worker_info, threshold, counter
     if dist >= threshold + (threshold * tol):
         counter[target_worker_id] += 1
         print(f"Latency larger than threshold. Increment violation counter: {counter[target_worker_id]}")
-    if counter[target_worker_id] >= ALLOWED_VIOLATIONS:
+    if counter[target_worker_id] > ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
         # Send alarm to cluster orchestrator
         publish_sla_alarm(node_id, "s2s-latency", job)
@@ -230,7 +230,7 @@ def check_s2u_geo_constraint(node_id, counter, job, constraint):
     if distance > threshold:
         counter[f"{constraint_lat},{constraint_long}"] += 1
         print(f"Distance larger than threshold. Increment violation counter: {counter[f'{constraint_lat},{constraint_long}']}")
-    if counter[f"{constraint_lat},{constraint_long}"] >= ALLOWED_VIOLATIONS:
+    if counter[f"{constraint_lat},{constraint_long}"] > ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
         # Send alarm to cluster orchestrator
         publish_sla_alarm(node_id, "s2u-geo", job)
@@ -345,7 +345,7 @@ def measure_s2u_latency_violations(node_id, job, ips, constraint, violation_ctr)
     for ip, rtt in statistics.items():
         if rtt > threshold + (threshold * tol):
             violation_ctr[ip] += 1
-            if violation_ctr[ip] >= ALLOWED_VIOLATIONS:
+            if violation_ctr[ip] > ALLOWED_VIOLATIONS:
                 violations[ip] = rtt
 
     print(f"Violations: {violations} Violation Counter: {violation_ctr}")
