@@ -65,6 +65,11 @@ def mongo_insert_job(obj):
     return str(new_job.get('_id'))
 
 
+def mongo_remove_job(system_job_id):
+    global mongo_jobs
+    return mongo_jobs.db.jobs.remove({"system_job_id": system_job_id})
+
+
 def mongo_get_all_jobs():
     global mongo_jobs
     return mongo_jobs.db.jobs.find()
@@ -99,6 +104,11 @@ def mongo_find_job_by_id(job_id):
     return mongo_jobs.db.jobs.find_one(ObjectId(job_id))
 
 
+def mongo_find_job_by_systemid(sys_id):
+    global mongo_jobs
+    return mongo_jobs.db.jobs.find_one({"system_job_id": sys_id})
+
+
 def mongo_find_job_by_name(job_name):
     global mongo_jobs
     return mongo_jobs.db.jobs.find_one({'job_name': job_name})
@@ -113,12 +123,27 @@ def mongo_find_job_by_ip(ip):
         job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip': ip})
     return job
 
-def mongo_update_job_status_and_instances_by_system_job_id(system_job_id, status, replicas, instance_list):
+
+def mongo_update_job_status_and_instances_by_system_job_id(system_job_id, instance_list):
     global mongo_jobs
     print('Updating Job Status and assigning a cluster for this job...')
     mongo_jobs.db.jobs.update_one({'system_job_id': system_job_id},
-                                  {'$set': {'status': status, 'replicas': replicas, 'instance_list': instance_list}})
+                                  {'$set': {'instance_list': instance_list}})
 
+
+def mongo_update_clean_one_instance(system_job_id, instance):
+    """
+    returns the replicas left
+    """
+    global mongo_jobs
+    job = mongo_find_job_by_systemid(system_job_id)
+    instances = job.get("instance_list")
+    for i in range(len(instances)):
+        if instances[i]['instance_number'] is instance:
+            instances.remove(i)
+            mongo_update_job_status_and_instances_by_system_job_id(system_job_id, instances)
+            return True
+    return False
 
 
 # ........... SERVICE MANAGER OPERATIONS  ............

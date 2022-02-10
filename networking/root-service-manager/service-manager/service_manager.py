@@ -1,9 +1,12 @@
 from flask import Flask, request
 from flask_socketio import SocketIO
+from interfaces.mongodb_requests import mongo_init
 from network.tablequery import *
 from network.subnetwork_management import *
-from interfaces.mongodb_requests import *
+from operations import instances_management
+from operations import service_management
 from net_logging import configure_logging
+import os
 
 my_logger = configure_logging()
 
@@ -20,7 +23,7 @@ MY_PORT = os.environ.get('MY_PORT') or 10100
 # ......................................................#
 
 @app.route('/api/net/service/net_deploy_status', methods=['POST'])
-def get_cluster_deployment_status_feedback():
+def update_instance_local_deployment_addresses():
     """
     Result of the deploy operation in a cluster and the subsequent generated network addresses
     json file structure:{
@@ -38,12 +41,10 @@ def get_cluster_deployment_status_feedback():
     data = request.json
     app.logger.info(data)
 
-    mongo_update_job_net_status(
-        job_id=data.get('job_id'),
-        instances=data.get('instances')
+    return instances_management.update_instance_local_addresses(
+        instances=data.get('instances'),
+        job_id=data.get('job_id')
     )
-
-    return "roger that"
 
 
 @app.route('/api/net/service/deploy', methods=['POST'])
@@ -62,19 +63,10 @@ def new_service_deployment():
     data = request.json
     app.logger.info(data)
 
-    s_ip = [{
-        "IpType": 'RR',
-        "Address": new_job_rr_address(data.get("deployment_descriptor")),
-    }]
-
-    job_id = mongo_insert_job(
-        {
-            'system_job_id': data.get("system_job_id"),
-            'deployment_descriptor': data.get("deployment_descriptor"),
-            'service_ip_list': s_ip
-        })
-
-    return "roger that"
+    return service_management.deploy_request(
+        deployment_descriptor=data.get('deployment_descriptor'),
+        system_job_id=data.get('system_job_id')
+    )
 
 
 @app.route('/api/net/instance/deploy', methods=['POST'])
@@ -93,24 +85,29 @@ def new_instance_deployment():
     data = request.json
     app.logger.info(data)
 
-    instance_list = []
-    for i in range(data.get('replicas')):
-        instance_info = {
-            'instance_number': i,  # number generation must be changed when scale up and down ops are implemented
-            'instance_ip': new_instance_ip(),
-            'cluster_id': str(data.get('cluster_id')),
-        }
-        instance_list.append(instance_info)
-
-    mongo_update_job_status_and_instances_by_system_job_id(
-        system_job_id=data.get('system_job_id'),
-        status='CLUSTER_SCHEDULED',
+    return instances_management.deploy_request(
+        sys_job_id=data.get('system_job_id'),
         replicas=data.get('replicas'),
-        instance_list=instance_list
+        cluster_id=data.get('cluster_id')
     )
 
-    return "roger that"
 
+@app.route('/api/net/instance/undeploy', methods=['POST'])
+def instance_undeployment():
+    """
+    Input:
+        {
+            system_job_id:int,
+            instance:int
+        }
+    Undeployment request for the instance number "instance"
+    """
+
+    app.logger.info("Incoming Request /api/net/instance/undeploy")
+    data = request.json
+    app.logger.info(data)
+
+    return instances_management.undeploy_request(data.get('system_job_id'), data.get('instance'))
 
 # .............. Table query Endpoints .................#
 # ......................................................#
