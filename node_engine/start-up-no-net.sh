@@ -22,4 +22,4 @@ export GPS=TRUE
 
 # Start node engine
 echo "Start Node Engine#"
-python3 app.py
+.venv/bin/python3 app.py

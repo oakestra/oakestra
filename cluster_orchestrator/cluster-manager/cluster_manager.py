@@ -74,7 +74,7 @@ def deploy_task():
 def get_scheduler_result_and_propagate_to_edge():
     # print(request)
     app.logger.info('Incoming Request /api/result - received cluster_scheduler result')
-    data = request.json  # get POST body
+    data = json.loads(request.json)  # get POST body
     app.logger.info(data)
 
     job = data.get('job')
