@@ -3,7 +3,7 @@ from flask_socketio import SocketIO
 from interfaces.mongodb_requests import mongo_init
 from network.tablequery import *
 from network.subnetwork_management import *
-from operations import instances_management
+from operations import instances_management, cluster_management
 from operations import service_management
 from net_logging import configure_logging
 import os
@@ -17,6 +17,29 @@ app.logger.addHandler(my_logger)
 socketio = SocketIO(app, async_mode='eventlet', logger=True, engineio_logger=True, cors_allowed_origins='*')
 
 MY_PORT = os.environ.get('MY_PORT') or 10100
+
+
+# .............. Cluster Handshake .....................#
+# ......................................................#
+
+@app.route('/api/net/cluster', methods=['POST'])
+def register_new_cluster():
+    """
+        Registration of the new cluster
+        json file structure:{
+            'cluster_id':string
+            'cluster_port':int
+        }
+    """
+    app.logger.info("Incoming Request /api/net/cluster")
+    data = request.json
+    app.logger.info(data)
+
+    cluster_management.register_clsuter(
+        cluster_id=data.get("cluster_id"),
+        cluster_port=data.get("cluster_port"),
+        cluster_address=str(request.remote_addr)
+    )
 
 
 # ......... Deployment Endpoints .......................#
@@ -92,8 +115,8 @@ def new_instance_deployment():
     )
 
 
-@app.route('/api/net/instance/undeploy', methods=['POST'])
-def instance_undeployment():
+@app.route('/api/net/undeploy/<system_job_id>/<instance>', methods=['DELETE'])
+def instance_undeployment(system_job_id, instance):
     """
     Input:
         {
@@ -103,11 +126,10 @@ def instance_undeployment():
     Undeployment request for the instance number "instance"
     """
 
-    app.logger.info("Incoming Request /api/net/instance/undeploy")
-    data = request.json
-    app.logger.info(data)
+    app.logger.info("Incoming Request /api/net/undeploy/" + str(system_job_id) + "/<instance>" + str(instance))
 
-    return instances_management.undeploy_request(data.get('system_job_id'), data.get('instance'))
+    return instances_management.undeploy_request(str(system_job_id), int(instance))
+
 
 # .............. Table query Endpoints .................#
 # ......................................................#
@@ -119,11 +141,7 @@ def table_query_resolution_by_jobname(service_name):
     """
     service_name = service_name.replace("_", ".")
     app.logger.info("Incoming Request /api/net/service/" + str(service_name) + "/instances")
-    job = service_resolution(name=service_name)
-    return {
-        "instance_list": job.get("instance_list"),
-        "service_ip_list": job.get("service_ip_list")
-    }
+    return instances_management.get_service_instances(name=service_name, cluster_ip=request.remote_addr)
 
 
 @app.route('/api/net/service/ip/<service_ip>/instances', methods=['GET'])
@@ -133,12 +151,7 @@ def table_query_resolution_by_ip(service_ip):
     """
     service_ip = service_ip.replace("_", ".")
     app.logger.info("Incoming Request /api/net/service/ip/" + str(service_ip) + "/instances")
-    job = service_resolution(ip=service_ip)
-    return {
-        "job_name": job.get("job_name"),
-        "instance_list": job.get("instance_list"),
-        "service_ip_list": job.get("service_ip_list")
-    }
+    return instances_management.get_service_instances(ip=service_ip, cluster_ip=request.remote_addr)
 
 
 # ........ Subnetwork management endpoints .............#
