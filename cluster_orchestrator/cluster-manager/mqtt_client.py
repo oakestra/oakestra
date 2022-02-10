@@ -2,14 +2,12 @@ import os
 import random
 import re
 import json
-from datetime import datetime
 
 from flask_mqtt import Mqtt
 
 from NetworkCoordinateSystem.network_measurements import ping
 from NetworkCoordinateSystem.vivaldi_coordinate import VivaldiCoordinate
-from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem, mongo_update_job_deployed, mongo_find_job_by_id, find_all_nodes, mongo_upsert_job
-from system_manager_requests import system_manager_notify_deployment_status
+from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem, mongo_update_job_deployed, find_all_nodes, mongo_upsert_job
 from cluster_scheduler_requests import scheduler_request_alarm
 
 mqtt = None
