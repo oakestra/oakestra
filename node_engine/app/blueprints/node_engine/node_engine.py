@@ -127,7 +127,6 @@ def handle_init_final(jsonarg):
     my_logger.info(f'SocketIO - Received Cluster_Manager_to_Node_Engine_2: {data}')
     mqtt_port = data["MQTT_BROKER_PORT"]
     node_info.id = data["id"]
-    node_info.subnetwork = data["SUBNETWORK"]
     my_logger.info("Received mqtt_port: {}".format(mqtt_port))
     my_logger.info("My received ID is: {}\n\n\n".format(node_info.id))
 
@@ -135,8 +134,7 @@ def handle_init_final(jsonarg):
     vivaldi_info = data["VIVALDI"]
     my_logger.info(f"Vivaldi info received from CO: {vivaldi_info}")
     # register to the netManager
-    net_manager_register(node_info.subnetwork)
-
+    net_manager_register(node_info.id)
 
     # publish node info
     ip_info = network_measurement.get_ip_info()
@@ -154,7 +152,6 @@ def handle_init_final(jsonarg):
     # disconnect the Socket
     sio.sleep(1)
     sio.disconnect()
-
 
 
 @sio.event(namespace='/init')

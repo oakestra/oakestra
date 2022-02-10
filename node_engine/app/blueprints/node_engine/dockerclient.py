@@ -12,29 +12,40 @@ PORT = "port"
 STATE = "State"
 STATUS = "Status"
 RUNNING = "running"
+COMMANDS = "commands"
 
 def start_container(job):
     # image = job.get("image")
     image = job.get(CODE)
     name = job.get(NAME)
     port = job.get(PORT)
+    commands = job.get(COMMANDS)
+
     if ":" in port:
         port_in, port_out = port.split(":")
     else:
         port_in, port_out = port, None
     try:
         # start container
-        container = docker_client.containers.run(image, name=name, ports={port_in: port_out}, detach=True)
-        if port_out is None:
-            container.reload()
-            port_out = container.attrs["NetworkSettings"]["Ports"]["5000/tcp"][0]["HostPort"]
+        container = docker_client.containers.run(image, name=name, ports={port_in: port_out}, commands=commands, detach=True)
+        container.pause()
+
         # assign address to the container
         address = net_manager_requests.net_manager_docker_deploy(job, str(container.id))
         if address == "":
-            raise Exception("Bad Address")
+            container.kill()
+            raise Exception("Bad Network Address - NetManager error")
+
+        container.unpause()
         print(container.id)
         print(address)
+
+        if port_out is None:
+            container.reload()
+            port_out = container.attrs["NetworkSettings"]["Ports"]["5000/tcp"][0]["HostPort"]
+
         return address, container.id, port_out
+
     except docker.errors.APIError as e:
         print("Oopps.. Docker API Error. {}")
         print(e)

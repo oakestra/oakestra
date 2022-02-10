@@ -1,6 +1,3 @@
-import os
-import time
-
 import numpy as np
 from flask_mqtt import Mqtt
 import json
@@ -12,7 +9,6 @@ from app.blueprints.node_engine import cpu_mem, dockerclient, coordinates, mirag
 from app.blueprints.monitoring import monitoring
 
 app = None
-# mqtt = None
 mqtt = Mqtt()
 ip_info = {}
 node_info = {}
