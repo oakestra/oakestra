@@ -156,8 +156,8 @@ def check_s2s_geo_constraint(node_id, target_worker_info, threshold, counter, jo
     distance = geopy.distance.distance([worker_lat, worker_long], [target_worker_lat, target_worker_long]).km
     print(f"Distance between node ({worker_lat},{worker_long}) and target worker ({target_worker_coords}): {distance}km")
     if distance > threshold:
-        counter[f"{target_worker_coords[0]},{target_worker_id[1]}"] += 1
-        print(f"Distance larger than threshold. Increment violation counter: {counter[f'{target_worker_coords[0]},{target_worker_id[1]}']}")
+        counter[f"{target_worker_coords[0]},{target_worker_coords[1]}"] += 1
+        print(f"Distance larger than threshold. Increment violation counter: {counter[f'{target_worker_coords[0]},{target_worker_coords[1]}']}")
     if counter[f"{target_worker_coords[0]},{target_worker_coords[1]}"] >= ALLOWED_VIOLATIONS:
         print(f"Exceeded violation threshold of {ALLOWED_VIOLATIONS}. Trigger SLA alarm.")
         # Send alarm to cluster orchestrator
