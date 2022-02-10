@@ -27,7 +27,7 @@ def start_container(job):
         port_in, port_out = port, None
     try:
         # start container
-        container = docker_client.containers.run(image, name=name, ports={port_in: port_out}, commands=commands, detach=True)
+        container = docker_client.containers.run(image, name=name, ports={port_in: port_out}, command=commands, detach=True)
         container.pause()
 
         # assign address to the container
