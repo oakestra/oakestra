@@ -57,6 +57,8 @@ services:
       - MQTT_BROKER_PORT=10003
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
+      - CLUSTER_PUBLIC_IP=${MYIP}
+      - CLUSTER_PRIVATE_IP=192.168.178.79
     depends_on:
       - mongo
       - mqtt

@@ -222,12 +222,12 @@ def handle_init_worker(message):
     app.logger.info('Websocket - Received Edge_to_Cluster_Manager_1: {}'.format(request.remote_addr))
     app.logger.info(message)
 
-    vivaldi_info = mongo_get_vivaldi_info_by_node_id(client_id)
     client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": message})
+    vivaldi_info = mongo_get_vivaldi_info_by_node_id(client_id)
 
     init_packet = {
         "id": str(client_id),
-        "MQTT_BROKER_PORT": os.environ.get('MQTT_BROKER_PORT')
+        "MQTT_BROKER_PORT": os.environ.get('MQTT_BROKER_PORT'),
         "VIVALDI": vivaldi_info
     }
 
