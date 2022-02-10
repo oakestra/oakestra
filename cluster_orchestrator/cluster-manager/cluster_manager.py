@@ -7,16 +7,16 @@ import sys
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
 from prometheus_client import start_http_server
-
-from cluster_balancer import service_resolution, service_resolution_ip
+import threading
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_upsert_job, mongo_find_job_by_system_id, \
     mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
 from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from cm_logging import configure_logging
-from system_manager_requests import send_aggregated_info_to_sm, system_manager_get_subnet
+from system_manager_requests import send_aggregated_info_to_sm
 from analyzing_workers import looking_for_dead_workers
 from my_prometheus_client import prometheus_init_gauge_metrics, prometheus_set_metrics
+from network_plugin_requests import *
 
 MY_PORT = os.environ.get('MY_PORT')
 
@@ -80,6 +80,11 @@ def get_scheduler_result_and_propagate_to_edge():
 
     mongo_update_job_status(job.get('_id'), 'NODE_SCHEDULED', data.get('node'))
     job = mongo_find_job_by_id(job.get('_id'))
+
+    # Inform network plugin about the deployment
+    threading.Thread(group=None, target=network_notify_deployment,
+                     args=(str(job['system_job_id']), job)).start()
+
     mqtt_publish_edge_deploy(resulting_node_id, job)
     return "ok"
 
@@ -144,46 +149,6 @@ def scheduler_test():
     return scheduler_request_status()
 
 
-# ............. Network management Endpoint ............#
-# ......................................................#
-
-@app.route('/api/job/<job_name>/instances', methods=['GET'])
-def table_query_resolution_by_jobname(job_name):
-    """
-    Get all the instances of a job given the complete name
-    """
-    service_ip = job_name.replace("_", ".")
-    app.logger.info("Incoming Request /api/job/" + str(job_name) + "/instances")
-    return {'instance_list': service_resolution(job_name)}
-
-
-@app.route('/api/job/ip/<service_ip>/instances', methods=['GET'])
-def table_query_resolution_by_ip(service_ip):
-    """
-    Get all the instances of a job given a Service IP in 172_30_x_y notation
-    returns {
-                app_name: string
-                instance_list: [
-                    {
-                        instance_number: int
-                        namespace_ip: string
-                        host_ip: string
-                        host_port: string
-                        service_ip: [
-                            {
-                                IpType: string
-                                Address: string
-                            }
-                        ]
-                    }
-                ]
-    """
-    service_ip = service_ip.replace("_", ".")
-    app.logger.info("Incoming Request /api/job/ip/" + str(service_ip) + "/instances")
-    name, instances = service_resolution_ip(service_ip)
-    return {'app_name': name, 'instance_list': instances}
-
-
 # ...... Websocket INIT Handling with edge nodes .......#
 # ......................................................#
 
@@ -198,13 +163,11 @@ def handle_init_worker(message):
     app.logger.info('Websocket - Received Edge_to_Cluster_Manager_1: {}'.format(request.remote_addr))
     app.logger.info(message)
 
-    client_subnetwork = system_manager_get_subnet()
-    client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": message, "node_subnet": client_subnetwork})
+    client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": message})
 
     init_packet = {
         "id": str(client_id),
-        "MQTT_BROKER_PORT": os.environ.get('MQTT_BROKER_PORT'),
-        "SUBNETWORK": client_subnetwork,
+        "MQTT_BROKER_PORT": os.environ.get('MQTT_BROKER_PORT')
     }
 
     # create ID and send it along with MQTT_Broker info to the client. save id into database
