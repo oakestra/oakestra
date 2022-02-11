@@ -1,11 +1,8 @@
 from unittest.mock import MagicMock
-import unittest
 import sys
-
-sys.modules['mongodb_client'] = unittest.mock.Mock()
 import service_manager
 
-mongodb_client = sys.modules['mongodb_client']
+mongodb_client = sys.modules['interfaces.mongodb_requests']
 
 
 def test_instance_address_base():
