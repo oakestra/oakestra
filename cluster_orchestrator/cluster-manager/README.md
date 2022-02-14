@@ -33,7 +33,11 @@ A virtualenv will be started and cluster-manager will start up.
 
 Use the docker-compose file to start other necessary Cluster Orchestrator components (Mqtt Broker + MongoDB + Redis as Cluster Scheduler-Queue)
 
-
+## IP Geolocation
+To be able to perform IP geolocation, the cluster orchestrator requires a local GeoLite2 database for IP geolocation lookup.
+Since the database file is too large to upload it to the git repository, the cluster operator has to download the .csv file
+and place in under /cluster-manager/geolocation
+Download: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en
 ## Built With
 
 - Python3.8.5

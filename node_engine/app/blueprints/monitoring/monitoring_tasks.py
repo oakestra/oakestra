@@ -29,7 +29,7 @@ AREAS = {
     "germany": GERMANY # Used for testing different latency measures from requests within geremany
 }
 
-PUBLIC_IP = os.environ.get("WORKER_PUBLIC_IP")
+PUBLIC_IP = os.environ.get("PUBLIC_WORKER_IP")
 ALLOWED_VIOLATIONS = 2
 
 # Note: use of redis causes warning "redis-py works best with hiredis. Please consider installing

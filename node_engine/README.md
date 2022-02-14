@@ -113,8 +113,11 @@ used to resolve the network call of the containers. More info are available in `
 ## Monitoring Component
 
 The monitoring component requires tshark to be installed on the system in order to be able to listen for incoming traffic 
-on the port specified for the microservice. The celery task that continuously checks whether the SLA is staisfied, is 
-in 'start-up.sh'
+on the port specified for the microservice. Furthermore, in case of permission issues, the user has to be added 
+to the wireshark group `sudo adduser <yourUser> wireshark`. In case the group does not exist, try first running `sudo dpkg-reconfigure wireshark-common`
+and select yes to create the group for non root users. Depending on your permissions it might be required to add exectuion rights 
+to `usr/bin/dumpcap` to allow capturing incoming traffic. The celery task that continuously checks whether the SLA is staisfied, is 
+started in 'celery-start.sh'
 
 ## Misc
 
