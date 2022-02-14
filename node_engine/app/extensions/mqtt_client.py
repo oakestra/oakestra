@@ -131,7 +131,7 @@ def handle_nodes_topic_vivaldi(payload):
     mqtt.app.logger.info("MQTT - Received Vivaldi command")
     public_ip = ip_info["public"]
     vivaldi_info = payload.get('vivaldi_info')
-    mqtt.app.logger.info(f"Received vivaldi infos: {vivaldi_info}")
+    # mqtt.app.logger.info(f"Received vivaldi infos: {vivaldi_info}")
     # Dict has target IP as key and a tuple consisting of the remote VivaldiCoordinate and the router_rtt if required
     ip_vivaldi_dict = {}
     for info in vivaldi_info:
@@ -155,7 +155,7 @@ def handle_nodes_topic_vivaldi(payload):
 
     # Ping received IPs in parallel
     statistics = network_measurement.parallel_ping(ip_vivaldi_dict.keys())
-    mqtt.app.logger.info(f"Ping statistics: {statistics}")
+    # mqtt.app.logger.info(f"Ping statistics: {statistics}")
     for ip, rtt in statistics.items():
         viv_router_rtts = ip_vivaldi_dict[ip]
         for _viv, _router_rtt in viv_router_rtts:
