@@ -1,7 +1,8 @@
 import re
+
+from interfaces.mongodb_requests import mongo_find_node_by_id_and_update_subnetwork
 from network.deployment import *
-from network.tablequery.resolution import *
-from network.tablequery.interests import *
+from network.tablequery import resolution, interests
 from flask_mqtt import Mqtt
 
 mqtt = None
@@ -44,6 +45,7 @@ def mqtt_init(flask_app):
         re_job_undeployment_topic = re.search("^nodes/.*/net/service/undeployed", topic)
         re_job_tablequery_topic = re.search("^nodes/.*/net/tablequery/request", topic)
         re_job_subnet_topic = re.search("^nodes/.*/net/subnet", topic)
+        re_job_interest_remove = re.search("^nodes/.*/net/interest/remove", topic)
 
         topic_split = topic.split('/')
         client_id = topic_split[1]
@@ -61,6 +63,9 @@ def mqtt_init(flask_app):
         if re_job_subnet_topic is not None:
             app.logger.debug('JOB-SUBNET-REQUEST')
             _subnet_handler(client_id, payload)
+        if re_job_interest_remove is not None:
+            app.logger.debug('JOB-INTEREST-REMOVE')
+            _interest_remove_handler(client_id, payload)
 
 
 def _deployment_handler(client_id, payload):
@@ -78,6 +83,11 @@ def _undeployment_handler(client_id, payload):
     pass
 
 
+def _interest_remove_handler(client_id, payload):
+    appname = payload.get('appname')
+    interests.remove_interest(appname, client_id)
+
+
 def _tablequery_handler(client_id, payload):
     serviceName = payload.get('sname')
     sip = payload.get('sip')
@@ -87,15 +97,15 @@ def _tablequery_handler(client_id, payload):
 
     # resolve the query and register interest
     if sip is not None and sip != "":
-        serviceName, instances, siplist = service_resolution_ip(sip)
+        serviceName, instances, siplist = resolution.service_resolution_ip(sip)
     elif serviceName is not None and serviceName != "":
-        instances, siplist = service_resolution(serviceName)
+        instances, siplist = resolution.service_resolution(serviceName)
 
     if instances is None:
         return
 
-    register_interest_sname(serviceName, client_id)
-    result = {'app_name': serviceName, 'instance_list': format_instance_response(instances, siplist)}
+    interests.add_interest(serviceName, client_id)
+    result = {'app_name': serviceName, 'instance_list': resolution.format_instance_response(instances, siplist)}
     mqtt_publish_tablequery_result(client_id, result)
 
 
@@ -119,3 +129,8 @@ def mqtt_publish_tablequery_result(client_id, result):
 def mqtt_publish_subnetwork_result(client_id, result):
     topic = 'nodes/' + client_id + '/net/subnetwork/result'
     mqtt.publish(topic, json.dumps(result))
+
+
+def mqtt_notify_service_change(job_name, type=None):
+    topic = 'jobs/' + job_name + '/updates_available'
+    mqtt.publish(topic, json.dumps({"type": type}))

@@ -1,9 +1,6 @@
 name: Root Service Manager Test
 
-on:
-  push:
-    branches: [ develop, main ]
-
+on: push
 
 jobs:
   test:

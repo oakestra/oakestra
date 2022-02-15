@@ -1,9 +1,10 @@
+import logging
 import requests
 import os
 import json
 
-ROOT_SERVICE_MANAGER_ADDR = 'http://' + os.environ.get('ROOT_SERVICE_MANAGER_URL') + ':' + os.environ.get(
-    'ROOT_SERVICE_MANAGER_PORT')
+ROOT_SERVICE_MANAGER_ADDR = 'http://' + os.environ.get('ROOT_SERVICE_MANAGER_URL',"0.0.0.0") + ':' + os.environ.get(
+    'ROOT_SERVICE_MANAGER_PORT',"5000")
 
 
 def root_service_manager_get_subnet():
@@ -58,6 +59,24 @@ def cloud_table_query_service_name(name):
     request_addr = ROOT_SERVICE_MANAGER_ADDR + '/api/net/service/' + str(job_name) + '/instances'
     print(request_addr)
     try:
-        return requests.get(request_addr).json()
+        resp = requests.get(request_addr)
+        return resp.json()
+    except requests.exceptions.RequestException as e:
+        logging.error(e)
+        logging.error('Calling System Manager /api/job/../instances not successful.')
+
+
+def cloud_remove_interest(job_name):
+    request_addr = ROOT_SERVICE_MANAGER_ADDR + '/api/net/interest/' + str(job_name)
+    try:
+        result = requests.delete(request_addr)
+        if result.status_code == 404:
+            # TODO fallback cluster re-register and re-register the interests
+            logging.error(result)
+            pass
+        if result.status_code != 200:
+            # TODO try again later
+            logging.error(result)
+            pass
     except requests.exceptions.RequestException as e:
         print('Calling System Manager /api/job/../instances not successful.')

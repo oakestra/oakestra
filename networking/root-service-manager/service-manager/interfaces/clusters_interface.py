@@ -23,7 +23,7 @@ def _notify_interest_update(cluster_addr, cluster_port, job_name, instancenum, t
         url=str(cluster_addr) + ":" + str(cluster_port) + NOTIFY_INTEREST_ENDPOINT,
         json={
             "job_name": job_name,
-            "instancenum": instancenum,
+            "instance_number": instancenum,
             "type": type
         })
 

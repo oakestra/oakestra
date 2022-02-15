@@ -2,7 +2,7 @@ from flask import Flask, request
 from flask_socketio import SocketIO
 from interfaces.mongodb_requests import mongo_init
 from network.tablequery import *
-from network.subnetwork_management import *
+from network import subnetwork_management, routes_interests
 from operations import instances_management, cluster_management
 from operations import service_management
 from net_logging import configure_logging
@@ -40,6 +40,19 @@ def register_new_cluster():
         cluster_port=data.get("cluster_port"),
         cluster_address=str(request.remote_addr)
     )
+
+
+@app.route('/api/net/interest/<job_name>', methods=['DELETE'])
+def register_new_cluster(job_name):
+    """
+        Deregistration of an interest
+        json file structure:{
+            'job_name':string
+        }
+    """
+    job_name = job_name.replace("_", ".")
+    app.logger.info("Incoming Request DELETE /api/net/interest/" + job_name)
+    return routes_interests.deregister_interest(request.remote_addr, job_name)
 
 
 # ......... Deployment Endpoints .......................#
@@ -162,7 +175,7 @@ def subnet_request():
     """
     Returns a new subnetwork address
     """
-    addr = new_subnetwork_addr()
+    addr = subnetwork_management.new_subnetwork_addr()
     return {'subnet_addr': addr}
 
 
