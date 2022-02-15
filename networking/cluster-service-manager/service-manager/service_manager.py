@@ -5,6 +5,7 @@ from flask_socketio import SocketIO
 from interfaces.mqtt_client import mqtt_init
 from net_logging import configure_logging
 from interfaces.mongodb_requests import mongo_init
+from interfaces.root_service_manager_requests import cloud_register_cluster
 from operations.instances_management import instance_deployment, instance_updates
 
 MY_PORT = os.environ.get('MY_PORT') or 10200
@@ -63,5 +64,5 @@ def task_update():
 
 if __name__ == '__main__':
     import eventlet
-
-    eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)
+    if cloud_register_cluster(MY_PORT):
+        eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)

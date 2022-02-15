@@ -26,10 +26,10 @@ def notify_job_instance_deployment(job_name, instancenum):
 def _notify_clusters(handler, job_name, instancenum):
     clusters = mongodb_requests.mongo_get_cluster_interested_to_job(job_name)
     for cluster in clusters:
-        if cluster["cluster_info"]["status"] == cluster_management.CLUSTER_STATUS_ACTIVE:
+        if cluster["status"] == cluster_management.CLUSTER_STATUS_ACTIVE:
             result = handler(
-                cluster["cluster_info"]["cluster_address"],
-                cluster["cluster_info"]["cluster_port"],
+                cluster["cluster_address"],
+                cluster["cluster_port"],
                 job_name,
                 instancenum
             )

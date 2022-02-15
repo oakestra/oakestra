@@ -26,12 +26,11 @@ def _get_fake_job(name):
 
 def _get_fake_cluster():
     return {
+        "_id": "1",
         "cluster_id": "1",
-        "cluster_info": {
-            "cluster_address": "192.168.1.1",
-            "cluster_port": "5555",
-            "status": operations.cluster_management.CLUSTER_STATUS_ACTIVE
-        },
+        "cluster_address": "192.168.1.1",
+        "cluster_port": "5555",
+        "status": operations.cluster_management.CLUSTER_STATUS_ACTIVE,
         "instances": ["aaa", "bbb"],
     }
 

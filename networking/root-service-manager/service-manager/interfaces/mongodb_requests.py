@@ -100,6 +100,7 @@ def mongo_update_job_net_status(job_id, instances):
         instance_list[instance_num] = elem
     return mongo_jobs.db.jobs.find_one_and_update({'_id': ObjectId(job_id)}, {'$set': {'instance_list': instance_list}})
 
+
 def mongo_find_job_by_id(job_id):
     global mongo_jobs
     return mongo_jobs.db.jobs.find_one(ObjectId(job_id))
@@ -303,15 +304,22 @@ def mongo_free_subnet_address_to_cache(address):
 # ......... CLUSTER OPERATIONS ....................#
 ####################################################
 
-def mongo_cluster_add(cluster_id, cluster_info):
+def mongo_cluster_add(cluster_port, cluster_address, status):
     global mongo_clusters
 
     job = mongo_clusters.db.cluster.find_one_and_update(
-        {"cluster_id": cluster_id},
+        {"cluster_port": cluster_port, "cluster_address": cluster_address},
         {'$set':
-             {"cluster_id": cluster_id,
-              "cluster_info": cluster_info}
-         })
+             {"cluster_port": cluster_port,
+              "cluster_address": cluster_address,
+              "status": status}
+         }, return_document=True)
+
+    mongo_clusters.db.cluster.find_one_and_update(
+        {"_id": job.get('_id')},
+        {'$set': {
+            "cluster_id": str(job.get('_id'))
+        }})
 
 
 def mongo_set_cluster_status(cluster_id, cluster_status):

@@ -3,9 +3,20 @@ import requests
 import os
 import json
 
-ROOT_SERVICE_MANAGER_ADDR = 'http://' + os.environ.get('ROOT_SERVICE_MANAGER_URL',"0.0.0.0") + ':' + os.environ.get(
-    'ROOT_SERVICE_MANAGER_PORT',"5000")
+ROOT_SERVICE_MANAGER_ADDR = 'http://' + os.environ.get('ROOT_SERVICE_MANAGER_URL', "0.0.0.0") + ':' + os.environ.get(
+    'ROOT_SERVICE_MANAGER_PORT', "5000")
 
+
+def cloud_register_cluster(port):
+    print('registering cluster...')
+    request_addr = ROOT_SERVICE_MANAGER_ADDR + '/api/net/cluster'
+    print(request_addr)
+
+    resp = requests.post(request_addr, json={'cluster_port': port})
+    if resp.status_code != 200:
+        logging.error("Cluster registration not successful")
+        return False
+    return True
 
 def root_service_manager_get_subnet():
     print('Asking the System Manager for a subnet')

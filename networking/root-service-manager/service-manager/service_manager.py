@@ -27,7 +27,6 @@ def register_new_cluster():
     """
         Registration of the new cluster
         json file structure:{
-            'cluster_id':string
             'cluster_port':int
         }
     """
@@ -36,21 +35,19 @@ def register_new_cluster():
     app.logger.info(data)
 
     cluster_management.register_clsuter(
-        cluster_id=data.get("cluster_id"),
-        cluster_port=data.get("cluster_port"),
+        cluster_port=str(data.get("cluster_port")),
         cluster_address=str(request.remote_addr)
     )
 
 
 @app.route('/api/net/interest/<job_name>', methods=['DELETE'])
-def register_new_cluster(job_name):
+def deregister_cluster_interest(job_name):
     """
         Deregistration of an interest
         json file structure:{
             'job_name':string
         }
     """
-    job_name = job_name.replace("_", ".")
     app.logger.info("Incoming Request DELETE /api/net/interest/" + job_name)
     return routes_interests.deregister_interest(request.remote_addr, job_name)
 
