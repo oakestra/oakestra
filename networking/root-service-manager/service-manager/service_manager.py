@@ -42,6 +42,7 @@ def register_new_cluster():
         cluster_address=str(data.get("cluster_address"))
     )
 
+
 # .............. Cluster Interests .....................#
 # ......................................................#
 
