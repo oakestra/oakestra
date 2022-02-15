@@ -70,7 +70,6 @@ The message format is not used/ implemented currently. Feel free to edit/extend 
         },
 'cluster': ['list', 'of', 'cluster_ids'],
 'worker': ['list', 'of', 'worker_ids']
-
 }
 ```
 

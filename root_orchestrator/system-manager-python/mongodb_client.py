@@ -42,7 +42,7 @@ def mongo_upsert_cluster(cluster_ip, message):
     cluster_info = message['cluster_info']
     cluster_name = message['cluster_name']
     cluster_location = message['cluster_location']
-    cluster_port = message['port']
+    cluster_port = message['manager_port']
     result_obj = clusters.update_one({'cluster_name': cluster_name},
                                      {'$set': {'ip': cluster_ip, 'clusterinfo': cluster_info, 'port': cluster_port,
                                                'cluster_location': cluster_location}},
