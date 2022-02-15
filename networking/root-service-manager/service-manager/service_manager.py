@@ -19,7 +19,7 @@ socketio = SocketIO(app, async_mode='eventlet', logger=True, engineio_logger=Tru
 MY_PORT = os.environ.get('MY_PORT') or 10100
 
 
-# .............. Cluster Handshake .....................#
+# .............. Cluster Registration ..................#
 # ......................................................#
 
 @app.route('/api/net/cluster', methods=['POST'])
@@ -27,6 +27,8 @@ def register_new_cluster():
     """
         Registration of the new cluster
         json file structure:{
+            'cluster_address':str
+            'cluster_id':str
             'cluster_port':int
         }
     """
@@ -34,11 +36,14 @@ def register_new_cluster():
     data = request.json
     app.logger.info(data)
 
-    cluster_management.register_clsuter(
+    cluster_management.register_cluster(
+        cluster_id=str(data.get("cluster_id")),
         cluster_port=str(data.get("cluster_port")),
-        cluster_address=str(request.remote_addr)
+        cluster_address=str(data.get("cluster_address"))
     )
 
+# .............. Cluster Interests .....................#
+# ......................................................#
 
 @app.route('/api/net/interest/<job_name>', methods=['DELETE'])
 def deregister_cluster_interest(job_name):
@@ -125,14 +130,9 @@ def new_instance_deployment():
     )
 
 
-@app.route('/api/net/undeploy/<system_job_id>/<instance>', methods=['DELETE'])
+@app.route('/api/net/<system_job_id>/<instance>', methods=['DELETE'])
 def instance_undeployment(system_job_id, instance):
     """
-    Input:
-        {
-            system_job_id:int,
-            instance:int
-        }
     Undeployment request for the instance number "instance"
     """
 

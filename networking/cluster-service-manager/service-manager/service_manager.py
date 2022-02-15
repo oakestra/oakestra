@@ -64,5 +64,4 @@ def task_update():
 
 if __name__ == '__main__':
     import eventlet
-    if cloud_register_cluster(MY_PORT):
-        eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)
+    eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)

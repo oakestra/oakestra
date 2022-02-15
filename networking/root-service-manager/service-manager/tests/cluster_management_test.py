@@ -22,6 +22,7 @@ def test_register_cluster():
     mongodb_client.mongo_cluster_add = MagicMock()
 
     result, code = cluster_management.register_cluster(
+        cluster_id=fake_cluster["cluster_id"],
         cluster_port=fake_cluster["cluster_port"],
         cluster_address=fake_cluster["cluster_address"]
     )
@@ -31,6 +32,7 @@ def test_register_cluster():
     mongodb_client. \
         mongo_cluster_add. \
         assert_called_with(
+        cluster_id=fake_cluster["cluster_id"],
         cluster_port=fake_cluster["cluster_port"],
         cluster_address=fake_cluster["cluster_address"],
         status=fake_cluster["status"]

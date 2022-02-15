@@ -304,22 +304,19 @@ def mongo_free_subnet_address_to_cache(address):
 # ......... CLUSTER OPERATIONS ....................#
 ####################################################
 
-def mongo_cluster_add(cluster_port, cluster_address, status):
+def mongo_cluster_add(cluster_id, cluster_port, cluster_address, status):
     global mongo_clusters
 
-    job = mongo_clusters.db.cluster.find_one_and_update(
-        {"cluster_port": cluster_port, "cluster_address": cluster_address},
-        {'$set':
-             {"cluster_port": cluster_port,
-              "cluster_address": cluster_address,
-              "status": status}
-         }, return_document=True)
-
     mongo_clusters.db.cluster.find_one_and_update(
-        {"_id": job.get('_id')},
-        {'$set': {
-            "cluster_id": str(job.get('_id'))
-        }})
+        {"cluster_id": cluster_id},
+        {'$set':
+            {
+                "cluster_port": cluster_port,
+                "cluster_address": cluster_address,
+                "status": status,
+                "cluster_id": cluster_id
+            }
+        })
 
 
 def mongo_set_cluster_status(cluster_id, cluster_status):
