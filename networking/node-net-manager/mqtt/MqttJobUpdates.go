@@ -3,6 +3,7 @@ package mqtt
 import (
 	"NetManager/events"
 	"NetManager/utils"
+	"encoding/json"
 	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
 	"log"
@@ -23,6 +24,10 @@ type jobUpdatesTimer struct {
 
 type jobEnvironmentManagerActions interface {
 	RefreshServiceTable(sname string)
+}
+
+type mqttInterestDeregisterRequest struct {
+	Appname string `json:"appname"`
 }
 
 func (jut *jobUpdatesTimer) ConnectHandler(client mqtt.Client) {
@@ -66,9 +71,9 @@ func (jut *jobUpdatesTimer) StartSelfDestructTimeout() {
 			break
 		}
 	}
-	//TODO: request interest deregistration
 	startSync.Lock()
 	defer startSync.Unlock()
+	cleanInterestTowardsJob(jut.job)
 	jut.client.Unsubscribe(jut.topic)
 	jut.client.Disconnect(0)
 	eventManager.DeRegister(events.TableQuery, jut.job)
@@ -97,7 +102,13 @@ func MqttRegisterInterest(jobName string, env jobEnvironmentManagerActions) {
 func runInterestClient(opts *mqtt.ClientOptions, jobName string) {
 	client = mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		//TODO: send unsubscribe request
+		cleanInterestTowardsJob(jobName)
 		log.Printf("Error subscribing the topic for the job %s", jobName)
 	}
+}
+
+func cleanInterestTowardsJob(jobName string) {
+	request := mqttInterestDeregisterRequest{Appname: jobName}
+	jsonreq, _ := json.Marshal(request)
+	PublishToBroker("interest/remove", string(jsonreq))
 }
