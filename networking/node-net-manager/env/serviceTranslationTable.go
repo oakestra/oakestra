@@ -83,6 +83,17 @@ func (t *TableManager) RemoveByNsip(nsip net.IP) error {
 		}
 	}
 
+	return errors.New("Entry not found")
+}
+
+func (t *TableManager) RemoveBySname(sname string) error {
+	correspondingEntries := t.SearchBySname(sname)
+	if len(correspondingEntries) == 0 {
+		return errors.New("No entires")
+	}
+	for _, entry := range correspondingEntries {
+		_ = t.RemoveByNsip(entry.Nsip)
+	}
 	return nil
 }
 
@@ -113,6 +124,18 @@ func (t *TableManager) SearchByNsIP(ip net.IP) (TableEntry, bool) {
 		}
 	}
 	return TableEntry{}, false
+}
+
+func (t *TableManager) SearchBySname(sname string) []TableEntry {
+	t.rwlock.Lock()
+	defer t.rwlock.Unlock()
+	results := make([]TableEntry, 0)
+	for _, tableElement := range t.translationTable {
+		if tableElement.Servicename == sname {
+			results = append(results, tableElement)
+		}
+	}
+	return results
 }
 
 //Sanity chceck for Appname and namespace

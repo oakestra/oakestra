@@ -1,19 +1,24 @@
 package events
 
-import "sync"
+import (
+	"errors"
+	"sync"
+)
 
 type EventManager interface {
 	Emit(event Event)
-	Register(eventType EventType) chan Event
+	Register(eventType EventType, eventTarget string) (chan Event, error)
+	DeRegister(eventType EventType, eventTarget string)
 }
 
 type Events struct {
 	//map of event target to event kind
-	eventTableQueryChannelQueue map[EventType]*[]chan Event
+	eventTableQueryChannelQueue map[string]chan Event
 }
 
 type Event struct {
 	EventType    EventType
+	EventTarget  string
 	EventMessage string
 }
 
@@ -34,7 +39,7 @@ var (
 func GetInstance() EventManager {
 	once.Do(func() {
 		eventInstance = &Events{
-			eventTableQueryChannelQueue: make(map[EventType]*[]chan Event, 10),
+			eventTableQueryChannelQueue: make(map[string]chan Event, 10),
 		}
 	})
 	return eventInstance
@@ -43,23 +48,33 @@ func GetInstance() EventManager {
 func (e *Events) Emit(event Event) {
 	switch event.EventType {
 	case TableQuery:
-		chanList := e.eventTableQueryChannelQueue[event.EventType]
-		if chanList != nil {
-			for _, channel := range *chanList {
-				channel <- event
-			}
+		channel := e.eventTableQueryChannelQueue[event.EventTarget]
+		if channel != nil {
+			channel <- event
 		}
 	}
 }
 
-func (e *Events) Register(eventType EventType) chan Event {
-	eventChan := make(chan Event, 1)
-	chanListPointer := e.eventTableQueryChannelQueue[eventType]
-	if chanListPointer == nil {
-		chanList := make([]chan Event, 0)
-		chanListPointer = &chanList
+func (e *Events) Register(eventType EventType, eventTarget string) (chan Event, error) {
+	switch eventType {
+	case TableQuery:
+		channel := e.eventTableQueryChannelQueue[eventTarget]
+		if channel == nil {
+			channel = make(chan Event, 0)
+		}
+		e.eventTableQueryChannelQueue[eventTarget] = channel
+		return channel, nil
 	}
-	chanList := append(*chanListPointer, eventChan)
-	e.eventTableQueryChannelQueue[eventType] = &chanList
-	return eventChan
+	return nil, errors.New("Invalid EventType")
+}
+
+func (e *Events) DeRegister(eventType EventType, eventTarget string) {
+	switch eventType {
+	case TableQuery:
+		channel := e.eventTableQueryChannelQueue[eventTarget]
+		if channel != nil {
+			close(channel)
+			e.eventTableQueryChannelQueue[eventTarget] = nil
+		}
+	}
 }

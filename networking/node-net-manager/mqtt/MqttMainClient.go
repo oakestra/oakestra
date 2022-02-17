@@ -12,6 +12,8 @@ var TOPICS = make(map[string]mqtt.MessageHandler)
 
 var clientID = ""
 var client mqtt.Client
+var BrokerUrl = ""
+var BrokerPort = ""
 
 var tableQueryRequestCache *TableQueryRequestCache
 
@@ -32,7 +34,6 @@ var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
 	tqtoken.Wait()
 	log.Printf("Subscribed to topics \n")
 
-	//subscribe to network management topics (interests messages and related) TODO
 }
 
 var subscribeHandlerDispatcher = func(client mqtt.Client, msg mqtt.Message) {
@@ -54,6 +55,9 @@ func InitMqtt(clientid string, brokerurl string, brokerport string) {
 		return
 	}
 
+	BrokerPort = brokerport
+	BrokerUrl = brokerurl
+
 	//platform's assigned client ID
 	clientID = clientid
 	tableQueryRequestCache = GetTableQueryRequestCacheInstance()
@@ -64,7 +68,7 @@ func InitMqtt(clientid string, brokerurl string, brokerport string) {
 		subnetworkAssignmentMqttHandler
 
 	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("tcp://%s:%s", brokerurl, brokerport))
+	opts.AddBroker(fmt.Sprintf("tcp://%s:%s", BrokerUrl, BrokerPort))
 	opts.SetClientID(clientid)
 	opts.SetUsername("")
 	opts.SetPassword("")

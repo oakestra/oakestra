@@ -1,6 +1,7 @@
 package env
 
 import (
+	"NetManager/events"
 	"NetManager/mqtt"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Return errors
@@ -628,6 +630,11 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 	//If entry already available
 	table := env.translationTable.SearchByServiceIP(ip)
 	if len(table) > 0 {
+		//Fire table instance usage event
+		events.GetInstance().Emit(events.Event{
+			EventType:   events.TableQuery,
+			EventTarget: table[0].Servicename,
+		})
 		return table
 	}
 
@@ -635,7 +642,9 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 	entryList, err := tableQueryByIP(ip.String())
 
 	if err == nil {
+		var once sync.Once
 		for _, tableEntry := range entryList {
+			once.Do(func() { mqtt.MqttRegisterInterest(tableEntry.Servicename, env) })
 			env.AddTableQueryEntry(tableEntry)
 		}
 		table = env.translationTable.SearchByServiceIP(ip)
@@ -650,30 +659,31 @@ func (env *Environment) GetTableEntryByInstanceIP(ip net.IP) (TableEntry, bool) 
 	//If entry already available
 	table := env.translationTable.SearchByServiceIP(ip)
 	if len(table) > 0 {
-		return table[0], true
+		for elemindex, elem := range table {
+			for _, elemIp := range elem.ServiceIP {
+				if elemIp.IpType == InstanceNumber && elemIp.Address.Equal(ip) {
+					return table[elemindex], true
+				}
+			}
+		}
 	}
-	//If no entry available -> TableQuery
-	// TODO: table query
-
 	return TableEntry{}, false
 }
 
-//Given a ServiceIP this method performs a search in the local ServiceCache
-//If the entry is not present a TableQuery is performed and the interest registered
+//Given a NamespaceIP finds the table entry. This search is local because the networking component MUST have all
+//the entries for the local deployed services.
 func (env *Environment) GetTableEntryByNsIP(ip net.IP) (TableEntry, bool) {
 	//If entry already available
 	entry, exist := env.translationTable.SearchByNsIP(ip)
 	if exist {
 		return entry, true
 	}
-	//If no entry available -> TableQuery
-	// TODO: table query, needed?
-
 	return entry, false
 }
 
 //Add new entry to the resolution table
 func (env *Environment) AddTableQueryEntry(entry TableEntry) {
+	_ = env.translationTable.RemoveByNsip(entry.Nsip)
 	err := env.translationTable.Add(entry)
 	if err != nil {
 		log.Println("[ERROR] ", err)
@@ -683,6 +693,7 @@ func (env *Environment) AddTableQueryEntry(entry TableEntry) {
 //force a table query refresh for a service
 func (env *Environment) RefreshServiceTable(sname string) {
 	entryList, err := tableQueryBySname(sname)
+	env.translationTable.RemoveBySname(sname)
 	if err == nil {
 		for _, tableEntry := range entryList {
 			env.AddTableQueryEntry(tableEntry)
