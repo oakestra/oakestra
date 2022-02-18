@@ -1,4 +1,3 @@
-bson
 Flask
 Flask_PyMongo
 Flask-SocketIO

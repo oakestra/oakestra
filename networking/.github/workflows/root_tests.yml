@@ -1,0 +1,32 @@
+name: Root Service Manager Test
+
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.x"
+
+      - name: Install pytest
+        working-directory: root-service-manager/service-manager
+        run: |
+          pip install pytest
+
+      - name: Install dependencies
+        working-directory: root-service-manager/service-manager
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run test suite
+        working-directory: root-service-manager/service-manager
+        run: |
+           pytest

@@ -7,3 +7,4 @@ eventlet
 requests
 pyyaml
 APScheduler
+requests_mock

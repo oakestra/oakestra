@@ -38,4 +38,4 @@ volumes:
 
 networks:
   default:  
-    name: root_orchestrator_default
+    name: rootorchestrator_default

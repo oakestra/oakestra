@@ -9,7 +9,7 @@ ADD . /
 
 ENV FLASK_ENV=development
 # TRUE for verbose logging
-ENV FLASK_DEBUG=FALSE
+ENV FLASK_DEBUG=TRUE
 
 
 ENV MY_PORT=10200

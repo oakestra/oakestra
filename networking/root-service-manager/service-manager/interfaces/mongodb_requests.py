@@ -8,8 +8,10 @@ MONGO_PORT = os.environ.get('CLOUD_MONGO_PORT')
 
 MONGO_ADDR_JOBS = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/jobs'
 MONGO_ADDR_NET = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/netcache'
+MONGO_ADDR_CLUSTER = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/cluster'
 
 mongo_jobs = None
+mongo_clusters = None
 mongo_net = None
 
 app = None
@@ -19,7 +21,7 @@ CLUSTERS_FRESHNESS_INTERVAL = 45
 
 def mongo_init(flask_app):
     global app
-    global mongo_jobs, mongo_net
+    global mongo_jobs, mongo_net, mongo_clusters
 
     app = flask_app
 
@@ -29,6 +31,7 @@ def mongo_init(flask_app):
     try:
         mongo_jobs = PyMongo(app, uri=MONGO_ADDR_JOBS)
         mongo_net = PyMongo(app, uri=MONGO_ADDR_NET)
+        mongo_clusters = PyMongo(app, uri=MONGO_ADDR_CLUSTER)
     except Exception as e:
         app.logger.fatal(e)
     app.logger.info("MONGODB - init mongo")
@@ -54,8 +57,7 @@ def mongo_insert_job(obj):
         **deployment_descriptor  # The content of the input deployment descriptor
     }
     # job insertion
-    jobs = mongo_jobs.db.jobs
-    new_job = jobs.find_one_and_update(
+    new_job = mongo_jobs.db.jobs.find_one_and_update(
         {'job_name': job_name},
         {'$set': job_content},
         upsert=True,
@@ -63,6 +65,11 @@ def mongo_insert_job(obj):
     )
     app.logger.info("MONGODB - job {} inserted".format(str(new_job.get('_id'))))
     return str(new_job.get('_id'))
+
+
+def mongo_remove_job(system_job_id):
+    global mongo_jobs
+    return mongo_jobs.db.jobs.remove({"system_job_id": system_job_id})
 
 
 def mongo_get_all_jobs():
@@ -82,7 +89,7 @@ def mongo_update_job_status(job_id, status):
 
 def mongo_update_job_net_status(job_id, instances):
     global mongo_jobs
-    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
+    job = mongo_jobs.db.jobs.find_one({'system_job_id': job_id})
     instance_list = job['instance_list']
     for instance in instances:
         instance_num = instance['instance_number']
@@ -91,12 +98,17 @@ def mongo_update_job_net_status(job_id, instances):
         elem['host_ip'] = instance['host_ip']
         elem['host_port'] = instance['host_port']
         instance_list[instance_num] = elem
-    mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)}, {'$set': {'instance_list': instance_list}})
+    return mongo_jobs.db.jobs.find_one_and_update({'system_job_id': job_id}, {'$set': {'instance_list': instance_list}})
 
 
 def mongo_find_job_by_id(job_id):
     global mongo_jobs
     return mongo_jobs.db.jobs.find_one(ObjectId(job_id))
+
+
+def mongo_find_job_by_systemid(sys_id):
+    global mongo_jobs
+    return mongo_jobs.db.jobs.find_one({"system_job_id": sys_id})
 
 
 def mongo_find_job_by_name(job_name):
@@ -113,12 +125,27 @@ def mongo_find_job_by_ip(ip):
         job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip': ip})
     return job
 
-def mongo_update_job_status_and_instances_by_system_job_id(system_job_id, status, replicas, instance_list):
+
+def mongo_update_job_status_and_instances_by_system_job_id(system_job_id, instance_list):
     global mongo_jobs
     print('Updating Job Status and assigning a cluster for this job...')
     mongo_jobs.db.jobs.update_one({'system_job_id': system_job_id},
-                                  {'$set': {'status': status, 'replicas': replicas, 'instance_list': instance_list}})
+                                  {'$set': {'instance_list': instance_list}})
 
+
+def mongo_update_clean_one_instance(system_job_id, instance):
+    """
+    returns the replicas left
+    """
+    global mongo_jobs
+    job = mongo_find_job_by_systemid(system_job_id)
+    instances = job.get("instance_list")
+    for i in range(len(instances)):
+        if instances[i]['instance_number'] is instance:
+            instances.remove(instances[i])
+            mongo_update_job_status_and_instances_by_system_job_id(system_job_id, instances)
+            return True
+    return False
 
 
 # ........... SERVICE MANAGER OPERATIONS  ............
@@ -272,3 +299,77 @@ def mongo_free_subnet_address_to_cache(address):
         'type': 'free_subnet_ip',
         'ipv4': address
     })
+
+
+# ......... CLUSTER OPERATIONS ....................#
+####################################################
+
+def mongo_cluster_add(cluster_id, cluster_port, cluster_address, status):
+    global mongo_clusters
+
+    mongo_clusters.db.cluster.find_one_and_update(
+        {"cluster_id": cluster_id},
+        {'$set':
+            {
+                "cluster_port": cluster_port,
+                "cluster_address": cluster_address,
+                "status": status,
+                "cluster_id": cluster_id
+            }
+        }, upsert=True)
+
+
+def mongo_set_cluster_status(cluster_id, cluster_status):
+    global mongo_clusters
+
+    job = mongo_clusters.db.cluster.find_one_and_update(
+        {"cluster_id": cluster_id},
+        {'$set':
+             {"status": cluster_status}
+         })
+
+
+def mongo_cluster_remove(cluster_id):
+    global mongo_clusters
+    mongo_clusters.db.cluster.remove({"cluster_id": cluster_id})
+
+
+def mongo_get_cluster_by_ip(cluster_ip):
+    global mongo_clusters
+    return mongo_clusters.db.cluster.find_one({"cluster_address": cluster_ip})
+
+
+# .......... INTERESTS OPERATIONS .........#
+###########################################
+
+def mongo_get_cluster_interested_to_job(job_name):
+    global mongo_clusters
+    return mongo_clusters.db.cluster.find({"interests": job_name})
+
+
+def mongo_register_cluster_job_interest(cluster_id, job_name):
+    global mongo_clusters
+    interests = mongo_clusters.db.cluster.find_one({"cluster_id": cluster_id}).get("interests")
+    if interests is None:
+        interests = []
+    if job_name in interests:
+        return
+    interests.append(job_name)
+    mongo_clusters.db.cluster.find_one_and_update(
+        {"cluster_id": cluster_id},
+        {'$set': {
+            "interests": interests
+        }}
+    )
+
+
+def mongo_remove_cluster_job_interest(cluster_id, job_name):
+    global mongo_clusters
+    interests = mongo_clusters.db.cluster.find_one({"cluster_id": cluster_id}).get("interests")
+    interests.remove(job_name)
+    mongo_clusters.db.cluster.find_one_and_update(
+        {"cluster_id": cluster_id},
+        {'$set': {
+            "interests": interests
+        }}
+    )

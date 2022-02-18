@@ -1,9 +1,12 @@
 from flask import Flask, request
 from flask_socketio import SocketIO
+from interfaces.mongodb_requests import mongo_init
 from network.tablequery import *
-from network.subnetwork_management import *
-from interfaces.mongodb_requests import *
+from network import subnetwork_management, routes_interests
+from operations import instances_management, cluster_management
+from operations import service_management
 from net_logging import configure_logging
+import os
 
 my_logger = configure_logging()
 
@@ -16,11 +19,50 @@ socketio = SocketIO(app, async_mode='eventlet', logger=True, engineio_logger=Tru
 MY_PORT = os.environ.get('MY_PORT') or 10100
 
 
+# .............. Cluster Registration ..................#
+# ......................................................#
+
+@app.route('/api/net/cluster', methods=['POST'])
+def register_new_cluster():
+    """
+        Registration of the new cluster
+        json file structure:{
+            'cluster_address':str
+            'cluster_id':str
+            'cluster_port':int
+        }
+    """
+    app.logger.info("Incoming Request /api/net/cluster")
+    data = request.json
+    app.logger.info(data)
+
+    return cluster_management.register_cluster(
+        cluster_id=str(data.get("cluster_id")),
+        cluster_port=str(data.get("cluster_port")),
+        cluster_address=str(data.get("cluster_address"))
+    )
+
+
+# .............. Cluster Interests .....................#
+# ......................................................#
+
+@app.route('/api/net/interest/<job_name>', methods=['DELETE'])
+def deregister_cluster_interest(job_name):
+    """
+        Deregistration of an interest
+        json file structure:{
+            'job_name':string
+        }
+    """
+    app.logger.info("Incoming Request DELETE /api/net/interest/" + job_name)
+    return routes_interests.deregister_interest(request.remote_addr, job_name)
+
+
 # ......... Deployment Endpoints .......................#
 # ......................................................#
 
 @app.route('/api/net/service/net_deploy_status', methods=['POST'])
-def get_cluster_deployment_status_feedback():
+def update_instance_local_deployment_addresses():
     """
     Result of the deploy operation in a cluster and the subsequent generated network addresses
     json file structure:{
@@ -34,16 +76,14 @@ def get_cluster_deployment_status_feedback():
     }
     """
 
-    app.logger.info("Incoming Request /api/job/net_deploy_status")
+    app.logger.info("Incoming Request /api/net/service/net_deploy_status")
     data = request.json
     app.logger.info(data)
 
-    mongo_update_job_net_status(
-        job_id=data.get('job_id'),
-        instances=data.get('instances')
+    return instances_management.update_instance_local_addresses(
+        instances=data.get('instances'),
+        job_id=data.get('job_id')
     )
-
-    return "roger that"
 
 
 @app.route('/api/net/service/deploy', methods=['POST'])
@@ -62,19 +102,10 @@ def new_service_deployment():
     data = request.json
     app.logger.info(data)
 
-    s_ip = [{
-        "IpType": 'RR',
-        "Address": new_job_rr_address(data.get("deployment_descriptor")),
-    }]
-
-    job_id = mongo_insert_job(
-        {
-            'system_job_id': data.get("system_job_id"),
-            'deployment_descriptor': data.get("deployment_descriptor"),
-            'service_ip_list': s_ip
-        })
-
-    return "roger that"
+    return service_management.deploy_request(
+        deployment_descriptor=data.get('deployment_descriptor'),
+        system_job_id=data.get('system_job_id')
+    )
 
 
 @app.route('/api/net/instance/deploy', methods=['POST'])
@@ -93,23 +124,22 @@ def new_instance_deployment():
     data = request.json
     app.logger.info(data)
 
-    instance_list = []
-    for i in range(data.get('replicas')):
-        instance_info = {
-            'instance_number': i,  # number generation must be changed when scale up and down ops are implemented
-            'instance_ip': new_instance_ip(),
-            'cluster_id': str(data.get('cluster_id')),
-        }
-        instance_list.append(instance_info)
-
-    mongo_update_job_status_and_instances_by_system_job_id(
-        system_job_id=data.get('system_job_id'),
-        status='CLUSTER_SCHEDULED',
+    return instances_management.deploy_request(
+        sys_job_id=data.get('system_job_id'),
         replicas=data.get('replicas'),
-        instance_list=instance_list
+        cluster_id=data.get('cluster_id')
     )
 
-    return "roger that"
+
+@app.route('/api/net/<system_job_id>/<instance>', methods=['DELETE'])
+def instance_undeployment(system_job_id, instance):
+    """
+    Undeployment request for the instance number "instance"
+    """
+
+    app.logger.info("Incoming Request /api/net/undeploy/" + str(system_job_id) + "/<instance>" + str(instance))
+
+    return instances_management.undeploy_request(str(system_job_id), int(instance))
 
 
 # .............. Table query Endpoints .................#
@@ -122,11 +152,7 @@ def table_query_resolution_by_jobname(service_name):
     """
     service_name = service_name.replace("_", ".")
     app.logger.info("Incoming Request /api/net/service/" + str(service_name) + "/instances")
-    job = service_resolution(name=service_name)
-    return {
-        "instance_list": job.get("instance_list"),
-        "service_ip_list": job.get("service_ip_list")
-    }
+    return instances_management.get_service_instances(name=service_name, cluster_ip=request.remote_addr)
 
 
 @app.route('/api/net/service/ip/<service_ip>/instances', methods=['GET'])
@@ -136,12 +162,7 @@ def table_query_resolution_by_ip(service_ip):
     """
     service_ip = service_ip.replace("_", ".")
     app.logger.info("Incoming Request /api/net/service/ip/" + str(service_ip) + "/instances")
-    job = service_resolution(ip=service_ip)
-    return {
-        "job_name": job.get("job_name"),
-        "instance_list": job.get("instance_list"),
-        "service_ip_list": job.get("service_ip_list")
-    }
+    return instances_management.get_service_instances(ip=service_ip, cluster_ip=request.remote_addr)
 
 
 # ........ Subnetwork management endpoints .............#
@@ -152,7 +173,7 @@ def subnet_request():
     """
     Returns a new subnetwork address
     """
-    addr = new_subnetwork_addr()
+    addr = subnetwork_management.new_subnetwork_addr()
     return {'subnet_addr': addr}
 
 

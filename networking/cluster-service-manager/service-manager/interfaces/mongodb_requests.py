@@ -43,25 +43,55 @@ def mongo_find_node_by_id_and_update_subnetwork(node_id, addr):
 # ........... Job Operations ............#
 #########################################
 
-def mongo_insert_job(job_name, job, sip_list, instances):
+def mongo_insert_job(job):
     global mongo_jobs
     app.logger.info("MONGODB - insert job...")
     job_content = {
-        'system_job_id': job.get('system_job_id'),
-        'job_name': job_name,
-        'service_ip_list': sip_list,
-        'instance_list': instances,
+        'system_job_id': job['system_job_id'],
+        'job_name': job['job_name'],
+        'service_ip_list': job['service_ip_list'],
+        'instance_list': job['instance_list'],
     }
     # job insertion
     jobs = mongo_jobs.db.jobs
     new_job = jobs.find_one_and_update(
-        {'job_name': job_name},
+        {'job_name': job['job_name']},
         {'$set': job_content},
         upsert=True,
         return_document=True
     )
     app.logger.info("MONGODB - job {} inserted".format(str(new_job.get('_id'))))
     return str(new_job.get('_id'))
+
+
+def mongo_update_job_instance(job_name, instance):
+    instances = mongo_jobs.db.jobs.find_one({'job_name': job_name}).get("instance_list")
+
+    updated = False
+    for i in range(len(instances)):
+        if instances[i]["instance_number"] == instance["instance_number"]:
+            updated = True
+            instances[i] = instance
+            break
+
+    if not updated:
+        instances.append(instance)
+
+    mongo_jobs.db.jobs.find_one_and_update(
+        {'job_name': job_name},
+        {'$set': {"instance_list": instances}}
+    )
+
+
+def mongo_remove_job_instance(job_name, instancenum):
+    instances = mongo_jobs.db.jobs.find_one({'job_name': job_name}).get("instance_list")
+    for i in range(len(instances)):
+        if instances[i]["instance_number"] == instancenum:
+            instances.remove(instances[i])
+    mongo_jobs.db.jobs.find_one_and_update(
+        {'job_name': job_name},
+        {'$set': {"instance_list": instances}}
+    )
 
 
 def mongo_find_job_by_name(job_name):
@@ -114,3 +144,42 @@ def mongo_update_job_status(job_id, status, node):
             break
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
                                          {'$set': {'status': status, 'instance_list': instance_list}})
+
+
+# ........ Interest Operations .........#
+#########################################
+
+def mongo_get_interest_workers(job_name):
+    global mongo_jobs
+    job = mongo_jobs.db.jobs.find_one({'job_name': job_name})
+    if job is not None:
+        interested_nodes = job.get("interested_nodes")
+        if interested_nodes is None:
+            return []
+        else:
+            return interested_nodes
+
+
+def mongo_add_interest(job_name, clientid):
+    global mongo_jobs
+    interested_nodes = mongo_get_interest_workers(job_name)
+    interested_nodes.append(clientid)
+    mongo_jobs.db.jobs.update_one(
+        {'job_name': job_name},
+        {'$set': {
+            "interested_nodes": interested_nodes
+        }}
+    )
+
+
+def mongo_remove_interest(job_name, clientid):
+    global mongo_jobs
+    interested_nodes = mongo_get_interest_workers(job_name)
+    if len(interested_nodes) > 0:
+        interested_nodes.remove(clientid)
+        mongo_jobs.db.jobs.update_one(
+            {'job_name': job_name},
+            {'$set': {
+                "interested_nodes": interested_nodes
+            }}
+        )
