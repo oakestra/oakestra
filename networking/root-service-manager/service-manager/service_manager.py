@@ -36,7 +36,7 @@ def register_new_cluster():
     data = request.json
     app.logger.info(data)
 
-    cluster_management.register_cluster(
+    return cluster_management.register_cluster(
         cluster_id=str(data.get("cluster_id")),
         cluster_port=str(data.get("cluster_port")),
         cluster_address=str(data.get("cluster_address"))
@@ -76,7 +76,7 @@ def update_instance_local_deployment_addresses():
     }
     """
 
-    app.logger.info("Incoming Request /api/job/net_deploy_status")
+    app.logger.info("Incoming Request /api/net/service/net_deploy_status")
     data = request.json
     app.logger.info(data)
 

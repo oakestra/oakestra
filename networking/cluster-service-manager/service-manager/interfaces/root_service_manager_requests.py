@@ -23,7 +23,7 @@ def root_service_manager_get_subnet():
 def system_manager_notify_deployment_status(job, worker_id):
     print('Sending deployment status information to System Manager.')
     data = {
-        'job_id': job.get('system_job_id'),
+        'job_id': job['system_job_id'],
         'instances': [],
     }
     # prepare json data information
@@ -37,7 +37,9 @@ def system_manager_notify_deployment_status(job, worker_id):
             }
             data['instances'].append(elem)
     try:
-        requests.post(ROOT_SERVICE_MANAGER_ADDR + '/api/result/cluster_deploy', json=data)
+        logging.info("Sending deployment information to the root")
+        logging.debug(job)
+        requests.post(ROOT_SERVICE_MANAGER_ADDR + '/api/net/service/net_deploy_status', json=data)
     except requests.exceptions.RequestException as e:
         print('Calling System Manager /api/result/cluster_deploy not successful.')
 

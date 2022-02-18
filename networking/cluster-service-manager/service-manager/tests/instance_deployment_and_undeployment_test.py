@@ -33,6 +33,7 @@ def test_instance_deployment_update(requests_mock):
     root_reqs.ROOT_SERVICE_MANAGER_ADDR = "http://0.0.0.0:5000"
     job = _get_fake_job("aaa")
     mongodb_client.mongo_update_job_instance = MagicMock(return_value=job)
+    mongodb_client.mongo_insert_job = MagicMock()
     mqtt_client.mqtt_notify_service_change = MagicMock()
     req_addr = root_reqs.ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/" + job["job_name"] + "/instances"
     requests_mock.get(req_addr, json=job, status_code=200)
@@ -45,6 +46,7 @@ def test_instance_deployment_update(requests_mock):
 
 def test_instance_undeployment_update():
     mongodb_client.mongo_remove_job_instance = MagicMock()
+    mongodb_client.mongo_insert_job = MagicMock()
     mqtt_client.mqtt_notify_service_change = MagicMock()
 
     _update_cache_and_workers("aaa", 0, "UNDEPLOYMENT")

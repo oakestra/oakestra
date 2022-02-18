@@ -5,7 +5,6 @@ from flask_socketio import SocketIO
 from interfaces.mqtt_client import mqtt_init
 from net_logging import configure_logging
 from interfaces.mongodb_requests import mongo_init
-from interfaces.root_service_manager_requests import cloud_register_cluster
 from operations.instances_management import instance_deployment, instance_updates
 
 MY_PORT = os.environ.get('MY_PORT') or 10200
@@ -27,7 +26,7 @@ def deploy_task():
        Deployment of a new service instance
        receives {
                    system_job_id: string
-                   data: {}object
+                   data: {}object representing the job
                 }
     """
 
@@ -36,7 +35,7 @@ def deploy_task():
     app.logger.debug(req_json)
     job_name = req_json['data']['job_name']
 
-    return instance_deployment(job_name, req_json)
+    return instance_deployment(job_name, req_json['data'])
 
 
 @app.route('/api/net/job/update', methods=['POST'])

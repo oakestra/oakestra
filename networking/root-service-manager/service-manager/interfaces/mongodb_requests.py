@@ -89,7 +89,7 @@ def mongo_update_job_status(job_id, status):
 
 def mongo_update_job_net_status(job_id, instances):
     global mongo_jobs
-    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
+    job = mongo_jobs.db.jobs.find_one({'system_job_id': job_id})
     instance_list = job['instance_list']
     for instance in instances:
         instance_num = instance['instance_number']
@@ -98,7 +98,7 @@ def mongo_update_job_net_status(job_id, instances):
         elem['host_ip'] = instance['host_ip']
         elem['host_port'] = instance['host_port']
         instance_list[instance_num] = elem
-    return mongo_jobs.db.jobs.find_one_and_update({'_id': ObjectId(job_id)}, {'$set': {'instance_list': instance_list}})
+    return mongo_jobs.db.jobs.find_one_and_update({'system_job_id': job_id}, {'$set': {'instance_list': instance_list}})
 
 
 def mongo_find_job_by_id(job_id):
@@ -142,7 +142,7 @@ def mongo_update_clean_one_instance(system_job_id, instance):
     instances = job.get("instance_list")
     for i in range(len(instances)):
         if instances[i]['instance_number'] is instance:
-            instances.remove(i)
+            instances.remove(instances[i])
             mongo_update_job_status_and_instances_by_system_job_id(system_job_id, instances)
             return True
     return False
@@ -316,7 +316,7 @@ def mongo_cluster_add(cluster_id, cluster_port, cluster_address, status):
                 "status": status,
                 "cluster_id": cluster_id
             }
-        })
+        }, upsert=True)
 
 
 def mongo_set_cluster_status(cluster_id, cluster_status):
@@ -325,7 +325,7 @@ def mongo_set_cluster_status(cluster_id, cluster_status):
     job = mongo_clusters.db.cluster.find_one_and_update(
         {"cluster_id": cluster_id},
         {'$set':
-             {"cluster_info.status": cluster_status}
+             {"status": cluster_status}
          })
 
 
@@ -336,7 +336,7 @@ def mongo_cluster_remove(cluster_id):
 
 def mongo_get_cluster_by_ip(cluster_ip):
     global mongo_clusters
-    return mongo_clusters.db.cluster.find_one({"cluster_info.cluster_address": cluster_ip})
+    return mongo_clusters.db.cluster.find_one({"cluster_address": cluster_ip})
 
 
 # .......... INTERESTS OPERATIONS .........#

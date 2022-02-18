@@ -65,12 +65,7 @@ def get_service_instances(name=None, ip=None, cluster_ip=None):
     # route interest registration for this route
     mongodb_requests.mongo_register_cluster_job_interest(cluster.get("cluster_id"), job.get("job_name"))
 
-    return {
-               "job_name": job.get("job_name"),
-               "system_job_id": job.get("system_job_id"),
-               "instance_list": job.get("instance_list"),
-               "service_ip_list": job.get("service_ip_list")
-           }, 200
+    return job, 200
 
 
 def _prepare_instance_list(replicas, cluster_id):

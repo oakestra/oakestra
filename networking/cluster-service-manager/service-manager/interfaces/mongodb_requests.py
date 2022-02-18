@@ -47,7 +47,7 @@ def mongo_insert_job(job):
     global mongo_jobs
     app.logger.info("MONGODB - insert job...")
     job_content = {
-        'system_job_id': job.get('system_job_id'),
+        'system_job_id': job['system_job_id'],
         'job_name': job['job_name'],
         'service_ip_list': job['service_ip_list'],
         'instance_list': job['instance_list'],
@@ -87,7 +87,7 @@ def mongo_remove_job_instance(job_name, instancenum):
     instances = mongo_jobs.db.jobs.find_one({'job_name': job_name}).get("instance_list")
     for i in range(len(instances)):
         if instances[i]["instance_number"] == instancenum:
-            instances.remove(i)
+            instances.remove(instances[i])
     mongo_jobs.db.jobs.find_one_and_update(
         {'job_name': job_name},
         {'$set': {"instance_list": instances}}

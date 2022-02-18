@@ -3,8 +3,10 @@ from threading import Thread
 from interfaces import mongodb_requests
 from network.tablequery import resolution
 from network.tablequery import interests
-from interfaces import mqtt_client, root_service_manager_requests
+from interfaces import mqtt_client, root_service_manager_requests,mongodb_requests
 import logging
+import traceback
+import copy
 
 
 def instance_deployment(job_name, job):
@@ -13,9 +15,12 @@ def instance_deployment(job_name, job):
 
     # table query the root to get the instances
     try:
-        instances, siplist = resolution.service_resolution(job_name)
+        job = root_service_manager_requests.cloud_table_query_service_name(job_name)
+        mongodb_requests.mongo_insert_job(copy.deepcopy(job))
     except Exception as e:
         logging.error('Incoming Request /api/net/deployment failed service_resolution')
+        logging.debug(traceback.format_exc())
+        print(traceback.format_exc())
         return "Service resolution failed", 500
 
     return "job stored succesfully", 200

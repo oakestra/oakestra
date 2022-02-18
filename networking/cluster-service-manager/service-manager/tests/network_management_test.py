@@ -39,7 +39,7 @@ def test_deployment_status_report(requests_mock):
     job = _get_fake_job("aaa")
     mongodb_client.mongo_update_job_deployed = MagicMock()
     mongodb_client.mongo_find_job_by_name = MagicMock(return_value=job)
-    adapter = requests_mock.post(ROOT_SERVICE_MANAGER_ADDR + "/api/result/cluster_deploy", status_code=200)
+    adapter = requests_mock.post(ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/net_deploy_status", status_code=200)
     job_instance = job['instance_list'][0]
 
     deployment.deployment_status_report(
