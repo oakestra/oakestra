@@ -8,7 +8,6 @@ requests
 Cerberus
 prometheus-client
 jsonschema
-matplotlib
 shapely
 geopy
 pandas

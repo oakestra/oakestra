@@ -19,7 +19,7 @@ vivaldi_coordinate = None
 def mqtt_init(info, vivaldi_coord, node_ip_info):
     global mqtt
     global node_info
-    global vivaldi_coordinate
+    global vivaldi_coordinate 
     global ip_info
     vivaldi_coordinate = mqtt.app.config["VIVALDI_COORDS"]
     if vivaldi_coord.vector is not None:

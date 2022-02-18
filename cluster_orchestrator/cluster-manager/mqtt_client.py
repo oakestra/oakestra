@@ -51,7 +51,6 @@ def mqtt_init(flask_app):
         mqtt.subscribe('nodes/+/information')
         mqtt.subscribe('nodes/+/job')
         mqtt.subscribe('nodes/+/alarm')
-        mqtt.subscribe('nodes/+/test')
 
     @mqtt.on_log()
     def handle_logging(client, userdata, level, buf):
@@ -72,30 +71,16 @@ def mqtt_init(flask_app):
         re_nodes_information_topic = re.search("^nodes/.*/information$", topic)
         re_job_deployment_topic = re.search("^nodes/.*/job$", topic)
         re_nodes_alarm_topic = re.search("^nodes/.*/alarm$", topic)
-        re_nodes_test_topic = re.search("^nodes/.*/test$", topic)
 
         # if topic starts with nodes and ends with information
         if re_nodes_information_topic is not None:
             handle_node_information_topic(data)
-        # if topic starts with nodes and ends with information
-        if re_nodes_test_topic is not None:
-            handle_node_test_topic(data)
         # if topic starts with nodes and ends with job
         if re_job_deployment_topic is not None:
             handle_job_deployment_topic(data)
         # if topic starts with nodes and ends with alarm
         if re_nodes_alarm_topic is not None:
             handle_nodes_alarm_topic(data)
-
-def handle_node_test_topic(data):
-    topic = data['topic']
-    # print(topic)
-    topic_split = topic.split('/')
-    client_id = topic_split[1]
-    payload = json.loads(data['payload'])
-    # print(payload)
-    test = payload.get('test')
-    app.logger.info(f"Received {test}")
 
 
 def mqtt_publish_edge_deploy(worker_id, job):

@@ -14,7 +14,7 @@ from app.blueprints.network_measurement import network_measurement
 from app.extensions.logging import configure_logging
 from app.models.vivaldi_coordinate import VivaldiCoordinate
 
-MY_PORT = os.environ.get('MY_PORT') or 3000
+PUBLIC_WORKER_PORT = os.environ.get('PUBLIC_WORKER_PORT') or 3000
 CLUSTERMANAGER_ADDR = f"http://{os.environ.get('CLUSTER_MANAGER_IP')}:{os.environ.get('CLUSTER_MANAGER_PORT')}"
 
 my_logger = configure_logging("node_engine")
@@ -72,7 +72,7 @@ def get_node_infos():
     # print(node_info.swap)
     # print(node_info.partitions)
     # print(node_info.if_addrs)
-    node_info.port = os.environ.get("MY_PORT")
+    node_info.port = os.environ.get("PUBLIC_WORKER_PORT")
     # node_info.technology = technology_support.verify_technology_support()
     node_info.virtualization = technology_support.verify_technology_support()
 
@@ -108,7 +108,7 @@ def handle_init_greeting(jsonarg):
     # print(node_info.swap)
     # print(node_info.partitions)
     # print(node_info.if_addrs)
-    node_info.port = MY_PORT
+    node_info.port = PUBLIC_WORKER_PORT
     # node_info.technology = verify_technology_support()
     node_info.virtualization = technology_support.verify_technology_support()
 
