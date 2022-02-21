@@ -8,3 +8,6 @@ requests
 Cerberus
 prometheus-client
 jsonschema
+shapely
+geopy
+pandas

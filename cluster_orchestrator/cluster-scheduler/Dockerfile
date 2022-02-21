@@ -5,6 +5,9 @@ ADD requirements.txt /app
 WORKDIR /app
 RUN pip install -r requirements.txt
 
+# Required for docker container to be able to use the ping command
+RUN apt-get update && apt-get install software-properties-common -y && apt-get install iproute2 iputils-ping -y && apt-get install -y procps
+
 ADD . /app
 
 ENV FLASK_ENV=development

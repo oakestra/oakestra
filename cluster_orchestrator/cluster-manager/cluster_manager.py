@@ -1,4 +1,6 @@
 import os
+
+from apscheduler.triggers.interval import IntervalTrigger
 from flask import Flask, request
 from flask_socketio import SocketIO, emit
 import json
@@ -9,7 +11,7 @@ import time
 from prometheus_client import start_http_server
 import threading
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_upsert_job, mongo_find_job_by_system_id, \
-    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id
+    mongo_update_job, mongo_find_node_by_name, mongo_find_job_by_id, mongo_get_vivaldi_info_by_node_id, mongo_find_many_by_ids
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
 from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from cm_logging import configure_logging
@@ -17,7 +19,7 @@ from system_manager_requests import send_aggregated_info_to_sm
 from analyzing_workers import looking_for_dead_workers
 from my_prometheus_client import prometheus_init_gauge_metrics, prometheus_set_metrics
 from network_plugin_requests import *
-
+from geolocation.geolocation import query_geolocation_for_ips, build_geolite_dataframe
 MY_PORT = os.environ.get('MY_PORT')
 
 MY_CHOSEN_CLUSTER_NAME = os.environ.get('CLUSTER_NAME')
@@ -63,7 +65,7 @@ def status():
 def deploy_task():
     app.logger.info('Incoming Request /api/deploy')
     job = request.json  # contains job_id and job_description
-    job_obj = mongo_upsert_job(job)
+    job_obj = mongo_upsert_job(job, from_root=True)
     scheduler_request_deploy(job_obj)
     return "ok"
 
@@ -72,13 +74,16 @@ def deploy_task():
 def get_scheduler_result_and_propagate_to_edge():
     # print(request)
     app.logger.info('Incoming Request /api/result - received cluster_scheduler result')
-    data = request.json  # get POST body
+    data = json.loads(request.json)  # get POST body
     app.logger.info(data)
 
     job = data.get('job')
-    resulting_node_id = data.get('node').get('_id')
+    connectivity = job.get("connectivity")
+    result_node = data.get('node')
+    resulting_node_id = result_node.get('_id')
 
-    mongo_update_job_status(job.get('_id'), 'NODE_SCHEDULED', data.get('node'))
+    app.logger.info(f"Deploy to Node: {resulting_node_id}")
+    mongo_update_job(job.get('_id'), 'NODE_SCHEDULED', result_node, connectivity)
     job = mongo_find_job_by_id(job.get('_id'))
 
     # Inform network plugin about the deployment
@@ -91,14 +96,42 @@ def get_scheduler_result_and_propagate_to_edge():
 
 @app.route('/api/delete/<system_job_id>')
 def delete_task(system_job_id):
+    """find service in db and ask corresponding workers to delete task"""
+    app.logger.info('Incoming Request /api/delete/ - to delete task...')
+    # job_id is the system_job_id assigned by System Manager
+    job = mongo_find_job_by_system_id(system_job_id)
+    # Undeploy all service instances
+    job_id = str(job.get('_id'))
+    job.__setitem__('_id', job_id)
+    for instance in job['instance_list']:
+        node_id = instance.get('worker_id')
+        mqtt_publish_edge_delete(node_id, job)
+    # Remove workers from instance list
+    job["instance_list"] = []
+    mongo_upsert_job(job)
+
+    return "ok"
+
+
+@app.route('/api/delete/<system_job_id>/<instance_worker_id>')
+def delete_task_instance(system_job_id, instance_worker_id):
     """find service in db and ask corresponding worker to delete task"""
     app.logger.info('Incoming Request /api/delete/ - to delete task...')
     # job_id is the system_job_id assigned by System Manager
     job = mongo_find_job_by_system_id(system_job_id)
-    node_id = job.get('instance_list')[0].get('worker_id')  # undeploy the first instance available
+    # Undeploy service running on specified worker
     job_id = str(job.get('_id'))
     job.__setitem__('_id', job_id)
-    mqtt_publish_edge_delete(node_id, job)
+    instance_to_remove = None
+    for instance in job['instance_list']:
+        node_id = instance.get('worker_id')
+        if node_id == instance_worker_id:
+            mqtt_publish_edge_delete(node_id, job)
+            instance_to_remove = instance
+
+    # Remove undeployed instance from instance list
+    if instance_to_remove is not None:
+        job["instance_list"].remove(instance_to_remove)
     return "ok"
 
 
@@ -139,6 +172,32 @@ def move_application_from_node_to_node():
     return "ok", 200
 
 
+@app.route('/api/geolocation', methods=['POST'])
+def get_geolocations():
+    """ Lookup coordinates for given IPs in GeoLite2 database. """
+    my_logger.info(f"Incoming Request /api/geolocations Body:{request.json}")
+    ips = json.loads(request.json)
+    ip_locations = query_geolocation_for_ips(ips)
+    app.logger.info(f"IP Locations: {ip_locations}")
+    return json.dumps(ip_locations), 200
+
+@app.route('/api/vivaldi-info', methods=['POST'])
+def get_vivaldi_info():
+    """ Retrieve Vivaldi coordinates for given workers. """
+    worker_ids = json.loads(request.json)
+    my_logger.info(f"Incoming Request /api/vivaldi_info Body:{worker_ids}")
+    nodes = mongo_find_many_by_ids(worker_ids)
+    response = {}
+    for node in nodes:
+        node_id = str(node.get("_id"))
+        if node_id in worker_ids:
+            vec = node.get("vivaldi_vector")
+            hgt = node.get("vivaldi_height")
+            err = node.get("vivaldi_error")
+            response[node_id] = {"vector": vec, "height": hgt, "error": err}
+
+    return json.dumps(response), 200
+
 # ................ Scheduler Test ......................#
 # ......................................................#
 
@@ -164,10 +223,12 @@ def handle_init_worker(message):
     app.logger.info(message)
 
     client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": message})
+    vivaldi_info = mongo_get_vivaldi_info_by_node_id(client_id)
 
     init_packet = {
         "id": str(client_id),
-        "MQTT_BROKER_PORT": os.environ.get('MQTT_BROKER_PORT')
+        "MQTT_BROKER_PORT": os.environ.get('MQTT_BROKER_PORT'),
+        "VIVALDI": vivaldi_info
     }
 
     # create ID and send it along with MQTT_Broker info to the client. save id into database
@@ -251,10 +312,14 @@ def init_cm_to_sm():
 def background_job_send_aggregated_information_to_sm():
     app.logger.info("Set up Background Jobs...")
     scheduler = BackgroundScheduler()
-    job_send_info = scheduler.add_job(send_aggregated_info_to_sm, 'interval', seconds=BACKGROUND_JOB_INTERVAL,
-                                      kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID,
-                                              'time_interval': BACKGROUND_JOB_INTERVAL})
-    job_dead_nodes = scheduler.add_job(looking_for_dead_workers, 'interval', seconds=2 * BACKGROUND_JOB_INTERVAL,
+    # @implNote: Create trigger with specified timezone to avoid warning from apscheduler
+    # see https://stackoverflow.com/questions/69776414/pytzusagewarning-the-zone-attribute-is-specific-to-pytzs-interface-please-mig
+    trigger1 = IntervalTrigger(seconds=BACKGROUND_JOB_INTERVAL, timezone="Europe/Berlin")
+    trigger2 = IntervalTrigger(seconds=2 * BACKGROUND_JOB_INTERVAL, timezone="Europe/Berlin")
+
+    job_send_info = scheduler.add_job(send_aggregated_info_to_sm, trigger=trigger1,
+                                      kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID, 'time_interval': BACKGROUND_JOB_INTERVAL})
+    job_dead_nodes = scheduler.add_job(looking_for_dead_workers, trigger=trigger2,
                                        kwargs={'interval': BACKGROUND_JOB_INTERVAL})
     scheduler.start()
 
@@ -264,6 +329,9 @@ if __name__ == '__main__':
     # app.run(debug=True, host='0.0.0.0', port=MY_PORT)
 
     start_http_server(10001)  # start prometheus server
+
+    # Build GeoLite2 dataframe to avoid rebuilding it for every user request
+    build_geolite_dataframe()
 
     import eventlet
 

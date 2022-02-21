@@ -46,7 +46,7 @@ def mongo_insert(obj):
 
 def mongo_find_cluster_by_id(id):
     global mongo_clusters
-    return mongo_clusters.db.clusters.find_one(id).inserted_id
+    return mongo_clusters.db.clusters.find_one(ObjectId(id))
 
 
 def mongo_find_any_cluster():
@@ -68,6 +68,9 @@ def mongo_find_cluster_by_id_and_update(id, key, value):
 
     return 1
 
+def mongo_find_cluster_by_name(name):
+    global mongo_clusters
+    return mongo_clusters.db.clusters.find_one({"cluster_name": name})
 
 def mongo_find_cluster_by_location(location):
     global mongo_clusters
@@ -121,3 +124,9 @@ def mongo_update_job_status_and_cluster(job_id, status, cluster_id):
     print('Updating Job Status and assgined cluster for this job...')
     mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
                                    {'$set': {'status': status, 'cluster': cluster_id, 'replicas': 1}})
+
+
+def mongo_find_job_by_microservice_id(application_id, microservice_id):
+    global mongo_jobs
+    app.logger.info(f"Get job with applicationID={application_id} and microserviceID={microservice_id}")
+    return mongo_jobs.db.jobs.find_one({"applicationID": application_id, "microserviceID": microservice_id})

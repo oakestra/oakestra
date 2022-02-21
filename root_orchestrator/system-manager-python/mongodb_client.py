@@ -110,8 +110,10 @@ def mongo_update_cluster_information(cluster_id, data):
     memory_percent = data.get('memory_percent')
     memory_in_mb = data.get('cumulative_memory_in_mb')
     nodes = data.get('number_of_nodes')
-    technology = data.get('technology')
+    # technology = data.get('technology')
+    virtualization = data.get('virtualization')
     more = data.get('more')
+    worker_groups = data.get('worker_groups')
 
     jobs = data.get('jobs')
     for j in jobs:
@@ -121,14 +123,14 @@ def mongo_update_cluster_information(cluster_id, data):
     datetime_now = datetime.now()
     datetime_now_timestamp = datetime.timestamp(datetime_now)
 
-    mongo_clusters.db.clusters. \
-        find_one_and_update({'_id': ObjectId(cluster_id)},
-                            {'$set': {'aggregated_cpu_percent': cpu_percent, 'total_cpu_cores': cpu_cores,
-                                      'aggregated_memory_percent': memory_percent, 'memory_in_mb': memory_in_mb,
-                                      'active_nodes': nodes, 'technology': technology, 'more': more,
-                                      'last_modified': datetime_now,
-                                      'last_modified_timestamp': datetime_now_timestamp}},
-                            upsert=True)
+    mongo_clusters.db.clusters.find_one_and_update(
+        {'_id': ObjectId(cluster_id)},
+        {'$set': {'aggregated_cpu_percent': cpu_percent, 'total_cpu_cores': cpu_cores,
+                  'aggregated_memory_percent': memory_percent, 'memory_in_mb': memory_in_mb,
+                  'active_nodes': nodes, 'virtualization': virtualization, 'more': more,
+                  'last_modified': datetime_now, 'last_modified_timestamp': datetime_now_timestamp,
+                  'worker_groups': worker_groups}},
+        upsert=True)
 
 
 # ......... JOB OPERATIONS .........................
@@ -138,13 +140,18 @@ def mongo_insert_job(obj):
     global mongo_jobs
     app.logger.info("MONGODB - insert job...")
     file = obj['file_content']
-
+    application = file['application']
+    microservice = file['microservice']
+    app.logger.info(file)
     # jobname and details generation
-    job_name = file['app_name'] + "." + file['app_ns'] + "." + file['service_name'] + "." + file['service_ns']
+    job_name = application['application_name'] + "." + application['application_namespace'] + "." + microservice['microservice_name'] + "." + microservice['microservice_namespace']
     file['job_name'] = job_name
     job_content = {
         'job_name': job_name,
-        **file  # The content of the input file
+        'application_name': application['application_name'],
+        'application_namespace': application['application_namespace'],
+        'applicationID': application['applicationID'],
+        **microservice  # The content of the microservice
     }
 
     # job insertion

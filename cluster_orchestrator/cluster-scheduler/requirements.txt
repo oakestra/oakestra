@@ -5,3 +5,7 @@ click
 redis
 requests
 pymongo
+shapely
+geopy
+numpy
+scipy

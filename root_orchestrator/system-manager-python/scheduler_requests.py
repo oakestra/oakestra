@@ -1,17 +1,17 @@
 import os
 import requests
 import time
+import json
 
 SCHUEDULER_ADDR = 'http://' + os.environ.get('CLOUD_SCHEDULER_URL') + ':' + str(os.environ.get('CLOUD_SCHEDULER_PORT'))
 
 
 def scheduler_request_deploy(job, job_id):
     print('new job: asking cloud_scheduler...')
-    print(job)
     request_addr = SCHUEDULER_ADDR + '/api/calculate/deploy'
     print(request_addr)
     try:
-        requests.post(request_addr, json={'job': job, 'system_job_id': job_id})
+        requests.post(request_addr, json=json.dumps({'job': job, 'system_job_id': job_id}))
     except requests.exceptions.RequestException as e:
         print('Calling Cloud Scheduler /api/calculate/deploy not successful.')
 

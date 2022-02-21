@@ -8,3 +8,8 @@ requests
 pyyaml
 APScheduler
 prometheus-client
+shapely
+alphashape
+scikit-learn
+pyproj
+pandas

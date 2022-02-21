@@ -34,6 +34,24 @@ docker-compose up --build -d
 ## Add worker nodes (run Node Engine)
 
 On an arbitrary Linux machine, install Python3.8 and virtualenv, then check [NodeEngine](node_engine/README.md) to startup the worker node. 
+TODO: move to worker readme
+On an arbitrary Linux machine, install Python3.8 and virtualenv. Set the IP address of the cluster orchestrator which should take care of the worker node in the start-up.sh file, and run the following:
+
+```bash
+cd node_engine/
+export CLUSTER_MANAGER_IP=" < IP OF THE CLUSTER MANAGER WHERE THIS NODE BELONGS >"
+export CLUSTER_MANAGER_PORT="<PORT OF CLUSTER MANAGER>"
+export MQTT_BROKER_PORT="<MQTT PORT OF CLUSTER MANAGER"
+# Either configure coordinates in environment variables or set them in gps_mock.txt (allows dynamic changes during runtime)
+# If gps_mock.txt is used, environment variable GPS has to be set to true
+# export GPS=TRUE
+export LAT=<LATITUDE COORDS OF WORKER>
+export LONG=<LONGITUDE COORDS OF WORKER> 
+export MYIP="<PUBLIC IP OF WORKER TO BE REACHABLE BY PING FOR VIVALDI NETWORK>"
+./start-up.sh <architecture: amd64 arm7>
+# Run redis server used by celery worker for service SLA monitoring
+docker run -p 6380:6379 --name workerRedis -d redis redis-server --requirepass workerRedis
+```
 
 # Application Deployment
 

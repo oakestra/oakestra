@@ -1,14 +1,12 @@
-import os
-from flask import Flask, flash, request, jsonify
+from flask import Flask, flash, request
 from flask_socketio import SocketIO, emit
 import json
-from bson.objectid import ObjectId
 from markupsafe import escape
-import time
 import threading
 from bson import json_util
+
 from mongodb_client import *
-from sla_parser import *
+from sla_parser import parse_sla
 from yamlfile_parser import *
 
 from cluster_requests import *
@@ -61,7 +59,10 @@ def status():
 def receive_scheduler_result_and_propagate_to_cluster():
     app.logger.info('Incoming Request /api/result/deploy - received cloud_scheduler result')
     data = json.loads(request.json)
-    app.logger.info(data)
+    # Omit worker nodes coordinates to avoid flooding the log
+    data_without_worker_groups = data.copy()
+    data_without_worker_groups['cluster'].pop('worker_groups', None)
+    app.logger.info(data_without_worker_groups)
     system_job_id = data.get('job_id')
     replicas = data.get('replicas')
     cluster_id = str(data.get('cluster').get('_id').get('$oid'))
@@ -118,7 +119,10 @@ def cluster_information(cluster_id):
     app.logger.info('Incoming Request /api/information/{0} to set aggregated cluster information'.format(cluster_id))
     # data = json.loads(request.json)
     data = request.json  # data contains cpu_percent, memory_percent, cpu_cores etc.
-    app.logger.info(data)
+    # Omit worker nodes coordinates to avoid flooding the log
+    data_without_worker_groups = data.copy()
+    data_without_worker_groups.pop('worker_groups', None)
+    app.logger.info(data_without_worker_groups)
     mongo_update_cluster_information(cluster_id, data)
     return "ok", 200
 
@@ -142,21 +146,41 @@ def deploy_task():
         try:
             data = parse_sla(sla)
         except SLAFormatError as e:
-            # The developer is using the old yaml schema. Let's keep it for compatibility.
+            # The developer is uising the old yaml schema. Let's keep it for compatibility.
             data = yaml_reader(sla)
+        job_ids = {}
+        applications = data.get('applications')
+        app.logger.info(f"SLA DATA: {data}")
+        for application in applications:
+            application_name = application.get('application_name')
+            microservices = application.get('microservices')
+            for i, microservice in enumerate(microservices):
+                app.logger.info(f"Process microservice {i + 1}/{len(microservices)}")
+                app.logger.info(data)
+                # Insert job into database
+                job_id = mongo_insert_job(
+                    {
+                        'file_content': {'application': application, 'microservice': microservice},
+                        'service_ip_list': s_ip
+                    })
+                app.logger.info(f"Inserted Job with ID: {str(job_id)}")
+                # Remove other microservices from deployment job
+                application.pop("microservices")
+                job = {**application, **microservice}
+                # Inform network plugin about the deployment
+                threading.Thread(group=None, target=net_inform_service_deploy, args=(data, str(job_id),)).start()
+                # Job status to scheduling REQUESTED
+                mongo_update_job_status(job_id, 'REQUESTED')
 
-        app.logger.info(data)
-        # Insert job into database
-        job_id = mongo_insert_job(
-            {
-                'file_content': data
-            })
-        # Inform network plugin about the deployment
-        threading.Thread(group=None, target=net_inform_service_deploy, args=(data, str(job_id),)).start()
-        # Job status to scheduling REQUESTED
-        mongo_update_job_status(job_id, 'REQUESTED')
-        # Request scheduling
-        threading.Thread(group=None, target=scheduler_request_deploy, args=(data, str(job_id),)).start()
+
+                # Request scheduling
+                threading.Thread(group=None, target=scheduler_request_deploy,
+                                 args=(job, str(job_id))).start()
+                # Job status to scheduling REQUESTED
+                mongo_update_job_status(job_id, 'REQUESTED')
+
+                job_ids.setdefault(application_name, []).append(job_id)
+
         return {'job_id': str(job_id)}, 200
 
 

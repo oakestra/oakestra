@@ -1,6 +1,6 @@
+import json
 import os
 import requests
-from bson.json_util import dumps
 
 
 CLUSTER_MANAGER_ADDR = 'http://' + os.environ.get('CLUSTER_MANAGER_URL') + ':' + str(os.environ.get('CLUSTER_MANAGER_PORT'))
@@ -16,6 +16,6 @@ def manager_request(app, node, job):
     node.__setitem__('_id', node_id)
     node.__delitem__('last_modified')  # delete last_modified of the node because it is not serializable
     try:
-        requests.post(request_addr, json={'node': node, 'job': job})
+        requests.post(request_addr, json=json.dumps({'node': node, 'job': job}))
     except requests.exceptions.RequestException as e:
         print('Calling Cluster Manager /api/result not successful.')

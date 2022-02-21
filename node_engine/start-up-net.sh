@@ -38,6 +38,35 @@ if [ "$PUBLIC_WORKER_PORT" == "" ]; then
     export PUBLIC_WORKER_PORT=50103
 fi
 
+if [ "$LAT" == "" ]; then
+    echo "WORKER LATITUDE NOT SET!"
+    echo "switching to mock GPS mode"
+    export GPS=TRUE
+fi
+
+if [ "$LONG" == "" ]; then
+    echo "WORKER LONGITUDE NOT SET!"
+    echo "switching to mock GPS mode"
+    export GPS=TRUE
+fi
+
+if [ "$GPS" == "" ]; then
+    echo "WORKER GPS MODE NOT SET!"
+    echo "switching to mock GPS mode"
+    export GPS=TRUE
+fi
+
+if [ "$VIVALDI_DIM" == "" ]; then
+    echo "WORKER VIVALDI COORDINTE DIMENSION NOT SET!"
+    echo "switching to default"
+    export VIVALDI_DIM=2
+fi
+
+if [ "$REDIS_ADDR" == "" ]; then
+    echo "WORKER REDIS ADDR NOT SET!"
+    echo "switching to default"
+    export REDIS_ADDR=redis://:workerRedis@localhost:6380
+fi
 #check NetManager installation
 #TODO
 
@@ -53,5 +82,6 @@ pip3 install -r requirements.txt
 # export FLASK_ENV=development
 export FLASK_DEBUG=FALSE # TRUE for verbose logging #when True, MQTT logs twice because Flask opens second reloader thread
 
-#.venv/bin/
-python3 node_engine.py
+# Start node engine
+echo "Start Node Engine"
+.venv/bin/python3 app.py
