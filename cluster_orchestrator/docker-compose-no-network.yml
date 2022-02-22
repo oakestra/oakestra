@@ -16,6 +16,11 @@ services:
       - /mosquitto/log
     networks:
       - default
+    healthcheck:
+      test: [ "CMD-SHELL", "timeout -t 5 mosquitto_sub -t '$$SYS/#' -C 1 | grep -v Error || exit 1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 6
 
       
   # cluster-level mongoDB

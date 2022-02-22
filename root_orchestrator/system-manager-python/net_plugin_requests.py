@@ -54,11 +54,12 @@ def net_register_cluster(cluster_id, cluster_address, cluster_port):
     logging.debug('new job: communicating cluster registration to net component...')
     request_addr = NET_PLUGIN_ADDR + '/api/net/cluster'
     try:
-        requests.post(request_addr,
+        req = requests.post(request_addr,
                       json={
                           'cluster_id': cluster_id,
                           'cluster_address': cluster_address,
                           'cluster_port': cluster_port
                       })
+        logging.debug(req)
     except requests.exceptions.RequestException as e:
         logging.error('Calling network plugin /api/net/cluster not successful.')

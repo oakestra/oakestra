@@ -7,7 +7,7 @@ RUN pip install -r requirements.txt
 ADD . /
 
 # TRUE for verbose logging
-ENV FLASK_DEBUG=FALSE
+ENV FLASK_DEBUG=TRUE
 
 ENV CLOUD_MONGO_URL=localhost
 ENV CLOUD_MONGO_PORT=10007

@@ -365,10 +365,5 @@ def disconnect():
 
 
 if __name__ == '__main__':
-    print('moin')
-    # start_http_server(10008)
-
-    # socketio.run(app, debug=True, host='0.0.0.0', port=MY_PORT)
     import eventlet
-
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)
