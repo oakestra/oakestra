@@ -644,7 +644,7 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 	if err == nil {
 		var once sync.Once
 		for _, tableEntry := range entryList {
-			once.Do(func() { mqtt.MqttRegisterInterest(tableEntry.Servicename, env) })
+			once.Do(func() { mqtt.MqttRegisterInterest(tableEntry.JobName, env) })
 			env.AddTableQueryEntry(tableEntry)
 		}
 		table = env.translationTable.SearchByServiceIP(ip)
@@ -691,14 +691,19 @@ func (env *Environment) AddTableQueryEntry(entry TableEntry) {
 }
 
 //force a table query refresh for a service
-func (env *Environment) RefreshServiceTable(sname string) {
-	entryList, err := tableQueryBySname(sname)
-	env.translationTable.RemoveBySname(sname)
+func (env *Environment) RefreshServiceTable(jobname string) {
+	log.Printf("Requested table query refresh fro %s", jobname)
+	entryList, err := tableQueryByJobName(jobname)
+	_ = env.translationTable.RemoveByJobName(jobname)
 	if err == nil {
 		for _, tableEntry := range entryList {
 			env.AddTableQueryEntry(tableEntry)
 		}
 	}
+}
+
+func (env *Environment) RemoveServiceEntries(jobname string) {
+	_ = env.translationTable.RemoveByJobName(jobname)
 }
 
 func (env *Environment) generateAddress() (net.IP, error) {

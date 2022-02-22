@@ -8,6 +8,7 @@ import (
 )
 
 type TableEntry struct {
+	JobName          string
 	Appname          string
 	Appns            string
 	Servicename      string
@@ -69,32 +70,31 @@ func (t *TableManager) RemoveByNsip(nsip net.IP) error {
 		}
 	}
 
-	if found > -1 {
-		if found == 0 {
-			t.translationTable = make([]TableEntry, 0)
-			return nil
-		}
-		if found == len(t.translationTable)-1 {
-			t.translationTable = t.translationTable[:found-1]
-			return nil
-		} else {
-			t.translationTable = append(t.translationTable[0:found], t.translationTable[found+1:]...)
-			return nil
-		}
-	}
-
-	return errors.New("Entry not found")
+	return t.removeByIndex(found)
 }
 
-func (t *TableManager) RemoveBySname(sname string) error {
-	correspondingEntries := t.SearchBySname(sname)
-	if len(correspondingEntries) == 0 {
-		return errors.New("No entires")
+func (t *TableManager) RemoveByJobName(jobname string) error {
+	t.rwlock.Lock()
+	defer t.rwlock.Unlock()
+
+	found := -1
+	for i, tableElement := range t.translationTable {
+		if tableElement.JobName == jobname {
+			found = i
+			break
+		}
 	}
-	for _, entry := range correspondingEntries {
-		_ = t.RemoveByNsip(entry.Nsip)
+
+	return t.removeByIndex(found)
+}
+
+func (t *TableManager) removeByIndex(index int) error {
+	if index > -1 {
+		t.translationTable[index] = t.translationTable[len(t.translationTable)-1]
+		t.translationTable = t.translationTable[:len(t.translationTable)-1]
+		return nil
 	}
-	return nil
+	return errors.New("Entry not found")
 }
 
 func (t *TableManager) SearchByServiceIP(ip net.IP) []TableEntry {
@@ -126,12 +126,12 @@ func (t *TableManager) SearchByNsIP(ip net.IP) (TableEntry, bool) {
 	return TableEntry{}, false
 }
 
-func (t *TableManager) SearchBySname(sname string) []TableEntry {
+func (t *TableManager) SearchByJobName(jobname string) []TableEntry {
 	t.rwlock.Lock()
 	defer t.rwlock.Unlock()
 	results := make([]TableEntry, 0)
 	for _, tableElement := range t.translationTable {
-		if tableElement.Servicename == sname {
+		if tableElement.JobName == jobname {
 			results = append(results, tableElement)
 		}
 	}
