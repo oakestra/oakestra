@@ -4,7 +4,6 @@ import (
 	"NetManager/events"
 	"NetManager/utils"
 	"encoding/json"
-	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
 	"log"
 	"sync"
@@ -24,33 +23,15 @@ type jobUpdatesTimer struct {
 
 type jobEnvironmentManagerActions interface {
 	RefreshServiceTable(sname string)
+	RemoveServiceEntries(sname string)
 }
 
 type mqttInterestDeregisterRequest struct {
 	Appname string `json:"appname"`
 }
 
-func (jut *jobUpdatesTimer) ConnectHandler(client mqtt.Client) {
-	startSync.Lock()
-	defer startSync.Unlock()
-	if runningHandlers.Exists(jut.job) {
-		log.Printf("Interest for job %s already registered", jut.job)
-		return
-	}
-	jut.topic = "jobs/" + jut.job + "/updates_available"
-	tqtoken := client.Subscribe(jut.topic, 1, jut.MessageHandler)
-	tqtoken.Wait()
-	log.Printf("Subscribed to job %s updates", jut.job)
-	runningHandlers.Add(jut.job)
-	jut.client = client
-	go jut.StartSelfDestructTimeout()
-}
-
-func (jut *jobUpdatesTimer) ConnectionLostHandler(client mqtt.Client, err error) {
-	//TODO: resiliency would be nice to have just in case :)
-}
-
 func (jut *jobUpdatesTimer) MessageHandler(client mqtt.Client, message mqtt.Message) {
+	log.Printf("Received job update regarding %s", message.Topic())
 	jut.env.RefreshServiceTable(jut.job)
 }
 
@@ -73,14 +54,23 @@ func (jut *jobUpdatesTimer) StartSelfDestructTimeout() {
 	}
 	startSync.Lock()
 	defer startSync.Unlock()
+	log.Printf("De-registering from %s", jut.job)
 	cleanInterestTowardsJob(jut.job)
 	jut.client.Unsubscribe(jut.topic)
-	jut.client.Disconnect(0)
+	delete(TOPICS, jut.topic) //removing topic from the topic list in case of disconnection
 	eventManager.DeRegister(events.TableQuery, jut.job)
+	jut.env.RemoveServiceEntries(jut.job)
 	runningHandlers.RemoveElem(jut.job)
 }
 
 func MqttRegisterInterest(jobName string, env jobEnvironmentManagerActions) {
+
+	startSync.Lock()
+	defer startSync.Unlock()
+	if runningHandlers.Exists(jobName) {
+		log.Printf("Interest for job %s already registered", jobName)
+		return
+	}
 
 	jobTimer := jobUpdatesTimer{
 		eventManager: events.GetInstance(),
@@ -88,23 +78,13 @@ func MqttRegisterInterest(jobName string, env jobEnvironmentManagerActions) {
 		env:          env,
 	}
 
-	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("tcp://%s:%s", BrokerUrl, BrokerPort))
-	opts.SetClientID(clientID)
-	opts.SetUsername("")
-	opts.SetPassword("")
-	opts.OnConnect = jobTimer.ConnectHandler
-	opts.OnConnectionLost = jobTimer.ConnectionLostHandler
-
-	go runInterestClient(opts, jobName)
-}
-
-func runInterestClient(opts *mqtt.ClientOptions, jobName string) {
-	client = mqtt.NewClient(opts)
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		cleanInterestTowardsJob(jobName)
-		log.Printf("Error subscribing the topic for the job %s", jobName)
-	}
+	jobTimer.topic = "jobs/" + jobName + "/updates_available"
+	TOPICS[jobTimer.topic] = jobTimer.MessageHandler //adding the topic to the global topic list to be handled in case of disconnection
+	tqtoken := mainMqttClient.Subscribe(jobTimer.topic, 1, jobTimer.MessageHandler)
+	tqtoken.Wait()
+	log.Printf("MQTT - Subscribed to %s ", jobTimer.topic)
+	runningHandlers.Add(jobTimer.job)
+	go jobTimer.StartSelfDestructTimeout()
 }
 
 func cleanInterestTowardsJob(jobName string) {

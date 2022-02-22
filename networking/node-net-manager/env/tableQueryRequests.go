@@ -27,12 +27,12 @@ func tableQueryByIP(ip string) ([]TableEntry, error) {
 /*
 Asks the MQTT client for a table query and parses the result
 */
-func tableQueryBySname(sname string) ([]TableEntry, error) {
+func tableQueryByJobName(jobname string) ([]TableEntry, error) {
 
-	log.Println("[MQTT TABLE QUERY] sname:", sname)
+	log.Println("[MQTT TABLE QUERY] sname:", jobname)
 	var mqttTablequery mqttifce.TablequeryMqttInterface = mqttifce.GetTableQueryRequestCacheInstance()
 
-	responseStruct, err := mqttTablequery.TableQueryBySnameRequestBlocking(sname)
+	responseStruct, err := mqttTablequery.TableQueryByJobNameRequestBlocking(jobname)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func tableQueryBySname(sname string) ([]TableEntry, error) {
 }
 
 func responseParser(responseStruct mqttifce.TableQueryResponse) ([]TableEntry, error) {
-	appCompleteName := strings.Split(responseStruct.AppName, ".")
+	appCompleteName := strings.Split(responseStruct.JobName, ".")
 
 	if len(appCompleteName) != 4 {
 		return nil, errors.New("app complete name not of size 4")
@@ -57,6 +57,7 @@ func responseParser(responseStruct mqttifce.TableQueryResponse) ([]TableEntry, e
 		}
 
 		entry := TableEntry{
+			JobName:          responseStruct.JobName,
 			Appname:          appCompleteName[0],
 			Appns:            appCompleteName[1],
 			Servicename:      appCompleteName[2],

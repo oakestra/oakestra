@@ -11,7 +11,7 @@ import (
 var TOPICS = make(map[string]mqtt.MessageHandler)
 
 var clientID = ""
-var client mqtt.Client
+var mainMqttClient mqtt.Client
 var BrokerUrl = ""
 var BrokerPort = ""
 
@@ -80,15 +80,15 @@ func InitMqtt(clientid string, brokerurl string, brokerport string) {
 }
 
 func runMqttClient(opts *mqtt.ClientOptions) {
-	client = mqtt.NewClient(opts)
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
+	mainMqttClient = mqtt.NewClient(opts)
+	if token := mainMqttClient.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
 }
 
 func PublishToBroker(topic string, payload string) {
 	log.Printf("MQTT - publish to - %s - the payload - %s", topic, payload)
-	token := client.Publish(fmt.Sprintf("nodes/%s/net/%s", clientID, topic), 1, false, payload)
+	token := mainMqttClient.Publish(fmt.Sprintf("nodes/%s/net/%s", clientID, topic), 1, false, payload)
 	if token.WaitTimeout(time.Second*5) && token.Error() != nil {
 		log.Printf("ERROR: MQTT PUBLISH: %s", token.Error())
 	}

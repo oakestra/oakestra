@@ -245,7 +245,7 @@ func (proxy *GoProxyTunnel) outgoingProxy(packet gopacket.Packet) gopacket.Packe
 
 			//Check proxy proxycache
 			entry, exist := proxy.proxycache.RetrieveByServiceIP(ipv4.SrcIP, srcport, ipv4.DstIP, dstport)
-			if !exist {
+			if !exist || entry.dstport < 1 {
 				//If no proxycache entry ask to the environment for a TableQuery
 				tableEntryList := proxy.environment.GetTableEntryByServiceIP(ipv4.DstIP)
 

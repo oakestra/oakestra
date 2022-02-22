@@ -20,7 +20,7 @@ var (
 /*----- Mqtt Table query cache classes and interfaces -----*/
 type TablequeryMqttInterface interface {
 	TableQueryByIpRequestBlocking(sip string) (TableQueryResponse, error)
-	TableQueryBySnameRequestBlocking(sname string) (TableQueryResponse, error)
+	TableQueryByJobNameRequestBlocking(sname string) (TableQueryResponse, error)
 }
 
 type TableQueryRequestCache struct {
@@ -32,7 +32,7 @@ type TableQueryRequestCache struct {
 
 /*------------------- Mqtt responses and requests ----------------------*/
 type TableQueryResponse struct {
-	AppName      string            `json:"app_name"`
+	JobName      string            `json:"app_name"`
 	InstanceList []ServiceInstance `json:"instance_list"`
 }
 
@@ -102,7 +102,7 @@ func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname
 	select {
 	case result := <-responseChannel:
 		return result, nil
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		log.Printf("TIMEOUT - Table query without response, quitting goroutine")
 	}
 
@@ -121,8 +121,8 @@ func (cache *TableQueryRequestCache) TableQueryByIpRequestBlocking(sip string) (
 	Perform a table query by ServiceName to the cluster manager
 	The call is blocking and awaits the response for a maximum of 5 seconds
 */
-func (cache *TableQueryRequestCache) TableQueryBySnameRequestBlocking(sname string) (TableQueryResponse, error) {
-	return cache.tableQueryRequestBlocking("", sname)
+func (cache *TableQueryRequestCache) TableQueryByJobNameRequestBlocking(jobname string) (TableQueryResponse, error) {
+	return cache.tableQueryRequestBlocking("", jobname)
 }
 
 /*
@@ -141,7 +141,7 @@ func (cache *TableQueryRequestCache) TablequeryResultMqttHandler(client mqtt.Cli
 
 	//extract sip and app names as query keys
 	querykeys := make([]string, 0)
-	querykeys = append(querykeys, responseStruct.AppName)
+	querykeys = append(querykeys, responseStruct.JobName)
 	for _, instance := range responseStruct.InstanceList {
 		for _, sip := range instance.ServiceIp {
 			querykeys = append(querykeys, sip.Address)
