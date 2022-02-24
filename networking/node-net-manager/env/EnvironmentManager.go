@@ -188,6 +188,11 @@ func (env *Environment) DetachDockerContainer(containername string) {
 	}
 }
 
+// creates a docker network compatible with the enviornment and returns it
+func (env *Environment) ConfigureDockerNetwork(containername string) (string, error) {
+	return "", errors.New("not yet implemented")
+}
+
 // Attach a Docker container to the bridge and the current network environment
 func (env *Environment) AttachDockerContainer(containername string) (net.IP, error) {
 
