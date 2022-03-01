@@ -1,4 +1,4 @@
-version: "3"
+version: "3.3"
 services:
 
   # MQTT 
@@ -14,6 +14,8 @@ services:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
       - /mosquitto/data
       - /mosquitto/log
+    networks:
+      - default
     healthcheck:
       test: [ "CMD-SHELL", "timeout -t 5 mosquitto_sub -t '$$SYS/#' -C 1 | grep -v Error || exit 1" ]
       interval: 10s
@@ -22,7 +24,7 @@ services:
 
       
   # cluster-level mongoDB
-  mongo_cluster:
+  mongo:
     image: mongo:3.6
     container_name: mongo
     hostname: mongo
@@ -32,40 +34,7 @@ services:
       - 'mongodb_data:/mongodb'
     command: mongod --port 10007
 
-# cluster-level mongoDB
-  mongo_clusternet:
-    image: mongo:3.6
-    container_name: cluster_mongo_net
-    hostname: cluster_mongo_net
-    ports:
-      - "10207:10207"
-    volumes:
-      - 'mongodb_net_data:/mongodb'
-    command: mongod --port 10207
 
-
-# Cluster Manager
-  cluster_service_manager:
-    image: ghcr.io/edgeio/edgeionet/cluster-service-manager:v0.02-experimental
-    container_name: cluster_service_manager
-    hostname: cluster_service_manager
-    expose:
-      - "10200"
-    ports:
-      - "10200:10200"
-    environment:
-      - MY_PORT=10200
-      - MQTT_BROKER_PORT=10003
-      - MQTT_BROKER_URL=mqtt
-      - ROOT_SERVICE_MANAGER_URL=${SYSTEM_MANAGER_URL}
-      - ROOT_SERVICE_MANAGER_PORT=10100
-      - SYSTEM_MANAGER_URL=cluster_manager
-      - SYSTEM_MANAGER_PORT=10000
-      - CLUSTER_MONGO_URL=cluster_mongo_net
-      - CLUSTER_MONGO_PORT=10207
-    depends_on:
-      - mongo_clusternet
-      - mqtt
 
 # Cluster Manager
   cluster_manager:
@@ -94,10 +63,9 @@ services:
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
     depends_on:
-      - mongo_cluster
+      - mongo
       - mqtt
       - cluster_scheduler
-      - cluster_service_manager
 
 
   # Cluster Scheduler
@@ -119,7 +87,7 @@ services:
       - REDIS_ADDR=redis://:clusterRedis@redis:6379
     depends_on:
       - redis
-      - mongo_cluster
+      - mongo
 
 
   # Redis for the Cluster Scheduler as Job Queue
@@ -150,6 +118,4 @@ services:
 
 volumes:
   mongodb_data:
-    driver: local
-  mongodb_net_data:
     driver: local

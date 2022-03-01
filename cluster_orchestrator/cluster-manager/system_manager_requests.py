@@ -1,6 +1,8 @@
 import requests
 import threading
 import os
+import json
+import traceback
 
 from mongodb_client import mongo_aggregate_node_information
 from my_prometheus_client import prometheus_set_metrics
@@ -9,10 +11,14 @@ SYSTEM_MANAGER_ADDR = 'http://' + os.environ.get('SYSTEM_MANAGER_URL') + ':' + o
 
 
 def send_aggregated_info_to_sm(my_id, time_interval):
-    data = mongo_aggregate_node_information(time_interval)
-    threading.Thread(group=None, target=send_aggregated_info,
-                     args=(my_id, data)).start()
-    prometheus_set_metrics(my_id=my_id, data=data)
+    try:
+        data = mongo_aggregate_node_information(time_interval)
+        threading.Thread(group=None, target=send_aggregated_info,
+                         args=(my_id, data)).start()
+        prometheus_set_metrics(my_id=my_id, data=data)
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
 
 
 def send_aggregated_info(my_id, data):
@@ -31,3 +37,4 @@ def cloud_request_incr_node(my_id):
         requests.get(request_addr)
     except requests.exceptions.RequestException as e:
         print('Calling System Manager /api/cluster/../incr_node not successful.')
+

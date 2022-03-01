@@ -7,30 +7,29 @@ import sys
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
 from prometheus_client import start_http_server
-
-
+import threading
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_upsert_job, mongo_find_job_by_system_id, \
-    mongo_update_job_status, mongo_find_node_by_name
+    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
 from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from cm_logging import configure_logging
 from system_manager_requests import send_aggregated_info_to_sm
 from analyzing_workers import looking_for_dead_workers
 from my_prometheus_client import prometheus_init_gauge_metrics, prometheus_set_metrics
+from network_plugin_requests import *
 
 MY_PORT = os.environ.get('MY_PORT')
 
 MY_CHOSEN_CLUSTER_NAME = os.environ.get('CLUSTER_NAME')
 MY_CLUSTER_LOCATION = os.environ.get('CLUSTER_LOCATION')
+NETWORK_COMPONENT_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
 MY_ASSIGNED_CLUSTER_ID = None
 
 SYSTEM_MANAGER_ADDR = 'http://' + os.environ.get('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
 
-
 my_logger = configure_logging()
 
 app = Flask(__name__)
-
 
 # socketioserver = SocketIO(app, async_mode='eventlet', logger=, engineio_logger=logging)
 socketioserver = SocketIO(app, logger=True, engineio_logger=True)
@@ -80,7 +79,13 @@ def get_scheduler_result_and_propagate_to_edge():
     job = data.get('job')
     resulting_node_id = data.get('node').get('_id')
 
-    # mongo_update_job_status(job.get('id'), 'NODE_SCHEDULED')  # Done in Cluster_Scheduler
+    mongo_update_job_status(job.get('_id'), 'NODE_SCHEDULED', data.get('node'))
+    job = mongo_find_job_by_id(job.get('_id'))
+
+    # Inform network plugin about the deployment
+    threading.Thread(group=None, target=network_notify_deployment,
+                     args=(str(job['system_job_id']), job)).start()
+
     mqtt_publish_edge_deploy(resulting_node_id, job)
     return "ok"
 
@@ -91,7 +96,7 @@ def delete_task(system_job_id):
     app.logger.info('Incoming Request /api/delete/ - to delete task...')
     # job_id is the system_job_id assigned by System Manager
     job = mongo_find_job_by_system_id(system_job_id)
-    node_id = job.get('scheduled_node')
+    node_id = job.get('instance_list')[0].get('worker_id')  # undeploy the first instance available
     job_id = str(job.get('_id'))
     job.__setitem__('_id', job_id)
     mqtt_publish_edge_delete(node_id, job)
@@ -184,8 +189,13 @@ def test_disconnect():
 @sio.on('sc1', namespace='/register')
 def handle_init_greeting(jsonarg):
     app.logger.info('Websocket - received System_Manager_to_Cluster_Manager_1 : ' + str(jsonarg))
-    data = {'port': MY_PORT, 'cluster_name': MY_CHOSEN_CLUSTER_NAME, 'cluster_info': {},
-            'cluster_location': MY_CLUSTER_LOCATION}
+    data = {
+        'manager_port': MY_PORT,
+        'network_component_port': NETWORK_COMPONENT_PORT,
+        'cluster_name': MY_CHOSEN_CLUSTER_NAME,
+        'cluster_info': {},
+        'cluster_location': MY_CLUSTER_LOCATION
+    }
     time.sleep(1)  # Wait to Avoid Race Condition!
 
     sio.emit('cs1', data, namespace='/register')
@@ -239,6 +249,7 @@ def init_cm_to_sm():
         app.logger.error('SocketIO - Connection Establishment with System Manager failed!')
     time.sleep(1)
 
+
 # ......... FINISH - register at System Manager ........#
 # ......................................................#
 
@@ -247,19 +258,20 @@ def background_job_send_aggregated_information_to_sm():
     app.logger.info("Set up Background Jobs...")
     scheduler = BackgroundScheduler()
     job_send_info = scheduler.add_job(send_aggregated_info_to_sm, 'interval', seconds=BACKGROUND_JOB_INTERVAL,
-                                      kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID, 'time_interval': BACKGROUND_JOB_INTERVAL})
-    job_dead_nodes = scheduler.add_job(looking_for_dead_workers, 'interval', seconds=2*BACKGROUND_JOB_INTERVAL,
+                                      kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID,
+                                              'time_interval': BACKGROUND_JOB_INTERVAL})
+    job_dead_nodes = scheduler.add_job(looking_for_dead_workers, 'interval', seconds=2 * BACKGROUND_JOB_INTERVAL,
                                        kwargs={'interval': BACKGROUND_JOB_INTERVAL})
     scheduler.start()
 
 
 if __name__ == '__main__':
-
     # socketioserver.run(app, debug=True, host='0.0.0.0', port=MY_PORT)
     # app.run(debug=True, host='0.0.0.0', port=MY_PORT)
 
     start_http_server(10001)  # start prometheus server
 
     import eventlet
+
     init_cm_to_sm()
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)  # see README for logging notes

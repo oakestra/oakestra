@@ -41,7 +41,6 @@ Python3.8
 
 The System Manager could be written in another programming language as well. Just the endpoints, protocols, and database API should be supported by the language.
 
-
 ## Some further Thoughts
 
 - Very interesting (=weird) behaviour: Pycharm 2020.1 reports `socketio.exceptions.BadNamespaceError: /init is not a connected namespace.` when a socketIO client wants to emit a Websocket message to an already connected SocketIO server. But in Pycharm2020.3 it works fine. Not examined further, but, probably, different versions of Python packages are installed on both.

@@ -7,3 +7,4 @@ PyYAML
 requests
 Cerberus
 prometheus-client
+jsonschema
