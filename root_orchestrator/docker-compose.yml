@@ -53,7 +53,7 @@ services:
 
   # Cluster Manager
   root_service_manager:
-    image: ghcr.io/edgeio/edgeionet/root-service-manager:v0.01-experimental
+    image: ghcr.io/edgeio/edgeionet/root-service-manager:v0.02-experimental
     container_name: root_service_manager
     hostname: root_service_manager
     expose:

@@ -22,6 +22,7 @@ MY_PORT = os.environ.get('MY_PORT')
 
 MY_CHOSEN_CLUSTER_NAME = os.environ.get('CLUSTER_NAME')
 MY_CLUSTER_LOCATION = os.environ.get('CLUSTER_LOCATION')
+NETWORK_COMPONENT_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
 MY_ASSIGNED_CLUSTER_ID = None
 
 SYSTEM_MANAGER_ADDR = 'http://' + os.environ.get('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
@@ -188,8 +189,13 @@ def test_disconnect():
 @sio.on('sc1', namespace='/register')
 def handle_init_greeting(jsonarg):
     app.logger.info('Websocket - received System_Manager_to_Cluster_Manager_1 : ' + str(jsonarg))
-    data = {'port': MY_PORT, 'cluster_name': MY_CHOSEN_CLUSTER_NAME, 'cluster_info': {},
-            'cluster_location': MY_CLUSTER_LOCATION}
+    data = {
+        'manager_port': MY_PORT,
+        'network_component_port': NETWORK_COMPONENT_PORT,
+        'cluster_name': MY_CHOSEN_CLUSTER_NAME,
+        'cluster_info': {},
+        'cluster_location': MY_CLUSTER_LOCATION
+    }
     time.sleep(1)  # Wait to Avoid Race Condition!
 
     sio.emit('cs1', data, namespace='/register')

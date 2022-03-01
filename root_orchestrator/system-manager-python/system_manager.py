@@ -189,6 +189,9 @@ def job_status(job_id):
 def delete_task(job_id):
     app.logger.info('Incoming Request /api/delete/{0} to delete task...'.format(escape(job_id)))
     # find service in db and ask corresponding cluster to delete task
+    job = mongo_find_job_by_id(job_id)
+    for instance in job['instance_list']:
+        net_inform_instance_undeploy(job_id, instance['instance_number'])
     cluster_obj = mongo_find_cluster_of_job(job_id)
     cluster_request_to_delete_job(cluster_obj, job_id)
     return "ok\n", 200
@@ -343,6 +346,12 @@ def handle_init_client(message):
         'id': str(cid)
     }
 
+    net_register_cluster(
+        cluster_id=str(cid),
+        cluster_address=request.remote_addr,
+        cluster_port=message['network_component_port']
+    )
+
     emit('sc2', json.dumps(x), namespace='/register')
 
 
@@ -356,10 +365,5 @@ def disconnect():
 
 
 if __name__ == '__main__':
-    print('moin')
-    # start_http_server(10008)
-
-    # socketio.run(app, debug=True, host='0.0.0.0', port=MY_PORT)
     import eventlet
-
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)

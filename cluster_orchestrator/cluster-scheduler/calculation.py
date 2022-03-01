@@ -1,3 +1,4 @@
+import logging
 import time
 
 from mongodb_client import mongo_find_one_node, mongo_find_all_active_nodes, mongo_find_node_by_name
@@ -21,17 +22,19 @@ def first_fit_algorithm(job):
 
     print('active_nodes: ')
     for node in active_nodes:
-        print(node)
 
-        available_cpu = node.get('current_cpu_cores_free')
-        available_memory = node.get('current_free_memory_in_MB')
-        node_info = node.get('node_info')
-        technology = node_info.get('technology')
+        try:
+            available_cpu = node.get('current_cpu_cores_free')
+            available_memory = node.get('current_free_memory_in_MB')
+            node_info = node.get('node_info')
+            technology = node_info.get('technology')
 
-        job_req = job.get('requirements')
-        if available_cpu >= job_req.get('cpu') and available_memory >= job_req.get('memory') and job.get(
-                'image_runtime') in technology:
-            return 'positive', node
+            job_req = job.get('requirements')
+            if available_cpu >= job_req.get('cpu') and available_memory >= job_req.get('memory') and job.get(
+                    'image_runtime') in technology:
+                return 'positive', node
+        except:
+            logging.error("Something wrong with job requirements or node infos")
 
     # no node found
     return 'negative', 'FAILED_NoCapacity'
