@@ -150,6 +150,23 @@ def scheduler_test():
     return scheduler_request_status()
 
 
+# ..................... REST handshake .................#
+# ......................................................#
+
+@app.route('/api/node/register', methods=['POST'])
+def http_node_registration():
+    app.logger.info('Incoming Request /api/node/register - to get all jobs')
+    data = request.json  # get POST body
+    registration_token = data.get("token")
+    # TODO: check and generate tokens
+    client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": data})
+    response = {
+        "id": str(client_id),
+        "MQTT_BROKER_PORT": os.environ.get('MQTT_BROKER_PORT')
+    }
+    return response, 200
+
+
 # ...... Websocket INIT Handling with edge nodes .......#
 # ......................................................#
 
@@ -164,7 +181,7 @@ def handle_init_worker(message):
     app.logger.info('Websocket - Received Edge_to_Cluster_Manager_1: {}'.format(request.remote_addr))
     app.logger.info(message)
 
-    client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": message})
+    client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": json.loads(message)})
 
     init_packet = {
         "id": str(client_id),
