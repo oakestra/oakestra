@@ -48,6 +48,16 @@ func GetNodeInfo() Node {
 	return node
 }
 
+func GetDynamicInfo() Node {
+	node.updateDynamicInfo()
+	return Node{
+		CpuUsage:   node.CpuUsage,
+		CpuCores:   node.CpuCores,
+		MemoryUsed: node.MemoryUsed,
+		MemoryMB:   node.MemoryMB,
+	}
+}
+
 func (n *Node) updateDynamicInfo() {
 	n.CpuUsage = getAvgCpuUsage()
 	n.Ip = getIp()
@@ -125,7 +135,7 @@ func getMemoryMB() int {
 		log.Printf("Error: %s", err.Error())
 		return 0
 	}
-	return int(mem.Free) / 1024
+	return int(mem.Free >> 20)
 }
 
 func getMemoryUsage() float64 {

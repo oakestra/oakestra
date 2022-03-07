@@ -6,6 +6,9 @@ import (
 	"go_node_engine/jobs"
 	"go_node_engine/model"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -19,9 +22,15 @@ func main() {
 	//binding the node MQTT client
 	interfaces.InitMqtt(handshakeResult.NodeId, *clusterAddress, handshakeResult.MqttPort)
 	//starting node status background job. One udpate every 30 seconds
-	go jobs.NodeStatusUpdater(time.Second * 30)
+	go jobs.NodeStatusUpdater(time.Second * 10)
 	//TODO: start tasks monitoring job
-
+	termination := make(chan os.Signal, 1)
+	// catch SIGETRM or SIGINTERRUPT
+	signal.Notify(termination, syscall.SIGTERM, syscall.SIGINT)
+	select {
+	case ossignal := <-termination:
+		log.Printf("Terminating the NodeEngine, signal:%v", ossignal)
+	}
 }
 
 func clusterHandshake() interfaces.HandshakeAnswer {
