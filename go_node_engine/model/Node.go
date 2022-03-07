@@ -18,7 +18,7 @@ import (
 
 type Node struct {
 	Id          string            `json:"id"`
-	Host        string            `json:"hostname"`
+	Host        string            `json:"host"`
 	Ip          string            `json:"ip"`
 	Port        string            `json:"port"`
 	SystemInfo  map[string]string `json:"system_info"`
@@ -29,6 +29,7 @@ type Node struct {
 	DiskInfo    map[string]string `json:"disk_info"`
 	NetworkInfo map[string]string `json:"network_info"`
 	GpuInfo     map[string]string `json:"gpu_info"`
+	Technology  []string          `json:"technology"`
 }
 
 var once sync.Once
@@ -42,6 +43,7 @@ func GetNodeInfo() Node {
 			SystemInfo: getSystemInfo(),
 			CpuCores:   getCpuCores(),
 			Port:       getPort(),
+			Technology: getSupportedTechnologyList(),
 		}
 	})
 	node.updateDynamicInfo()
@@ -195,4 +197,8 @@ func getPort() string {
 		port = "3000"
 	}
 	return port
+}
+
+func getSupportedTechnologyList() []string {
+	return []string{"docker"}
 }

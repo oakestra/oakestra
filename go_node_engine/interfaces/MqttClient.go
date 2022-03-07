@@ -1,8 +1,10 @@
 package interfaces
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
+	"go_node_engine/model"
 	"log"
 	"strings"
 	"time"
@@ -59,8 +61,8 @@ func InitMqtt(clientid string, brokerurl string, brokerport string) {
 	//platform's assigned client ID
 	clientID = clientid
 
-	TOPICS[fmt.Sprintf("nodes/%s/control/deploy$", clientID)] = deployHandler
-	TOPICS[fmt.Sprintf("nodes/%s/control/delete$", clientID)] = deleteHandler
+	TOPICS[fmt.Sprintf("nodes/%s/control/deploy", clientID)] = deployHandler
+	TOPICS[fmt.Sprintf("nodes/%s/control/delete", clientID)] = deleteHandler
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%s", BrokerUrl, BrokerPort))
@@ -90,8 +92,47 @@ func PublishToBroker(topic string, payload string) {
 }
 
 func deployHandler(client mqtt.Client, msg mqtt.Message) {
-	//TODO
+	log.Printf("Received deployment request with payload: %s", string(msg.Payload()))
+	service := model.Service{}
+	err := json.Unmarshal(msg.Payload(), &service)
+	if err != nil {
+		log.Printf("ERROR: unable to unmarshal cluster orch request: %v", err)
+		return
+	}
+	runtime := GetRuntime(service.Runtime)
+	err = runtime.Deploy(service)
+	service.Status = model.SERVICE_ACTIVE
+	if err != nil {
+		service.Status = model.SERVICE_FAILED
+	}
+	reportServiceStatus(service)
 }
 func deleteHandler(client mqtt.Client, msg mqtt.Message) {
-	//TODO
+	log.Printf("Received undeployment request with payload: %s", string(msg.Payload()))
+	service := model.Service{}
+	err := json.Unmarshal(msg.Payload(), &service)
+	if err != nil {
+		log.Printf("ERROR: unable to unmarshal cluster orch request: %v", err)
+		return
+	}
+	runtime := GetRuntime(service.Runtime)
+	_ = runtime.Undeploy(service.Sname)
+	service.Status = model.SERVICE_UNDEPLOYED
+	reportServiceStatus(service)
+}
+
+func reportServiceStatus(service model.Service) {
+	type ServiceStatus struct {
+		Id     string `json:"job_id"`
+		Status string `json:"status"`
+	}
+	reportStatusStruct := ServiceStatus{
+		Id:     service.JobID,
+		Status: service.Status,
+	}
+	jsonmsg, err := json.Marshal(reportStatusStruct)
+	if err != nil {
+		log.Printf("ERROR: unable to report service status: %v", err)
+	}
+	PublishToBroker("job", string(jsonmsg))
 }

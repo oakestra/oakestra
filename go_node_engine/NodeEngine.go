@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"go_node_engine/containers"
 	"go_node_engine/interfaces"
 	"go_node_engine/jobs"
 	"go_node_engine/model"
@@ -17,15 +18,23 @@ var clusterPort = flag.String("p", "10000", "Port of the cluster orchestrator")
 
 func main() {
 	flag.Parse()
+
+	//connect to container runtime
+	runtime := containers.GetContainerdClient()
+	defer runtime.StopContainerdClient()
+
 	//hadshake with the cluster orchestrator to get mqtt port and node id
 	handshakeResult := clusterHandshake()
+
 	//binding the node MQTT client
 	interfaces.InitMqtt(handshakeResult.NodeId, *clusterAddress, handshakeResult.MqttPort)
+
 	//starting node status background job. One udpate every 30 seconds
 	go jobs.NodeStatusUpdater(time.Second * 10)
 	//TODO: start tasks monitoring job
-	termination := make(chan os.Signal, 1)
+
 	// catch SIGETRM or SIGINTERRUPT
+	termination := make(chan os.Signal, 1)
 	signal.Notify(termination, syscall.SIGTERM, syscall.SIGINT)
 	select {
 	case ossignal := <-termination:
