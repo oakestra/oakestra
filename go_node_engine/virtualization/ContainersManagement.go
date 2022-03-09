@@ -10,6 +10,7 @@ import (
 	"github.com/containerd/containerd/oci"
 	"go_node_engine/logger"
 	"go_node_engine/model"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -18,6 +19,7 @@ type ContainerRuntime struct {
 	contaierClient *containerd.Client
 	killQueue      map[string]*chan bool
 	channelLock    *sync.RWMutex
+	ctx            context.Context
 }
 
 var runtime = ContainerRuntime{
@@ -25,6 +27,8 @@ var runtime = ContainerRuntime{
 }
 
 var once sync.Once
+
+const NAMESPACE = "edge.io"
 
 func GetContainerdClient() *ContainerRuntime {
 	once.Do(func() {
@@ -34,24 +38,29 @@ func GetContainerdClient() *ContainerRuntime {
 		}
 		runtime.contaierClient = client
 		runtime.killQueue = make(map[string]*chan bool)
+		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
 	})
 	return &runtime
 }
 
 func (r *ContainerRuntime) StopContainerdClient() {
-	for _, channel := range r.killQueue {
-		*channel <- true
+	r.channelLock.Lock()
+	servicesNames := reflect.ValueOf(r.killQueue).MapKeys()
+	r.channelLock.Unlock()
+
+	for _, sname := range servicesNames {
+		err := r.Undeploy(sname.String())
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", sname.String(), err)
+		}
 	}
-	time.Sleep(2 * time.Second)
 	r.contaierClient.Close()
 }
 
 func (r *ContainerRuntime) Deploy(service model.Service) error {
-	// create a context with a namespace
-	ctx := namespaces.WithNamespace(context.Background(), service.Sname)
 
 	// pull the given image
-	image, err := r.contaierClient.Pull(ctx, service.Image, containerd.WithPullUnpack)
+	image, err := r.contaierClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack)
 	if err != nil {
 		return err
 	}
@@ -73,7 +82,7 @@ func (r *ContainerRuntime) Deploy(service model.Service) error {
 
 	// create startup routine which will accompany the container through its lifetime
 	go r.containerCreationRoutine(
-		ctx,
+		r.ctx,
 		image,
 		service.Sname,
 		service.Commands,
@@ -98,6 +107,14 @@ func (r *ContainerRuntime) Undeploy(sname string) error {
 	if found && el != nil {
 		logger.InfoLogger().Printf("Sending kill signal to %s", sname)
 		*r.killQueue[sname] <- true
+		select {
+		case res := <-*r.killQueue[sname]:
+			if res == false {
+				logger.ErrorLogger().Printf("Unable to stop service %s", sname)
+			}
+		case <-time.After(5 * time.Second):
+			logger.ErrorLogger().Printf("Unable to stop service %s", sname)
+		}
 		delete(r.killQueue, sname)
 		return nil
 	}
@@ -173,14 +190,17 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		p, err := task.LoadProcess(ctx, task.ID(), nil)
 		if err != nil {
 			logger.ErrorLogger().Printf("ERROR deleting the task, LoadProcess: %v", err)
+			*killChannel <- false
 		}
 		_, err = p.Delete(ctx, containerd.WithProcessKill)
 		if err != nil {
 			logger.ErrorLogger().Printf("ERROR deleting the task, Delete: %v", err)
+			*killChannel <- false
 		}
 		container.Delete(ctx)
 		if err == nil {
 			logger.ErrorLogger().Printf("Task %s terminated", sname)
+			*killChannel <- true
 		}
 	}
 
