@@ -1,8 +1,8 @@
 package interfaces
 
 import (
-	"go_node_engine/containers"
 	"go_node_engine/model"
+	"go_node_engine/virtualization"
 )
 
 type RuntimeInterface interface {
@@ -10,9 +10,16 @@ type RuntimeInterface interface {
 	Undeploy(sname string) error
 }
 
+type RuntimeType string
+
+const (
+	CONTAINER_RUNTIME = "docker"
+	UNIKERNEL_RUNTIME = "unikernel"
+)
+
 func GetRuntime(runtime string) RuntimeInterface {
-	if runtime == "docker" {
-		return containers.GetContainerdClient()
+	if runtime == CONTAINER_RUNTIME {
+		return virtualization.GetContainerdClient()
 	}
 	return nil
 }

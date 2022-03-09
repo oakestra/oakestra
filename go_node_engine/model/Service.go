@@ -1,13 +1,14 @@
 package model
 
 type Service struct {
-	JobID    string   `json:"_id"`
-	Sname    string   `json:"job_name"`
-	Image    string   `json:"image"`
-	Commands []string `json:"commands"`
-	Port     int      `json:"port"`
-	Status   string   `json:"status"`
-	Runtime  string   `json:"image_runtime"`
+	JobID        string   `json:"_id"`
+	Sname        string   `json:"job_name"`
+	Image        string   `json:"image"`
+	Commands     []string `json:"commands"`
+	Port         int      `json:"port"`
+	Status       string   `json:"status"`
+	Runtime      string   `json:"image_runtime"`
+	StatusDetail string   `json:"status_detail"`
 }
 
 const (

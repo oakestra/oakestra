@@ -9,7 +9,7 @@ import (
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	psnet "github.com/shirou/gopsutil/net"
-	"log"
+	"go_node_engine/logger"
 	"net"
 	"os"
 	"strconv"
@@ -93,7 +93,7 @@ func getHostname() string {
 	hostname, err := os.Hostname()
 	if err != nil {
 		hostname = ""
-		log.Fatal("Unable to get Node hostname")
+		logger.ErrorLogger().Fatal("Unable to get Node hostname")
 	}
 	return hostname
 }
@@ -101,7 +101,7 @@ func getHostname() string {
 func getSystemInfo() map[string]string {
 	hostinfo, err := host.Info()
 	if err != nil {
-		log.Printf("Error: %s", err.Error())
+		logger.ErrorLogger().Printf("Error: %s", err.Error())
 		return make(map[string]string, 0)
 	}
 	sysInfo := make(map[string]string)
@@ -117,7 +117,7 @@ func getSystemInfo() map[string]string {
 func getCpuCores() int {
 	cpu, err := cpu.Counts(true)
 	if err != nil {
-		log.Printf("Error: %s", err.Error())
+		logger.ErrorLogger().Printf("Error: %s", err.Error())
 		return 0
 	}
 	return cpu
@@ -134,7 +134,7 @@ func getAvgCpuUsage() float64 {
 func getMemoryMB() int {
 	mem, err := mem.VirtualMemory()
 	if err != nil {
-		log.Printf("Error: %s", err.Error())
+		logger.ErrorLogger().Printf("Error: %s", err.Error())
 		return 0
 	}
 	return int(mem.Free >> 20)
@@ -143,7 +143,7 @@ func getMemoryMB() int {
 func getMemoryUsage() float64 {
 	mem, err := mem.VirtualMemory()
 	if err != nil {
-		log.Printf("Error: %s", err.Error())
+		logger.ErrorLogger().Printf("Error: %s", err.Error())
 		return 100
 	}
 	return mem.UsedPercent

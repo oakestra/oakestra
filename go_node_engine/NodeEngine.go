@@ -2,11 +2,11 @@ package main
 
 import (
 	"flag"
-	"go_node_engine/containers"
 	"go_node_engine/interfaces"
 	"go_node_engine/jobs"
+	"go_node_engine/logger"
 	"go_node_engine/model"
-	"log"
+	"go_node_engine/virtualization"
 	"os"
 	"os/signal"
 	"syscall"
@@ -20,7 +20,7 @@ func main() {
 	flag.Parse()
 
 	//connect to container runtime
-	runtime := containers.GetContainerdClient()
+	runtime := virtualization.GetContainerdClient()
 	defer runtime.StopContainerdClient()
 
 	//hadshake with the cluster orchestrator to get mqtt port and node id
@@ -38,21 +38,22 @@ func main() {
 	signal.Notify(termination, syscall.SIGTERM, syscall.SIGINT)
 	select {
 	case ossignal := <-termination:
-		log.Printf("Terminating the NodeEngine, signal:%v", ossignal)
+		logger.InfoLogger().Printf("Terminating the NodeEngine, signal:%v", ossignal)
 	}
 }
 
 func clusterHandshake() interfaces.HandshakeAnswer {
-	log.Printf("INIT: Starting handshake with cluster orhcestrator %s:%s", *clusterAddress, *clusterPort)
+	logger.InfoLogger().Printf("INIT: Starting handshake with cluster orhcestrator %s:%s", *clusterAddress, *clusterPort)
 	node := model.GetNodeInfo()
-	log.Printf("Node Statistics: \n__________________")
-	log.Printf("CPU Cores: %d", node.CpuCores)
-	log.Printf("CPU Usage: %f", node.CpuUsage)
-	log.Printf("Mem Usage: %f", node.MemoryUsed)
-	log.Printf("GPU Present: %t", len(node.GpuInfo) > 0)
-	log.Printf("\n________________")
+	logger.InfoLogger().Printf("Node Statistics: \n__________________")
+	logger.InfoLogger().Printf("CPU Cores: %d", node.CpuCores)
+	logger.InfoLogger().Printf("CPU Usage: %f", node.CpuUsage)
+	logger.InfoLogger().Printf("Mem Usage: %f", node.MemoryUsed)
+	logger.InfoLogger().Printf("GPU Present: %t", len(node.GpuInfo) > 0)
+	logger.InfoLogger().Printf("\n________________")
 	clusterReponse := interfaces.ClusterHandshake(*clusterAddress, *clusterPort)
-	log.Printf("Got cluster response with MQTT port %s and node ID %s", clusterReponse.MqttPort, clusterReponse.NodeId)
+	logger.InfoLogger().Printf("Got cluster response with MQTT port %s and node ID %s", clusterReponse.MqttPort, clusterReponse.NodeId)
+
 	node.SetNodeId(clusterReponse.NodeId)
 	return clusterReponse
 }

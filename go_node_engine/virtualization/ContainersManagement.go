@@ -1,4 +1,4 @@
-package containers
+package virtualization
 
 import (
 	"context"
@@ -7,15 +7,16 @@ import (
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/oci"
+	"go_node_engine/logger"
 	"go_node_engine/model"
-	"log"
 	"sync"
 	"time"
 )
 
 type ContainerRuntime struct {
 	contaierClient *containerd.Client
-	killQueue      map[string]chan bool
+	killQueue      map[string]*chan bool
 	channelLock    *sync.RWMutex
 }
 
@@ -29,17 +30,17 @@ func GetContainerdClient() *ContainerRuntime {
 	once.Do(func() {
 		client, err := containerd.New("/run/containerd/containerd.sock")
 		if err != nil {
-			log.Fatalf("Unable to start the container engine: %v\n", err)
+			logger.ErrorLogger().Fatalf("Unable to start the container engine: %v\n", err)
 		}
 		runtime.contaierClient = client
-		runtime.killQueue = make(map[string]chan bool)
+		runtime.killQueue = make(map[string]*chan bool)
 	})
 	return &runtime
 }
 
 func (r *ContainerRuntime) StopContainerdClient() {
 	for _, channel := range r.killQueue {
-		channel <- true
+		*channel <- true
 	}
 	time.Sleep(2 * time.Second)
 	r.contaierClient.Close()
@@ -55,15 +56,20 @@ func (r *ContainerRuntime) Deploy(service model.Service) error {
 		return err
 	}
 
-	killChannel := make(chan bool, 0)
+	killChannel := make(chan bool, 1)
 	startupChannel := make(chan bool, 0)
 	errorChannel := make(chan error, 0)
 
 	r.channelLock.RLock()
-	if r.killQueue[service.Sname] != nil {
-		r.killQueue[service.Sname] = killChannel
-	}
+	el, servicefound := r.killQueue[service.Sname]
 	r.channelLock.RUnlock()
+	if !servicefound || el == nil {
+		r.channelLock.Lock()
+		r.killQueue[service.Sname] = &killChannel
+		r.channelLock.Unlock()
+	} else {
+		return errors.New("Service already deployed")
+	}
 
 	// create startup routine which will accompany the container through its lifetime
 	go r.containerCreationRoutine(
@@ -74,7 +80,7 @@ func (r *ContainerRuntime) Deploy(service model.Service) error {
 		fmt.Sprintf("%d", service.Port),
 		startupChannel,
 		errorChannel,
-		killChannel,
+		&killChannel,
 	)
 
 	// wait for updates regarding the container creation
@@ -86,10 +92,13 @@ func (r *ContainerRuntime) Deploy(service model.Service) error {
 }
 
 func (r *ContainerRuntime) Undeploy(sname string) error {
-	r.channelLock.RLock()
-	defer r.channelLock.RUnlock()
-	if r.killQueue[sname] != nil {
-		r.killQueue[sname] <- true
+	r.channelLock.Lock()
+	defer r.channelLock.Unlock()
+	el, found := r.killQueue[sname]
+	if found && el != nil {
+		logger.InfoLogger().Printf("Sending kill signal to %s", sname)
+		*r.killQueue[sname] <- true
+		delete(r.killQueue, sname)
 		return nil
 	}
 	return errors.New("service not found")
@@ -103,7 +112,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	port string,
 	startup chan bool,
 	errorchan chan error,
-	killChannel chan bool,
+	killChannel *chan bool,
 ) {
 
 	// create the container
@@ -111,10 +120,13 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		ctx,
 		sname,
 		containerd.WithImage(image),
+		containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", sname), image),
+		containerd.WithNewSpec(oci.WithImageConfig(image)),
 	)
 	if err != nil {
 		startup <- false
 		errorchan <- err
+		return
 	}
 	defer container.Delete(ctx)
 
@@ -124,7 +136,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	//	start task
 	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStdio))
 	if err != nil {
-		log.Printf("ERROR: containerd deployment failed: %v", err)
+		logger.ErrorLogger().Printf("ERROR: containerd task creation failure: %v", err)
 		startup <- false
 		errorchan <- err
 		return
@@ -134,7 +146,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// get wait channel
 	exitStatusC, err := task.Wait(ctx)
 	if err != nil {
-		log.Printf("ERROR: containerd deployment failed: %v", err)
+		logger.ErrorLogger().Printf("ERROR: containerd task wait failure: %v", err)
 		startup <- false
 		errorchan <- err
 		return
@@ -142,7 +154,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 
 	// execute the image's task
 	if err := task.Start(ctx); err != nil {
-		log.Printf("ERROR: containerd deployment failed: %v", err)
+		logger.ErrorLogger().Printf("ERROR: containerd task start failure: %v", err)
 		startup <- false
 		errorchan <- err
 		return
@@ -155,10 +167,21 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	select {
 	case exitStatus := <-exitStatusC:
 		//TODO: container exited, do something, notify to cluster manager
-		log.Printf("WARNING: Container exited %v", exitStatus.Error())
-	case <-killChannel:
-		task.Delete(ctx)
-		log.Printf("Task %s terminated", sname)
+		logger.InfoLogger().Printf("WARNING: Container exited %v", exitStatus.Error())
+	case <-*killChannel:
+		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
+		p, err := task.LoadProcess(ctx, task.ID(), nil)
+		if err != nil {
+			logger.ErrorLogger().Printf("ERROR deleting the task, LoadProcess: %v", err)
+		}
+		_, err = p.Delete(ctx, containerd.WithProcessKill)
+		if err != nil {
+			logger.ErrorLogger().Printf("ERROR deleting the task, Delete: %v", err)
+		}
+		container.Delete(ctx)
+		if err == nil {
+			logger.ErrorLogger().Printf("Task %s terminated", sname)
+		}
 	}
 
 	// removing self from kill queue
