@@ -4,7 +4,6 @@ import (
 	"NetManager/events"
 	"NetManager/mqtt"
 	"errors"
-	"fmt"
 	"github.com/milosgajdos/tenus"
 	"github.com/tkanos/gonfig"
 	"log"
@@ -16,7 +15,6 @@ import (
 	"sync"
 )
 
-// Return errors
 const NamespaceAlreadyDeclared string = "namespace already declared"
 
 type EnvironmentManager interface {
@@ -25,7 +23,6 @@ type EnvironmentManager interface {
 	GetTableEntryByInstanceIP(ip net.IP) (TableEntry, bool)
 }
 
-// Config
 type Configuration struct {
 	HostBridgeName             string
 	HostBridgeIP               string
@@ -35,7 +32,6 @@ type Configuration struct {
 	Mtusize                    string
 }
 
-// env class
 type Environment struct {
 	//### Environment management variables
 	nodeNetwork       net.IPNet
@@ -68,7 +64,7 @@ type networkInterface struct {
 	namespace                string
 }
 
-// environment constructor
+// NewCustom environment constructor
 func NewCustom(proxyname string, customConfig Configuration) Environment {
 	e := Environment{
 		nameSpaces:        make([]string, 0),
@@ -147,7 +143,7 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 	return e
 }
 
-// Creates a new environment using the static configuration files
+// NewStatic Creates a new environment using the static configuration files
 func NewStatic(proxyname string) Environment {
 	log.Println("Loading config file for environment creation")
 	config := Configuration{}
@@ -159,7 +155,7 @@ func NewStatic(proxyname string) Environment {
 	return NewCustom(proxyname, config)
 }
 
-// Creates a new environment using the default configuration and asking the cluster for a new subnetwork
+// NewEnvironmentClusterConfigured Creates a new environment using the default configuration and asking the cluster for a new subnetwork
 func NewEnvironmentClusterConfigured(proxyname string) Environment {
 	log.Println("Asking the cluster for a new subnetwork")
 	subnetwork, err := mqtt.RequestSubnetworkMqttBlocking()
@@ -179,161 +175,192 @@ func NewEnvironmentClusterConfigured(proxyname string) Environment {
 	return NewCustom(proxyname, config)
 }
 
-func (env *Environment) DetachDockerContainer(containername string) {
-	ip, ok := env.deployedServices[containername]
+func (env *Environment) DetachContainer(sname string) {
+	ip, ok := env.deployedServices[sname]
 	if ok {
 		_ = env.translationTable.RemoveByNsip(ip)
-		delete(env.deployedServices, containername)
+		delete(env.deployedServices, sname)
 		env.freeContainerAddress(ip)
 	}
 }
 
-// creates a docker network compatible with the enviornment and returns it
+// ConfigureDockerNetwork creates a docker network compatible with the enviornment and returns it
 func (env *Environment) ConfigureDockerNetwork(containername string) (string, error) {
 	return "", errors.New("not yet implemented")
 }
 
-// Attach a Docker container to the bridge and the current network environment
+// AttachDockerContainer Attach a Docker container to the bridge and the current network environment
 func (env *Environment) AttachDockerContainer(containername string) (net.IP, error) {
-
-	// Retrieve current bridge
-	br, err := tenus.BridgeFromName(env.config.HostBridgeName)
+	pid, err := tenus.DockerPidByName(containername, "/var/run/docker.sock")
 	if err != nil {
 		return nil, err
 	}
+	return env.AttachNetworkToContainer(pid, containername)
+}
 
-	//create veth pair to connect the namespace to the host bridge
-	veth1name := "veth" + "00" + strconv.Itoa(env.nextVethNumber)
-	veth2name := "veth" + "01" + strconv.Itoa(env.nextVethNumber)
-	log.Println("creating veth pair: " + veth1name + "@" + veth2name)
+// AttachNetworkToContainer Attach a Docker container to the bridge and the current network environment
+func (env *Environment) AttachNetworkToContainer(pid int, sname string) (net.IP, error) {
 
-	cleanup := func() {
-		cmd := exec.Command("ip", "link", "delete", veth1name)
+	cleanup := func(vethname string) {
+		cmd := exec.Command("ip", "link", "delete", vethname)
 		_, _ = cmd.Output()
 	}
 
-	veth, err := tenus.NewVethPairWithOptions(veth1name, tenus.VethOptions{PeerName: veth2name})
+	bridgeVeth, clientVeth, vethIfce, err := env.createVethsPairAndAttachToBridge()
 	if err != nil {
-		cleanup()
-		env.nextVethNumber = env.nextVethNumber + 1
+		cleanup(bridgeVeth)
 		return nil, err
-	}
-
-	//Increasing MTUs
-	log.Println("Changing Veth1's MTU")
-	cmd := exec.Command("ip", "link", "set", "dev", veth1name, "mtu", env.mtusize)
-	_, err = cmd.Output()
-	if err != nil {
-		cleanup()
-		return nil, err
-	}
-	log.Println("Changing Veth2's MTU")
-	cmd = exec.Command("ip", "link", "set", "dev", veth2name, "mtu", env.mtusize)
-	_, err = cmd.Output()
-	if err != nil {
-		cleanup()
-		return nil, err
-	}
-
-	// add veth1 to the bridge
-	myveth01, err := net.InterfaceByName(veth1name)
-	if err != nil {
-		cleanup()
-		return nil, err
-	}
-
-	if err = br.AddSlaveIfc(myveth01); err != nil {
-		cleanup()
-		return nil, err
-	}
-
-	if err = veth.SetLinkUp(); err != nil {
-		fmt.Println(err)
 	}
 
 	// Attach veth2 to the docker container
-	log.Println("Attaching cointainer ", containername, " with custom veth ", veth2name)
-	pid, err := tenus.DockerPidByName(containername, "/var/run/docker.sock")
-	if err != nil {
-		cleanup()
-		return nil, err
-	}
-
-	if err := veth.SetPeerLinkNsPid(pid); err != nil {
-		cleanup()
+	if err := vethIfce.SetPeerLinkNsPid(pid); err != nil {
+		cleanup(bridgeVeth)
 		return nil, err
 	}
 
 	//generate a new ip for this container
 	ip, err := env.generateAddress()
 	if err != nil {
-		cleanup()
+		cleanup(bridgeVeth)
 		return nil, err
 	}
 
 	// set ip to the container veth
-	log.Println("Assigning ip ", ip.String()+env.config.HostBridgeMask, " to container ", containername)
+	log.Println("Assigning ip ", ip.String()+env.config.HostBridgeMask, " to container ")
 	vethGuestIp, vethGuestIpNet, err := net.ParseCIDR(ip.String() + env.config.HostBridgeMask)
 	if err != nil {
-		cleanup()
+		cleanup(bridgeVeth)
 		env.freeContainerAddress(ip)
 		return nil, err
 	}
 
-	if err := veth.SetPeerLinkNetInNs(pid, vethGuestIp, vethGuestIpNet, nil); err != nil {
-		cleanup()
+	if err := vethIfce.SetPeerLinkNetInNs(pid, vethGuestIp, vethGuestIpNet, nil); err != nil {
+		cleanup(bridgeVeth)
 		env.freeContainerAddress(ip)
 		return nil, err
 	}
 
-	//Add route to bridge
-	//sudo nsenter -n -t 5565 ip route add 172.16.0.0/12 via 172.18.8.193 dev veth013
-	cmd = exec.Command("nsenter", "-n", "-t", strconv.Itoa(pid), "ip", "route", "add", "172.16.0.0/12", "via", env.config.HostBridgeIP, "dev", veth2name)
-	_, err = cmd.Output()
+	//Add traffic route to bridge
+	err = env.setContainerRoutes(pid, clientVeth)
 	if err != nil {
-		log.Println("Impossible to setup route inside the netns")
-		cleanup()
+		cleanup(bridgeVeth)
 		env.freeContainerAddress(ip)
 		return nil, err
 	}
 
 	err = env.Update()
 	if err != nil {
-		cleanup()
+		cleanup(bridgeVeth)
 		env.freeContainerAddress(ip)
 		return nil, err
 	}
 
-	//Adding firewall roule
-	// iptables -A FORWARD -o goProxyBridge -i veth -j ACCEPT
-	cmd = exec.Command("iptables", "-A", "FORWARD", "-o", env.config.HostBridgeName, "-i", veth1name, "-j", "ACCEPT")
-	_, err = cmd.Output()
+	err = env.setVethFirewallRules(bridgeVeth)
 	if err != nil {
-		cleanup()
 		env.freeContainerAddress(ip)
-		return nil, err
-	}
-	cmd = exec.Command("iptables", "-A", "FORWARD", "-i", env.config.HostBridgeName, "-o", veth1name, "-j", "ACCEPT")
-	_, err = cmd.Output()
-	if err != nil {
-		cleanup()
-		env.freeContainerAddress(ip)
+		cleanup(bridgeVeth)
 		return nil, err
 	}
 
-	env.deployedServices[containername] = ip
+	env.deployedServices[sname] = ip
 
 	return ip, nil
 }
 
-// creates a new namespace and link it to the host bridge, the ip is going to be generated from the default space
+func (env *Environment) increaseVethsMtu(veth1 string, veth2 string) error {
+	log.Println("Changing Veth1's MTU")
+	cmd := exec.Command("ip", "link", "set", "dev", veth1, "mtu", env.mtusize)
+	_, err := cmd.Output()
+	if err != nil {
+		return err
+	}
+	log.Println("Changing Veth2's MTU")
+	cmd = exec.Command("ip", "link", "set", "dev", veth2, "mtu", env.mtusize)
+	_, err = cmd.Output()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+//create veth pair and connect one to the host bridge
+//returns: bridgeVeth name, free Veth name, Vether interface to the veth pair and eventually an error
+func (env *Environment) createVethsPairAndAttachToBridge() (string, string, tenus.Vether, error) {
+	// Retrieve current bridge
+	br, err := tenus.BridgeFromName(env.config.HostBridgeName)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	veth1name := "veth" + "00" + strconv.Itoa(env.nextVethNumber)
+	veth2name := "veth" + "01" + strconv.Itoa(env.nextVethNumber)
+	log.Println("creating veth pair: " + veth1name + "@" + veth2name)
+
+	veth, err := tenus.NewVethPairWithOptions(veth1name, tenus.VethOptions{PeerName: veth2name})
+	if err != nil {
+		env.nextVethNumber = env.nextVethNumber + 1
+		return "", "", nil, err
+	}
+
+	//Increasing MTUs
+	err = env.increaseVethsMtu(veth1name, veth2name)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	// add veth1 to the bridge
+	myveth01, err := net.InterfaceByName(veth1name)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	if err = br.AddSlaveIfc(myveth01); err != nil {
+		return "", "", nil, err
+	}
+
+	if err = veth.SetLinkUp(); err != nil {
+		return "", "", nil, err
+	}
+	return veth1name, veth2name, veth, nil
+}
+
+// sets the FPRWARD firewall rules for the bridge veth
+func (env *Environment) setVethFirewallRules(bridgeVethName string) error {
+	// iptables -A FORWARD -o goProxyBridge -i veth -j ACCEPT
+	cmd := exec.Command("iptables", "-A", "FORWARD", "-o", env.config.HostBridgeName, "-i", bridgeVethName, "-j", "ACCEPT")
+	_, err := cmd.Output()
+	if err != nil {
+		return err
+	}
+	cmd = exec.Command("iptables", "-A", "FORWARD", "-i", env.config.HostBridgeName, "-o", bridgeVethName, "-j", "ACCEPT")
+	_, err = cmd.Output()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// add routes inside the container namespace to forward the traffic using the bridge
+func (env *Environment) setContainerRoutes(containerPid int, containerVethName string) error {
+	//Add route to bridge
+	//sudo nsenter -n -t 5565 ip route add 172.16.0.0/12 via 172.18.8.193 dev veth013
+	cmd := exec.Command("nsenter", "-n", "-t", strconv.Itoa(containerPid), "ip", "route", "add", "172.16.0.0/12", "via", env.config.HostBridgeIP, "dev", containerVethName)
+	_, err := cmd.Output()
+	if err != nil {
+		log.Println("Impossible to setup route inside the netns")
+		return err
+	}
+	return nil
+}
+
+// CreateNetworkNamespaceNewIp creates a new namespace and link it to the host bridge, the ip is going to be generated from the default space
 func (env *Environment) CreateNetworkNamespaceNewIp(netname string) (string, error) {
 	//generate a new ip for this container
 	ip, _ := env.generateAddress()
 	return env.CreateNetworkNamespace(netname, ip)
 }
 
-// creates a new namespace and link it to the host bridge
+// CreateNetworkNamespace creates a new namespace and link it to the host bridge
 // netname: short name representative of the namespace, better if a short unique name of the service, max 10 char
 func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (string, error) {
 	//check if appName is valid
@@ -509,7 +536,7 @@ func (env *Environment) Destroy() {
 	_, _ = cmd.Output()
 }
 
-// update the env class with the current state of the machine. This method must be run always at boot
+// Update update the env class with the current state of the machine. This method must be run always at boot
 // updates current declared interfaces and namespaces
 func (env *Environment) Update() error {
 
@@ -573,7 +600,7 @@ func (env *Environment) fetchNetworkVethLinkList(namespace string) ([]networkInt
 	return result, nil
 }
 
-//create host bridge if it has not been created yet, return the current host bridge name or the newly created one
+// CreateHostBridge create host bridge if it has not been created yet, return the current host bridge name or the newly created one
 func (env *Environment) CreateHostBridge() (string, error) {
 	//check current declared bridges
 	bridgecmd := exec.Command("ip", "link", "list", "type", "bridge")
@@ -629,7 +656,7 @@ func (env *Environment) CreateHostBridge() (string, error) {
 	return env.config.HostBridgeName, nil
 }
 
-//Given a ServiceIP this method performs a search in the local ServiceCache
+// GetTableEntryByServiceIP Given a ServiceIP this method performs a search in the local ServiceCache
 //If the entry is not present a TableQuery is performed and the interest registered
 func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 	//If entry already available
@@ -658,7 +685,7 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 	return table
 }
 
-//Given a ServiceIP this method performs a search in the local ServiceCache
+// GetTableEntryByInstanceIP Given a ServiceIP this method performs a search in the local ServiceCache
 //If the entry is not present a TableQuery is performed and the interest registered
 func (env *Environment) GetTableEntryByInstanceIP(ip net.IP) (TableEntry, bool) {
 	//If entry already available
@@ -675,7 +702,7 @@ func (env *Environment) GetTableEntryByInstanceIP(ip net.IP) (TableEntry, bool) 
 	return TableEntry{}, false
 }
 
-//Given a NamespaceIP finds the table entry. This search is local because the networking component MUST have all
+// GetTableEntryByNsIP Given a NamespaceIP finds the table entry. This search is local because the networking component MUST have all
 //the entries for the local deployed services.
 func (env *Environment) GetTableEntryByNsIP(ip net.IP) (TableEntry, bool) {
 	//If entry already available
@@ -686,7 +713,7 @@ func (env *Environment) GetTableEntryByNsIP(ip net.IP) (TableEntry, bool) {
 	return entry, false
 }
 
-//Add new entry to the resolution table
+// AddTableQueryEntry Add new entry to the resolution table
 func (env *Environment) AddTableQueryEntry(entry TableEntry) {
 	_ = env.translationTable.RemoveByNsip(entry.Nsip)
 	err := env.translationTable.Add(entry)
@@ -695,7 +722,7 @@ func (env *Environment) AddTableQueryEntry(entry TableEntry) {
 	}
 }
 
-//force a table query refresh for a service
+// RefreshServiceTable force a table query refresh for a service
 func (env *Environment) RefreshServiceTable(jobname string) {
 	log.Printf("Requested table query refresh fro %s", jobname)
 	entryList, err := tableQueryByJobName(jobname)

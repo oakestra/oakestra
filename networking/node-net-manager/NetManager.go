@@ -15,8 +15,14 @@ import (
 	"strings"
 )
 
-type deployRequest struct {
+type dockerDeployRequest struct {
 	ContainerId    string `json:"containerId"`
+	AppFullName    string `json:"appName"`
+	Instancenumber int    `json:"instanceNumber"`
+}
+
+type containerDeployRequest struct {
+	Pid            int    `json:"pid"`
 	AppFullName    string `json:"appName"`
 	Instancenumber int    `json:"instanceNumber"`
 }
@@ -50,7 +56,9 @@ func handleRequests() {
 	netRouter := mux.NewRouter().StrictSlash(true)
 	netRouter.HandleFunc("/register", register).Methods("POST")
 	netRouter.HandleFunc("/docker/deploy", dockerDeploy).Methods("POST")
-	netRouter.HandleFunc("/docker/undeploy", dockerUndeploy).Methods("POST")
+	netRouter.HandleFunc("/container/deploy", containerDeploy).Methods("POST")
+	netRouter.HandleFunc("/docker/undeploy", containerUndeploy).Methods("POST")
+	netRouter.HandleFunc("/container/undeploy", containerUndeploy).Methods("POST")
 	log.Fatal(http.ListenAndServe(":10010", netRouter))
 }
 
@@ -69,7 +77,7 @@ Request Json:
 	}
 Response: 200 OK or Failure code
 */
-func dockerUndeploy(writer http.ResponseWriter, request *http.Request) {
+func containerUndeploy(writer http.ResponseWriter, request *http.Request) {
 	log.Println("Received HTTP request - /docker/undeploy ")
 
 	if WorkerID == "" {
@@ -87,12 +95,12 @@ func dockerUndeploy(writer http.ResponseWriter, request *http.Request) {
 
 	log.Println(requestStruct)
 
-	Env.DetachDockerContainer(requestStruct.Servicename)
+	Env.DetachContainer(requestStruct.Servicename)
 
 	writer.WriteHeader(http.StatusOK)
 }
 
-/*
+/* DEPRECATED
 Endpoint: /docker/deploy
 Usage: used to assign a network to a docker container. This method can be used only after the registration
 Method: POST
@@ -119,7 +127,7 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 
 	reqBody, _ := ioutil.ReadAll(request.Body)
 	log.Println("ReqBody received :", reqBody)
-	var requestStruct deployRequest
+	var requestStruct dockerDeployRequest
 	err := json.Unmarshal(reqBody, &requestStruct)
 	if err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
@@ -162,6 +170,85 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	log.Println("Response to /docker/deploy: ", response)
+
+	writer.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(writer).Encode(response)
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+/*
+Endpoint: /container/deploy
+Usage: used to assign a network to a generic container. This method can be used only after the registration
+Method: POST
+Request Json:
+	{
+		pid:string #pid of container's task
+		appName:string
+		instanceNumber:int
+	}
+Response Json:
+	{
+		serviceName:    string
+		nsAddress:  	string # address assigned to this container
+	}
+*/
+func containerDeploy(writer http.ResponseWriter, request *http.Request) {
+	log.Println("Received HTTP request - /container/deploy ")
+
+	if WorkerID == "" {
+		log.Printf("[ERROR] Node not initialized")
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	reqBody, _ := ioutil.ReadAll(request.Body)
+	log.Println("ReqBody received :", reqBody)
+	var requestStruct containerDeployRequest
+	err := json.Unmarshal(reqBody, &requestStruct)
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+	}
+
+	log.Println(requestStruct)
+
+	//get app full name
+	appCompleteName := strings.Split(requestStruct.AppFullName, ".")
+	if len(appCompleteName) != 4 {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	//attach network to the container
+	addr, err := Env.AttachNetworkToContainer(requestStruct.Pid, requestStruct.AppFullName)
+	if err != nil {
+		log.Println("[ERROR]:", err)
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	//notify net-component
+	mqtt.NotifyDeploymentStatus(
+		requestStruct.AppFullName,
+		"DEPLOYED",
+		requestStruct.Instancenumber,
+		addr.String(),
+		Configuration.NodePublicAddress,
+		Configuration.NodePublicPort,
+	)
+
+	//update internal table entry
+	Env.RefreshServiceTable(requestStruct.AppFullName)
+
+	//answer the caller
+	response := deployResponse{
+		ServiceName: requestStruct.AppFullName,
+		NsAddress:   addr.String(),
+	}
+
+	log.Println("Response to /container/deploy: ", response)
 
 	writer.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(writer).Encode(response)
