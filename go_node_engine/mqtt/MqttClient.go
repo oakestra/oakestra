@@ -1,4 +1,4 @@
-package interfaces
+package mqtt
 
 import (
 	"encoding/json"
@@ -6,6 +6,7 @@ import (
 	"github.com/eclipse/paho.mqtt.golang"
 	"go_node_engine/logger"
 	"go_node_engine/model"
+	"go_node_engine/virtualization"
 	"strings"
 	"time"
 )
@@ -66,7 +67,7 @@ func InitMqtt(clientid string, brokerurl string, brokerport string) {
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%s", BrokerUrl, BrokerPort))
-	opts.SetClientID(clientid)
+	opts.SetClientID(clientid + "-ne")
 	opts.SetUsername("")
 	opts.SetPassword("")
 	opts.SetDefaultPublishHandler(messagePubHandler)
@@ -101,7 +102,7 @@ func deployHandler(client mqtt.Client, msg mqtt.Message) {
 	}
 	//handle deployment in background
 	go func() {
-		runtime := GetRuntime(service.Runtime)
+		runtime := virtualization.GetRuntime(service.Runtime)
 		err = runtime.Deploy(service)
 		service.Status = model.SERVICE_ACTIVE
 		if err != nil {
@@ -120,7 +121,7 @@ func deleteHandler(client mqtt.Client, msg mqtt.Message) {
 		logger.ErrorLogger().Printf("ERROR: unable to unmarshal cluster orch request: %v", err)
 		return
 	}
-	runtime := GetRuntime(service.Runtime)
+	runtime := virtualization.GetRuntime(service.Runtime)
 	err = runtime.Undeploy(service.Sname)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to undeploy application: %s", err.Error())

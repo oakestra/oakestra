@@ -9,6 +9,7 @@ type Service struct {
 	Status       string   `json:"status"`
 	Runtime      string   `json:"image_runtime"`
 	StatusDetail string   `json:"status_detail"`
+	Pid          int
 }
 
 const (

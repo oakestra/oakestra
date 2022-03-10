@@ -10,6 +10,7 @@ import (
 	"github.com/containerd/containerd/oci"
 	"go_node_engine/logger"
 	"go_node_engine/model"
+	"go_node_engine/requests"
 	"reflect"
 	"sync"
 	"time"
@@ -147,9 +148,6 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 	defer container.Delete(ctx)
 
-	// attach network
-	// TODO
-
 	//	start task
 	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStdio))
 	if err != nil {
@@ -159,6 +157,18 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		return
 	}
 	defer task.Delete(ctx)
+
+	// if Overlay mode is active then attach network to the task
+	if model.GetNodeInfo().Overlay {
+		taskpid := int(task.Pid())
+		err = requests.AttachNetworkToTask(taskpid, sname, 0)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
+			startup <- false
+			errorchan <- err
+			return
+		}
+	}
 
 	// get wait channel
 	exitStatusC, err := task.Wait(ctx)
@@ -170,6 +180,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 
 	// execute the image's task
+
 	if err := task.Start(ctx); err != nil {
 		logger.ErrorLogger().Printf("ERROR: containerd task start failure: %v", err)
 		startup <- false
@@ -187,6 +198,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		logger.InfoLogger().Printf("WARNING: Container exited %v", exitStatus.Error())
 	case <-*killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
+		//detaching network
+		_ = requests.DetachNetworkFromTask(sname, 0)
+		//removing the task
 		p, err := task.LoadProcess(ctx, task.ID(), nil)
 		if err != nil {
 			logger.ErrorLogger().Printf("ERROR deleting the task, LoadProcess: %v", err)

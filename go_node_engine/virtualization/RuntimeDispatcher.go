@@ -1,8 +1,7 @@
-package interfaces
+package virtualization
 
 import (
 	"go_node_engine/model"
-	"go_node_engine/virtualization"
 )
 
 type RuntimeInterface interface {
@@ -19,7 +18,7 @@ const (
 
 func GetRuntime(runtime string) RuntimeInterface {
 	if runtime == CONTAINER_RUNTIME {
-		return virtualization.GetContainerdClient()
+		return GetContainerdClient()
 	}
 	return nil
 }

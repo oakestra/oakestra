@@ -2,10 +2,11 @@ package main
 
 import (
 	"flag"
-	"go_node_engine/interfaces"
 	"go_node_engine/jobs"
 	"go_node_engine/logger"
 	"go_node_engine/model"
+	"go_node_engine/mqtt"
+	"go_node_engine/requests"
 	"go_node_engine/virtualization"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ import (
 
 var clusterAddress = flag.String("a", "localhost", "Address of the cluster orchestrator without port")
 var clusterPort = flag.String("p", "10000", "Port of the cluster orchestrator")
+var overlayNetwork = flag.Int("n", -1, "Port of the NetManager component, if any. This enables the overlay network across nodes")
 
 func main() {
 	flag.Parse()
@@ -26,8 +28,17 @@ func main() {
 	//hadshake with the cluster orchestrator to get mqtt port and node id
 	handshakeResult := clusterHandshake()
 
+	//enable overlay network if required
+	if *overlayNetwork > 0 {
+		model.EnableOverlay(*overlayNetwork)
+		err := requests.RegisterSelfToNetworkComponent()
+		if err != nil {
+			logger.ErrorLogger().Fatalf("Unable to register to NetManager: %v", err)
+		}
+	}
+
 	//binding the node MQTT client
-	interfaces.InitMqtt(handshakeResult.NodeId, *clusterAddress, handshakeResult.MqttPort)
+	mqtt.InitMqtt(handshakeResult.NodeId, *clusterAddress, handshakeResult.MqttPort)
 
 	//starting node status background job. One udpate every 30 seconds
 	go jobs.NodeStatusUpdater(time.Second * 10)
@@ -42,7 +53,7 @@ func main() {
 	}
 }
 
-func clusterHandshake() interfaces.HandshakeAnswer {
+func clusterHandshake() requests.HandshakeAnswer {
 	logger.InfoLogger().Printf("INIT: Starting handshake with cluster orhcestrator %s:%s", *clusterAddress, *clusterPort)
 	node := model.GetNodeInfo()
 	logger.InfoLogger().Printf("Node Statistics: \n__________________")
@@ -51,9 +62,9 @@ func clusterHandshake() interfaces.HandshakeAnswer {
 	logger.InfoLogger().Printf("Mem Usage: %f", node.MemoryUsed)
 	logger.InfoLogger().Printf("GPU Present: %t", len(node.GpuInfo) > 0)
 	logger.InfoLogger().Printf("\n________________")
-	clusterReponse := interfaces.ClusterHandshake(*clusterAddress, *clusterPort)
+	clusterReponse := requests.ClusterHandshake(*clusterAddress, *clusterPort)
 	logger.InfoLogger().Printf("Got cluster response with MQTT port %s and node ID %s", clusterReponse.MqttPort, clusterReponse.NodeId)
 
-	node.SetNodeId(clusterReponse.NodeId)
+	model.SetNodeId(clusterReponse.NodeId)
 	return clusterReponse
 }

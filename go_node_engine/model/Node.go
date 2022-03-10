@@ -17,19 +17,21 @@ import (
 )
 
 type Node struct {
-	Id          string            `json:"id"`
-	Host        string            `json:"host"`
-	Ip          string            `json:"ip"`
-	Port        string            `json:"port"`
-	SystemInfo  map[string]string `json:"system_info"`
-	CpuUsage    float64           `json:"cpu"`
-	CpuCores    int               `json:"free_cores"`
-	MemoryUsed  float64           `json:"memory"`
-	MemoryMB    int               `json:"memory_free_in_MB"`
-	DiskInfo    map[string]string `json:"disk_info"`
-	NetworkInfo map[string]string `json:"network_info"`
-	GpuInfo     map[string]string `json:"gpu_info"`
-	Technology  []string          `json:"technology"`
+	Id             string            `json:"id"`
+	Host           string            `json:"host"`
+	Ip             string            `json:"ip"`
+	Port           string            `json:"port"`
+	SystemInfo     map[string]string `json:"system_info"`
+	CpuUsage       float64           `json:"cpu"`
+	CpuCores       int               `json:"free_cores"`
+	MemoryUsed     float64           `json:"memory"`
+	MemoryMB       int               `json:"memory_free_in_MB"`
+	DiskInfo       map[string]string `json:"disk_info"`
+	NetworkInfo    map[string]string `json:"network_info"`
+	GpuInfo        map[string]string `json:"gpu_info"`
+	Technology     []string          `json:"technology"`
+	Overlay        bool
+	NetManagerPort int
 }
 
 var once sync.Once
@@ -38,12 +40,12 @@ var node Node
 func GetNodeInfo() Node {
 	once.Do(func() {
 		node = Node{
-			Id:         "",
 			Host:       getHostname(),
 			SystemInfo: getSystemInfo(),
 			CpuCores:   getCpuCores(),
 			Port:       getPort(),
 			Technology: getSupportedTechnologyList(),
+			Overlay:    false,
 		}
 	})
 	node.updateDynamicInfo()
@@ -60,6 +62,11 @@ func GetDynamicInfo() Node {
 	}
 }
 
+func EnableOverlay(port int) {
+	node.Overlay = true
+	node.NetManagerPort = port
+}
+
 func (n *Node) updateDynamicInfo() {
 	n.CpuUsage = getAvgCpuUsage()
 	n.Ip = getIp()
@@ -70,8 +77,9 @@ func (n *Node) updateDynamicInfo() {
 	n.GpuInfo = getGpuInfo()
 }
 
-func (n *Node) SetNodeId(id string) {
-	n.Id = id
+func SetNodeId(id string) {
+	GetNodeInfo()
+	node.Id = id
 }
 
 func getIp() string {
