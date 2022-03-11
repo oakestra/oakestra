@@ -82,50 +82,11 @@ Run the netmanager using:
 ## Development setup
 The development setup can be used to test locally the tunneling mechanism without the use of the Cluster orchestrator. This setup requires 2 different machines namely Host1 and Host2.
 * go 1.12+ required 
-* run the setup.sh to install the dependencies on each machine 
+* run the install.sh to install the dependencies on each machine 
 
-### Host1
-use: `sudo go run testEnvironment/TwoNetnsDev1.go`
-when prompted insert the address of the current machine ( *Host 1* ) and then the address of *Host2* used to resolve the tunneling.
+### todo: start the netmanager in debug mode 
 
-This script will create the local subnetwork `172.19.1.0/24` with 2 network namespaces deployed `myapp1` and `myapp2`
-
-You can now access these namespaces with the ip utility and run inside them whatever you prefer.
-example:
-
-`sudo ip netns exec myapp1 ip a s`
-
-This command will show the current interfaces inside this namespace and the current ip address that should be `172.19.1.12`.
-
-### Host2
-use: `sudo go run testEnvironment/TwoNetnsDev2.go`
-when prompted insert the address of the current machine ( *Host 2* ) and then the address of *Host1* used to resolve the tunneling.
-
-This script will create the local subnetwork `172.19.2.0/24` with 2 network namespaces deployed `myapp1` and `myapp2`
-
-You can now access these namespaces with the ip utility and run inside them whatever you prefer.
-example:
-
-`sudo ip netns exec myapp1 ip a s`
-
-This command will show the current interfaces inside this namespace and the current ip address that should be `172.19.2.12`.
-
-### Test the setup
-
-Now try running a sample hello world flask app inside Host1/myapp1. Let's suppose we have our app.py file and that this application exposes the port 50001. 
-
-Run the flask app on Host1:
-`sudo netns exec myapp1 python3 app.py`
-
-Now on Host2 try reaching the app deployed on the Host1/myapp1
-`sudo netns exec myapp2 curl 172.19.1.12`
-
-Now let's try from Host2 to load balance between all the myapp2 instances across Host1 and Host2 using the proxy address. In this example setup the proxy address 172.30.0.0 will map to myapp1.
-`sudo netns exec myapp1 curl 172.30.0.0`
-
-If there is nothing deployed behind the myapp2 namespace you probably will only get a connection refused error. That error is sent by the linux kernel but this means that you actually reached the namesapce correctly. 
-
-### Subnetworks
+## Subnetworks
 With this default test configuration the Subnetwork hierarchy is:
 
 ###Container Network:
