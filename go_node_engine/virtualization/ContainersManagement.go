@@ -141,9 +141,10 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		startup <- false
 		errorchan <- err
 	}
+
 	//create container general oci specs
 	hostname := fmt.Sprintf("%s.instance", sname)
-	specs := []oci.SpecOpts{
+	specOpts := []oci.SpecOpts{
 		oci.WithImageConfig(image),
 		oci.WithHostHostsFile,
 		oci.WithHostname(hostname),
@@ -151,7 +152,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 	//add user defined commands
 	if len(cmd) > 0 {
-		specs = append(specs, oci.WithProcessArgs(cmd...))
+		specOpts = append(specOpts, oci.WithProcessArgs(cmd...))
 	}
 	//add resolve file with default google dns
 	resolvconfFile, err := getGoogleDNSResolveConf()
@@ -161,7 +162,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 	defer resolvconfFile.Close()
 	_ = resolvconfFile.Chmod(444)
-	specs = append(specs, withCustomResolvConf(resolvconfFile.Name()))
+	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile.Name()))
 
 	// create the container
 	container, err := r.contaierClient.NewContainer(
@@ -169,7 +170,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		sname,
 		containerd.WithImage(image),
 		containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", sname), image),
-		containerd.WithNewSpec(specs...),
+		containerd.WithNewSpec(specOpts...),
 	)
 	if err != nil {
 		revert(err)
