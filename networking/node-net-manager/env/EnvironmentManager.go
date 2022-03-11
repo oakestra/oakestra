@@ -133,6 +133,14 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 		log.Fatal(err.Error())
 	}
 
+	//Enable bridge MASQUERADING
+	log.Println("add NAT ip MASQUERADING")
+	cmd = exec.Command("iptables", "-t", "nat", "-A", "POSTROUTING", "-s", e.config.HostBridgeIP+e.config.HostBridgeMask, "-o", e.config.HostBridgeName, "-j", "MASQUERADE")
+	_, err = cmd.Output()
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
 	//update status with current network configuration
 	log.Println("Reading the current environment configuration")
 	err = e.Update()
@@ -344,7 +352,7 @@ func (env *Environment) setVethFirewallRules(bridgeVethName string) error {
 func (env *Environment) setContainerRoutes(containerPid int, containerVethName string) error {
 	//Add route to bridge
 	//sudo nsenter -n -t 5565 ip route add 172.16.0.0/12 via 172.18.8.193 dev veth013
-	cmd := exec.Command("nsenter", "-n", "-t", strconv.Itoa(containerPid), "ip", "route", "add", "172.16.0.0/12", "via", env.config.HostBridgeIP, "dev", containerVethName)
+	cmd := exec.Command("nsenter", "-n", "-t", strconv.Itoa(containerPid), "ip", "route", "add", "0.0.0.0/0", "via", env.config.HostBridgeIP, "dev", containerVethName)
 	_, err := cmd.Output()
 	if err != nil {
 		log.Println("Impossible to setup route inside the netns")

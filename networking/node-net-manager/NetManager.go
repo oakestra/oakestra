@@ -38,7 +38,7 @@ type deployResponse struct {
 }
 
 type undeployRequest struct {
-	Servicename string `json:"servicename"`
+	Servicename string `json:"serviceName"`
 }
 
 type registerRequest struct {
