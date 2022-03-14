@@ -4,12 +4,14 @@ import (
 	"NetManager/events"
 	"NetManager/mqtt"
 	"errors"
+	"fmt"
 	"github.com/milosgajdos/tenus"
 	"github.com/tkanos/gonfig"
 	"log"
 	"net"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,14 +44,20 @@ type Environment struct {
 	config            Configuration
 	translationTable  TableManager
 	//### Deployment management variables
-	deployedServices map[string]net.IP //all the deployed services with the ip
-	nextContainerIP  net.IP            //next address for the next container to be deployed
-	totNextAddr      int               //number of addresses currently generated, max 62
-	addrCache        []net.IP          //Cache used to store the free addresses available for new containers
+	deployedServices map[string]service //all the deployed services with the ip and ports
+	nextContainerIP  net.IP             //next address for the next container to be deployed
+	totNextAddr      int                //number of addresses currently generated, max 62
+	addrCache        []net.IP           //Cache used to store the free addresses available for new containers
 	//### Communication variables
 	clusterPort string
 	clusterAddr string
 	mtusize     string
+}
+
+type service struct {
+	ip          net.IP
+	sname       string
+	portmapping map[int]int
 }
 
 // current network interfaces in the system
@@ -64,6 +72,13 @@ type networkInterface struct {
 	namespace                string
 }
 
+type PortOperation string
+
+const (
+	OpenPorts  PortOperation = "-A"
+	ClosePorts PortOperation = "-D"
+)
+
 // NewCustom environment constructor
 func NewCustom(proxyname string, customConfig Configuration) Environment {
 	e := Environment{
@@ -76,7 +91,7 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 		nextContainerIP:   nextIP(net.ParseIP(customConfig.HostBridgeIP), 1),
 		totNextAddr:       1,
 		addrCache:         make([]net.IP, 0),
-		deployedServices:  make(map[string]net.IP, 0),
+		deployedServices:  make(map[string]service, 0),
 		clusterAddr:       os.Getenv("CLUSTER_MANAGER_IP"),
 		clusterPort:       os.Getenv("CLUSTER_MANAGER_PORT"),
 		mtusize:           customConfig.Mtusize,
@@ -100,46 +115,18 @@ func NewCustom(proxyname string, customConfig Configuration) Environment {
 	}
 	e.nextVethNumber = 0
 
-	//enable IP forwarding
-	log.Println("enabling IP forwarding")
-	cmd := exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1")
-	_, err = cmd.Output()
-	if err != nil {
-		log.Fatal(err.Error())
-	}
+	//flush current nat rules
+	//iptables -F -t nat -v
+	iptableFlushAll()
 
 	//disable reverse path filtering
-	cmd = exec.Command("echo", "0", ">", "/proc/sys/net/ipv4/conf/"+e.config.ConnectedInternetInterface+"/rp_filter")
-	_, err = cmd.Output()
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	cmd = exec.Command("echo", "0", ">", "/proc/sys/net/ipv4/conf/"+e.config.HostBridgeName+"/rp_filter")
-	_, err = cmd.Output()
-	if err != nil {
-		log.Fatal(err.Error())
-	}
+	disableReversePathFiltering(e.config.HostBridgeName)
 
 	//Enable tun device forwarding
-	log.Println("enabling tun device forwarding")
-	cmd = exec.Command("iptables", "-A", "FORWARD", "-i", e.config.HostBridgeName, "-o", proxyname, "-j", "ACCEPT")
-	_, err = cmd.Output()
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	cmd = exec.Command("iptables", "-A", "FORWARD", "-o", e.config.HostBridgeName, "-i", proxyname, "-j", "ACCEPT")
-	_, err = cmd.Output()
-	if err != nil {
-		log.Fatal(err.Error())
-	}
+	enableForwarding(e.config.HostBridgeName, proxyname)
 
 	//Enable bridge MASQUERADING
-	log.Println("add NAT ip MASQUERADING")
-	cmd = exec.Command("iptables", "-t", "nat", "-A", "POSTROUTING", "-s", e.config.HostBridgeIP+e.config.HostBridgeMask, "-o", e.config.HostBridgeName, "-j", "MASQUERADE")
-	_, err = cmd.Output()
-	if err != nil {
-		log.Fatal(err.Error())
-	}
+	enableMasquerading(e.config.HostBridgeIP, e.config.HostBridgeMask, e.config.HostBridgeName)
 
 	//update status with current network configuration
 	log.Println("Reading the current environment configuration")
@@ -184,11 +171,12 @@ func NewEnvironmentClusterConfigured(proxyname string) Environment {
 }
 
 func (env *Environment) DetachContainer(sname string) {
-	ip, ok := env.deployedServices[sname]
+	s, ok := env.deployedServices[sname]
 	if ok {
-		_ = env.translationTable.RemoveByNsip(ip)
+		_ = env.translationTable.RemoveByNsip(s.ip)
 		delete(env.deployedServices, sname)
-		env.freeContainerAddress(ip)
+		env.freeContainerAddress(s.ip)
+		env.manageContainerPorts(s.ip.String(), s.portmapping, ClosePorts)
 	}
 }
 
@@ -203,11 +191,11 @@ func (env *Environment) AttachDockerContainer(containername string) (net.IP, err
 	if err != nil {
 		return nil, err
 	}
-	return env.AttachNetworkToContainer(pid, containername)
+	return env.AttachNetworkToContainer(pid, containername, nil)
 }
 
 // AttachNetworkToContainer Attach a Docker container to the bridge and the current network environment
-func (env *Environment) AttachNetworkToContainer(pid int, sname string) (net.IP, error) {
+func (env *Environment) AttachNetworkToContainer(pid int, sname string, portmapping map[int]int) (net.IP, error) {
 
 	cleanup := func(vethname string) {
 		cmd := exec.Command("ip", "link", "delete", vethname)
@@ -249,29 +237,36 @@ func (env *Environment) AttachNetworkToContainer(pid int, sname string) (net.IP,
 	}
 
 	//Add traffic route to bridge
-	err = env.setContainerRoutes(pid, clientVeth)
-	if err != nil {
+	if err = env.setContainerRoutes(pid, clientVeth); err != nil {
 		cleanup(bridgeVeth)
 		env.freeContainerAddress(ip)
 		return nil, err
 	}
 
-	err = env.Update()
-	if err != nil {
+	if err = env.Update(); err != nil {
 		cleanup(bridgeVeth)
 		env.freeContainerAddress(ip)
 		return nil, err
 	}
 
-	err = env.setVethFirewallRules(bridgeVeth)
-	if err != nil {
+	if err = env.setVethFirewallRules(bridgeVeth); err != nil {
 		env.freeContainerAddress(ip)
 		cleanup(bridgeVeth)
 		return nil, err
 	}
 
-	env.deployedServices[sname] = ip
+	if err = env.manageContainerPorts(ip.String(), portmapping, OpenPorts); err != nil {
+		debug.PrintStack()
+		env.freeContainerAddress(ip)
+		cleanup(bridgeVeth)
+		return nil, err
+	}
 
+	env.deployedServices[sname] = service{
+		ip:          ip,
+		sname:       sname,
+		portmapping: portmapping,
+	}
 	return ip, nil
 }
 
@@ -351,7 +346,7 @@ func (env *Environment) setVethFirewallRules(bridgeVethName string) error {
 // add routes inside the container namespace to forward the traffic using the bridge
 func (env *Environment) setContainerRoutes(containerPid int, containerVethName string) error {
 	//Add route to bridge
-	//sudo nsenter -n -t 5565 ip route add 172.16.0.0/12 via 172.18.8.193 dev veth013
+	//sudo nsenter -n -t 5565 ip route add 0.0.0.0/0 via 172.18.8.193 dev veth013
 	cmd := exec.Command("nsenter", "-n", "-t", strconv.Itoa(containerPid), "ip", "route", "add", "0.0.0.0/0", "via", env.config.HostBridgeIP, "dev", containerVethName)
 	_, err := cmd.Output()
 	if err != nil {
@@ -765,6 +760,23 @@ func (env *Environment) generateAddress() (net.IP, error) {
 
 func (env *Environment) freeContainerAddress(ip net.IP) {
 	env.addrCache = append(env.addrCache, ip)
+}
+
+func (env *Environment) manageContainerPorts(localContainerAddress string, portmapping map[int]int, operation PortOperation) error {
+	if portmapping != nil {
+		for hostport, containerport := range portmapping {
+			sport := strconv.Itoa(hostport)
+			destination := fmt.Sprintf("%s:%d", localContainerAddress, containerport)
+			openPortCmd := exec.Command("iptables", "-t", "nat", string(operation), "PREROUTING", "-p", "tcp", "--dport", sport, "-j", "DNAT", "--to-destination", destination)
+			status, err := openPortCmd.Output()
+			if err != nil {
+				log.Printf("ERROR: %s\n", string(status))
+				return err
+			}
+			log.Printf("Changed port %s status toward destination %s\n", sport, destination)
+		}
+	}
+	return nil
 }
 
 //Given an ipv4, gives the next IP
