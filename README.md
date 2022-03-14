@@ -42,7 +42,7 @@ The latest version of the NodeEngine supportes containerd instead of Docker as c
 - port 10000, 10010 and 50103 available
 
 1) First you need to install the go Node Engine. Download the latest relase and use the command `./install <architecture>`. Architecture can be arm or amd64.
-2) Run the node engine: `sudo NodeEngine -a <cluster orchestrator address> -n <network component port, if any>`. If you specifcy a network component port, the node will start in overlay mode, enabling the networking across the deployed application. In order to do so, you need to have the EdgeIO NetManager component installed on your worker node ([EdgeIONet](https://github.com/edgeIO/edgeionet))
+2) Run the node engine: `sudo NodeEngine -a <cluster orchestrator address> -n <network component port, if any. default NetManager port is 10010>`. If you specifcy a network component port, the node will start in overlay mode, enabling the networking across the deployed application. In order to do so, you need to have the EdgeIO NetManager component installed on your worker node ([EdgeIONet](https://github.com/edgeIO/edgeionet))
 3) Use NodeEngine -h for further details
 
 # Application Deployment
