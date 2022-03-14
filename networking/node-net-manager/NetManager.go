@@ -22,9 +22,10 @@ type dockerDeployRequest struct {
 }
 
 type containerDeployRequest struct {
-	Pid            int    `json:"pid"`
-	AppFullName    string `json:"appName"`
-	Instancenumber int    `json:"instanceNumber"`
+	Pid            int         `json:"pid"`
+	ServiceName    string      `json:"serviceName"`
+	Instancenumber int         `json:"instanceNumber"`
+	PortMappings   map[int]int `json:"portMappings"`
 }
 
 type sip struct {
@@ -188,6 +189,7 @@ Request Json:
 		pid:string #pid of container's task
 		appName:string
 		instanceNumber:int
+		portMapppings: map[int]int (host port, container port)
 	}
 Response Json:
 	{
@@ -215,14 +217,14 @@ func containerDeploy(writer http.ResponseWriter, request *http.Request) {
 	log.Println(requestStruct)
 
 	//get app full name
-	appCompleteName := strings.Split(requestStruct.AppFullName, ".")
+	appCompleteName := strings.Split(requestStruct.ServiceName, ".")
 	if len(appCompleteName) != 4 {
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	//attach network to the container
-	addr, err := Env.AttachNetworkToContainer(requestStruct.Pid, requestStruct.AppFullName)
+	addr, err := Env.AttachNetworkToContainer(requestStruct.Pid, requestStruct.ServiceName, requestStruct.PortMappings)
 	if err != nil {
 		log.Println("[ERROR]:", err)
 		writer.WriteHeader(http.StatusBadRequest)
@@ -231,7 +233,7 @@ func containerDeploy(writer http.ResponseWriter, request *http.Request) {
 
 	//notify net-component
 	mqtt.NotifyDeploymentStatus(
-		requestStruct.AppFullName,
+		requestStruct.ServiceName,
 		"DEPLOYED",
 		requestStruct.Instancenumber,
 		addr.String(),
@@ -240,11 +242,11 @@ func containerDeploy(writer http.ResponseWriter, request *http.Request) {
 	)
 
 	//update internal table entry
-	Env.RefreshServiceTable(requestStruct.AppFullName)
+	Env.RefreshServiceTable(requestStruct.ServiceName)
 
 	//answer the caller
 	response := deployResponse{
-		ServiceName: requestStruct.AppFullName,
+		ServiceName: requestStruct.ServiceName,
 		NsAddress:   addr.String(),
 	}
 
