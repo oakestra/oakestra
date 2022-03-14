@@ -10,7 +10,7 @@ MONGO_ADDR_NODES = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/nod
 MONGO_ADDR_JOBS = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/jobs'
 
 
-NODES_FRESHNESS_INTERVAL = 60
+NODES_FRESHNESS_INTERVAL = 15
 
 mongo_nodes = None
 mongo_jobs = None
