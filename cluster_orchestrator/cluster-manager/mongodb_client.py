@@ -33,7 +33,7 @@ def mongo_init(flask_app):
 def mongo_upsert_node(obj):
     global app, mongo_nodes
     app.logger.info("MONGODB - upserting node...")
-    json_node_info = json.loads(obj['node_info'])
+    json_node_info = obj['node_info']
     node_info_hostname = json_node_info.get('host')
 
     nodes = mongo_nodes.db.nodes
@@ -116,10 +116,10 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
         # if it is not older than TIME_INTERVAL
         try:
             if n.get('last_modified_timestamp') >= (datetime.now().timestamp() - TIME_INTERVAL):
-                cumulative_cpu += n.get('current_cpu_percent', default=0)
-                cumulative_cpu_cores += n.get('current_cpu_cores_free', default=0)
-                cumulative_memory += n.get('current_memory_percent', default=0)
-                cumulative_memory_in_mb += n.get('current_free_memory_in_MB', default=0)
+                cumulative_cpu += n.get('current_cpu_percent', 0)
+                cumulative_cpu_cores += n.get('current_cpu_cores_free', 0)
+                cumulative_memory += n.get('current_memory_percent', 0)
+                cumulative_memory_in_mb += n.get('current_free_memory_in_MB', 0)
                 number_of_active_nodes += 1
                 for t in n.get('node_info').get('technology'):
                     technology.append(t) if t not in technology else technology
