@@ -16,6 +16,8 @@ import (
 	"io/ioutil"
 	"os"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -91,7 +93,7 @@ func (r *ContainerRuntime) Deploy(service model.Service) error {
 		image,
 		service.Sname,
 		service.Commands,
-		fmt.Sprintf("%d", service.Port),
+		service.Ports,
 		startupChannel,
 		errorChannel,
 		&killChannel,
@@ -140,6 +142,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	revert := func(err error) {
 		startup <- false
 		errorchan <- err
+		r.channelLock.Lock()
+		defer r.channelLock.Unlock()
+		r.killQueue[sname] = nil
 	}
 
 	//create container general oci specs
@@ -176,21 +181,35 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		revert(err)
 		return
 	}
-	defer container.Delete(ctx)
 
 	//	start task
 	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStdio))
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR: containerd task creation failure: %v", err)
+		_ = container.Delete(ctx)
 		revert(err)
 		return
 	}
-	defer task.Delete(ctx)
+	defer func(ctx context.Context, task containerd.Task) {
+		_ = killTask(ctx, task, container, killChannel)
+		//removing from killqueue
+		r.channelLock.Lock()
+		defer r.channelLock.Unlock()
+		r.killQueue[sname] = nil
+	}(ctx, task)
+
+	//create port mappings map
+	portMappings, err := createPortMappings(port)
+	if err != nil {
+		logger.ErrorLogger().Printf("Invalid port mappings %v", err)
+		revert(err)
+		return
+	}
 
 	// if Overlay mode is active then attach network to the task
 	if model.GetNodeInfo().Overlay {
 		taskpid := int(task.Pid())
-		err = requests.AttachNetworkToTask(taskpid, sname, 0)
+		err = requests.AttachNetworkToTask(taskpid, sname, 0, portMappings)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
 			revert(err)
@@ -225,28 +244,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
 		//detaching network
 		_ = requests.DetachNetworkFromTask(sname, 0)
-		//removing the task
-		p, err := task.LoadProcess(ctx, task.ID(), nil)
-		if err != nil {
-			logger.ErrorLogger().Printf("ERROR deleting the task, LoadProcess: %v", err)
-			*killChannel <- false
-		}
-		_, err = p.Delete(ctx, containerd.WithProcessKill)
-		if err != nil {
-			logger.ErrorLogger().Printf("ERROR deleting the task, Delete: %v", err)
-			*killChannel <- false
-		}
-		container.Delete(ctx)
-		if err == nil {
-			logger.ErrorLogger().Printf("Task %s terminated", sname)
-			*killChannel <- true
-		}
 	}
-
-	// removing self from kill queue
-	r.channelLock.Lock()
-	defer r.channelLock.Unlock()
-	r.killQueue[sname] = nil
 }
 
 func withCustomResolvConf(src string) func(context.Context, oci.Client, *containers.Container, *oci.Spec) error {
@@ -273,4 +271,42 @@ func getGoogleDNSResolveConf() (*os.File, error) {
 		return nil, err
 	}
 	return file, err
+}
+
+func killTask(ctx context.Context, task containerd.Task, container containerd.Container, killChannel *chan bool) error {
+	//removing the task
+	p, err := task.LoadProcess(ctx, task.ID(), nil)
+	if err != nil {
+		logger.ErrorLogger().Printf("ERROR deleting the task, LoadProcess: %v", err)
+		*killChannel <- false
+	}
+	_, err = p.Delete(ctx, containerd.WithProcessKill)
+	if err != nil {
+		logger.ErrorLogger().Printf("ERROR deleting the task, Delete: %v", err)
+		*killChannel <- false
+	}
+	_, _ = task.Delete(ctx)
+	_ = container.Delete(ctx)
+
+	logger.ErrorLogger().Printf("Task %s terminated", task.ID())
+	*killChannel <- true
+	return nil
+}
+
+func createPortMappings(ports string) (map[int]int, error) {
+	portMappings := make(map[int]int, 0)
+	mappings := strings.Split(ports, ";")
+	for _, portmap := range mappings {
+		ports := strings.Split(portmap, ":")
+		hostPort, err := strconv.Atoi(ports[0])
+		containerPort := hostPort
+		if len(ports) > 1 && err == nil {
+			containerPort, err = strconv.Atoi(ports[1])
+		}
+		if err != nil {
+			return nil, err
+		}
+		portMappings[hostPort] = containerPort
+	}
+	return portMappings, nil
 }

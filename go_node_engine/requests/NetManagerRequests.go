@@ -14,16 +14,18 @@ type registerRequest struct {
 }
 
 type connectNetworkRequest struct {
-	Pid            int    `json:"pid"`
-	Appname        string `json:"appName"`
-	Instancenumber int    `json:"instanceNumber"`
+	Pid            int         `json:"pid"`
+	Servicename    string      `json:"serviceName"`
+	Instancenumber int         `json:"instanceNumber"`
+	PortMappings   map[int]int `json:"PortMappings"`
 }
 
-func AttachNetworkToTask(pid int, appname string, instance int) error {
+func AttachNetworkToTask(pid int, servicename string, instance int, portMappings map[int]int) error {
 	request := connectNetworkRequest{
 		Pid:            pid,
-		Appname:        appname,
+		Servicename:    servicename,
 		Instancenumber: instance,
+		PortMappings:   portMappings,
 	}
 	jsonReq, err := json.Marshal(request)
 	if err != nil {
@@ -44,10 +46,10 @@ func AttachNetworkToTask(pid int, appname string, instance int) error {
 	return nil
 }
 
-func DetachNetworkFromTask(appname string, instance int) error {
+func DetachNetworkFromTask(servicename string, instance int) error {
 	request := connectNetworkRequest{
 		Pid:            -1,
-		Appname:        appname,
+		Servicename:    servicename,
 		Instancenumber: instance,
 	}
 	jsonReq, err := json.Marshal(request)

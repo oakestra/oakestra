@@ -5,7 +5,7 @@ type Service struct {
 	Sname        string   `json:"job_name"`
 	Image        string   `json:"image"`
 	Commands     []string `json:"commands"`
-	Port         int      `json:"port"`
+	Ports        string   `json:"port"`
 	Status       string   `json:"status"`
 	Runtime      string   `json:"image_runtime"`
 	StatusDetail string   `json:"status_detail"`
