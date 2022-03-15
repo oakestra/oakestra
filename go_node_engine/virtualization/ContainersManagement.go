@@ -9,7 +9,6 @@ import (
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
-	"github.com/containerd/containerd/snapshots/storage"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/struCoder/pidusage"
 	"go_node_engine/logger"
@@ -49,6 +48,7 @@ func GetContainerdClient() *ContainerRuntime {
 		runtime.contaierClient = client
 		runtime.killQueue = make(map[string]*chan bool)
 		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
+		runtime.forceContainerCleanup()
 	})
 	return &runtime
 }
@@ -192,11 +192,16 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		return
 	}
 	defer func(ctx context.Context, task containerd.Task) {
-		_ = killTask(ctx, task, container, killChannel)
+		err := killTask(ctx, task, container)
 		//removing from killqueue
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
 		r.killQueue[service.Sname] = nil
+		if err != nil {
+			*killChannel <- false
+		} else {
+			*killChannel <- true
+		}
 	}(ctx, task)
 
 	//create port mappings map
@@ -258,23 +263,29 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 			case <-time.After(every):
 				deployedContainers, err := r.contaierClient.Containers(r.ctx)
 				if err != nil {
-					logger.ErrorLogger().Printf("Unable to fetch running containers")
+					logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 				}
 				resourceList := make([]model.Resources, 0)
 				for _, container := range deployedContainers {
 					task, err := container.Task(r.ctx, nil)
 					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container task")
+						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
 						continue
 					}
 					sysInfo, err := pidusage.GetStat(int(task.Pid()))
 					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch task info")
+						logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
 						continue
 					}
-					_, _, usage, err := storage.GetInfo(r.ctx, fmt.Sprintf("%s-snapshotter", task.ID()))
+					containerMetadata, err := container.Info(r.ctx)
 					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch task disk usage")
+						logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
+						continue
+					}
+					currentsnapshotter := r.contaierClient.SnapshotService(containerd.DefaultSnapshotter)
+					usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
+					if err != nil {
+						logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
 						continue
 					}
 					resourceList = append(resourceList, model.Resources{
@@ -289,6 +300,26 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 			}
 		}
 	})
+}
+
+func (r *ContainerRuntime) forceContainerCleanup() {
+	deployedContainers, err := r.contaierClient.Containers(r.ctx)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
+	}
+	for _, container := range deployedContainers {
+		logger.InfoLogger().Printf("Clenaning up container: %s", container.ID())
+		task, err := container.Task(r.ctx, nil)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+			continue
+		}
+		err = killTask(r.ctx, task, container)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to fetch kill task: %v", err)
+			continue
+		}
+	}
 }
 
 func withCustomResolvConf(src string) func(context.Context, oci.Client, *containers.Container, *oci.Spec) error {
@@ -317,23 +348,22 @@ func getGoogleDNSResolveConf() (*os.File, error) {
 	return file, err
 }
 
-func killTask(ctx context.Context, task containerd.Task, container containerd.Container, killChannel *chan bool) error {
+func killTask(ctx context.Context, task containerd.Task, container containerd.Container) error {
 	//removing the task
 	p, err := task.LoadProcess(ctx, task.ID(), nil)
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR deleting the task, LoadProcess: %v", err)
-		*killChannel <- false
+		return err
 	}
 	_, err = p.Delete(ctx, containerd.WithProcessKill)
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR deleting the task, Delete: %v", err)
-		*killChannel <- false
+		return err
 	}
 	_, _ = task.Delete(ctx)
 	_ = container.Delete(ctx)
 
 	logger.ErrorLogger().Printf("Task %s terminated", task.ID())
-	*killChannel <- true
 	return nil
 }
 

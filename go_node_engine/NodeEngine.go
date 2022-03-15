@@ -49,7 +49,7 @@ func main() {
 
 	// catch SIGETRM or SIGINTERRUPT
 	termination := make(chan os.Signal, 1)
-	signal.Notify(termination, syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(termination, syscall.SIGTERM, syscall.SIGINT, syscall.SIGKILL)
 	select {
 	case ossignal := <-termination:
 		logger.InfoLogger().Printf("Terminating the NodeEngine, signal:%v", ossignal)
