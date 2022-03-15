@@ -16,6 +16,11 @@ import (
 	"sync"
 )
 
+const (
+	CONTAINER_RUNTIME = "docker"
+	UNIKERNEL_RUNTIME = "unikernel"
+)
+
 type Node struct {
 	Id             string            `json:"id"`
 	Host           string            `json:"host"`
@@ -208,5 +213,5 @@ func getPort() string {
 }
 
 func getSupportedTechnologyList() []string {
-	return []string{"docker"}
+	return []string{CONTAINER_RUNTIME}
 }

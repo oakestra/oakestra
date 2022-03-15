@@ -12,6 +12,13 @@ type Service struct {
 	Pid          int
 }
 
+type Resources struct {
+	Cpu    string `json:"cpu"`
+	Memory string `json:"memory"`
+	Disk   string `json:"disk"`
+	Sname  string `json:"sname"`
+}
+
 const (
 	SERVICE_ACTIVE     = "ACTIVE"
 	SERVICE_CREATING   = "CREATING"

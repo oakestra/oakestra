@@ -1,23 +1,24 @@
 package jobs
 
 import (
-	"encoding/json"
-	"go_node_engine/logger"
 	"go_node_engine/model"
-	"go_node_engine/mqtt"
+	"sync"
 	"time"
 )
 
-func NodeStatusUpdater(cadence time.Duration) {
+var once sync.Once
+
+func NodeStatusUpdater(cadence time.Duration, statusUpdateHandler func(node model.Node)) {
+	once.Do(func() {
+		go updateRoutine(cadence, statusUpdateHandler)
+	})
+}
+
+func updateRoutine(cadence time.Duration, statusUpdateHandler func(node model.Node)) {
 	for true {
 		select {
 		case <-time.After(cadence):
-			data, err := json.Marshal(model.GetDynamicInfo())
-			if err != nil {
-				logger.ErrorLogger().Printf("ERROR: error gathering ndoe info")
-				continue
-			}
-			mqtt.PublishToBroker("information", string(data))
+			statusUpdateHandler(model.GetDynamicInfo())
 		}
 	}
 }

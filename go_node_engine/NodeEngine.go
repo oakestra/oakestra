@@ -18,6 +18,8 @@ var clusterAddress = flag.String("a", "localhost", "Address of the cluster orche
 var clusterPort = flag.String("p", "10000", "Port of the cluster orchestrator")
 var overlayNetwork = flag.Int("n", -1, "Port of the NetManager component, if any. This enables the overlay network across nodes")
 
+const MONITORING_CYCLE = time.Second * 10
+
 func main() {
 	flag.Parse()
 
@@ -40,9 +42,10 @@ func main() {
 	//binding the node MQTT client
 	mqtt.InitMqtt(handshakeResult.NodeId, *clusterAddress, handshakeResult.MqttPort)
 
-	//starting node status background job. One udpate every 30 seconds
-	go jobs.NodeStatusUpdater(time.Second * 10)
-	//TODO: start tasks monitoring job
+	//starting node status background job.
+	jobs.NodeStatusUpdater(MONITORING_CYCLE, mqtt.ReportNodeInformation)
+	//starting container resources background monitor.
+	jobs.StartServicesMonitoring(MONITORING_CYCLE, mqtt.ReportServiceResources)
 
 	// catch SIGETRM or SIGINTERRUPT
 	termination := make(chan os.Signal, 1)
