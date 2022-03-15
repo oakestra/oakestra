@@ -205,6 +205,16 @@ def mongo_update_job_status(job_id, status, node):
 def mongo_update_job_deployed(job_id, status, node_id):
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
-    instance_list = job['instance_list']
     return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
-                                         {'$set': {'status': status, 'instance_list': instance_list}})
+                                         {'$set': {'status': status}})
+
+
+def mongo_update_service_resources(sname, service, instance=0):
+    global mongo_jobs
+    job = mongo_jobs.db.jobs.find_one({'job_name': sname})
+    instance_list = job['instance_list']
+    instance_list[0]["cpu"] = service.get("cpu")
+    instance_list[0]["memory"] = service.get("cpu")
+    instance_list[0]["disk"] = service.get("cpu")
+    return mongo_jobs.db.jobs.update_one({'job_name': sname},
+                                         {'$set': {'instance_list': instance_list}})

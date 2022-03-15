@@ -4,7 +4,8 @@ import json
 from datetime import datetime
 
 from flask_mqtt import Mqtt
-from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem, mongo_update_job_deployed, mongo_find_job_by_id
+from mongodb_client import mongo_find_node_by_id_and_update_cpu_mem, mongo_update_job_deployed, mongo_find_job_by_id, \
+    mongo_update_service_resources
 
 mqtt = None
 app = None
@@ -25,6 +26,7 @@ def mqtt_init(flask_app):
         app.logger.info("MQTT - Connected to MQTT Broker")
         mqtt.subscribe('nodes/+/information')
         mqtt.subscribe('nodes/+/job')
+        mqtt.subscribe('nodes/+/jobs/resources')
 
     @mqtt.on_log()
     def handle_logging(client, userdata, level, buf):
@@ -44,6 +46,7 @@ def mqtt_init(flask_app):
 
         re_nodes_information_topic = re.search("^nodes/.*/information$", topic)
         re_job_deployment_topic = re.search("^nodes/.*/job$", topic)
+        re_job_resources_topic = re.search("^nodes/.*/jobs/resources$", topic)
 
         topic_split = topic.split('/')
         client_id = topic_split[1]
@@ -60,6 +63,16 @@ def mqtt_init(flask_app):
             job_id = payload.get('job_id')
             status = payload.get('status')
             mongo_update_job_deployed(job_id, status, client_id)
+        if re_job_resources_topic is not None:
+            services = payload.get('services')
+            for service in services:
+                try:
+                    mongo_update_service_resources(service.get("sname"), service)
+                except Exception as e:
+                    app.logger.error('MQTT - unable to update service resources')
+                    app.logger.error(e)
+
+
 
 
 def mqtt_publish_edge_deploy(worker_id, job):
