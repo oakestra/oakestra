@@ -10,7 +10,16 @@ The networking component resembles the multi-layer architecture of EdgeIO with t
 This networking component creates a semantic addressing space where the IP addresses not only represent the final destination for a packet
 but also enforces a balancing policy.
 
-Please refer to our documentation.
+## Prerequisites
+
+- Linux OS with
+  - iptable
+  - ip util
+- port 10010   
+
+## Installation
+
+Download the NetManager package, install it using `./install.sh <architecture>` and then execute it using `sudo NetManager`
 
 ## Semantic addressing (ServiceIPs)
 
