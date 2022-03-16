@@ -64,7 +64,7 @@ def get_service_instances(name=None, ip=None, cluster_ip=None):
 
     # route interest registration for this route
     mongodb_requests.mongo_register_cluster_job_interest(cluster.get("cluster_id"), job.get("job_name"))
-
+    job["_id"] = str(job["_id"])
     return job, 200
 
 
