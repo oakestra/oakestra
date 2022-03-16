@@ -172,7 +172,7 @@ def mongo_get_job_status(job_id):
 def mongo_update_job_status(job_id, status, instances=None):
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
-    instance_list = job['instance_list']
+    instance_list = job.get('instance_list')
     if instances is not None:
         for instance in instances:
             instance_num = instance['instance_number']

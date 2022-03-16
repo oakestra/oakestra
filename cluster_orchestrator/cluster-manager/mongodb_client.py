@@ -167,7 +167,7 @@ def mongo_find_job_by_id(id):
 def mongo_find_all_jobs():
     global mongo_jobs
     # list (= going into RAM) okey for small result sets (not clean for large data sets!)
-    return list(mongo_jobs.db.jobs.find({}, {'_id': 0, 'system_job_id': 1, 'status': 1}))
+    return list(mongo_jobs.db.jobs.find({}, {'_id': 0, 'system_job_id': 1, 'status': 1, 'instance_list': 1}))
 
 
 def mongo_find_job_by_name(job_name):
@@ -213,8 +213,8 @@ def mongo_update_service_resources(sname, service, instance=0):
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'job_name': sname})
     instance_list = job['instance_list']
-    instance_list[0]["cpu"] = service.get("cpu")
-    instance_list[0]["memory"] = service.get("cpu")
-    instance_list[0]["disk"] = service.get("cpu")
+    instance_list[instance]["cpu"] = service.get("cpu")
+    instance_list[instance]["memory"] = service.get("memory")
+    instance_list[instance]["disk"] = service.get("disk")
     return mongo_jobs.db.jobs.update_one({'job_name': sname},
                                          {'$set': {'instance_list': instance_list}})
