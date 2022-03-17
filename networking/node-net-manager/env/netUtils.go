@@ -1,8 +1,12 @@
 package env
 
 import (
+	"crypto/sha1"
+	"encoding/base64"
+	"fmt"
 	"log"
 	"net"
+	"time"
 )
 
 // GetLocalIP returns the non loopback local IP of the host and the associated interface
@@ -49,4 +53,15 @@ func ToServiceIP(Type string, Addr string) ServiceIP {
 	}
 
 	return ip
+}
+
+func NameUniqueHash(name string, size int) string {
+	shaHashFunc := sha1.New()
+	shaHashFunc.Write([]byte(fmt.Sprintf("%s,%s", time.Now().String(), name)))
+	hashed := shaHashFunc.Sum(nil)
+	for size > len(hashed) {
+		hashed = append(hashed, hashed...)
+	}
+	hashedAndEncoded := base64.StdEncoding.EncodeToString(hashed)
+	return string(hashedAndEncoded[:size])
 }

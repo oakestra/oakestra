@@ -2,6 +2,7 @@ package main
 
 import (
 	"NetManager/env"
+	"NetManager/handlers"
 	"NetManager/mqtt"
 	"NetManager/proxy"
 	"encoding/json"
@@ -21,21 +22,9 @@ type dockerDeployRequest struct {
 	Instancenumber int    `json:"instanceNumber"`
 }
 
-type containerDeployRequest struct {
-	Pid            int         `json:"pid"`
-	ServiceName    string      `json:"serviceName"`
-	Instancenumber int         `json:"instanceNumber"`
-	PortMappings   map[int]int `json:"portMappings"`
-}
-
 type sip struct {
 	Type    string `json:"IpType"` //RR, Closest or InstanceNumber
 	Address string `json:"Address"`
-}
-
-type deployResponse struct {
-	ServiceName string `json:"serviceName"`
-	NsAddress   string `json:"nsAddress"`
 }
 
 type undeployRequest struct {
@@ -165,7 +154,7 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 	Env.RefreshServiceTable(requestStruct.AppFullName)
 
 	//answer the caller
-	response := deployResponse{
+	response := handlers.DeployResponse{
 		ServiceName: requestStruct.AppFullName,
 		NsAddress:   addr.String(),
 	}
@@ -208,56 +197,20 @@ func containerDeploy(writer http.ResponseWriter, request *http.Request) {
 
 	reqBody, _ := ioutil.ReadAll(request.Body)
 	log.Println("ReqBody received :", reqBody)
-	var requestStruct containerDeployRequest
+	var requestStruct handlers.ContainerDeployRequest
 	err := json.Unmarshal(reqBody, &requestStruct)
 	if err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
 	}
-
+	requestStruct.PublicAddr = Configuration.NodePublicAddress
+	requestStruct.PublicPort = Configuration.NodePublicPort
+	requestStruct.Env = &Env
+	requestStruct.Writer = &writer
+	requestStruct.Finish = make(chan bool, 0)
 	log.Println(requestStruct)
 
-	//get app full name
-	appCompleteName := strings.Split(requestStruct.ServiceName, ".")
-	if len(appCompleteName) != 4 {
-		writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	//attach network to the container
-	addr, err := Env.AttachNetworkToContainer(requestStruct.Pid, requestStruct.ServiceName, requestStruct.PortMappings)
-	if err != nil {
-		log.Println("[ERROR]:", err)
-		writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	//notify net-component
-	mqtt.NotifyDeploymentStatus(
-		requestStruct.ServiceName,
-		"DEPLOYED",
-		requestStruct.Instancenumber,
-		addr.String(),
-		Configuration.NodePublicAddress,
-		Configuration.NodePublicPort,
-	)
-
-	//update internal table entry
-	Env.RefreshServiceTable(requestStruct.ServiceName)
-
-	//answer the caller
-	response := deployResponse{
-		ServiceName: requestStruct.ServiceName,
-		NsAddress:   addr.String(),
-	}
-
-	log.Println("Response to /container/deploy: ", response)
-
-	writer.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(writer).Encode(response)
-	if err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	handlers.NewDeployTaskQueue().NewTask(&requestStruct)
+	<-requestStruct.Finish
 }
 
 /*

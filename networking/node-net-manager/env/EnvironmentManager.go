@@ -202,7 +202,7 @@ func (env *Environment) AttachNetworkToContainer(pid int, sname string, portmapp
 		_, _ = cmd.Output()
 	}
 
-	bridgeVeth, clientVeth, vethIfce, err := env.createVethsPairAndAttachToBridge()
+	bridgeVeth, clientVeth, vethIfce, err := env.createVethsPairAndAttachToBridge(sname)
 	if err != nil {
 		cleanup(bridgeVeth)
 		return nil, err
@@ -273,13 +273,13 @@ func (env *Environment) AttachNetworkToContainer(pid int, sname string, portmapp
 func (env *Environment) increaseVethsMtu(veth1 string, veth2 string) error {
 	log.Println("Changing Veth1's MTU")
 	cmd := exec.Command("ip", "link", "set", "dev", veth1, "mtu", env.mtusize)
-	_, err := cmd.Output()
+	err := cmd.Run()
 	if err != nil {
 		return err
 	}
 	log.Println("Changing Veth2's MTU")
 	cmd = exec.Command("ip", "link", "set", "dev", veth2, "mtu", env.mtusize)
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		return err
 	}
@@ -288,15 +288,15 @@ func (env *Environment) increaseVethsMtu(veth1 string, veth2 string) error {
 
 //create veth pair and connect one to the host bridge
 //returns: bridgeVeth name, free Veth name, Vether interface to the veth pair and eventually an error
-func (env *Environment) createVethsPairAndAttachToBridge() (string, string, tenus.Vether, error) {
+func (env *Environment) createVethsPairAndAttachToBridge(sname string) (string, string, tenus.Vether, error) {
 	// Retrieve current bridge
 	br, err := tenus.BridgeFromName(env.config.HostBridgeName)
 	if err != nil {
 		return "", "", nil, err
 	}
-
-	veth1name := "veth" + "00" + strconv.Itoa(env.nextVethNumber)
-	veth2name := "veth" + "01" + strconv.Itoa(env.nextVethNumber)
+	hashedName := NameUniqueHash(sname, 4)
+	veth1name := fmt.Sprintf("veth%d%d%s", 00, env.nextVethNumber, hashedName)
+	veth2name := fmt.Sprintf("veth%d%d%s", 01, env.nextVethNumber, hashedName)
 	log.Println("creating veth pair: " + veth1name + "@" + veth2name)
 
 	veth, err := tenus.NewVethPairWithOptions(veth1name, tenus.VethOptions{PeerName: veth2name})
@@ -331,12 +331,12 @@ func (env *Environment) createVethsPairAndAttachToBridge() (string, string, tenu
 func (env *Environment) setVethFirewallRules(bridgeVethName string) error {
 	// iptables -A FORWARD -o goProxyBridge -i veth -j ACCEPT
 	cmd := exec.Command("iptables", "-A", "FORWARD", "-o", env.config.HostBridgeName, "-i", bridgeVethName, "-j", "ACCEPT")
-	_, err := cmd.Output()
+	err := cmd.Run()
 	if err != nil {
 		return err
 	}
 	cmd = exec.Command("iptables", "-A", "FORWARD", "-i", env.config.HostBridgeName, "-o", bridgeVethName, "-j", "ACCEPT")
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		return err
 	}
@@ -348,7 +348,7 @@ func (env *Environment) setContainerRoutes(containerPid int, containerVethName s
 	//Add route to bridge
 	//sudo nsenter -n -t 5565 ip route add 0.0.0.0/0 via 172.18.8.193 dev veth013
 	cmd := exec.Command("nsenter", "-n", "-t", strconv.Itoa(containerPid), "ip", "route", "add", "0.0.0.0/0", "via", env.config.HostBridgeIP, "dev", containerVethName)
-	_, err := cmd.Output()
+	err := cmd.Run()
 	if err != nil {
 		log.Println("Impossible to setup route inside the netns")
 		return err
@@ -376,7 +376,7 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	//create namespace
 	log.Println("creating namespace: " + netname)
 	cmd := exec.Command("ip", "netns", "add", netname)
-	_, err := cmd.Output()
+	err := cmd.Run()
 	if err != nil {
 		return "", err
 	}
@@ -394,7 +394,7 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	}
 
 	cmd = exec.Command("ip", "link", "add", veth1name, "type", "veth", "peer", "name", veth2name)
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err
@@ -403,14 +403,14 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	//Increasing MTUs
 	log.Println("Changing Veth1's MTU")
 	cmd = exec.Command("ip", "link", "set", "dev", veth1name, "mtu", env.mtusize)
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err
 	}
 	log.Println("Changing Veth2's MTU")
 	cmd = exec.Command("ip", "link", "set", "dev", veth2name, "mtu", env.mtusize)
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err
@@ -419,7 +419,7 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	//attach veth2 to namespace
 	log.Println("attaching " + veth2name + " to namespace " + netname)
 	cmd = exec.Command("ip", "link", "set", veth2name, "netns", netname)
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err
@@ -430,7 +430,7 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	cmd = exec.Command("ip", "netns", "exec", netname, "ip", "addr", "add",
 		ip.String()+env.config.HostBridgeMask, "dev", veth2name)
 	//cmd = exec.Command("ip", "a", "add", ip.String(), "dev", veth2name)
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err
@@ -439,7 +439,7 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	//bring ns lo up
 	log.Println("bringing lo up")
 	cmd = exec.Command("ip", "netns", "exec", netname, "ip", "link", "set", "lo", "up")
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err
@@ -448,7 +448,7 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	//bring veth2 up
 	log.Println("bringing " + veth2name + " up")
 	cmd = exec.Command("ip", "netns", "exec", netname, "ip", "link", "set", veth2name, "up")
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err
@@ -457,7 +457,7 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	//attach veth1 to the bridge
 	log.Println("attaching " + veth1name + " to host bridge")
 	cmd = exec.Command("ip", "link", "set", veth1name, "master", env.config.HostBridgeName)
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err
@@ -466,7 +466,7 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	//bring veth1 up
 	log.Println("bringing " + veth1name + " up")
 	cmd = exec.Command("ip", "link", "set", veth1name, "up")
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err
@@ -475,7 +475,7 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	//add rules on netname namespace for routing through the veth
 	log.Println("adding default routing rule inside " + netname)
 	cmd = exec.Command("ip", "netns", "exec", netname, "ip", "route", "add", "default", "via", env.config.HostBridgeIP, "dev", veth2name)
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err
@@ -483,7 +483,7 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	//add rules on default namespace for routing to the new namespace
 	log.Println("adding routing rule for default namespace to " + netname)
 	cmd = exec.Command("ip", "route", "add", ip.String(), "via", env.config.HostBridgeIP)
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err
@@ -492,7 +492,7 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	//disable reverse path filtering
 	log.Println("disabling reverse path filtering")
 	cmd = exec.Command("echo", "0", ">", "/proc/sys/net/ipv4/conf/all/rp_filter")
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -500,7 +500,7 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	//add IP masquerade
 	log.Println("add NAT ip MASQUERADING for the bridge")
 	cmd = exec.Command("iptables", "-t", "nat", "-A", "POSTROUTING", "-s", ip.String()+env.config.HostBridgeMask, "-o", env.config.ConnectedInternetInterface, "-j", "MASQUERADE")
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err
@@ -509,13 +509,13 @@ func (env *Environment) CreateNetworkNamespace(netname string, ip net.IP) (strin
 	//add NAT packet forwarding rules
 	log.Println("add NAT packet forwarding rules for " + netname)
 	cmd = exec.Command("iptables", "-A", "FORWARD", "-o", env.config.ConnectedInternetInterface, "-i", veth1name, "-j", "ACCEPT")
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err
 	}
 	cmd = exec.Command("iptables", "-A", "FORWARD", "-i", env.config.ConnectedInternetInterface, "-o", veth1name, "-j", "ACCEPT")
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		cleanup()
 		return "", err

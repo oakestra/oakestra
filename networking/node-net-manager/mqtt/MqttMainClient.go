@@ -5,6 +5,7 @@ import (
 	"github.com/eclipse/paho.mqtt.golang"
 	"log"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -14,6 +15,8 @@ var clientID = ""
 var mainMqttClient mqtt.Client
 var BrokerUrl = ""
 var BrokerPort = ""
+
+var mqttWriteMutex sync.Mutex
 
 var tableQueryRequestCache *TableQueryRequestCache
 
@@ -87,6 +90,8 @@ func runMqttClient(opts *mqtt.ClientOptions) {
 }
 
 func PublishToBroker(topic string, payload string) {
+	mqttWriteMutex.Lock()
+	defer mqttWriteMutex.Unlock()
 	log.Printf("MQTT - publish to - %s - the payload - %s", topic, payload)
 	token := mainMqttClient.Publish(fmt.Sprintf("nodes/%s/net/%s", clientID, topic), 1, false, payload)
 	if token.WaitTimeout(time.Second*5) && token.Error() != nil {
