@@ -62,6 +62,6 @@ func NameUniqueHash(name string, size int) string {
 	for size > len(hashed) {
 		hashed = append(hashed, hashed...)
 	}
-	hashedAndEncoded := base64.StdEncoding.EncodeToString(hashed)
-	return string(hashedAndEncoded[:size])
+	hashedAndEncoded := base64.URLEncoding.EncodeToString(hashed)
+	return hashedAndEncoded[:size]
 }
