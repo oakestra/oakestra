@@ -10,6 +10,7 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/struCoder/pidusage"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
@@ -33,12 +34,13 @@ var runtime = ContainerRuntime{
 	channelLock: &sync.RWMutex{},
 }
 
-var once sync.Once
+var containerdSingletonCLient sync.Once
+var startContainerMonitoring sync.Once
 
 const NAMESPACE = "edge.io"
 
 func GetContainerdClient() *ContainerRuntime {
-	once.Do(func() {
+	containerdSingletonCLient.Do(func() {
 		client, err := containerd.New("/run/containerd/containerd.sock")
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Unable to start the container engine: %v\n", err)
@@ -46,6 +48,7 @@ func GetContainerdClient() *ContainerRuntime {
 		runtime.contaierClient = client
 		runtime.killQueue = make(map[string]*chan bool)
 		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
+		runtime.forceContainerCleanup()
 	})
 	return &runtime
 }
@@ -64,7 +67,7 @@ func (r *ContainerRuntime) StopContainerdClient() {
 	r.contaierClient.Close()
 }
 
-func (r *ContainerRuntime) Deploy(service model.Service) error {
+func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
 
 	// pull the given image
 	image, err := r.contaierClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack)
@@ -91,12 +94,11 @@ func (r *ContainerRuntime) Deploy(service model.Service) error {
 	go r.containerCreationRoutine(
 		r.ctx,
 		image,
-		service.Sname,
-		service.Commands,
-		service.Ports,
+		service,
 		startupChannel,
 		errorChannel,
 		&killChannel,
+		statusChangeNotificationHandler,
 	)
 
 	// wait for updates regarding the container creation
@@ -131,12 +133,11 @@ func (r *ContainerRuntime) Undeploy(sname string) error {
 func (r *ContainerRuntime) containerCreationRoutine(
 	ctx context.Context,
 	image containerd.Image,
-	sname string,
-	cmd []string,
-	port string,
+	service model.Service,
 	startup chan bool,
 	errorchan chan error,
 	killChannel *chan bool,
+	statusChangeNotificationHandler func(service model.Service),
 ) {
 
 	revert := func(err error) {
@@ -144,11 +145,11 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		errorchan <- err
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
-		r.killQueue[sname] = nil
+		r.killQueue[service.Sname] = nil
 	}
 
 	//create container general oci specs
-	hostname := fmt.Sprintf("%s.instance", sname)
+	hostname := fmt.Sprintf("%s.instance", service.Sname)
 	specOpts := []oci.SpecOpts{
 		oci.WithImageConfig(image),
 		oci.WithHostHostsFile,
@@ -156,8 +157,8 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		oci.WithEnv([]string{fmt.Sprintf("HOSTNAME=%s", hostname)}),
 	}
 	//add user defined commands
-	if len(cmd) > 0 {
-		specOpts = append(specOpts, oci.WithProcessArgs(cmd...))
+	if len(service.Commands) > 0 {
+		specOpts = append(specOpts, oci.WithProcessArgs(service.Commands...))
 	}
 	//add resolve file with default google dns
 	resolvconfFile, err := getGoogleDNSResolveConf()
@@ -172,9 +173,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// create the container
 	container, err := r.contaierClient.NewContainer(
 		ctx,
-		sname,
+		service.Sname,
 		containerd.WithImage(image),
-		containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", sname), image),
+		containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", service.Sname), image),
 		containerd.WithNewSpec(specOpts...),
 	)
 	if err != nil {
@@ -191,30 +192,24 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		return
 	}
 	defer func(ctx context.Context, task containerd.Task) {
-		_ = killTask(ctx, task, container, killChannel)
+		err := killTask(ctx, task, container)
 		//removing from killqueue
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
-		r.killQueue[sname] = nil
+		r.killQueue[service.Sname] = nil
+		if err != nil {
+			*killChannel <- false
+		} else {
+			*killChannel <- true
+		}
 	}(ctx, task)
 
 	//create port mappings map
-	portMappings, err := createPortMappings(port)
+	portMappings, err := createPortMappings(service.Ports)
 	if err != nil {
 		logger.ErrorLogger().Printf("Invalid port mappings %v", err)
 		revert(err)
 		return
-	}
-
-	// if Overlay mode is active then attach network to the task
-	if model.GetNodeInfo().Overlay {
-		taskpid := int(task.Pid())
-		err = requests.AttachNetworkToTask(taskpid, sname, 0, portMappings)
-		if err != nil {
-			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
-			revert(err)
-			return
-		}
 	}
 
 	// get wait channel
@@ -223,6 +218,17 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		logger.ErrorLogger().Printf("ERROR: containerd task wait failure: %v", err)
 		revert(err)
 		return
+	}
+
+	// if Overlay mode is active then attach network to the task
+	if model.GetNodeInfo().Overlay {
+		taskpid := int(task.Pid())
+		err = requests.AttachNetworkToTask(taskpid, service.Sname, 0, portMappings)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
+			revert(err)
+			return
+		}
 	}
 
 	// execute the image's task
@@ -243,7 +249,76 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	case <-*killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
 		//detaching network
-		_ = requests.DetachNetworkFromTask(sname, 0)
+		_ = requests.DetachNetworkFromTask(service.Sname, 0)
+	}
+	service.Status = model.SERVICE_DEAD
+	statusChangeNotificationHandler(service)
+}
+
+func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
+	//start container monitoring service
+	startContainerMonitoring.Do(func() {
+		for true {
+			select {
+			case <-time.After(every):
+				deployedContainers, err := r.contaierClient.Containers(r.ctx)
+				if err != nil {
+					logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
+				}
+				resourceList := make([]model.Resources, 0)
+				for _, container := range deployedContainers {
+					task, err := container.Task(r.ctx, nil)
+					if err != nil {
+						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+						continue
+					}
+					sysInfo, err := pidusage.GetStat(int(task.Pid()))
+					if err != nil {
+						logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
+						continue
+					}
+					containerMetadata, err := container.Info(r.ctx)
+					if err != nil {
+						logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
+						continue
+					}
+					currentsnapshotter := r.contaierClient.SnapshotService(containerd.DefaultSnapshotter)
+					usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
+					if err != nil {
+						logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
+						continue
+					}
+					resourceList = append(resourceList, model.Resources{
+						Cpu:    fmt.Sprintf("%f", sysInfo.CPU),
+						Memory: fmt.Sprintf("%f", sysInfo.Memory),
+						Disk:   fmt.Sprintf("%d", usage.Size),
+						Sname:  task.ID(),
+					})
+				}
+				//NOTIFY WITH THE CURRENT CONTAINERS STATUS
+				notifyHandler(resourceList)
+			}
+		}
+	})
+}
+
+func (r *ContainerRuntime) forceContainerCleanup() {
+	deployedContainers, err := r.contaierClient.Containers(r.ctx)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
+	}
+	for _, container := range deployedContainers {
+		logger.InfoLogger().Printf("Clenaning up container: %s", container.ID())
+		task, err := container.Task(r.ctx, nil)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+			continue
+		}
+		err = killTask(r.ctx, task, container)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to fetch kill task: %v", err)
+			continue
+		}
 	}
 }
 
@@ -273,23 +348,22 @@ func getGoogleDNSResolveConf() (*os.File, error) {
 	return file, err
 }
 
-func killTask(ctx context.Context, task containerd.Task, container containerd.Container, killChannel *chan bool) error {
+func killTask(ctx context.Context, task containerd.Task, container containerd.Container) error {
 	//removing the task
 	p, err := task.LoadProcess(ctx, task.ID(), nil)
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR deleting the task, LoadProcess: %v", err)
-		*killChannel <- false
+		return err
 	}
 	_, err = p.Delete(ctx, containerd.WithProcessKill)
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR deleting the task, Delete: %v", err)
-		*killChannel <- false
+		return err
 	}
 	_, _ = task.Delete(ctx)
 	_ = container.Delete(ctx)
 
 	logger.ErrorLogger().Printf("Task %s terminated", task.ID())
-	*killChannel <- true
 	return nil
 }
 

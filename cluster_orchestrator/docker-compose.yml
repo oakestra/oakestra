@@ -3,7 +3,7 @@ services:
 
   # MQTT 
   mqtt:
-    image: eclipse-mosquitto
+    image: eclipse-mosquitto:1.6
     hostname: mqtt
     container_name: mqtt
     expose:
@@ -46,7 +46,7 @@ services:
 
 # Cluster Manager
   cluster_service_manager:
-    image: ghcr.io/edgeio/edgeionet/cluster-service-manager:v0.02-experimental
+    image: ghcr.io/edgeio/edgeionet/cluster-service-manager:v0.03-amd64
     container_name: cluster_service_manager
     hostname: cluster_service_manager
     expose:

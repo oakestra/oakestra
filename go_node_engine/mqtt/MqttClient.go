@@ -84,7 +84,7 @@ func runMqttClient(opts *mqtt.ClientOptions) {
 	}
 }
 
-func PublishToBroker(topic string, payload string) {
+func publishToBroker(topic string, payload string) {
 	logger.InfoLogger().Printf("MQTT - publish to - %s - the payload - %s", topic, payload)
 	token := mainMqttClient.Publish(fmt.Sprintf("nodes/%s/%s", clientID, topic), 1, false, payload)
 	if token.WaitTimeout(time.Second*5) && token.Error() != nil {
@@ -103,14 +103,14 @@ func deployHandler(client mqtt.Client, msg mqtt.Message) {
 	//handle deployment in background
 	go func() {
 		runtime := virtualization.GetRuntime(service.Runtime)
-		err = runtime.Deploy(service)
+		err = runtime.Deploy(service, ReportServiceStatus)
 		service.Status = model.SERVICE_ACTIVE
 		if err != nil {
 			logger.ErrorLogger().Printf("ERROR during app deployment: %v", err)
 			service.StatusDetail = err.Error()
 			service.Status = model.SERVICE_FAILED
 		}
-		reportServiceStatus(service)
+		ReportServiceStatus(service)
 	}()
 }
 func deleteHandler(client mqtt.Client, msg mqtt.Message) {
@@ -127,10 +127,10 @@ func deleteHandler(client mqtt.Client, msg mqtt.Message) {
 		logger.ErrorLogger().Printf("Unable to undeploy application: %s", err.Error())
 	}
 	service.Status = model.SERVICE_UNDEPLOYED
-	reportServiceStatus(service)
+	ReportServiceStatus(service)
 }
 
-func reportServiceStatus(service model.Service) {
+func ReportServiceStatus(service model.Service) {
 	type ServiceStatus struct {
 		Id     string `json:"job_id"`
 		Status string `json:"status"`
@@ -145,5 +145,27 @@ func reportServiceStatus(service model.Service) {
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR: unable to report service status: %v", err)
 	}
-	PublishToBroker("job", string(jsonmsg))
+	publishToBroker("job", string(jsonmsg))
+}
+
+func ReportServiceResources(services []model.Resources) {
+	type ServiceResources struct {
+		Services []model.Resources `json:"services"`
+	}
+	reportStatusStruct := ServiceResources{
+		Services: services,
+	}
+	jsonmsg, err := json.Marshal(reportStatusStruct)
+	if err != nil {
+		logger.ErrorLogger().Printf("ERROR: unable to report services resources: %v", err)
+	}
+	publishToBroker("jobs/resources", string(jsonmsg))
+}
+
+func ReportNodeInformation(node model.Node) {
+	data, err := json.Marshal(node)
+	if err != nil {
+		logger.ErrorLogger().Printf("ERROR: error gathering node info")
+	}
+	publishToBroker("information", string(data))
 }

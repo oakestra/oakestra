@@ -16,7 +16,6 @@ services:
       - mongo_root
       - cloud_scheduler
       - root_service_manager
-      - mqtt
     environment:
       - CLOUD_MONGO_URL=mongo
       - CLOUD_MONGO_PORT=10007
@@ -53,7 +52,7 @@ services:
 
   # Cluster Manager
   root_service_manager:
-    image: ghcr.io/edgeio/edgeionet/root-service-manager:v0.02-experimental
+    image: ghcr.io/edgeio/edgeionet/root-service-manager:v0.03-amd64
     container_name: root_service_manager
     hostname: root_service_manager
     expose:

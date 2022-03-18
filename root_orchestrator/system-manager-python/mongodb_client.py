@@ -116,7 +116,7 @@ def mongo_update_cluster_information(cluster_id, data):
     jobs = data.get('jobs')
     for j in jobs:
         print(j)
-        mongo_update_job_status(job_id=j.get('system_job_id'), status=j.get('status'))
+        mongo_update_job_status(job_id=j.get('system_job_id'), status=j.get('status'), instances=j.get('instance_list'))
 
     datetime_now = datetime.now()
     datetime_now_timestamp = datetime.timestamp(datetime_now)
@@ -169,9 +169,23 @@ def mongo_get_job_status(job_id):
     return mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)}, {'status': 1})['status'] + '\n'
 
 
-def mongo_update_job_status(job_id, status):
+def mongo_update_job_status(job_id, status, instances=None):
     global mongo_jobs
-    return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)}, {'$set': {'status': status}})
+    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
+    instance_list = job.get('instance_list')
+    if instances is not None:
+        for instance in instances:
+            instance_num = instance['instance_number']
+            elem = instance_list[instance_num]
+            elem['cpu']=instance.get('cpu')
+            elem['memory'] = instance.get('memory')
+            elem['disk'] = instance.get('disk')
+            instance_list[instance_num] = elem
+
+    return mongo_jobs.db.jobs.update_one(
+        {'_id': ObjectId(job_id)},
+        {'$set': {'status': status, 'instance_list': instance_list}}
+    )
 
 
 def mongo_update_job_net_status(job_id, instances):
