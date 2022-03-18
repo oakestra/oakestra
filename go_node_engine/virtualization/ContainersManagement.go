@@ -212,6 +212,14 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		return
 	}
 
+	// get wait channel
+	exitStatusC, err := task.Wait(ctx)
+	if err != nil {
+		logger.ErrorLogger().Printf("ERROR: containerd task wait failure: %v", err)
+		revert(err)
+		return
+	}
+
 	// if Overlay mode is active then attach network to the task
 	if model.GetNodeInfo().Overlay {
 		taskpid := int(task.Pid())
@@ -221,14 +229,6 @@ func (r *ContainerRuntime) containerCreationRoutine(
 			revert(err)
 			return
 		}
-	}
-
-	// get wait channel
-	exitStatusC, err := task.Wait(ctx)
-	if err != nil {
-		logger.ErrorLogger().Printf("ERROR: containerd task wait failure: %v", err)
-		revert(err)
-		return
 	}
 
 	// execute the image's task

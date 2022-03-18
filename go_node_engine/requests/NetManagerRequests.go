@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"go_node_engine/model"
 	"net/http"
+	"sync"
+	"time"
 )
 
 type registerRequest struct {
@@ -20,7 +22,17 @@ type connectNetworkRequest struct {
 	PortMappings   map[int]int `json:"PortMappings"`
 }
 
+var ongoingDeployment sync.Mutex
+
+var httpClient = &http.Client{
+	Timeout: time.Second * 10,
+}
+
 func AttachNetworkToTask(pid int, servicename string, instance int, portMappings map[int]int) error {
+
+	ongoingDeployment.Lock()
+	defer ongoingDeployment.Unlock()
+
 	request := connectNetworkRequest{
 		Pid:            pid,
 		Servicename:    servicename,
@@ -32,7 +44,7 @@ func AttachNetworkToTask(pid int, servicename string, instance int, portMappings
 		return err
 	}
 
-	response, err := http.Post(
+	response, err := httpClient.Post(
 		fmt.Sprintf("http://localhost:%d/container/deploy", model.GetNodeInfo().NetManagerPort),
 		"application/json",
 		bytes.NewBuffer(jsonReq),
@@ -57,7 +69,7 @@ func DetachNetworkFromTask(servicename string, instance int) error {
 		return err
 	}
 
-	response, err := http.Post(
+	response, err := httpClient.Post(
 		fmt.Sprintf("http://localhost:%d/container/undeploy", model.GetNodeInfo().NetManagerPort),
 		"application/json",
 		bytes.NewBuffer(jsonReq),
@@ -80,7 +92,7 @@ func RegisterSelfToNetworkComponent() error {
 		return err
 	}
 
-	response, err := http.Post(
+	response, err := httpClient.Post(
 		fmt.Sprintf("http://localhost:%d/register", model.GetNodeInfo().NetManagerPort),
 		"application/json",
 		bytes.NewBuffer(jsonReq),
