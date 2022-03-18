@@ -344,12 +344,12 @@ func (proxy *GoProxyTunnel) createTun() {
 
 	log.Println("Bringing tun up with addr " + proxy.tunNetIP + "/12")
 	cmd := exec.Command("ip", "addr", "add", proxy.tunNetIP+"/12", "dev", ifce.Name())
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
 	cmd = exec.Command("ip", "link", "set", "dev", ifce.Name(), "up")
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -357,7 +357,7 @@ func (proxy *GoProxyTunnel) createTun() {
 	//disabling reverse path filtering
 	log.Println("Disabling tun dev reverse path filtering")
 	cmd = exec.Command("echo", "0", ">", "/proc/sys/net/ipv4/conf/"+ifce.Name()+"/rp_filter")
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		log.Printf("Error disabling tun dev reverse path filtering: %s ", err.Error())
 	}
@@ -365,7 +365,7 @@ func (proxy *GoProxyTunnel) createTun() {
 	//Increasing the MTU on the TUN dev
 	log.Println("Changing TUN's MTU")
 	cmd = exec.Command("ip", "link", "set", "dev", ifce.Name(), "mtu", proxy.mtusize)
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -378,13 +378,13 @@ func (proxy *GoProxyTunnel) createTun() {
 	//add firewalls rules
 	log.Println("adding firewall roule " + ifce.Name())
 	/*cmd = exec.Command("iptables", "-t", "nat", "-A", "POSTROUTING", "-o", ifce.Name(), "-j", "MASQUERADE")
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		log.Fatal(err)
 	}*/
 	cmd = exec.Command("iptables", "-A", "INPUT", "-i", "tun0", "-m", "state",
 		"--state", "RELATED,ESTABLISHED", "-j", "ACCEPT")
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		log.Fatal(err)
 	}

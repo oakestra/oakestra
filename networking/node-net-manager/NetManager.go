@@ -2,17 +2,16 @@ package main
 
 import (
 	"NetManager/env"
+	"NetManager/handlers"
 	"NetManager/mqtt"
 	"NetManager/proxy"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/tkanos/gonfig"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strings"
 )
 
 type dockerDeployRequest struct {
@@ -21,21 +20,9 @@ type dockerDeployRequest struct {
 	Instancenumber int    `json:"instanceNumber"`
 }
 
-type containerDeployRequest struct {
-	Pid            int         `json:"pid"`
-	ServiceName    string      `json:"serviceName"`
-	Instancenumber int         `json:"instanceNumber"`
-	PortMappings   map[int]int `json:"portMappings"`
-}
-
 type sip struct {
 	Type    string `json:"IpType"` //RR, Closest or InstanceNumber
 	Address string `json:"Address"`
-}
-
-type deployResponse struct {
-	ServiceName string `json:"serviceName"`
-	NsAddress   string `json:"nsAddress"`
 }
 
 type undeployRequest struct {
@@ -63,7 +50,7 @@ func handleRequests() {
 	log.Fatal(http.ListenAndServe(":10010", netRouter))
 }
 
-var Env env.Environment
+var Env *env.Environment
 var Proxy proxy.GoProxyTunnel
 var WorkerID string
 var Configuration netConfiguration
@@ -122,60 +109,11 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 
 	if WorkerID == "" {
 		log.Printf("[ERROR] Node not initialized")
-		writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	reqBody, _ := ioutil.ReadAll(request.Body)
-	log.Println("ReqBody received :", reqBody)
-	var requestStruct dockerDeployRequest
-	err := json.Unmarshal(reqBody, &requestStruct)
-	if err != nil {
-		writer.WriteHeader(http.StatusBadRequest)
-	}
-
-	log.Println(requestStruct)
-
-	//get app full name
-	appCompleteName := strings.Split(requestStruct.AppFullName, ".")
-	if len(appCompleteName) != 4 {
-		writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	//attach network to the container
-	addr, err := Env.AttachDockerContainer(requestStruct.ContainerId)
-	if err != nil {
-		log.Println("[ERROR]:", err)
-		writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	//notify net-component
-	mqtt.NotifyDeploymentStatus(
-		requestStruct.AppFullName,
-		"DEPLOYED",
-		requestStruct.Instancenumber,
-		addr.String(),
-		Configuration.NodePublicAddress,
-		Configuration.NodePublicPort,
-	)
-
-	//update internal table entry
-	Env.RefreshServiceTable(requestStruct.AppFullName)
-
-	//answer the caller
-	response := deployResponse{
-		ServiceName: requestStruct.AppFullName,
-		NsAddress:   addr.String(),
-	}
-
-	log.Println("Response to /docker/deploy: ", response)
-
-	writer.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(writer).Encode(response)
-	if err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
+		writer.WriteHeader(299)
+		_, err := writer.Write([]byte("DEPRECATED API"))
+		if err != nil {
+			return
+		}
 		return
 	}
 }
@@ -208,56 +146,20 @@ func containerDeploy(writer http.ResponseWriter, request *http.Request) {
 
 	reqBody, _ := ioutil.ReadAll(request.Body)
 	log.Println("ReqBody received :", reqBody)
-	var requestStruct containerDeployRequest
+	var requestStruct handlers.ContainerDeployRequest
 	err := json.Unmarshal(reqBody, &requestStruct)
 	if err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
 	}
-
+	requestStruct.PublicAddr = Configuration.NodePublicAddress
+	requestStruct.PublicPort = Configuration.NodePublicPort
+	requestStruct.Env = Env
+	requestStruct.Writer = &writer
+	requestStruct.Finish = make(chan bool, 0)
 	log.Println(requestStruct)
 
-	//get app full name
-	appCompleteName := strings.Split(requestStruct.ServiceName, ".")
-	if len(appCompleteName) != 4 {
-		writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	//attach network to the container
-	addr, err := Env.AttachNetworkToContainer(requestStruct.Pid, requestStruct.ServiceName, requestStruct.PortMappings)
-	if err != nil {
-		log.Println("[ERROR]:", err)
-		writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	//notify net-component
-	mqtt.NotifyDeploymentStatus(
-		requestStruct.ServiceName,
-		"DEPLOYED",
-		requestStruct.Instancenumber,
-		addr.String(),
-		Configuration.NodePublicAddress,
-		Configuration.NodePublicPort,
-	)
-
-	//update internal table entry
-	Env.RefreshServiceTable(requestStruct.ServiceName)
-
-	//answer the caller
-	response := deployResponse{
-		ServiceName: requestStruct.ServiceName,
-		NsAddress:   addr.String(),
-	}
-
-	log.Println("Response to /container/deploy: ", response)
-
-	writer.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(writer).Encode(response)
-	if err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	handlers.NewDeployTaskQueue().NewTask(&requestStruct)
+	<-requestStruct.Finish
 }
 
 /*
@@ -304,13 +206,7 @@ func register(writer http.ResponseWriter, request *http.Request) {
 
 	//initialize the Env Manager
 	Env = env.NewEnvironmentClusterConfigured(Proxy.HostTUNDeviceName)
-	Proxy.SetEnvironment(&Env)
-
-	//create debug netns
-	_, err = Env.CreateNetworkNamespaceNewIp("debugAppNs")
-	if err != nil {
-		fmt.Println(err)
-	}
+	Proxy.SetEnvironment(Env)
 
 	writer.WriteHeader(http.StatusOK)
 }

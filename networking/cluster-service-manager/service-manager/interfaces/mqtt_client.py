@@ -3,10 +3,54 @@ import re
 from interfaces.mongodb_requests import mongo_find_node_by_id_and_update_subnetwork
 from network.deployment import *
 from network.tablequery import resolution, interests
-from flask_mqtt import Mqtt
+import paho.mqtt.client as paho_mqtt
 
 mqtt = None
 app = None
+
+
+def handle_connect(client, userdata, flags, rc):
+    global mqtt
+    global app
+    app.logger.info("MQTT - Connected to MQTT Broker")
+    mqtt.subscribe(topic='nodes/+/net/#', qos=1)
+
+
+def handle_mqtt_message(client, userdata, message):
+    data = dict(
+        topic=message.topic,
+        payload=message.payload.decode()
+    )
+    app.logger.info('MQTT - Received from worker: ')
+    app.logger.info(data)
+
+    topic = data['topic']
+
+    re_job_deployment_topic = re.search("^nodes/.*/net/service/deployed", topic)
+    re_job_undeployment_topic = re.search("^nodes/.*/net/service/undeployed", topic)
+    re_job_tablequery_topic = re.search("^nodes/.*/net/tablequery/request", topic)
+    re_job_subnet_topic = re.search("^nodes/.*/net/subnet", topic)
+    re_job_interest_remove = re.search("^nodes/.*/net/interest/remove", topic)
+
+    topic_split = topic.split('/')
+    client_id = topic_split[1]
+    payload = json.loads(data['payload'])
+
+    if re_job_deployment_topic is not None:
+        app.logger.debug('JOB-DEPLOYMENT-UPDATE')
+        _deployment_handler(client_id, payload)
+    if re_job_undeployment_topic is not None:
+        app.logger.debug('JOB-UNDEPLOYMENT-UPDATE')
+        _undeployment_handler(client_id, payload)
+    if re_job_tablequery_topic is not None:
+        app.logger.debug('JOB-TABLEQUERY-REQUEST')
+        _tablequery_handler(client_id, payload)
+    if re_job_subnet_topic is not None:
+        app.logger.debug('JOB-SUBNET-REQUEST')
+        _subnet_handler(client_id, payload)
+    if re_job_interest_remove is not None:
+        app.logger.debug('JOB-INTEREST-REMOVE')
+        _interest_remove_handler(client_id, payload)
 
 
 def mqtt_init(flask_app):
@@ -14,58 +58,13 @@ def mqtt_init(flask_app):
     global app
     app = flask_app
 
-    app.config['MQTT_BROKER_URL'] = os.environ.get('MQTT_BROKER_URL')
-    app.config['MQTT_BROKER_PORT'] = int(os.environ.get('MQTT_BROKER_PORT'))
-    app.config['MQTT_KEEPALIVE'] = 5
-    app.config['MQTT_REFRESH_TIME'] = 1.0
-    mqtt = Mqtt(app)
-
-    @mqtt.on_connect()
-    def handle_connect(client, userdata, flags, rc):
-        app.logger.info("MQTT - Connected to MQTT Broker")
-        mqtt.subscribe('nodes/+/net/#')
-
-    @mqtt.on_log()
-    def handle_logging(client, userdata, level, buf):
-        if level == 'MQTT_LOG_ERR':
-            app.logger.info('Error: {}'.format(buf))
-
-    @mqtt.on_message()
-    def handle_mqtt_message(client, userdata, message):
-        data = dict(
-            topic=message.topic,
-            payload=message.payload.decode()
-        )
-        app.logger.info('MQTT - Received from worker: ')
-        app.logger.info(data)
-
-        topic = data['topic']
-
-        re_job_deployment_topic = re.search("^nodes/.*/net/service/deployed", topic)
-        re_job_undeployment_topic = re.search("^nodes/.*/net/service/undeployed", topic)
-        re_job_tablequery_topic = re.search("^nodes/.*/net/tablequery/request", topic)
-        re_job_subnet_topic = re.search("^nodes/.*/net/subnet", topic)
-        re_job_interest_remove = re.search("^nodes/.*/net/interest/remove", topic)
-
-        topic_split = topic.split('/')
-        client_id = topic_split[1]
-        payload = json.loads(data['payload'])
-
-        if re_job_deployment_topic is not None:
-            app.logger.debug('JOB-DEPLOYMENT-UPDATE')
-            _deployment_handler(client_id, payload)
-        if re_job_undeployment_topic is not None:
-            app.logger.debug('JOB-UNDEPLOYMENT-UPDATE')
-            _undeployment_handler(client_id, payload)
-        if re_job_tablequery_topic is not None:
-            app.logger.debug('JOB-TABLEQUERY-REQUEST')
-            _tablequery_handler(client_id, payload)
-        if re_job_subnet_topic is not None:
-            app.logger.debug('JOB-SUBNET-REQUEST')
-            _subnet_handler(client_id, payload)
-        if re_job_interest_remove is not None:
-            app.logger.debug('JOB-INTEREST-REMOVE')
-            _interest_remove_handler(client_id, payload)
+    mqtt = paho_mqtt.Client()
+    mqtt.on_connect = handle_connect
+    mqtt.on_message = handle_mqtt_message
+    mqtt.reconnect_delay_set(min_delay=1, max_delay=120)
+    mqtt.max_queued_messages_set(1000)
+    mqtt.connect(os.environ.get('MQTT_BROKER_URL'), int(os.environ.get('MQTT_BROKER_PORT')), keepalive=5)
+    mqtt.loop_start()
 
 
 def _deployment_handler(client_id, payload):
@@ -123,14 +122,14 @@ def _subnet_handler(client_id, payload):
 
 def mqtt_publish_tablequery_result(client_id, result):
     topic = 'nodes/' + client_id + '/net/tablequery/result'
-    mqtt.publish(topic, json.dumps(result))
+    mqtt.publish(topic, json.dumps(result), qos=1)
 
 
 def mqtt_publish_subnetwork_result(client_id, result):
     topic = 'nodes/' + client_id + '/net/subnetwork/result'
-    mqtt.publish(topic, json.dumps(result))
+    mqtt.publish(topic, json.dumps(result), qos=1)
 
 
 def mqtt_notify_service_change(job_name, type=None):
     topic = 'jobs/' + job_name + '/updates_available'
-    mqtt.publish(topic, json.dumps({"type": type}))
+    mqtt.publish(topic, json.dumps({"type": type}), qos=1)

@@ -77,7 +77,7 @@ func GetTableQueryRequestCacheInstance() *TableQueryRequestCache {
 */
 func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname string) (TableQueryResponse, error) {
 	reqname := sip + sname
-	responseChannel := make(chan TableQueryResponse, 1)
+	responseChannel := make(chan TableQueryResponse, 2)
 	var updatedRequests []chan TableQueryResponse
 
 	//appending response channel used by the Mqtt handler
@@ -95,7 +95,7 @@ func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname
 		Sname: sname,
 		Sip:   sip,
 	})
-	go PublishToBroker("tablequery/request", string(jsonreq))
+	PublishToBroker("tablequery/request", string(jsonreq))
 
 	//waiting for maximum 5 seconds the mqtt handler to receive a response. Otherwise fail the tableQuery.
 	log.Printf("waiting for table query %s", reqname)
