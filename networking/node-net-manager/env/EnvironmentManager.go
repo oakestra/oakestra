@@ -165,8 +165,11 @@ func NewEnvironmentClusterConfigured(proxyname string) *Environment {
 }
 
 func (env *Environment) Destroy() {
-	cmd := exec.Command("ip", "link", "delete", env.config.HostBridgeName)
-	_ = cmd.Run()
+	_ = netlink.LinkDel(&netlink.GenericLink{
+		LinkAttrs: netlink.LinkAttrs{
+			Name: env.config.HostBridgeName,
+		},
+	})
 }
 
 func (env *Environment) DetachContainer(sname string) {
