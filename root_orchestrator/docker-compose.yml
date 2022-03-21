@@ -22,7 +22,7 @@ services:
       - CLOUD_SCHEDULER_URL=cloud_scheduler
       - CLOUD_SCHEDULER_PORT=10004
       - NET_PLUGIN_URL=root_service_manager
-      - NET_PLUGIN_PORT=10100
+      - NET_PLUGIN_PORT=10010
 
 
   # MongoDB in Root Orchestrator
@@ -44,10 +44,10 @@ services:
     container_name: mongo_net
     hostname: mongo_net
     ports:
-      - "10107:10107"
+      - "10008:10008"
     volumes:
       - 'mongodb_net_data:/mongodb'
-    command: mongod --port 10107
+    command: mongod --port 10008
 
 
   # Cluster Manager
@@ -56,15 +56,15 @@ services:
     container_name: root_service_manager
     hostname: root_service_manager
     expose:
-      - "10100"
+      - "10010"
     ports:
-      - "10100:10100"
+      - "10010:10010"
     environment:
-      - MY_PORT=10100
+      - MY_PORT=10099
       - SYSTEM_MANAGER_URL=system_manager
       - SYSTEM_MANAGER_PORT=10000
       - CLOUD_MONGO_URL=mongo_net
-      - CLOUD_MONGO_PORT=10107
+      - CLOUD_MONGO_PORT=10008
     depends_on:
       - mongo_rootnet
 
