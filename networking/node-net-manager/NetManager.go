@@ -7,6 +7,7 @@ import (
 	"NetManager/proxy"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/tkanos/gonfig"
 	"io/ioutil"
@@ -40,14 +41,14 @@ type netConfiguration struct {
 	ClusterMqttPort   string
 }
 
-func handleRequests() {
+func handleRequests(port int) {
 	netRouter := mux.NewRouter().StrictSlash(true)
 	netRouter.HandleFunc("/register", register).Methods("POST")
 	netRouter.HandleFunc("/docker/deploy", dockerDeploy).Methods("POST")
 	netRouter.HandleFunc("/container/deploy", containerDeploy).Methods("POST")
 	netRouter.HandleFunc("/docker/undeploy", containerUndeploy).Methods("POST")
 	netRouter.HandleFunc("/container/undeploy", containerUndeploy).Methods("POST")
-	log.Fatal(http.ListenAndServe(":10010", netRouter))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), netRouter))
 }
 
 var Env *env.Environment
@@ -213,6 +214,7 @@ func register(writer http.ResponseWriter, request *http.Request) {
 
 func main() {
 	cfgFile := flag.String("cfg", "/etc/netmanager/netcfg.json", "Set a cluster IP")
+	localPort := flag.Int("p", 10010, "Default local port of the NetManager")
 	flag.Parse()
 
 	err := gonfig.GetConf(*cfgFile, &Configuration)
@@ -223,5 +225,5 @@ func main() {
 	log.Print(Configuration)
 
 	log.Println("NetManager started. Waiting for registration.")
-	handleRequests()
+	handleRequests(*localPort)
 }
