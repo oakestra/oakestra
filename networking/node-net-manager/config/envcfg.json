@@ -1,6 +1,6 @@
 {
   "HostBridgeName": "goProxyBridge",
-  "HostBridgeIP": "172.19.1.1",
+  "HostBridgeIP": "10.19.1.1",
   "HostBridgeMask": "/24",
   "HostTunName": "goProxyTun",
   "ConnectedInternetInterface": "wlan0"

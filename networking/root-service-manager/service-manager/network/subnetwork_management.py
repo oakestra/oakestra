@@ -20,8 +20,8 @@ def new_job_rr_address(job_data):
     if address is not None:
         address_arr = str(address).split(".")
         if len(address_arr) == 4:
-            if address_arr[0] != "172" or address_arr[1] != "30":
-                raise Exception("RR ip address must be in the form 172.30.x.y")
+            if address_arr[0] != "10" or address_arr[1] != "30":
+                raise Exception("RR ip address must be in the form 10.30.x.y")
             job = mongodb_requests.mongo_find_job_by_ip(address)
             if job is not None:
                 if job['job_name'] != job_name:

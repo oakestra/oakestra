@@ -2,15 +2,15 @@ version: "3.3"
 services:
 
   # cluster-level mongoDB
-  mongo:
+  mongo_clusternet:
     image: mongo:3.6
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
     ports:
-      - "10207:10207"
+      - "10108:10108"
     volumes:
-      - 'mongodb_data:/mongodb'
-    command: mongod --port 10207
+      - 'mongodb_cluster_net_data:/mongodb'
+    command: mongod --port 10108
 
 
 # Cluster Manager
@@ -20,24 +20,25 @@ services:
     container_name: cluster_service_manager
     hostname: cluster_service_manager
     expose:
-      - "10200"
+      - "10110"
     ports:
-      - "10200:10200"
+      - "10110:10110"
     environment:
-      - MY_PORT=10200
+      - MY_PORT=10110
       - MQTT_BROKER_PORT=10003
       - MQTT_BROKER_URL=mqtt
-      - ROOT_SERVICE_MANAGER_URL=${ROOT_SERVICE_MANAGER_URL}
-      - ROOT_SERVICE_MANAGER_PORT=10100
+      - ROOT_SERVICE_MANAGER_URL=${SYSTEM_MANAGER_URL}
+      - ROOT_SERVICE_MANAGER_PORT=10099
       - SYSTEM_MANAGER_URL=cluster_manager
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_MONGO_URL=cluster_mongo_net
-      - CLUSTER_MONGO_PORT=10207
+      - CLUSTER_MONGO_PORT=10108
     depends_on:
-      - mongo
+      - mongo_clusternet
+      - mqtt
 
 volumes:
-  mongodb_data:
+  mongodb_cluster_net_data:
     driver: local
 
 networks:
