@@ -24,12 +24,12 @@ services:
   # cluster-level mongoDB
   mongo_cluster:
     image: mongo:3.6
-    container_name: mongo
-    hostname: mongo
+    container_name: cluster_mongo
+    hostname: cluster_mongo
     ports:
       - "10107:10107"
     volumes:
-      - 'mongodb_data:/mongodb'
+      - 'mongodb_cluster_data:/mongodb'
     command: mongod --port 10107
 
 # cluster-level mongoDB
@@ -40,13 +40,13 @@ services:
     ports:
       - "10108:10108"
     volumes:
-      - 'mongodb_net_data:/mongodb'
+      - 'mongodb_cluster_net_data:/mongodb'
     command: mongod --port 10108
 
 
 # Cluster Manager
   cluster_service_manager:
-    image: ghcr.io/edgeio/edgeionet/cluster-service-manager:v0.03-amd64
+    image: ghcr.io/edgeio/edgeionet/cluster-service-manager:v0.03.arm.experimental
     container_name: cluster_service_manager
     hostname: cluster_service_manager
     expose:
@@ -54,11 +54,11 @@ services:
     ports:
       - "10110:10110"
     environment:
-      - MY_PORT=10200
+      - MY_PORT=10110
       - MQTT_BROKER_PORT=10003
       - MQTT_BROKER_URL=mqtt
       - ROOT_SERVICE_MANAGER_URL=${SYSTEM_MANAGER_URL}
-      - ROOT_SERVICE_MANAGER_PORT=10100
+      - ROOT_SERVICE_MANAGER_PORT=10099
       - SYSTEM_MANAGER_URL=cluster_manager
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_MONGO_URL=cluster_mongo_net
@@ -82,10 +82,10 @@ services:
     environment:
       - MY_PORT=10100
       - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
+      - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
       - CLUSTER_SERVICE_MANAGER_PORT=10110
-      - SYSTEM_MANAGER_PORT=10000
-      - CLUSTER_MONGO_URL=mongo
+      - CLUSTER_MONGO_URL=cluster_mongo
       - CLUSTER_MONGO_PORT=10107
       - CLUSTER_SCHEDULER_URL=cluster_scheduler
       - CLUSTER_SCHEDULER_PORT=10105
@@ -114,24 +114,22 @@ services:
       - MY_PORT=10105
       - CLUSTER_MANAGER_URL=cluster_manager
       - CLUSTER_MANAGER_PORT=10100
-      - CLUSTER_MONGO_URL=mongo
+      - CLUSTER_MONGO_URL=cluster_mongo
       - CLUSTER_MONGO_PORT=10107
-      - REDIS_ADDR=redis://:clusterRedis@redis:6479
+      - REDIS_ADDR=redis://:clusterRedis@cluster_redis:6479
     depends_on:
-      - redis
+      - cluster_redis
       - mongo_cluster
 
 
   # Redis for the Cluster Scheduler as Job Queue
-  redis:
+  cluster_redis:
     image: redis
-    hostname: redis
-    container_name: redis
-    expose:
-      - "6479"
+    hostname: cluster_redis
+    container_name: cluster_redis
     ports:
       - "6479:6479"
-    command: redis-server --requirepass clusterRedis
+    command: redis-server --requirepass clusterRedis --port 6479
 
 
   prometheus:

@@ -22,7 +22,7 @@ services:
       - CLOUD_SCHEDULER_URL=cloud_scheduler
       - CLOUD_SCHEDULER_PORT=10004
       - NET_PLUGIN_URL=root_service_manager
-      - NET_PLUGIN_PORT=10010
+      - NET_PLUGIN_PORT=10099
 
 
   # MongoDB in Root Orchestrator
@@ -52,13 +52,13 @@ services:
 
   # Cluster Manager
   root_service_manager:
-    image: ghcr.io/edgeio/edgeionet/root-service-manager:v0.03-amd64
+    image: ghcr.io/edgeio/edgeionet/root-service-manager:v0.03.arm.experimental
     container_name: root_service_manager
     hostname: root_service_manager
     expose:
-      - "10010"
+      - "10099"
     ports:
-      - "10010:10010"
+      - "10099:10099"
     environment:
       - MY_PORT=10099
       - SYSTEM_MANAGER_URL=system_manager
@@ -74,8 +74,6 @@ services:
     image: redis
     hostname: redis
     container_name: redis
-    expose:
-      - "6379"
     ports:
       - "6379:6379"
     command: redis-server --requirepass cloudRedis
