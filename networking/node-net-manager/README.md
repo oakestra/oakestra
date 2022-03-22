@@ -92,18 +92,18 @@ The development setup can be used to test locally the tunneling mechanism withou
 With this default test configuration the Subnetwork hierarchy is:
 
 ###Container Network:
-`172.16.0.0/12`
+`10.16.0.0/12`
 
 This is the network where all the IP addresses belongs
 
 ###Service IP subnetwork:
-`172.32.0.0/16`
+`10.32.0.0/16`
 
 This is a special subnetwork where all the VirtualIP addresses belongs. An address belonging to this range must be
 translated to an actual container address and pass trough the proxy. 
 
 ###Bridge Subnetwork:
-`172.19.1.0/24`
+`10.19.1.0/24`
 
 Address where all the containers of this node belong. Each new container will have an address from this space.
 

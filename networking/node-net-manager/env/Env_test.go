@@ -14,12 +14,12 @@ func TestTableInsertSuccessfull(t *testing.T) {
 		Servicenamespace: "a2",
 		Instancenumber:   0,
 		Cluster:          0,
-		Nodeip:           net.ParseIP("172.30.0.1"),
+		Nodeip:           net.ParseIP("10.30.0.1"),
 		Nodeport:         1003,
-		Nsip:             net.ParseIP("172.18.0.1"),
+		Nsip:             net.ParseIP("10.18.0.1"),
 		ServiceIP: []ServiceIP{{
 			IpType:  RoundRobin,
-			Address: net.ParseIP("172.30.1.1"),
+			Address: net.ParseIP("10.30.1.1"),
 		}},
 	}
 
@@ -44,10 +44,10 @@ func TestTableInsertError(t *testing.T) {
 		Cluster:          0,
 		Nodeip:           nil,
 		Nodeport:         1003,
-		Nsip:             net.ParseIP("172.18.0.1"),
+		Nsip:             net.ParseIP("10.18.0.1"),
 		ServiceIP: []ServiceIP{{
 			IpType:  RoundRobin,
-			Address: net.ParseIP("172.30.1.1"),
+			Address: net.ParseIP("10.30.1.1"),
 		}},
 	}
 
@@ -66,18 +66,18 @@ func TestTableDeleteOne(t *testing.T) {
 		Servicenamespace: "a2",
 		Instancenumber:   0,
 		Cluster:          0,
-		Nodeip:           net.ParseIP("172.30.0.1"),
+		Nodeip:           net.ParseIP("10.30.0.1"),
 		Nodeport:         1003,
-		Nsip:             net.ParseIP("172.18.0.1"),
+		Nsip:             net.ParseIP("10.18.0.1"),
 		ServiceIP: []ServiceIP{{
 			IpType:  RoundRobin,
-			Address: net.ParseIP("172.30.1.1"),
+			Address: net.ParseIP("10.30.1.1"),
 		}},
 	}
 
 	_ = table.Add(entry)
 
-	err := table.RemoveByNsip(net.ParseIP("172.18.0.1"))
+	err := table.RemoveByNsip(net.ParseIP("10.18.0.1"))
 	if err != nil {
 		t.Error("Error during deletion")
 	}
@@ -96,12 +96,12 @@ func TestTableDeleteMany(t *testing.T) {
 		Servicenamespace: "a2",
 		Instancenumber:   0,
 		Cluster:          0,
-		Nodeip:           net.ParseIP("172.30.0.1"),
+		Nodeip:           net.ParseIP("10.30.0.1"),
 		Nodeport:         1003,
-		Nsip:             net.ParseIP("172.18.0.1"),
+		Nsip:             net.ParseIP("10.18.0.1"),
 		ServiceIP: []ServiceIP{{
 			IpType:  RoundRobin,
-			Address: net.ParseIP("172.30.1.1"),
+			Address: net.ParseIP("10.30.1.1"),
 		}},
 	}
 	entry2 := TableEntry{
@@ -111,19 +111,19 @@ func TestTableDeleteMany(t *testing.T) {
 		Servicenamespace: "a3",
 		Instancenumber:   0,
 		Cluster:          0,
-		Nodeip:           net.ParseIP("172.30.0.1"),
+		Nodeip:           net.ParseIP("10.30.0.1"),
 		Nodeport:         1003,
-		Nsip:             net.ParseIP("172.18.21"),
+		Nsip:             net.ParseIP("10.18.21"),
 		ServiceIP: []ServiceIP{{
 			IpType:  RoundRobin,
-			Address: net.ParseIP("172.30.1.1"),
+			Address: net.ParseIP("10.30.1.1"),
 		}},
 	}
 
 	_ = table.Add(entry1)
 	_ = table.Add(entry2)
 
-	err := table.RemoveByNsip(net.ParseIP("172.18.21"))
+	err := table.RemoveByNsip(net.ParseIP("10.18.21"))
 	if err != nil {
 		t.Error("Error during deletion")
 	}

@@ -213,9 +213,16 @@ func register(writer http.ResponseWriter, request *http.Request) {
 }
 
 func main() {
+
+	flushRoutes := flag.Bool("flush", false, "Flush the routes without starting the engine. Recommended after a crash")
 	cfgFile := flag.String("cfg", "/etc/netmanager/netcfg.json", "Set a cluster IP")
 	localPort := flag.Int("p", 10010, "Default local port of the NetManager")
 	flag.Parse()
+
+	if *flushRoutes {
+		env.IptableFlushAll()
+		return
+	}
 
 	err := gonfig.GetConf(*cfgFile, &Configuration)
 	if err != nil {

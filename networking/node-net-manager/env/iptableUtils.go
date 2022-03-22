@@ -5,7 +5,7 @@ import (
 	"os/exec"
 )
 
-func iptableFlushAll() {
+func IptableFlushAll() {
 	log.Println("flushing NAT rules")
 	cmd := exec.Command("iptables", "-F", "-t", "nat", "-v")
 	err := cmd.Run()

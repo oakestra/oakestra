@@ -154,7 +154,7 @@ def mongo_update_clean_one_instance(system_job_id, instance):
 def mongo_get_service_address_from_cache():
     """
     Pop an available Service address, if any, from the free addresses cache
-    @return: int[4] in the shape [172,30,x,y]
+    @return: int[4] in the shape [10,30,x,y]
     """
     global mongo_net
     netdb = mongo_net.db.netcache
@@ -171,7 +171,7 @@ def mongo_get_service_address_from_cache():
 def mongo_free_service_address_to_cache(address):
     """
     Add back an address to the cache
-    @param address: int[4] in the shape [172,30,x,y]
+    @param address: int[4] in the shape [10,30,x,y]
     """
     global mongo_net
     netcache = mongo_net.db.netcache
@@ -188,8 +188,8 @@ def mongo_free_service_address_to_cache(address):
 
 def mongo_get_next_service_ip():
     """
-    Returns the next available ip address from the addressing space 172.30.x.y/16
-    @return: int[4] in the shape [172,30,x,y,]
+    Returns the next available ip address from the addressing space 10.30.x.y/16
+    @return: int[4] in the shape [10,30,x,y,]
     """
     global mongo_net
     netcache = mongo_net.db.netcache
@@ -199,7 +199,7 @@ def mongo_get_next_service_ip():
     if next_addr is not None:
         return next_addr["ipv4"]
     else:
-        ip4arr = [172, 30, 0, 0]
+        ip4arr = [10, 30, 0, 0]
         netcache = mongo_net.db.netcache
         id = netcache.insert_one({
             'type': 'next_service_ip',
@@ -211,7 +211,7 @@ def mongo_get_next_service_ip():
 def mongo_update_next_service_ip(address):
     """
     Update the value for the next service ip available
-    @param address: int[4] in the form [172,30,x,y] monotonically increasing with respect to the previous address
+    @param address: int[4] in the form [10,30,x,y] monotonically increasing with respect to the previous address
     """
     global mongo_net
     netcache = mongo_net.db.netcache
@@ -220,7 +220,7 @@ def mongo_update_next_service_ip(address):
     assert len(address) == 4
     for n in address:
         assert 0 <= n < 256
-    assert address[0] == 172
+    assert address[0] == 10
     assert address[1] == 30
 
     netcache.update_one({'type': 'next_service_ip'}, {'$set': {'ipv4': address}})
@@ -228,8 +228,8 @@ def mongo_update_next_service_ip(address):
 
 def mongo_get_next_subnet_ip():
     """
-    Returns the next available subnetwork ip address from the addressing space 172.16.y.z/12
-    @return: int[4] in the shape [172,x,y,z]
+    Returns the next available subnetwork ip address from the addressing space 10.16.y.z/12
+    @return: int[4] in the shape [10,x,y,z]
     """
     global mongo_net
     netcache = mongo_net.db.netcache
@@ -239,7 +239,7 @@ def mongo_get_next_subnet_ip():
     if next_addr is not None:
         return next_addr["ipv4"]
     else:
-        ip4arr = [172, 18, 0, 0]
+        ip4arr = [10, 18, 0, 0]
         netcache = mongo_net.db.netcache
         id = netcache.insert_one({
             'type': 'next_subnet_ip',
@@ -251,7 +251,7 @@ def mongo_get_next_subnet_ip():
 def mongo_update_next_subnet_ip(address):
     """
     Update the value for the next subnet ip available
-    @param address: int[4] in the form [172,x,y,z] monotonically increasing with respect to the previous address
+    @param address: int[4] in the form [10,x,y,z] monotonically increasing with respect to the previous address
     """
     global mongo_net
     netcache = mongo_net.db.netcache
@@ -260,7 +260,7 @@ def mongo_update_next_subnet_ip(address):
     assert len(address) == 4
     for n in address:
         assert 0 <= n < 256
-    assert address[0] == 172
+    assert address[0] == 10
     assert 17 < address[1] < 30
 
     netcache.update_one({'type': 'next_subnet_ip'}, {'$set': {'ipv4': address}})
@@ -269,7 +269,7 @@ def mongo_update_next_subnet_ip(address):
 def mongo_get_subnet_address_from_cache():
     """
     Pop an available Subnet address, if any, from the free addresses cache
-    @return: int[4] in the shape [172,x,y,z]
+    @return: int[4] in the shape [10,x,y,z]
     """
     global mongo_net
     netcache = mongo_net.db.netcache
@@ -286,7 +286,7 @@ def mongo_get_subnet_address_from_cache():
 def mongo_free_subnet_address_to_cache(address):
     """
     Add back a subnetwork address to the cache
-    @param address: int[4] in the shape [172,30,x,y]
+    @param address: int[4] in the shape [10,30,x,y]
     """
     global mongo_net
     netcache = mongo_net.db.netcache

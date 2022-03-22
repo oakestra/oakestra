@@ -78,13 +78,13 @@ func New() GoProxyTunnel {
 	}
 	proxySubnetwork := os.Getenv("PROXY_SUBNETWORK")
 	if len(proxySubnetwork) == 0 {
-		log.Printf("Default proxy subnetwork to 172.30.0.0")
-		proxySubnetwork = "172.30.0.0"
+		log.Printf("Default proxy subnetwork to 10.30.0.0")
+		proxySubnetwork = "10.30.0.0"
 	}
 	tunNetIP := os.Getenv("TUN_NET_IP")
 	if len(tunNetIP) == 0 {
-		log.Printf("Default to tunNetIP 172.19.1.254")
-		tunNetIP = "172.19.1.254"
+		log.Printf("Default to tunNetIP 10.19.1.254")
+		tunNetIP = "10.19.1.254"
 	}
 	tunconfig := Configuration{
 		HostTUNDeviceName:   "goProxyTun",
@@ -371,17 +371,12 @@ func (proxy *GoProxyTunnel) createTun() {
 	}
 
 	//Add network routing rule, Done by default by the system
-	log.Println("adding routing rule for 172.30.0.0/12 to " + ifce.Name())
-	cmd = exec.Command("ip", "route", "add", "172.30.0.0/12", "dev", ifce.Name())
+	log.Printf("adding routing rule for %s to %s\n", proxy.ProxyIpSubnetwork.String(), ifce.Name())
+	cmd = exec.Command("ip", "route", "add", "10.30.0.0/12", "dev", ifce.Name())
 	_, _ = cmd.Output()
 
 	//add firewalls rules
 	log.Println("adding firewall roule " + ifce.Name())
-	/*cmd = exec.Command("iptables", "-t", "nat", "-A", "POSTROUTING", "-o", ifce.Name(), "-j", "MASQUERADE")
-	err = cmd.Run()
-	if err != nil {
-		log.Fatal(err)
-	}*/
 	cmd = exec.Command("iptables", "-A", "INPUT", "-i", "tun0", "-m", "state",
 		"--state", "RELATED,ESTABLISHED", "-j", "ACCEPT")
 	err = cmd.Run()

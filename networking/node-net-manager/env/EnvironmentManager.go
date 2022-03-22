@@ -110,10 +110,6 @@ func NewCustom(proxyname string, customConfig Configuration) *Environment {
 		log.Fatal(err.Error())
 	}
 
-	//flush current nat rules
-	//iptables -F -t nat -v
-	iptableFlushAll()
-
 	//disable reverse path filtering
 	log.Println("Disabling reverse path filtering")
 	disableReversePathFiltering(e.config.HostBridgeName)
@@ -320,7 +316,7 @@ func (env *Environment) setVethFirewallRules(bridgeVethName string) error {
 // add routes inside the container namespace to forward the traffic using the bridge
 func (env *Environment) setContainerRoutes(containerPid int, peerVeth string) error {
 	//Add route to bridge
-	//sudo nsenter -n -t 5565 ip route add 0.0.0.0/0 via 172.18.8.193 dev veth013
+	//sudo nsenter -n -t 5565 ip route add 0.0.0.0/0 via 10.18.8.193 dev veth013
 	err := env.execInsideNs(containerPid, func() error {
 		link, err := netlink.LinkByName(peerVeth)
 		if err != nil {

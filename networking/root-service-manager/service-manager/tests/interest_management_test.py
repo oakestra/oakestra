@@ -61,7 +61,7 @@ def test_interest_register():
 
 def test_deploy_request():
     mongodb_client.mongo_get_service_address_from_cache = MagicMock(return_value=None)
-    mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[172, 30, 0, 253])
+    mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[10, 30, 0, 253])
     mongodb_client.mongo_update_next_service_ip = MagicMock()
     mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
     mongodb_client.mongo_update_job_status_and_instances_by_system_job_id = MagicMock()
@@ -75,7 +75,7 @@ def test_deploy_request():
         system_job_id="123",
         instance_list=[{
             "instance_number": 0,
-            "instance_ip": "172.30.0.253",
+            "instance_ip": "10.30.0.253",
             "cluster_id": "abc"
         }]
     )
