@@ -69,10 +69,18 @@ func (r *ContainerRuntime) StopContainerdClient() {
 
 func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
 
+	var image containerd.Image
 	// pull the given image
-	image, err := r.contaierClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack)
-	if err != nil {
-		return err
+	sysimg, err := r.contaierClient.ImageService().Get(r.ctx, service.Image)
+	if err == nil {
+		image = containerd.NewImage(r.contaierClient, sysimg)
+	} else {
+		logger.ErrorLogger().Printf("Error retrieving the image: %v \n Trying to pull the image online.", err)
+
+		image, err = r.contaierClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack)
+		if err != nil {
+			return err
+		}
 	}
 
 	killChannel := make(chan bool, 1)
