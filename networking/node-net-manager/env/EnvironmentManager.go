@@ -5,7 +5,6 @@ import (
 	"NetManager/mqtt"
 	"errors"
 	"fmt"
-	"github.com/tkanos/gonfig"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 	"log"
@@ -126,18 +125,6 @@ func NewCustom(proxyname string, customConfig Configuration) *Environment {
 	log.Println("Reading the current environment configuration")
 
 	return &e
-}
-
-// NewStatic Creates a new environment using the static configuration files
-func NewStatic(proxyname string) *Environment {
-	log.Println("Loading config file for environment creation")
-	config := Configuration{}
-	//parse confgiuration file
-	err := gonfig.GetConf("config/envcfg.json", &config)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return NewCustom(proxyname, config)
 }
 
 // NewEnvironmentClusterConfigured Creates a new environment using the default configuration and asking the cluster for a new subnetwork
@@ -316,7 +303,7 @@ func (env *Environment) setVethFirewallRules(bridgeVethName string) error {
 // add routes inside the container namespace to forward the traffic using the bridge
 func (env *Environment) setContainerRoutes(containerPid int, peerVeth string) error {
 	//Add route to bridge
-	//sudo nsenter -n -t 5565 ip route add 0.0.0.0/0 via 10.18.8.193 dev veth013
+	//sudo nsenter -n -t 5565 ip route add 0.0.0.0/0 via 127.19.x.y dev veth013
 	err := env.execInsideNs(containerPid, func() error {
 		link, err := netlink.LinkByName(peerVeth)
 		if err != nil {
@@ -516,6 +503,10 @@ func (env *Environment) RefreshServiceTable(jobname string) {
 
 func (env *Environment) RemoveServiceEntries(jobname string) {
 	_ = env.translationTable.RemoveByJobName(jobname)
+}
+
+func (env *Environment) RemoveNsIPEntries(nsip string) {
+	_ = env.translationTable.RemoveByNsip(net.IP(nsip))
 }
 
 func (env *Environment) generateAddress() (net.IP, error) {
