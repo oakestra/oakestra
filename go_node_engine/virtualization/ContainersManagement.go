@@ -162,7 +162,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		oci.WithImageConfig(image),
 		oci.WithHostHostsFile,
 		oci.WithHostname(hostname),
-		oci.WithEnv([]string{fmt.Sprintf("HOSTNAME=%s", hostname)}),
+		oci.WithEnv(append([]string{fmt.Sprintf("HOSTNAME=%s", hostname)}, service.Env...)),
 	}
 	//add user defined commands
 	if len(service.Commands) > 0 {
