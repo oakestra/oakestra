@@ -7,23 +7,23 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"log"
-	"net"
 	"strconv"
 	"strings"
 )
 
 var PUBLIC_ADDRESS = ""
+var LISTEN_PORT = "6000"
 var PUBLIC_PORT = 50103
 var ENV *env.Environment
 var PROXY proxy.GoProxyTunnel
 var APP *tview.Application
-var services [][]string
-var entries [][]string
+var Services [][]string
+var Entries [][]string
 var killchan []*chan bool
 
 func Cli_loop(addr string, port string) {
-	services = make([][]string, 0)
-	entries = make([][]string, 0)
+	Services = make([][]string, 0)
+	Entries = make([][]string, 0)
 	killchan = make([]*chan bool, 0)
 	APP = tview.NewApplication()
 	welcomeForm := tview.NewForm().
@@ -72,6 +72,9 @@ func initEnv(addr string, port string) {
 		AddDropDown("Y", []string{"0", "64", "128", "192"}, 0, func(option string, optionIndex int) {
 			y = option
 		}).
+		AddInputField("P2P sync public port", LISTEN_PORT, 5, nil, func(text string) {
+			LISTEN_PORT = text
+		}).
 		AddInputField("MTU size", "3000", 5, nil, func(text string) {
 			config.Mtusize, _ = strconv.Atoi(text)
 		}).
@@ -81,6 +84,7 @@ func initEnv(addr string, port string) {
 			config.HostBridgeIP = fmt.Sprintf("172.19.%s.%d", x, yint+1)
 			ENV = env.NewCustom(PROXY.HostTUNDeviceName, config)
 			PROXY.SetEnvironment(ENV)
+			go HandleHttpSyncRequests(LISTEN_PORT)
 			gotoMenu()
 		}).
 		AddButton("Quit", func() {
@@ -111,13 +115,13 @@ func gotoMenu() {
 			APP.Stop()
 			removeRoutes()
 		}).
-		AddItem("Add table entry", "Add a new route towards an external service deployed on another playground", 'd', func() {
+		AddItem("P2P sync", "Sync routes with another node's p2p instance", 'd', func() {
 			APP.Stop()
-			addTableEntry()
+			p2pSync()
 		}).
 		AddItem("Undeploy container", "(not yet implemented) Undeploy a application that is currently running", 'e', nil).
 		AddItem("Remove all containers", "Undeploy all running containers", 'f', func() {
-			services = make([][]string, 0)
+			Services = make([][]string, 0)
 			for _, ch := range killchan {
 				*ch <- true
 			}
@@ -138,7 +142,7 @@ func listContainers() {
 	table := tview.NewTable().
 		SetBorders(true)
 	colsNames := strings.Split("index appname nsIP instanceIP RR_IP", " ")
-	cols, rows := 5, len(services)+1
+	cols, rows := 5, len(Services)+1
 	word := 0
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
@@ -158,7 +162,7 @@ func listContainers() {
 							SetAlign(tview.AlignCenter))
 				} else {
 					table.SetCell(r, c,
-						tview.NewTableCell(services[r-1][c-1]).
+						tview.NewTableCell(Services[r-1][c-1]).
 							SetTextColor(color).
 							SetAlign(tview.AlignCenter))
 				}
@@ -222,7 +226,7 @@ func deployContainer() {
 				closePlayground(err)
 			}
 			app := []string{sname, addr, iip, sip}
-			services = append(services, app)
+			Services = append(Services, app)
 			killchan = append(killchan, kill)
 			gotoMenu()
 		}).
@@ -236,67 +240,23 @@ func deployContainer() {
 	}
 }
 
-func addTableEntry() {
+func p2pSync() {
 	APP = tview.NewApplication()
-	sname := "test"
-	instance := "0"
-	nodeip := "192.168.0.2"
-	nodeport := "50103"
-	nsip := "172.19.0.2"
-	iip := "172.30.10.10"
-	sip := "172.30.20.20"
+	address := "192.168.0.2"
+	port := "6000"
 	form := tview.NewForm().
-		AddInputField("Appname:", "test", 0, nil, func(text string) {
-			sname = text
+		AddInputField("P2P Node address: ", address, 7, nil, func(text string) {
+			address = text
 		}).
-		AddDropDown("Instance", []string{"0", "1", "2", "3", "4", "5"}, 0, func(option string, optionIndex int) {
-			instance = option
+		AddInputField("P2P Node port", "6000", 7, nil, func(text string) {
+			port = fmt.Sprintf("172.30.%s", text)
 		}).
-		AddInputField("NamespaceIP: 172.19.", "0.2", 7, nil, func(text string) {
-			nsip = fmt.Sprintf("172.19.%s", text)
-		}).
-		AddInputField("InstanceIP: 172.30.", "10.10", 7, nil, func(text string) {
-			iip = fmt.Sprintf("172.30.%s", text)
-		}).
-		AddInputField("RoundRobinIP (must match the other instances): 172.30.", "20.20", 7, nil, func(text string) {
-			sip = fmt.Sprintf("172.30.%s", text)
-		}).
-		AddInputField("Remote node IP: 192.168.", "0.2", 7, nil, func(text string) {
-			nodeip = fmt.Sprintf("192.168.%s", text)
-		}).
-		AddInputField("Remote node port:", nodeport, 7, nil, func(text string) {
-			nodeport = text
-		}).
-		AddButton("Save", func() {
+		AddButton("Sync", func() {
 			APP.Stop()
-			instanceint, _ := strconv.Atoi(instance)
-			portint, err := strconv.Atoi(nodeport)
+			err := AskSync(address, port, Entries)
 			if err != nil {
-				closePlayground(err)
+				log.Printf("ERROR: impossible to sync: %v", err)
 			}
-			ENV.AddTableQueryEntry(env.TableEntry{
-				JobName:          sname,
-				Appname:          sname,
-				Appns:            "default",
-				Servicename:      "test",
-				Servicenamespace: "default",
-				Instancenumber:   instanceint,
-				Cluster:          0,
-				Nodeip:           net.IP(nodeip),
-				Nodeport:         portint,
-				Nsip:             net.IP(nsip),
-				ServiceIP: []env.ServiceIP{
-					env.ServiceIP{
-						IpType:  env.InstanceNumber,
-						Address: net.IP(iip),
-					},
-					env.ServiceIP{
-						IpType:  env.RoundRobin,
-						Address: net.IP(sip),
-					},
-				},
-			})
-			entries = append(entries, strings.Split(fmt.Sprintf("%s %s %s %s %s %s", sname, nsip, iip, sip, nodeip, nodeport), " "))
 			gotoMenu()
 		}).
 		AddButton("Back", func() {
@@ -314,7 +274,7 @@ func listRoutes() {
 	table := tview.NewTable().
 		SetBorders(true)
 	colsNames := strings.Split("index appname nsIP instanceIP RR_IP nodeIP port", " ")
-	cols, rows := 7, len(entries)+1
+	cols, rows := 7, len(Entries)+1
 	word := 0
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
@@ -334,7 +294,7 @@ func listRoutes() {
 							SetAlign(tview.AlignCenter))
 				} else {
 					table.SetCell(r, c,
-						tview.NewTableCell(entries[r-1][c-1]).
+						tview.NewTableCell(Entries[r-1][c-1]).
 							SetTextColor(color).
 							SetAlign(tview.AlignCenter))
 				}
@@ -360,7 +320,7 @@ func removeRoutes() {
 	table := tview.NewTable().
 		SetBorders(true)
 	colsNames := strings.Split("index appname nsIP instanceIP RR_IP nodeIP port", " ")
-	cols, rows := 7, len(entries)+1
+	cols, rows := 7, len(Entries)+1
 	word := 0
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
@@ -380,7 +340,7 @@ func removeRoutes() {
 							SetAlign(tview.AlignCenter))
 				} else {
 					table.SetCell(r, c,
-						tview.NewTableCell(entries[r-1][c-1]).
+						tview.NewTableCell(Entries[r-1][c-1]).
 							SetTextColor(color).
 							SetAlign(tview.AlignCenter))
 				}
@@ -398,8 +358,8 @@ func removeRoutes() {
 	}).SetSelectedFunc(func(row int, column int) {
 		if row > 0 {
 			APP.Stop()
-			ENV.RemoveNsIPEntries(entries[row-1][1])
-			entries = append(entries[:row-1], entries[row:]...)
+			ENV.RemoveNsIPEntries(Entries[row-1][1])
+			Entries = append(Entries[:row-1], Entries[row:]...)
 			listRoutes()
 		}
 	})

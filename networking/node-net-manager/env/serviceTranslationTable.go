@@ -8,17 +8,17 @@ import (
 )
 
 type TableEntry struct {
-	JobName          string
-	Appname          string
-	Appns            string
-	Servicename      string
-	Servicenamespace string
-	Instancenumber   int
-	Cluster          int
-	Nodeip           net.IP
-	Nodeport         int
-	Nsip             net.IP
-	ServiceIP        []ServiceIP
+	JobName          string      `json:"job_name"`
+	Appname          string      `json:"appname"`
+	Appns            string      `json:"appns"`
+	Servicename      string      `json:"servicename"`
+	Servicenamespace string      `json:"servicenamespace"`
+	Instancenumber   int         `json:"instancenumber"`
+	Cluster          int         `json:"cluster"`
+	Nodeip           net.IP      `json:"nodeip"`
+	Nodeport         int         `json:"nodeport"`
+	Nsip             net.IP      `json:"nsip"`
+	ServiceIP        []ServiceIP `json:"serviceIP"`
 }
 
 type ServiceIpType int
@@ -30,8 +30,8 @@ const (
 )
 
 type ServiceIP struct {
-	IpType  ServiceIpType
-	Address net.IP
+	IpType  ServiceIpType `json:"ip_type"`
+	Address net.IP        `json:"address"`
 }
 
 type TableManager struct {
