@@ -187,7 +187,7 @@ func deployContainer() {
 	sname := "test"
 	image := "docker.io/curlimages/curl:7.82.0"
 	instance := "0"
-	cmd := "ls"
+	cmd := ""
 	iip := "172.30.10.10"
 	sip := "172.30.20.20"
 	form := tview.NewForm().
@@ -212,7 +212,11 @@ func deployContainer() {
 		AddButton("Save", func() {
 			APP.Stop()
 			instanceint, _ := strconv.Atoi(instance)
-			kill, addr, err := Start(sname, image, instanceint, strings.Split(cmd, " "), iip, sip)
+			cmdArr := make([]string, 0)
+			if len(cmd) > 0 {
+				cmdArr = strings.Split(cmd, " ")
+			}
+			kill, addr, err := Start(sname, image, instanceint, cmdArr, iip, sip)
 			if err != nil {
 				fmt.Printf("%v", err)
 				closePlayground(err)
