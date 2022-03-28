@@ -4,6 +4,7 @@ import (
 	"NetManager/env"
 	"NetManager/handlers"
 	"NetManager/mqtt"
+	"NetManager/playground"
 	"NetManager/proxy"
 	"encoding/json"
 	"flag"
@@ -217,12 +218,8 @@ func main() {
 	flushRoutes := flag.Bool("flush", false, "Flush the routes without starting the engine. Recommended after a crash")
 	cfgFile := flag.String("cfg", "/etc/netmanager/netcfg.json", "Set a cluster IP")
 	localPort := flag.Int("p", 10010, "Default local port of the NetManager")
+	p2pMode := flag.Bool("p2p", false, "Start the engine in p2p mode (playground2playground), requires the address of a peer node. Useful for debugging.")
 	flag.Parse()
-
-	if *flushRoutes {
-		env.IptableFlushAll()
-		return
-	}
 
 	err := gonfig.GetConf(*cfgFile, &Configuration)
 	if err != nil {
@@ -230,6 +227,17 @@ func main() {
 	}
 
 	log.Print(Configuration)
+
+	if *flushRoutes {
+		env.IptableFlushAll()
+		return
+	}
+
+	if *p2pMode {
+		defer playground.APP.Stop()
+		env.IptableFlushAll()
+		playground.CliLoop(Configuration.NodePublicAddress, Configuration.NodePublicPort)
+	}
 
 	log.Println("NetManager started. Waiting for registration.")
 	handleRequests(*localPort)
