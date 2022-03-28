@@ -1,7 +1,7 @@
 
 #!/bin/bash
 
-# docker-compose --file ../docker-compose.yml up -d
+# docker-compose --file ../docker-compose-amd64.yml up -d
 
 # create virtualenv
 virtualenv --clear -p python3.8 .venv

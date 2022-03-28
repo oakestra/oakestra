@@ -1,4 +1,4 @@
-version: "3.3"
+version: "3"
 services:
 
   # MQTT 
@@ -14,8 +14,6 @@ services:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
       - /mosquitto/data
       - /mosquitto/log
-    networks:
-      - default
     healthcheck:
       test: [ "CMD-SHELL", "timeout -t 5 mosquitto_sub -t '$$SYS/#' -C 1 | grep -v Error || exit 1" ]
       interval: 10s
@@ -34,7 +32,40 @@ services:
       - 'mongodb_cluster_data:/mongodb'
     command: mongod --port 10107
 
+# cluster-level mongoDB
+  mongo_clusternet:
+    image: mongo:3.6
+    container_name: cluster_mongo_net
+    hostname: cluster_mongo_net
+    ports:
+      - "10108:10108"
+    volumes:
+      - 'mongodb_cluster_net_data:/mongodb'
+    command: mongod --port 10108
 
+
+# Cluster Manager
+  cluster_service_manager:
+    image: ghcr.io/edgeio/edgeionet/cluster-service-manager:v0.03.amd64.experimental
+    container_name: cluster_service_manager
+    hostname: cluster_service_manager
+    expose:
+      - "10110"
+    ports:
+      - "10110:10110"
+    environment:
+      - MY_PORT=10110
+      - MQTT_BROKER_PORT=10003
+      - MQTT_BROKER_URL=mqtt
+      - ROOT_SERVICE_MANAGER_URL=${SYSTEM_MANAGER_URL}
+      - ROOT_SERVICE_MANAGER_PORT=10099
+      - SYSTEM_MANAGER_URL=cluster_manager
+      - SYSTEM_MANAGER_PORT=10000
+      - CLUSTER_MONGO_URL=cluster_mongo_net
+      - CLUSTER_MONGO_PORT=10108
+    depends_on:
+      - mongo_clusternet
+      - mqtt
 
 # Cluster Manager
   cluster_manager:
@@ -49,7 +80,7 @@ services:
       - "10100:10100"
       - "10101:10101"
     environment:
-      - MY_PORT=10000
+      - MY_PORT=10100
       - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
@@ -63,9 +94,10 @@ services:
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
     depends_on:
-      - mongo
+      - mongo_cluster
       - mqtt
       - cluster_scheduler
+      - cluster_service_manager
 
 
   # Cluster Scheduler
@@ -84,17 +116,17 @@ services:
       - CLUSTER_MANAGER_PORT=10100
       - CLUSTER_MONGO_URL=cluster_mongo
       - CLUSTER_MONGO_PORT=10107
-      - REDIS_ADDR=redis://:clusterRedis@redis:6479
+      - REDIS_ADDR=redis://:clusterRedis@cluster_redis:6479
     depends_on:
-      - redis
-      - mongo
+      - cluster_redis
+      - mongo_cluster
 
 
   # Redis for the Cluster Scheduler as Job Queue
-  redis:
+  cluster_redis:
     image: redis
-    hostname: redis
-    container_name: redis
+    hostname: cluster_redis
+    container_name: cluster_redis
     ports:
       - "6479:6479"
     command: redis-server --requirepass clusterRedis --port 6479
@@ -116,4 +148,6 @@ services:
 
 volumes:
   mongodb_cluster_data:
+    driver: local
+  mongodb_cluster_net_data:
     driver: local
