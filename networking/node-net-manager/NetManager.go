@@ -236,7 +236,7 @@ func main() {
 	if *p2pMode {
 		defer playground.APP.Stop()
 		env.IptableFlushAll()
-		playground.Cli_loop(Configuration.NodePublicPort, Configuration.NodePublicAddress)
+		playground.CliLoop(Configuration.NodePublicAddress, Configuration.NodePublicPort)
 	}
 
 	log.Println("NetManager started. Waiting for registration.")

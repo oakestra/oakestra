@@ -40,13 +40,16 @@ func attachNetwork(appname string, pid int, instance int, mappings map[int]int, 
 		},
 	})
 
-	return addr.String(), nil
+	return fmt.Sprintf("%s", addr.String()), nil
 }
 
 func AddRoute(entry env.TableEntry) {
-	ENV.AddTableQueryEntry(entry)
-	Entries = append(Entries, EntryToString(entry))
+	if !entryExist(entry) {
+		ENV.AddTableQueryEntry(entry)
+		Entries = append(Entries, EntryToString(entry))
+	}
 }
+
 func StringToEntry(entry []string) env.TableEntry {
 	port, _ := strconv.Atoi(entry[5])
 	instance, _ := strconv.Atoi(entry[6])
@@ -75,5 +78,14 @@ func StringToEntry(entry []string) env.TableEntry {
 }
 
 func EntryToString(entry env.TableEntry) []string {
-	return []string{entry.Appname, string(entry.Nsip), string(entry.ServiceIP[0].Address), string(entry.ServiceIP[1].Address), string(entry.Nodeip), strconv.Itoa(entry.Nodeport), strconv.Itoa(entry.Instancenumber)}
+	return []string{entry.Appname, fmt.Sprintf("%s", entry.Nsip.String()), fmt.Sprintf("%s", entry.ServiceIP[0].Address.String()), fmt.Sprintf("%s", entry.ServiceIP[1].Address.String()), fmt.Sprintf("%s", entry.Nodeip.String()), strconv.Itoa(entry.Nodeport), strconv.Itoa(entry.Instancenumber)}
+}
+
+func entryExist(toAdd env.TableEntry) bool {
+	for _, entry := range Entries {
+		if entry[1] == fmt.Sprintf("%s", toAdd.Nsip.String()) {
+			return true
+		}
+	}
+	return false
 }

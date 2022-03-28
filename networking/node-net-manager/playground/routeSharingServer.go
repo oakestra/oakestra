@@ -16,7 +16,7 @@ type SyncPacket struct {
 }
 
 func AskSync(ip string, port string, entries [][]string) error {
-	RequestUrl := fmt.Sprintf("http://%s:%s/sync")
+	RequestUrl := fmt.Sprintf("http://%s:%s/sync", ip, port)
 	req := SyncPacket{
 		EntryList: entriesToList(entries),
 	}

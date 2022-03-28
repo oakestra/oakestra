@@ -66,6 +66,10 @@ func Start(sname string, imageName string, instance int, cmd []string, iip strin
 	if err != nil {
 		return nil, "", err
 	}
+	err = task.CloseIO(ctx)
+	if err != nil {
+		return nil, "", err
+	}
 
 	// get wait channel
 	_, err = task.Wait(ctx)

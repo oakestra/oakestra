@@ -9,6 +9,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var PUBLIC_ADDRESS = ""
@@ -21,13 +22,17 @@ var Services [][]string
 var Entries [][]string
 var killchan []*chan bool
 
-func Cli_loop(addr string, port string) {
+func CliLoop(addr string, port string) {
 	Services = make([][]string, 0)
 	Entries = make([][]string, 0)
 	killchan = make([]*chan bool, 0)
+	PUBLIC_ADDRESS = addr
+	PUBLIC_PORT, _ = strconv.Atoi(port)
 	APP = tview.NewApplication()
 	welcomeForm := tview.NewForm().
-		AddInputField("Welcome to NetManagerPlayground", "!", 1, nil, nil).
+		AddInputField("Welcome to NetManagerPlayground, node address:", PUBLIC_ADDRESS, 0, nil, func(text string) {
+			PUBLIC_ADDRESS = text
+		}).
 		AddButton("Proceed", func() {
 			APP.Stop()
 			initEnv(addr, port)
@@ -36,7 +41,7 @@ func Cli_loop(addr string, port string) {
 			closePlayground(nil)
 		})
 	welcomeForm.SetBorder(true).SetTitle("P2P - Playground2Playground").SetTitleAlign(tview.AlignCenter)
-	if err := APP.SetRoot(welcomeForm, true).Run(); err != nil {
+	if err := APP.SetRoot(welcomeForm, true).SetFocus(welcomeForm).Run(); err != nil {
 		closePlayground(err)
 	}
 }
@@ -44,8 +49,6 @@ func Cli_loop(addr string, port string) {
 func initEnv(addr string, port string) {
 	//initialize the proxy tunnel
 	APP = tview.NewApplication()
-	PUBLIC_PORT, _ = strconv.Atoi(port)
-	PUBLIC_ADDRESS = addr
 	PROXY = proxy.New()
 	PROXY.Listen()
 	cleanAll()
@@ -53,7 +56,7 @@ func initEnv(addr string, port string) {
 	//initialize the Env Manager
 	config := env.Configuration{
 		HostBridgeName:             "goProxyBridge",
-		HostBridgeIP:               "172.19.0.0",
+		HostBridgeIP:               "10.19.0.0",
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
@@ -64,8 +67,8 @@ func initEnv(addr string, port string) {
 	y := "0"
 
 	initForm := tview.NewForm().
-		AddInputField("Input X and Y for the for the node subnetwork 172.19.x.y", "", 1, nil, nil).
-		AddInputField("E.g. node1: 172.19.0.0 | node 2: 172.19.0.64", "", 1, nil, nil).
+		AddInputField("Input X and Y for the for the node subnetwork 10.19.x.y", "", 1, nil, nil).
+		AddInputField("E.g. node1: 10.19.0.0 | node 2: 10.19.0.64", "", 1, nil, nil).
 		AddDropDown("X", []string{"0", "1", "2", "3", "4"}, 0, func(option string, optionIndex int) {
 			x = option
 		}).
@@ -81,7 +84,7 @@ func initEnv(addr string, port string) {
 		AddButton("Save", func() {
 			APP.Stop()
 			yint, _ := strconv.Atoi(y)
-			config.HostBridgeIP = fmt.Sprintf("172.19.%s.%d", x, yint+1)
+			config.HostBridgeIP = fmt.Sprintf("10.19.%s.%d", x, yint+1)
 			ENV = env.NewCustom(PROXY.HostTUNDeviceName, config)
 			PROXY.SetEnvironment(ENV)
 			go HandleHttpSyncRequests(LISTEN_PORT)
@@ -133,7 +136,7 @@ func gotoMenu() {
 			closePlayground(nil)
 		})
 	if err := APP.SetRoot(list, true).SetFocus(list).Run(); err != nil {
-		closePlayground(nil)
+		closePlayground(err)
 	}
 }
 
@@ -191,9 +194,9 @@ func deployContainer() {
 	sname := "test"
 	image := "docker.io/curlimages/curl:7.82.0"
 	instance := "0"
-	cmd := ""
-	iip := "172.30.10.10"
-	sip := "172.30.20.20"
+	cmd := "sh -c tail -f /dev/null"
+	iip := "10.30.10.10"
+	sip := "10.30.20.20"
 	form := tview.NewForm().
 		AddInputField("Appname:", "test", 0, nil, func(text string) {
 			sname = text
@@ -204,14 +207,14 @@ func deployContainer() {
 		AddDropDown("Instance", []string{"0", "1", "2", "3", "4", "5"}, 0, func(option string, optionIndex int) {
 			instance = option
 		}).
-		AddInputField("Cmd", "ls", 0, nil, func(text string) {
+		AddInputField("Cmd", cmd, 0, nil, func(text string) {
 			cmd = text
 		}).
-		AddInputField("InstanceIP: 172.30.", "10.10", 7, nil, func(text string) {
-			iip = fmt.Sprintf("172.30.%s", text)
+		AddInputField("InstanceIP: 10.30.", "10.10", 7, nil, func(text string) {
+			iip = fmt.Sprintf("10.30.%s", text)
 		}).
-		AddInputField("RoundRobinIP (must match the other instances): 172.30.", "20.20", 7, nil, func(text string) {
-			sip = fmt.Sprintf("172.30.%s", text)
+		AddInputField("RoundRobinIP (must match the other instances): 10.30.", "20.20", 7, nil, func(text string) {
+			sip = fmt.Sprintf("10.30.%s", text)
 		}).
 		AddButton("Save", func() {
 			APP.Stop()
@@ -249,7 +252,7 @@ func p2pSync() {
 			address = text
 		}).
 		AddInputField("P2P Node port", "6000", 7, nil, func(text string) {
-			port = fmt.Sprintf("172.30.%s", text)
+			port = text
 		}).
 		AddButton("Sync", func() {
 			APP.Stop()
@@ -372,4 +375,11 @@ func closePlayground(err error) {
 	APP.Stop()
 	cleanAll()
 	log.Fatalln(err)
+}
+
+func periodic_redraw() {
+	select {
+	case <-time.After(time.Second * 2):
+		APP.Draw()
+	}
 }
