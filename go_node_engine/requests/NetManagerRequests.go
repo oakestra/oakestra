@@ -16,10 +16,10 @@ type registerRequest struct {
 }
 
 type connectNetworkRequest struct {
-	Pid            int         `json:"pid"`
-	Servicename    string      `json:"serviceName"`
-	Instancenumber int         `json:"instanceNumber"`
-	PortMappings   map[int]int `json:"PortMappings"`
+	Pid            int    `json:"pid"`
+	Servicename    string `json:"serviceName"`
+	Instancenumber int    `json:"instanceNumber"`
+	PortMappings   string `json:"portMappings"`
 }
 
 var ongoingDeployment sync.Mutex
@@ -28,7 +28,7 @@ var httpClient = &http.Client{
 	Timeout: time.Second * 10,
 }
 
-func AttachNetworkToTask(pid int, servicename string, instance int, portMappings map[int]int) error {
+func AttachNetworkToTask(pid int, servicename string, instance int, portMappings string) error {
 
 	ongoingDeployment.Lock()
 	defer ongoingDeployment.Unlock()
