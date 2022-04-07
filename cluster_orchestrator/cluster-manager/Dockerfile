@@ -3,6 +3,7 @@ LABEL org.opencontainers.image.source https://github.com/edgeIO/edgeio
 
 ADD requirements.txt /
 
+RUN apt-get update && apt-get install -y curl
 RUN apt-get update -y && apt-get install apt-file -y && apt-file update && apt-get install -y python3-dev build-essential
 RUN pip install -r requirements.txt
 

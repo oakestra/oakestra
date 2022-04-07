@@ -8,9 +8,11 @@ services:
     hostname: system_manager
     container_name: system_manager
     expose:
-      - "10000"
+      - "10000/tcp"
+      - "10000/udp"
     ports:
-      - "10000:10000"
+      - "10000:10000/tcp"
+      - "10000:10000/udp"
     depends_on:
       - mongo_root
       - cloud_scheduler
@@ -55,9 +57,9 @@ services:
     container_name: root_service_manager
     hostname: root_service_manager
     expose:
-      - "10010"
+      - "10099"
     ports:
-      - "10010:10010"
+      - "10099:10099"
     environment:
       - MY_PORT=10099
       - SYSTEM_MANAGER_URL=system_manager
@@ -116,7 +118,7 @@ services:
     ports:
       - "10003:10003"
     volumes:
-      - .cluster_orchestrator/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
       - /mosquitto/data
       - /mosquitto/log
     healthcheck:
@@ -162,9 +164,9 @@ services:
       - MY_PORT=10110
       - MQTT_BROKER_PORT=10003
       - MQTT_BROKER_URL=mqtt
-      - ROOT_SERVICE_MANAGER_URL=${SYSTEM_MANAGER_URL}
+      - ROOT_SERVICE_MANAGER_URL=root_service_manager
       - ROOT_SERVICE_MANAGER_PORT=10099
-      - SYSTEM_MANAGER_URL=cluster_manager
+      - SYSTEM_MANAGER_URL=system_manager
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_MONGO_URL=cluster_mongo_net
       - CLUSTER_MONGO_PORT=10108
@@ -185,7 +187,7 @@ services:
       - "10101:10101"
     environment:
       - MY_PORT=10100
-      - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
+      - SYSTEM_MANAGER_URL=system_manager
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
       - CLUSTER_SERVICE_MANAGER_PORT=10110
@@ -202,6 +204,7 @@ services:
       - mqtt
       - cluster_scheduler
       - cluster_service_manager
+      - system_manager
 
 
   # Cluster Scheduler
