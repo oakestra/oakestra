@@ -16,17 +16,6 @@ import (
 	"net/http"
 )
 
-type dockerDeployRequest struct {
-	ContainerId    string `json:"containerId"`
-	AppFullName    string `json:"appName"`
-	Instancenumber int    `json:"instanceNumber"`
-}
-
-type sip struct {
-	Type    string `json:"IpType"` //RR, Closest or InstanceNumber
-	Address string `json:"Address"`
-}
-
 type undeployRequest struct {
 	Servicename string `json:"serviceName"`
 }
@@ -108,16 +97,8 @@ Response Json:
 */
 func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 	log.Println("Received HTTP request - /docker/deploy ")
-
-	if WorkerID == "" {
-		log.Printf("[ERROR] Node not initialized")
-		writer.WriteHeader(299)
-		_, err := writer.Write([]byte("DEPRECATED API"))
-		if err != nil {
-			return
-		}
-		return
-	}
+	writer.WriteHeader(299)
+	_, _ = writer.Write([]byte("DEPRECATED API"))
 }
 
 /*

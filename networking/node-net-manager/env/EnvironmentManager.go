@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -57,7 +58,7 @@ type Environment struct {
 type service struct {
 	ip          net.IP
 	sname       string
-	portmapping map[int]int
+	portmapping string
 	veth        *netlink.Veth
 }
 
@@ -172,7 +173,7 @@ func (env *Environment) ConfigureDockerNetwork(containername string) (string, er
 }
 
 // AttachNetworkToContainer Attach a Docker container to the bridge and the current network environment
-func (env *Environment) AttachNetworkToContainer(pid int, sname string, portmapping map[int]int) (net.IP, error) {
+func (env *Environment) AttachNetworkToContainer(pid int, sname string, portmapping string) (net.IP, error) {
 
 	cleanup := func(veth *netlink.Veth) {
 		_ = netlink.LinkDel(veth)
@@ -530,33 +531,36 @@ func (env *Environment) freeContainerAddress(ip net.IP) {
 	env.addrCache = append(env.addrCache, ip)
 }
 
-func (env *Environment) manageContainerPorts(localContainerAddress string, portmapping map[int]int, operation PortOperation) error {
+func (env *Environment) manageContainerPorts(localContainerAddress string, portmapping string, operation PortOperation) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	if portmapping != nil {
-		for hostport, containerport := range portmapping {
-			sport := strconv.Itoa(hostport)
-			destination := fmt.Sprintf("%s:%d", localContainerAddress, containerport)
-			openPortCmd := exec.Command("iptables", "-t", "nat", string(operation), "PREROUTING", "-p", "tcp", "--dport", sport, "-j", "DNAT", "--to-destination", destination)
-			status, err := openPortCmd.Output()
-			if err != nil {
-				log.Printf("ERROR: %s\n", string(status))
-				return err
-			}
-			log.Printf("Changed port %s status toward destination %s\n", sport, destination)
+
+	mappings := strings.Split(portmapping, ";")
+	for _, portmap := range mappings {
+		portType := "tcp"
+		if strings.Contains(portmap, "/udp") {
+			portmap = strings.Replace(portmap, "/udp", "", -1)
+			portType = "udp"
+		} else {
+			portmap = strings.Replace(portmap, "/tcp", "", -1)
 		}
+		ports := strings.Split(portmap, ":")
+		hostPort := ports[0]
+		containerPort := ports[0]
+		if len(ports) > 1 {
+			containerPort = ports[1]
+		}
+		if !isValidPort(hostPort) || !isValidPort(containerPort) {
+			return errors.New("invaid Port Mapping")
+		}
+		destination := fmt.Sprintf("%s:%s", localContainerAddress, containerPort)
+		openPortCmd := exec.Command("iptables", "-t", "nat", string(operation), "PREROUTING", "-p", portType, "--dport", hostPort, "-j", "DNAT", "--to-destination", destination)
+		status, err := openPortCmd.Output()
+		if err != nil {
+			log.Printf("ERROR: %s\n", string(status))
+			return err
+		}
+		log.Printf("Changed port %s status toward destination %s\n", hostPort, destination)
 	}
 	return nil
-}
-
-//Given an ipv4, gives the next IP
-func nextIP(ip net.IP, inc uint) net.IP {
-	i := ip.To4()
-	v := uint(i[0])<<24 + uint(i[1])<<16 + uint(i[2])<<8 + uint(i[3])
-	v += inc
-	v3 := byte(v & 0xFF)
-	v2 := byte((v >> 8) & 0xFF)
-	v1 := byte((v >> 16) & 0xFF)
-	v0 := byte((v >> 24) & 0xFF)
-	return net.IPv4(v0, v1, v2, v3)
 }

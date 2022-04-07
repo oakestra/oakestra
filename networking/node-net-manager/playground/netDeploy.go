@@ -7,7 +7,7 @@ import (
 	"strconv"
 )
 
-func attachNetwork(appname string, pid int, instance int, mappings map[int]int, iip string, sip string) (string, error) {
+func attachNetwork(appname string, pid int, instance int, mappings string, iip string, sip string) (string, error) {
 
 	//attach network to the container
 	addr, err := ENV.AttachNetworkToContainer(pid, appname, mappings)

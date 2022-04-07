@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -64,4 +65,28 @@ func NameUniqueHash(name string, size int) string {
 	}
 	hashedAndEncoded := base64.URLEncoding.EncodeToString(hashed)
 	return hashedAndEncoded[:size]
+}
+
+//check if the string is a valid network port
+func isValidPort(port string) bool {
+	portInt, err := strconv.Atoi(port)
+	if err != nil {
+		return false
+	}
+	if portInt < 0 || portInt > 65535 {
+		return false
+	}
+	return true
+}
+
+//Given an ipv4, gives the next IP
+func nextIP(ip net.IP, inc uint) net.IP {
+	i := ip.To4()
+	v := uint(i[0])<<24 + uint(i[1])<<16 + uint(i[2])<<8 + uint(i[3])
+	v += inc
+	v3 := byte(v & 0xFF)
+	v2 := byte((v >> 8) & 0xFF)
+	v1 := byte((v >> 16) & 0xFF)
+	v0 := byte((v >> 24) & 0xFF)
+	return net.IPv4(v0, v1, v2, v3)
 }
