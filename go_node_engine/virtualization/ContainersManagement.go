@@ -17,8 +17,6 @@ import (
 	"io/ioutil"
 	"os"
 	"reflect"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -212,14 +210,6 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		}
 	}(ctx, task)
 
-	//create port mappings map
-	portMappings, err := createPortMappings(service.Ports)
-	if err != nil {
-		logger.ErrorLogger().Printf("Invalid port mappings %v", err)
-		revert(err)
-		return
-	}
-
 	// get wait channel
 	exitStatusC, err := task.Wait(ctx)
 	if err != nil {
@@ -231,7 +221,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// if Overlay mode is active then attach network to the task
 	if model.GetNodeInfo().Overlay {
 		taskpid := int(task.Pid())
-		err = requests.AttachNetworkToTask(taskpid, service.Sname, 0, portMappings)
+		err = requests.AttachNetworkToTask(taskpid, service.Sname, 0, service.Ports)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
 			revert(err)
@@ -327,6 +317,11 @@ func (r *ContainerRuntime) forceContainerCleanup() {
 			logger.ErrorLogger().Printf("Unable to fetch kill task: %v", err)
 			continue
 		}
+		err = container.Delete(r.ctx)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to delete container: %v", err)
+			continue
+		}
 	}
 }
 
@@ -373,22 +368,4 @@ func killTask(ctx context.Context, task containerd.Task, container containerd.Co
 
 	logger.ErrorLogger().Printf("Task %s terminated", task.ID())
 	return nil
-}
-
-func createPortMappings(ports string) (map[int]int, error) {
-	portMappings := make(map[int]int, 0)
-	mappings := strings.Split(ports, ";")
-	for _, portmap := range mappings {
-		ports := strings.Split(portmap, ":")
-		hostPort, err := strconv.Atoi(ports[0])
-		containerPort := hostPort
-		if len(ports) > 1 && err == nil {
-			containerPort, err = strconv.Atoi(ports[1])
-		}
-		if err != nil {
-			return nil, err
-		}
-		portMappings[hostPort] = containerPort
-	}
-	return portMappings, nil
 }

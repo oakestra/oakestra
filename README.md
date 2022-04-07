@@ -63,7 +63,7 @@ service_name: service1
 service_ns: test
 image: docker.io/library/nginx:alpine
 image_runtime: docker
-port: 80:80
+port: 80:80/tcp
 commands: []
 environment: ["DUMMY_ENV=hello_world","DUMMY_ENV2=hello_world2"]
 RR_ip: 172.30.25.3
