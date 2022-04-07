@@ -317,6 +317,11 @@ func (r *ContainerRuntime) forceContainerCleanup() {
 			logger.ErrorLogger().Printf("Unable to fetch kill task: %v", err)
 			continue
 		}
+		err = container.Delete(r.ctx)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to delete container: %v", err)
+			continue
+		}
 	}
 }
 
