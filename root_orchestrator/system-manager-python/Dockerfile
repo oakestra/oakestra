@@ -1,4 +1,5 @@
 FROM python:3.8.5-slim-buster
+LABEL org.opencontainers.image.source https://github.com/edgeIO/edgeio
 
 ADD requirements.txt /
 

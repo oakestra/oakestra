@@ -16,14 +16,13 @@ services:
       - mongo_root
       - cloud_scheduler
       - root_service_manager
-      - mqtt
     environment:
       - CLOUD_MONGO_URL=mongo
       - CLOUD_MONGO_PORT=10007
       - CLOUD_SCHEDULER_URL=cloud_scheduler
       - CLOUD_SCHEDULER_PORT=10004
       - NET_PLUGIN_URL=root_service_manager
-      - NET_PLUGIN_PORT=10100
+      - NET_PLUGIN_PORT=10099
 
 
   # MongoDB in Root Orchestrator
@@ -45,27 +44,27 @@ services:
     container_name: mongo_net
     hostname: mongo_net
     ports:
-      - "10107:10107"
+      - "10008:10008"
     volumes:
       - 'mongodb_net_data:/mongodb'
-    command: mongod --port 10107
+    command: mongod --port 10008
 
 
   # Cluster Manager
   root_service_manager:
-    image: ghcr.io/edgeio/edgeionet/root-service-manager:v0.02-experimental
+    image: ghcr.io/edgeio/edgeionet/root-service-manager:v0.03.arm.experimental
     container_name: root_service_manager
     hostname: root_service_manager
     expose:
-      - "10100"
+      - "10099"
     ports:
-      - "10100:10100"
+      - "10099:10099"
     environment:
-      - MY_PORT=10100
+      - MY_PORT=10099
       - SYSTEM_MANAGER_URL=system_manager
       - SYSTEM_MANAGER_PORT=10000
       - CLOUD_MONGO_URL=mongo_net
-      - CLOUD_MONGO_PORT=10107
+      - CLOUD_MONGO_PORT=10008
     depends_on:
       - mongo_rootnet
 
@@ -75,8 +74,6 @@ services:
     image: redis
     hostname: redis
     container_name: redis
-    expose:
-      - "6379"
     ports:
       - "6379:6379"
     command: redis-server --requirepass cloudRedis
