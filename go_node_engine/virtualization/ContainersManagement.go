@@ -7,6 +7,7 @@ import (
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/containers"
+	"github.com/containerd/containerd/contrib/nvidia"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -165,6 +166,14 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	//add user defined commands
 	if len(service.Commands) > 0 {
 		specOpts = append(specOpts, oci.WithProcessArgs(service.Commands...))
+	}
+	//add GPU if needed
+	if val, ok := service.Requirements["gpu"]; ok {
+		value := fmt.Sprintf("%v", val)
+		if value != "0" {
+			specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(0), nvidia.WithAllCapabilities))
+			logger.InfoLogger().Printf("NVIDIA - Adding GPU driver")
+		}
 	}
 	//add resolve file with default google dns
 	resolvconfFile, err := getGoogleDNSResolveConf()

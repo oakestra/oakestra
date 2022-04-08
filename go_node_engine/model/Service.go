@@ -1,15 +1,16 @@
 package model
 
 type Service struct {
-	JobID        string   `json:"_id"`
-	Sname        string   `json:"job_name"`
-	Image        string   `json:"image"`
-	Commands     []string `json:"commands"`
-	Env          []string `json:"environment"`
-	Ports        string   `json:"port"`
-	Status       string   `json:"status"`
-	Runtime      string   `json:"image_runtime"`
-	StatusDetail string   `json:"status_detail"`
+	JobID        string                 `json:"_id"`
+	Sname        string                 `json:"job_name"`
+	Image        string                 `json:"image"`
+	Commands     []string               `json:"commands"`
+	Env          []string               `json:"environment"`
+	Ports        string                 `json:"port"`
+	Status       string                 `json:"status"`
+	Runtime      string                 `json:"image_runtime"`
+	StatusDetail string                 `json:"status_detail"`
+	Requirements map[string]interface{} `json:"requirements"`
 	Pid          int
 }
 

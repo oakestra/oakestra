@@ -12,7 +12,7 @@ if [ ! $? -eq 0 ]; then
 fi
 
 #check containerd installation
-if systemctl | grep -Fq 'containerd'; then
+if sudo systemctl | grep -Fq 'containerd'; then
   sudo systemctl daemon-reload
   sudo systemctl enable --now containerd
 else
