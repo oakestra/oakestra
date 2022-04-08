@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strconv"
 	"time"
 )
 
@@ -65,18 +64,6 @@ func NameUniqueHash(name string, size int) string {
 	}
 	hashedAndEncoded := base64.URLEncoding.EncodeToString(hashed)
 	return hashedAndEncoded[:size]
-}
-
-//check if the string is a valid network port
-func isValidPort(port string) bool {
-	portInt, err := strconv.Atoi(port)
-	if err != nil {
-		return false
-	}
-	if portInt < 0 || portInt > 65535 {
-		return false
-	}
-	return true
 }
 
 //Given an ipv4, gives the next IP

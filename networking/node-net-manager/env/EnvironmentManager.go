@@ -14,7 +14,6 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strconv"
-	"strings"
 	"sync"
 )
 
@@ -162,7 +161,7 @@ func (env *Environment) DetachContainer(sname string) {
 		_ = env.translationTable.RemoveByNsip(s.ip)
 		delete(env.deployedServices, sname)
 		env.freeContainerAddress(s.ip)
-		_ = env.manageContainerPorts(s.ip.String(), s.portmapping, ClosePorts)
+		_ = manageContainerPorts(s.ip.String(), s.portmapping, ClosePorts)
 		_ = netlink.LinkDel(s.veth)
 	}
 }
@@ -228,7 +227,7 @@ func (env *Environment) AttachNetworkToContainer(pid int, sname string, portmapp
 		return nil, err
 	}
 
-	if err = env.manageContainerPorts(ip.String(), portmapping, OpenPorts); err != nil {
+	if err = manageContainerPorts(ip.String(), portmapping, OpenPorts); err != nil {
 		debug.PrintStack()
 		env.freeContainerAddress(ip)
 		cleanup(vethIfce)
@@ -529,38 +528,4 @@ func (env *Environment) generateAddress() (net.IP, error) {
 
 func (env *Environment) freeContainerAddress(ip net.IP) {
 	env.addrCache = append(env.addrCache, ip)
-}
-
-func (env *Environment) manageContainerPorts(localContainerAddress string, portmapping string, operation PortOperation) error {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	mappings := strings.Split(portmapping, ";")
-	for _, portmap := range mappings {
-		portType := "tcp"
-		if strings.Contains(portmap, "/udp") {
-			portmap = strings.Replace(portmap, "/udp", "", -1)
-			portType = "udp"
-		} else {
-			portmap = strings.Replace(portmap, "/tcp", "", -1)
-		}
-		ports := strings.Split(portmap, ":")
-		hostPort := ports[0]
-		containerPort := ports[0]
-		if len(ports) > 1 {
-			containerPort = ports[1]
-		}
-		if !isValidPort(hostPort) || !isValidPort(containerPort) {
-			return errors.New("invaid Port Mapping")
-		}
-		destination := fmt.Sprintf("%s:%s", localContainerAddress, containerPort)
-		openPortCmd := exec.Command("iptables", "-t", "nat", string(operation), "PREROUTING", "-p", portType, "--dport", hostPort, "-j", "DNAT", "--to-destination", destination)
-		status, err := openPortCmd.Output()
-		if err != nil {
-			log.Printf("ERROR: %s\n", string(status))
-			return err
-		}
-		log.Printf("Changed port %s status toward destination %s\n", hostPort, destination)
-	}
-	return nil
 }

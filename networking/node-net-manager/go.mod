@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/Microsoft/go-winio v0.5.2 // indirect
 	github.com/containerd/containerd v1.6.2
+	github.com/coreos/go-iptables v0.6.0
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/gdamore/tcell/v2 v2.4.1-0.20210905002822-f057f0a857a1
 	github.com/gogo/googleapis v1.4.1 // indirect
