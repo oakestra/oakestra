@@ -1,4 +1,4 @@
-package env
+package network
 
 import (
 	"crypto/sha1"
@@ -36,25 +36,6 @@ func GetLocalIPandIface() (string, string) {
 	return "", ""
 }
 
-func ToServiceIP(Type string, Addr string) ServiceIP {
-	ip := ServiceIP{
-		IpType:  0,
-		Address: net.ParseIP(Addr),
-	}
-
-	if Type == "RR" {
-		ip.IpType = RoundRobin
-	}
-	if Type == "Closest" {
-		ip.IpType = Closest
-	}
-	if Type == "InstanceNumber" {
-		ip.IpType = InstanceNumber
-	}
-
-	return ip
-}
-
 func NameUniqueHash(name string, size int) string {
 	shaHashFunc := sha1.New()
 	shaHashFunc.Write([]byte(fmt.Sprintf("%s,%s", time.Now().String(), name)))
@@ -67,7 +48,7 @@ func NameUniqueHash(name string, size int) string {
 }
 
 //Given an ipv4, gives the next IP
-func nextIP(ip net.IP, inc uint) net.IP {
+func NextIP(ip net.IP, inc uint) net.IP {
 	i := ip.To4()
 	v := uint(i[0])<<24 + uint(i[1])<<16 + uint(i[2])<<8 + uint(i[3])
 	v += inc

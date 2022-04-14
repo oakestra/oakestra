@@ -3,6 +3,7 @@ package env
 import (
 	"NetManager/events"
 	"NetManager/mqtt"
+	"NetManager/network"
 	"errors"
 	"fmt"
 	"github.com/vishvananda/netlink"
@@ -73,13 +74,6 @@ type networkInterface struct {
 	namespace                string
 }
 
-type PortOperation string
-
-const (
-	OpenPorts  PortOperation = "-A"
-	ClosePorts PortOperation = "-D"
-)
-
 // NewCustom environment constructor
 func NewCustom(proxyname string, customConfig Configuration) *Environment {
 	e := Environment{
@@ -89,7 +83,7 @@ func NewCustom(proxyname string, customConfig Configuration) *Environment {
 		proxyName:         proxyname,
 		config:            customConfig,
 		translationTable:  NewTableManager(),
-		nextContainerIP:   nextIP(net.ParseIP(customConfig.HostBridgeIP), 1),
+		nextContainerIP:   network.NextIP(net.ParseIP(customConfig.HostBridgeIP), 1),
 		totNextAddr:       1,
 		addrCache:         make([]net.IP, 0),
 		deployedServices:  make(map[string]service, 0),
@@ -100,7 +94,7 @@ func NewCustom(proxyname string, customConfig Configuration) *Environment {
 
 	//Get Connected Internet Interface
 	if e.config.ConnectedInternetInterface == "" {
-		_, e.config.ConnectedInternetInterface = GetLocalIPandIface()
+		_, e.config.ConnectedInternetInterface = network.GetLocalIPandIface()
 	}
 
 	//create bridge
@@ -111,15 +105,15 @@ func NewCustom(proxyname string, customConfig Configuration) *Environment {
 
 	//disable reverse path filtering
 	log.Println("Disabling reverse path filtering")
-	disableReversePathFiltering(e.config.HostBridgeName)
+	network.DisableReversePathFiltering(e.config.HostBridgeName)
 
 	//Enable tun device forwarding
 	log.Println("Enabling packet forwarding")
-	enableForwarding(e.config.HostBridgeName, proxyname)
+	network.EnableForwarding(e.config.HostBridgeName, proxyname)
 
 	//Enable bridge MASQUERADING
 	log.Println("Enabling packet masquerading")
-	enableMasquerading(e.config.HostBridgeIP, e.config.HostBridgeMask, e.config.HostBridgeName, e.config.ConnectedInternetInterface)
+	network.EnableMasquerading(e.config.HostBridgeIP, e.config.HostBridgeMask, e.config.HostBridgeName, e.config.ConnectedInternetInterface)
 
 	//update status with current network configuration
 	log.Println("Reading the current environment configuration")
@@ -138,7 +132,7 @@ func NewEnvironmentClusterConfigured(proxyname string) *Environment {
 	log.Println("Creating with default config")
 	config := Configuration{
 		HostBridgeName:             "goProxyBridge",
-		HostBridgeIP:               nextIP(net.ParseIP(subnetwork), 1).String(),
+		HostBridgeIP:               network.NextIP(net.ParseIP(subnetwork), 1).String(),
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
@@ -161,7 +155,7 @@ func (env *Environment) DetachContainer(sname string) {
 		_ = env.translationTable.RemoveByNsip(s.ip)
 		delete(env.deployedServices, sname)
 		env.freeContainerAddress(s.ip)
-		_ = manageContainerPorts(s.ip.String(), s.portmapping, ClosePorts)
+		_ = network.ManageContainerPorts(s.ip.String(), s.portmapping, network.ClosePorts)
 		_ = netlink.LinkDel(s.veth)
 	}
 }
@@ -227,7 +221,7 @@ func (env *Environment) AttachNetworkToContainer(pid int, sname string, portmapp
 		return nil, err
 	}
 
-	if err = manageContainerPorts(ip.String(), portmapping, OpenPorts); err != nil {
+	if err = network.ManageContainerPorts(ip.String(), portmapping, network.OpenPorts); err != nil {
 		debug.PrintStack()
 		env.freeContainerAddress(ip)
 		cleanup(vethIfce)
@@ -251,7 +245,7 @@ func (env *Environment) createVethsPairAndAttachToBridge(sname string, mtu int) 
 	if err != nil {
 		return nil, err
 	}
-	hashedName := NameUniqueHash(sname, 4)
+	hashedName := network.NameUniqueHash(sname, 4)
 	veth1name := fmt.Sprintf("veth%s%s%s", "00", strconv.Itoa(env.nextVethNumber), hashedName)
 	veth2name := fmt.Sprintf("veth%s%s%s", "01", strconv.Itoa(env.nextVethNumber), hashedName)
 	log.Println("creating veth pair: " + veth1name + "@" + veth2name)
@@ -379,17 +373,16 @@ func (env *Environment) BookVethNumber() {
 
 // CreateHostBridge create host bridge if it has not been created yet, return the current host bridge name or the newly created one
 func (env *Environment) CreateHostBridge() error {
+
 	//check current declared bridges
-	bridgecmd := exec.Command("ip", "link", "list", "type", "bridge")
-	bridgelines, err := bridgecmd.Output()
+	devices, err := netlink.DevLinkGetDeviceList()
 	if err != nil {
 		return err
 	}
-	currentDeclaredBridges := extractNetInterfaceName(string(bridgelines))
 
 	//is HostBridgeName already created? DESTROY IT
-	for _, name := range currentDeclaredBridges {
-		if name == env.config.HostBridgeName {
+	for _, device := range devices {
+		if device.DeviceName == env.config.HostBridgeName {
 			log.Println("Removing previous bridge")
 			env.Destroy()
 		}
@@ -521,7 +514,7 @@ func (env *Environment) generateAddress() (net.IP, error) {
 			log.Println("[ERROR] exhausted address space")
 			return result, errors.New("address space exhausted")
 		}
-		env.nextContainerIP = nextIP(env.nextContainerIP, 1)
+		env.nextContainerIP = network.NextIP(env.nextContainerIP, 1)
 	}
 	return result, nil
 }

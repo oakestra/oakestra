@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"NetManager/env"
+	"NetManager/network"
 	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -126,7 +127,7 @@ func NewCustom(configuration Configuration) GoProxyTunnel {
 	proxy.createTun()
 
 	//set local ip
-	ipstring, _ := env.GetLocalIPandIface()
+	ipstring, _ := network.GetLocalIPandIface()
 	proxy.localIP = net.ParseIP(ipstring)
 
 	log.Printf("Created ProxyTun device: %s\n", proxy.ifce.Name())

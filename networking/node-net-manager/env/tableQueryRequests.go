@@ -53,7 +53,7 @@ func responseParser(responseStruct mqttifce.TableQueryResponse) ([]TableEntry, e
 		sipList := make([]ServiceIP, 0)
 
 		for _, ip := range instance.ServiceIp {
-			sipList = append(sipList, ToServiceIP(ip.Type, ip.Address))
+			sipList = append(sipList, toServiceIP(ip.Type, ip.Address))
 		}
 
 		entry := TableEntry{
@@ -74,4 +74,23 @@ func responseParser(responseStruct mqttifce.TableQueryResponse) ([]TableEntry, e
 	}
 
 	return result, nil
+}
+
+func toServiceIP(Type string, Addr string) ServiceIP {
+	ip := ServiceIP{
+		IpType:  0,
+		Address: net.ParseIP(Addr),
+	}
+
+	if Type == "RR" {
+		ip.IpType = RoundRobin
+	}
+	if Type == "Closest" {
+		ip.IpType = Closest
+	}
+	if Type == "InstanceNumber" {
+		ip.IpType = InstanceNumber
+	}
+
+	return ip
 }

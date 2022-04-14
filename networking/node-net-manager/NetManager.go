@@ -4,6 +4,7 @@ import (
 	"NetManager/env"
 	"NetManager/handlers"
 	"NetManager/mqtt"
+	"NetManager/network"
 	"NetManager/playground"
 	"NetManager/proxy"
 	"encoding/json"
@@ -208,7 +209,7 @@ func main() {
 
 	log.Print(Configuration)
 
-	env.IptableFlushAll()
+	network.IptableFlushAll()
 
 	if *p2pMode {
 		defer playground.APP.Stop()

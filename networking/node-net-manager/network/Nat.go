@@ -1,9 +1,8 @@
-package env
+package network
 
 import (
 	"errors"
 	"fmt"
-	"github.com/coreos/go-iptables/iptables"
 	"log"
 	"os/exec"
 	"runtime"
@@ -11,16 +10,22 @@ import (
 	"strings"
 )
 
-var iptable, ipterr = iptables.New()
+type PortOperation string
+
+const (
+	OpenPorts  PortOperation = "-A"
+	ClosePorts PortOperation = "-D"
+)
+
 var chain = "OAKESTRA"
+var iptable = NewOakestraIpTable()
 
 func IptableFlushAll() {
-	_ = iptable.ClearChain("nat", chain)
 	_ = iptable.DeleteChain("nat", chain)
 	_ = iptable.Delete("nat", "PREROUTING", "-j", chain)
 }
 
-func disableReversePathFiltering(bridgeName string) {
+func DisableReversePathFiltering(bridgeName string) {
 	log.Println("disabling reverse path filtering")
 	cmd := exec.Command("echo", "0", ">", "/proc/sys/net/ipv4/conf/all/rp_filter")
 	err := cmd.Run()
@@ -40,7 +45,7 @@ func disableReversePathFiltering(bridgeName string) {
 	}
 }
 
-func enableForwarding(bridgeName string, proxyName string) {
+func EnableForwarding(bridgeName string, proxyName string) {
 	log.Println("enabling tun device forwarding")
 	err := iptable.AppendUnique("filter", "FORWARD", "-i", bridgeName, "-o", proxyName, "-j", "ACCEPT")
 	err = iptable.AppendUnique("filter", "FORWARD", "-o", bridgeName, "-i", proxyName, "-j", "ACCEPT")
@@ -55,16 +60,15 @@ func enableForwarding(bridgeName string, proxyName string) {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	_ = iptable.ClearChain("nat", chain)
 	_ = iptable.DeleteChain("nat", chain)
-	_ = iptable.NewChain("nat", chain)
+	_ = iptable.AddChain("nat", chain)
 	err = iptable.AppendUnique("nat", "PREROUTING", "-j", chain)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 }
 
-func enableMasquerading(address string, mask string, bridgeName string, internetIfce string) {
+func EnableMasquerading(address string, mask string, bridgeName string, internetIfce string) {
 	log.Println("add NAT ip MASQUERADING")
 	err := iptable.AppendUnique("nat", "POSTROUTING", "-s", address+mask, "-o", bridgeName, "-j", "MASQUERADE")
 	if err != nil {
@@ -77,8 +81,11 @@ func enableMasquerading(address string, mask string, bridgeName string, internet
 	}
 }
 
-//oper or close container port with the nat rules
-func manageContainerPorts(localContainerAddress string, portmapping string, operation PortOperation) error {
+// ManageContainerPorts open or close container port with the nat rules
+func ManageContainerPorts(localContainerAddress string, portmapping string, operation PortOperation) error {
+	if portmapping == "" {
+		return nil
+	}
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
