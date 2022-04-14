@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -69,16 +70,28 @@ func EnableForwarding(bridgeName string, proxyName string) {
 }
 
 func EnableMasquerading(address string, mask string, bridgeName string, internetIfce string) {
-	log.Println("add NAT ip MASQUERADING")
-	err := iptable.AppendUnique("nat", "POSTROUTING", "-s", address+mask, "-o", bridgeName, "-j", "MASQUERADE")
+
+	log.Printf("add NAT ip MASQUERADING towards %s\n", internetIfce)
+	err := iptable.AppendUnique("nat", "POSTROUTING", "-s", address+mask, "-o", internetIfce, "-j", "MASQUERADE")
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	log.Println("add NAT ip MASQUERADING for the bridge")
-	err = iptable.AppendUnique("nat", "POSTROUTING", "-s", address+mask, "-o", internetIfce, "-j", "MASQUERADE")
-	if err != nil {
-		log.Fatal(err.Error())
+
+	//masquerating towards additional interfaces
+	ifaces := []string{"en", "eth", "wl"}
+	localifces, _ := net.Interfaces()
+	for _, ifc := range localifces {
+		for _, pattern := range ifaces {
+			if ifc.Name != internetIfce && strings.Contains(ifc.Name, pattern) {
+				log.Printf("add additional NAT ip MASQUERADING towards %s\n", ifc.Name)
+				err := iptable.AppendUnique("nat", "POSTROUTING", "-s", address+mask, "-o", ifc.Name, "-j", "MASQUERADE")
+				if err != nil {
+					log.Fatal(err.Error())
+				}
+			}
+		}
 	}
+
 }
 
 // ManageContainerPorts open or close container port with the nat rules

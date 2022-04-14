@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"tailscale.com/net/interfaces"
 	"time"
 )
 
@@ -16,6 +17,11 @@ func GetLocalIPandIface() (string, string) {
 		log.Printf("not net Interfaces found")
 		panic(err)
 	}
+	defaultIfce, err := interfaces.DefaultRouteInterface()
+	if err != nil {
+		log.Printf("not default Interfaces found")
+		panic(err)
+	}
 
 	for _, iface := range list {
 		addrs, err := iface.Addrs()
@@ -24,7 +30,7 @@ func GetLocalIPandIface() (string, string) {
 		}
 		for _, address := range addrs {
 			// check the address type and if it is not a loopback the display it
-			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && iface.Name == defaultIfce {
 				if ipnet.IP.To4() != nil {
 					log.Println("Local Interface in use: ", iface.Name, " with addr ", ipnet.IP.String())
 					return ipnet.IP.String(), iface.Name

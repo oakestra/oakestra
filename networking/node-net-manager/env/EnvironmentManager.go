@@ -100,7 +100,7 @@ func NewCustom(proxyname string, customConfig Configuration) *Environment {
 	//create bridge
 	log.Println("Creation of goProxyBridge")
 	if err := e.CreateHostBridge(); err != nil {
-		log.Fatal(err.Error())
+		log.Fatal(err)
 	}
 
 	//disable reverse path filtering
@@ -375,14 +375,14 @@ func (env *Environment) BookVethNumber() {
 func (env *Environment) CreateHostBridge() error {
 
 	//check current declared bridges
-	devices, err := netlink.DevLinkGetDeviceList()
+	devices, err := net.Interfaces()
 	if err != nil {
 		return err
 	}
 
 	//is HostBridgeName already created? DESTROY IT
-	for _, device := range devices {
-		if device.DeviceName == env.config.HostBridgeName {
+	for _, ifce := range devices {
+		if ifce.Name == env.config.HostBridgeName {
 			log.Println("Removing previous bridge")
 			env.Destroy()
 		}
