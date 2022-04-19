@@ -187,7 +187,6 @@ func getGpuInfo() map[string]string {
 		return gpuInfoMap
 	}
 	for i, card := range gpu.GraphicsCards {
-		fmt.Printf(" %v\n", card)
 		gpuInfoMap[fmt.Sprintf("gpu_%d", i)] = card.String()
 	}
 	return gpuInfoMap
