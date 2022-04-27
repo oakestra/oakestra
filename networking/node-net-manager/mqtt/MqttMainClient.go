@@ -79,7 +79,7 @@ func InitMqtt(clientid string, brokerurl string, brokerport string) {
 	opts.OnConnect = connectHandler
 	opts.OnConnectionLost = connectLostHandler
 
-	go runMqttClient(opts)
+	runMqttClient(opts)
 }
 
 func runMqttClient(opts *mqtt.ClientOptions) {

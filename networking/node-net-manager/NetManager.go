@@ -4,6 +4,7 @@ import (
 	"NetManager/env"
 	"NetManager/handlers"
 	"NetManager/mqtt"
+	"NetManager/network"
 	"NetManager/playground"
 	"NetManager/proxy"
 	"encoding/json"
@@ -15,17 +16,6 @@ import (
 	"log"
 	"net/http"
 )
-
-type dockerDeployRequest struct {
-	ContainerId    string `json:"containerId"`
-	AppFullName    string `json:"appName"`
-	Instancenumber int    `json:"instanceNumber"`
-}
-
-type sip struct {
-	Type    string `json:"IpType"` //RR, Closest or InstanceNumber
-	Address string `json:"Address"`
-}
 
 type undeployRequest struct {
 	Servicename string `json:"serviceName"`
@@ -108,16 +98,8 @@ Response Json:
 */
 func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 	log.Println("Received HTTP request - /docker/deploy ")
-
-	if WorkerID == "" {
-		log.Printf("[ERROR] Node not initialized")
-		writer.WriteHeader(299)
-		_, err := writer.Write([]byte("DEPRECATED API"))
-		if err != nil {
-			return
-		}
-		return
-	}
+	writer.WriteHeader(299)
+	_, _ = writer.Write([]byte("DEPRECATED API"))
 }
 
 /*
@@ -215,7 +197,6 @@ func register(writer http.ResponseWriter, request *http.Request) {
 
 func main() {
 
-	flushRoutes := flag.Bool("flush", false, "Flush the routes without starting the engine. Recommended after a crash")
 	cfgFile := flag.String("cfg", "/etc/netmanager/netcfg.json", "Set a cluster IP")
 	localPort := flag.Int("p", 10010, "Default local port of the NetManager")
 	p2pMode := flag.Bool("p2p", false, "Start the engine in p2p mode (playground2playground), requires the address of a peer node. Useful for debugging.")
@@ -228,14 +209,10 @@ func main() {
 
 	log.Print(Configuration)
 
-	if *flushRoutes {
-		env.IptableFlushAll()
-		return
-	}
+	network.IptableFlushAll()
 
 	if *p2pMode {
 		defer playground.APP.Stop()
-		env.IptableFlushAll()
 		playground.CliLoop(Configuration.NodePublicAddress, Configuration.NodePublicPort)
 	}
 

@@ -11,10 +11,10 @@ import (
 )
 
 type ContainerDeployRequest struct {
-	Pid            int         `json:"pid"`
-	ServiceName    string      `json:"serviceName"`
-	Instancenumber int         `json:"instanceNumber"`
-	PortMappings   map[int]int `json:"portMappings"`
+	Pid            int    `json:"pid"`
+	ServiceName    string `json:"serviceName"`
+	Instancenumber int    `json:"instanceNumber"`
+	PortMappings   string `json:"portMappings"`
 	PublicAddr     string
 	PublicPort     string
 	Env            *env.Environment

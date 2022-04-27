@@ -2,5 +2,5 @@
   "NodePublicAddress": "",
   "NodePublicPort": "",
   "ClusterUrl": "",
-  "ClusterMqttPort": ""
+  "ClusterMqttPort": "",
 }

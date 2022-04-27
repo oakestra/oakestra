@@ -78,7 +78,7 @@ func Start(sname string, imageName string, instance int, cmd []string, iip strin
 	}
 
 	// if Overlay mode is active then attach network to the task
-	address, err = attachNetwork(sname, int(task.Pid()), instance, map[int]int{}, iip, sip)
+	address, err = attachNetwork(sname, int(task.Pid()), instance, "", iip, sip)
 	if err != nil {
 		return nil, "", err
 	}

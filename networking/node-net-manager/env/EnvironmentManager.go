@@ -3,6 +3,7 @@ package env
 import (
 	"NetManager/events"
 	"NetManager/mqtt"
+	"NetManager/network"
 	"errors"
 	"fmt"
 	"github.com/vishvananda/netlink"
@@ -57,7 +58,7 @@ type Environment struct {
 type service struct {
 	ip          net.IP
 	sname       string
-	portmapping map[int]int
+	portmapping string
 	veth        *netlink.Veth
 }
 
@@ -73,13 +74,6 @@ type networkInterface struct {
 	namespace                string
 }
 
-type PortOperation string
-
-const (
-	OpenPorts  PortOperation = "-A"
-	ClosePorts PortOperation = "-D"
-)
-
 // NewCustom environment constructor
 func NewCustom(proxyname string, customConfig Configuration) *Environment {
 	e := Environment{
@@ -89,7 +83,7 @@ func NewCustom(proxyname string, customConfig Configuration) *Environment {
 		proxyName:         proxyname,
 		config:            customConfig,
 		translationTable:  NewTableManager(),
-		nextContainerIP:   nextIP(net.ParseIP(customConfig.HostBridgeIP), 1),
+		nextContainerIP:   network.NextIP(net.ParseIP(customConfig.HostBridgeIP), 1),
 		totNextAddr:       1,
 		addrCache:         make([]net.IP, 0),
 		deployedServices:  make(map[string]service, 0),
@@ -100,26 +94,26 @@ func NewCustom(proxyname string, customConfig Configuration) *Environment {
 
 	//Get Connected Internet Interface
 	if e.config.ConnectedInternetInterface == "" {
-		_, e.config.ConnectedInternetInterface = GetLocalIPandIface()
+		_, e.config.ConnectedInternetInterface = network.GetLocalIPandIface()
 	}
 
 	//create bridge
 	log.Println("Creation of goProxyBridge")
 	if err := e.CreateHostBridge(); err != nil {
-		log.Fatal(err.Error())
+		log.Fatal(err)
 	}
 
 	//disable reverse path filtering
 	log.Println("Disabling reverse path filtering")
-	disableReversePathFiltering(e.config.HostBridgeName)
+	network.DisableReversePathFiltering(e.config.HostBridgeName)
 
 	//Enable tun device forwarding
 	log.Println("Enabling packet forwarding")
-	enableForwarding(e.config.HostBridgeName, proxyname)
+	network.EnableForwarding(e.config.HostBridgeName, proxyname)
 
 	//Enable bridge MASQUERADING
 	log.Println("Enabling packet masquerading")
-	enableMasquerading(e.config.HostBridgeIP, e.config.HostBridgeMask, e.config.HostBridgeName, e.config.ConnectedInternetInterface)
+	network.EnableMasquerading(e.config.HostBridgeIP, e.config.HostBridgeMask, e.config.HostBridgeName, e.config.ConnectedInternetInterface)
 
 	//update status with current network configuration
 	log.Println("Reading the current environment configuration")
@@ -138,7 +132,7 @@ func NewEnvironmentClusterConfigured(proxyname string) *Environment {
 	log.Println("Creating with default config")
 	config := Configuration{
 		HostBridgeName:             "goProxyBridge",
-		HostBridgeIP:               nextIP(net.ParseIP(subnetwork), 1).String(),
+		HostBridgeIP:               network.NextIP(net.ParseIP(subnetwork), 1).String(),
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
@@ -161,7 +155,7 @@ func (env *Environment) DetachContainer(sname string) {
 		_ = env.translationTable.RemoveByNsip(s.ip)
 		delete(env.deployedServices, sname)
 		env.freeContainerAddress(s.ip)
-		_ = env.manageContainerPorts(s.ip.String(), s.portmapping, ClosePorts)
+		_ = network.ManageContainerPorts(s.ip.String(), s.portmapping, network.ClosePorts)
 		_ = netlink.LinkDel(s.veth)
 	}
 }
@@ -172,7 +166,7 @@ func (env *Environment) ConfigureDockerNetwork(containername string) (string, er
 }
 
 // AttachNetworkToContainer Attach a Docker container to the bridge and the current network environment
-func (env *Environment) AttachNetworkToContainer(pid int, sname string, portmapping map[int]int) (net.IP, error) {
+func (env *Environment) AttachNetworkToContainer(pid int, sname string, portmapping string) (net.IP, error) {
 
 	cleanup := func(veth *netlink.Veth) {
 		_ = netlink.LinkDel(veth)
@@ -227,7 +221,7 @@ func (env *Environment) AttachNetworkToContainer(pid int, sname string, portmapp
 		return nil, err
 	}
 
-	if err = env.manageContainerPorts(ip.String(), portmapping, OpenPorts); err != nil {
+	if err = network.ManageContainerPorts(ip.String(), portmapping, network.OpenPorts); err != nil {
 		debug.PrintStack()
 		env.freeContainerAddress(ip)
 		cleanup(vethIfce)
@@ -251,7 +245,7 @@ func (env *Environment) createVethsPairAndAttachToBridge(sname string, mtu int) 
 	if err != nil {
 		return nil, err
 	}
-	hashedName := NameUniqueHash(sname, 4)
+	hashedName := network.NameUniqueHash(sname, 4)
 	veth1name := fmt.Sprintf("veth%s%s%s", "00", strconv.Itoa(env.nextVethNumber), hashedName)
 	veth2name := fmt.Sprintf("veth%s%s%s", "01", strconv.Itoa(env.nextVethNumber), hashedName)
 	log.Println("creating veth pair: " + veth1name + "@" + veth2name)
@@ -379,17 +373,16 @@ func (env *Environment) BookVethNumber() {
 
 // CreateHostBridge create host bridge if it has not been created yet, return the current host bridge name or the newly created one
 func (env *Environment) CreateHostBridge() error {
+
 	//check current declared bridges
-	bridgecmd := exec.Command("ip", "link", "list", "type", "bridge")
-	bridgelines, err := bridgecmd.Output()
+	devices, err := net.Interfaces()
 	if err != nil {
 		return err
 	}
-	currentDeclaredBridges := extractNetInterfaceName(string(bridgelines))
 
 	//is HostBridgeName already created? DESTROY IT
-	for _, name := range currentDeclaredBridges {
-		if name == env.config.HostBridgeName {
+	for _, ifce := range devices {
+		if ifce.Name == env.config.HostBridgeName {
 			log.Println("Removing previous bridge")
 			env.Destroy()
 		}
@@ -521,42 +514,11 @@ func (env *Environment) generateAddress() (net.IP, error) {
 			log.Println("[ERROR] exhausted address space")
 			return result, errors.New("address space exhausted")
 		}
-		env.nextContainerIP = nextIP(env.nextContainerIP, 1)
+		env.nextContainerIP = network.NextIP(env.nextContainerIP, 1)
 	}
 	return result, nil
 }
 
 func (env *Environment) freeContainerAddress(ip net.IP) {
 	env.addrCache = append(env.addrCache, ip)
-}
-
-func (env *Environment) manageContainerPorts(localContainerAddress string, portmapping map[int]int, operation PortOperation) error {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	if portmapping != nil {
-		for hostport, containerport := range portmapping {
-			sport := strconv.Itoa(hostport)
-			destination := fmt.Sprintf("%s:%d", localContainerAddress, containerport)
-			openPortCmd := exec.Command("iptables", "-t", "nat", string(operation), "PREROUTING", "-p", "tcp", "--dport", sport, "-j", "DNAT", "--to-destination", destination)
-			status, err := openPortCmd.Output()
-			if err != nil {
-				log.Printf("ERROR: %s\n", string(status))
-				return err
-			}
-			log.Printf("Changed port %s status toward destination %s\n", sport, destination)
-		}
-	}
-	return nil
-}
-
-//Given an ipv4, gives the next IP
-func nextIP(ip net.IP, inc uint) net.IP {
-	i := ip.To4()
-	v := uint(i[0])<<24 + uint(i[1])<<16 + uint(i[2])<<8 + uint(i[3])
-	v += inc
-	v3 := byte(v & 0xFF)
-	v2 := byte((v >> 8) & 0xFF)
-	v1 := byte((v >> 16) & 0xFF)
-	v0 := byte((v >> 24) & 0xFF)
-	return net.IPv4(v0, v1, v2, v3)
 }
