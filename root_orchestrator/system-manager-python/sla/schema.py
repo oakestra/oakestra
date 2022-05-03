@@ -1,81 +1,14 @@
-deploy_schema = {
-    'app_name': {
-        'required': True,
-        'type': 'string',
-        'regex': '^[a-z]{2,12}'
-    },
-    'app_ns': {
-        'required': True,
-        'type': 'string',
-        'regex': '^[a-z]{2,12}'
-    },
-    'service_name': {
-        'required': True,
-        'type': 'string',
-        'regex': '^[a-z]{2,12}'
-    },
-    'service_ns': {
-        'required': True,
-        'type': 'string',
-        'regex': '^[a-z]{2,12}'
-    },
-    'api_version': {
-        'required': True,
-        'type': 'string',
-    },
-    'RR_ip': {
-        'required': False,
-        'type': 'string',
-    },
-    'image': {
-        'required': True,
-        'type': 'string'
-    },
-    'requirements': {
-        'required': True,
-        'type': 'dict',
-        'schema': {
-            'cpu': {
-                'required': True,
-                'type': 'number'
-            },
-            'memory': {
-                'required': True,
-                'type': 'number'
-            },
-            'commands': {
-                'required': False,
-                'type': 'string'
-            }
-        }
-    },
-    'cluster': {
-        'required': False,
-        'type': 'dict',
-        'schema': {
-            'name': {
-                'required': False,
-                'type': 'string'
-            },
-            'node': {
-                'required': False,
-                'type': 'string'
-            }
-        }
-    }
-}
-
 sla_schema = {
     "type": "object",
     "properties": {
-        "api_version": {"type": "string"},
-        "customerID": {"type": "integer"},
+        "sla_version": {"type": "string"},
+        "customerID": {"type": "string"}, # was integer
         "applications": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
-                    "applicationID": {"type": "integer"},
+                    "applicationID": {"type": "string"}, # was integer
                     "application_name": {"type": "string"},
                     "application_namespace": {"type": "string"},
                     "application_desc": {"type": "string"},
@@ -84,7 +17,7 @@ sla_schema = {
                         "items": {
                             "type": "object",
                             "properties": {
-                                "microserviceID": {"type": "integer"},
+                                "microserviceID": {"type": "string"}, # was integer
                                 "microservice_name": {"type": "string"},
                                 "microservice_namespace": {"type": "string"},
                                 "virtualization": {"type": "string"},
@@ -93,11 +26,19 @@ sla_schema = {
                                 "vgpus": {"type": "integer"},
                                 "vtpus": {"type": "integer"},
                                 "bandwidth_in": {"type": "integer"},
-                                "bandwith_out": {"type": "integer"},
+                                "bandwidth_out": {"type": "integer"},
                                 "storage": {"type": "integer"},
                                 "code": {"type": "string"},
                                 "state": {"type": "string"},
-                                "port": {"type": "integer"},
+                                "port": {"type": "string"},
+                                "cmd": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                    }
+                                },
+                                "sla_violation_strategy": {"type": "string"},
+                                "target_node": {"type": "string"},
                                 "addresses": {
                                     "type": "object",
                                     "properties": {
@@ -148,7 +89,7 @@ sla_schema = {
                                     "items": {
                                         "type": "object",
                                         "properties": {
-                                            "target_microservice_id": {"type": "integer"},
+                                            "target_microservice_id": {"type": "string"}, # was integer
                                             "con_constraints": {
                                                 "type": "array",
                                                 "items": {
@@ -167,9 +108,7 @@ sla_schema = {
                                     }
                                 },
                             },
-                            "required": ["microserviceID", "microservice_name", "virtualization", "memory", "vcpus",
-                                         "vgpus", "vtpus", "bandwidth_in",  "bandwith_out", "storage", "code", "state",
-                                         "port", "added_files", "constraints", "connectivity"]
+                            "required": ["microserviceID", "microservice_name", "virtualization", "memory", "storage", "code"]
                         },
                         "exclusiveMinimum": 0,
                     },
@@ -184,5 +123,5 @@ sla_schema = {
             }
         },
     },
-    "required": ["api_version", "customerID", "applications"]
+    "required": ["sla_version", "customerID", "applications"]
 }

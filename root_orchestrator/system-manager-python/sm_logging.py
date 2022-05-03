@@ -6,7 +6,7 @@ from logging.handlers import RotatingFileHandler
 def configure_logging():
     format_str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     formatter = logging.Formatter(format_str)
-    my_filename = 'sm.log'
+    my_filename = 'files/sm.log'
 
     logging.basicConfig(filename=my_filename, format=format_str, level=logging.DEBUG)
     my_logger = logging.getLogger("system_manager")
@@ -17,7 +17,7 @@ def configure_logging():
     stdout_handler.setFormatter(formatter)
     my_logger.addHandler(stdout_handler)
 
-    rotating_handler = RotatingFileHandler(my_filename, maxBytes=1500, backupCount=2)
-    my_logger.addHandler(rotating_handler)
+    # rotating_handler = RotatingFileHandler(my_filename, maxBytes=1500, backupCount=2)
+    # my_logger.addHandler(rotating_handler)
 
     return my_logger

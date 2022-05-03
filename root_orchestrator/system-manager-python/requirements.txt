@@ -8,3 +8,11 @@ requests
 Cerberus
 prometheus-client
 jsonschema
+flask_cors
+PyPi
+Flask-JWT-Extended
+Flask_restful
+matplotlib
+shapely
+geopy
+pandas

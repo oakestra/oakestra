@@ -1,25 +1,51 @@
-import os
-from flask import Flask, flash, request, jsonify
-from flask_socketio import SocketIO, emit
-import json
-from bson.objectid import ObjectId
-from markupsafe import escape
-import time
 import threading
-from bson import json_util
-from mongodb_client import *
-from sla_parser import *
-from yamlfile_parser import *
 
-from cluster_requests import *
-from scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
-from net_plugin_requests import *
+from bson import json_util, ObjectId
+from datetime import timedelta
+from flask import Flask, flash
+from flask_cors import CORS
+from flask_jwt_extended import JWTManager
+from flask_restful import Api
+from flask_socketio import SocketIO, emit
+from markupsafe import escape
+from pathlib import Path
+from secrets import token_hex
+from werkzeug.utils import secure_filename, redirect
+
+from controllers.applications_controller import *
+from controllers.authentication_controller import *
+from controllers.authorization_controller import *
+from controllers.deployment_controller import DeployInstanceController
+from ext_requests.apps_db import mongo_update_job_status_and_instances, mongo_find_job_by_id
+from ext_requests.cluster_db import mongo_update_cluster_information, mongo_get_all_clusters, \
+    mongo_find_all_active_clusters, mongo_find_cluster_by_location, mongo_find_cluster_by_id_and_set_number_of_nodes, \
+    mongo_upsert_cluster
+from ext_requests.cluster_requests import *
+from controllers.services_controller import *
+from ext_requests.mongodb_client import mongo_init
+from ext_requests.net_plugin_requests import *
+from ext_requests.scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
+from sla.versioned_sla_parser import *
 from sm_logging import configure_logging
+from controllers.users_controller import *
+from sla.v1_validator import *
 
 my_logger = configure_logging()
 
+UPLOAD_FOLDER = 'files'
+ALLOWED_EXTENSIONS = {'txt', 'json', 'yml'}
+
 app = Flask(__name__)
-app.secret_key = b'\xc8I\xae\x85\x90E\x9aBxQP\xde\x8es\xfdY'
+
+app.config["JWT_SECRET_KEY"] = token_hex(32)
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=10)
+app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
+app.config["RESET_TOKEN_EXPIRES"] = timedelta(hours=3)  # for password reset
+jwt = JWTManager(app)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+cors = CORS(app, resources={r"/*": {"origins": "*"}})
 
 socketio = SocketIO(app, async_mode='eventlet', logger=True, engineio_logger=True, cors_allowed_origins='*')
 
@@ -29,39 +55,48 @@ MY_PORT = os.environ.get('MY_PORT') or 10000
 
 cluster_gauges_for_prometheus = []
 
+api = Api(app)
 
-# ............ Flask API Endpoints .....................#
+# ........ Endpoints for the authentication.............#
 # ......................................................#
+api.add_resource(UserLoginController, '/api/auth/login')
+api.add_resource(UserRegisterController, '/api/auth/register')
+api.add_resource(TokenRefreshController, '/api/auth/refresh')
+api.add_resource(UserPermissionController, '/api/permission/<string:username>')
+api.add_resource(UserResetPasswordController, '/api/auth/resetPassword')
 
-
-@app.route('/')
-def hello_world():
-    app.logger.info("Hello World Request.")
-    return "Hello, World! This is Systems Manager's REST API"
-
-
-@app.route('/sample')
-def sample():
-    app.logger.info("sample Request.")
-    time.sleep(2)
-    return "sample", 200
-
-
-@app.route('/status')
-def status():
-    app.logger.info("Incoming Request /status")
-    return "ok", 200
-
-
-# ......... Deployment Endpoints .......................#
+# .......... Endpoints for the user functions ..........#
 # ......................................................#
+api.add_resource(UserController, '/api/user/<string:username>')
+api.add_resource(AllUserController, '/api/users')
+api.add_resource(UserChangePasswordController, '/api/changePassword/<string:username>')
+api.add_resource(UserRolesController, '/api/roles')
+
+# ...... Endpoints for the application functions .......#
+# ......................................................#
+api.add_resource(ApplicationController, '/api/application', '/frontend/application/<string:appid>')
+api.add_resource(MultipleApplicationControllerUser, '/api/applications/<string:userid>')
+api.add_resource(MultipleApplicationController, '/api/applications')
+
+# ........... Endpoints for creating and gettting services ..........#
+# ...................................................................#
+api.add_resource(ServiceController, '/api/service', '/api/service/<string:serviceid>')
+api.add_resource(MultipleServicesControllerUser, '/api/services/<string:appid>')
+api.add_resource(MultipleServicesController, '/api/services')
+
+# ........... Endpoints for triggering deployment operations ..........#
+# .....................................................................#
+api.add_resource(DeployInstanceController, '/api/service/<string:serviceid>/instance','/api/service/<string:serviceid>/instance/<string:instance_number>')
 
 
 @app.route('/api/result/deploy', methods=['POST'])
 def receive_scheduler_result_and_propagate_to_cluster():
     app.logger.info('Incoming Request /api/result/deploy - received cloud_scheduler result')
     data = json.loads(request.json)
-    app.logger.info(data)
+    # Omit worker nodes coordinates to avoid flooding the log
+    data_without_worker_groups = data.copy()
+    data_without_worker_groups['cluster'].pop('worker_groups', None)
+    app.logger.info(data_without_worker_groups)
     system_job_id = data.get('job_id')
     replicas = data.get('replicas')
     cluster_id = str(data.get('cluster').get('_id').get('$oid'))
@@ -91,73 +126,21 @@ def receive_scheduler_result_and_propagate_to_cluster():
     return "ok"
 
 
-@app.route('/api/result/replicate', methods=['POST'])
-def receive_scheduler_replicate_result_and_propagate_to_cluster():
-    """
-    Replication function not yet fully implemented
-    """
-    app.logger.info('Incoming Request /api/result/replicate - received cloud_scheduler result')
-    data = json.loads(request.json)
-    system_job_id = data.get('job_id')
-    job = data.get('job')
-    replicas = data.get('replicas')
-
-    return 'ok', 200
-
-
-@app.route('/api/feedback')
-def get_cluster_feedback():
-    """whether job is running or not"""
-    app.logger.info("Incoming Request /api/feedback")
-    return "ok"
-
-
 @app.route('/api/information/<cluster_id>', methods=['GET', 'POST'])
 def cluster_information(cluster_id):
-    """Endpoint to receive aggregated information of a Cluster Manager"""
-    app.logger.info('Incoming Request /api/information/{0} to set aggregated cluster information'.format(cluster_id))
-    # data = json.loads(request.json)
-    data = request.json  # data contains cpu_percent, memory_percent, cpu_cores etc.
-    app.logger.info(data)
-    mongo_update_cluster_information(cluster_id, data)
-    return "ok", 200
-
-
-@app.route('/api/deploy', methods=['POST'])
-def deploy_task():
-    app.logger.info('Incoming Request /api/deploy - deploying task...')
-
-    if 'file' not in request.files:
-        flash('No file part')
-        return "no file", 400
-    file = request.files['file']
-    app.logger.info('file found')
-    if file.filename == '':
-        flash('No selected file')
-        return "empty file", 400
-    if file:
-        # Reading config file
-        sla = file.read()
-        data = ""
-        try:
-            data = parse_sla(sla)
-        except SLAFormatError as e:
-            # The developer is using the old yaml schema. Let's keep it for compatibility.
-            data = yaml_reader(sla)
-
-        app.logger.info(data)
-        # Insert job into database
-        job_id = mongo_insert_job(
-            {
-                'file_content': data
-            })
-        # Inform network plugin about the deployment
-        threading.Thread(group=None, target=net_inform_service_deploy, args=(data, str(job_id),)).start()
-        # Job status to scheduling REQUESTED
-        mongo_update_job_status(job_id, 'REQUESTED')
-        # Request scheduling
-        threading.Thread(group=None, target=scheduler_request_deploy, args=(data, str(job_id),)).start()
-        return {'job_id': str(job_id)}, 200
+    if request.method == 'POST':
+        """Endpoint to receive aggregated information of a Cluster Manager"""
+        app.logger.info(
+            'Incoming Request /api/information/{0} to set aggregated cluster information'.format(cluster_id))
+        # data = json.loads(request.json)
+        data = request.json  # data contains cpu_percent, memory_percent, cpu_cores etc.
+        # Omit worker nodes coordinates to avoid flooding the log
+        data_without_worker_groups = data.copy()
+        data_without_worker_groups.pop('worker_groups', None)
+        app.logger.info(data_without_worker_groups)
+        mongo_update_cluster_information(cluster_id, data)
+        return "ok", 200
+    return "no file", 200
 
 
 # ................ Scheduler Test .....................#
@@ -168,33 +151,6 @@ def deploy_task():
 def scheduler_test():
     app.logger.info('Incoming Request /api/jobs - to get all jobs')
     return scheduler_request_status()
-
-
-# ................ Jobs Endpoints .....................#
-# .....................................................#
-
-@app.route('/api/jobs', methods=['GET'])
-def get_jobs():
-    app.logger.info('Incoming Request /api/jobs - to get all jobs')
-    return str(json_util.dumps(mongo_get_all_jobs()))
-
-
-@app.route('/api/job/status/<job_id>')
-def job_status(job_id):
-    app.logger.info('Incoming Request /api/job/status/{0} - to get job status'.format(escape(job_id)))
-    return mongo_get_job_status(escape(job_id))
-
-
-@app.route('/api/delete/<job_id>')
-def delete_task(job_id):
-    app.logger.info('Incoming Request /api/delete/{0} to delete task...'.format(escape(job_id)))
-    # find service in db and ask corresponding cluster to delete task
-    job = mongo_find_job_by_id(job_id)
-    for instance in job['instance_list']:
-        net_inform_instance_undeploy(job_id, instance['instance_number'])
-    cluster_obj = mongo_find_cluster_of_job(job_id)
-    cluster_request_to_delete_job(cluster_obj, job_id)
-    return "ok\n", 200
 
 
 # ................ Clusters Endpoints ................#
@@ -218,91 +174,6 @@ def get_number_of_clusters():
     return "ok"
 
 
-@app.route('/api/clusters/move', methods=['GET', 'POST'])
-def move_from_cluster_to_cluster():
-    """move a service from one cluster to another"""
-    """request body should be in this format: {job_id: j, from_location: f, to_location: t}"""
-    app.logger.info('Incoming Request /api/move - to move service from one cluster to another')
-
-    data = request.json
-    job_id = data.get('job_id')
-    from_cluster = data.get('from_location')
-    to_cluster = data.get('to_location')
-    job_obj = mongo_find_job_by_id(job_id)
-    from_cluster_obj = mongo_find_cluster_by_location(from_cluster)
-    to_cluster_obj = mongo_find_cluster_by_location(to_cluster)
-
-    if from_cluster_obj == 'Error':
-        return 'Error: Source Cluster does not exist', 404
-    if to_cluster_obj == 'Error':
-        return 'Error: Target Cluster does not exist', 404
-
-    cluster_request_to_delete_job(cluster_obj=from_cluster_obj, job_id=job_id)
-    cluster_request_to_deploy(cluster_obj=to_cluster_obj, job=job_obj)
-    return "ok\n", 200
-
-
-@app.route('/api/nodes/move', methods=['GET', 'POST'])
-def move_within_cluster():
-    """Move a service from one node to another within the same cluster"""
-    data = request.json
-    job_id = data.get('job_id')
-    cluster = data.get('cluster')
-    node_source = data.get('from_node')
-    node_target = data.get('to_node')
-    job_obj = mongo_find_job_by_id(job_id)
-    cluster_obj = mongo_find_cluster_by_location(cluster)
-    if cluster_obj is None:
-        return "ClusterNotFound\n", 404
-    cluster_request_to_move_within_cluster(cluster_obj, job_id, node_source, node_target)
-    return "Ok\n", 200
-
-
-@app.route('/api/replicate_up', methods=['GET', 'POST'])
-def replicate_up():
-    """replicate service"""
-    app.logger.info("Incoming Request /api/replicate")
-    data = request.json
-    job_id = data.get('job_id')
-    replicas_desired = int(data.get('replicas'))
-    job_obj = mongo_find_job_by_id(job_id)
-
-    replicas_current = job_obj.get('replicas')
-    cluster_obj_of_job = mongo_find_cluster_of_job(job_id)
-
-    cluster_request_to_replicate_up(cluster_obj_of_job, job_obj, replicas_desired)
-
-    return "ok"
-
-
-@app.route('/api/replicate_down/<job_id>/<replicas>', methods=['GET', 'POST'])
-def replicate_down(job_id, replicas):
-    """shrink numbers of service"""
-    # find cluster of service and ask that cluster to shrink number of deployments to desired amount
-    cluster_obj = mongo_find_cluster_of_job(job_id=job_id)
-    cluster_request_to_replicate_down(cluster_obj=cluster_obj, job_obj=cluster_obj, int_replicas=replicas)
-    return "ok"
-
-
-@app.route('/api/replicate', methods=['GET', 'POST'])
-def replicate():
-    app.logger.info('Incoming Request /api/replicate')
-    data = request.json
-    job_id = data.get('job_id')
-    replicas_desired = int(data.get('replicas'))
-    job_obj = mongo_find_job_by_id(job_id)
-    scheduler_request_replicate(job_obj, replicas_desired)
-    return 'ok', 200
-
-
-@app.route('/api/cluster/<c_id>/incr_node')
-def increase_node(c_id):
-    app.logger.info('increment node of cluster')
-    app.logger.info(escape(c_id))
-    mongo_find_cluster_by_id_and_incr_node(ObjectId(c_id))
-    return "ok"
-
-
 @app.route('/api/cluster/<c_id>/nodes/<number_of_nodes>')
 def set_node(c_id, number_of_nodes):
     app.logger.info('Incoming Request /api/cluster/{0}/nodes/{1} - to set number of nodes in a cluster'.
@@ -310,14 +181,6 @@ def set_node(c_id, number_of_nodes):
 
     app.logger.info(escape(c_id))
     mongo_find_cluster_by_id_and_set_number_of_nodes(ObjectId(c_id), number_of_nodes)
-    return "ok"
-
-
-@app.route('/api/cluster/<c_id>/decr_node')
-def decrease_node(c_id):
-    app.logger.info('Incoming Request /api/cluster/{0}/decr_node - to increment node of cluster'.format(escape(c_id)))
-    app.logger.info(escape(c_id))
-    mongo_find_cluster_by_id_and_decr_node(ObjectId(c_id))
     return "ok"
 
 
@@ -341,7 +204,6 @@ def handle_init_client(message):
     app.logger.info(message)
 
     cid = mongo_upsert_cluster(cluster_ip=request.remote_addr, message=message)
-
     x = {
         'id': str(cid)
     }
@@ -362,6 +224,34 @@ def disconnect():
 
 # ............... Finish WebSocket handling ............#
 # ......................................................#
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+# Used to upload file from the frontend
+@app.route('/frontend/uploader', methods=['GET', 'POST'])
+def upload_file():
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            flash('No file part')
+            return redirect(request.url)
+        file = request.files['file']
+        if file.filename == '':
+            flash('No selected file')
+            return redirect(request.url)
+        if not allowed_file(file.filename):
+            return "Not a valid file", 400
+        if file:
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            response = {"path": str(Path(filename).absolute())}
+            return str(json_util.dumps(response))
+    return '''
+    <!doctype html>
+    <h1>Not a valid request</h1>
+    '''
 
 
 if __name__ == '__main__':

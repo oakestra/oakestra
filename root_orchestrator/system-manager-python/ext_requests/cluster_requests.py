@@ -5,7 +5,10 @@ import requests
 def cluster_request_to_deploy(cluster_obj, job):
     print('propagate to cluster...')
     # cluster = mongo_find_one_cluster() # for debug purposes: take a cluster from database
-    print(cluster_obj)
+    # Omit worker nodes coordinates to avoid flooding the log
+    cluster_obj_without_worker_groups = cluster_obj.copy()
+    cluster_obj_without_worker_groups.pop('worker_groups', None)
+    print(cluster_obj_without_worker_groups)
     cluster_addr = 'http://' + cluster_obj.get('ip') + ':' + str(cluster_obj.get('port')) + '/api/deploy'
     try:
         job['_id'] = str(job['_id'])
@@ -15,7 +18,7 @@ def cluster_request_to_deploy(cluster_obj, job):
         print('Calling Cluster Orchestrator /api/deploy not successful.')
 
 
-def cluster_request_to_delete_job(cluster_obj, job_id):
+def cluster_request_to_delete_job(cluster_obj, job_id, instancenumber):
     cluster_addr = 'http://' + cluster_obj.get('ip') + ':' + str(cluster_obj.get('port')) + '/api/delete/' + job_id
     try:
         resp = requests.get(cluster_addr)
