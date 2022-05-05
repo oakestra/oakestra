@@ -5,6 +5,7 @@ from ext_requests.apps_db import mongo_find_job_by_id, mongo_insert_job, mongo_g
 from services.application_management import get_user_app, update_app, add_service_to_app, remove_service_from_app
 from services.instance_management import scale_down_instance
 from sla.versioned_sla_parser import parse_sla_json
+from flask_smorest import abort
 
 
 def create_services_of_app(username, sla, force=False):
@@ -13,7 +14,7 @@ def create_services_of_app(username, sla, force=False):
     app_id = data.get('applications')[0]["applicationID"]
     last_service_id = ""
     if mongo_find_app_by_id(app_id, username) is None:
-        return {"message": "app not found"}, 404
+        abort(404, {"message": "app not found"})
     for microservice in data.get('applications')[0].get('microservices'):
         # Insert job into database
         last_service_id = mongo_insert_job(
@@ -23,7 +24,7 @@ def create_services_of_app(username, sla, force=False):
         # Insert job into app's services list
         add_service_to_app(app_id, last_service_id, username)
         # TODO: check if service deployed already etc. force=True must force the insertion anyway
-    return {'job_id': str(last_service_id)}, 200
+    return {'job_id': str(last_service_id)}
 
 
 def delete_service(username, serviceid):
@@ -44,10 +45,11 @@ def update_service(username, sla, serviceid):
     create_services_of_app(username, sla, force=True)
 
 
-def user_services(appid,username):
+def user_services(appid, username):
     application = mongo_find_app_by_id(appid, username)
     if application is None:
-        return {"message": "app not found"}, 404
+        abort(404, {"message": "app not found"})
+
     return mongo_get_jobs_of_application(appid)
 
 
