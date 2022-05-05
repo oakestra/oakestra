@@ -37,16 +37,13 @@ class ServiceController(MethodView):
         """
         username = get_jwt_auth_identity()
         job = service_management.get_service(serviceid, username)
-        try:
-            return Response(
-                response=json_util.dumps(job),
-                status=200,
-                mimetype="application/json"
-            )
-        except:
-            return {"error": "not found"}, 404
+        if job is not None:
+            return job
+        else:
+            return abort(404, {"error": "not found"})
 
     @jwt_auth_required()
+    @serviceblp.response(200, content_type="application/json")
     def delete(self, serviceid):
         """Remove service with ID
 
@@ -56,10 +53,7 @@ class ServiceController(MethodView):
         try:
             username = get_jwt_auth_identity()
             if service_management.delete_service(username, serviceid):
-                resp = jsonify(
-                    {"message": "Job deleted"})
-                resp.status_code = 200
-                return resp
+                return {"message": "Job deleted"}
             else:
                 resp = jsonify(
                     {"message": "Job could not be deleted"})
@@ -72,6 +66,7 @@ class ServiceController(MethodView):
 
     @serviceblp.arguments(schema=sla.schema.sla_schema, location="json", validate=False, unknown=True)
     @jwt_auth_required()
+    @serviceblp.response(200, content_type="application/json")
     def put(self, serviceid):
         """Update service with ID
 
@@ -84,18 +79,17 @@ class ServiceController(MethodView):
             if "_id" in job:
                 del job['_id']
             service_management.update_service(username, job, serviceid)
-            return {}, 200
+            return {}
         except ConnectionError as e:
-            resp = jsonify({"message": e})
-            resp.status_code = 404
-            return resp
+            abort(404, {"message": e})
 
 
 @serviceblp.route('/')
 class ServiceControllerPost(MethodView):
     @serviceblp.arguments(schema=sla.schema.sla_schema, location="json", validate=False, unknown=True)
     @jwt_auth_required()
-    def post(self,stuff):
+    @serviceblp.response(200, content_type="application/json")
+    def post(self, stuff):
         """Attach a new service to an application
 
         Requires user to own the service. Do not specify microserviceID but only AppID.
@@ -107,8 +101,8 @@ class ServiceControllerPost(MethodView):
                 username = get_jwt_auth_identity()
                 return service_management.create_services_of_app(username, data)
             except SLAFormatError:
-                return "The given SLA was not formatted correctly", 400
-        return "/api/deploy request without a yaml file\n", 400
+                abort(400, {"message": "The given SLA was not formatted correctly"})
+        abort(404, {"message": "/api/deploy request without a yaml file\n"})
 
 
 @servicesblp.route('/<appid>')
