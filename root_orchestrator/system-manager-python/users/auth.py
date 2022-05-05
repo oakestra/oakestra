@@ -48,7 +48,7 @@ def user_login(content):
 
     if len(username) > 0 and len(password) > 0:
         user_struct = user_db.mongo_get_user_by_name(username)
-        logging.log(user_struct)
+        logging.log(logging.INFO,user_struct)
         if user_struct is not None:
             logging.log(level=logging.ERROR, msg="User not found")
             if check_password_hash(user_struct.get('password'), password):

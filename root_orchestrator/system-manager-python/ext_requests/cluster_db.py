@@ -2,13 +2,13 @@ from datetime import datetime
 
 from bson import ObjectId
 
-from ext_requests.mongodb_client import *
+import ext_requests.mongodb_client as db
 from ext_requests.apps_db import mongo_update_job_status
 
 
 def mongo_upsert_cluster(cluster_ip, message):
-    app.logger.info("MONGODB - upserting cluster...")
-    clusters = mongo_clusters.db.clusters
+    db.app.logger.info("MONGODB - upserting cluster...")
+    clusters = db.mongo_clusters.db.clusters
     cluster_info = message['cluster_info']
     cluster_name = message['cluster_name']
     cluster_location = message['cluster_location']
@@ -20,45 +20,45 @@ def mongo_upsert_cluster(cluster_ip, message):
 
     cluster_obj = clusters.find_one({'cluster_name': cluster_name})
 
-    app.logger.info("MONGODB - cluster_id: {0}".format(cluster_obj['_id']))
+    db.app.logger.info("MONGODB - cluster_id: {0}".format(cluster_obj['_id']))
     return cluster_obj['_id']
 
 
 def mongo_find_cluster_by_id(cluster_id):
-    return mongo_clusters.db.clusters.find_one(cluster_id)
+    return db.mongo_clusters.db.clusters.find_one(cluster_id)
 
 
 def mongo_get_all_clusters():
-    return mongo_clusters.db.clusters.find()
+    return db.mongo_clusters.db.clusters.find()
 
 
 def mongo_find_one_cluster():
     """Finds first cluster occurrence"""
-    return mongo_clusters.db.clusters.find_one()
+    return db.mongo_clusters.db.clusters.find_one()
 
 
 def mongo_find_all_active_clusters():
-    app.logger.info('Finding the active cluster orchestrators...')
+    db.app.logger.info('Finding the active cluster orchestrators...')
     now_timestamp = datetime.now().timestamp()
-    return mongo_clusters.db.clusters.find(
-        {'last_modified_timestamp': {'$gt': now_timestamp - CLUSTERS_FRESHNESS_INTERVAL}})
+    return db.mongo_clusters.db.clusters.find(
+        {'last_modified_timestamp': {'$gt': now_timestamp - db.CLUSTERS_FRESHNESS_INTERVAL}})
 
 
 def mongo_find_cluster_by_id_and_incr_node(c_id):
-    return mongo_clusters.db.clusters.update_one({'_id': c_id}, {'$inc': {'nodes': 1}}, upsert=True)
+    return db.mongo_clusters.db.clusters.update_one({'_id': c_id}, {'$inc': {'nodes': 1}}, upsert=True)
 
 
 def mongo_find_cluster_by_id_and_set_number_of_nodes(c_id, number_of_nodes):
-    return mongo_clusters.db.clusters.update_one({'_id': c_id}, {'$inc': {'nodes': number_of_nodes}}, upsert=True)
+    return db.mongo_clusters.db.clusters.update_one({'_id': c_id}, {'$inc': {'nodes': number_of_nodes}}, upsert=True)
 
 
 def mongo_find_cluster_by_id_and_decr_node(c_id):
-    return mongo_clusters.db.clusters.update_one({'_id': c_id}, {'$inc': {'nodes': -1}}, upsert=True)
+    return db.mongo_clusters.db.clusters.update_one({'_id': c_id}, {'$inc': {'nodes': -1}}, upsert=True)
 
 
 def mongo_find_cluster_by_location(location):
     try:
-        return mongo_clusters.db.clusters.find_one({'cluster_location': location})
+        return db.mongo_clusters.db.clusters.find_one({'cluster_location': location})
     except Exception as e:
         return "Error"
 
@@ -84,7 +84,7 @@ def mongo_update_cluster_information(cluster_id, data):
     datetime_now = datetime.now()
     datetime_now_timestamp = datetime.timestamp(datetime_now)
 
-    mongo_clusters.db.clusters.find_one_and_update(
+    db.mongo_clusters.db.clusters.find_one_and_update(
         {'_id': ObjectId(cluster_id)},
         {'$set': {'aggregated_cpu_percent': cpu_percent, 'total_cpu_cores': cpu_cores,
                   'aggregated_memory_percent': memory_percent, 'memory_in_mb': memory_in_mb,

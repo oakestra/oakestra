@@ -2,13 +2,13 @@ sla_schema = {
     "type": "object",
     "properties": {
         "sla_version": {"type": "string"},
-        "customerID": {"type": "string"}, # was integer
+        "customerID": {"type": "string"},  # was integer
         "applications": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
-                    "applicationID": {"type": "string"}, # was integer
+                    "applicationID": {"type": "string"},  # was integer
                     "application_name": {"type": "string"},
                     "application_namespace": {"type": "string"},
                     "application_desc": {"type": "string"},
@@ -17,7 +17,7 @@ sla_schema = {
                         "items": {
                             "type": "object",
                             "properties": {
-                                "microserviceID": {"type": "string"}, # was integer
+                                "microserviceID": {"type": "string"},  # was integer
                                 "microservice_name": {"type": "string"},
                                 "microservice_namespace": {"type": "string"},
                                 "virtualization": {"type": "string"},
@@ -89,7 +89,7 @@ sla_schema = {
                                     "items": {
                                         "type": "object",
                                         "properties": {
-                                            "target_microservice_id": {"type": "string"}, # was integer
+                                            "target_microservice_id": {"type": "string"},  # was integer
                                             "con_constraints": {
                                                 "type": "array",
                                                 "items": {
@@ -108,7 +108,8 @@ sla_schema = {
                                     }
                                 },
                             },
-                            "required": ["microserviceID", "microservice_name", "virtualization", "memory", "storage", "code"]
+                            "required": ["microserviceID", "microservice_name", "virtualization", "memory", "storage",
+                                         "code"]
                         },
                         "exclusiveMinimum": 0,
                     },
@@ -125,3 +126,6 @@ sla_schema = {
     },
     "required": ["sla_version", "customerID", "applications"]
 }
+
+sla_microservice_schema = sla_schema["properties"]["applications"]["items"]["properties"]["microservices"]["items"]
+sla_microservices_schema = sla_schema["properties"]["applications"]["items"]["properties"]["microservices"]

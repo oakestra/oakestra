@@ -1,34 +1,39 @@
+import json
 import threading
 
 from bson import json_util, ObjectId
-from datetime import timedelta
-from flask import Flask, flash
+from flask import flash, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
-from flask_restful import Api
+
+from blueprints import blueprints
 from flask_socketio import SocketIO, emit
 from markupsafe import escape
 from pathlib import Path
-from secrets import token_hex
 from werkzeug.utils import secure_filename, redirect
 
-from controllers.applications_controller import *
-from controllers.authentication_controller import *
-from controllers.authorization_controller import *
-from controllers.deployment_controller import DeployInstanceController
+# from blueprints.applications_blueprints import *
+# from blueprints.authentication_blueprints import *
+# from blueprints.authorization_blueprints import *
+# from blueprints.deployment_blueprints import DeployInstanceController
 from ext_requests.apps_db import mongo_update_job_status_and_instances, mongo_find_job_by_id
 from ext_requests.cluster_db import mongo_update_cluster_information, mongo_get_all_clusters, \
     mongo_find_all_active_clusters, mongo_find_cluster_by_location, mongo_find_cluster_by_id_and_set_number_of_nodes, \
     mongo_upsert_cluster
 from ext_requests.cluster_requests import *
-from controllers.services_controller import *
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
-from ext_requests.scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
-from sla.versioned_sla_parser import *
+from ext_requests.scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, \
+    scheduler_request_status
+from ext_requests.user_db import create_admin
 from sm_logging import configure_logging
-from controllers.users_controller import *
-from sla.v1_validator import *
+from flask import Flask
+from secrets import token_hex
+from datetime import timedelta
+from flask_smorest import Blueprint, Api, abort
+from flask_swagger_ui import get_swaggerui_blueprint
+
+# from blueprints.users_blueprints import *
 
 my_logger = configure_logging()
 
@@ -37,56 +42,80 @@ ALLOWED_EXTENSIONS = {'txt', 'json', 'yml'}
 
 app = Flask(__name__)
 
+app.config['OPENAPI_VERSION'] = '3.0.2'
+app.config['API_TITLE'] = 'Oakestra root api'
+app.config['API_VERSION'] = 'v1'
+app.config["OPENAPI_URL_PREFIX"] = '/docs'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config["JWT_SECRET_KEY"] = token_hex(32)
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=10)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
 app.config["RESET_TOKEN_EXPIRES"] = timedelta(hours=3)  # for password reset
-jwt = JWTManager(app)
 
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+jwt = JWTManager(app)
+api = Api(app, spec_kwargs={"host": "oakestra.io", "x-internal-id": "1"})
 
 cors = CORS(app, resources={r"/*": {"origins": "*"}})
-
 socketio = SocketIO(app, async_mode='eventlet', logger=True, engineio_logger=True, cors_allowed_origins='*')
-
 mongo_init(app)
+create_admin()
 
 MY_PORT = os.environ.get('MY_PORT') or 10000
 
 cluster_gauges_for_prometheus = []
 
-api = Api(app)
+# Register apis
+for bp in blueprints:
+    api.register_blueprint(bp)
+
+api.spec.components.security_scheme(
+    "bearerAuth", {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+)
+api.spec.options["security"] = [{"bearerAuth": []}]
+
+# Swagger docs
+SWAGGER_URL = '/api/docs'
+API_URL = '/docs/openapi.json'
+swaggerui_blueprint = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={
+        'app_name': "Oakestra root orchestrator"
+    },
+)
+app.register_blueprint(swaggerui_blueprint)
+
 
 # ........ Endpoints for the authentication.............#
 # ......................................................#
-api.add_resource(UserLoginController, '/api/auth/login')
-api.add_resource(UserRegisterController, '/api/auth/register')
-api.add_resource(TokenRefreshController, '/api/auth/refresh')
-api.add_resource(UserPermissionController, '/api/permission/<string:username>')
-api.add_resource(UserResetPasswordController, '/api/auth/resetPassword')
-
-# .......... Endpoints for the user functions ..........#
-# ......................................................#
-api.add_resource(UserController, '/api/user/<string:username>')
-api.add_resource(AllUserController, '/api/users')
-api.add_resource(UserChangePasswordController, '/api/changePassword/<string:username>')
-api.add_resource(UserRolesController, '/api/roles')
-
-# ...... Endpoints for the application functions .......#
-# ......................................................#
-api.add_resource(ApplicationController, '/api/application', '/frontend/application/<string:appid>')
-api.add_resource(MultipleApplicationControllerUser, '/api/applications/<string:userid>')
-api.add_resource(MultipleApplicationController, '/api/applications')
-
-# ........... Endpoints for creating and gettting services ..........#
-# ...................................................................#
-api.add_resource(ServiceController, '/api/service', '/api/service/<string:serviceid>')
-api.add_resource(MultipleServicesControllerUser, '/api/services/<string:appid>')
-api.add_resource(MultipleServicesController, '/api/services')
-
-# ........... Endpoints for triggering deployment operations ..........#
-# .....................................................................#
-api.add_resource(DeployInstanceController, '/api/service/<string:serviceid>/instance','/api/service/<string:serviceid>/instance/<string:instance_number>')
+# api.add_resource(UserLoginController, '/api/auth/login')
+# api.add_resource(UserRegisterController, '/api/auth/register')
+# api.add_resource(TokenRefreshController, '/api/auth/refresh')
+# api.add_resource(UserPermissionController, '/api/permission/<string:username>')
+# api.add_resource(UserResetPasswordController, '/api/auth/resetPassword')
+#
+# # .......... Endpoints for the user functions ..........#
+# # ......................................................#
+# api.add_resource(UserController, '/api/user/<string:username>')
+# api.add_resource(AllUserController, '/api/users')
+# api.add_resource(UserChangePasswordController, '/api/changePassword/<string:username>')
+# api.add_resource(UserRolesController, '/api/roles')
+#
+# # ...... Endpoints for the application functions .......#
+# # ......................................................#
+# api.add_resource(ApplicationController, '/api/application', '/frontend/application/<string:appid>')
+# api.add_resource(MultipleApplicationControllerUser, '/api/applications/<string:userid>')
+# api.add_resource(MultipleApplicationController, '/api/applications')
+#
+# # ........... Endpoints for creating and gettting services ..........#
+# # ...................................................................#
+# api.add_resource(ServiceController, '/api/service', '/api/service/<string:serviceid>')
+# api.add_resource(MultipleServicesControllerUser, '/api/services/<string:appid>')
+# api.add_resource(MultipleServicesController, '/api/services')
+#
+# # ........... Endpoints for triggering deployment operations ..........#
+# # .....................................................................#
+# api.add_resource(DeployInstanceController, '/api/service/<string:serviceid>/instance','/api/service/<string:serviceid>/instance/<string:instance_number>')
 
 
 @app.route('/api/result/deploy', methods=['POST'])
@@ -256,4 +285,5 @@ def upload_file():
 
 if __name__ == '__main__':
     import eventlet
+
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)

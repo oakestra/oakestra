@@ -40,7 +40,7 @@ def delete_service(username, serviceid):
     return False
 
 
-def update_service(username, sla):
+def update_service(username, sla, serviceid):
     create_services_of_app(username, sla, force=True)
 
 

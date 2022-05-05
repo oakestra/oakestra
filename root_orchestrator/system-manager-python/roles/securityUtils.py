@@ -1,7 +1,7 @@
 from flask_jwt_extended import get_jwt_identity, jwt_required, create_access_token, create_refresh_token, get_jwt, \
     verify_jwt_in_request
 
-from requests.mongodb_client import mongo_get_user_by_name
+from ext_requests.user_db import mongo_get_user_by_name
 
 
 class Role:
@@ -35,10 +35,10 @@ def require_role(required_role):
 
 def identity_is_username():
     def decorator(func):
-        def wrapper(username):
+        def wrapper(*args,**kwargs):
             current_user = get_jwt_auth_identity()
-            if current_user == username:
-                return func(username)
+            if current_user == kwargs['user']:
+                return func(*args, **kwargs)
             else:
                 return not_authorized
 

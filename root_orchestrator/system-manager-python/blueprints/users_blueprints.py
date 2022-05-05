@@ -1,13 +1,8 @@
-import hashlib
 import secrets
 from datetime import datetime
-
 from bson import json_util
 from flask import request, Response, current_app
 from flask_restful import Resource
-from werkzeug.security import check_password_hash, generate_password_hash
-
-from mail.mail import *
 from roles.securityUtils import jwt_auth_required, identity_is_username, require_role, Role
 
 

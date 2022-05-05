@@ -5,7 +5,7 @@ from flask import request, Response, jsonify
 from flask_restful import Resource
 from flask_jwt_extended import jwt_required
 
-from services_controller.application_management import *
+from services.application_management import *
 from roles.securityUtils import *
 
 

@@ -3,7 +3,7 @@ import requests
 import time
 import json
 
-SCHUEDULER_ADDR = 'http://' + os.environ.get('CLOUD_SCHEDULER_URL') + ':' + str(os.environ.get('CLOUD_SCHEDULER_PORT'))
+SCHUEDULER_ADDR = 'http://' + os.environ.get('CLOUD_SCHEDULER_URL','localhost') + ':' + str(os.environ.get('CLOUD_SCHEDULER_PORT','10004'))
 
 
 def scheduler_request_deploy(job, job_id):

@@ -3,7 +3,7 @@ import os
 import requests
 import time
 
-NET_PLUGIN_ADDR = 'http://' + os.environ.get('NET_PLUGIN_URL') + ':' + str(os.environ.get('NET_PLUGIN_PORT'))
+NET_PLUGIN_ADDR = 'http://' + os.environ.get('NET_PLUGIN_URL','localhost') + ':' + str(os.environ.get('NET_PLUGIN_PORT','10010'))
 
 
 def net_inform_service_deploy(job, job_id):
