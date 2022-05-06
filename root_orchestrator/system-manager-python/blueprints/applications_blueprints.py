@@ -3,6 +3,7 @@ import traceback
 
 from bson import json_util
 from flask import request, Response, jsonify
+from flask.views import MethodView
 from flask_restful import Resource
 from flask_jwt_extended import jwt_required
 from flask_smorest import Blueprint, Api, abort
@@ -43,7 +44,7 @@ application_update_schema = login_schema = {
 
 
 @applicationblp.route('/<appid>')
-class ApplicationController(Resource):
+class ApplicationController(MethodView):
 
     @applicationblp.response(200, SchemaWrapper(sla_schema), content_type="application/json")
     @jwt_required()

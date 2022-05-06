@@ -2,71 +2,69 @@ import secrets
 from datetime import datetime
 from bson import json_util
 from flask import request, Response, current_app
+from flask.views import MethodView
 from flask_restful import Resource
 from roles.securityUtils import jwt_auth_required, identity_is_username, require_role, Role
-
+from flask_smorest import Blueprint, Api, abort
 
 # ........ Functions for user management ...............#
 # ......................................................#
 from users.auth import user_change_password, user_create_password_reset_request, user_change_password_with_reset_request
 from users.user_management import user_get_by_name, user_delete, user_add, user_get_all
 
+userbp = Blueprint(
+    'User Operations', 'user', url_prefix='/api/user',
+    description='Operations on single user'
+)
 
-class UserController(Resource):
+usersbp = Blueprint(
+    'Multiple Users Operations', 'users', url_prefix='/api/users',
+    description='Operations on multiple users'
+)
 
-    @staticmethod
+
+@userbp.route('/<username>')
+class UserController(MethodView):
+
     @jwt_auth_required()
     @identity_is_username()
-    def get(username):
-        return Response(
-            response=json_util.dumps(user_get_by_name(username)),
-            status=200,
-            mimetype="application/json"
-        )
+    def get(self, username, *args, **kwargs):
+        return json_util.dumps(user_get_by_name(username)),
 
-    @staticmethod
     @jwt_auth_required()
     @require_role(Role.ADMIN)
-    def delete(username):
-        return Response(
-            response=json_util.dumps(user_delete(username)),
-            status=200,
-            mimetype="application/json"
-        )
+    def delete(self, username, *args, **kwargs):
+        return json_util.dumps(user_delete(username))
 
-    @staticmethod
     @jwt_auth_required()
     @require_role(Role.ADMIN)
-    def put(username):
+    def put(self, username, *args, **kwargs):
         return user_add(username, request.get_json())
 
 
-class AllUserController(Resource):
+@usersbp.route('/')
+class AllUserController(MethodView):
 
-    @staticmethod
     @jwt_auth_required()
     @require_role(Role.ADMIN)
-    def get():
-        return Response(
-            response=json_util.dumps(user_get_all()),
-            status=200,
-            mimetype="application/json")
+    def get(self, *args, **kwargs):
+        return json_util.dumps(user_get_all())
 
 
-class UserChangePasswordController(Resource):
+@userbp.route('/<username>')
+class UserChangePasswordController(MethodView):
 
-    @staticmethod
     @jwt_auth_required()
     @identity_is_username()
-    def post(username):
+    def post(self, username, *args, **kwargs):
         content = request.get_json()
         return user_change_password(username, content['oldPassword'], content['newPassword'])
 
 
-class UserResetPasswordController(Resource):
+@userbp.route('/')
+class UserResetPasswordController(MethodView):
 
-    @staticmethod
-    def post():
+    def post(self, *args, **kwargs):
         content = request.get_json()
         username = content['username']
         domain = content['domain']
@@ -76,20 +74,6 @@ class UserResetPasswordController(Resource):
 
         return user_create_password_reset_request(username, domain, reset_token, expiry_date)
 
-    @staticmethod
-    def put():
+    def put(self, *args, **kwargs):
         content = request.get_json()
-        return user_change_password_with_reset_request(content["token"],content["password"])
-
-
-class UserRolesController(Resource):
-    @staticmethod
-    def get():
-        roles = [{"name": "Admin", "description": "This is the admin role"},
-                 {"name": "Application_Provider", "description": "This is the app role"},
-                 {"name": "Infrastructure_Provider", "description": "This is the infra role"}]
-        return Response(
-            response=json_util.dumps(roles),
-            status=200,
-            mimetype="application/json"
-        )
+        return user_change_password_with_reset_request(content["token"], content["password"])

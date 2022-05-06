@@ -3,6 +3,7 @@ from blueprints.authorization_blueprints import permissionbp
 from blueprints.authentication_blueprints import loginbp
 from blueprints.deployment_blueprints import deploybp
 from blueprints.applications_blueprints import applicationsblp,applicationblp
+from blueprints.users_blueprints import userbp, usersbp
 
 blueprints = [
     serviceblp,
@@ -11,5 +12,7 @@ blueprints = [
     loginbp,
     deploybp,
     applicationblp,
-    applicationsblp
+    applicationsblp,
+    userbp,
+    usersbp
 ]

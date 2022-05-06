@@ -97,22 +97,6 @@ app.register_blueprint(swaggerui_blueprint)
 # api.add_resource(AllUserController, '/api/users')
 # api.add_resource(UserChangePasswordController, '/api/changePassword/<string:username>')
 # api.add_resource(UserRolesController, '/api/roles')
-#
-# # ...... Endpoints for the application functions .......#
-# # ......................................................#
-# api.add_resource(ApplicationController, '/api/application', '/api/application/<string:appid>')
-# api.add_resource(MultipleApplicationControllerUser, '/api/applications/<string:userid>')
-# api.add_resource(MultipleApplicationController, '/api/applications')
-#
-# # ........... Endpoints for creating and gettting services ..........#
-# # ...................................................................#
-# api.add_resource(ServiceController, '/api/service', '/api/service/<string:serviceid>')
-# api.add_resource(MultipleServicesControllerUser, '/api/services/<string:appid>')
-# api.add_resource(MultipleServicesController, '/api/services')
-#
-# # ........... Endpoints for triggering deployment operations ..........#
-# # .....................................................................#
-# api.add_resource(DeployInstanceController, '/api/service/<string:serviceid>/instance','/api/service/<string:serviceid>/instance/<string:instance_number>')
 
 
 @app.route('/api/result/deploy', methods=['POST'])
