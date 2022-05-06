@@ -35,7 +35,7 @@ register_schema = {
 class UserLoginController(MethodView):
 
     @loginbp.arguments(schema=login_schema, location="json", validate=False, unknown=True)
-    def post(self, stuff):
+    def post(self,*args,**kwargs):
         content = request.get_json()
         print(content)
         if content is None:

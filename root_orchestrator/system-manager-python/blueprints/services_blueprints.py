@@ -1,3 +1,5 @@
+import logging
+
 from bson import json_util
 from flask import request, jsonify, Response
 from flask_restful import Resource
@@ -38,9 +40,9 @@ class ServiceController(MethodView):
         username = get_jwt_auth_identity()
         job = service_management.get_service(serviceid, username)
         if job is not None:
-            return job
+            return json_util.dumps(job)
         else:
-            return abort(404, {"error": "not found"})
+            return abort(404, "not found")
 
     @jwt_auth_required()
     @serviceblp.response(200, content_type="application/json")
@@ -55,18 +57,13 @@ class ServiceController(MethodView):
             if service_management.delete_service(username, serviceid):
                 return {"message": "Job deleted"}
             else:
-                resp = jsonify(
-                    {"message": "Job could not be deleted"})
-                resp.status_code = 200
-                return resp
+                abort(500,"Job not deleted")
         except ConnectionError as e:
-            resp = jsonify({"message": e})
-            resp.status_code = 404
-            return resp
+            abort(500,e)
 
     @serviceblp.arguments(schema=sla.schema.sla_schema, location="json", validate=False, unknown=True)
-    @jwt_auth_required()
     @serviceblp.response(200, content_type="application/json")
+    @jwt_auth_required()
     def put(self, serviceid):
         """Update service with ID
 
@@ -87,9 +84,9 @@ class ServiceController(MethodView):
 @serviceblp.route('/')
 class ServiceControllerPost(MethodView):
     @serviceblp.arguments(schema=sla.schema.sla_schema, location="json", validate=False, unknown=True)
-    @jwt_auth_required()
     @serviceblp.response(200, content_type="application/json")
-    def post(self, stuff):
+    @jwt_auth_required()
+    def post(self, *args,**kwargs):
         """Attach a new service to an application
 
         Requires user to own the service. Do not specify microserviceID but only AppID.
@@ -100,8 +97,10 @@ class ServiceControllerPost(MethodView):
             try:
                 username = get_jwt_auth_identity()
                 return service_management.create_services_of_app(username, data)
-            except SLAFormatError:
+            except Exception as e:
+                logging.log(logging.ERROR,e)
                 abort(400, {"message": "The given SLA was not formatted correctly"})
+        logging.log(logging.ERROR, "POST service no data found")
         abort(404, {"message": "/api/deploy request without a yaml file\n"})
 
 
@@ -112,11 +111,7 @@ class MultipleServicesControllerUser(Resource):
     @jwt_auth_required()
     def get(self, appid):
         username = get_jwt_auth_identity()
-        return Response(
-            response=json_util.dumps(service_management.user_services(appid, username)),
-            status=200,
-            mimetype="application/json"
-        )
+        return json_util.dumps(service_management.user_services(appid, username))
 
 
 @servicesblp.route('/')
@@ -125,9 +120,5 @@ class MultipleServicesController(Resource):
     @serviceblp.response(200, SchemaWrapper(sla.schema.sla_microservices_schema), content_type="application/json")
     @jwt_auth_required()
     @require_role(Role.ADMIN)
-    def get(self):
-        return Response(
-            response=json_util.dumps(service_management.get_all_services()),
-            status=200,
-            mimetype="application/json"
-        )
+    def get(self,*args,**kwargs):
+        return json_util.dumps(service_management.get_all_services())

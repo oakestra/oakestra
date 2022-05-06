@@ -1,7 +1,7 @@
 import logging
 
 from ext_requests.apps_db import mongo_find_job_by_id, mongo_insert_job, mongo_get_applications_of_user, \
-    mongo_delete_job, mongo_find_app_by_id, mongo_get_jobs_of_application, mongo_get_all_jobs
+    mongo_delete_job, mongo_find_app_by_id, mongo_get_jobs_of_application, mongo_get_all_jobs, mongo_set_microservice_id
 from services.application_management import get_user_app, update_app, add_service_to_app, remove_service_from_app
 from services.instance_management import scale_down_instance
 from sla.versioned_sla_parser import parse_sla_json
@@ -13,15 +13,14 @@ def create_services_of_app(username, sla, force=False):
     logging.log(logging.INFO, sla)
     app_id = data.get('applications')[0]["applicationID"]
     last_service_id = ""
-    if mongo_find_app_by_id(app_id, username) is None:
+    application = mongo_find_app_by_id(app_id, username)
+    if application is None:
         abort(404, {"message": "app not found"})
     for microservice in data.get('applications')[0].get('microservices'):
         # Insert job into database
-        last_service_id = mongo_insert_job(
-            {
-                'file_content': generate_db_structure(data.get('applications')[0], microservice)
-            })
+        last_service_id = mongo_insert_job(generate_db_structure(application, microservice))
         # Insert job into app's services list
+        mongo_set_microservice_id(last_service_id)
         add_service_to_app(app_id, last_service_id, username)
         # TODO: check if service deployed already etc. force=True must force the insertion anyway
     return {'job_id': str(last_service_id)}

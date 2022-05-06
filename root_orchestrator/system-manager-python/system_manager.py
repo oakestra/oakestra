@@ -88,10 +88,7 @@ app.register_blueprint(swaggerui_blueprint)
 
 # ........ Endpoints for the authentication.............#
 # ......................................................#
-# api.add_resource(UserLoginController, '/api/auth/login')
-# api.add_resource(UserRegisterController, '/api/auth/register')
-# api.add_resource(TokenRefreshController, '/api/auth/refresh')
-# api.add_resource(UserPermissionController, '/api/permission/<string:username>')
+
 # api.add_resource(UserResetPasswordController, '/api/auth/resetPassword')
 #
 # # .......... Endpoints for the user functions ..........#
@@ -103,7 +100,7 @@ app.register_blueprint(swaggerui_blueprint)
 #
 # # ...... Endpoints for the application functions .......#
 # # ......................................................#
-# api.add_resource(ApplicationController, '/api/application', '/frontend/application/<string:appid>')
+# api.add_resource(ApplicationController, '/api/application', '/api/application/<string:appid>')
 # api.add_resource(MultipleApplicationControllerUser, '/api/applications/<string:userid>')
 # api.add_resource(MultipleApplicationController, '/api/applications')
 #

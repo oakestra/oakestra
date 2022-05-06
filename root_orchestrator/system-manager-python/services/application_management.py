@@ -1,10 +1,12 @@
 from ext_requests.apps_db import *
 
 
-def register_app(application, userid):
-    application['userId'] = userid
-    application['microservices'] = []
-    return mongo_add_application(application)
+def register_app(applications, userid):
+    # TODO check for duplciates etc.
+    for application in applications['applications']:
+        application['userId'] = userid
+        application['microservices'] = []
+        return mongo_add_application(application)
 
 
 def add_service_to_app(app_id, service_id, userid):
@@ -20,7 +22,7 @@ def remove_service_from_app(app_id, service_id, userid):
 
 
 def update_app(appid, userid, fields):
-    # TODO: fields validation
+    # TODO: fields validation before update
     return mongo_update_application(appid, userid, fields)
 
 
