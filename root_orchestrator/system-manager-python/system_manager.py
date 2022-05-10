@@ -117,47 +117,6 @@ def cluster_information(cluster_id):
     return "no file", 200
 
 
-# ................ Scheduler Test .....................#
-# .....................................................#
-
-
-@app.route('/api/test/scheduler', methods=['GET'])
-def scheduler_test():
-    app.logger.info('Incoming Request /api/jobs - to get all jobs')
-    return scheduler_request_status()
-
-
-# ................ Clusters Endpoints ................#
-# ....................................................#
-
-
-@app.route('/api/clusters_all', methods=['GET'])
-def get_all_clusters():
-    app.logger.info('Incoming Request /api/clusters_all - to get all known clusters')
-    return str(json_util.dumps(mongo_get_all_clusters()))
-
-
-@app.route('/api/clusters', methods=['GET'])
-def get_active_clusters():
-    app.logger.info('Incoming Request /api/clusters - to get all active clusters')
-    return str(json_util.dumps(mongo_find_all_active_clusters()))
-
-
-@app.route('/api/clusters/count', methods=['GET'])
-def get_number_of_clusters():
-    return "ok"
-
-
-@app.route('/api/cluster/<c_id>/nodes/<number_of_nodes>')
-def set_node(c_id, number_of_nodes):
-    app.logger.info('Incoming Request /api/cluster/{0}/nodes/{1} - to set number of nodes in a cluster'.
-                    format(escape(c_id), escape(number_of_nodes)))
-
-    app.logger.info(escape(c_id))
-    mongo_find_cluster_by_id_and_set_number_of_nodes(ObjectId(c_id), number_of_nodes)
-    return "ok"
-
-
 # .......... Register clusters via WebSocket ...........#
 # ......................................................#
 
