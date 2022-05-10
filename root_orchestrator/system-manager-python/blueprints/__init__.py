@@ -1,3 +1,4 @@
+from blueprints.scheduling_blueprints import schedulingbp
 from blueprints.services_blueprints import serviceblp, servicesblp
 from blueprints.authorization_blueprints import permissionbp
 from blueprints.authentication_blueprints import loginbp
@@ -14,5 +15,6 @@ blueprints = [
     applicationblp,
     applicationsblp,
     userbp,
-    usersbp
+    usersbp,
+    schedulingbp
 ]

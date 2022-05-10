@@ -1,22 +1,32 @@
+import logging
 import traceback
+import json
+from flask.views import MethodView
+from flask import request
+from flask_smorest import Blueprint, Api, abort
 
-from bson import json_util
-from flask import request, Response, jsonify
-from flask_restful import Resource
+from services.instance_management import instance_scale_up_scheduled_handler
+
+schedulingbp = Blueprint(
+    'Scheduling', 'scheduling-completed', url_prefix='/api/result'
+)
+
+auth_schema = {
+    "type": "object",
+    "properties": {
+        "job_id": {"type": "string"},
+        "cluster_id": {"type": "string"},
+    }
+}
 
 
-# ........ Functions for user management ...............#
-# ......................................................#
-class SchedulingController(Resource):
+@schedulingbp.route('/deploy')
+class SchedulingController(MethodView):
 
-    @staticmethod
-    def post(appid):
-        try:
-            return Response(
-                status=200,
-            )
-        except Exception as e:
-            tb = traceback.format_exc()
-            print(tb)
-            return {"message": e.message}, 404
-
+    @schedulingbp.arguments(schema=auth_schema, location="json", validate=False, unknown=True)
+    def post(self, *args, **kwargs):
+        data = json.loads(request.json)
+        logging.log(logging.INFO, data)
+        job_id = data.get('job_id')
+        cluster_id = str(data.get('cluster').get('_id').get('$oid'))
+        instance_scale_up_scheduled_handler(job_id, cluster_id)

@@ -99,42 +99,6 @@ app.register_blueprint(swaggerui_blueprint)
 # api.add_resource(UserRolesController, '/api/roles')
 
 
-@app.route('/api/result/deploy', methods=['POST'])
-def receive_scheduler_result_and_propagate_to_cluster():
-    app.logger.info('Incoming Request /api/result/deploy - received cloud_scheduler result')
-    data = json.loads(request.json)
-    # Omit worker nodes coordinates to avoid flooding the log
-    data_without_worker_groups = data.copy()
-    data_without_worker_groups['cluster'].pop('worker_groups', None)
-    app.logger.info(data_without_worker_groups)
-    system_job_id = data.get('job_id')
-    replicas = data.get('replicas')
-    cluster_id = str(data.get('cluster').get('_id').get('$oid'))
-
-    # Updating status and instances
-    instance_list = []
-    for i in range(replicas):
-        instance_info = {
-            'instance_number': i,
-            'cluster_id': cluster_id,
-        }
-        instance_list.append(instance_info)
-
-    # Inform network plugin about the deployment
-    threading.Thread(group=None, target=net_inform_instance_deploy,
-                     args=(str(system_job_id), replicas, cluster_id)).start()
-
-    # Update the current instance information
-    mongo_update_job_status_and_instances(
-        job_id=system_job_id,
-        status='CLUSTER_SCHEDULED',
-        replicas=replicas,
-        instance_list=instance_list
-    )
-
-    cluster_request_to_deploy(data.get('cluster'), mongo_find_job_by_id(system_job_id))
-    return "ok"
-
 
 @app.route('/api/information/<cluster_id>', methods=['GET', 'POST'])
 def cluster_information(cluster_id):

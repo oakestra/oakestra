@@ -1,15 +1,15 @@
 import time
 import requests
 
+from ext_requests.apps_db import mongo_find_job_by_id
+from ext_requests.cluster_db import mongo_find_cluster_by_id
 
-def cluster_request_to_deploy(cluster_obj, job):
+
+def cluster_request_to_deploy(cluster_id, job_id):
     print('propagate to cluster...')
-    # cluster = mongo_find_one_cluster() # for debug purposes: take a cluster from database
-    # Omit worker nodes coordinates to avoid flooding the log
-    cluster_obj_without_worker_groups = cluster_obj.copy()
-    cluster_obj_without_worker_groups.pop('worker_groups', None)
-    print(cluster_obj_without_worker_groups)
-    cluster_addr = 'http://' + cluster_obj.get('ip') + ':' + str(cluster_obj.get('port')) + '/api/deploy'
+    cluster = mongo_find_cluster_by_id(cluster_id)
+    job = mongo_find_job_by_id(job_id)
+    cluster_addr = 'http://' + cluster.get('ip') + ':' + str(cluster.get('port')) + '/api/deploy'
     try:
         job['_id'] = str(job['_id'])
         resp = requests.post(cluster_addr, json=job)

@@ -88,10 +88,10 @@ def mongo_find_job_by_ip(ip):
     return job
 
 
-def mongo_update_job_status_and_instances(job_id, status, replicas, instance_list):
+def mongo_update_job_status_and_instances(job_id, status, next_instance_progressive_number, instance_list):
     print('Updating Job Status and assigning a cluster for this job...')
     db.mongo_services.update_one({'_id': ObjectId(job_id)},
-                                 {'$set': {'status': status, 'replicas': replicas, 'instance_list': instance_list}})
+                                 {'$set': {'status': status, 'next_instance_progressive_number': next_instance_progressive_number, 'instance_list': instance_list}})
 
 
 def mongo_get_jobs_of_application(app_id):
