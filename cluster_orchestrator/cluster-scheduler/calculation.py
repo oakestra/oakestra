@@ -99,3 +99,35 @@ def greedy_load_balanced_algorithm(job):
 
 def replicate(job):
     return 1
+
+
+def extract_specs(node):
+    return {
+        'available_cpu': node.get('current_cpu_cores_free') * (100-node.get('current_memory_percent')) / 100,
+        'available_memory': node.get('memory_free_in_MB'),
+        'available_gpu': len(node.get('gpu_info',[])),
+        'technology': node.get('node_info').get('technology'),
+    }
+
+
+def does_cluster_respects_requirements(node_specs, job):
+    memory = 0
+    if job.get('memory'):
+        memory = job.get('memory')
+
+    vcpu = 0
+    if job.get('vcpu'):
+        vcpu = job.get('vcpu')
+
+    vgpu = 0
+    if job.get('vgpu'):
+        vgpu = job.get('vgpu')
+
+    virtualization = job.get('virtualization')
+
+    if node_specs['available_cpu'] >= vcpu and \
+            node_specs['available_memory'] >= memory and \
+            virtualization in node_specs['technology'] and \
+            node_specs['available_gpu'] > vgpu:
+        return True
+    return False

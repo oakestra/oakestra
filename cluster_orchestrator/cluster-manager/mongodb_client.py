@@ -105,6 +105,8 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     cumulative_cpu = 0
     cumulative_cpu_cores = 0
     cumulative_memory = 0
+    gpu_cores = 0
+    gpu_percent = 0
     cumulative_memory_in_mb = 0
     number_of_active_nodes = 0
     technology = []
@@ -120,6 +122,11 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
                 cumulative_cpu_cores += n.get('current_cpu_cores_free', 0)
                 cumulative_memory += n.get('current_memory_percent', 0)
                 cumulative_memory_in_mb += n.get('current_free_memory_in_MB', 0)
+                gpu_info = n.get('gpu_info')
+                gpu_cores = 0
+                if gpu_info:
+                    gpu_cores=len(gpu_info)
+                gpu_percent += n.get('gpu_percent', 0)
                 number_of_active_nodes += 1
                 for t in n.get('node_info').get('technology'):
                     technology.append(t) if t not in technology else technology
@@ -135,6 +142,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
 
     return {'cpu_percent': cumulative_cpu, 'memory_percent': cumulative_memory,
             'cpu_cores': cumulative_cpu_cores, 'cumulative_memory_in_mb': cumulative_memory_in_mb,
+            'gpu_cores': gpu_cores, 'gpu_percent': gpu_percent,
             'number_of_nodes': number_of_active_nodes, 'jobs': jobs, 'technology': technology, 'more': 0}
 
 

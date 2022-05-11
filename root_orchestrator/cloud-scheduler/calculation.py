@@ -106,9 +106,9 @@ def same_cluster_replication(job_obj, cluster_obj, replicas):
 
 def extract_specs(cluster):
     return {
-        'available_cpu': cluster.get('total_cpu_cores') * cluster.get('aggregated_cpu_percent') / 100,
+        'available_cpu': cluster.get('total_cpu_cores') * (100-cluster.get('aggregated_cpu_percent')) / 100,
         'available_memory': cluster.get('current_free_memory_in_MB'),
-        'available_gpu': cluster.get('total_gpu_cores') * cluster.get('total_gpu_percent') / 100,
+        'available_gpu': cluster.get('total_gpu_cores') * (100-cluster.get('total_gpu_percent')) / 100,
         'node_info': cluster.get('node_info'),
         'technology': cluster.get('node_info').get('technology'),
     }
