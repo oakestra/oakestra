@@ -71,6 +71,8 @@ def mongo_update_cluster_information(cluster_id, data):
     memory_percent = data.get('memory_percent')
     memory_in_mb = data.get('cumulative_memory_in_mb')
     nodes = data.get('number_of_nodes')
+    gpu_cores = data.get('gpu_cores')
+    gpu_percent = data.get('gpu_percent')
     # technology = data.get('technology')
     virtualization = data.get('virtualization')
     more = data.get('more')
@@ -87,6 +89,7 @@ def mongo_update_cluster_information(cluster_id, data):
     db.mongo_clusters.db.clusters.find_one_and_update(
         {'_id': ObjectId(cluster_id)},
         {'$set': {'aggregated_cpu_percent': cpu_percent, 'total_cpu_cores': cpu_cores,
+                  'total_gpu_cores': gpu_cores, 'total_gpu_percent': gpu_percent,
                   'aggregated_memory_percent': memory_percent, 'memory_in_mb': memory_in_mb,
                   'active_nodes': nodes, 'virtualization': virtualization, 'more': more,
                   'last_modified': datetime_now, 'last_modified_timestamp': datetime_now_timestamp,

@@ -24,6 +24,8 @@ cluster_info_schema = {
     "properties": {
         "cpu_percent": {"type": "string"},
         "cpu_cores": {"type": "string"},
+        "gpu_cores": {"type": "string"},
+        "gpu_percent": {"type": "string"},
         "cumulative_memory_in_mb": {"type": "string"},
         "number_of_nodes": {"type": "string"},
         "virtualization": {"type": "array", "items": {"type": "string"}},
