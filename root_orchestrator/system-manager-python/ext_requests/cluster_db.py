@@ -25,7 +25,7 @@ def mongo_upsert_cluster(cluster_ip, message):
 
 
 def mongo_find_cluster_by_id(cluster_id):
-    return db.mongo_clusters.db.clusters.find_one(cluster_id)
+    return db.mongo_clusters.db.clusters.find_one(ObjectId(cluster_id))
 
 
 def mongo_get_all_clusters():

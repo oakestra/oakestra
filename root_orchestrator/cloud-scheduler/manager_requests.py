@@ -11,7 +11,7 @@ def manager_request(cluster, job_id, job, replicas):
     request_address = SYSTEM_MANAGER_ADDR + '/api/result/deploy'
     print(request_address)
     try:
-        requests.post(request_address, json=dumps({'cluster_id': str(cluster.get('_id').get('$oid')), 'job_id': job_id}))
+        requests.post(request_address, json={'cluster_id': str(cluster.get('_id')), 'job_id': job_id})
     except requests.exceptions.RequestException as e:
         print('Calling System Manager /api/result/deploy not successful.')
 

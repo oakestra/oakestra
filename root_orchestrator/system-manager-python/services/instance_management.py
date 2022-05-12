@@ -10,7 +10,8 @@ from ext_requests.scheduler_requests import scheduler_request_deploy
 
 def request_scale_up_instance(microserviceid, username):
     service = mongo_find_job_by_id(microserviceid)
-    application = mongo_find_app_by_id(service["applicationID"], username)
+    print(service)
+    application = mongo_find_app_by_id(str(service["applicationID"]), username)
     if application is not None:
         if microserviceid in application["microservices"]:
             # Inform network plugin about the deployment
@@ -27,7 +28,7 @@ def request_scale_down_instance(microserviceid, username, how_many=-1):
     how_many default value is -1 which means "all instances"
     """
     service = mongo_find_job_by_id(microserviceid)
-    application = mongo_find_app_by_id(service["applicationID"], username)
+    application = mongo_find_app_by_id(str(service["applicationID"]), username)
     if application is not None:
         if microserviceid in application["microservices"]:
             service = mongo_find_job_by_id(microserviceid)
@@ -49,7 +50,7 @@ def instance_scale_up_scheduled_handler(job_id, cluster_id):
             'instance_number': instance_number,
             'cluster_id': cluster_id,
         }
-        instance_list = job.get['instance_list']
+        instance_list = job['instance_list']
         instance_list.append(instance_info)
 
         mongo_update_job_status_and_instances(

@@ -107,10 +107,9 @@ def same_cluster_replication(job_obj, cluster_obj, replicas):
 def extract_specs(cluster):
     return {
         'available_cpu': cluster.get('total_cpu_cores') * (100-cluster.get('aggregated_cpu_percent')) / 100,
-        'available_memory': cluster.get('current_free_memory_in_MB'),
+        'available_memory': cluster.get('memory_in_mb'),
         'available_gpu': cluster.get('total_gpu_cores') * (100-cluster.get('total_gpu_percent')) / 100,
-        'node_info': cluster.get('node_info'),
-        'technology': cluster.get('node_info').get('technology'),
+        'virtualization': cluster.get('virtualization'),
     }
 
 
@@ -131,7 +130,7 @@ def does_cluster_respects_requirements(cluster_specs, job):
 
     if cluster_specs['available_cpu'] >= vcpu and \
             cluster_specs['available_memory'] >= memory and \
-            virtualization in cluster_specs['technology'] and \
-            cluster_specs['available_gpu'] > vgpu:
+            virtualization in cluster_specs['virtualization'] and \
+            cluster_specs['available_gpu'] >= vgpu:
         return True
     return False

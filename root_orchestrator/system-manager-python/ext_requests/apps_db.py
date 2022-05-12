@@ -91,7 +91,9 @@ def mongo_find_job_by_ip(ip):
 def mongo_update_job_status_and_instances(job_id, status, next_instance_progressive_number, instance_list):
     print('Updating Job Status and assigning a cluster for this job...')
     db.mongo_services.update_one({'_id': ObjectId(job_id)},
-                                 {'$set': {'status': status, 'next_instance_progressive_number': next_instance_progressive_number, 'instance_list': instance_list}})
+                                 {'$set': {'status': status,
+                                           'next_instance_progressive_number': next_instance_progressive_number,
+                                           'instance_list': instance_list}})
 
 
 def mongo_get_jobs_of_application(app_id):
@@ -151,7 +153,10 @@ def mongo_get_all_applications():
 
 
 def mongo_find_app_by_id(app_id, userid):
-    return db.mongo_applications.find_one({'_id': ObjectId(app_id), 'userId': userid})
+    app = db.mongo_applications.find_one(ObjectId(app_id))
+    if app:
+        if app.get('userId') == userid:
+            return app
 
 
 def mongo_update_application(app_id, userid, data):

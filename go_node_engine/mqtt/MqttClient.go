@@ -96,6 +96,7 @@ func deployHandler(client mqtt.Client, msg mqtt.Message) {
 	logger.InfoLogger().Printf("Received deployment request with payload: %s", string(msg.Payload()))
 	service := model.Service{}
 	err := json.Unmarshal(msg.Payload(), &service)
+	logger.InfoLogger().Printf("%v", service)
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR: unable to unmarshal cluster orch request: %v", err)
 		return

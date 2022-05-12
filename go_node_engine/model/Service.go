@@ -8,7 +8,7 @@ type Service struct {
 	Env          []string               `json:"environment"`
 	Ports        string                 `json:"port"`
 	Status       string                 `json:"status"`
-	Runtime      string                 `json:"image_runtime"`
+	Runtime      string                 `json:"virtualization"`
 	StatusDetail string                 `json:"status_detail"`
 	Requirements map[string]interface{} `json:"requirements"`
 	Pid          int

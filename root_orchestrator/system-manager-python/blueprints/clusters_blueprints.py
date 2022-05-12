@@ -73,6 +73,7 @@ class ActiveClustersController(MethodView):
 class ClusterController(MethodView):
 
     @clusterinfo.arguments(schema=cluster_info_schema, location="json", validate=False, unknown=True)
-    def post(self, clusterid, *args, **kwargs):
+    def post(self, *args, **kwargs):
         data = request.json
-        mongo_update_cluster_information(clusterid, data)
+        mongo_update_cluster_information(kwargs['clusterid'], data)
+        return 'ok'

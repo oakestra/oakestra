@@ -25,8 +25,9 @@ class SchedulingController(MethodView):
 
     @schedulingbp.arguments(schema=auth_schema, location="json", validate=False, unknown=True)
     def post(self, *args, **kwargs):
-        data = json.loads(request.json)
+        data = request.get_json()
         logging.log(logging.INFO, data)
         job_id = data.get('job_id')
-        cluster_id = str(data.get('cluster').get('_id').get('$oid'))
+        cluster_id = data.get('cluster_id')
         instance_scale_up_scheduled_handler(job_id, cluster_id)
+        return 'ok'
