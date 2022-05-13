@@ -9,7 +9,7 @@ import time
 from prometheus_client import start_http_server
 import threading
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_upsert_job, mongo_find_job_by_system_id, \
-    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id
+    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id, mongo_remove_job
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
 from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from cm_logging import configure_logging
@@ -91,7 +91,7 @@ def get_scheduler_result_and_propagate_to_edge():
 
 
 @app.route('/api/delete/<system_job_id>')
-def delete_task(system_job_id):
+def delete_service(system_job_id):
     """find service in db and ask corresponding worker to delete task"""
     app.logger.info('Incoming Request /api/delete/ - to delete task...')
     # job_id is the system_job_id assigned by System Manager
@@ -100,6 +100,7 @@ def delete_task(system_job_id):
     job_id = str(job.get('_id'))
     job.__setitem__('_id', job_id)
     mqtt_publish_edge_delete(node_id, job)
+    mongo_remove_job(str(job_id))
     return "ok"
 
 

@@ -38,6 +38,8 @@ def mongo_get_job_status(job_id):
 
 def mongo_update_job_status(job_id, status, instances=None):
     job = db.mongo_services.find_one({'_id': ObjectId(job_id)})
+    if job is None:
+        return None
     instance_list = job.get('instance_list')
     if instances is not None:
         for instance in instances:

@@ -78,10 +78,6 @@ def mongo_update_cluster_information(cluster_id, data):
     more = data.get('more')
     worker_groups = data.get('worker_groups')
 
-    jobs = data.get('jobs')
-    for j in jobs:
-        print(j)
-        mongo_update_job_status(job_id=j.get('system_job_id'), status=j.get('status'), instances=j.get('instance_list'))
 
     datetime_now = datetime.now()
     datetime_now_timestamp = datetime.timestamp(datetime_now)

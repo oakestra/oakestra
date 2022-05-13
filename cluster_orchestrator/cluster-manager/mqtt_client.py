@@ -56,7 +56,7 @@ def handle_mqtt_message(client, userdata, message):
         services = payload.get('services')
         for service in services:
             try:
-                mongo_update_service_resources(service.get("sname"), service)
+                res = mongo_update_service_resources(service.get("sname"), service)
             except Exception as e:
                 app.logger.error('MQTT - unable to update service resources')
                 app.logger.error(e)

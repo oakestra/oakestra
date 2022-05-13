@@ -125,7 +125,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
                 gpu_info = n.get('gpu_info')
                 gpu_cores = 0
                 if gpu_info:
-                    gpu_cores=len(gpu_info)
+                    gpu_cores = len(gpu_info)
                 gpu_percent += n.get('gpu_percent', 0)
                 number_of_active_nodes += 1
                 for t in n.get('node_info').get('technology'):
@@ -220,9 +220,17 @@ def mongo_update_job_deployed(job_id, status, node_id):
 def mongo_update_service_resources(sname, service, instance=0):
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'job_name': sname})
-    instance_list = job['instance_list']
-    instance_list[instance]["cpu"] = service.get("cpu")
-    instance_list[instance]["memory"] = service.get("memory")
-    instance_list[instance]["disk"] = service.get("disk")
-    return mongo_jobs.db.jobs.update_one({'job_name': sname},
-                                         {'$set': {'instance_list': instance_list}})
+    if job:
+        instance_list = job['instance_list']
+        instance_list[instance]["cpu"] = service.get("cpu")
+        instance_list[instance]["memory"] = service.get("memory")
+        instance_list[instance]["disk"] = service.get("disk")
+        return mongo_jobs.db.jobs.update_one({'job_name': sname},
+                                             {'$set': {'instance_list': instance_list}})
+    else:
+        return None
+
+
+def mongo_remove_job(job_id):
+    global mongo_jobs
+    return mongo_jobs.db.jobs.find_one_and_delete({'_id': ObjectId(job_id)})
