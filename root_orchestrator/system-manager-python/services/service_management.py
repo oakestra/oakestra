@@ -1,7 +1,8 @@
 import logging
 
 from ext_requests.apps_db import mongo_find_job_by_id, mongo_insert_job, mongo_get_applications_of_user, \
-    mongo_delete_job, mongo_find_app_by_id, mongo_get_jobs_of_application, mongo_get_all_jobs, mongo_set_microservice_id
+    mongo_delete_job, mongo_find_app_by_id, mongo_get_jobs_of_application, mongo_get_all_jobs, \
+    mongo_set_microservice_id, mongo_update_job
 from services.application_management import get_user_app, update_app, add_service_to_app, remove_service_from_app
 from services.instance_management import request_scale_down_instance
 from sla.versioned_sla_parser import parse_sla_json
@@ -41,7 +42,8 @@ def delete_service(username, serviceid):
 
 
 def update_service(username, sla, serviceid):
-    create_services_of_app(username, sla, force=True)
+    # TODO Change also job_name and redeploy service
+    mongo_update_job(serviceid,sla)
 
 
 def user_services(appid, username):

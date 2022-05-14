@@ -4,6 +4,10 @@ from ext_requests.apps_db import *
 def register_app(applications, userid):
     # TODO check for duplciates etc.
     for application in applications['applications']:
+        if "action" in application:
+            del application['action']
+        if "_id" in application:
+            del application['_id']
         application['userId'] = userid
         application['microservices'] = []
         return mongo_add_application(application)

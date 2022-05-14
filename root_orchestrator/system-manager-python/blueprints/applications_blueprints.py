@@ -51,7 +51,7 @@ class ApplicationController(MethodView):
     def get(self, appid, *args, **kwargs):
         try:
             current_user = get_jwt_identity()
-            return json_util.dumps(get_user_app(appid, current_user))
+            return json_util.dumps(get_user_app(current_user, appid))
         except Exception as e:
             return abort(404, {"message": e})
 
@@ -69,6 +69,7 @@ class ApplicationController(MethodView):
 
     @jwt_required()
     def put(self, appid, *args, **kwargs):
+        print(request.get_json())
         try:
             current_user = get_jwt_identity()
             update_app(appid, current_user, request.get_json())
@@ -84,10 +85,6 @@ class ApplicationController(Resource):
     @jwt_required()
     def post(self, *args, **kwargs):
         data = request.get_json()
-        if "action" in data:
-            del data['action']
-        if "_id" in data:
-            del data['_id']
         current_user = get_jwt_identity()
         return json_util.dumps(register_app(data, current_user))
 
@@ -99,7 +96,8 @@ class MultipleApplicationControllerUser(Resource):
     @jwt_required()
     def get(self, userid):
         current_user = get_jwt_identity()
-        if userid != current_user:
+        user = mongo_get_user_by_name(current_user)
+        if userid != str(user['_id']):
             abort(401, {"message": "Unauthorized"})
         return json_util.dumps(users_apps(current_user))
 

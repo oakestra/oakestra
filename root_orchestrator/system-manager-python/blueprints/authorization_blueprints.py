@@ -16,14 +16,14 @@ auth_schema = {
 }
 
 
-@permissionbp.route("/<user>")
+@permissionbp.route("/<username>")
 class UserPermissionController(MethodView):
 
     @permissionbp.response(200, schema=SchemaWrapper(auth_schema), content_type="application/json")
     @jwt_auth_required()
     @identity_is_username()
-    def get(self, user):
-        user = user_get_roles(user)
+    def get(self, username):
+        user = user_get_roles(username)
         print(user)
         if user is not None:
             return {"roles": user['roles']}

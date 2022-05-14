@@ -52,7 +52,7 @@ class UserRegisterController(Resource):
     @loginbp.arguments(schema=register_schema, location="json", validate=False, unknown=True)
     @jwt_required()
     @require_role(Role.ADMIN)
-    def post(self):
+    def post(self, *args,  **kwargs):
         content = request.get_json()
         return user_register(content)
 

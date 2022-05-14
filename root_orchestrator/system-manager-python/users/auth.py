@@ -15,7 +15,7 @@ def user_register(content):
     if len(content['name']) > 0 and len(content['password']) > 0:
 
         existing_user = user_db.mongo_get_user_by_name(content['name'])
-        if len(existing_user) != 0:
+        if existing_user is not None:
             return {"message": "Username already exists"}, 409
 
         password = content['password']
