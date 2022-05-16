@@ -4,7 +4,7 @@ services:
 
   # System Manager REST API of Root Orchestrator
   system_manager:
-    image: ghcr.io/edgeio/edgeio/root-system-manager:v0.01.arm
+    image: ghcr.io/edgeio/edgeio/root-system-manager:v0.02.arm
     hostname: system_manager
     container_name: system_manager
     network_mode: "host"
@@ -44,7 +44,7 @@ services:
 
   # Cluster Manager
   root_service_manager:
-    image: ghcr.io/edgeio/edgeionet/root-service-manager:v0.03.arm.experimental
+    image: ghcr.io/edgeio/edgeionet/root-service-manager:v0.04.arm.experimental
     container_name: root_service_manager
     hostname: root_service_manager
     network_mode: "host"
@@ -76,7 +76,7 @@ services:
 
   # Cloud Scheduler
   cloud_scheduler:
-    image: ghcr.io/edgeio/edgeio/cloud-scheduler:v0.01.arm
+    image: ghcr.io/edgeio/edgeio/cloud-scheduler:v0.02.arm
     container_name: cloud_scheduler
     hostname: cloud_scheduler
     network_mode: "host"
@@ -131,7 +131,7 @@ services:
 
 # Cluster Manager
   cluster_service_manager:
-    image: ghcr.io/edgeio/edgeionet/cluster-service-manager:v0.03.arm.experimental
+    image: ghcr.io/edgeio/edgeionet/cluster-service-manager:v0.04.arm.experimental
     container_name: cluster_service_manager
     hostname: cluster_service_manager
     network_mode: "host"
@@ -151,7 +151,7 @@ services:
 
 # Cluster Manager
   cluster_manager:
-    image: ghcr.io/edgeio/edgeio/cluster-manager:v0.01.arm
+    image: ghcr.io/edgeio/edgeio/cluster-manager:v0.02.arm
     container_name: cluster_manager
     hostname: cluster_manager
     command: bash -c 'sleep 2; python cluster_manager.py'
@@ -180,7 +180,7 @@ services:
 
   # Cluster Scheduler
   cluster_scheduler:
-    image: ghcr.io/edgeio/edgeio/cluster-scheduler:v0.01.arm
+    image: ghcr.io/edgeio/edgeio/cluster-scheduler:v0.02.arm
     container_name: cluster_scheduler
     hostname: cluster_scheduler
     network_mode: "host"

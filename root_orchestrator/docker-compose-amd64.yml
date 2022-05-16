@@ -52,7 +52,7 @@ services:
 
   # Cluster Manager
   root_service_manager:
-    image: ghcr.io/edgeio/edgeionet/root-service-manager:v0.03-amd64
+    image: ghcr.io/edgeio/edgeionet/root-service-manager:v0.04-amd64
     container_name: root_service_manager
     hostname: root_service_manager
     expose:
