@@ -14,8 +14,6 @@ def request_scale_up_instance(microserviceid, username):
     application = mongo_find_app_by_id(str(service["applicationID"]), username)
     if application is not None:
         if microserviceid in application["microservices"]:
-            # Inform network plugin about the deployment
-            threading.Thread(group=None, target=net_inform_service_deploy, args=(service, str(microserviceid),)).start()
             # Job status to scheduling REQUESTED
             mongo_update_job_status(microserviceid, 'REQUESTED')
             # Request scheduling
@@ -60,6 +58,7 @@ def instance_scale_up_scheduled_handler(job_id, cluster_id):
             instance_list=instance_list
         )
 
+        #inform
         threading.Thread(group=None, target=net_inform_instance_deploy,
                          args=(str(job_id), instance_number, cluster_id)).start()
 

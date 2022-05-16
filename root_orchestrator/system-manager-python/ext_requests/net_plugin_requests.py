@@ -15,7 +15,8 @@ def net_inform_service_deploy(job, job_id):
     request_addr = NET_PLUGIN_ADDR + '/api/net/service/deploy'
     logging.debug(request_addr)
     try:
-        job['_id']=str(job['_id'])
+        job['_id']=str(job_id)
+        job['system_job_id'] = str(job_id)
         r = requests.post(request_addr, json={'deployment_descriptor': job, 'system_job_id': job_id})
         r.raise_for_status()
     except requests.exceptions.ConnectionError as errc:
