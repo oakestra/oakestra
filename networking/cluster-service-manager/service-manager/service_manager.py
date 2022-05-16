@@ -6,6 +6,7 @@ from interfaces.mqtt_client import mqtt_init
 from net_logging import configure_logging
 from interfaces.mongodb_requests import mongo_init
 from operations.instances_management import instance_deployment, instance_updates
+from operations.service_management import create_service, remove_service
 
 MY_PORT = os.environ.get('MY_PORT') or 10200
 
@@ -21,21 +22,31 @@ mqtt_init(app)
 # ...........................................................#
 
 @app.route('/api/net/deployment', methods=['POST'])
-def deploy_task():
+def deploy_service():
     """
        Deployment of a new service instance
        receives {
-                   system_job_id: string
-                   data: {}object representing the job
+                   job_name: string
                 }
     """
 
     app.logger.info('Incoming Request /api/net/deployment')
     req_json = request.json
     app.logger.debug(req_json)
-    job_name = req_json['data']['job_name']
+    job_name = req_json['job_name']
 
-    return instance_deployment(job_name, req_json['data'])
+    return create_service(job_name)
+
+
+@app.route('/api/net/deployment/<job_name>', methods=['DELETE'])
+def delete_service(job_name):
+    """
+       Remove a deployment and all its instances
+    """
+
+    app.logger.info('Incoming Request DELETE /api/net/deployment/' + str(job_name))
+
+    return remove_service(job_name)
 
 
 @app.route('/api/net/job/update', methods=['POST'])
@@ -59,8 +70,8 @@ def task_update():
 
 
 # TODO: job migration
-# TODO: job scale up
 
 if __name__ == '__main__':
     import eventlet
+
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)

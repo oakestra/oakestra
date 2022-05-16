@@ -4,12 +4,12 @@ from interfaces import mongodb_requests
 from network import tablequery, routes_interests
 
 
-def deploy_request(sys_job_id=None, replicas=None, cluster_id=None):
-    if sys_job_id is None or replicas is None or cluster_id is None:
+def deploy_request(sys_job_id=None, instance_number=None, cluster_id=None):
+    if sys_job_id is None or instance_number is None or cluster_id is None:
         return "Invalid input parameters", 400
-    mongodb_requests.mongo_update_job_status_and_instances_by_system_job_id(
+    mongodb_requests.mongo_update_job_instance(
         system_job_id=sys_job_id,
-        instance_list=_prepare_instance_list(replicas, cluster_id)
+        instance=_prepare_instance_dict(instance_number, cluster_id)
     )
     return "Instance info added", 200
 
@@ -37,14 +37,14 @@ def update_instance_local_addresses(job_id=None, instances=None):
     return "Status updated", 200
 
 
-def undeploy_request(sys_job_id=None, instance=None):
-    if sys_job_id is None or instance is None:
+def undeploy_request(sys_job_id=None, instance_number=None):
+    if sys_job_id is None or instance_number is None:
         return "Invalid input parameters", 400
     if (mongodb_requests.mongo_update_clean_one_instance(
             system_job_id=sys_job_id,
-            instance=instance)):
+            instance_number=instance_number)):
         job = mongodb_requests.mongo_find_job_by_systemid(sys_job_id)
-        routes_interests.notify_job_instance_undeployment(job.get("job_name"), instance)
+        routes_interests.notify_job_instance_undeployment(job.get("job_name"), instance_number)
         return "Instance info cleared", 200
     return "Instance not found", 400
 
@@ -71,13 +71,10 @@ def get_service_instances(name=None, ip=None, cluster_ip=None):
     return job, 200
 
 
-def _prepare_instance_list(replicas, cluster_id):
-    instance_list = []
-    for i in range(replicas):
-        instance_info = {
-            'instance_number': i,  # number generation must be changed when scale up and down ops are implemented
-            'instance_ip': new_instance_ip(),
-            'cluster_id': str(cluster_id),
-        }
-        instance_list.append(instance_info)
-    return instance_list
+def _prepare_instance_dict(isntance_number, cluster_id):
+
+    return {
+        'instance_number': isntance_number,
+        'instance_ip': new_instance_ip(),
+        'cluster_id': str(cluster_id),
+    }

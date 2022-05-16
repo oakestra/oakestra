@@ -114,7 +114,7 @@ def new_instance_deployment():
     Input:
         {
             system_job_id:int,
-            replicas:int,
+            instance_number:int,
             cluster_id:string,
         }
     The System Manager adds an instance ip for a new deployed instance to a new cluster
@@ -126,20 +126,20 @@ def new_instance_deployment():
 
     return instances_management.deploy_request(
         sys_job_id=data.get('system_job_id'),
-        replicas=data.get('replicas'),
+        instance_number=data.get('instance_number'),
         cluster_id=data.get('cluster_id')
     )
 
 
-@app.route('/api/net/<system_job_id>/<instance>', methods=['DELETE'])
-def instance_undeployment(system_job_id, instance):
+@app.route('/api/net/<system_job_id>/<instance_number>', methods=['DELETE'])
+def instance_undeployment(system_job_id, instance_number):
     """
     Undeployment request for the instance number "instance"
     """
 
-    app.logger.info("Incoming Request /api/net/undeploy/" + str(system_job_id) + "/<instance>" + str(instance))
+    app.logger.info("Incoming Request /api/net/undeploy/" + str(system_job_id) + "/<instance>" + str(instance_number))
 
-    return instances_management.undeploy_request(str(system_job_id), int(instance))
+    return instances_management.undeploy_request(str(system_job_id), int(instance_number))
 
 
 # .............. Table query Endpoints .................#

@@ -93,11 +93,13 @@ def mongo_update_job_net_status(job_id, instances):
     instance_list = job['instance_list']
     for instance in instances:
         instance_num = instance['instance_number']
-        elem = instance_list[instance_num]
-        elem['namespace_ip'] = instance['namespace_ip']
-        elem['host_ip'] = instance['host_ip']
-        elem['host_port'] = instance['host_port']
-        instance_list[instance_num] = elem
+        for deployed_instance in instances:
+            if deployed_instance['instance_number'] == instance_num:
+                deployed_instance['namespace_ip'] = instance['namespace_ip']
+                deployed_instance['host_ip'] = instance['host_ip']
+                deployed_instance['host_port'] = instance['host_port']
+                break
+
     return mongo_jobs.db.jobs.find_one_and_update({'system_job_id': job_id}, {'$set': {'instance_list': instance_list}})
 
 
@@ -126,26 +128,28 @@ def mongo_find_job_by_ip(ip):
     return job
 
 
-def mongo_update_job_status_and_instances_by_system_job_id(system_job_id, instance_list):
+def mongo_update_job_instance(system_job_id, instance):
     global mongo_jobs
-    print('Updating Job Status and assigning a cluster for this job...')
-    mongo_jobs.db.jobs.update_one({'system_job_id': system_job_id},
-                                  {'$set': {'instance_list': instance_list}})
+    print('Updating job instance')
+    mongo_jobs.db.jobs.update_one(
+        {'system_job_id': system_job_id},
+        {
+            '$set': {"instance_list.$[element]", instance}
+        },
+        {
+            'arrayFilters': [{'element.instance_number': instance['instance_number']}],
+            'upsert': True
+        }
+    )
 
 
-def mongo_update_clean_one_instance(system_job_id, instance):
+def mongo_update_clean_one_instance(system_job_id, instance_number):
     """
     returns the replicas left
     """
     global mongo_jobs
-    job = mongo_find_job_by_systemid(system_job_id)
-    instances = job.get("instance_list")
-    for i in range(len(instances)):
-        if instances[i]['instance_number'] is instance:
-            instances.remove(instances[i])
-            mongo_update_job_status_and_instances_by_system_job_id(system_job_id, instances)
-            return True
-    return False
+    mongo_jobs.db.jobs.update_one({'system_job_id': system_job_id},
+                                  {'$pull': {'instance_list.instance_number': instance_number}})
 
 
 # ........... SERVICE MANAGER OPERATIONS  ............

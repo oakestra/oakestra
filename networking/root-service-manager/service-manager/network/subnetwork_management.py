@@ -114,6 +114,7 @@ def clear_subnetwork_ip(addr):
 
         mongodb_requests.mongo_free_subnet_address_to_cache(addr)
 
+
 def _increase_service_address(addr):
     new2 = addr[2]
     new3 = (addr[3] + 1) % 254

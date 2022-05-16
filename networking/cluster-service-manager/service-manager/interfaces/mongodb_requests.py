@@ -64,33 +64,29 @@ def mongo_insert_job(job):
     return str(new_job.get('_id'))
 
 
+def mongo_remove_job(job_name):
+    global mongo_jobs
+    mongo_jobs.db.job.delete_one({"job_name", job_name})
+
+
 def mongo_update_job_instance(job_name, instance):
-    instances = mongo_jobs.db.jobs.find_one({'job_name': job_name}).get("instance_list")
-
-    updated = False
-    for i in range(len(instances)):
-        if instances[i]["instance_number"] == instance["instance_number"]:
-            updated = True
-            instances[i] = instance
-            break
-
-    if not updated:
-        instances.append(instance)
-
     mongo_jobs.db.jobs.find_one_and_update(
         {'job_name': job_name},
-        {'$set': {"instance_list": instances}}
+        {
+            '$set': {"instance_list.$[element]", instance}
+        },
+        {
+            'arrayFilters': [{'element.instance_number': instance['instance_number']}],
+            'upsert': True
+        }
     )
 
 
 def mongo_remove_job_instance(job_name, instancenum):
-    instances = mongo_jobs.db.jobs.find_one({'job_name': job_name}).get("instance_list")
-    for i in range(len(instances)):
-        if instances[i]["instance_number"] == instancenum:
-            instances.remove(instances[i])
+    global mongo_jobs
     mongo_jobs.db.jobs.find_one_and_update(
         {'job_name': job_name},
-        {'$set': {"instance_list": instances}}
+        {'$pull': {"instance_list.instance_number": instancenum}}
     )
 
 
