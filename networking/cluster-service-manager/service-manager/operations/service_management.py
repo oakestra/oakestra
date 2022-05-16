@@ -1,5 +1,5 @@
 from interfaces import mqtt_client, root_service_manager_requests, mongodb_requests
-from instances_management import instance_updates
+from operations.instances_management import instance_updates
 import logging
 import traceback
 import copy
