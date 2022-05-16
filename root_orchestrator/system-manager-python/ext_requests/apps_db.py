@@ -166,6 +166,7 @@ def mongo_update_application(app_id, userid, data):
     db.mongo_applications.find_one_and_update({'_id': ObjectId(app_id), 'userId': userid},
                                               {'$set': {'application_name': data.get('application_name'),
                                                         'application_namespace': data.get('application_namespace'),
+                                                        'application_desc': data.get('application_desc'),
                                                         'microservices': data.get('microservices')}})
 
     db.app.logger.info("MONGODB - application {} updated")

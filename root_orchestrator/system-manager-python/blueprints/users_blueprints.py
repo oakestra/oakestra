@@ -29,7 +29,7 @@ class UserController(MethodView):
     @jwt_auth_required()
     @identity_is_username()
     def get(self, username, *args, **kwargs):
-        return json_util.dumps(user_get_by_name(username)),
+        return json_util.dumps(user_get_by_name(username))
 
     @jwt_auth_required()
     @require_role(Role.ADMIN)
@@ -39,7 +39,7 @@ class UserController(MethodView):
     @jwt_auth_required()
     @require_role(Role.ADMIN)
     def put(self, username, *args, **kwargs):
-        return user_add(username, request.get_json())
+        return json_util.dumps(user_add(username, request.get_json()))
 
 
 @usersbp.route('/')

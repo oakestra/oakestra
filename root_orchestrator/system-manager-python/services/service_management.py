@@ -2,7 +2,7 @@ import logging
 import threading
 
 from ext_requests.apps_db import mongo_find_job_by_id, mongo_insert_job, mongo_get_applications_of_user, \
-    mongo_delete_job, mongo_find_app_by_id, mongo_get_jobs_of_application, mongo_get_all_jobs, mongo_set_microservice_id
+    mongo_delete_job, mongo_update_job, mongo_find_app_by_id, mongo_get_jobs_of_application, mongo_get_all_jobs, mongo_set_microservice_id
 from ext_requests.net_plugin_requests import net_inform_service_deploy
 from services.application_management import get_user_app, update_app, add_service_to_app, remove_service_from_app
 from services.instance_management import request_scale_down_instance
@@ -46,7 +46,12 @@ def delete_service(username, serviceid):
 
 
 def update_service(username, sla, serviceid):
-    create_services_of_app(username, sla, force=True)
+    # TODO Change also job_name and redeploy service
+    apps = mongo_get_applications_of_user(username)
+    for application in apps:
+        if serviceid in application["microservices"]:
+            return mongo_update_job(serviceid,sla)
+    abort(404, {"message": "service not found"})
 
 
 def user_services(appid, username):

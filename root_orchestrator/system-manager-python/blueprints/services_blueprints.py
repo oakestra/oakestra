@@ -57,14 +57,14 @@ class ServiceController(MethodView):
             if service_management.delete_service(username, serviceid):
                 return {"message": "Job deleted"}
             else:
-                abort(500,"Job not deleted")
+                abort(500, "Job not deleted")
         except ConnectionError as e:
-            abort(500,e)
+            abort(500, e)
 
     @serviceblp.arguments(schema=sla.schema.sla_schema, location="json", validate=False, unknown=True)
     @serviceblp.response(200, content_type="application/json")
     @jwt_auth_required()
-    def put(self, serviceid):
+    def put(self, *args, serviceid):
         """Update service with ID
 
         Requires user to own the service
@@ -72,7 +72,7 @@ class ServiceController(MethodView):
         """
         try:
             username = get_jwt_auth_identity()
-            job = request.get_json()
+            job = (request.get_json()['applications'][0])['microservices'][0]
             if "_id" in job:
                 del job['_id']
             service_management.update_service(username, job, serviceid)
@@ -86,7 +86,7 @@ class ServiceControllerPost(MethodView):
     @serviceblp.arguments(schema=sla.schema.sla_schema, location="json", validate=False, unknown=True)
     @serviceblp.response(200, content_type="application/json")
     @jwt_auth_required()
-    def post(self, *args,**kwargs):
+    def post(self, *args, **kwargs):
         """Attach a new service to an application
 
         Requires user to own the service. Do not specify microserviceID but only AppID.
@@ -98,7 +98,7 @@ class ServiceControllerPost(MethodView):
                 username = get_jwt_auth_identity()
                 return service_management.create_services_of_app(username, data)
             except Exception as e:
-                logging.log(logging.ERROR,e)
+                logging.log(logging.ERROR, e)
                 abort(400, {"message": "The given SLA was not formatted correctly"})
         logging.log(logging.ERROR, "POST service no data found")
         abort(404, {"message": "/api/deploy request without a yaml file\n"})
@@ -120,5 +120,5 @@ class MultipleServicesController(Resource):
     @serviceblp.response(200, SchemaWrapper(sla.schema.sla_microservices_schema), content_type="application/json")
     @jwt_auth_required()
     @require_role(Role.ADMIN)
-    def get(self,*args,**kwargs):
+    def get(self, *args, **kwargs):
         return json_util.dumps(service_management.get_all_services())

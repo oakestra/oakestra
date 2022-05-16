@@ -37,7 +37,7 @@ def identity_is_username():
     def decorator(func):
         def wrapper(*args,**kwargs):
             current_user = get_jwt_auth_identity()
-            if current_user == kwargs['user']:
+            if current_user == kwargs['username']:
                 return func(*args, **kwargs)
             else:
                 return not_authorized
