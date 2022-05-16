@@ -78,10 +78,12 @@ def generate_db_structure(application, microservice):
     microservice["app_name"] = application["application_name"]
     microservice["app_ns"] = application["application_namespace"]
     microservice["service_name"] = microservice["microservice_name"]
-    microservice["service_namespace"] = microservice["microservice_namespace"]
+    microservice["service_ns"] = microservice["microservice_namespace"]
     microservice["image"] = microservice["code"]
     microservice["next_instance_progressive_number"] = 0
     microservice["instance_list"] = []
+    if microservice["virtualization"] == "container":
+        microservice["virtualization"] = "docker"
     addresses = microservice.get("addresses")
     if addresses is not None:
         microservice["RR_ip"] = addresses.get("rr_ip")  # compatibility with older netmanager versions

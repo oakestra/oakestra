@@ -10,7 +10,7 @@ def network_notify_deployment(job_id, job):
     print('Sending network deployment notification to the network component')
     job["_id"] = str(job["_id"])
     try:
-        requests.post(SERVICE_MANAGER_ADDR + '/api/net/deployment', json={'job_id': job_id, 'data': job})
+        requests.post(SERVICE_MANAGER_ADDR + '/api/net/deployment', json={'job_name': job['job_name']})
     except requests.exceptions.RequestException as e:
         print('Calling Service Manager /api/net/deployment not successful.')
 
