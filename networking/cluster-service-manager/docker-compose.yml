@@ -35,7 +35,6 @@ services:
       - CLUSTER_MONGO_PORT=10108
     depends_on:
       - mongo_clusternet
-      - mqtt
 
 volumes:
   mongodb_cluster_net_data:
