@@ -3,7 +3,7 @@ LABEL org.opencontainers.image.source https://github.com/edgeIO/edgeionet
 
 ADD requirements.txt /
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc \
+    && apt-get install -y --no-install-recommends gcc musl-dev \
     && apt-get update -y && apt-get install apt-file -y && apt-file update && apt-get install -y python3-dev build-essential \
     && rm -rf /var/lib/apt/lists/* \
     && pip install -r requirements.txt \
