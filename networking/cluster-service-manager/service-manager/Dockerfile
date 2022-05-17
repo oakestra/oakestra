@@ -2,6 +2,11 @@ FROM python:3.8.5-slim-buster
 LABEL org.opencontainers.image.source https://github.com/edgeIO/edgeionet
 
 ADD requirements.txt /
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc and-build-dependencies \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install cryptography \
+    && apt-get purge -y --auto-remove gcc and-build-dependencies
 RUN apt-get update -y && apt-get install apt-file -y && apt-file update && apt-get install -y python3-dev build-essential
 RUN pip install -r requirements.txt
 
