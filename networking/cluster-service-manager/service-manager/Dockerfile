@@ -7,7 +7,7 @@ RUN apt-get update \
     && apt-get update -y && apt-get install apt-file -y && apt-file update && apt-get install -y python3-dev build-essential \
     && rm -rf /var/lib/apt/lists/* \
     && pip install -r requirements.txt \
-    && apt-get purge -y --auto-remove gcc
+    && apt-get purge -y --auto-remove gcc musl-dev
 
 ADD . /
 
