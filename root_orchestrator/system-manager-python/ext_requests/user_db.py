@@ -6,6 +6,7 @@ from bson import ObjectId
 from werkzeug.security import generate_password_hash
 import ext_requests.mongodb_client as db
 
+
 def create_admin():
     existing_user = mongo_get_user_by_name('Admin')
     if existing_user is None:
@@ -56,7 +57,7 @@ def mongo_update_user(user_id, user):
     if "_id" in user:
         del user['_id']
     db.mongo_users.find_one_and_update({'_id': ObjectId(user_id)},
-                              {'$set': user})
+                                       {'$set': user})
     return "ok"
 
 

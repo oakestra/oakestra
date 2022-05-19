@@ -1,0 +1,32 @@
+{
+  "sla_version" : "v2.0",
+  "customerID" : "Admin",
+  "applications" : [
+    {
+      "applicationID" : "REPLACE-ME",
+      "application_name" : "",
+      "application_namespace" : "",
+      "application_desc" : "",
+      "microservices" : [
+        {
+          "microserviceID": "",
+          "microservice_name": "ubuntu",
+          "microservice_namespace": "test",
+          "virtualization": "container",
+          "cmd": ["sh", "-c", "tail -f /dev/null"],
+          "memory": 100,
+          "vcpus": 1,
+          "vgpus": 0,
+          "vtpus": 0,
+          "bandwidth_in": 0,
+          "bandwidth_out": 0,
+          "storage": 0,
+          "code": "docker.io/library/ubuntu:18.04",
+          "state": "",
+          "port": "9080",
+          "added_files": []
+        }
+      ]
+    }
+  ]
+}

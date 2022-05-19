@@ -8,8 +8,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import time
 from prometheus_client import start_http_server
 import threading
-from mongodb_client import mongo_init, mongo_upsert_node, mongo_upsert_job, mongo_find_job_by_system_id, \
-    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id, mongo_remove_job
+from mongodb_client import mongo_init, mongo_upsert_node, mongo_find_job_by_system_id, \
+    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id, mongo_remove_job_instance, \
+    mongo_create_new_job_instance
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
 from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from cm_logging import configure_logging
@@ -60,85 +61,57 @@ def status():
     return "ok", 200
 
 
-@app.route('/api/deploy', methods=['GET', 'POST'])
-def deploy_task():
+@app.route('/api/deploy/<system_job_id>/<instance_number>', methods=['GET', 'POST'])
+def deploy_task(system_job_id, instance_number):
     app.logger.info('Incoming Request /api/deploy')
     job = request.json  # contains job_id and job_description
-    job_obj = mongo_upsert_job(job)
-    scheduler_request_deploy(job_obj)
+    job_obj = mongo_create_new_job_instance(job,int(instance_number))
+    scheduler_request_deploy(job_obj, system_job_id, instance_number)
     return "ok"
 
 
-@app.route('/api/result', methods=['POST'])
-def get_scheduler_result_and_propagate_to_edge():
+@app.route('/api/result/<system_job_id>/<instance_number>', methods=['POST'])
+def get_scheduler_result_and_propagate_to_edge(system_job_id, instance_number):
     # print(request)
     app.logger.info('Incoming Request /api/result - received cluster_scheduler result')
     data = request.json  # get POST body
     app.logger.info(data)
 
-    job = data.get('job')
     resulting_node_id = data.get('node').get('_id')
 
-    mongo_update_job_status(job.get('_id'), 'NODE_SCHEDULED', data.get('node'))
-    job = mongo_find_job_by_id(job.get('_id'))
+    mongo_update_job_status(system_job_id, instance_number, 'NODE_SCHEDULED', data.get('node'))
+    job = mongo_find_job_by_system_id(system_job_id)
 
     # Inform network plugin about the deployment
     threading.Thread(group=None, target=network_notify_deployment,
                      args=(str(job['system_job_id']), job)).start()
 
-    mqtt_publish_edge_deploy(resulting_node_id, job)
+    mqtt_publish_edge_deploy(resulting_node_id, job, instance_number)
     return "ok"
 
 
-@app.route('/api/delete/<system_job_id>')
-def delete_service(system_job_id):
-    """find service in db and ask corresponding worker to delete task"""
+@app.route('/api/delete/<system_job_id>/<instance_number>')
+def delete_service(system_job_id, instance_number):
+    """
+    find service in db and ask corresponding worker to delete task,
+    instance_number -1 undeploys all known instances
+    """
     app.logger.info('Incoming Request /api/delete/ - to delete task...')
     # job_id is the system_job_id assigned by System Manager
     job = mongo_find_job_by_system_id(system_job_id)
-    node_id = job.get('instance_list')[0].get('worker_id')  # undeploy the first instance available
+    instance_list = job.get('instance_list')
     job_id = str(job.get('_id'))
     job.__setitem__('_id', job_id)
-    mqtt_publish_edge_delete(node_id, job)
-    mongo_remove_job(str(job_id))
+    for instance in instance_list:
+        if int(instance["instance_number"]) == int(instance_number) or int(instance_number) == -1:
+            node_id = instance.get("worker_id")
+            if node_id is not None:
+                mqtt_publish_edge_delete(node_id, job.get('job_name'), instance["instance_number"],
+                                         job.get('virtualization', 'docker'))
+            mongo_remove_job_instance(system_job_id, instance["instance_number"])
+            if int(instance_number) != -1:
+                break
     return "ok"
-
-
-@app.route('/api/replicate/', methods=['GET', 'POST'])
-def replicate():
-    """Replicate the amount of services"""
-    app.logger.info('Incoming Request /api/replicate - to replicate amount of services')
-    data = request.json
-    job_id = data.get('job')
-    desired_replicas = data.get('replicas')
-
-    job_obj = mongo_find_job_by_system_id(job_id)
-    current_replicas = job_obj.get('replicas')
-
-    scheduler_request_replicate(job_obj, replicas=desired_replicas)
-
-    return "ok", 200
-
-
-@app.route('/api/move/', methods=['GET', 'POST'])
-def move_application_from_node_to_node():
-    """Request to move service from one Node to another Node in this cluster"""
-    data = request.json  # get POST body
-    job = data.get('job')
-    node_source = data.get('node_from')
-    node_target = data.get('node_to')
-
-    job_obj = mongo_find_job_by_system_id(job)
-    node_source_obj = mongo_find_node_by_name(node_source)
-    node_target_obj = mongo_find_node_by_name(node_target)
-    if node_source_obj == 'Error':
-        return "Source Node Not Found", 404
-    elif node_target_obj == 'Error':
-        return "Target Node Not Found", 404
-    # TODO ask Scheduler for permission and whether target_node is schedulable
-    mqtt_publish_edge_delete(str(node_source_obj.get('_id')), job_obj)
-    mqtt_publish_edge_deploy(str(node_target_obj.get('_id')), job_obj)
-    return "ok", 200
 
 
 # ................ Scheduler Test ......................#

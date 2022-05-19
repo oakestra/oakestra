@@ -27,16 +27,15 @@ def net_inform_service_deploy(job, job_id):
         logging.error('Calling network plugin ' + request_addr + ' not successful.')
 
 
-def net_inform_instance_deploy(job_id, replicas, cluster_id):
+def net_inform_instance_deploy(job_id, instance_number, cluster_id):
     """
     Inform the network plugin about the new service's instance scheduled
     """
     logging.debug('new job: communicating instance deploy to network plugin...')
-    logging.debug(replicas)
     request_addr = NET_PLUGIN_ADDR + '/api/net/instance/deploy'
     logging.debug(request_addr)
     try:
-        r = requests.post(request_addr, json={'replicas': replicas, 'cluster_id': cluster_id, 'system_job_id': job_id})
+        r = requests.post(request_addr, json={'instance_number': instance_number, 'cluster_id': cluster_id, 'system_job_id': job_id})
         r.raise_for_status()
     except requests.exceptions.ConnectionError as errc:
         logging.error('Calling network plugin ' + request_addr + ' Connection error.')

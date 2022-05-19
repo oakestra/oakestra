@@ -7,7 +7,7 @@ import (
 
 type RuntimeInterface interface {
 	Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error
-	Undeploy(sname string) error
+	Undeploy(sname string, instance int) error
 }
 
 type RuntimeMonitoring interface {

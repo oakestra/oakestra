@@ -18,6 +18,8 @@ import (
 	"io/ioutil"
 	"os"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -54,13 +56,13 @@ func GetContainerdClient() *ContainerRuntime {
 
 func (r *ContainerRuntime) StopContainerdClient() {
 	r.channelLock.Lock()
-	servicesNames := reflect.ValueOf(r.killQueue).MapKeys()
+	taskIDs := reflect.ValueOf(r.killQueue).MapKeys()
 	r.channelLock.Unlock()
 
-	for _, sname := range servicesNames {
-		err := r.Undeploy(sname.String())
+	for _, taskid := range taskIDs {
+		err := r.Undeploy(extractSnameFromTaskID(taskid.String()), extractInstanceNumberFromTaskID(taskid.String()))
 		if err != nil {
-			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", sname.String(), err)
+			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", taskid.String(), err)
 		}
 	}
 	r.contaierClient.Close()
@@ -87,11 +89,11 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 	errorChannel := make(chan error, 0)
 
 	r.channelLock.RLock()
-	el, servicefound := r.killQueue[service.Sname]
+	el, servicefound := r.killQueue[genTaskID(service.Sname, service.Instance)]
 	r.channelLock.RUnlock()
 	if !servicefound || el == nil {
 		r.channelLock.Lock()
-		r.killQueue[service.Sname] = &killChannel
+		r.killQueue[genTaskID(service.Sname, service.Instance)] = &killChannel
 		r.channelLock.Unlock()
 	} else {
 		return errors.New("Service already deployed")
@@ -116,22 +118,23 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 	return nil
 }
 
-func (r *ContainerRuntime) Undeploy(sname string) error {
+func (r *ContainerRuntime) Undeploy(service string, instance int) error {
 	r.channelLock.Lock()
 	defer r.channelLock.Unlock()
-	el, found := r.killQueue[sname]
+	taskid := genTaskID(service, instance)
+	el, found := r.killQueue[taskid]
 	if found && el != nil {
-		logger.InfoLogger().Printf("Sending kill signal to %s", sname)
-		*r.killQueue[sname] <- true
+		logger.InfoLogger().Printf("Sending kill signal to %s", taskid)
+		*r.killQueue[taskid] <- true
 		select {
-		case res := <-*r.killQueue[sname]:
+		case res := <-*r.killQueue[taskid]:
 			if res == false {
-				logger.ErrorLogger().Printf("Unable to stop service %s", sname)
+				logger.ErrorLogger().Printf("Unable to stop service %s", taskid)
 			}
 		case <-time.After(5 * time.Second):
-			logger.ErrorLogger().Printf("Unable to stop service %s", sname)
+			logger.ErrorLogger().Printf("Unable to stop service %s", taskid)
 		}
-		delete(r.killQueue, sname)
+		delete(r.killQueue, taskid)
 		return nil
 	}
 	return errors.New("service not found")
@@ -147,16 +150,17 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	statusChangeNotificationHandler func(service model.Service),
 ) {
 
+	hostname := genTaskID(service.Sname, service.Instance)
+
 	revert := func(err error) {
 		startup <- false
 		errorchan <- err
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
-		r.killQueue[service.Sname] = nil
+		r.killQueue[hostname] = nil
 	}
 
 	//create container general oci specs
-	hostname := fmt.Sprintf("%s.instance", service.Sname)
 	specOpts := []oci.SpecOpts{
 		oci.WithImageConfig(image),
 		oci.WithHostHostsFile,
@@ -188,9 +192,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// create the container
 	container, err := r.contaierClient.NewContainer(
 		ctx,
-		service.Sname,
+		hostname,
 		containerd.WithImage(image),
-		containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", service.Sname), image),
+		containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", hostname), image),
 		containerd.WithNewSpec(specOpts...),
 	)
 	if err != nil {
@@ -211,7 +215,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		//removing from killqueue
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
-		r.killQueue[service.Sname] = nil
+		r.killQueue[hostname] = nil
 		if err != nil {
 			*killChannel <- false
 		} else {
@@ -230,7 +234,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// if Overlay mode is active then attach network to the task
 	if model.GetNodeInfo().Overlay {
 		taskpid := int(task.Pid())
-		err = requests.AttachNetworkToTask(taskpid, service.Sname, 0, service.Ports)
+		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
 			revert(err)
@@ -296,10 +300,12 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						continue
 					}
 					resourceList = append(resourceList, model.Resources{
-						Cpu:    fmt.Sprintf("%f", sysInfo.CPU),
-						Memory: fmt.Sprintf("%f", sysInfo.Memory),
-						Disk:   fmt.Sprintf("%d", usage.Size),
-						Sname:  task.ID(),
+						Cpu:      fmt.Sprintf("%f", sysInfo.CPU),
+						Memory:   fmt.Sprintf("%f", sysInfo.Memory),
+						Disk:     fmt.Sprintf("%d", usage.Size),
+						Sname:    extractSnameFromTaskID(task.ID()),
+						Runtime:  model.CONTAINER_RUNTIME,
+						Instance: extractInstanceNumberFromTaskID(task.ID()),
 					})
 				}
 				//NOTIFY WITH THE CURRENT CONTAINERS STATUS
@@ -377,4 +383,30 @@ func killTask(ctx context.Context, task containerd.Task, container containerd.Co
 
 	logger.ErrorLogger().Printf("Task %s terminated", task.ID())
 	return nil
+}
+
+func extractSnameFromTaskID(taskid string) string {
+	sname := taskid
+	index := strings.LastIndex(taskid, ".instance")
+	if index > 0 {
+		sname = taskid[0:index]
+	}
+	return sname
+}
+
+func extractInstanceNumberFromTaskID(taskid string) int {
+	instance := 0
+	separator := ".instance"
+	index := strings.LastIndex(taskid, separator)
+	if index > 0 {
+		number, err := strconv.Atoi(taskid[index+len(separator)+1:])
+		if err == nil {
+			instance = number
+		}
+	}
+	return instance
+}
+
+func genTaskID(sname string, instancenumber int) string {
+	return fmt.Sprintf("%s.instance.%d", sname, instancenumber)
 }

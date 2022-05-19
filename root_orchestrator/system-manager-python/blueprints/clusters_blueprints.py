@@ -7,7 +7,7 @@ from flask.views import MethodView
 from flask import request
 from flask_smorest import Blueprint, Api, abort
 
-from ext_requests.cluster_requests import cluster_request_to_delete_job
+from ext_requests.cluster_requests import cluster_request_to_delete_job, cluster_request_to_delete_job_by_ip
 from services.service_management import delete_service
 from ext_requests.apps_db import mongo_update_job_status
 from ext_requests.cluster_db import mongo_get_all_clusters, mongo_find_all_active_clusters, \
@@ -85,7 +85,6 @@ class ClusterController(MethodView):
                                              instances=j.get('instance_list'))
             if result is None:
                 # cluster has outdated jobs, ask to undeploy
-                cluster = mongo_find_cluster_by_id(kwargs['clusterid'])
-                cluster_request_to_delete_job(cluster, j.get('system_job_id'), -1)
+                cluster_request_to_delete_job_by_ip(j.get('system_job_id'), -1, request.remote_addr)
 
         return 'ok'

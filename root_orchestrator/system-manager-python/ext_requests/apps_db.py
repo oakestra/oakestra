@@ -43,17 +43,17 @@ def mongo_update_job_status(job_id, status, instances=None):
     instance_list = job.get('instance_list')
     if instances is not None:
         for instance in instances:
-            instance_num = instance['instance_number']
-            elem = instance_list[instance_num]
-            elem['cpu'] = instance.get('cpu')
-            elem['memory'] = instance.get('memory')
-            elem['disk'] = instance.get('disk')
-            instance_list[instance_num] = elem
+            db.mongo_services.update_one(
+                {'_id': ObjectId(job_id),
+                 "instance_list": {'$elemMatch': {'instance_number': instance['instance_number']}}},
+                {'$set': {"instance_list.$.cpu": instance.get('cpu'),
+                          "instance_list.$.memory": instance.get('memory'),
+                          "instance_list.$.disk": instance.get('disk'),
+                          "instance_list.$.status": instance.get('status')}
+                 }
+            )
 
-    return db.mongo_services.update_one(
-        {'_id': ObjectId(job_id)},
-        {'$set': {'status': status, 'instance_list': instance_list}}
-    )
+    return db.mongo_services.find_one({'_id': ObjectId(job_id)})
 
 
 def mongo_set_microservice_id(job_id):
@@ -111,7 +111,6 @@ def mongo_update_job(job_id, job):
 
 
 def mongo_delete_job(job_id):
-    global mongo_jobs
     db.app.logger.info("MONGODB - delete job...")
     db.mongo_services.find_one_and_delete({'_id': ObjectId(job_id)})
     db.app.logger.info("MONGODB - job {} deleted")
@@ -119,7 +118,6 @@ def mongo_delete_job(job_id):
 
 
 def mongo_get_job_usage(job_id):
-    global mongo_jobs
     db.app.logger.info("MONGODB - get usage...")
     job = db.mongo_services.find_one(ObjectId(job_id))
     if "usage" in job:
@@ -128,12 +126,13 @@ def mongo_get_job_usage(job_id):
         return None
 
 
-def mongo_find_cluster_of_job(job_id):
+def mongo_find_cluster_of_job(job_id, instance_num):
     db.app.logger.info('Find job by Id and return cluster...')
     job_obj = db.mongo_services.find_one({'_id': ObjectId(job_id)},
                                          {'instance_list': 1})  # return just the assgined cluster of the job
-    cluster_id = ObjectId(job_obj.get('instance_list')[0].get('cluster_id'))
-    return db.mongo_clusters.db.clusters.find_one(cluster_id)
+    for instance in job_obj.get('instance_list'):
+        if instance['instance_number'] == int(instance_num) or instance_num == -1:
+            return db.mongo_clusters.db.clusters.find_one(ObjectId(instance['cluster_id']))
 
 
 # ......... APPLICATIONS .........

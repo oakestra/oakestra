@@ -1,6 +1,6 @@
 import threading
 
-from ext_requests.apps_db import mongo_find_app_by_id, mongo_find_job_by_id, mongo_find_cluster_of_job, \
+from ext_requests.apps_db import mongo_find_app_by_id, mongo_find_job_by_id, \
     mongo_update_job_status, mongo_update_job_status_and_instances
 from ext_requests.cluster_requests import cluster_request_to_delete_job, cluster_request_to_deploy
 from ext_requests.net_plugin_requests import net_inform_instance_undeploy, net_inform_service_deploy, \
@@ -20,10 +20,10 @@ def request_scale_up_instance(microserviceid, username):
             threading.Thread(group=None, target=scheduler_request_deploy, args=(service, str(microserviceid),)).start()
 
 
-def request_scale_down_instance(microserviceid, username, how_many=-1):
+def request_scale_down_instance(microserviceid, username, which_one=-1):
     """
-    scale down <how_many> the instances of a service.
-    how_many default value is -1 which means "all instances"
+    remove the instance <which_one> of a service.
+    which_one default value is -1 which means "all instances"
     """
     service = mongo_find_job_by_id(microserviceid)
     application = mongo_find_app_by_id(str(service["applicationID"]), username)
@@ -33,11 +33,16 @@ def request_scale_down_instance(microserviceid, username, how_many=-1):
             instances = service.get("instance_list")
             if instances is not None:
                 for instance in instances:
-                    if how_many != 0:
-                        how_many = how_many - 1
+                    if which_one == instance['instance_number'] or which_one == -1:
                         net_inform_instance_undeploy(microserviceid, instance['instance_number'])
-                        cluster_obj = mongo_find_cluster_of_job(microserviceid)
-                        cluster_request_to_delete_job(cluster_obj, microserviceid, instance['instance_number'])
+                        cluster_request_to_delete_job(microserviceid, instance['instance_number'])
+                        instances.remove(instance)
+                mongo_update_job_status_and_instances(
+                    microserviceid,
+                    service['status'],
+                    service['next_instance_progressive_number'],
+                    instances
+                )
 
 
 def instance_scale_up_scheduled_handler(job_id, cluster_id):
@@ -58,8 +63,8 @@ def instance_scale_up_scheduled_handler(job_id, cluster_id):
             instance_list=instance_list
         )
 
-        #inform
+        # inform network component
         threading.Thread(group=None, target=net_inform_instance_deploy,
                          args=(str(job_id), instance_number, cluster_id)).start()
 
-        cluster_request_to_deploy(cluster_id, job_id)
+        cluster_request_to_deploy(cluster_id, job_id, instance_number)

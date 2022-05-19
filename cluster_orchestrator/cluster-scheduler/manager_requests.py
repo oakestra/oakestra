@@ -6,10 +6,10 @@ from bson.json_util import dumps
 CLUSTER_MANAGER_ADDR = 'http://' + os.environ.get('CLUSTER_MANAGER_URL') + ':' + str(os.environ.get('CLUSTER_MANAGER_PORT'))
 
 
-def manager_request(app, node, job):
+def manager_request(app, node, job, job_id, instance_num):
     print('manager request')
     app.logger.info('sending scheduling result to cluster-manager...')
-    request_addr = CLUSTER_MANAGER_ADDR + '/api/result'
+    request_addr = CLUSTER_MANAGER_ADDR + '/api/result/'+job_id+"/"+instance_num
     app.logger.info(request_addr)
 
     node_id = str(node.get('_id'))  # change ObjectID to string to send it via JSON

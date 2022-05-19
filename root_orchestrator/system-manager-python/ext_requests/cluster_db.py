@@ -3,7 +3,6 @@ from datetime import datetime
 from bson import ObjectId
 
 import ext_requests.mongodb_client as db
-from ext_requests.apps_db import mongo_update_job_status
 
 
 def mongo_upsert_cluster(cluster_ip, message):
@@ -26,6 +25,10 @@ def mongo_upsert_cluster(cluster_ip, message):
 
 def mongo_find_cluster_by_id(cluster_id):
     return db.mongo_clusters.db.clusters.find_one(ObjectId(cluster_id))
+
+
+def mongo_find_cluster_by_ip(cluster_ip):
+    return db.mongo_clusters.db.clusters.find_one({'ip': cluster_ip})
 
 
 def mongo_get_all_clusters():
@@ -77,7 +80,6 @@ def mongo_update_cluster_information(cluster_id, data):
     virtualization = data.get('virtualization')
     more = data.get('more')
     worker_groups = data.get('worker_groups')
-
 
     datetime_now = datetime.now()
     datetime_now_timestamp = datetime.timestamp(datetime_now)
