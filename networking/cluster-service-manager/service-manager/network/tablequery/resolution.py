@@ -2,6 +2,8 @@ from interfaces import mongodb_requests
 from interfaces import root_service_manager_requests
 import copy
 
+from interfaces.mongodb_requests import mongo_update_job_instance
+
 
 def service_resolution(service_name):
     """
@@ -32,6 +34,8 @@ def service_resolution(service_name):
         instances = job['instance_list']
         siplist = job['service_ip_list']
         mongodb_requests.mongo_insert_job(copy.deepcopy(job))
+        for instance in instances:
+            mongo_update_job_instance(job['job_name'], instance)
     else:
         instances = job['instance_list']
         siplist = job['service_ip_list']
@@ -65,14 +69,14 @@ def service_resolution_ip(ip_string):
     if job is None:
         job = root_service_manager_requests.cloud_table_query_ip(ip_string)
         mongodb_requests.mongo_insert_job(copy.deepcopy(job))
-
+        for instance in job.get('instance_list'):
+            mongo_update_job_instance(job['job_name'], instance)
     return job.get("job_name"), job.get('instance_list'), job.get('service_ip_list')
 
 
 def format_instance_response(instance_list, sip_list):
-    service_ip_list = sip_list
     for elem in instance_list:
-        elem['service_ip'] = service_ip_list
+        elem['service_ip'] = copy.deepcopy(sip_list)
         elem['service_ip'].append({
             "IpType": "instance_ip",
             "Address": elem['instance_ip']

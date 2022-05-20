@@ -32,10 +32,10 @@ type mqttInterestDeregisterRequest struct {
 
 func (jut *jobUpdatesTimer) MessageHandler(client mqtt.Client, message mqtt.Message) {
 	log.Printf("Received job update regarding %s", message.Topic())
-	jut.env.RefreshServiceTable(jut.job)
+	go jut.env.RefreshServiceTable(jut.job)
 }
 
-func (jut *jobUpdatesTimer) StartSelfDestructTimeout() {
+func (jut *jobUpdatesTimer) startSelfDestructTimeout() {
 	/*
 		If any worker still requires this job, reset timer. If in 5 minutes nobody needs this service, de-register the interest.
 	*/
@@ -84,7 +84,7 @@ func MqttRegisterInterest(jobName string, env jobEnvironmentManagerActions) {
 	tqtoken.Wait()
 	log.Printf("MQTT - Subscribed to %s ", jobTimer.topic)
 	runningHandlers.Add(jobTimer.job)
-	go jobTimer.StartSelfDestructTimeout()
+	go jobTimer.startSelfDestructTimeout()
 }
 
 func cleanInterestTowardsJob(jobName string) {
