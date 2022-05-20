@@ -34,7 +34,7 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
             if instances is not None:
                 for instance in instances:
                     if which_one == instance['instance_number'] or which_one == -1:
-                        net_inform_instance_undeploy(microserviceid, instance['instance_number'])
+                        net_inform_instance_undeploy(microserviceid, which_one)
                         cluster_request_to_delete_job(microserviceid, instance['instance_number'])
                         instances.remove(instance)
                 mongo_update_job_status_and_instances(
