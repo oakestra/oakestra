@@ -51,5 +51,5 @@ def test_instance_undeployment_update():
 
     _update_cache_and_workers("aaa", 0, "UNDEPLOYMENT")
 
-    mongodb_client.mongo_remove_job_instance.assert_called_with(job_name="aaa", instancenum=0)
+    mongodb_client.mongo_remove_job_instance.assert_called_with(job_name="aaa", instance_number=0)
     mqtt_client.mqtt_notify_service_change.assert_called_with(job_name="aaa", type="UNDEPLOYMENT")

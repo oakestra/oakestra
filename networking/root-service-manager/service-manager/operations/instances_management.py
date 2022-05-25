@@ -7,7 +7,7 @@ from network import tablequery, routes_interests
 def deploy_request(sys_job_id=None, instance_number=None, cluster_id=None):
     if sys_job_id is None or instance_number is None or cluster_id is None:
         return "Invalid input parameters", 400
-    mongodb_requests.mongo_update_job_instance(
+    mongodb_requests.mongo_create_job_instance(
         system_job_id=sys_job_id,
         instance=_prepare_instance_dict(instance_number, cluster_id)
     )
