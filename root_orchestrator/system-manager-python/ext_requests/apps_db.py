@@ -160,6 +160,13 @@ def mongo_find_app_by_id(app_id, userid):
             return app
 
 
+def mongo_find_app_by_name_and_namespace(app_name, app_ns):
+    return db.mongo_applications.find_one({
+        'application_name': app_name,
+        'application_namespace': app_ns
+    })
+
+
 def mongo_update_application(app_id, userid, data):
     db.app.logger.info("MONGODB - update data...")
     db.mongo_applications.find_one_and_update({'_id': ObjectId(app_id), 'userId': userid},

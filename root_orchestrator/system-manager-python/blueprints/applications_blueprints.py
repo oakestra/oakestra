@@ -86,7 +86,10 @@ class ApplicationController(Resource):
     def post(self, *args, **kwargs):
         data = request.get_json()
         current_user = get_jwt_identity()
-        return json_util.dumps(register_app(data, current_user))
+        result, code = register_app(data, current_user)
+        if code != 200:
+            abort(code, result)
+        return json_util.dumps(result)
 
 
 @applicationsblp.route('/<userid>')
@@ -109,6 +112,5 @@ class MultipleApplicationController(Resource):
     @applicationblp.response(200, SchemaWrapper(applications_schema), content_type="application/json")
     @jwt_required()
     @require_role(Role.ADMIN)
-    def get(self,*args,**kwargs):
+    def get(self, *args, **kwargs):
         return json_util.dumps(mongo_get_all_applications())
-
