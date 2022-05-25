@@ -484,7 +484,7 @@ func (env *Environment) AddTableQueryEntry(entry TableEntry) {
 
 // RefreshServiceTable force a table query refresh for a service
 func (env *Environment) RefreshServiceTable(jobname string) {
-	log.Printf("Requested table query refresh fro %s", jobname)
+	log.Printf("Requested table query refresh for %s", jobname)
 	entryList, err := tableQueryByJobName(jobname)
 	_ = env.translationTable.RemoveByJobName(jobname)
 	if err == nil {

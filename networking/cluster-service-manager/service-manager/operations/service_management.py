@@ -4,7 +4,7 @@ import logging
 import traceback
 import copy
 
-from interfaces.mongodb_requests import mongo_remove_job
+from interfaces.mongodb_requests import mongo_remove_job, mongo_update_job_instance
 
 
 def create_service(job_name):
@@ -15,6 +15,8 @@ def create_service(job_name):
     try:
         job = root_service_manager_requests.cloud_table_query_service_name(job_name)
         mongodb_requests.mongo_insert_job(copy.deepcopy(job))
+        for instance in job.get('instance_list'):
+            mongo_update_job_instance(job_name, instance)
     except Exception as e:
         logging.error('Incoming Request /api/net/deployment failed service_resolution')
         logging.debug(traceback.format_exc())

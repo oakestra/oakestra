@@ -1,9 +1,10 @@
 from threading import Thread
 
 from interfaces import mongodb_requests
+from interfaces.mongodb_requests import mongo_update_job_instance
 from network.tablequery import resolution
 from network.tablequery import interests
-from interfaces import mqtt_client, root_service_manager_requests,mongodb_requests
+from interfaces import mqtt_client, root_service_manager_requests, mongodb_requests
 import logging
 import traceback
 import copy
@@ -17,6 +18,8 @@ def instance_deployment(job_name, job):
     try:
         job = root_service_manager_requests.cloud_table_query_service_name(job_name)
         mongodb_requests.mongo_insert_job(copy.deepcopy(job))
+        for instance in job.get('instance_list'):
+            mongo_update_job_instance(job.get('job_name'), instance)
     except Exception as e:
         logging.error('Incoming Request /api/net/deployment failed service_resolution')
         logging.debug(traceback.format_exc())
@@ -30,7 +33,7 @@ def instance_updates(job_name, instancenum, type):
     if job_name is None or instancenum is None:
         return "Invalid Parameters", 400
 
-    if int(instancenum) < 0:
+    if int(instancenum) < -1:
         return "Invalid instancenum", 400
 
     if type == "DEPLOYMENT" or type == "UNDEPLOYMENT":
@@ -45,16 +48,9 @@ def instance_updates(job_name, instancenum, type):
 def _update_cache_and_workers(job_name, instancenum, type):
     if type == "DEPLOYMENT":
         query_result = root_service_manager_requests.cloud_table_query_service_name(job_name)
-        instances = query_result['instance_list']
-        updated_instance = None
-        for instance in instances:
-            if instance["instance_number"] == instancenum:
-                updated_instance = instance
-        if updated_instance is not None:
-            mongodb_requests.mongo_update_job_instance(job_name=job_name, instance=updated_instance)
-        else:
-            logging.error("Invalid instancenum given")
+        for instance in query_result['instance_list']:
+            mongodb_requests.mongo_update_job_instance(job_name=job_name, instance=instance)
     else:
-        mongodb_requests.mongo_remove_job_instance(job_name=job_name, instancenum=instancenum)
+        mongodb_requests.mongo_remove_job_instance(job_name=job_name, instance_number=instancenum)
 
     mqtt_client.mqtt_notify_service_change(job_name=job_name, type=type)

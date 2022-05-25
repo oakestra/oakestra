@@ -5,7 +5,7 @@ from flask_socketio import SocketIO
 from interfaces.mqtt_client import mqtt_init
 from net_logging import configure_logging
 from interfaces.mongodb_requests import mongo_init
-from operations.instances_management import instance_deployment, instance_updates
+from operations.instances_management import instance_updates
 from operations.service_management import create_service, remove_service
 
 MY_PORT = os.environ.get('MY_PORT') or 10200

@@ -134,10 +134,10 @@ def new_instance_deployment():
 @app.route('/api/net/<system_job_id>/<instance_number>', methods=['DELETE'])
 def instance_undeployment(system_job_id, instance_number):
     """
-    Undeployment request for the instance number "instance"
+    Undeployment request for the instance number "instance", if instance ==-1 remove the service all together
     """
 
-    app.logger.info("Incoming Request /api/net/undeploy/" + str(system_job_id) + "/<instance>" + str(instance_number))
+    app.logger.info("Incoming Request /api/net/undeploy/" + str(system_job_id) + "/" + str(instance_number))
 
     return instances_management.undeploy_request(str(system_job_id), int(instance_number))
 

@@ -49,8 +49,7 @@ def mongo_insert_job(job):
     job_content = {
         'system_job_id': job['system_job_id'],
         'job_name': job['job_name'],
-        'service_ip_list': job['service_ip_list'],
-        'instance_list': job['instance_list'],
+        'service_ip_list': job['service_ip_list']
     }
     # job insertion
     jobs = mongo_jobs.db.jobs
@@ -60,6 +59,12 @@ def mongo_insert_job(job):
         upsert=True,
         return_document=True
     )
+    # if new job add empty instance list
+    if new_job.get('instance_list') is None:
+        jobs.find_one_and_update(
+            {'job_name': job['job_name']},
+            {'$set': {'instance_list': []}}
+        )
     app.logger.info("MONGODB - job {} inserted".format(str(new_job.get('_id'))))
     return str(new_job.get('_id'))
 
@@ -70,24 +75,47 @@ def mongo_remove_job(job_name):
 
 
 def mongo_update_job_instance(job_name, instance):
-    mongo_jobs.db.jobs.find_one_and_update(
-        {'job_name': job_name},
-        {
-            '$set': {"instance_list.$[element]", instance}
-        },
-        {
-            'arrayFilters': [{'element.instance_number': instance['instance_number']}],
-            'upsert': True
-        }
-    )
+    # update if exist otherwise push a new instance
+    if mongo_jobs.db.jobs.find_one(
+            {
+                'job_name': job_name,
+                "instance_list.instance_number": instance['instance_number']
+            }):
+        mongo_jobs.db.jobs.update_one(
+            {
+                'job_name': job_name,
+                "instance_list": {'$elemMatch': {'instance_number': instance['instance_number']}}},
+            {
+                '$set': {
+                    "instance_list.$.namespace_ip": instance.get('namespace_ip'),
+                    "instance_list.$.host_ip": instance.get('host_ip'),
+                    "instance_list.$.host_port": instance.get('host_port'),
+                }
+            }
+        )
+    else:
+        mongo_jobs.db.jobs.update_one(
+            {
+                'job_name': job_name,
+            },
+            {
+                '$push': {"instance_list": instance},
+            }
+        )
 
 
-def mongo_remove_job_instance(job_name, instancenum):
+def mongo_remove_job_instance(job_name, instance_number):
     global mongo_jobs
-    mongo_jobs.db.jobs.find_one_and_update(
-        {'job_name': job_name},
-        {'$pull': {"instance_list.instance_number": instancenum}}
-    )
+    if int(instance_number) == -1:
+        mongo_jobs.db.jobs.find_one_and_update(
+            {'job_name': job_name},
+            {'$set': {'instance_list': []}}
+        )
+    else:
+        mongo_jobs.db.jobs.find_one_and_update(
+            {'job_name': job_name},
+            {'$pull': {'instance_list': {'instance_number': instance_number}}}
+        )
 
 
 def mongo_find_job_by_name(job_name):
@@ -123,23 +151,6 @@ def mongo_update_job_deployed(job_name, status, ns_ip, node_id, instance_number,
 def mongo_find_job_by_id(id):
     print('Find job by Id')
     return mongo_jobs.db.jobs.find_one({'_id': ObjectId(id)})
-
-
-def mongo_update_job_status(job_id, status, node):
-    global mongo_jobs
-    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
-    instance_list = job['instance_list']
-    for instance in instance_list:
-        if instance.get('host_ip') == '':
-            instance['host_ip'] = node['node_address']
-            port = node['node_info'].get('node_port')
-            if port is None:
-                port = 50011
-            instance['host_port'] = int(port)
-            instance['worker_id'] = node.get('_id')
-            break
-    return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
-                                         {'$set': {'status': status, 'instance_list': instance_list}})
 
 
 # ........ Interest Operations .........#

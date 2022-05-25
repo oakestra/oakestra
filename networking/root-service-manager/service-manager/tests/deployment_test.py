@@ -40,13 +40,13 @@ def test_deploy_request():
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[10, 30, 0, 253])
     mongodb_client.mongo_update_next_service_ip = MagicMock()
     mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
-    mongodb_client.mongo_update_job_instance = MagicMock()
+    mongodb_client.mongo_create_job_instance = MagicMock()
 
     res, code = operations.instances_management.deploy_request("123", 0, "abc")
 
     assert code == 200
     mongodb_client. \
-        mongo_update_job_instance. \
+        mongo_create_job_instance. \
         assert_called_with(
         system_job_id="123",
         instance={
@@ -61,13 +61,13 @@ def test_deploy_request_2_instances():
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[10, 30, 0, 253])
     mongodb_client.mongo_update_next_service_ip = MagicMock()
     mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
-    mongodb_client.mongo_update_job_instance = MagicMock()
+    mongodb_client.mongo_create_job_instance = MagicMock()
 
     res, code = operations.instances_management.deploy_request("123", 0, "abc")
 
     assert code == 200
     mongodb_client. \
-        mongo_update_job_instance. \
+        mongo_create_job_instance. \
         assert_called_with(
         system_job_id="123",
         instance={
@@ -83,7 +83,7 @@ def test_deploy_request_2_instances():
 
     assert code == 200
     mongodb_client. \
-        mongo_update_job_instance. \
+        mongo_create_job_instance. \
         assert_called_with(
         system_job_id="123",
         instance={
@@ -99,7 +99,7 @@ def test_deploy_request_2_instances():
 
     assert code == 200
     mongodb_client. \
-        mongo_update_job_instance. \
+        mongo_create_job_instance. \
         assert_called_with(
         system_job_id="123",
         instance={
