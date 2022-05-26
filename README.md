@@ -3,7 +3,7 @@
   <img src="https://github.com/edgeIO/edgeio/blob/main/fig/edgeio-logo.png">
 </p>
 
-# EdgeIO Infrastructure Getting Started
+# Oakestra Infrastructure Getting Started
 
 ## Root Orchestrator setup
 
