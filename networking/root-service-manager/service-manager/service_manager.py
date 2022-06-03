@@ -108,6 +108,20 @@ def new_service_deployment():
     )
 
 
+@app.route('/api/net/service/<system_job_id>', methods=['DELETE'])
+def service_undeployment(system_job_id):
+    """
+    service deployment descriptor and job_id
+    The System Manager decorates the service with a new RR Ip in its own DB
+    """
+
+    app.logger.info("Incoming Request DELETE /api/net/service/"+system_job_id)
+
+    return service_management.remove_service(
+        system_job_id=str(system_job_id)
+    )
+
+
 @app.route('/api/net/instance/deploy', methods=['POST'])
 def new_instance_deployment():
     """
