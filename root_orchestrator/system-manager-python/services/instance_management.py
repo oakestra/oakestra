@@ -31,7 +31,7 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
         if microserviceid in application["microservices"]:
             service = mongo_find_job_by_id(microserviceid)
             instances = service.get("instance_list")
-            if instances is not None:
+            if len(instances)>0:
                 for instance in instances:
                     if which_one == instance['instance_number'] or which_one == -1:
                         net_inform_instance_undeploy(microserviceid, which_one)
@@ -64,7 +64,6 @@ def instance_scale_up_scheduled_handler(job_id, cluster_id):
         )
 
         # inform network component
-        threading.Thread(group=None, target=net_inform_instance_deploy,
-                         args=(str(job_id), instance_number, cluster_id)).start()
+        net_inform_instance_deploy(str(job_id), instance_number, cluster_id)
 
         cluster_request_to_deploy(cluster_id, job_id, instance_number)

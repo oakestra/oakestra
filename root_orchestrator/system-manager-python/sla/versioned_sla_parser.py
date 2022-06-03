@@ -11,15 +11,12 @@ class SLAFormatError(BaseException):
 # if it was uploaded with a post request we have to use also json.loads
 
 def parse_sla_json(sla):
-    try:
-        json_data = sla
-        if type(sla) != dict:
-            json_data = json.loads(sla)
-        version = json_data['sla_version']
-        validator = sla_validator_by_version[version]
-        if validator(json_data):
-            return json_data
-        else:
-            raise SLAFormatError
-    except:
+    json_data = sla
+    if type(sla) != dict:
+        json_data = json.loads(sla)
+    version = json_data['sla_version']
+    validator = sla_validator_by_version[version]
+    if validator(json_data):
+        return json_data
+    else:
         raise SLAFormatError

@@ -146,7 +146,7 @@ def mongo_add_application(application):
     db.app.logger.info("MONGODB - app {} inserted".format(str(inserted_id)))
     db.mongo_applications.find_one_and_update({'_id': inserted_id},
                                               {'$set': {'applicationID': str(inserted_id)}})
-    return mongo_get_applications_of_user(user)  # return the application list
+    return str(inserted_id)
 
 
 def mongo_get_all_applications():

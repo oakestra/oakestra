@@ -75,7 +75,9 @@ class ServiceController(MethodView):
             job = (request.get_json()['applications'][0])['microservices'][0]
             if "_id" in job:
                 del job['_id']
-            service_management.update_service(username, job, serviceid)
+            result,status = service_management.update_service(username, job, serviceid)
+            if status != 200:
+                abort(status, result)
             return {}
         except ConnectionError as e:
             abort(404, {"message": e})
@@ -96,7 +98,10 @@ class ServiceControllerPost(MethodView):
         if data:
             try:
                 username = get_jwt_auth_identity()
-                return service_management.create_services_of_app(username, data)
+                result, status = service_management.create_services_of_app(username, data)
+                if status != 200:
+                    abort(status, result)
+                return result
             except Exception as e:
                 logging.log(logging.ERROR, e)
                 abort(400, {"message": "The given SLA was not formatted correctly"})
@@ -111,7 +116,10 @@ class MultipleServicesControllerUser(Resource):
     @jwt_auth_required()
     def get(self, appid):
         username = get_jwt_auth_identity()
-        return json_util.dumps(service_management.user_services(appid, username))
+        result,status = service_management.user_services(appid, username)
+        if status != 200:
+            abort(status,result)
+        return json_util.dumps(result)
 
 
 @servicesblp.route('/')
