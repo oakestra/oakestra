@@ -71,7 +71,7 @@ def mongo_insert_job(obj):
 
 def mongo_remove_job(system_job_id):
     global mongo_jobs
-    return mongo_jobs.db.jobs.remove({"system_job_id": system_job_id})
+    return mongo_jobs.db.jobs.delete_one({"system_job_id": system_job_id})
 
 
 def mongo_get_all_jobs():
@@ -355,7 +355,7 @@ def mongo_set_cluster_status(cluster_id, cluster_status):
 
 def mongo_cluster_remove(cluster_id):
     global mongo_clusters
-    mongo_clusters.db.cluster.remove({"cluster_id": cluster_id})
+    mongo_clusters.db.cluster.delete_one({"cluster_id": cluster_id})
 
 
 def mongo_get_cluster_by_ip(cluster_ip):
@@ -390,7 +390,7 @@ def mongo_register_cluster_job_interest(cluster_id, job_name):
 def mongo_remove_cluster_job_interest(cluster_id, job_name):
     global mongo_clusters
     interests = mongo_clusters.db.cluster.find_one({"cluster_id": cluster_id}).get("interests")
-    interests.remove(job_name)
+    interests.delete_one(job_name)
     mongo_clusters.db.cluster.find_one_and_update(
         {"cluster_id": cluster_id},
         {'$set': {
