@@ -10,7 +10,7 @@
       "microservices" : [
         {
           "microserviceID": "",
-          "microservice_name": "ubuntu",
+          "microservice_name": "curl",
           "microservice_namespace": "test",
           "virtualization": "container",
           "cmd": ["sh", "-c", "tail -f /dev/null"],
@@ -21,7 +21,7 @@
           "bandwidth_in": 0,
           "bandwidth_out": 0,
           "storage": 0,
-          "code": "docker.io/library/ubuntu:18.04",
+          "code": "docker.io/curlimages/curl:7.82.0",
           "state": "",
           "port": "9080",
           "added_files": []
