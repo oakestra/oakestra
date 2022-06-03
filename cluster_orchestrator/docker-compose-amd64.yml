@@ -46,7 +46,7 @@ services:
 
 # Cluster Manager
   cluster_service_manager:
-    image: ghcr.io/edgeio/edgeionet/cluster-service-manager:v0.04.amd64.experimental
+    image: ghcr.io/oakestra/edgeionet/cluster-service-manager:v0.04.amd64.experimental
     container_name: cluster_service_manager
     hostname: cluster_service_manager
     expose:
