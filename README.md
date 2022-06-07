@@ -50,7 +50,7 @@ The following ports are exposed:
 - port 50103 available
 
 1) First you need to install the go Node Engine. Download the latest release and use the command `./install <architecture>`. Architecture can be arm or amd64.
-2) (Optional, required only if you want to enable communication across the microservices) Install and run the [OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager) component
+2) (Optional, required only if you want to enable communication across the microservices) Install and run the [OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager) component. Make sure to use the branch corresponding to the Oakestra version you're using. 
 3) Run the node engine: `sudo NodeEngine -a <cluster orchestrator address> -p <cluster orhcestrator port e.g. 10100> -n <network component port, if any. default NetManager port is 10010>`. If you specifcy a network component port, the node will start in overlay mode, enabling the networking across the deployed application. In order to do so, you need to have the Oakestra NetManager component installed on your worker node ([OakestraNet](https://github.com/oakestra/oakestra-net))
 4) Use NodeEngine -h for further details
 
