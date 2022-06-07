@@ -1,7 +1,7 @@
 ![Oakestra](res/oakestra-white.png)
 
 # How to create a development cluster
-## Root Orchestrator development setup
+## Deploy a Root Orchestrator 
 
 On a Linux machine with public IP address or DNS name, first install Docker and Docker-compose. Then, run the following commands to set up the Root Orchestrator components. 
 
@@ -16,7 +16,7 @@ The following ports are exposed:
 - Port 10000 - System Manager (It needs to be accessible from the Cluster Orchestrator)
 
 
-## Cluster Orchestrator(s) development setup
+## Deploy one or more Cluster Orchestrator(s)
 
 For each one of the cluster orchestrator that needs to be deployed 
 
