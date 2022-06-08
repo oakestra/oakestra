@@ -41,13 +41,13 @@ def test_celery():
     return "ok", 200
 
 
-@app.route('/api/calculate/deploy', methods=['GET', 'POST'])
-def deploy_task():
+@app.route('/api/calculate/deploy/<job_id>/<instance_num>', methods=['GET', 'POST'])
+def deploy_task(job_id,instance_num):
     app.logger.info('Request /api/calculate/deploy\n')
 
     job = request.json  # contains job_id and job_description
     app.logger.info(job)
-    start_calc_deploy.delay(job)
+    start_calc_deploy.delay(job,job_id,instance_num)
     return "ok"
 
 
@@ -62,7 +62,7 @@ def replicate_task():
 
 
 @celeryapp.task()
-def start_calc_deploy(job):
+def start_calc_deploy(job,job_id,instance_num):
     # i = celeryapp.control.inspect()
     # print(i)
     app.logger.info("App.logger.info Received Task")
@@ -74,7 +74,7 @@ def start_calc_deploy(job):
         app.logger.info('No active node found to schedule this job.')
     else:
         app.logger.info('Chosen Node: {0}'.format(scheduling_result))
-        manager_request(app, scheduling_result, job)
+        manager_request(app, scheduling_result, job, job_id, instance_num)
         # mongo_set_job_as_scheduled(job_id=job.get('_id'), node_id=scheduling_result.get('_id')) # DONE IN CLUSTER-MANAGER
 
 

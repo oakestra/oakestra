@@ -96,6 +96,7 @@ func deployHandler(client mqtt.Client, msg mqtt.Message) {
 	logger.InfoLogger().Printf("Received deployment request with payload: %s", string(msg.Payload()))
 	service := model.Service{}
 	err := json.Unmarshal(msg.Payload(), &service)
+	logger.InfoLogger().Printf("%v", service)
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR: unable to unmarshal cluster orch request: %v", err)
 		return
@@ -122,7 +123,7 @@ func deleteHandler(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 	runtime := virtualization.GetRuntime(service.Runtime)
-	err = runtime.Undeploy(service.Sname)
+	err = runtime.Undeploy(service.Sname, service.Instance)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to undeploy application: %s", err.Error())
 	}
@@ -132,14 +133,16 @@ func deleteHandler(client mqtt.Client, msg mqtt.Message) {
 
 func ReportServiceStatus(service model.Service) {
 	type ServiceStatus struct {
-		Id     string `json:"job_id"`
-		Status string `json:"status"`
-		Detail string `json:"status_detail"`
+		Sname    string `json:"sname"`
+		Status   string `json:"status"`
+		Detail   string `json:"status_detail"`
+		Instance int    `json:"instance"`
 	}
 	reportStatusStruct := ServiceStatus{
-		Id:     service.JobID,
-		Status: service.Status,
-		Detail: service.StatusDetail,
+		Sname:    service.Sname,
+		Status:   service.Status,
+		Detail:   service.StatusDetail,
+		Instance: service.Instance,
 	}
 	jsonmsg, err := json.Marshal(reportStatusStruct)
 	if err != nil {

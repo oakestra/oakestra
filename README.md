@@ -1,142 +1,209 @@
-# EdgeIO Infrastructure Getting Started
+![Oakestra](res/oakestra-white.png)
 
-## Root Orchestrator setup
+# How to create a development cluster
+## Deploy a Root Orchestrator 
 
-On a Linux machine with public IP address or DNS name, first install Docker and Docker-compose. Then, run the following commands to set up the Root Orchestrator components. Open the following ports:
-
-- Port 80 - Grafana Dashboard
-- Port 10000 - System Manager
-
+On a Linux machine with public IP address or DNS name, first install Docker and Docker-compose. Then, run the following commands to set up the Root Orchestrator components. 
 
 ```bash
 cd root_orchestrator/
-docker-compose up --build -d
+docker-compose up --build 
 ```
 
-## Cluster Orchestrator(s) setup
+The following ports are exposed:
 
-On a second Linux machine with public IP address or DNS name
+- Port 80 - Grafana Dashboard (It can be used to monitor the clsuter status)
+- Port 10000 - System Manager (It needs to be accessible from the Cluster Orchestrator)
 
-- Install Docker and Docker-compose. 
 
+## Deploy one or more Cluster Orchestrator(s)
+
+For each one of the cluster orchestrator that needs to be deployed 
+
+- Log into a Linux machine with public IP address or DNS name
+- Install Docker and Docker-compose.
 - Export the required parameters:
-  - export SYSTEM_MANAGER_URL=" < ip address of the root orchestrator > "
-  - export CLUSTER_NAME=" < name of the cluster > "
-  - export CLUSTER_LOCATION=" < location of the cluster > "
 
-- Then, run the following commands to set up the Root Orchestrator components. Open port 10000 for the cluster manager.
+```
+export SYSTEM_MANAGER_URL=" < ip address of the root orchestrator > "
+export CLUSTER_NAME=" < name of the cluster > "
+export CLUSTER_LOCATION=" < location of the cluster > "
+```
+
+- Then, run the following commands to set up the Cluster Orchestrator components. 
 
 ```bash
 cd cluster_orchestrator/
-docker-compose up --build -d
+docker-compose up --build 
 ```
 
-## Add worker nodes (run Node Engine)
+The following ports are exposed:
 
-The latest version of the NodeEngine supportes containerd instead of Docker as container runtime and is implmeented in go. Please refer to [go_node_engine](go_node_engine/README.md) for the detailed documentation of the component. 
+- 10100 Cluster Manager (needs to be accessible by the Node Engine)
+
+## Add worker nodes (run Node Engine)
 
 *Requirements*
 - Linux OS with the following packages installed (Ubuntu and many other distributions natively supports them)
   - iptable
   - ip utils
-- port 10000, 10010 and 50103 available
+- port 50103 available
 
-1) First you need to install the go Node Engine. Download the latest relase and use the command `./install <architecture>`. Architecture can be arm or amd64.
-2) Run the node engine: `sudo NodeEngine -a <cluster orchestrator address> -n <network component port, if any. default NetManager port is 10010>`. If you specifcy a network component port, the node will start in overlay mode, enabling the networking across the deployed application. In order to do so, you need to have the EdgeIO NetManager component installed on your worker node ([EdgeIONet](https://github.com/edgeIO/edgeionet))
-3) Use NodeEngine -h for further details
+1) First you need to install the go Node Engine. Download the latest release and use the command `./install <architecture>`. Architecture can be arm or amd64.
+2) (Optional, required only if you want to enable communication across the microservices) Install and run the [OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager) component. Make sure to use the branch corresponding to the Oakestra version you're using. 
+3) Run the node engine: `sudo NodeEngine -a <cluster orchestrator address> -p <cluster orhcestrator port e.g. 10100> -n <network component port, if any. default NetManager port is 10010>`. If you specifcy a network component port, the node will start in overlay mode, enabling the networking across the deployed application. In order to do so, you need to have the Oakestra NetManager component installed on your worker node ([OakestraNet](https://github.com/oakestra/oakestra-net))
+4) Use NodeEngine -h for further details
 
-# Application Deployment
+# Use the APIs to deploy new application
 
 ## Deployment descriptor
 
-In order to deploy a container a deployment descriptor must be ppassed to the deployment command. 
-The deployment descriptor contains all the information that EdgeIO needs in order to achieve a complete
+In order to deploy a container a deployment descriptor must be passed to the deployment command. 
+The deployment descriptor contains all the information that Oakestra needs in order to achieve a complete
 deploy in the system. 
 
-`deployment_descriptor_model.yaml`
+Since version 0.4, Oakestra (previously, EdgeIO) uses the following deployment descriptor format. 
+
+`deploy_curl_application.yaml`
 
 ```yaml
-api_version: v0.1 
-app_name: demo   
-app_ns: default
-service_name: service1
-service_ns: test
-image: docker.io/library/nginx:alpine
-image_runtime: docker
-port: 80:80/tcp
-commands: []
-environment: ["DUMMY_ENV=hello_world","DUMMY_ENV2=hello_world2"]
-RR_ip: 172.30.25.3
-cluster_location: hpi
-node: vm-20211019-009
-requirements:
-    cpu: 0 # cores
-    memory: 100  # in MB
-    node: vm-20211019-009
+{
+  "sla_version" : "v2.0",
+  "customerID" : "Admin",
+  "applications" : [
+    {
+      "applicationID" : "",
+      "application_name" : "clientsrvr",
+      "application_namespace" : "test",
+      "application_desc" : "Simple demo with curl client and Nginx server",
+      "microservices" : [
+        {
+          "microserviceID": "",
+          "microservice_name": "curl",
+          "microservice_namespace": "test",
+          "virtualization": "container",
+          "cmd": ["sh", "-c", "tail -f /dev/null"],
+          "memory": 100,
+          "vcpus": 1,
+          "vgpus": 0,
+          "vtpus": 0,
+          "bandwidth_in": 0,
+          "bandwidth_out": 0,
+          "storage": 0,
+          "code": "docker.io/curlimages/curl:7.82.0",
+          "state": "",
+          "port": "9080",
+          "added_files": []
+        },
+        {
+          "microserviceID": "",
+          "microservice_name": "nginx",
+          "microservice_namespace": "test",
+          "virtualization": "container",
+          "cmd": [],
+          "memory": 100,
+          "vcpus": 1,
+          "vgpus": 0,
+          "vtpus": 0,
+          "bandwidth_in": 0,
+          "bandwidth_out": 0,
+          "storage": 0,
+          "code": "docker.io/library/nginx:latest",
+          "state": "",
+          "port": "6080:60/tcp",
+          "addresses": {
+            "rr_ip": "10.30.30.30"
+          },
+          "added_files": []
+        }
+      ]
+    }
+  ]
+}
 ```
 
-- api_version: by default you can leave v0.1
-- Give your application a fully qualified name: A fully qualified name in EdgeIO is composed of 4 components
-    - app_name: name of the application
-    - app_ns: namespace of the app, used to reference different deployment of the same applciation. Examples of namespace name can be `default` or `production` or `test`
-    - service_name: name of the service that is going to be deployed
-    - service_ns: same as app ns, this can be used to reference different deployment of the same service. Like `v1` or `test`
-- image: link to the docker image that will be downloaded 
-- image_runtime: right now the only stable runtime is `docker`
-- commands: list of string representing the startup commands for the container
-- environment: list of environment variables to be used during startup
-- port: port mapping for the container in the syntax hostport_1:containerport_1;hostport_2:containerport_2
-- RR\_ip: [optional filed] This field allows you to setup a custom Round Robin network address to reference all the instances belonging to this service. This address is going to be permanently bounded to the service. The address MUST be in the form `172.30.x.y` and must not collide with any other Instance Address or Service IP in the system, otherwise an error will be returned. If you don't specify a RR_ip and you don't set this field, a new address will be generated by the system. 
-- cluster_location: if you have any preference on a specific cluster write here the name otherwise remove this field.
-- node: if you have any prefrence on a specific node within a cluster write here the hostname otw remove this field
-- requirements: does your container have any min cpu or memory requirement?
-    - cpu: expressed in number of cores
-    - memory: expressed in MB
-    - node: same value expressed in the node field out of the requirements section. Right now this is a duplicate. And must be included if you specified a node requirement before. Please refer to: [Github Issue #24](https://github.com/edgeIO/src/issues/24)
+This deployment descriptor example generates one application named *clientserver* with the `test` namespace and two microservices:
+- nginx server with test namespace, namely `clientserver.test.nginx.test`
+- curl client with test namespace, namely `clientserver.test.curl.test`
+
+This is a detailed description of the deployment descriptor fields currently implemented:
+- sla_version: the current version is v0.2
+- customerID: id of the user, default is Admin
+- application list, in a single deployment descriptor is possible to define multiple applications, each containing:
+  - Fully qualified app name: A fully qualified name in Oakestra is composed of 
+      - application_name: unique name representing the application (max 10 char, no symbols)
+      - application_namespace: namespace of the app, used to reference different deployment of the same application. Examples of namespace name can be `default` or `production` or `test` (max 10 char, no symbols)
+      - applicationID: leave it empty for new deployments, this is needed only to edit an existing deployment.  
+  - application_desc: Short description of the application
+  - microservice list, a list of the microservices composing the application. For each microservice the user can specify:
+    - microserviceID: leave it empty for new deployments, this is needed only to edit an existing deployment.
+    - Fully qualified service name:
+      - microservice_name: name of the service (max 10 char, no symbols)
+      - microservice_namespace: namespace of the service, used to reference different deployment of the same service. Examples of namespace name can be `default` or `production` or `test` (max 10 char, no symbols)
+    - virtualization: currently the only uspported virtualization is `container`
+    - cmd: list of the commands to be executed inside the container at startup
+    - vcpu,vgpu,memory: minimum cpu/gpu vcores and memory amount needed to run the container
+    - vtpus: currently not implemented
+    - storage: minimum storage size required (currently the scheduler does not take this value into account)
+    - bandwidth_in/out: minimum required bandwith on the worker node. (currently the scheduler does not take this value into account)
+    - port: port mapping for the container in the syntax hostport_1:containerport_1\[/protocol];hostport_2:containerport_2\[/protocol] (default protocol is tcp)
+    - addresses: allows to specify a custom ip address to be used to balance the traffic across all the service instances. 
+      - rr\_ip: [optional filed] This field allows you to setup a custom Round Robin network address to reference all the instances belonging to this service. This address is going to be permanently bounded to the service. The address MUST be in the form `10.30.x.y` and must not collide with any other Instance Address or Service IP in the system, otherwise an error will be returned. If you don't specify a RR_ip and you don't set this field, a new address will be generated by the system.
     
-    
-## Deploy
+## Login
+After running a cluster you can use the debug OpenAPI page to interact with the apis and use the infrastructure
 
-After creating a deployment descriptor file, simply deploy a service using 
+connect to `<root_orch_ip>:10000/api/docs`
 
-```
-curl -F file=@'deploy.yaml' http://localhost:10000/api/deploy -v
-```
+Authenticate using the following procedure:
 
-deploy.yaml is the deployment descriptor file
+1. locate the login method and use the try-out button
+![try-login](res/login-try.png)
+2. Use the default Admin credentials to login
+![execute-login](res/login-execute.png)
+3. Copy the result login token
+![token-login](res/login-token-copy.png)
+4. Go to the top of the page and authenticate with this token
+![auth-login](res/authorize.png)
+![auth2-login](res/authorize-2.png)
 
-Once you have a running edgeIO setup, use the API of the System Manager to deploy applications.
+## Register an application and the services
+After you authenticate with the login function, you can try out to deploy the first application. 
 
-If the call is successful you'll receive the job name for this service. Save this name for future call.
+1. Upload the deployment description to the system. You can try using the deployment descriptor above.
+![post app](res/post-app.png)
+
+The response contains the Application id and the id for all the application's services. Now the application and the services are registered to the platform. It's time to deploy the service instances! 
+
+You can always remove or create a new service for the application using the /api/services endpoints
+
+## Deploy an instance of a registered service 
+
+1. Trigger a deployment of a service's instance using `POST /api/service/{serviceid}/instance`
+
+each call to this endpoint generates a new instance of the service
+
+## Monitor the service status
+
+1. With `GET /api/aplications/<userid>` (or simply /api/aplications/ if you're admin) you can check the list of the deployed application.
+2. With `GET /api/services/<appid>` you can check the services attached to an application
+3. With `GET /api/service/<serviceid>` you can check the status for all the instances of <serviceid>
 
 ## Undeploy 
 
-```
-curl localhost:10000/api/delete/<job_name>
-```
-
-job_name is the name you receive as answer after a deployment 
-
-## Query job status 
-
-```
-curl localhost:10000/api/job/status/<job_id>
-```
-
-## List of the current deployed Jobs
-
-```
-curl localhost:10000/api/jobs
-```
-
-Use this endpoint to get information regarding the deployed services in the system. Like the network address assigned to a service.
+- Use `DELETE /api/service/<serviceid>` to delete all the instances of a service
+- Use `DELETE /api/service/<serviceid>/instance/<instance number>` to delete a specific instance of a service
+- Use `DELETE /api/application/<appid>` to delete all together an application with all the services and instances
 
 # Networking 
 
-After a successful deployment in EdgeIO a service is going to have 2 internal IP addresses that can be used for container to container communication. 
-The addresses currently can be retrieved with the ```job/list``` command. Each service is going to have an Instance address and a RR address. 
+To enable the communication between services: 
 
-- Instance address is bounded to the specific instance of a service. THis address will always refer to that instance.
-- The RR address instead can be used to balance across all the instaces of the same service, "one address to rule them all".
+1. ensure that each worker node has the [OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager) component installed, up and running before running the node engine. 
+2. Declare a rr_ip ad deploy time in the deployment descriptor 
+3. Use the rr_ip address to reference the service
 
-The addresses right now are assigned at deploy time randomly or can be assigned with the field RR_ip in the deployment descriptor. 
+# Frontend?
+
+To make your life easire you can run the Oakestra front-end.
+Check the [Dashboard](https://github.com/oakestra/dashboard) repository for further info.

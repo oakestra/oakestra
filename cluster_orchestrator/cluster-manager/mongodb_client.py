@@ -105,6 +105,8 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     cumulative_cpu = 0
     cumulative_cpu_cores = 0
     cumulative_memory = 0
+    gpu_cores = 0
+    gpu_percent = 0
     cumulative_memory_in_mb = 0
     number_of_active_nodes = 0
     technology = []
@@ -120,6 +122,11 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
                 cumulative_cpu_cores += n.get('current_cpu_cores_free', 0)
                 cumulative_memory += n.get('current_memory_percent', 0)
                 cumulative_memory_in_mb += n.get('current_free_memory_in_MB', 0)
+                gpu_info = n.get('gpu_info')
+                gpu_cores = 0
+                if gpu_info:
+                    gpu_cores = len(gpu_info)
+                gpu_percent += n.get('gpu_percent', 0)
                 number_of_active_nodes += 1
                 for t in n.get('node_info').get('technology'):
                     technology.append(t) if t not in technology else technology
@@ -129,25 +136,34 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
         except Exception as e:
             print("Problem during the aggregation of the data, skipping the node: ", str(n), " - because - ", str(e))
 
+    mongo_update_jobs_status(TIME_INTERVAL)
     jobs = mongo_find_all_jobs()
-    for j in jobs:
-        print(j)
 
     return {'cpu_percent': cumulative_cpu, 'memory_percent': cumulative_memory,
             'cpu_cores': cumulative_cpu_cores, 'cumulative_memory_in_mb': cumulative_memory_in_mb,
-            'number_of_nodes': number_of_active_nodes, 'jobs': jobs, 'technology': technology, 'more': 0}
+            'gpu_cores': gpu_cores, 'gpu_percent': gpu_percent,
+            'number_of_nodes': number_of_active_nodes, 'jobs': jobs, 'virtualization': technology, 'more': 0}
 
 
 # ................. Job Operations .......................#
 ###########################################################
 
-def mongo_upsert_job(job):
+def mongo_create_new_job_instance(job, instance_number):
     print('insert/upsert requested job')
     job['system_job_id'] = job['_id']
     del job['_id']
-    ## REMOVE ENTRY FROM DB
+    if job.get('instance_list') is not None:
+        del job['instance_list']
     result = mongo_jobs.db.jobs.find_one_and_update({'system_job_id': job['system_job_id']}, {'$set': job}, upsert=True,
                                                     return_document=True)  # if job does not exist, insert it
+    if result.get('instance_list') is None:
+        result['instance_list'] = []
+    result['instance_list'].append({
+        'instance_number': instance_number,
+        'status': 'CLUSTER_SCHEDULED'
+    })
+    mongo_jobs.db.jobs.find_one_and_update({'system_job_id': job['system_job_id']},
+                                           {'$set': {'instance_list': result['instance_list']}})
     result['_id'] = str(result['_id'])
     return result
 
@@ -162,6 +178,24 @@ def mongo_find_job_by_system_id(system_job_id):
 def mongo_find_job_by_id(id):
     print('Find job by Id')
     return mongo_jobs.db.jobs.find_one({'_id': ObjectId(id)})
+
+
+def mongo_update_jobs_status(TIME_INTERVAL):
+    "If there are no updates from a job in the last TIME_INTERVAL mark it as failed"
+    jobs = mongo_find_all_jobs()
+    for job in jobs:
+        try:
+            updated = False
+            for instance in range(len(job["instance_list"])):
+                if job["instance_list"][instance].get('last_modified_timestamp', 0) < (
+                        datetime.now().timestamp() - TIME_INTERVAL):
+                    job["instance_list"][instance]["status"] = "FAILED"
+                    updated = True
+            if updated:
+                mongo_jobs.db.jobs.update_one({'_id': job['_id']},
+                                              {'$set': {'instance_list.': job["instance_list"]}})
+        except Exception as e:
+            print(e)
 
 
 def mongo_find_all_jobs():
@@ -185,36 +219,61 @@ def mongo_find_job_by_ip(ip):
     return job
 
 
-def mongo_update_job_status(job_id, status, node):
+def mongo_update_job_status(system_job_id, instancenum, status, node):
     global mongo_jobs
-    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
+    job = mongo_jobs.db.jobs.find_one({'system_job_id': system_job_id})
     instance_list = job['instance_list']
     for instance in instance_list:
-        if instance.get('host_ip') == '' or instance.get('host_ip') is None:
+        if int(instance.get('instance_number')) == int(instancenum):
             instance['host_ip'] = node['node_address']
             port = node['node_info'].get('node_port')
             if port is None:
                 port = 50011
             instance['host_port'] = port
+            instance['status'] = status
             instance['worker_id'] = node.get('_id')
             break
-    return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
+    return mongo_jobs.db.jobs.update_one({'system_job_id': system_job_id},
                                          {'$set': {'status': status, 'instance_list': instance_list}})
 
 
-def mongo_update_job_deployed(job_id, status, node_id):
+def mongo_update_job_deployed(sname, instance, status, node_id):
     global mongo_jobs
-    job = mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
-    return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
+    job = mongo_jobs.db.jobs.find_one({'job_name': sname})
+    return mongo_jobs.db.jobs.update_one({'job_name': sname},
                                          {'$set': {'status': status}})
 
 
-def mongo_update_service_resources(sname, service, instance=0):
+def mongo_update_service_resources(sname, service, workerid, instance_num=0):
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'job_name': sname})
-    instance_list = job['instance_list']
-    instance_list[instance]["cpu"] = service.get("cpu")
-    instance_list[instance]["memory"] = service.get("memory")
-    instance_list[instance]["disk"] = service.get("disk")
-    return mongo_jobs.db.jobs.update_one({'job_name': sname},
-                                         {'$set': {'instance_list': instance_list}})
+    if job:
+        instance_list = job['instance_list']
+        for instance in range(len(instance_list)):
+            if int(instance_list[instance]["instance_number"]) == int(instance_num):
+                if instance_list[instance].get('worker_id') != workerid:
+                    return None  # cannot update another worker's resources
+                instance_list[instance]["status"] = "RUNNING"
+                instance_list[instance]["last_modified_timestamp"] = datetime.timestamp(datetime.now())
+                instance_list[instance]["cpu"] = service.get("cpu")
+                instance_list[instance]["memory"] = service.get("memory")
+                instance_list[instance]["disk"] = service.get("disk")
+                return mongo_jobs.db.jobs.update_one({'job_name': sname},
+                                                     {'$set': {'instance_list': instance_list}})
+    else:
+        return None
+
+
+def mongo_remove_job_instance(system_job_id, instance_number):
+    global mongo_jobs
+    job = mongo_jobs.db.jobs.find_one({'system_job_id': system_job_id})
+    instances = job["instance_list"]
+    for instance in instances:
+        if int(instance["instance_number"]) == int(instance_number) or int(instance_number) == -1:
+            instances.remove(instance)
+            break
+    if len(instances) == 0:
+        return mongo_jobs.db.jobs.find_one_and_delete({'system_job_id': system_job_id})
+    else:
+        return mongo_jobs.db.jobs.update_one({'system_job_id': system_job_id},
+                                             {'$set': {'instance_list': instances}})
