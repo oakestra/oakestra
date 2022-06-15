@@ -1,32 +1,35 @@
 import time
-
-from mongodb_client import mongo_find_cluster_by_location, is_cluster_active, mongo_find_all_active_clusters
+from mongodb_client import mongo_find_cluster_by_location, is_cluster_active, mongo_find_all_active_clusters, \
+    mongo_find_cluster_by_name
 
 
 def calculate(job_id, job):
     print('calculating...')
 
-    if job.get('cluster_location'):
-        return location_based_scheduling(job)  # tuple of (negative|positive, cluster|negative_description)
+    constraints = job.get('constraints')
+    if constraints is not None:
+        return constraint_based_scheduling(job,constraints)
     else:
         return greedy_load_balanced_algorithm(job=job)
 
 
-def location_based_scheduling(job):
-    requested_location = job.get('cluster_location')
-    cluster = mongo_find_cluster_by_location(requested_location)  # can return None
+def constraint_based_scheduling(job, constraints):
+    clusters = mongo_find_all_active_clusters()
+    for constraint in constraints:
+        type = constraint.get('type')
+        if type == 'direct':
+            return direct_service_mapping(job, constraint.get('cluster'))
+    return greedy_load_balanced_algorithm(job=job)
+
+
+def direct_service_mapping(job, cluster_name):
+    cluster = mongo_find_cluster_by_name(cluster_name)  # can return None
 
     if cluster is not None:  # cluster found by location exists
         if is_cluster_active(cluster):
             print('Cluster is active')
-
-            job_required_cpu_cores = job.get('requirements').get('cpu')
-            job_required_memory = job.get('requirements').get('memory')
-
-            cluster_cores_available = cluster.get('total_cpu_cores')
-            cluster_memory_available = cluster.get('memory_in_mb')
-
-            if cluster_cores_available >= job_required_cpu_cores and cluster_memory_available >= job_required_memory:
+            cluster_specs = extract_specs(cluster)
+            if does_cluster_respects_requirements(cluster_specs,job):
                 return 'positive', cluster
             else:
                 return 'negative', 'TargetClusterNoCapacity'
@@ -44,17 +47,18 @@ def first_fit_algorithm(job):
     for cluster in active_clusters:
         print(cluster)
 
-        if does_cluster_respects_requirements(extract_specs(cluster),job):
+        if does_cluster_respects_requirements(extract_specs(cluster), job):
             return 'positive', cluster
 
     # no cluster found
     return 'negative', 'NoActiveClusterWithCapacity'
 
 
-def greedy_load_balanced_algorithm(job):
+def greedy_load_balanced_algorithm(job, active_clusters=None):
     """Which of the clusters have the most capacity for a given job"""
 
-    active_clusters = mongo_find_all_active_clusters()
+    if active_clusters is None:
+        active_clusters = mongo_find_all_active_clusters()
     qualified_clusters = []
 
     memory = 0
@@ -70,7 +74,7 @@ def greedy_load_balanced_algorithm(job):
         vgpu = job.get('vgpu')
 
     for cluster in active_clusters:
-        if does_cluster_respects_requirements(extract_specs(cluster),job):
+        if does_cluster_respects_requirements(extract_specs(cluster), job):
             qualified_clusters.append(cluster)
 
     target_cluster = None
@@ -106,9 +110,9 @@ def same_cluster_replication(job_obj, cluster_obj, replicas):
 
 def extract_specs(cluster):
     return {
-        'available_cpu': cluster.get('total_cpu_cores') * (100-cluster.get('aggregated_cpu_percent')) / 100,
+        'available_cpu': cluster.get('total_cpu_cores') * (100 - cluster.get('aggregated_cpu_percent')) / 100,
         'available_memory': cluster.get('memory_in_mb'),
-        'available_gpu': cluster.get('total_gpu_cores') * (100-cluster.get('total_gpu_percent')) / 100,
+        'available_gpu': cluster.get('total_gpu_cores') * (100 - cluster.get('total_gpu_percent')) / 100,
         'virtualization': cluster.get('virtualization'),
     }
 

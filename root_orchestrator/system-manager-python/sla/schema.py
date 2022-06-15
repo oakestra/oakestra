@@ -76,12 +76,14 @@ sla_schema = {
                                         "properties": {
                                             "type": {"type": "string"},
                                             "area": {"type": "string"},
+                                            "cluster": {"type": "string"},
+                                            "node":     {"type": "string"},
                                             "location": {"type": "string"},
                                             "threshold": {"type": "number"},
                                             "rigidness": {"type": "number"},
                                             "convergence_time": {"type": "integer"},
                                         },
-                                        "required": ["type", "threshold", "rigidness", "convergence_time"]
+                                        "required": ["type"]
                                     }
                                 },
                                 "connectivity": {

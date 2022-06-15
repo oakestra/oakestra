@@ -3,7 +3,6 @@ from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
 from _datetime import datetime
 
-
 MONGO_URL = os.environ.get('CLOUD_MONGO_URL')
 MONGO_PORT = os.environ.get('CLOUD_MONGO_PORT')
 
@@ -69,6 +68,12 @@ def mongo_find_cluster_by_id_and_update(id, key, value):
     return 1
 
 
+def mongo_find_cluster_by_name(name):
+    global mongo_clusters
+    cluster = mongo_clusters.db.clusters.find_one({'cluster_name': name})
+    return cluster
+
+
 def mongo_find_cluster_by_location(location):
     global mongo_clusters
     cluster = mongo_clusters.db.clusters.find_one({'cluster_location': location})
@@ -120,4 +125,4 @@ def mongo_update_job_status_and_cluster(job_id, status, cluster_id):
     global mongo_jobs
     print('Updating Job Status and assgined cluster for this job...')
     mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)},
-                                   {'$set': {'status': status, 'cluster': cluster_id, 'replicas': 1}})
+                                  {'$set': {'status': status, 'cluster': cluster_id, 'replicas': 1}})
