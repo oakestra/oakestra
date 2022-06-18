@@ -20,6 +20,9 @@ func GetRuntime(runtime string) RuntimeInterface {
 	if runtime == model.CONTAINER_RUNTIME {
 		return GetContainerdClient()
 	}
+	if runtime == model.UNIKERNEL_RUNTIME {
+		return GetLibVirtConnection()
+	}
 	return nil
 }
 
