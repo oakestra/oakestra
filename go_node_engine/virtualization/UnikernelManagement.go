@@ -38,8 +38,11 @@ func GetLibVirtConnection() *UnikernelRuntime {
 	return &VMruntime
 }
 
-func CloseLibVirtConnection() {
-
+func (r *UnikernelRuntime) CloseLibVirtConnection() {
+	_, err := r.libVirtConnection.Close()
+	if err != nil {
+		logger.ErrorLogger().Fatalf("Unable to disconnect from libVirt: %v\n", err)
+	}
 }
 
 func (r *UnikernelRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
