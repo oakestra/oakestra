@@ -264,6 +264,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 	service.Status = model.SERVICE_DEAD
 	statusChangeNotificationHandler(service)
+	r.removeContainer(container)
 }
 
 func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
@@ -321,22 +322,25 @@ func (r *ContainerRuntime) forceContainerCleanup() {
 		logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 	}
 	for _, container := range deployedContainers {
-		logger.InfoLogger().Printf("Clenaning up container: %s", container.ID())
-		task, err := container.Task(r.ctx, nil)
-		if err != nil {
-			logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
-			continue
-		}
+		r.removeContainer(container)
+	}
+}
+
+func (r *ContainerRuntime) removeContainer(container containerd.Container) {
+	logger.InfoLogger().Printf("Clenaning up container: %s", container.ID())
+	task, err := container.Task(r.ctx, nil)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+	}
+	if err == nil {
 		err = killTask(r.ctx, task, container)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to fetch kill task: %v", err)
-			continue
 		}
-		err = container.Delete(r.ctx)
-		if err != nil {
-			logger.ErrorLogger().Printf("Unable to delete container: %v", err)
-			continue
-		}
+	}
+	err = container.Delete(r.ctx)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to delete container: %v", err)
 	}
 }
 

@@ -14,10 +14,11 @@ from mongodb_client import mongo_init, mongo_upsert_node, mongo_find_job_by_syst
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
 from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from cm_logging import configure_logging
-from system_manager_requests import send_aggregated_info_to_sm
+from system_manager_requests import send_aggregated_info_to_sm, re_deploy_dead_services_routine
 from analyzing_workers import looking_for_dead_workers
 from my_prometheus_client import prometheus_init_gauge_metrics, prometheus_set_metrics
 from network_plugin_requests import *
+import service_operations
 
 MY_PORT = os.environ.get('MY_PORT')
 
@@ -65,9 +66,13 @@ def status():
 def deploy_task(system_job_id, instance_number):
     app.logger.info('Incoming Request /api/deploy')
     job = request.json  # contains job_id and job_description
-    job_obj = mongo_create_new_job_instance(job,int(instance_number))
-    scheduler_request_deploy(job_obj, system_job_id, instance_number)
-    return "ok"
+
+    try:
+        service_operations.deploy_service(job,system_job_id,instance_number)
+    except Exception as e:
+        return "",500
+
+    return 200
 
 
 @app.route('/api/result/<system_job_id>/<instance_number>', methods=['POST'])
@@ -97,21 +102,13 @@ def delete_service(system_job_id, instance_number):
     instance_number -1 undeploys all known instances
     """
     app.logger.info('Incoming Request /api/delete/ - to delete task...')
-    # job_id is the system_job_id assigned by System Manager
-    job = mongo_find_job_by_system_id(system_job_id)
-    instance_list = job.get('instance_list')
-    job_id = str(job.get('_id'))
-    job.__setitem__('_id', job_id)
-    for instance in instance_list:
-        if int(instance["instance_number"]) == int(instance_number) or int(instance_number) == -1:
-            node_id = instance.get("worker_id")
-            if node_id is not None:
-                mqtt_publish_edge_delete(node_id, job.get('job_name'), instance["instance_number"],
-                                         job.get('virtualization', 'docker'))
-            mongo_remove_job_instance(system_job_id, instance["instance_number"])
-            if int(instance_number) != -1:
-                break
-    return "ok"
+
+    try:
+        service_operations.delete_service(system_job_id, instance_number)
+    except Exception as e:
+        return "", 500
+
+    return "ok", 200
 
 
 # ................ Scheduler Test ......................#
@@ -253,6 +250,8 @@ def background_job_send_aggregated_information_to_sm():
                                               'time_interval': BACKGROUND_JOB_INTERVAL})
     job_dead_nodes = scheduler.add_job(looking_for_dead_workers, 'interval', seconds=2 * BACKGROUND_JOB_INTERVAL,
                                        kwargs={'interval': BACKGROUND_JOB_INTERVAL})
+    job_re_deploy_dead_jobs = scheduler.add_job(re_deploy_dead_services_routine, 'interval', seconds=2 * BACKGROUND_JOB_INTERVAL)
+
     scheduler.start()
 
 
