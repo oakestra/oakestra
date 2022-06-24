@@ -95,11 +95,13 @@ def _tablequery_handler(client_id, payload):
     siplist = []
 
     # resolve the query and register interest
-    if sip is not None and sip != "":
-        serviceName, instances, siplist = resolution.service_resolution_ip(sip)
-    elif serviceName is not None and serviceName != "":
-        instances, siplist = resolution.service_resolution(serviceName)
-
+    try:
+        if sip is not None and sip != "":
+            serviceName, instances, siplist = resolution.service_resolution_ip(sip)
+        elif serviceName is not None and serviceName != "":
+            instances, siplist = resolution.service_resolution(serviceName)
+    except Exception as e:
+        return
     if instances is None:
         return
 
