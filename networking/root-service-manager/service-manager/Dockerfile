@@ -4,6 +4,7 @@ LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra-net
 ADD requirements.txt /
 
 RUN apt-get update \
+    && apt-get install -y g++ \
     && apt-get install -y --no-install-recommends gcc musl-dev linux-libc-dev libc6-dev \
     && rm -rf /var/lib/apt/lists/* \
     && pip install -r requirements.txt \
