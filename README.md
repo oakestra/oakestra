@@ -156,8 +156,8 @@ This is a detailed description of the deployment descriptor fields currently imp
     ```
     "constraints":[
                 {
-                  "type":"direct"
-                  "node":"xavier1"
+                  "type":"direct",
+                  "node":"xavier1",
                   "cluster":"gpu"
                 }
               ]
