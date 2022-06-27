@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
+	"reflect"
 	"sync"
 
 	"time"
@@ -17,6 +18,9 @@ type UnikernelRuntime struct {
 	libVirtConnection *libvirt.Connect
 	killQueue         map[string]*chan bool
 	channelLock       *sync.RWMutex
+	network           *libvirt.Network
+	subnet            string
+	IPaddresses       map[int]int
 }
 
 var VMruntime = UnikernelRuntime{
@@ -34,11 +38,48 @@ func GetLibVirtConnection() *UnikernelRuntime {
 		}
 		VMruntime.libVirtConnection = conn
 		VMruntime.killQueue = make(map[string]*chan bool)
+
+		networks, err := VMruntime.libVirtConnection.ListAllNetworks(libvirt.CONNECT_LIST_NETWORKS_ACTIVE)
+		if err != nil {
+			logger.InfoLogger().Printf("Unable to list the network interfaces %v", err)
+		}
+		if !model.GetNodeInfo().Overlay {
+			if len(networks) < 1 {
+				logger.InfoLogger().Printf("No local Network for libvirt found")
+			}
+
+			for i, n := range networks {
+				if i == 0 {
+					name, _ := n.GetBridgeName()
+					logger.InfoLogger().Printf("Using %s as default Network", name)
+					test, _ := n.GetXMLDesc(0)
+					var networkDescription libvirtxml.Network
+					networkDescription.Unmarshal(test)
+					VMruntime.subnet = networkDescription.IPs[0].Address[0 : len(networkDescription.IPs[0].Address)-1]
+					VMruntime.network = &n
+				} else {
+					n.Free()
+				}
+			}
+		} else {
+			VMruntime.network = nil
+		}
 	})
 	return &VMruntime
 }
 
 func (r *UnikernelRuntime) CloseLibVirtConnection() {
+	r.channelLock.Lock()
+	IDs := reflect.ValueOf(r.killQueue).MapKeys()
+	r.channelLock.Unlock()
+	for _, id := range IDs {
+		logger.InfoLogger().Printf("Stopping VM %s : %s %d\n", id.String(), extractSnameFromTaskID(id.String()), extractInstanceNumberFromTaskID(id.String()))
+		err := r.Undeploy(extractSnameFromTaskID(id.String()), extractInstanceNumberFromTaskID(id.String()))
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", id.String(), err)
+		}
+	}
+	r.network.Free()
 	_, err := r.libVirtConnection.Close()
 	if err != nil {
 		logger.ErrorLogger().Fatalf("Unable to disconnect from libVirt: %v\n", err)
@@ -48,7 +89,6 @@ func (r *UnikernelRuntime) CloseLibVirtConnection() {
 func (r *UnikernelRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
 
 	//TODO Differ between unikernels
-
 	killChannel := make(chan bool, 1)
 	startupChannel := make(chan bool, 0)
 	errorChannel := make(chan error, 0)
@@ -59,6 +99,7 @@ func (r *UnikernelRuntime) Deploy(service model.Service, statusChangeNotificatio
 	if !servicefound || el == nil {
 		r.channelLock.Lock()
 		r.killQueue[genTaskID(service.Sname, service.Instance)] = &killChannel
+		r.channelLock.Unlock()
 	} else {
 		return errors.New("Service already deployed")
 	}
@@ -106,10 +147,11 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 ) {
 	var domain *libvirt.Domain
 	var domainString string
+	var err error
+	var addr int
 	_ = domain
 	_ = domainString
 	hostname := genTaskID(service.Sname, service.Instance)
-
 	revert := func(err error) {
 		startup <- false
 		errorchan <- err
@@ -118,9 +160,21 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		r.killQueue[hostname] = nil
 	}
 
-	domainString, err := CreateXMLDomain(hostname, 1, 64, 1, "virbr0", "x86_64", "192.168.178.48")
-	if err != nil {
-		logger.ErrorLogger().Printf("VM configuration creation failed: %v", err)
+	if r.network != nil {
+
+		for i := 2; i < 255; i++ {
+			_, found := r.IPaddresses[i]
+			if !found {
+				r.IPaddresses[i] = i
+				addr = i
+				break
+			}
+		}
+		Bridgename, err := r.network.GetBridgeName()
+		domainString, err = CreateXMLDomain(hostname, 1, 64, 1, Bridgename, "x86_64", r.subnet, addr)
+		if err != nil {
+			logger.ErrorLogger().Printf("VM configuration creation failed: %v", err)
+		}
 	}
 
 	//Create and start Virtual Machine
@@ -131,9 +185,14 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	}
 
 	defer func(domain *libvirt.Domain) {
+		logger.InfoLogger().Printf("Trying to kill VM %s", hostname)
 		err := domain.Destroy()
-		r.channelLock.Lock()
-		defer r.channelLock.Unlock()
+		if r.network != nil {
+			delete(r.IPaddresses, addr)
+		}
+		//r.channelLock.Lock()
+		//defer r.channelLock.Unlock()
+		r.killQueue[hostname] = nil
 		if err != nil {
 			*killChannel <- false
 		} else {
@@ -151,14 +210,15 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	statusChangeNotificationHandler(service)
 }
 
-func CreateXMLDomain(Hostname string, DomainID int, Memory uint, CoreCount uint, BrigeName string, Arch string, IPAddress string) (string, error) {
+func CreateXMLDomain(Hostname string, DomainID int, Memory uint, CoreCount uint, BrigeName string, Arch string, Subnet string, Addr int) (string, error) {
 	var pci_index uint = 0
-	CMDString := fmt.Sprintf("netdev.ipv4_addr=%s netdev.ipv4_gw_addr=192.168.122.1  netdev.ipv4_subnet_mask=255.255.255.0 --", IPAddress)
+
+	CMDString := fmt.Sprintf("netdev.ipv4_addr=%s%d netdev.ipv4_gw_addr=%s1  netdev.ipv4_subnet_mask=255.255.255.0 --", Subnet, Addr, Subnet)
 	domain := &libvirtxml.Domain{
 		Name:          Hostname,
 		Type:          "kvm",
 		ID:            &DomainID,
-		Title:         "Unikraft VM Testing",
+		Title:         Hostname,
 		Memory:        &libvirtxml.DomainMemory{Value: Memory, Unit: "MiB"},
 		CurrentMemory: &libvirtxml.DomainCurrentMemory{Value: Memory, Unit: "MiB"},
 		VCPU:          &libvirtxml.DomainVCPU{Placement: "static", Value: CoreCount},
@@ -167,7 +227,7 @@ func CreateXMLDomain(Hostname string, DomainID int, Memory uint, CoreCount uint,
 		OnPoweroff:    "destroy",
 		OnReboot:      "restart",
 		Devices: &libvirtxml.DomainDeviceList{
-			Emulator: "/usr/bin/qemu-system-x86_64",
+			//Emulator: "/usr/bin/qemu-system-x86_64",
 			Controllers: []libvirtxml.DomainController{
 				{
 					Type:  "pci",
@@ -188,8 +248,8 @@ func CreateXMLDomain(Hostname string, DomainID int, Memory uint, CoreCount uint,
 			},
 		},
 		OS: &libvirtxml.DomainOS{
-			Type:   &libvirtxml.DomainOSType{Type: "hvm", Arch: Arch, Machine: "pc-i440fx-6.2"},
-			Kernel: "/home/patrick/unikraft/workspace/apps/app-httpreply/build/httpreply_kvm-x86_64",
+			Type:   &libvirtxml.DomainOSType{Type: "hvm" /*, Arch: Arch*/},
+			Kernel: "/home/orch/shared/kernel_images/httpreply_kvm-x86_64",
 			BootDevices: []libvirtxml.DomainBootDevice{
 				{
 					Dev: "hd",
@@ -198,7 +258,10 @@ func CreateXMLDomain(Hostname string, DomainID int, Memory uint, CoreCount uint,
 			Cmdline: CMDString,
 		},
 	}
-	return domain.Marshal()
+	x, err := domain.Marshal()
+	logger.InfoLogger().Printf("%s", x)
+
+	return x, err
 }
 
 func (r *UnikernelRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
