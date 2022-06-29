@@ -68,9 +68,9 @@ def deploy_task(system_job_id, instance_number):
     job = request.json  # contains job_id and job_description
 
     try:
-        service_operations.deploy_service(job,system_job_id,instance_number)
+        service_operations.deploy_service(job, system_job_id, instance_number)
     except Exception as e:
-        return "",500
+        return "", 500
 
     return 200
 
@@ -245,12 +245,21 @@ def init_cm_to_sm():
 def background_job_send_aggregated_information_to_sm():
     app.logger.info("Set up Background Jobs...")
     scheduler = BackgroundScheduler()
-    job_send_info = scheduler.add_job(send_aggregated_info_to_sm, 'interval', seconds=BACKGROUND_JOB_INTERVAL,
-                                      kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID,
-                                              'time_interval': BACKGROUND_JOB_INTERVAL})
-    job_dead_nodes = scheduler.add_job(looking_for_dead_workers, 'interval', seconds=2 * BACKGROUND_JOB_INTERVAL,
-                                       kwargs={'interval': BACKGROUND_JOB_INTERVAL})
-    job_re_deploy_dead_jobs = scheduler.add_job(re_deploy_dead_services_routine, 'interval', seconds=2 * BACKGROUND_JOB_INTERVAL)
+    job_send_info = scheduler.add_job(
+        send_aggregated_info_to_sm,
+        'interval',
+        seconds=BACKGROUND_JOB_INTERVAL,
+        kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID,
+                'time_interval': 2 * BACKGROUND_JOB_INTERVAL})
+    job_dead_nodes = scheduler.add_job(
+        looking_for_dead_workers,
+        'interval',
+        seconds=BACKGROUND_JOB_INTERVAL,
+        kwargs={'interval': 2 * BACKGROUND_JOB_INTERVAL})
+    job_re_deploy_dead_jobs = scheduler.add_job(
+        re_deploy_dead_services_routine,
+        'interval',
+        seconds=BACKGROUND_JOB_INTERVAL)
 
     scheduler.start()
 
