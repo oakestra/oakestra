@@ -172,12 +172,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		specOpts = append(specOpts, oci.WithProcessArgs(service.Commands...))
 	}
 	//add GPU if needed
-	if val, ok := service.Requirements["gpu"]; ok {
-		value := fmt.Sprintf("%v", val)
-		if value != "0" {
-			specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(0), nvidia.WithAllCapabilities))
-			logger.InfoLogger().Printf("NVIDIA - Adding GPU driver")
-		}
+	if service.Vgpus > 0 {
+		specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(0), nvidia.WithAllCapabilities))
+		logger.InfoLogger().Printf("NVIDIA - Adding GPU driver")
 	}
 	//add resolve file with default google dns
 	resolvconfFile, err := getGoogleDNSResolveConf()
