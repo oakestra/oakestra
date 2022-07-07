@@ -37,6 +37,12 @@ sla_schema = {
                                         "type": "string",
                                     }
                                 },
+                                "environment": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                    }
+                                },
                                 "sla_violation_strategy": {"type": "string"},
                                 "target_node": {"type": "string"},
                                 "addresses": {

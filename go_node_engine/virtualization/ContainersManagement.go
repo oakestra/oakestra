@@ -257,7 +257,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	case <-*killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
 		//detaching network
-		_ = requests.DetachNetworkFromTask(service.Sname, 0)
+		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
 	}
 	service.Status = model.SERVICE_DEAD
 	statusChangeNotificationHandler(service)
