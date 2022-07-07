@@ -1,5 +1,5 @@
-FROM python:3.8.5-slim-buster
-LABEL org.opencontainers.image.source https://github.com/edgeIO/edgeio
+FROM python:3.10
+LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
 ADD requirements.txt /
 

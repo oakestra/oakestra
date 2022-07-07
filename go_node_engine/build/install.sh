@@ -11,17 +11,22 @@ if [ ! $? -eq 0 ]; then
   exit 1
 fi
 
+arch='amd64'
+if [ "$1" == "arm-7" ]; then
+    arch='arm64'
+fi
+
 #check containerd installation
 if sudo systemctl | grep -Fq 'containerd'; then
   sudo systemctl daemon-reload
   sudo systemctl enable --now containerd
 else
-  wget https://github.com/containerd/containerd/releases/download/v1.6.1/cri-containerd-cni-1.6.1-linux-amd64.tar.gz
-  chmod 777 cri-containerd-cni-1.6.1-linux-amd64.tar.gz
-  sudo tar --no-overwrite-dir -C / -xzf cri-containerd-cni-1.6.1-linux-amd64.tar.gz
+  wget https://github.com/containerd/containerd/releases/download/v1.6.1/cri-containerd-cni-1.6.1-linux-$arch.tar.gz
+  chmod 777 cri-containerd-cni-1.6.1-linux-$arch.tar.gz
+  sudo tar --no-overwrite-dir -C / -xzf cri-containerd-cni-1.6.1-linux-$arch.tar.gz
   sudo systemctl daemon-reload
   sudo systemctl enable --now containerd
-  rm cri-containerd-cni-1.6.1-linux-amd64.tar.*
+  rm cri-containerd-cni-1.6.1-linux-$arch.tar.*
 fi
 
 #install latest version

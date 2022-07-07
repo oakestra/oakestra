@@ -8,15 +8,17 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import time
 from prometheus_client import start_http_server
 import threading
-from mongodb_client import mongo_init, mongo_upsert_node, mongo_upsert_job, mongo_find_job_by_system_id, \
-    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id
+from mongodb_client import mongo_init, mongo_upsert_node, mongo_find_job_by_system_id, \
+    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id, mongo_remove_job_instance, \
+    mongo_create_new_job_instance
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
 from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from cm_logging import configure_logging
-from system_manager_requests import send_aggregated_info_to_sm
+from system_manager_requests import send_aggregated_info_to_sm, re_deploy_dead_services_routine
 from analyzing_workers import looking_for_dead_workers
 from my_prometheus_client import prometheus_init_gauge_metrics, prometheus_set_metrics
 from network_plugin_requests import *
+import service_operations
 
 MY_PORT = os.environ.get('MY_PORT')
 
@@ -60,83 +62,52 @@ def status():
     return "ok", 200
 
 
-@app.route('/api/deploy', methods=['GET', 'POST'])
-def deploy_task():
+@app.route('/api/deploy/<system_job_id>/<instance_number>', methods=['GET', 'POST'])
+def deploy_task(system_job_id, instance_number):
     app.logger.info('Incoming Request /api/deploy')
     job = request.json  # contains job_id and job_description
-    job_obj = mongo_upsert_job(job)
-    scheduler_request_deploy(job_obj)
-    return "ok"
+
+    try:
+        service_operations.deploy_service(job, system_job_id, instance_number)
+    except Exception as e:
+        return "", 500
+
+    return 200
 
 
-@app.route('/api/result', methods=['POST'])
-def get_scheduler_result_and_propagate_to_edge():
+@app.route('/api/result/<system_job_id>/<instance_number>', methods=['POST'])
+def get_scheduler_result_and_propagate_to_edge(system_job_id, instance_number):
     # print(request)
     app.logger.info('Incoming Request /api/result - received cluster_scheduler result')
     data = request.json  # get POST body
     app.logger.info(data)
 
-    job = data.get('job')
     resulting_node_id = data.get('node').get('_id')
 
-    mongo_update_job_status(job.get('_id'), 'NODE_SCHEDULED', data.get('node'))
-    job = mongo_find_job_by_id(job.get('_id'))
+    mongo_update_job_status(system_job_id, instance_number, 'NODE_SCHEDULED', data.get('node'))
+    job = mongo_find_job_by_system_id(system_job_id)
 
     # Inform network plugin about the deployment
     threading.Thread(group=None, target=network_notify_deployment,
                      args=(str(job['system_job_id']), job)).start()
 
-    mqtt_publish_edge_deploy(resulting_node_id, job)
+    mqtt_publish_edge_deploy(resulting_node_id, job, instance_number)
     return "ok"
 
 
-@app.route('/api/delete/<system_job_id>')
-def delete_task(system_job_id):
-    """find service in db and ask corresponding worker to delete task"""
+@app.route('/api/delete/<system_job_id>/<instance_number>')
+def delete_service(system_job_id, instance_number):
+    """
+    find service in db and ask corresponding worker to delete task,
+    instance_number -1 undeploys all known instances
+    """
     app.logger.info('Incoming Request /api/delete/ - to delete task...')
-    # job_id is the system_job_id assigned by System Manager
-    job = mongo_find_job_by_system_id(system_job_id)
-    node_id = job.get('instance_list')[0].get('worker_id')  # undeploy the first instance available
-    job_id = str(job.get('_id'))
-    job.__setitem__('_id', job_id)
-    mqtt_publish_edge_delete(node_id, job)
-    return "ok"
 
+    try:
+        service_operations.delete_service(system_job_id, instance_number)
+    except Exception as e:
+        return "", 500
 
-@app.route('/api/replicate/', methods=['GET', 'POST'])
-def replicate():
-    """Replicate the amount of services"""
-    app.logger.info('Incoming Request /api/replicate - to replicate amount of services')
-    data = request.json
-    job_id = data.get('job')
-    desired_replicas = data.get('replicas')
-
-    job_obj = mongo_find_job_by_system_id(job_id)
-    current_replicas = job_obj.get('replicas')
-
-    scheduler_request_replicate(job_obj, replicas=desired_replicas)
-
-    return "ok", 200
-
-
-@app.route('/api/move/', methods=['GET', 'POST'])
-def move_application_from_node_to_node():
-    """Request to move service from one Node to another Node in this cluster"""
-    data = request.json  # get POST body
-    job = data.get('job')
-    node_source = data.get('node_from')
-    node_target = data.get('node_to')
-
-    job_obj = mongo_find_job_by_system_id(job)
-    node_source_obj = mongo_find_node_by_name(node_source)
-    node_target_obj = mongo_find_node_by_name(node_target)
-    if node_source_obj == 'Error':
-        return "Source Node Not Found", 404
-    elif node_target_obj == 'Error':
-        return "Target Node Not Found", 404
-    # TODO ask Scheduler for permission and whether target_node is schedulable
-    mqtt_publish_edge_delete(str(node_source_obj.get('_id')), job_obj)
-    mqtt_publish_edge_deploy(str(node_target_obj.get('_id')), job_obj)
     return "ok", 200
 
 
@@ -274,11 +245,22 @@ def init_cm_to_sm():
 def background_job_send_aggregated_information_to_sm():
     app.logger.info("Set up Background Jobs...")
     scheduler = BackgroundScheduler()
-    job_send_info = scheduler.add_job(send_aggregated_info_to_sm, 'interval', seconds=BACKGROUND_JOB_INTERVAL,
-                                      kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID,
-                                              'time_interval': BACKGROUND_JOB_INTERVAL})
-    job_dead_nodes = scheduler.add_job(looking_for_dead_workers, 'interval', seconds=2 * BACKGROUND_JOB_INTERVAL,
-                                       kwargs={'interval': BACKGROUND_JOB_INTERVAL})
+    job_send_info = scheduler.add_job(
+        send_aggregated_info_to_sm,
+        'interval',
+        seconds=BACKGROUND_JOB_INTERVAL,
+        kwargs={'my_id': MY_ASSIGNED_CLUSTER_ID,
+                'time_interval': 2 * BACKGROUND_JOB_INTERVAL})
+    job_dead_nodes = scheduler.add_job(
+        looking_for_dead_workers,
+        'interval',
+        seconds=BACKGROUND_JOB_INTERVAL,
+        kwargs={'interval': 2 * BACKGROUND_JOB_INTERVAL})
+    job_re_deploy_dead_jobs = scheduler.add_job(
+        re_deploy_dead_services_routine,
+        'interval',
+        seconds=BACKGROUND_JOB_INTERVAL)
+
     scheduler.start()
 
 

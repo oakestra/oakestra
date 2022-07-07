@@ -5,10 +5,10 @@ import time
 CLUSTER_SCHEDULER_ADDR = 'http://' + os.environ.get('CLUSTER_SCHEDULER_URL') + ':' + str(os.environ.get('CLUSTER_SCHEDULER_PORT'))
 
 
-def scheduler_request_deploy(job):
+def scheduler_request_deploy(job,system_job_id,instance_number):
     print('new job: asking cluster_scheduler...')
     print(job)
-    request_address = CLUSTER_SCHEDULER_ADDR + '/api/calculate/deploy'
+    request_address = CLUSTER_SCHEDULER_ADDR + '/api/calculate/deploy/'+system_job_id+"/"+instance_number
     print(request_address)
     job_id = str(job.get('_id'))
     job.__setitem__('_id', job_id)

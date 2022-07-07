@@ -1,3 +1,4 @@
+import os
 import sys
 import logging
 from logging.handlers import RotatingFileHandler
@@ -8,7 +9,7 @@ def configure_logging():
     formatter = logging.Formatter(format_str)
     my_filename = 'sm.log'
 
-    logging.basicConfig(filename=my_filename, format=format_str, level=logging.DEBUG)
+    logging.basicConfig(filename=my_filename, format=format_str, level=logging.INFO)
     my_logger = logging.getLogger("system_manager")
 
     stdout_handler = logging.StreamHandler(sys.stdout)
