@@ -48,6 +48,7 @@ cluster_info_schema = {
                             "properties": {
                                 "instance_number": {"type": "string"},
                                 "status": {"type": "string"},
+                                "publicip": {"type": "string"}
                             }
                         }
                     },
@@ -81,8 +82,10 @@ class ClusterController(MethodView):
         mongo_update_cluster_information(kwargs['clusterid'], data)
         jobs = data.get('jobs')
         for j in jobs:
-            result = mongo_update_job_status(job_id=j.get('system_job_id'), status=j.get('status'),
-                                             instances=j.get('instance_list'))
+            result = mongo_update_job_status(
+                job_id=j.get('system_job_id'),
+                status=j.get('status'),
+                instances=j.get('instance_list'))
             if result is None:
                 # cluster has outdated jobs, ask to undeploy
                 cluster_request_to_delete_job_by_ip(j.get('system_job_id'), -1, request.remote_addr)
