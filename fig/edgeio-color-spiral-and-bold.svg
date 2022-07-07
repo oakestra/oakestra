@@ -1,0 +1,412 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="210mm"
+   height="297mm"
+   viewBox="0 0 210 297"
+   version="1.1"
+   id="svg5"
+   inkscape:version="1.1.1 (c3084ef, 2021-09-22)"
+   sodipodi:docname="edgeio-color-spiral-and-bold.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:document-units="mm"
+     showgrid="false"
+     inkscape:zoom="0.41799152"
+     inkscape:cx="-259.57464"
+     inkscape:cy="513.1683"
+     inkscape:window-width="2560"
+     inkscape:window-height="1313"
+     inkscape:window-x="-3"
+     inkscape:window-y="25"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="layer7" />
+  <defs
+     id="defs2">
+    <rect
+       x="106.72295"
+       y="295.73829"
+       width="505.32673"
+       height="459.03727"
+       id="rect9632" />
+    <rect
+       x="106.72295"
+       y="295.73828"
+       width="505.32672"
+       height="459.03726"
+       id="rect9632-5" />
+    <rect
+       x="106.72295"
+       y="295.73828"
+       width="505.32672"
+       height="459.03726"
+       id="rect9632-3" />
+    <rect
+       x="106.72295"
+       y="295.73828"
+       width="505.32672"
+       height="459.03726"
+       id="rect4015" />
+    <rect
+       x="106.72295"
+       y="295.73828"
+       width="505.32672"
+       height="459.03726"
+       id="rect4099" />
+    <rect
+       x="106.72295"
+       y="295.73829"
+       width="505.32673"
+       height="459.03727"
+       id="rect4101" />
+    <filter
+       inkscape:collect="always"
+       style="color-interpolation-filters:sRGB"
+       id="filter8973"
+       x="-0.34094844"
+       y="-0.4053498"
+       width="1.6818969"
+       height="1.8106996">
+      <feGaussianBlur
+         inkscape:collect="always"
+         stdDeviation="2.2640039"
+         id="feGaussianBlur8975" />
+    </filter>
+    <filter
+       inkscape:collect="always"
+       style="color-interpolation-filters:sRGB"
+       id="filter1341"
+       x="-0.08891377"
+       y="-0.084872796"
+       width="1.1778257"
+       height="1.1697208">
+      <feGaussianBlur
+         inkscape:collect="always"
+         stdDeviation="5.300977"
+         id="feGaussianBlur1343" />
+    </filter>
+    <filter
+       inkscape:collect="always"
+       style="color-interpolation-filters:sRGB"
+       id="filter1475"
+       x="-0.51531409"
+       y="-0.38172568"
+       width="2.1758611"
+       height="1.7668535">
+      <feGaussianBlur
+         inkscape:collect="always"
+         stdDeviation="2.2618778"
+         id="feGaussianBlur1477" />
+    </filter>
+    <rect
+       x="106.72295"
+       y="295.73828"
+       width="505.32672"
+       height="459.03726"
+       id="rect4101-3" />
+    <rect
+       x="106.72295"
+       y="295.73828"
+       width="505.32672"
+       height="459.03726"
+       id="rect4101-6" />
+    <rect
+       x="106.72295"
+       y="295.73828"
+       width="505.32672"
+       height="459.03726"
+       id="rect4101-3-8" />
+    <rect
+       x="106.72295"
+       y="295.73828"
+       width="505.32672"
+       height="459.03726"
+       id="rect4015-9" />
+  </defs>
+  <g
+     inkscape:groupmode="layer"
+     id="layer6"
+     inkscape:label="circle"
+     style="display:inline">
+    <circle
+       style="fill:#333333;stroke-width:0.0666917;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+       id="path1466"
+       cx="132.30855"
+       cy="127.83395"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"
+       r="45" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="g1473"
+     inkscape:label="spiral copy"
+     style="display:none;filter:url(#filter1475)">
+    <path
+       sodipodi:type="spiral"
+       style="opacity:1;fill:none;fill-rule:evenodd;stroke:#00bcd4;stroke-width:2.29156;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;filter:url(#filter1341)"
+       id="path1471"
+       sodipodi:cx="234.019"
+       sodipodi:cy="623.62207"
+       sodipodi:expansion="2"
+       sodipodi:revolution="3"
+       sodipodi:radius="103.06621"
+       sodipodi:argument="-17.859842"
+       sodipodi:t0="0"
+       d="m 234.019,623.62207 c 0.17441,0.26559 -0.48512,0.4025 -0.59827,0.39289 -1.29666,-0.11008 -1.37227,-1.8992 -0.97329,-2.78594 1.20228,-2.67211 4.85831,-2.54238 6.95592,-1.14295 4.42981,2.95536 3.94269,9.35974 0.90187,13.1082 -5.3543,6.60031 -15.40994,5.57987 -21.2428,0.25003 -9.19313,-8.40031 -7.45629,-23.01126 0.81255,-31.35969 12.09509,-12.21149 32.16492,-9.57292 43.45889,2.28589 15.65666,16.43968 11.9302,42.87153 -4.16996,57.54038 -21.43475,19.5292 -55.13153,14.52831 -73.60419,-6.46478 -23.82939,-27.08068 -17.36734,-68.94515 9.17035,-91.6503 33.37775,-28.55737 84.31257,-20.44736 111.67871,12.28667 33.71325,40.32611 23.7684,101.23388 -15.81373,133.68943"
+       transform="matrix(-0.1401051,-0.2428574,0.2307763,-0.14223802,-10.621947,299.22667)" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer2"
+     inkscape:label="spiral"
+     style="display:inline">
+    <path
+       sodipodi:type="spiral"
+       style="opacity:1;fill:none;fill-rule:evenodd;stroke:#009688;stroke-width:1.74149836;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="path3620"
+       sodipodi:cx="234.019"
+       sodipodi:cy="623.62207"
+       sodipodi:expansion="2"
+       sodipodi:revolution="3"
+       sodipodi:radius="103.06621"
+       sodipodi:argument="-17.859842"
+       sodipodi:t0="0"
+       d="m 234.019,623.62207 c 0.17441,0.26559 -0.48512,0.4025 -0.59827,0.39289 -1.29666,-0.11008 -1.37227,-1.8992 -0.97329,-2.78594 1.20228,-2.67211 4.85831,-2.54238 6.95592,-1.14295 4.42981,2.95536 3.94269,9.35974 0.90187,13.1082 -5.3543,6.60031 -15.40994,5.57987 -21.2428,0.25003 -9.19313,-8.40031 -7.45629,-23.01126 0.81255,-31.35969 12.09509,-12.21149 32.16492,-9.57292 43.45889,2.28589 15.65666,16.43968 11.9302,42.87153 -4.16996,57.54038 -21.43475,19.5292 -55.13153,14.52831 -73.60419,-6.46478 -23.82939,-27.08068 -17.36734,-68.94515 9.17035,-91.6503 33.37775,-28.55737 84.31257,-20.44736 111.67871,12.28667 33.71325,40.32611 23.7684,101.23388 -15.81373,133.68943"
+       transform="matrix(-0.11364622,-0.20790219,0.18719417,-0.12176527,45.88085,268.18113)"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer3"
+     inkscape:label="text"
+     style="display:none">
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,89.347667,41.904246)"
+       id="text9630-60"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:192px;line-height:1.25;font-family:'Academy Engraved LET';-inkscape-font-specification:'Academy Engraved LET, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;white-space:pre;shape-inside:url(#rect9632-3);fill:#212121;fill-opacity:1;stroke:none"><tspan
+         x="106.72266"
+         y="476.27331"
+         id="tspan2683">O</tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,34.814177,41.731832)"
+       id="text9630"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:192px;line-height:1.25;font-family:'Academy Engraved LET';-inkscape-font-specification:'Academy Engraved LET, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;white-space:pre;shape-inside:url(#rect9632);display:inline;fill:#212121;fill-opacity:1;stroke:none"><tspan
+         x="106.72266"
+         y="476.27331"
+         id="tspan2685">I  </tspan></text>
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="g4097"
+     inkscape:label="text copy"
+     style="display:inline">
+    <text
+       xml:space="preserve"
+       transform="matrix(0.18743831,0,0,0.19525275,82.898804,50.78291)"
+       id="text4095"
+       style="font-style:normal;font-variant:normal;font-weight:100;font-stretch:normal;font-size:322.667px;line-height:1.25;font-family:'Apple SD Gothic Neo';-inkscape-font-specification:'Apple SD Gothic Neo, Thin';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;white-space:pre;shape-inside:url(#rect4101);display:inline;fill:#009688;fill-opacity:1;stroke:none"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"><tspan
+         x="106.72266"
+         y="578.0719"
+         id="tspan2687">I  </tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.22528564,0,0,0.19494511,89.63308,51.549921)"
+       id="text4095-8"
+       style="font-style:normal;font-variant:normal;font-weight:100;font-stretch:normal;font-size:322.667px;line-height:1.25;font-family:'Apple SD Gothic Neo';-inkscape-font-specification:'Apple SD Gothic Neo, Thin';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;white-space:pre;shape-inside:url(#rect4101-3);display:inline;fill:#009688;fill-opacity:1;stroke:none"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"><tspan
+         x="106.72266"
+         y="578.0719"
+         id="tspan2689">O  </tspan></text>
+  </g>
+  <g
+     inkscape:label="dots"
+     inkscape:groupmode="layer"
+     id="layer1"
+     style="display:inline">
+    <ellipse
+       style="fill:#009688;fill-opacity:1;fill-rule:evenodd;stroke-width:0.18775"
+       id="path2959-9"
+       cx="88.586861"
+       cy="176.26154"
+       transform="matrix(0.95385227,-0.30027627,0.2984654,0.95442045,0,0)"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"
+       rx="3.5431993"
+       ry="3.5528738" />
+    <ellipse
+       style="fill:#00bcd4;fill-opacity:1;fill-rule:evenodd;stroke-width:0.166047"
+       id="path2959-9-5-4"
+       cx="100.45868"
+       cy="167.02477"
+       transform="matrix(0.95441033,-0.29849779,0.30024372,0.95386252,0,0)"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"
+       rx="6.2840195"
+       ry="6.2839999" />
+    <circle
+       style="fill:#0097a7;fill-opacity:1;fill-rule:evenodd;stroke-width:0.164816"
+       id="path2959-9-5"
+       cx="79.418571"
+       cy="185.20856"
+       transform="matrix(0.95077702,-0.30987587,0.28915157,0.95728333,0,0)"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"
+       r="4.9499998" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer4"
+     inkscape:label="edge"
+     style="display:none">
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,35.745185,37.405752)"
+       id="text9630-6"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:64px;line-height:1.25;font-family:'Academy Engraved LET';-inkscape-font-specification:'Academy Engraved LET, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;white-space:pre;shape-inside:url(#rect9632-5);display:inline;fill:#212121;fill-opacity:1;stroke:none"><tspan
+         x="106.72266"
+         y="355.91663"
+         id="tspan2691">Edge</tspan></text>
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer5"
+     inkscape:label="white-shadow"
+     style="display:none">
+    <ellipse
+       style="opacity:1;mix-blend-mode:normal;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.264583;stroke-opacity:1;filter:url(#filter8973)"
+       id="path8751"
+       cx="82.885986"
+       cy="125.48328"
+       rx="7.9683743"
+       ry="6.7023711"
+       transform="matrix(1.393752,0.152213,-0.23025215,0.92136897,0.57557853,-2.7494471)" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="g4013"
+     inkscape:label="edge copy"
+     style="display:inline">
+    <text
+       xml:space="preserve"
+       transform="matrix(0.33312224,0,0,0.33602011,70.539628,-7.6433244)"
+       id="text4011"
+       style="font-style:normal;font-variant:normal;font-weight:100;font-stretch:normal;font-size:80px;line-height:1.25;font-family:'Apple SD Gothic Neo';-inkscape-font-specification:'Apple SD Gothic Neo, Thin';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;white-space:pre;shape-inside:url(#rect4015);display:inline;fill:#0097a7;fill-opacity:1;stroke:none"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"><tspan
+         x="106.72266"
+         y="365.73828"
+         id="tspan2693">Edge</tspan></text>
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer7"
+     inkscape:label="light">
+    <path
+       sodipodi:type="spiral"
+       style="display:inline;opacity:1;fill:none;fill-rule:evenodd;stroke:#009688;stroke-width:1.7415;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="path3620-4"
+       sodipodi:cx="234.019"
+       sodipodi:cy="623.62207"
+       sodipodi:expansion="2"
+       sodipodi:revolution="3"
+       sodipodi:radius="103.06621"
+       sodipodi:argument="-17.859842"
+       sodipodi:t0="0"
+       transform="matrix(-0.11364622,-0.20790219,0.18719417,-0.12176527,48.956207,375.18548)"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"
+       d="m 234.019,623.62207 c 0.17441,0.26559 -0.48512,0.4025 -0.59827,0.39289 -1.29666,-0.11008 -1.37227,-1.8992 -0.97329,-2.78594 1.20228,-2.67211 4.85831,-2.54238 6.95592,-1.14295 4.42981,2.95536 3.94269,9.35974 0.90187,13.1082 -5.3543,6.60031 -15.40994,5.57987 -21.2428,0.25003 -9.19313,-8.40031 -7.45629,-23.01126 0.81255,-31.35969 12.09509,-12.21149 32.16492,-9.57292 43.45889,2.28589 15.65666,16.43968 11.9302,42.87153 -4.16996,57.54038 -21.43475,19.5292 -55.13153,14.52831 -73.60419,-6.46478 -23.82939,-27.08068 -17.36734,-68.94515 9.17035,-91.6503 33.37775,-28.55737 84.31257,-20.44736 111.67871,12.28667 33.71325,40.32611 23.7684,101.23388 -15.81373,133.68943" />
+    <text
+       xml:space="preserve"
+       transform="matrix(0.18743831,0,0,0.19525275,85.974167,157.78726)"
+       id="text4095-88"
+       style="font-style:normal;font-variant:normal;font-weight:100;font-stretch:normal;font-size:322.667px;line-height:1.25;font-family:'Apple SD Gothic Neo';-inkscape-font-specification:'Apple SD Gothic Neo, Thin';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;white-space:pre;shape-inside:url(#rect4101-6);display:inline;fill:#009688;fill-opacity:1;stroke:none"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"><tspan
+         x="106.72266"
+         y="578.0719"
+         id="tspan2695">I  </tspan></text>
+    <text
+       xml:space="preserve"
+       transform="matrix(0.22528564,0,0,0.19494511,92.708437,158.55427)"
+       id="text4095-8-7"
+       style="font-style:normal;font-variant:normal;font-weight:100;font-stretch:normal;font-size:322.667px;line-height:1.25;font-family:'Apple SD Gothic Neo';-inkscape-font-specification:'Apple SD Gothic Neo, Thin';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;white-space:pre;shape-inside:url(#rect4101-3-8);display:inline;fill:#009688;fill-opacity:1;stroke:none"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"><tspan
+         x="106.72266"
+         y="578.0719"
+         id="tspan2697">O  </tspan></text>
+    <ellipse
+       style="display:inline;fill:#009688;fill-opacity:1;fill-rule:evenodd;stroke-width:0.18775"
+       id="path2959-9-1"
+       cx="59.5849"
+       cy="279.25153"
+       transform="matrix(0.95385227,-0.30027627,0.2984654,0.95442045,0,0)"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"
+       rx="3.5431993"
+       ry="3.5528738" />
+    <ellipse
+       style="display:inline;fill:#00bcd4;fill-opacity:1;fill-rule:evenodd;stroke-width:0.166047"
+       id="path2959-9-5-4-9"
+       cx="71.264717"
+       cy="270.06897"
+       transform="matrix(0.95441033,-0.29849779,0.30024372,0.95386252,0,0)"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"
+       rx="6.2840195"
+       ry="6.2839999" />
+    <circle
+       style="display:inline;fill:#0097a7;fill-opacity:1;fill-rule:evenodd;stroke-width:0.164816"
+       id="path2959-9-5-3"
+       cx="51.415485"
+       cy="287.92303"
+       transform="matrix(0.95077702,-0.30987587,0.28915157,0.95728333,0,0)"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"
+       r="4.9499998" />
+    <text
+       xml:space="preserve"
+       transform="matrix(0.33312224,0,0,0.33602011,73.614987,99.361025)"
+       id="text4011-1"
+       style="font-style:normal;font-variant:normal;font-weight:100;font-stretch:normal;font-size:80px;line-height:1.25;font-family:'Apple SD Gothic Neo';-inkscape-font-specification:'Apple SD Gothic Neo, Thin';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;white-space:pre;shape-inside:url(#rect4015-9);display:inline;fill:#0097a7;fill-opacity:1;stroke:none"
+       inkscape:export-filename="/Users/giovannibartolomeo/Documents/edgeio-logo-dark.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"><tspan
+         x="106.72266"
+         y="365.73828"
+         id="tspan2699">Edge</tspan></text>
+  </g>
+</svg>
