@@ -149,11 +149,12 @@ func (env *Environment) Destroy() {
 	})
 }
 
-func (env *Environment) DetachContainer(sname string) {
-	s, ok := env.deployedServices[sname]
+func (env *Environment) DetachContainer(sname string, instance int) {
+	snameAndInstance := fmt.Sprintf("%s.%d", sname, instance)
+	s, ok := env.deployedServices[snameAndInstance]
 	if ok {
 		_ = env.translationTable.RemoveByNsip(s.ip)
-		delete(env.deployedServices, sname)
+		delete(env.deployedServices, snameAndInstance)
 		env.freeContainerAddress(s.ip)
 		_ = network.ManageContainerPorts(s.ip.String(), s.portmapping, network.ClosePorts)
 		_ = netlink.LinkDel(s.veth)
@@ -166,7 +167,7 @@ func (env *Environment) ConfigureDockerNetwork(containername string) (string, er
 }
 
 // AttachNetworkToContainer Attach a Docker container to the bridge and the current network environment
-func (env *Environment) AttachNetworkToContainer(pid int, sname string, portmapping string) (net.IP, error) {
+func (env *Environment) AttachNetworkToContainer(pid int, sname string, instancenumber int, portmapping string) (net.IP, error) {
 
 	cleanup := func(veth *netlink.Veth) {
 		_ = netlink.LinkDel(veth)
@@ -228,7 +229,7 @@ func (env *Environment) AttachNetworkToContainer(pid int, sname string, portmapp
 		return nil, err
 	}
 
-	env.deployedServices[sname] = service{
+	env.deployedServices[fmt.Sprintf("%s.%d", sname, instancenumber)] = service{
 		ip:          ip,
 		sname:       sname,
 		portmapping: portmapping,
