@@ -3,12 +3,10 @@ from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
 from datetime import datetime
 
-
 MONGO_URL = os.environ.get('CLUSTER_MONGO_URL')
 MONGO_PORT = os.environ.get('CLUSTER_MONGO_PORT')
 MONGO_ADDR_NODES = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/nodes'
 MONGO_ADDR_JOBS = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/jobs'
-
 
 NODES_FRESHNESS_INTERVAL = 15
 
@@ -57,6 +55,11 @@ def mongo_find_node_by_name(name):
         return mongo_nodes.db.nodes.find_one({'node_info.host': name})
     except Exception as e:
         return "Error"
+
+
+def mongo_find_node_by_id(id):
+    global mongo_nodes
+    return mongo_nodes.db.nodes.find_one({'_id': ObjectId(id)})
 
 
 def mongo_find_all_nodes():

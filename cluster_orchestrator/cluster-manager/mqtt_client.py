@@ -52,7 +52,8 @@ def handle_mqtt_message(client, userdata, message):
         sname = payload.get('sname')
         status = payload.get('status')
         instance = payload.get('instance')
-        mongo_update_job_deployed(sname,instance, status, client_id)
+        publicip = payload.get('publicip',"--")
+        mongo_update_job_deployed(sname,instance, status, publicip, client_id)
     if re_job_resources_topic is not None:
         services = payload.get('services')
         for service in services:

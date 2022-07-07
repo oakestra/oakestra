@@ -85,41 +85,8 @@ swaggerui_blueprint = get_swaggerui_blueprint(
 )
 app.register_blueprint(swaggerui_blueprint)
 
-
-# ........ Endpoints for the authentication.............#
-# ......................................................#
-
-# api.add_resource(UserResetPasswordController, '/api/auth/resetPassword')
-#
-# # .......... Endpoints for the user functions ..........#
-# # ......................................................#
-# api.add_resource(UserController, '/api/user/<string:username>')
-# api.add_resource(AllUserController, '/api/users')
-# api.add_resource(UserChangePasswordController, '/api/changePassword/<string:username>')
-# api.add_resource(UserRolesController, '/api/roles')
-
-
-
-@app.route('/api/information/<cluster_id>', methods=['GET', 'POST'])
-def cluster_information(cluster_id):
-    if request.method == 'POST':
-        """Endpoint to receive aggregated information of a Cluster Manager"""
-        app.logger.info(
-            'Incoming Request /api/information/{0} to set aggregated cluster information'.format(cluster_id))
-        # data = json.loads(request.json)
-        data = request.json  # data contains cpu_percent, memory_percent, cpu_cores etc.
-        # Omit worker nodes coordinates to avoid flooding the log
-        data_without_worker_groups = data.copy()
-        data_without_worker_groups.pop('worker_groups', None)
-        app.logger.info(data_without_worker_groups)
-        mongo_update_cluster_information(cluster_id, data)
-        return "ok", 200
-    return "no file", 200
-
-
 # .......... Register clusters via WebSocket ...........#
 # ......................................................#
-
 
 @socketio.on('connect', namespace='/register')
 def on_connect():

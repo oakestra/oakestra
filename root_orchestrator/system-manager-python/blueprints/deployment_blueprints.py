@@ -17,7 +17,7 @@ class DeployInstanceController(MethodView):
     def post(self, serviceid):
         username = get_jwt_identity()
         request_scale_up_instance(str(serviceid), username)
-        return "ok"
+        return {"message": "ok"}
 
 
 @deploybp.route('/<serviceid>/instance/<instance_number>')
@@ -27,4 +27,4 @@ class UndeployInstanceController(MethodView):
     def delete(self, serviceid, instance_number):
         username = get_jwt_identity()
         request_scale_down_instance(serviceid, username, which_one=int(instance_number))
-        return "ok"
+        return {"message": "ok"}

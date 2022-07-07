@@ -137,12 +137,14 @@ func ReportServiceStatus(service model.Service) {
 		Status   string `json:"status"`
 		Detail   string `json:"status_detail"`
 		Instance int    `json:"instance"`
+		Publicip string `json:"publicip"`
 	}
 	reportStatusStruct := ServiceStatus{
 		Sname:    service.Sname,
 		Status:   service.Status,
 		Detail:   service.StatusDetail,
 		Instance: service.Instance,
+		Publicip: model.GetNodeInfo().Ip,
 	}
 	jsonmsg, err := json.Marshal(reportStatusStruct)
 	if err != nil {

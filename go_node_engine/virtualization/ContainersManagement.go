@@ -172,12 +172,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		specOpts = append(specOpts, oci.WithProcessArgs(service.Commands...))
 	}
 	//add GPU if needed
-	if val, ok := service.Requirements["gpu"]; ok {
-		value := fmt.Sprintf("%v", val)
-		if value != "0" {
-			specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(0), nvidia.WithAllCapabilities))
-			logger.InfoLogger().Printf("NVIDIA - Adding GPU driver")
-		}
+	if service.Vgpus > 0 {
+		specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(0), nvidia.WithAllCapabilities))
+		logger.InfoLogger().Printf("NVIDIA - Adding GPU driver")
 	}
 	//add resolve file with default google dns
 	resolvconfFile, err := getGoogleDNSResolveConf()
@@ -260,10 +257,11 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	case <-*killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
 		//detaching network
-		_ = requests.DetachNetworkFromTask(service.Sname, 0)
+		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
 	}
 	service.Status = model.SERVICE_DEAD
 	statusChangeNotificationHandler(service)
+	r.removeContainer(container)
 }
 
 func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
@@ -321,22 +319,25 @@ func (r *ContainerRuntime) forceContainerCleanup() {
 		logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 	}
 	for _, container := range deployedContainers {
-		logger.InfoLogger().Printf("Clenaning up container: %s", container.ID())
-		task, err := container.Task(r.ctx, nil)
-		if err != nil {
-			logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
-			continue
-		}
+		r.removeContainer(container)
+	}
+}
+
+func (r *ContainerRuntime) removeContainer(container containerd.Container) {
+	logger.InfoLogger().Printf("Clenaning up container: %s", container.ID())
+	task, err := container.Task(r.ctx, nil)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+	}
+	if err == nil {
 		err = killTask(r.ctx, task, container)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to fetch kill task: %v", err)
-			continue
 		}
-		err = container.Delete(r.ctx)
-		if err != nil {
-			logger.ErrorLogger().Printf("Unable to delete container: %v", err)
-			continue
-		}
+	}
+	err = container.Delete(r.ctx)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to delete container: %v", err)
 	}
 }
 

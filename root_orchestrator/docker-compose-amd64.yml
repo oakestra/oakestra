@@ -52,13 +52,13 @@ services:
 
   # Cluster Manager
   root_service_manager:
-    image: ghcr.io/oakestra/edgeionet/root-service-manager:v0.04-amd64
+    image: ghcr.io/oakestra/oakestra-net/root-service-manager:v0.04.amd64.experimental
     container_name: root_service_manager
     hostname: root_service_manager
     expose:
-      - "10010"
+      - "10099"
     ports:
-      - "10010:10010"
+      - "10099:10099"
     environment:
       - MY_PORT=10099
       - SYSTEM_MANAGER_URL=system_manager
