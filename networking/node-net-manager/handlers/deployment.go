@@ -74,7 +74,7 @@ func deploymentHandler(requestStruct *ContainerDeployRequest) {
 	}
 
 	//attach network to the container
-	addr, err := requestStruct.Env.AttachNetworkToContainer(requestStruct.Pid, requestStruct.ServiceName, requestStruct.PortMappings)
+	addr, err := requestStruct.Env.AttachNetworkToContainer(requestStruct.Pid, requestStruct.ServiceName, requestStruct.Instancenumber, requestStruct.PortMappings)
 	if err != nil {
 		log.Println("[ERROR]:", err)
 		writer.WriteHeader(http.StatusBadRequest)

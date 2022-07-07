@@ -18,7 +18,8 @@ import (
 )
 
 type undeployRequest struct {
-	Servicename string `json:"serviceName"`
+	Servicename    string `json:"serviceName"`
+	Instancenumber int    `json:"instanceNumber"`
 }
 
 type registerRequest struct {
@@ -54,11 +55,12 @@ Method: POST
 Request Json:
 	{
 		serviceName:string #name used to register the service in the first place
+		instance:int
 	}
 Response: 200 OK or Failure code
 */
 func containerUndeploy(writer http.ResponseWriter, request *http.Request) {
-	log.Println("Received HTTP request - /docker/undeploy ")
+	log.Println("Received HTTP request - /container/undeploy ")
 
 	if WorkerID == "" {
 		log.Printf("[ERROR] Node not initialized")
@@ -75,7 +77,7 @@ func containerUndeploy(writer http.ResponseWriter, request *http.Request) {
 
 	log.Println(requestStruct)
 
-	Env.DetachContainer(requestStruct.Servicename)
+	Env.DetachContainer(requestStruct.Servicename, requestStruct.Instancenumber)
 
 	writer.WriteHeader(http.StatusOK)
 }

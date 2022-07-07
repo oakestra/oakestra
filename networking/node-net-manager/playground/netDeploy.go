@@ -10,7 +10,7 @@ import (
 func attachNetwork(appname string, pid int, instance int, mappings string, iip string, sip string) (string, error) {
 
 	//attach network to the container
-	addr, err := ENV.AttachNetworkToContainer(pid, appname, mappings)
+	addr, err := ENV.AttachNetworkToContainer(pid, appname, 0, mappings)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return "", err

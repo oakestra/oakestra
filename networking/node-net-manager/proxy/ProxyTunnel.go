@@ -52,6 +52,7 @@ type GoProxyTunnel struct {
 	incomingChannel   chan incomingMessage
 	outgoingChannel   chan []byte
 	mtusize           string
+	randseed          *rand.Rand
 }
 
 //incoming message from UDP channel
@@ -113,6 +114,7 @@ func NewCustom(configuration Configuration) GoProxyTunnel {
 		incomingChannel:  make(chan incomingMessage),
 		outgoingChannel:  make(chan []byte),
 		mtusize:          configuration.Mtusize,
+		randseed:         rand.New(rand.NewSource(42)),
 	}
 
 	//parse confgiuration file
@@ -255,9 +257,9 @@ func (proxy *GoProxyTunnel) outgoingProxy(packet gopacket.Packet) gopacket.Packe
 					//discard packet
 					return packet
 				}
-
+				log.Printf("LIIIIIST: #### %v\n", tableEntryList)
 				//Choose between the table entry according to the ServiceIP algorithm
-				tableEntry := tableEntryList[rand.Intn(len(tableEntryList))]
+				tableEntry := tableEntryList[proxy.randseed.Intn(len(tableEntryList))]
 
 				//Find the instanceIP of the current service
 				instanceTableEntry, instanceexist := proxy.environment.GetTableEntryByNsIP(ipv4.SrcIP)
@@ -506,19 +508,19 @@ func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket
 	}
 
 	//If destination host is this machine, forward packet directly to the ingoing traffic method
-	if dstHost.Equal(proxy.localIP) {
-		//log.Println("Packet forwarded locally")
-		msg := incomingMessage{
-			from: net.UDPAddr{
-				IP:   nil,
-				Port: 0,
-				Zone: "",
-			},
-			content: packet.Data(),
-		}
-		proxy.incomingChannel <- msg
-		return
-	}
+	//if dstHost.Equal(proxy.localIP) {
+	//log.Println("Packet forwarded locally")
+	//	msg := incomingMessage{
+	//		from: net.UDPAddr{
+	//			IP:   nil,
+	//			Port: 0,
+	//			Zone: "",
+	//		},
+	//		content: packet.Data(),
+	//	}
+	//	proxy.incomingChannel <- msg
+	//	return
+	//}
 
 	//Check udp channel buffer to avoid creating a new channel
 	proxy.udpwrite.Lock()
