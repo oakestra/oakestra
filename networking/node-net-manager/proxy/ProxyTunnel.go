@@ -257,7 +257,6 @@ func (proxy *GoProxyTunnel) outgoingProxy(packet gopacket.Packet) gopacket.Packe
 					//discard packet
 					return packet
 				}
-				log.Printf("LIIIIIST: #### %v\n", tableEntryList)
 				//Choose between the table entry according to the ServiceIP algorithm
 				tableEntry := tableEntryList[proxy.randseed.Intn(len(tableEntryList))]
 
