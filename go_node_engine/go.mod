@@ -10,6 +10,8 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/struCoder/pidusage v0.2.1
 	gotest.tools v2.2.0+incompatible
+	libvirt.org/go/libvirt v1.8004.0
+	libvirt.org/go/libvirtxml v1.8004.0
 )
 
 require (
