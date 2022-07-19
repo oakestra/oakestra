@@ -19,8 +19,6 @@ type UnikernelRuntime struct {
 	killQueue         map[string]*chan bool
 	channelLock       *sync.RWMutex
 	network           *libvirt.Network
-	subnet            string
-	IPaddresses       map[int]int
 }
 
 var VMruntime = UnikernelRuntime{
@@ -39,31 +37,6 @@ func GetLibVirtConnection() *UnikernelRuntime {
 		VMruntime.libVirtConnection = conn
 		VMruntime.killQueue = make(map[string]*chan bool)
 
-		networks, err := VMruntime.libVirtConnection.ListAllNetworks(libvirt.CONNECT_LIST_NETWORKS_ACTIVE)
-		if err != nil {
-			logger.InfoLogger().Printf("Unable to list the network interfaces %v", err)
-		}
-		if !model.GetNodeInfo().Overlay {
-			if len(networks) < 1 {
-				logger.InfoLogger().Printf("No local Network for libvirt found")
-			}
-
-			for i, n := range networks {
-				if i == 0 {
-					name, _ := n.GetBridgeName()
-					logger.InfoLogger().Printf("Using %s as default Network", name)
-					test, _ := n.GetXMLDesc(0)
-					var networkDescription libvirtxml.Network
-					networkDescription.Unmarshal(test)
-					VMruntime.subnet = networkDescription.IPs[0].Address[0 : len(networkDescription.IPs[0].Address)-1]
-					VMruntime.network = &n
-				} else {
-					n.Free()
-				}
-			}
-		} else {
-			VMruntime.network = nil
-		}
 	})
 	return &VMruntime
 }
@@ -160,18 +133,12 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		r.killQueue[hostname] = nil
 	}
 
-	if r.network != nil {
-
-		for i := 2; i < 255; i++ {
-			_, found := r.IPaddresses[i]
-			if !found {
-				r.IPaddresses[i] = i
-				addr = i
-				break
-			}
-		}
+	if model.GetNodeInfo().Overlay {
+		//TODO Use Overlay Network to configure network
+	} else {
+		//Start Unikernel without network
 		Bridgename, err := r.network.GetBridgeName()
-		domainString, err = CreateXMLDomain(hostname, 1, 64, 1, Bridgename, "x86_64", r.subnet, addr)
+		domainString, err = CreateXMLDomain(hostname, 1, 64, 1, Bridgename, "x86_64", "", addr)
 		if err != nil {
 			logger.ErrorLogger().Printf("VM configuration creation failed: %v", err)
 		}
@@ -187,9 +154,6 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	defer func(domain *libvirt.Domain) {
 		logger.InfoLogger().Printf("Trying to kill VM %s", hostname)
 		err := domain.Destroy()
-		if r.network != nil {
-			delete(r.IPaddresses, addr)
-		}
 		//r.channelLock.Lock()
 		//defer r.channelLock.Unlock()
 		r.killQueue[hostname] = nil
