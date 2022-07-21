@@ -4,6 +4,7 @@ import (
 	"NetManager/env"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"math/rand"
 	"net"
 	"testing"
 )
@@ -75,6 +76,7 @@ func getFakeTunnel() GoProxyTunnel {
 		TunnelPort:        50011,
 		listenConnection:  nil,
 		proxycache:        NewProxyCache(),
+		randseed:          rand.New(rand.NewSource(42)),
 	}
 	tunnel.SetEnvironment(&FakeEnv{})
 	return tunnel
