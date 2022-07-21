@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"encoding/json"
+	"errors"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"log"
 	"net"
@@ -77,6 +78,12 @@ func GetTableQueryRequestCacheInstance() *TableQueryRequestCache {
 */
 func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname string) (TableQueryResponse, error) {
 	reqname := sip + sname
+
+	// If the worker node already registered an interest towards this route, avoid new requests
+	if MqttIsInterestRegistered(reqname) {
+		return TableQueryResponse{}, errors.New("interest already registered")
+	}
+
 	responseChannel := make(chan TableQueryResponse, 2)
 	var updatedRequests []chan TableQueryResponse
 

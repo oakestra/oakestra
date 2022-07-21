@@ -49,18 +49,18 @@ func (jut *jobUpdatesTimer) startSelfDestructTimeout() {
 			continue
 		case <-time.After(5 * time.Minute):
 			//timeout job no longer required
-			break
+			startSync.Lock()
+			defer startSync.Unlock()
+			log.Printf("De-registering from %s", jut.job)
+			cleanInterestTowardsJob(jut.job)
+			jut.client.Unsubscribe(jut.topic)
+			delete(TOPICS, jut.topic) //removing topic from the topic list in case of disconnection
+			eventManager.DeRegister(events.TableQuery, jut.job)
+			jut.env.RemoveServiceEntries(jut.job)
+			runningHandlers.RemoveElem(jut.job)
+			return
 		}
 	}
-	startSync.Lock()
-	defer startSync.Unlock()
-	log.Printf("De-registering from %s", jut.job)
-	cleanInterestTowardsJob(jut.job)
-	jut.client.Unsubscribe(jut.topic)
-	delete(TOPICS, jut.topic) //removing topic from the topic list in case of disconnection
-	eventManager.DeRegister(events.TableQuery, jut.job)
-	jut.env.RemoveServiceEntries(jut.job)
-	runningHandlers.RemoveElem(jut.job)
 }
 
 func MqttRegisterInterest(jobName string, env jobEnvironmentManagerActions) {
@@ -85,6 +85,15 @@ func MqttRegisterInterest(jobName string, env jobEnvironmentManagerActions) {
 	log.Printf("MQTT - Subscribed to %s ", jobTimer.topic)
 	runningHandlers.Add(jobTimer.job)
 	go jobTimer.startSelfDestructTimeout()
+}
+
+func MqttIsInterestRegistered(jobName string) bool {
+	startSync.Lock()
+	defer startSync.Unlock()
+	if runningHandlers.Exists(jobName) {
+		return true
+	}
+	return false
 }
 
 func cleanInterestTowardsJob(jobName string) {
