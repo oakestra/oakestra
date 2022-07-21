@@ -11,22 +11,17 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v2
 
-      - name: Setup Python
-        uses: actions/setup-python@v2
+      - name: Setup Golang
+        uses: actions/setup-go@v3
         with:
-          python-version: "3.x"
-
-      - name: Install pytest
-        working-directory: root-service-manager/service-manager
-        run: |
-          pip install pytest
+          go-version: '^1.17'
 
       - name: Install dependencies
-        working-directory: root-service-manager/service-manager
+        working-directory: node-net-manager
         run: |
-          pip install -r requirements.txt
+          go get -u
 
       - name: Run test suite
-        working-directory: root-service-manager/service-manager
+        working-directory: node-net-manager
         run: |
-           pytest
+           go test ./...
