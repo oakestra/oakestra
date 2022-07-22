@@ -27,8 +27,8 @@ func main() {
 	runtime := virtualization.GetContainerdClient()
 	defer runtime.StopContainerdClient()
 
-	unikernelRuntime := virtualization.GetLibVirtConnection()
-	defer unikernelRuntime.CloseLibVirtConnection()
+	unikernelRuntime := virtualization.GetUnikernelRuntime()
+	defer unikernelRuntime.StopUnikernelRuntime()
 
 	//hadshake with the cluster orchestrator to get mqtt port and node id
 	handshakeResult := clusterHandshake()

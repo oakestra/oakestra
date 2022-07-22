@@ -10,38 +10,40 @@ import (
 
 	"time"
 
-	"libvirt.org/go/libvirt"
-	"libvirt.org/go/libvirtxml"
+	"os/exec"
+
+	"github.com/digitalocean/go-qemu/qmp"
 )
 
 type UnikernelRuntime struct {
-	libVirtConnection *libvirt.Connect
-	killQueue         map[string]*chan bool
-	channelLock       *sync.RWMutex
-	network           *libvirt.Network
+	qemuPath    string
+	killQueue   map[string]*chan bool
+	channelLock *sync.RWMutex
 }
 
 var VMruntime = UnikernelRuntime{
 	channelLock: &sync.RWMutex{},
 }
 
+const local_qemu_architecutre = "qemu-system-x86_64"
+
 var libVirtSyncOnce sync.Once
 
-func GetLibVirtConnection() *UnikernelRuntime {
+func GetUnikernelRuntime() *UnikernelRuntime {
 	libVirtSyncOnce.Do(func() {
-		conn, err := libvirt.NewConnect("qemu:///system")
+		path, err := exec.LookPath(local_qemu_architecutre)
 		if err != nil {
-			logger.ErrorLogger().Fatalf("Unable to connect to LibVirt: %v\n", err)
-
+			logger.ErrorLogger().Fatalf("Unable to find qemu executable(%s): %v\n", local_qemu_architecutre, err)
 		}
-		VMruntime.libVirtConnection = conn
+		VMruntime.qemuPath = path
+		logger.InfoLogger().Printf("Using qemu at %s\n", path)
 		VMruntime.killQueue = make(map[string]*chan bool)
 
 	})
 	return &VMruntime
 }
 
-func (r *UnikernelRuntime) CloseLibVirtConnection() {
+func (r *UnikernelRuntime) StopUnikernelRuntime() {
 	r.channelLock.Lock()
 	IDs := reflect.ValueOf(r.killQueue).MapKeys()
 	r.channelLock.Unlock()
@@ -52,11 +54,8 @@ func (r *UnikernelRuntime) CloseLibVirtConnection() {
 			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", id.String(), err)
 		}
 	}
-	r.network.Free()
-	_, err := r.libVirtConnection.Close()
-	if err != nil {
-		logger.ErrorLogger().Fatalf("Unable to disconnect from libVirt: %v\n", err)
-	}
+
+	logger.InfoLogger().Print("Stopped all Unikernel deployments\n")
 }
 
 func (r *UnikernelRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
@@ -111,6 +110,17 @@ func (r *UnikernelRuntime) Undeploy(service string, instance int) error {
 	return errors.New("Service not found")
 }
 
+type QemuConfiguration struct {
+	hostname string
+	memory   int
+}
+
+type QemuStopResult struct {
+	ID     string `json:"id"`
+	Return struct {
+	}
+}
+
 func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	service model.Service,
 	killChannel *chan bool,
@@ -118,13 +128,22 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	errorchan chan error,
 	statusChangeNotificationHandler func(service model.Service),
 ) {
-	var domain *libvirt.Domain
-	var domainString string
-	var err error
-	var addr int
-	_ = domain
-	_ = domainString
+
+	var qemuName string
+	var qemuNetwork string
+	var qemuQmp string
+	var qemuMemory string
+	var qemuKernel string
+	var qemuAdditinalParameters string = "-cpu host -enable-kvm -daemonize -nographics"
+	var qemuMonitor *qmp.SocketMonitor
+
+	qemuMemory = fmt.Sprintf("-m %d", service.Memory)
+	qemuKernel = fmt.Sprintf("-kernel %s", service.Image)
+
+	//hostname is used as name for the namespace in which the unikernel will be running in
 	hostname := genTaskID(service.Sname, service.Instance)
+	qemuName = fmt.Sprintf("-name %s,debug-threads=on", hostname)
+	qemuQmp = fmt.Sprintf("-qmp -qmp unix:./%s,server,nowait", hostname)
 	revert := func(err error) {
 		startup <- false
 		errorchan <- err
@@ -135,25 +154,35 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 
 	if model.GetNodeInfo().Overlay {
 		//TODO Use Overlay Network to configure network
+		qemuNetwork = fmt.Sprintf("-netdev tap,id=tap0,script=no,br=virbr0")
 	} else {
 		//Start Unikernel without network
-		Bridgename, err := r.network.GetBridgeName()
-		domainString, err = CreateXMLDomain(hostname, 1, 64, 1, Bridgename, "x86_64", "", addr)
-		if err != nil {
-			logger.ErrorLogger().Printf("VM configuration creation failed: %v", err)
-		}
+		qemuNetwork = ""
 	}
 
 	//Create and start Virtual Machine
-	domain, err = r.libVirtConnection.DomainCreateXML(domainString, 0)
+	qemuCmd := exec.Command(r.qemuPath, qemuName, qemuKernel, qemuMemory, qemuNetwork, qemuQmp, qemuAdditinalParameters)
+	err := qemuCmd.Run()
 	if err != nil {
 		revert(err)
 		return
 	}
+	socketPath := fmt.Sprintf("./%s", hostname)
+	qemuMonitor, err = qmp.NewSocketMonitor("unix", socketPath, 2*time.Second)
+	if err != nil {
+		logger.InfoLogger().Printf("Failed to Create connection to QMP: %v\n", err)
+		revert(err)
+		return
+	}
 
-	defer func(domain *libvirt.Domain) {
+	defer func(monitor *qmp.SocketMonitor) {
 		logger.InfoLogger().Printf("Trying to kill VM %s", hostname)
-		err := domain.Destroy()
+
+		//There is no guaranteed answer for the quit Command
+		cmd := []byte(`{"execute": "quit"}`)
+		err := monitor.Connect()
+		monitor.Run(cmd)
+		monitor.Disconnect()
 		//r.channelLock.Lock()
 		//defer r.channelLock.Unlock()
 		r.killQueue[hostname] = nil
@@ -162,7 +191,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		} else {
 			*killChannel <- true
 		}
-	}(domain)
+	}(qemuMonitor)
 
 	startup <- true
 
@@ -174,96 +203,45 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	statusChangeNotificationHandler(service)
 }
 
-func CreateXMLDomain(Hostname string, DomainID int, Memory uint, CoreCount uint, BrigeName string, Arch string, Subnet string, Addr int) (string, error) {
-	var pci_index uint = 0
-
-	CMDString := fmt.Sprintf("netdev.ipv4_addr=%s%d netdev.ipv4_gw_addr=%s1  netdev.ipv4_subnet_mask=255.255.255.0 --", Subnet, Addr, Subnet)
-	domain := &libvirtxml.Domain{
-		Name:          Hostname,
-		Type:          "kvm",
-		ID:            &DomainID,
-		Title:         Hostname,
-		Memory:        &libvirtxml.DomainMemory{Value: Memory, Unit: "MiB"},
-		CurrentMemory: &libvirtxml.DomainCurrentMemory{Value: Memory, Unit: "MiB"},
-		VCPU:          &libvirtxml.DomainVCPU{Placement: "static", Value: CoreCount},
-		CPU:           &libvirtxml.DomainCPU{Mode: "host-passthrough", Check: "none", Migratable: "on"},
-		OnCrash:       "restart",
-		OnPoweroff:    "destroy",
-		OnReboot:      "restart",
-		Devices: &libvirtxml.DomainDeviceList{
-			//Emulator: "/usr/bin/qemu-system-x86_64",
-			Controllers: []libvirtxml.DomainController{
-				{
-					Type:  "pci",
-					Index: &pci_index,
-					Model: "pci-root",
-				},
-				{
-					Type:  "usb",
-					Model: "none",
-				},
-			},
-			Interfaces: []libvirtxml.DomainInterface{
-				{
-					Source:  &libvirtxml.DomainInterfaceSource{Network: &libvirtxml.DomainInterfaceSourceNetwork{Network: "default", Bridge: BrigeName}},
-					Model:   &libvirtxml.DomainInterfaceModel{Type: "virtio"},
-					Address: &libvirtxml.DomainAddress{},
-				},
-			},
-		},
-		OS: &libvirtxml.DomainOS{
-			Type:   &libvirtxml.DomainOSType{Type: "hvm" /*, Arch: Arch*/},
-			Kernel: "/home/orch/shared/kernel_images/httpreply_kvm-x86_64",
-			BootDevices: []libvirtxml.DomainBootDevice{
-				{
-					Dev: "hd",
-				},
-			},
-			Cmdline: CMDString,
-		},
-	}
-	x, err := domain.Marshal()
-	logger.InfoLogger().Printf("%s", x)
-
-	return x, err
-}
-
 func (r *UnikernelRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
 
 	for true {
 		select {
 		case <-time.After(every):
-			domainIDs, err := r.libVirtConnection.ListDomains()
-			if err != nil {
-				logger.ErrorLogger().Printf("Unable to query running domains: %v", err)
-			}
-			resourceList := make([]model.Resources, 0)
-			for _, domainID := range domainIDs {
-				domain, err := r.libVirtConnection.LookupDomainById(domainID)
+			/*
+				domainIDs, err := r.libVirtConnection.ListDomains()
 				if err != nil {
-					logger.ErrorLogger().Printf("Unable to get domain: %v", err)
-					continue
+					logger.ErrorLogger().Printf("Unable to query running domains: %v", err)
 				}
-				CPUStats, err := domain.GetCPUStats(-1, 1, 0)
-				if err != nil {
-					logger.ErrorLogger().Printf("Unable to query domain cpu usage: %v", err)
-					continue
+				resourceList := make([]model.Resources, 0)
+				for _, domainID := range domainIDs {
+					domain, err := r.libVirtConnection.LookupDomainById(domainID)
+					if err != nil {
+						logger.ErrorLogger().Printf("Unable to get domain: %v", err)
+						continue
+					}
+					CPUStats, err := domain.GetCPUStats(-1, 1, 0)
+					if err != nil {
+						logger.ErrorLogger().Printf("Unable to query domain cpu usage: %v", err)
+						continue
+					}
+					_ = CPUStats
+					Hostname, err := domain.GetName()
+					//TODO
+					resourceList = append(resourceList, model.Resources{
+						Cpu:      fmt.Sprintf("%f", 0.0),
+						Memory:   fmt.Sprintf("%f", 0.1),
+						Disk:     fmt.Sprintf("%d", 0),
+						Sname:    extractSnameFromTaskID(Hostname),
+						Runtime:  model.UNIKERNEL_RUNTIME,
+						Instance: extractInstanceNumberFromTaskID(Hostname),
+					})
+
 				}
-				_ = CPUStats
-				Hostname, err := domain.GetName()
-				//TODO
-				resourceList = append(resourceList, model.Resources{
-					Cpu:      fmt.Sprintf("%f", 0.0),
-					Memory:   fmt.Sprintf("%f", 0.1),
-					Disk:     fmt.Sprintf("%d", 0),
-					Sname:    extractSnameFromTaskID(Hostname),
-					Runtime:  model.UNIKERNEL_RUNTIME,
-					Instance: extractInstanceNumberFromTaskID(Hostname),
-				})
 
-			}
 
-			notifyHandler(resourceList)
+				notifyHandler(resourceList)
+			*/
 		}
 	}
 

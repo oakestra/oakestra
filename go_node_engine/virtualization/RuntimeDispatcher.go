@@ -21,7 +21,7 @@ func GetRuntime(runtime string) RuntimeInterface {
 		return GetContainerdClient()
 	}
 	if runtime == model.UNIKERNEL_RUNTIME {
-		return GetLibVirtConnection()
+		return GetUnikernelRuntime()
 	}
 	return nil
 }
