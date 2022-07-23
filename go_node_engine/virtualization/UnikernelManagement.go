@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
+	"go_node_engine/requests"
 	"reflect"
 	"sync"
 
@@ -137,6 +138,8 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	var qemuAdditinalParameters string = "-cpu host -enable-kvm -daemonize -nographics"
 	var qemuMonitor *qmp.SocketMonitor
 
+	var unikraftKernelArguments string
+
 	qemuMemory = fmt.Sprintf("-m %d", service.Memory)
 	qemuKernel = fmt.Sprintf("-kernel %s", service.Image)
 
@@ -153,15 +156,22 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	}
 
 	if model.GetNodeInfo().Overlay {
-		//TODO Use Overlay Network to configure network
-		qemuNetwork = fmt.Sprintf("-netdev tap,id=tap0,script=no,br=virbr0")
+		//Use Overlay Network to configure network
+		err := requests.CreateNetworkNamespaceForUnikernel(service.Sname, service.Instance, service.Ports)
+		if err != nil {
+			logger.InfoLogger().Printf("Network creation for Unikernel failed: %v\n", err)
+			return
+		}
+		qemuNetwork = fmt.Sprintf("-netdev tap,id=tap0,ifname=tap0,script=no,downscript=no,br=virbr0 -device virtio-net,netdev=tap0,mac=52:55:00:d1:55:01")
+		unikraftKernelArguments = "-append \"netdev.ipv4_addr=192.168.1.2 nedev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.0 --"
 	} else {
 		//Start Unikernel without network
 		qemuNetwork = ""
+		unikraftKernelArguments = ""
 	}
 
 	//Create and start Virtual Machine
-	qemuCmd := exec.Command(r.qemuPath, qemuName, qemuKernel, qemuMemory, qemuNetwork, qemuQmp, qemuAdditinalParameters)
+	qemuCmd := exec.Command(r.qemuPath, qemuName, qemuKernel, unikraftKernelArguments, qemuMemory, qemuNetwork, qemuQmp, qemuAdditinalParameters)
 	err := qemuCmd.Run()
 	if err != nil {
 		revert(err)
@@ -198,6 +208,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	select {
 	case <-*killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for unikernel")
+		_ = requests.DeleteNamespaceForUnikernel(service.Sname, service.Instance)
 	}
 	service.Status = model.SERVICE_DEAD
 	statusChangeNotificationHandler(service)

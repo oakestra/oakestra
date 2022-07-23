@@ -10,6 +10,7 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/struCoder/pidusage v0.2.1
 	gotest.tools v2.2.0+incompatible
+	github.com/digitalocean/go-qemu v0.0.0-20210326154740-ac9e0b687001
 	libvirt.org/go/libvirt v1.8004.0
 	libvirt.org/go/libvirtxml v1.8004.0
 )
@@ -23,7 +24,10 @@ require (
 	github.com/containerd/fifo v1.0.0 // indirect
 	github.com/containerd/ttrpc v1.1.0 // indirect
 	github.com/containerd/typeurl v1.0.2 // indirect
+	github.com/digitalocean/go-libvirt v0.0.0-20201209184759-e2a69bcd5bd1 // indirect
+	github.com/digitalocean/go-qemu v0.0.0-20210326154740-ac9e0b687001 // indirect
 	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
+	github.com/fatih/camelcase v1.0.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
