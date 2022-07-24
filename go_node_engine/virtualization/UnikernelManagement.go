@@ -18,6 +18,7 @@ import (
 
 type UnikernelRuntime struct {
 	qemuPath    string
+	qemuDomains []string
 	killQueue   map[string]*chan bool
 	channelLock *sync.RWMutex
 }
@@ -91,6 +92,7 @@ func (r *UnikernelRuntime) Undeploy(service string, instance int) error {
 	r.channelLock.Lock()
 	defer r.channelLock.Unlock()
 	hostname := genTaskID(service, instance)
+	r.qemuDomains = append(r.qemuDomains, hostname)
 	el, found := r.killQueue[hostname]
 	if found && el != nil {
 		logger.InfoLogger().Printf("Sending kill signal to VM with hostname: %s", hostname)
@@ -163,7 +165,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 			return
 		}
 		qemuNetwork = fmt.Sprintf("-netdev tap,id=tap0,ifname=tap0,script=no,downscript=no,br=virbr0 -device virtio-net,netdev=tap0,mac=52:55:00:d1:55:01")
-		unikraftKernelArguments = "-append \"netdev.ipv4_addr=192.168.1.2 nedev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.0 --"
+		unikraftKernelArguments = "-append \"netdev.ipv4_addr=192.168.1.2 nedev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.0 --\""
 	} else {
 		//Start Unikernel without network
 		qemuNetwork = ""
@@ -219,40 +221,19 @@ func (r *UnikernelRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 	for true {
 		select {
 		case <-time.After(every):
-			/*
-				domainIDs, err := r.libVirtConnection.ListDomains()
-				if err != nil {
-					logger.ErrorLogger().Printf("Unable to query running domains: %v", err)
-				}
-				resourceList := make([]model.Resources, 0)
-				for _, domainID := range domainIDs {
-					domain, err := r.libVirtConnection.LookupDomainById(domainID)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to get domain: %v", err)
-						continue
-					}
-					CPUStats, err := domain.GetCPUStats(-1, 1, 0)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to query domain cpu usage: %v", err)
-						continue
-					}
-					_ = CPUStats
-					Hostname, err := domain.GetName()
-					//TODO
-					resourceList = append(resourceList, model.Resources{
-						Cpu:      fmt.Sprintf("%f", 0.0),
-						Memory:   fmt.Sprintf("%f", 0.1),
-						Disk:     fmt.Sprintf("%d", 0),
-						Sname:    extractSnameFromTaskID(Hostname),
-						Runtime:  model.UNIKERNEL_RUNTIME,
-						Instance: extractInstanceNumberFromTaskID(Hostname),
-					})
+			resourceList := make([]model.Resources, 0)
+			for _, domain := range r.qemuDomains {
+				resourceList = append(resourceList, model.Resources{
+					Cpu:      fmt.Sprintf("%f", 0.0),
+					Memory:   fmt.Sprintf("%f", 100.0),
+					Disk:     fmt.Sprintf("%f", 0.0),
+					Sname:    extractSnameFromTaskID(domain),
+					Runtime:  model.UNIKERNEL_RUNTIME,
+					Instance: extractInstanceNumberFromTaskID(domain),
+				})
 
-				}
-
-
-				notifyHandler(resourceList)
-			*/
+			}
+			notifyHandler(resourceList)
 		}
 	}
 
