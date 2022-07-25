@@ -185,7 +185,7 @@ def mongo_update_jobs_status(TIME_INTERVAL):
         try:
             updated = False
             for instance in range(len(job["instance_list"])):
-                if job["instance_list"][instance].get('last_modified_timestamp', 0) < (
+                if job["instance_list"][instance].get('last_modified_timestamp',datetime.now().timestamp()) < (
                         datetime.now().timestamp() - TIME_INTERVAL) and job["instance_list"][instance].get('status',
                                                                                                            0) not in [
                     'NODE_SCHEDULED', 'CLUSTER_SCHEDULED']:
