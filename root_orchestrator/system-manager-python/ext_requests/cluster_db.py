@@ -101,3 +101,14 @@ def mongo_update_cluster_information(cluster_id, data):
                   'last_modified': datetime_now, 'last_modified_timestamp': datetime_now_timestamp,
                   'worker_groups': worker_groups}},
         upsert=True)
+
+
+def mongo_add_cluster(cluster):
+    db.app.logger.info("MONGODB - insert cluster...")
+    user = cluster.get('userId')
+    new_job = db.mongo_applications.insert_one(application)
+    inserted_id = new_job.inserted_id
+    db.app.logger.info("MONGODB - app {} inserted".format(str(inserted_id)))
+    db.mongo_applications.find_one_and_update({'_id': inserted_id},
+                                              {'$set': {'applicationID': str(inserted_id)}})
+    return str(inserted_id)

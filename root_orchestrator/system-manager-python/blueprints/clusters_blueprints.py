@@ -22,6 +22,10 @@ clusterinfo = Blueprint(
     'Clusterinfo', 'cluster informations', url_prefix='/api/information'
 )
 
+clusterop = Blueprint(
+    'Cluster operations', url_prefix='/api/cluster/add'
+)
+
 cluster_info_schema = {
     "type": "object",
     "properties": {
@@ -59,6 +63,14 @@ cluster_info_schema = {
     }
 }
 
+clusterop_schema = {
+    "type": "object",
+    "properties": {
+        "cluster_name": {"type": "string"},
+        "cluster_location": {"type": "string"},
+    }
+}
+
 
 @clustersbp.route('/')
 class ClustersController(MethodView):
@@ -93,3 +105,18 @@ class ClusterController(MethodView):
                 cluster_request_to_delete_job_by_ip(j.get('system_job_id'), -1, request.remote_addr)
 
         return 'ok'
+
+
+@clusterop.route('/cluster/add')
+class ClusterController(MethodView):
+
+    @clusterinfo.arguments(schema=clusterop_schema, location="json", validate=False, unknown=True)
+    @clusterinfo.response(200, content_type="application/json")
+    @jwt_auth_required()
+    def post(self, args, *kwargs):
+          data = request.get_json()
+          current_user = get_jwt_identity()
+          result, code = register_cluster(data, current_user)
+          if code != 200:
+              abort(code, result)
+          return json_util.dumps(result)
