@@ -5,14 +5,17 @@ import json
 from bson import json_util
 from flask.views import MethodView
 from flask import request
+from flask_jwt_extended import get_jwt_identity
 from flask_smorest import Blueprint, Api, abort
 
 from ext_requests.cluster_requests import cluster_request_to_delete_job, cluster_request_to_delete_job_by_ip
+from roles.securityUtils import jwt_auth_required
 from services.service_management import delete_service
 from ext_requests.apps_db import mongo_update_job_status
 from ext_requests.cluster_db import mongo_get_all_clusters, mongo_find_all_active_clusters, \
     mongo_update_cluster_information, mongo_find_cluster_by_id, mongo_add_cluster
 from services.instance_management import instance_scale_up_scheduled_handler
+from services.cluster_management import register_cluster
 
 clustersbp = Blueprint(
     'Clusters', 'cluster management', url_prefix='/api/clusters'
@@ -23,7 +26,7 @@ clusterinfo = Blueprint(
 )
 
 clusterop = Blueprint(
-    'Cluster operations', url_prefix='/api/cluster/add'
+    'Clusterop', 'Cluster operations', url_prefix='/api/cluster/add'
 )
 
 cluster_info_schema = {
@@ -63,7 +66,7 @@ cluster_info_schema = {
     }
 }
 
-clusterop_schema = {
+cluster_op_schema = {
     "type": "object",
     "properties": {
         "cluster_name": {"type": "string"},
@@ -110,13 +113,13 @@ class ClusterController(MethodView):
 @clusterop.route('/cluster/add')
 class ClusterController(MethodView):
 
-    @clusterop.arguments(schema=clusterop_schema, location="json", validate=False, unknown=True)
+    @clusterop.arguments(schema=cluster_op_schema, location="json", validate=False, unknown=True)
     @clusterop.response(200, content_type="application/json")
     @jwt_auth_required()
     def post(self, args, *kwargs):
-          data = request.get_json()
-          data['userId'] = get_jwt_identity()
-          result, code = mongo_add_cluster(data)
-          if code != 200:
-              abort(code, result)
-          return json_util.dumps(result)
+        data = request.get_json()
+        userid = get_jwt_identity()
+        result, code = register_cluster(data, userid)
+        if code != 200:
+            abort(code, result)
+        return json_util.dumps(result)

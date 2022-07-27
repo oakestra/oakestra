@@ -3,10 +3,13 @@ import traceback
 from ext_requests.cluster_db import *
 from services.service_management import delete_service
 
-'''TODO: All functions above might be implemented properly
 
 def register_cluster(clusters, userid):
+    clusters['userId'] = userid
+    return mongo_add_cluster(clusters)
 
+
+'''TODO: All functions above might be implemented properly
 def update_cluster(clusterid, userid, fields):
     # TODO: fields validation before update
     return mongo_update_cluster(clusterid, userid, fields)
