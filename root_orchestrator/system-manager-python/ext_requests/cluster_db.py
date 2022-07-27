@@ -103,12 +103,15 @@ def mongo_update_cluster_information(cluster_id, data):
         upsert=True)
 
 
+def mongo_get_clusters_of_user(user_id):
+    return db.mongo_clusters.aggregated([{'$match': {"userId": user_id}}])
+
 def mongo_add_cluster(cluster):
     db.app.logger.info("MONGODB - insert cluster...")
     user = cluster.get('userId')
-    new_job = db.mongo_applications.insert_one(application)
+    new_job = db.mongo_clusters.insert_one(cluster)
     inserted_id = new_job.inserted_id
-    db.app.logger.info("MONGODB - app {} inserted".format(str(inserted_id)))
-    db.mongo_applications.find_one_and_update({'_id': inserted_id},
-                                              {'$set': {'applicationID': str(inserted_id)}})
-    return str(inserted_id)
+    db.cluster.logger.info("MONGODB - cluster {} inserted".format(str(inserted_id)))
+    db.mongo_clusters.find_one_and_update({'_id': inserted_id},
+                                              {'$set': {'clusterID': str(inserted_id)}})
+    return mongo_get_clusters_of_user(userid), 200

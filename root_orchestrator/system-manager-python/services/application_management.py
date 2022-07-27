@@ -22,27 +22,6 @@ def register_app(applications, userid):
         application['microservices'] = []
         app_id = mongo_add_application(application)
 
-        # register microservices as well if any
-        if app_id:
-            if len(microservices) > 0:
-                try:
-                    application['microservices'] = microservices
-                    application['applicationID'] = app_id
-                    result, status = create_services_of_app(
-                        userid,
-                        {
-                            'sla_version': applications['sla_version'],
-                            'customerID': userid,
-                            'applications': [application]
-                        }
-                    )
-                    if status != 200:
-                        delete_app(app_id, userid)
-                        return result, status
-                except Exception as e:
-                    print(traceback.format_exc())
-                    delete_app(app_id, userid)
-                    return {'message': 'error during the registration of the microservices'}, 500
 
     return list(mongo_get_applications_of_user(userid)), 200
 

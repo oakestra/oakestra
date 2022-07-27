@@ -11,7 +11,7 @@ from ext_requests.cluster_requests import cluster_request_to_delete_job, cluster
 from services.service_management import delete_service
 from ext_requests.apps_db import mongo_update_job_status
 from ext_requests.cluster_db import mongo_get_all_clusters, mongo_find_all_active_clusters, \
-    mongo_update_cluster_information, mongo_find_cluster_by_id
+    mongo_update_cluster_information, mongo_find_cluster_by_id, mongo_add_cluster
 from services.instance_management import instance_scale_up_scheduled_handler
 
 clustersbp = Blueprint(
@@ -110,13 +110,13 @@ class ClusterController(MethodView):
 @clusterop.route('/cluster/add')
 class ClusterController(MethodView):
 
-    @clusterinfo.arguments(schema=clusterop_schema, location="json", validate=False, unknown=True)
-    @clusterinfo.response(200, content_type="application/json")
+    @clusterop.arguments(schema=clusterop_schema, location="json", validate=False, unknown=True)
+    @clusterop.response(200, content_type="application/json")
     @jwt_auth_required()
     def post(self, args, *kwargs):
           data = request.get_json()
-          current_user = get_jwt_identity()
-          result, code = register_cluster(data, current_user)
+          data['userId'] = get_jwt_identity()
+          result, code = mongo_add_cluster(data)
           if code != 200:
               abort(code, result)
           return json_util.dumps(result)
