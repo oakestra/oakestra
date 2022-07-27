@@ -116,3 +116,8 @@ def mongo_add_cluster(cluster):
     db.mongo_clusters.find_one_and_update({'_id': inserted_id},
                                           {'$set': {'clusterID': str(inserted_id)}})
     return mongo_get_clusters_of_user(userid), 200
+
+
+def mongo_delete_cluster(cluster_id, userid):
+    db.mongo_clusters.find_one_and_delete({'_id': ObjectId(cluster_id), 'userId': userid})
+    return db.mongo_clusters.find()  # return the clusters list

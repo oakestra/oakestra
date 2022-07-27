@@ -9,15 +9,15 @@ def register_cluster(clusters, userid):
     return mongo_add_cluster(clusters)
 
 
-'''TODO: All functions above might be implemented properly
-def update_cluster(clusterid, userid, fields):
+def update_cluster(cluster_id, userid, fields):
     # TODO: fields validation before update
-    return mongo_update_cluster(clusterid, userid, fields)
+    fields['userId'] = userid
+    return mongo_update_cluster_information(cluster_id, fields)
 
 
-def delete_cluster(clusterid, userid):
-    cluster = get_user_cluster(userid, clusterid)
-    return mongo_delete_cluster(clusterid, userid)
+def delete_cluster(cluster_id, userid):
+    cluster = get_user_cluster(userid, cluster_id)
+    return mongo_delete_cluster(cluster_id, userid)
 
 
 def users_clusters(userid):
@@ -28,5 +28,5 @@ def all_clusters():
     return mongo_get_all_clusters()
 
 
-def get_user_cluster(userid, clusterid):
-    return mongo_find_cluster_by_id(clusterid, userid)'''
+def get_user_cluster(userid, cluster_id):
+    return mongo_find_cluster_by_id(cluster_id)
