@@ -4,7 +4,6 @@ import (
 	"NetManager/events"
 	"NetManager/utils"
 	"encoding/json"
-	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
 	"log"
 	"sync"
@@ -50,8 +49,8 @@ func (jut *jobUpdatesTimer) startSelfDestructTimeout() {
 		case <-eventChan:
 			//event received, reset timer
 			continue
-		case <-time.After(5 * time.Minute):
-			if !jut.env.IsServiceDeployed(fmt.Sprintf("%s.%d", jut.job, jut.instance)) {
+		case <-time.After(10 * time.Second):
+			if !jut.env.IsServiceDeployed(jut.job) {
 				//timeout job no longer required
 				startSync.Lock()
 				defer startSync.Unlock()

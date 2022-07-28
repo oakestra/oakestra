@@ -3,6 +3,7 @@ package events
 import (
 	"errors"
 	"sync"
+	"time"
 )
 
 type EventManager interface {
@@ -73,8 +74,13 @@ func (e *Events) DeRegister(eventType EventType, eventTarget string) {
 	case TableQuery:
 		channel := e.eventTableQueryChannelQueue[eventTarget]
 		if channel != nil {
-			close(channel)
 			e.eventTableQueryChannelQueue[eventTarget] = nil
+			go deferClose(channel)
 		}
 	}
+}
+
+func deferClose(channel chan Event) {
+	time.Sleep(time.Second)
+	close(channel)
 }

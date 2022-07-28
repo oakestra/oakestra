@@ -161,9 +161,13 @@ func (env *Environment) DetachContainer(sname string, instance int) {
 	}
 }
 
-func (env *Environment) IsServiceDeployed(fullSnameAndInstance string) bool {
-	_, ok := env.deployedServices[fullSnameAndInstance]
-	return ok
+func (env *Environment) IsServiceDeployed(jobName string) bool {
+	for _, element := range env.deployedServices {
+		if element.sname == jobName {
+			return true
+		}
+	}
+	return false
 }
 
 // ConfigureDockerNetwork creates a docker network compatible with the enviornment and returns it
