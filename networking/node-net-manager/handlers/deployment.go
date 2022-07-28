@@ -94,7 +94,7 @@ func deploymentHandler(requestStruct *ContainerDeployRequest) {
 	//update internal table entry
 	requestStruct.Env.RefreshServiceTable(requestStruct.ServiceName)
 
-	mqtt.MqttRegisterInterest(requestStruct.ServiceName, requestStruct.Env)
+	mqtt.MqttRegisterInterest(requestStruct.ServiceName, requestStruct.Env, requestStruct.Instancenumber)
 
 	//answer the caller
 	response := DeployResponse{

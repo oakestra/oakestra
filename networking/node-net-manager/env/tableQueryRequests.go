@@ -11,12 +11,12 @@ import (
 /*
 Asks the MQTT client for a table query and parses the result
 */
-func tableQueryByIP(ip string) ([]TableEntry, error) {
+func tableQueryByIP(ip string, force_optional ...bool) ([]TableEntry, error) {
 
 	log.Println("[MQTT TABLE QUERY] sip:", ip)
 	var mqttTablequery mqttifce.TablequeryMqttInterface = mqttifce.GetTableQueryRequestCacheInstance()
 
-	responseStruct, err := mqttTablequery.TableQueryByIpRequestBlocking(ip)
+	responseStruct, err := mqttTablequery.TableQueryByIpRequestBlocking(ip, force_optional...)
 	if err != nil {
 		return nil, err
 	}
@@ -27,12 +27,12 @@ func tableQueryByIP(ip string) ([]TableEntry, error) {
 /*
 Asks the MQTT client for a table query and parses the result
 */
-func tableQueryByJobName(jobname string) ([]TableEntry, error) {
+func tableQueryByJobName(jobname string, force_optional ...bool) ([]TableEntry, error) {
 
 	log.Println("[MQTT TABLE QUERY] sname:", jobname)
 	var mqttTablequery mqttifce.TablequeryMqttInterface = mqttifce.GetTableQueryRequestCacheInstance()
 
-	responseStruct, err := mqttTablequery.TableQueryByJobNameRequestBlocking(jobname)
+	responseStruct, err := mqttTablequery.TableQueryByJobNameRequestBlocking(jobname, force_optional...)
 	if err != nil {
 		return nil, err
 	}

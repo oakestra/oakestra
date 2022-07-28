@@ -161,6 +161,11 @@ func (env *Environment) DetachContainer(sname string, instance int) {
 	}
 }
 
+func (env *Environment) IsServiceDeployed(fullSnameAndInstance string) bool {
+	_, ok := env.deployedServices[fullSnameAndInstance]
+	return ok
+}
+
 // ConfigureDockerNetwork creates a docker network compatible with the enviornment and returns it
 func (env *Environment) ConfigureDockerNetwork(containername string) (string, error) {
 	return "", errors.New("not yet implemented")
@@ -442,6 +447,8 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 		}
 		table = env.translationTable.SearchByServiceIP(ip)
 	}
+	//register interest for sip as well to avoid querying the address too many times
+	mqtt.MqttRegisterInterest(ip.String(), env)
 
 	return table
 }
@@ -486,7 +493,7 @@ func (env *Environment) AddTableQueryEntry(entry TableEntry) {
 // RefreshServiceTable force a table query refresh for a service
 func (env *Environment) RefreshServiceTable(jobname string) {
 	log.Printf("Requested table query refresh for %s", jobname)
-	entryList, err := tableQueryByJobName(jobname)
+	entryList, err := tableQueryByJobName(jobname, true)
 	_ = env.translationTable.RemoveByJobName(jobname)
 	if err == nil {
 		for _, tableEntry := range entryList {
