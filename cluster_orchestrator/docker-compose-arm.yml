@@ -3,7 +3,7 @@ services:
 
   # MQTT 
   mqtt:
-    image: eclipse-mosquitto:1.6
+    image: eclipse-mosquitto:2.0
     hostname: mqtt
     container_name: mqtt
     expose:
