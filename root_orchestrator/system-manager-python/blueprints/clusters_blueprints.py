@@ -7,17 +7,18 @@ from flask_smorest import Blueprint, abort
 from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from ext_requests.apps_db import mongo_update_job_status
 from services.cluster_management import *
+from ext_requests.cluster_db import *
 
-clustersbp = Blueprint(
+clustersblp = Blueprint(
     'Clusters', 'cluster management', url_prefix='/api/clusters'
 )
 
 clusterinfo = Blueprint(
-    'Clusterinfo', 'cluster informations', url_prefix='/api/information'
+    'Clusterinfo', 'cluster information', url_prefix='/api/information'
 )
 
-clusterop = Blueprint(
-    'Clusterop', 'Cluster operations', url_prefix='/api/cluster/add'
+clusterblp = Blueprint(
+    'Cluster operations', 'cluster operations', url_prefix='/api/cluster'
 )
 
 cluster_info_schema = {
@@ -67,14 +68,21 @@ cluster_op_schema = {
 }
 
 
-@clustersbp.route('/')
+@clustersblp.route('/')
 class ClustersController(MethodView):
 
     def get(self, *args, **kwargs):
         return json_util.dumps(mongo_get_all_clusters())
 
 
-@clustersbp.route('/active')
+@clustersblp.route('/<userid>')
+class ClustersController(MethodView):
+
+    def get(self, user_id, *args, **kwargs):
+        return json_util.dumps(mongo_get_clusters_of_user(user_id))
+
+
+@clustersblp.route('/active')
 class ActiveClustersController(MethodView):
 
     def get(self, *args, **kwargs):
@@ -102,11 +110,11 @@ class ClusterController(MethodView):
         return 'ok'
 
 
-@clusterop.route('/')
+@clusterblp.route('/add')
 class ClusterController(MethodView):
 
-    @clusterop.arguments(schema=cluster_op_schema, location="json", validate=False, unknown=True)
-    @clusterop.response(200, content_type="application/json")
+    @clusterblp.arguments(schema=cluster_op_schema, location="json", validate=False, unknown=True)
+    @clusterblp.response(200, content_type="application/json")
     @jwt_required()
     def post(self, args, *kwargs):
         data = request.get_json()
@@ -117,10 +125,10 @@ class ClusterController(MethodView):
         return json_util.dumps(result)
 
 
-@clusterop.route('/<cluster_id>')
+@clusterblp.route('/<cluster_id>')
 class ApplicationController(MethodView):
 
-    @clusterop.response(200, content_type="application/json")
+    @clusterblp.response(200, content_type="application/json")
     @jwt_required()
     def get(self, cluster_id, *args, **kwargs):
         try:
