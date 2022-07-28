@@ -51,7 +51,7 @@ func (jut *jobUpdatesTimer) startSelfDestructTimeout() {
 			//event received, reset timer
 			continue
 		case <-time.After(5 * time.Minute):
-			if !jut.env.IsServiceDeployed(fmt.Sprintf("%s,%d", jut.job, jut.instance)) {
+			if !jut.env.IsServiceDeployed(fmt.Sprintf("%s.%d", jut.job, jut.instance)) {
 				//timeout job no longer required
 				startSync.Lock()
 				defer startSync.Unlock()
