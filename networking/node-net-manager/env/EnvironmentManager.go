@@ -431,7 +431,7 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 		//Fire table instance usage event
 		events.GetInstance().Emit(events.Event{
 			EventType:   events.TableQuery,
-			EventTarget: table[0].Servicename,
+			EventTarget: table[0].JobName,
 		})
 		return table
 	}
