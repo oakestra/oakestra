@@ -184,7 +184,7 @@ def mongo_remove_interest(job_name, clientid):
     interested_nodes = mongo_get_interest_workers(job_name)
     if interested_nodes is not None:
         if len(interested_nodes) > 0:
-            interested_nodes.delete_one(clientid)
+            interested_nodes.remove(clientid)
             mongo_jobs.db.jobs.update_one(
                 {'job_name': job_name},
                 {'$set': {
