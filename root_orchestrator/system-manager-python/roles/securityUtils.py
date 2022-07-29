@@ -92,3 +92,26 @@ def create_jwt_auth_access_token(identity, additional_claims):
 
 def create_jwt_auth_refresh_token(identity, additional_claims):
     return create_refresh_token(identity=identity, additional_claims=additional_claims)
+
+
+def create_jwt_secret_key_cluster(identity):
+    return create_access_token(identity=identity)
+
+
+'''def create_cluster_secret_key(user_id, cluster_id):
+    expiry_date = datetime.now() + timedelta(hours=1)
+    payload_data = {
+        'cluster_id': cluster_id,
+        'user_id': user_id,
+        'expiry_date': expiry_date,
+    }
+    # Store private & public key accordingly
+    private_key = 'secret-private-key-cluster'
+    public_key = 'secret-public-key-cluster'
+    key = serialization.load_ssh_private_key(private_key.encode(), password=b'')
+    # new_token = jwt.encode(payload=payload_data, key=key, algorithm='RS256')
+    new_token = {}
+    #For adding expiration time automatically:
+    #jwt.encode({"exp": 1371720939}, "secret")
+    db.mongo_clusters.insert_one(payload_data)
+    return new_token'''

@@ -107,15 +107,25 @@ def mongo_get_clusters_of_user(user_id):
     return db.mongo_clusters.aggregate([{'$match': {"userId": user_id}}])
 
 
-def mongo_add_cluster(cluster):
+# def mongo_get_secret_key(user_id, cluster_id)
+
+
+def mongo_add_cluster(data):
     db.app.logger.info("MONGODB - insert cluster...")
-    userid = cluster.get('userId')
-    new_job = db.mongo_clusters.insert_one(cluster)
+    userid = data.get('userId')
+    # TODO: What would the two lines above imply?
+    new_job = db.mongo_clusters.db.clusters.insert_one(data)
     inserted_id = new_job.inserted_id
+    user_id = data.get('userId')
+    cluster_name = data.get("cluster_name")
+    cluster_location = data.get("cluster_location")
     db.app.logger.info("MONGODB - cluster {} inserted".format(str(inserted_id)))
-    db.mongo_clusters.find_one_and_update({'_id': inserted_id},
-                                          {'$set': {'clusterID': str(inserted_id)}})
-    return mongo_get_clusters_of_user(userid), 200
+    db.mongo_clusters.db.clusters.find_one_and_update({'_id': inserted_id},
+                                          {'$set': {'clusterID': str(inserted_id)},
+                                           'cluster_name': cluster_name,
+                                           'cluster_location': cluster_location,
+                                           'user_id': user_id})
+    return str(inserted_id)
 
 
 def mongo_delete_cluster(cluster_id, userid):

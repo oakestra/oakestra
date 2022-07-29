@@ -140,6 +140,12 @@ def http_node_registration():
     }
     return response, 200
 
+'''@app.route('/api/attach', methods=['POST'])
+   def attach_cluster_to_root():
+       app.logger.info('Incoming Request /api/attach')
+       data = request.json  # get POST body
+       app.logger.info(data)'''
+
 
 # ...... Websocket INIT Handling with edge nodes .......#
 # ......................................................#
