@@ -30,5 +30,8 @@ func GetRuntimeMonitoring(runtime string) RuntimeMonitoring {
 	if runtime == model.CONTAINER_RUNTIME {
 		return GetContainerdClient()
 	}
+	if runtime == model.UNIKERNEL_RUNTIME {
+		return GetUnikernelRuntime()
+	}
 	return nil
 }

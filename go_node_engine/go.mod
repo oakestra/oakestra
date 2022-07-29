@@ -4,15 +4,14 @@ go 1.17
 
 require (
 	github.com/containerd/containerd v1.6.1
+	github.com/digitalocean/go-qemu v0.0.0-20210326154740-ac9e0b687001
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/jaypipes/ghw v0.8.0
 	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/struCoder/pidusage v0.2.1
+	github.com/vishvananda/netns v0.0.0-20211101163701-50045581ed74
 	gotest.tools v2.2.0+incompatible
-	github.com/digitalocean/go-qemu v0.0.0-20210326154740-ac9e0b687001
-	libvirt.org/go/libvirt v1.8004.0
-	libvirt.org/go/libvirtxml v1.8004.0
 )
 
 require (
@@ -25,7 +24,6 @@ require (
 	github.com/containerd/ttrpc v1.1.0 // indirect
 	github.com/containerd/typeurl v1.0.2 // indirect
 	github.com/digitalocean/go-libvirt v0.0.0-20201209184759-e2a69bcd5bd1 // indirect
-	github.com/digitalocean/go-qemu v0.0.0-20210326154740-ac9e0b687001 // indirect
 	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
 	github.com/fatih/camelcase v1.0.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
