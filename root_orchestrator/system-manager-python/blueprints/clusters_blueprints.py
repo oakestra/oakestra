@@ -119,10 +119,10 @@ class ClusterController(MethodView):
     def post(self, args, *kwargs):
         data = request.get_json()
         current_user = get_jwt_identity()
-        result, code = register_cluster(data, current_user)
-        if code != 200:
-            abort(code, result)
-        return json_util.dumps(result)
+        resp = register_cluster(data, current_user)
+        if resp == {}:
+            abort(401, {"message": "invalid input"})
+        return resp
 
 
 @clusterblp.route('/<cluster_id>')

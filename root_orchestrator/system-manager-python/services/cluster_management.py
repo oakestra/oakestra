@@ -13,6 +13,8 @@ def valid_cluster_requirements(cluster):
 
 
 def register_cluster(cluster, userid):
+    if userid is None:
+        return {"message": "Please log in with your credentials"}, 403
     if cluster is None:
         return {"message": "No cluster data provided"}, 403
     if not valid_cluster_requirements(cluster):
