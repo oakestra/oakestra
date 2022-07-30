@@ -60,6 +60,9 @@ func (r *UnikernelRuntime) StopUnikernelRuntime() {
 	IDs := reflect.ValueOf(r.killQueue).MapKeys()
 	r.channelLock.Unlock()
 	for _, id := range IDs {
+		if r.killQueue[id.String()] == nil {
+			continue
+		}
 		logger.InfoLogger().Printf("Stopping VM %s : %s %d\n", id.String(), extractSnameFromTaskID(id.String()), extractInstanceNumberFromTaskID(id.String()))
 		err := r.Undeploy(extractSnameFromTaskID(id.String()), extractInstanceNumberFromTaskID(id.String()))
 		if err != nil {
@@ -172,8 +175,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 			logger.InfoLogger().Printf("Network creation for Unikernel failed: %v\n", err)
 			return
 		}
-		//qemuNetwork = fmt.Sprintf("-netdev tap,id=tap0,ifname=tap0,script=no,downscript=no,br=virbr0 -device virtio-net,netdev=tap0,mac=52:55:00:d1:55:01")
-		unikraftKernelArguments = "\"netdev.ipv4_addr=192.168.1.2 nedev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.0 --\""
+		unikraftKernelArguments = "netdev.ipv4_addr=192.168.1.2 netdev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.0 --"
 		//Command uses ip-netns to run in a different namespace
 		qemuCmd = exec.Command("ip", "netns", "exec", hostname, r.qemuPath, "-name", qemuName, "-kernel", service.Image, "-append", unikraftKernelArguments, "-m", qemuMemory, "-netdev",
 			"tap,id=tap0,ifname=tap0,script=no,downscript=no,br=virbr0", "-device", "virtio-net,netdev=tap0,mac=52:55:00:d1:55:01",
@@ -181,7 +183,6 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 
 	} else {
 		//Start Unikernel without network
-		//qemuNetwork = ""
 		unikraftKernelArguments = ""
 		qemuCmd = exec.Command(r.qemuPath, "-name", qemuName, "-kernel", service.Image, "-append", unikraftKernelArguments, "-m",
 			qemuMemory, "-cpu", "host", "-enable-kvm" /*, "-nographic"*/, "-qmp", qemuQmp)
@@ -197,13 +198,6 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		return
 	}
 	logger.InfoLogger().Printf("NOW RUNNING UNIKERNEL")
-	//Create and start Virtual Machine
-	//qemuCmd = exec.Command(r.qemuPath, qemuName, qemuKernel, unikraftKernelArguments, qemuMemory, qemuNetwork, qemuQmp, qemuAdditinalParameters)
-	//qemuCmd = exec.Command(r.qemuPath, "-name", qemuName, "-kernel", service.Image, "-append", unikraftKernelArguments, "-m", qemuMemory)
-	//qemuCmd = exec.Command(r.qemuPath, "-kernel", service.Image)
-
-	//out, err := qemuCmd.CombinedOutput()
-	//logger.InfoLogger().Printf("%s", out)
 
 	Domain := qemuDomain{
 		Name:        hostname,
@@ -249,6 +243,13 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		r.killQueue[hostname] = nil
 		delete(r.qemuDomains, hostname)
 		r.channelLock.Unlock()
+
+		//Undeploy the network -> Delete Namespace
+		err = requests.DeleteNamespaceForUnikernel(service.Sname, service.Instance)
+		if err != nil {
+			logger.InfoLogger().Printf("Unable to undeploy %s: %v", hostname, err)
+		}
+
 		if err != nil {
 			*killChannel <- false
 		} else {
@@ -260,7 +261,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	select {
 	case <-*killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for unikernel")
-		_ = requests.DeleteNamespaceForUnikernel(service.Sname, service.Instance)
+
 	}
 	service.Status = model.SERVICE_DEAD
 	statusChangeNotificationHandler(service)
@@ -272,14 +273,6 @@ func (r *UnikernelRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 		select {
 		case <-time.After(every):
 			resourceList := make([]model.Resources, 0)
-			for k, _ := range r.qemuDomains {
-				logger.InfoLogger().Printf("\n\n")
-
-				logger.InfoLogger().Printf("%s", k)
-
-				logger.InfoLogger().Printf("\n\n")
-
-			}
 			for _, domain := range r.qemuDomains {
 				//Get CPU and memory stats based on pid
 				sysInfo, err := pidusage.GetStat(domain.qemuProcess.Pid)
@@ -289,8 +282,8 @@ func (r *UnikernelRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 				}
 				logger.InfoLogger().Printf("%f", sysInfo.CPU)
 				resourceList = append(resourceList, model.Resources{
-					Cpu:      fmt.Sprintf("%f", 0.0 /*sysInfo.CPU*/),
-					Memory:   fmt.Sprintf("%f", 0.0 /*sysInfo.Memory <- Includes memory overhead of qemu itself -> reports more than allowed*/),
+					Cpu:      fmt.Sprintf("%f", sysInfo.CPU),
+					Memory:   fmt.Sprintf("%f", sysInfo.Memory),
 					Disk:     fmt.Sprintf("%d", 0),
 					Sname:    domain.Sname,
 					Runtime:  model.UNIKERNEL_RUNTIME,
