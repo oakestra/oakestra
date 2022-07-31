@@ -118,7 +118,8 @@ def mongo_add_cluster(data):
 
     user_id = data.get('userId')
     cluster_name = data.get("cluster_name")
-    cluster_location = data.get("cluster_location")
+    cluster_latitude = data.get("cluster_latitude")
+    cluster_longitude = data.get("cluster_longitude")
 
     db.app.logger.info("MONGODB - cluster {} inserted".format(str(inserted_id)))
     db.mongo_clusters.db.clusters.find_one_and_update({'_id': ObjectId(inserted_id)},
@@ -129,8 +130,9 @@ def mongo_add_cluster(data):
 '''db.mongo_clusters.db.clusters.find_one_and_update({'_id': inserted_id},
                                                    {'$set': {'clusterID': str(inserted_id)},
                                                     'cluster_name': cluster_name,
-                                                    'cluster_location': cluster_location,
-                                                    'user_id': user_id})'''
+                                                    'cluster_latitude': cluster_latitude,
+                                                    'cluster_longitude': cluster_longitude
+                                                    'cluster_location': cluster_location})'''
 
 
 def mongo_delete_cluster(cluster_id, userid):
