@@ -7,12 +7,16 @@ from services.service_management import delete_service
 
 
 def valid_cluster_requirements(cluster):
-    if len(cluster['cluster_name']) > 10 or len(cluster['cluster_name']) < 1:
+    if len(cluster.get('cluster_name')) > 10 or len(cluster.get('cluster_name')) < 1:
         return False
     return True
 
 
 def register_cluster(cluster, userid):
+    if "action" in cluster:
+        del cluster['action']
+    if "_id" in cluster:
+        del cluster['_id']
     if userid is None:
         return {"message": "Please log in with your credentials"}, 403
     if cluster is None:

@@ -8,6 +8,7 @@ from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from ext_requests.apps_db import mongo_update_job_status
 from services.cluster_management import *
 from ext_requests.cluster_db import *
+import traceback
 
 clustersblp = Blueprint(
     'Clusters', 'cluster management', url_prefix='/api/clusters'
@@ -120,10 +121,12 @@ class ClusterController(MethodView):
     def post(self, args, *kwargs):
         data = request.get_json()
         current_user = get_jwt_identity()
-        resp = register_cluster(data, current_user)
-        if resp == {}:
-            abort(401, {"message": "invalid input"})
-        return resp
+        try:
+            resp = register_cluster(data, current_user)
+            return resp
+        except Exception as e:
+            traceback.print_exc()
+            abort(401, {"message": str(e)})
 
 
 @clusterblp.route('/<cluster_id>')

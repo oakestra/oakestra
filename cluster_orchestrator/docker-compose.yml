@@ -93,7 +93,7 @@ services:
       - MQTT_BROKER_PORT=10003
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
-#      - CLUSTER_ATTACHMENT_TOKEN=${CLUSTER_TOKEN}  # Token to attach to a Root Orchestrator
+#     - CLUSTER_ATTACHMENT_KEY=${CLUSTER_KEY}  # Key to attach to a Root Orchestrator
     depends_on:
       - mongo_cluster
       - mqtt

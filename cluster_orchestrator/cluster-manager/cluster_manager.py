@@ -29,6 +29,8 @@ MY_ASSIGNED_CLUSTER_ID = None
 
 SYSTEM_MANAGER_ADDR = 'http://' + os.environ.get('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
 
+CLUSTER_KEY =
+
 my_logger = configure_logging()
 
 app = Flask(__name__)
