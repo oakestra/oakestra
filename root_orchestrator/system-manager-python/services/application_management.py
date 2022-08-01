@@ -44,7 +44,7 @@ def register_app(applications, userid):
                     delete_app(app_id, userid)
                     return {'message': 'error during the registration of the microservices'}, 500
 
-    return mongo_get_applications_of_user(userid), 200
+    return list(mongo_get_applications_of_user(userid)), 200
 
 
 def update_app(appid, userid, fields):
