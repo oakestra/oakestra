@@ -23,13 +23,16 @@ import service_operations
 MY_PORT = os.environ.get('MY_PORT')
 
 MY_CHOSEN_CLUSTER_NAME = os.environ.get('CLUSTER_NAME')
-MY_CLUSTER_LOCATION = os.environ.get('CLUSTER_LOCATION')
+#MY_CLUSTER_LOCATION = os.environ.get('CLUSTER_LOCATION')
+MY_CLUSTER_LATITUDE = os.environ.get('CLUSTER_LATITUDE')
+MY_CLUSTER_LONGITUDE = os.environ.get('CLUSTER_LONGITUDE')
 NETWORK_COMPONENT_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
+CLUSTER_ATTACHMENT_KEY = os.environ.get('CLUSTER_ATTACHMENT_KEY', None)
 MY_ASSIGNED_CLUSTER_ID = None
 
 SYSTEM_MANAGER_ADDR = 'http://' + os.environ.get('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
 
-CLUSTER_KEY =
+# CLUSTER_KEY =
 
 my_logger = configure_logging()
 
@@ -142,12 +145,26 @@ def http_node_registration():
     }
     return response, 200
 
-'''@app.route('/api/attach', methods=['POST'])
-   def attach_cluster_to_root():
-       app.logger.info('Incoming Request /api/attach')
-       data = request.json  # get POST body
-       app.logger.info(data)'''
+'''
+@app.route('/api/attach', methods=['POST'])
+def attach_cluster_to_root():
+   app.logger.info('Incoming Request /api/attach')
+   data = str(request.json) + CLUSTER_ATTACHMENT_KEY
 
+   app.logger.info(data)
+   app.logger.info('Websocket - received System_Manager_to_Cluster_Manager_1 : ' + str(jsonarg))
+   data = {
+       'manager_port': MY_PORT,
+       'network_component_port': NETWORK_COMPONENT_PORT,
+       'cluster_name': MY_CHOSEN_CLUSTER_NAME,
+       'cluster_info': {},
+       'cluster_location': MY_CLUSTER_LOCATION
+   }
+   time.sleep(1)  # Wait to Avoid Race Condition!
+
+   sio.emit('cs1', data, namespace='//api/attach')
+   app.logger.info('Websocket - Cluster Info sent. (Cluster_Manager_to_System_Manager)')
+'''
 
 # ...... Websocket INIT Handling with edge nodes .......#
 # ......................................................#
@@ -188,12 +205,17 @@ def test_disconnect():
 @sio.on('sc1', namespace='/register')
 def handle_init_greeting(jsonarg):
     app.logger.info('Websocket - received System_Manager_to_Cluster_Manager_1 : ' + str(jsonarg))
+    '''message to the root - info might be updated within the pairing key'''
     data = {
         'manager_port': MY_PORT,
         'network_component_port': NETWORK_COMPONENT_PORT,
         'cluster_name': MY_CHOSEN_CLUSTER_NAME,
         'cluster_info': {},
-        'cluster_location': MY_CLUSTER_LOCATION
+        #Do we want to ask for the cluster location in the pairing process?
+        'cluster_latitude': MY_CLUSTER_LATITUDE,
+        'cluster_longitude': MY_CLUSTER_LONGITUDE,
+        'pairing_key': CLUSTER_ATTACHMENT_KEY
+        #'cluster_location': MY_CLUSTER_LOCATION
     }
     time.sleep(1)  # Wait to Avoid Race Condition!
 

@@ -9,20 +9,23 @@ MONGO_PORT = os.environ.get('CLUSTER_MONGO_PORT')
 
 MONGO_ADDR_NODES = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/nodes'
 MONGO_ADDR_JOBS = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/jobs'
+MONGO_ADDR_PAIRING_KEY = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/keys'
 
 mongo_nodes = None
 mongo_jobs = None
+mongo_keys = None
 app = None
 
 
 def mongo_init(flask_app):
     global app
-    global mongo_nodes, mongo_jobs
+    global mongo_nodes, mongo_jobs, mongo_keys
 
     app = flask_app
 
     mongo_nodes = PyMongo(app, uri=MONGO_ADDR_NODES)
     mongo_jobs = PyMongo(app, uri=MONGO_ADDR_JOBS)
+    mongo_keys = PyMongo(app, uri=MONGO_ADDR_PAIRING_KEY)
 
     app.logger.info("MONGODB - init mongo")
 
@@ -90,6 +93,21 @@ def find_one_edge_node():
 def find_all_nodes():
     global mongo_nodes
     return mongo_nodes.db.nodes.find()
+
+
+# .......... Pairing process of a cluster to the Root Orchestrator ...........#
+# ............................................................................#
+
+def mongo_find_key_by_identifier(identifier):
+    global mongo_keys
+    return mongo_keys.db.keys.find_one(identifier)
+
+
+def mongo_add_pairing_key(identifier, key):
+    global mongo_keys
+    return mongo_keys.db.keys.find_one_and_update({identifier: key},
+                                                  upsert=True,
+                                                  return_document=True)
 
 
 def mongo_dead_nodes():

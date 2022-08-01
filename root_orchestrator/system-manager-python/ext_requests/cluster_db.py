@@ -11,10 +11,13 @@ def mongo_upsert_cluster(cluster_ip, message):
     cluster_info = message['cluster_info']
     cluster_name = message['cluster_name']
     cluster_location = message['cluster_location']
+    cluster_latitude = message['cluster_latitude']
+    cluster_longitude = message['cluster_longitude']
     cluster_port = message['manager_port']
     result_obj = clusters.update_one({'cluster_name': cluster_name},
                                      {'$set': {'ip': cluster_ip, 'clusterinfo': cluster_info, 'port': cluster_port,
-                                               'cluster_location': cluster_location}},
+                                               'cluster_latitude': cluster_latitude,
+                                               'cluster_longitude': cluster_longitude}},
                                      upsert=True)
 
     cluster_obj = clusters.find_one({'cluster_name': cluster_name})
@@ -59,9 +62,9 @@ def mongo_find_cluster_by_id_and_decr_node(c_id):
     return db.mongo_clusters.db.clusters.update_one({'_id': c_id}, {'$inc': {'nodes': -1}}, upsert=True)
 
 
-def mongo_find_cluster_by_location(location):
+def mongo_find_cluster_by_location(latitude, longitude):
     try:
-        return db.mongo_clusters.db.clusters.find_one({'cluster_location': location})
+        return db.mongo_clusters.db.clusters.find_one({'cluster_latitude': latitude, 'cluster_longitude': longitude})
     except Exception as e:
         return "Error"
 
@@ -107,19 +110,11 @@ def mongo_get_clusters_of_user(user_id):
     return db.mongo_clusters.aggregate([{'$match': {"userId": user_id}}])
 
 
-# def mongo_get_secret_key(user_id, cluster_id)
-
-
 def mongo_add_cluster(data):
     db.app.logger.info("MONGODB - insert cluster...")
     userid = data.get('userId')
     new_job = db.mongo_clusters.db.clusters.insert_one(data)
     inserted_id = new_job.inserted_id
-
-    user_id = data.get('userId')
-    cluster_name = data.get("cluster_name")
-    cluster_latitude = data.get("cluster_latitude")
-    cluster_longitude = data.get("cluster_longitude")
 
     db.app.logger.info("MONGODB - cluster {} inserted".format(str(inserted_id)))
     db.mongo_clusters.db.clusters.find_one_and_update({'_id': ObjectId(inserted_id)},
@@ -127,14 +122,19 @@ def mongo_add_cluster(data):
     return str(inserted_id)
 
 
-'''db.mongo_clusters.db.clusters.find_one_and_update({'_id': inserted_id},
-                                                   {'$set': {'clusterID': str(inserted_id)},
-                                                    'cluster_name': cluster_name,
-                                                    'cluster_latitude': cluster_latitude,
-                                                    'cluster_longitude': cluster_longitude
-                                                    'cluster_location': cluster_location})'''
-
-
 def mongo_delete_cluster(cluster_id, userid):
-    db.mongo_clusters.find_one_and_delete({'_id': ObjectId(cluster_id), 'userId': userid})
-    return db.mongo_clusters.find()  # return the clusters list
+    db.mongo_clusters.db.clusters.find_one_and_delete({'_id': ObjectId(cluster_id), 'userId': userid})
+    # TODO: Verify this find() call
+    return db.mongo_clusters.db.clusters.find()  # return the clusters list
+
+
+def mongo_update_cluster(userid, cluster_id, data):
+    db.app.logger.info("MONGODB - update pairing key...")
+    db.mongo_clusters.db.clusters.find_one_and_update({'_id': ObjectId(cluster_id), 'userId': userid},
+                                          {'$set': {'pairing_key': data.get('pairing_key')}},
+                                          return_document=True)
+
+
+def mongo_verify_pairing_key(identify, received_key):
+    db.app.logger.info("MONGODB - checking if the pairing key introduced by the cluster matches correctly")
+    return db.mongo_clusters.db.clusters.find({identify: received_key})

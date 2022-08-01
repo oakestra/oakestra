@@ -25,15 +25,20 @@ def register_cluster(cluster, userid):
         return {'message': 'Cluster name is not in the valid format'}, 422
 
     cluster['userId'] = userid
-    cl = mongo_add_cluster(cluster)
-    if cl == "":
+    cluster_id = mongo_add_cluster(cluster)
+    if cluster_id == "":
         logging.log(level=logging.ERROR, msg="Invalid input")
         return {}
 
-    cluster_identifier = userid + cl
-    secret_key = securityUtils.create_jwt_secret_key_cluster(identity=cluster_identifier)
+    cluster_of_user_identifier = userid + cluster_id
+    # TODO: We have to define the expiration date for the access token
+    secret_key = securityUtils.create_jwt_secret_key_cluster(identity=cluster_of_user_identifier)
+    # TODO: We have to define the refresh token for the pairing key
+
+    cluster['pairing_key'] = secret_key
+    mongo_update_cluster(userid, cluster_id, cluster)
+
     return {"secret key": secret_key}
-    # return securityUtils.create_cluster_secret_key(userid, cl)
 
 
 def update_cluster(cluster_id, userid, fields):

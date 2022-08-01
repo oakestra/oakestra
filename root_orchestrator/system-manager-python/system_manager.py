@@ -19,7 +19,7 @@ from werkzeug.utils import secure_filename, redirect
 from ext_requests.apps_db import mongo_update_job_status_and_instances, mongo_find_job_by_id
 from ext_requests.cluster_db import mongo_update_cluster_information, mongo_get_all_clusters, \
     mongo_find_all_active_clusters, mongo_find_cluster_by_location, mongo_find_cluster_by_id_and_set_number_of_nodes, \
-    mongo_upsert_cluster
+    mongo_upsert_cluster, mongo_verify_pairing_key
 from ext_requests.cluster_requests import *
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
@@ -85,6 +85,7 @@ swaggerui_blueprint = get_swaggerui_blueprint(
 )
 app.register_blueprint(swaggerui_blueprint)
 
+
 # .......... Register clusters via WebSocket ...........#
 # ......................................................#
 
@@ -103,18 +104,26 @@ def handle_init_client(message):
                     format(request.remote_addr, request.environ.get('REMOTE_PORT')))
     app.logger.info(message)
 
+    '''create a new method (i.e.: mongo_pair_cluster with the content of the message, update de parameters)'''
+
     cid = mongo_upsert_cluster(cluster_ip=request.remote_addr, message=message)
-    x = {
-        'id': str(cid)
-    }
 
-    net_register_cluster(
-        cluster_id=str(cid),
-        cluster_address=request.remote_addr,
-        cluster_port=message['network_component_port']
-    )
+    if mongo_verify_pairing_key(message['userId'] + cid, message['pairing_key']):
+        response = {
+            'id': str(cid)
+        }
+        net_register_cluster(
+            cluster_id=str(cid),
+            cluster_address=request.remote_addr,
+            cluster_port=message['network_component_port']
+        )
+        # TODO: We have to invalidate the key
+    else:
+        response = {
+            'error': "the pairing key introduced does not match"
+        }
 
-    emit('sc2', json.dumps(x), namespace='/register')
+    emit('sc2', json.dumps(response), namespace='/register')
 
 
 @socketio.event(namespace='/register')
