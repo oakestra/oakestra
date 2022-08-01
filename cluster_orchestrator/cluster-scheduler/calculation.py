@@ -85,7 +85,7 @@ def greedy_load_balanced_algorithm(job, active_nodes=None):
         mem = float(node.get('current_free_memory_in_MB'))
         if cpu >= target_cpu and mem >= target_mem:
             target_cpu = cpu
-            target_mem = target_cpu
+            target_mem = mem
             target_node = node
 
     return 'positive', target_node
