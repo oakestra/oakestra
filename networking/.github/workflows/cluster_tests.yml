@@ -1,4 +1,4 @@
-name: Root Service Manager Test
+name: Cluster Service Manager Test
 
 on: push
 

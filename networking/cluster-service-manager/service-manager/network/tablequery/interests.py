@@ -18,4 +18,7 @@ def add_interest(job_name, clientid):
 
 
 def is_job_relevant_for_the_cluster(job_name):
-    return len(mongodb_requests.mongo_get_interest_workers(job_name)) > 0
+    interested = mongodb_requests.mongo_get_interest_workers(job_name)
+    if interested is None:
+        return False
+    return len(interested) > 0

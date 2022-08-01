@@ -182,11 +182,12 @@ def mongo_add_interest(job_name, clientid):
 def mongo_remove_interest(job_name, clientid):
     global mongo_jobs
     interested_nodes = mongo_get_interest_workers(job_name)
-    if len(interested_nodes) > 0:
-        interested_nodes.delete_one(clientid)
-        mongo_jobs.db.jobs.update_one(
-            {'job_name': job_name},
-            {'$set': {
-                "interested_nodes": interested_nodes
-            }}
-        )
+    if interested_nodes is not None:
+        if len(interested_nodes) > 0:
+            interested_nodes.remove(clientid)
+            mongo_jobs.db.jobs.update_one(
+                {'job_name': job_name},
+                {'$set': {
+                    "interested_nodes": interested_nodes
+                }}
+            )
