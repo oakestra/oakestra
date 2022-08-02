@@ -141,17 +141,12 @@ class ApplicationController(MethodView):
         except Exception as e:
             return abort(404, {"message": e})
 
+    # TODO: treat exception
     @jwt_required()
     def delete(self, cluster_id, *args, **kwargs):
-        try:
-            current_user = get_jwt_identity()
-            res = delete_cluster(cluster_id, current_user)
-            if res:
-                return {"message": "Cluster Deleted"}
-            else:
-                abort(501, {"message": "User could not be deleted"})
-        except ConnectionError as e:
-            abort(404, {"message": e})
+        current_user = get_jwt_identity()
+        delete_cluster(cluster_id, current_user)
+        return {"message": "Cluster Deleted"}
 
     @jwt_required()
     def put(self, cluster_id, *args, **kwargs):

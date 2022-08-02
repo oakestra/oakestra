@@ -1,39 +1,26 @@
 import json
-import threading
 
-from bson import json_util, ObjectId
+from bson import json_util
 from flask import flash, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 
 from blueprints import blueprints
 from flask_socketio import SocketIO, emit
-from markupsafe import escape
 from pathlib import Path
 from werkzeug.utils import secure_filename, redirect
 
-# from blueprints.applications_blueprints import *
-# from blueprints.authentication_blueprints import *
-# from blueprints.authorization_blueprints import *
-# from blueprints.deployment_blueprints import DeployInstanceController
-from ext_requests.apps_db import mongo_update_job_status_and_instances, mongo_find_job_by_id
-from ext_requests.cluster_db import mongo_update_cluster_information, mongo_get_all_clusters, \
-    mongo_find_all_active_clusters, mongo_find_cluster_by_location, mongo_find_cluster_by_id_and_set_number_of_nodes, \
-    mongo_upsert_cluster, mongo_verify_pairing_key
-from ext_requests.cluster_requests import *
+from ext_requests.cluster_db import mongo_upsert_cluster, mongo_find_key_by_id_and_location, \
+    mongo_find_by_name_and_location
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
-from ext_requests.scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, \
-    scheduler_request_status
 from ext_requests.user_db import create_admin
 from sm_logging import configure_logging
 from flask import Flask
 from secrets import token_hex
 from datetime import timedelta
-from flask_smorest import Blueprint, Api, abort
+from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
-
-# from blueprints.users_blueprints import *
 
 my_logger = configure_logging()
 
@@ -106,22 +93,31 @@ def handle_init_client(message):
 
     '''create a new method (i.e.: mongo_pair_cluster with the content of the message, update de parameters)'''
 
-    cid = mongo_upsert_cluster(cluster_ip=request.remote_addr, message=message)
-
-    if mongo_verify_pairing_key(message['userId'] + cid, message['pairing_key']):
+    net_port = message['network_component_port']
+    del message['manager_port']
+    del message['network_component_port']
+    app.logger.info("MONGODB - checking if the cluster introduced is in our Database...")
+    existing_cl = mongo_find_by_name_and_location(message)
+    if existing_cl is None:
         response = {
-            'id': str(cid)
+            'error': "The cluster you are trying to pair is not yet saved in our database, please log in in the "
+                     "Dashboard and add your cluster there. "
         }
-        net_register_cluster(
-            cluster_id=str(cid),
-            cluster_address=request.remote_addr,
-            cluster_port=message['network_component_port']
-        )
-        # TODO: We have to invalidate the key
     else:
-        response = {
-            'error': "the pairing key introduced does not match"
-        }
+        if existing_cl['pairing_key'] == message['pairing_key']:
+            response = {
+                'id': str(existing_cl['_id'])
+            }
+            net_register_cluster(
+                cluster_id=str(existing_cl['_id']),
+                cluster_address=request.remote_addr,
+                cluster_port=net_port
+            )
+            # TODO: Invalidate the key
+        else:
+            response = {
+                'error': "Your pairing key does not match the one generated for your cluster"
+            }
 
     emit('sc2', json.dumps(response), namespace='/register')
 

@@ -7,7 +7,7 @@ from services.service_management import delete_service
 
 
 def valid_cluster_requirements(cluster):
-    if len(cluster.get('cluster_name')) > 10 or len(cluster.get('cluster_name')) < 1:
+    if len(cluster.get('cluster_name')) > 15 or len(cluster.get('cluster_name')) < 1:
         return False
     return True
 
@@ -23,6 +23,8 @@ def register_cluster(cluster, userid):
         return {"message": "No cluster data provided"}, 403
     if not valid_cluster_requirements(cluster):
         return {'message': 'Cluster name is not in the valid format'}, 422
+    if mongo_find_by_name_and_location(cluster) is not None:
+        return {'message': 'There is another cluster with the same exact location'}, 422
 
     cluster['userId'] = userid
     cluster_id = mongo_add_cluster(cluster)
@@ -49,7 +51,7 @@ def update_cluster(cluster_id, userid, fields):
 
 def delete_cluster(cluster_id, userid):
     cluster = get_user_cluster(userid, cluster_id)
-    return mongo_delete_cluster(cluster_id, userid)
+    mongo_delete_cluster(cluster_id, userid)
 
 
 def users_clusters(userid):

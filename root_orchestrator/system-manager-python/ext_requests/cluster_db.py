@@ -10,7 +10,7 @@ def mongo_upsert_cluster(cluster_ip, message):
     clusters = db.mongo_clusters.db.clusters
     cluster_info = message['cluster_info']
     cluster_name = message['cluster_name']
-    cluster_location = message['cluster_location']
+    # cluster_location = message['cluster_location']
     cluster_latitude = message['cluster_latitude']
     cluster_longitude = message['cluster_longitude']
     cluster_port = message['manager_port']
@@ -124,17 +124,21 @@ def mongo_add_cluster(data):
 
 def mongo_delete_cluster(cluster_id, userid):
     db.mongo_clusters.db.clusters.find_one_and_delete({'_id': ObjectId(cluster_id), 'userId': userid})
-    # TODO: Verify this find() call
-    return db.mongo_clusters.db.clusters.find()  # return the clusters list
+    db.app.logger.info("MONGODB - cluster {} deleted")
 
 
 def mongo_update_cluster(userid, cluster_id, data):
     db.app.logger.info("MONGODB - update pairing key...")
     db.mongo_clusters.db.clusters.find_one_and_update({'_id': ObjectId(cluster_id), 'userId': userid},
-                                          {'$set': {'pairing_key': data.get('pairing_key')}},
-                                          return_document=True)
+                                                      {'$set': {'pairing_key': data.get('pairing_key')}},
+                                                      return_document=True)
 
 
-def mongo_verify_pairing_key(identify, received_key):
-    db.app.logger.info("MONGODB - checking if the pairing key introduced by the cluster matches correctly")
-    return db.mongo_clusters.db.clusters.find({identify: received_key})
+def mongo_find_by_clusterId_and_userid(cluster_id, userid):
+    return db.mongo_clusters.db.clusters.find_one({'userId': userid, '_id': ObjectId(cluster_id)})['pairing_key']
+
+
+def mongo_find_by_name_and_location(data):
+    return db.mongo_clusters.db.clusters.find_one({'cluster_name': data['cluster_name'],
+                                                   'cluster_latitude': data['cluster_latitude'],
+                                                   'cluster_longitude': data['cluster_longitude']})
