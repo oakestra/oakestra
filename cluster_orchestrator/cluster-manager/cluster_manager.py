@@ -228,18 +228,22 @@ def handle_init_final(jsonarg):
     app.logger.info('Websocket - received System_Manager_to_Cluster_Manager_2:' + str(jsonarg))
     data = json.loads(jsonarg)
 
-    app.logger.info("My received ID is: {}\n\n\n".format(data['id']))
-
-    global MY_ASSIGNED_CLUSTER_ID
-    MY_ASSIGNED_CLUSTER_ID = data['id']
-
-    sio.disconnect()
-    if MY_ASSIGNED_CLUSTER_ID is not None:
-        app.logger.info('Received ID. Go ahead with Background Jobs')
-        prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID)
-        background_job_send_aggregated_information_to_sm()
+    if list(data.keys())[0] == 'error':
+        app.logger.info(data['error'])
+        sio.disconnect()
     else:
-        app.logger.info('No ID received.')
+        app.logger.info("My received ID is: {}\n\n\n".format(data['id']))
+
+        global MY_ASSIGNED_CLUSTER_ID
+        MY_ASSIGNED_CLUSTER_ID = data['id']
+
+        sio.disconnect()
+        if MY_ASSIGNED_CLUSTER_ID is not None:
+            app.logger.info('Received ID. Go ahead with Background Jobs')
+            prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID)
+            background_job_send_aggregated_information_to_sm()
+        else:
+            app.logger.info('No ID received.')
 
 
 @sio.event()

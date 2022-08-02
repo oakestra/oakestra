@@ -10,8 +10,7 @@ from flask_socketio import SocketIO, emit
 from pathlib import Path
 from werkzeug.utils import secure_filename, redirect
 
-from ext_requests.cluster_db import mongo_upsert_cluster, mongo_find_key_by_id_and_location, \
-    mongo_find_by_name_and_location
+from ext_requests.cluster_db import mongo_find_by_name_and_location, mongo_update_pairing_complete
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
 from ext_requests.user_db import create_admin
@@ -103,11 +102,17 @@ def handle_init_client(message):
             'error': "The cluster you are trying to pair is not yet saved in our database, please log in in the "
                      "Dashboard and add your cluster there. "
         }
+    elif existing_cl['pairing_complete']:
+        response = {
+            'error': "Your cluster has already been attached to the Root Orchestrator"
+        }
     else:
         if existing_cl['pairing_key'] == message['pairing_key']:
+            # TODO: Consider the case where the key is expired
             response = {
                 'id': str(existing_cl['_id'])
             }
+            mongo_update_pairing_complete(existing_cl['_id'])
             net_register_cluster(
                 cluster_id=str(existing_cl['_id']),
                 cluster_address=request.remote_addr,

@@ -143,9 +143,8 @@ class ApplicationController(MethodView):
 
     # TODO: treat exception
     @jwt_required()
-    def delete(self, cluster_id, *args, **kwargs):
-        current_user = get_jwt_identity()
-        delete_cluster(cluster_id, current_user)
+    def delete(self, cluster_id):
+        delete_cluster(cluster_id)
         return {"message": "Cluster Deleted"}
 
     @jwt_required()

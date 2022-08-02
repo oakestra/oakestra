@@ -122,12 +122,12 @@ def mongo_add_cluster(data):
     return str(inserted_id)
 
 
-def mongo_delete_cluster(cluster_id, userid):
-    db.mongo_clusters.db.clusters.find_one_and_delete({'_id': ObjectId(cluster_id), 'userId': userid})
+def mongo_delete_cluster(cluster_id):
+    db.mongo_clusters.db.clusters.find_one_and_delete({'_id': ObjectId(cluster_id)})
     db.app.logger.info("MONGODB - cluster {} deleted")
 
 
-def mongo_update_cluster(userid, cluster_id, data):
+def mongo_update_pairing_key(userid, cluster_id, data):
     db.app.logger.info("MONGODB - update pairing key...")
     db.mongo_clusters.db.clusters.find_one_and_update({'_id': ObjectId(cluster_id), 'userId': userid},
                                                       {'$set': {'pairing_key': data.get('pairing_key')}},
@@ -138,7 +138,14 @@ def mongo_find_by_clusterId_and_userid(cluster_id, userid):
     return db.mongo_clusters.db.clusters.find_one({'userId': userid, '_id': ObjectId(cluster_id)})['pairing_key']
 
 
-def mongo_find_by_name_and_location(data):
-    return db.mongo_clusters.db.clusters.find_one({'cluster_name': data['cluster_name'],
-                                                   'cluster_latitude': data['cluster_latitude'],
-                                                   'cluster_longitude': data['cluster_longitude']})
+def mongo_find_by_name_and_location(cluster):
+    return db.mongo_clusters.db.clusters.find_one({'cluster_name': cluster['cluster_name'],
+                                                   'cluster_latitude': cluster['cluster_latitude'],
+                                                   'cluster_longitude': cluster['cluster_longitude']})
+
+
+def mongo_update_pairing_complete(cluster_id):
+    db.app.logger.info("MONGODB - update pairing key...")
+    db.mongo_clusters.db.clusters.find_one_and_update({'_id': ObjectId(cluster_id)},
+                                                      {'$set': {'pairing_complete': True}},
+                                                      return_document=True)

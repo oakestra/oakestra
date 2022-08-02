@@ -23,10 +23,12 @@ def register_cluster(cluster, userid):
         return {"message": "No cluster data provided"}, 403
     if not valid_cluster_requirements(cluster):
         return {'message': 'Cluster name is not in the valid format'}, 422
-    if mongo_find_by_name_and_location(cluster) is not None:
-        return {'message': 'There is another cluster with the same exact location'}, 422
+    cl_ob = mongo_find_by_name_and_location(cluster)
+    if cl_ob is not None and not cl_ob['pairing_complete']:
+        return {'message': 'There is another cluster with the same exact location trying to pair'}, 422
 
     cluster['userId'] = userid
+    cluster['pairing_complete'] = False
     cluster_id = mongo_add_cluster(cluster)
     if cluster_id == "":
         logging.log(level=logging.ERROR, msg="Invalid input")
@@ -38,7 +40,7 @@ def register_cluster(cluster, userid):
     # TODO: We have to define the refresh token for the pairing key
 
     cluster['pairing_key'] = secret_key
-    mongo_update_cluster(userid, cluster_id, cluster)
+    mongo_update_pairing_key(userid, cluster_id, cluster)
 
     return {"secret key": secret_key}
 
@@ -49,9 +51,8 @@ def update_cluster(cluster_id, userid, fields):
     return mongo_update_cluster_information(cluster_id, fields)
 
 
-def delete_cluster(cluster_id, userid):
-    cluster = get_user_cluster(userid, cluster_id)
-    mongo_delete_cluster(cluster_id, userid)
+def delete_cluster(cluster_id):
+    mongo_delete_cluster(cluster_id)
 
 
 def users_clusters(userid):
