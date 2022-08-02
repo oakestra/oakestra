@@ -103,11 +103,13 @@ def handle_init_client(message):
                      "Dashboard and add your cluster there. "
         }
     elif existing_cl['pairing_complete']:
+        app.logger.info("The pairing was already completed")
         response = {
             'error': "Your cluster has already been attached to the Root Orchestrator"
         }
     else:
         if existing_cl['pairing_key'] == message['pairing_key']:
+            app.logger.info("The keys match")
             # TODO: Consider the case where the key is expired
             response = {
                 'id': str(existing_cl['_id'])
@@ -120,6 +122,7 @@ def handle_init_client(message):
             )
             # TODO: Invalidate the key
         else:
+            app.logger.info("The pairing does not match")
             response = {
                 'error': "Your pairing key does not match the one generated for your cluster"
             }
