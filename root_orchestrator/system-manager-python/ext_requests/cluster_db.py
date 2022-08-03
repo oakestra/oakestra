@@ -128,7 +128,6 @@ def mongo_delete_cluster(cluster_id):
 
 
 def mongo_update_pairing_key(userid, cluster_id, data):
-    db.app.logger.info("MONGODB - update pairing key...")
     db.mongo_clusters.db.clusters.find_one_and_update({'_id': ObjectId(cluster_id), 'userId': userid},
                                                       {'$set': {'pairing_key': data.get('pairing_key')}},
                                                       return_document=True)

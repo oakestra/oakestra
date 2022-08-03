@@ -1,5 +1,5 @@
 from flask_jwt_extended import get_jwt_identity, jwt_required, create_access_token, create_refresh_token, get_jwt, \
-    verify_jwt_in_request
+    verify_jwt_in_request, decode_token
 
 from ext_requests.user_db import mongo_get_user_by_name
 
@@ -34,7 +34,7 @@ def require_role(required_role):
 
 def identity_is_username():
     def decorator(func):
-        def wrapper(*args,**kwargs):
+        def wrapper(*args, **kwargs):
             current_user = get_jwt_auth_identity()
             if current_user == kwargs['username']:
                 return func(*args, **kwargs)
@@ -94,24 +94,9 @@ def create_jwt_auth_refresh_token(identity, additional_claims):
     return create_refresh_token(identity=identity, additional_claims=additional_claims)
 
 
-def create_jwt_secret_key_cluster(identity):
-    return create_access_token(identity=identity)
+def create_jwt_secret_key_cluster(identity, expiration, claims):
+    return create_access_token(identity=identity, expires_delta=expiration, additional_claims=claims)
 
 
-'''def create_cluster_secret_key(user_id, cluster_id):
-    expiry_date = datetime.now() + timedelta(hours=1)
-    payload_data = {
-        'cluster_id': cluster_id,
-        'user_id': user_id,
-        'expiry_date': expiry_date,
-    }
-    # Store private & public key accordingly
-    private_key = 'secret-private-key-cluster'
-    public_key = 'secret-public-key-cluster'
-    key = serialization.load_ssh_private_key(private_key.encode(), password=b'')
-    # new_token = jwt.encode(payload=payload_data, key=key, algorithm='RS256')
-    new_token = {}
-    #For adding expiration time automatically:
-    #jwt.encode({"exp": 1371720939}, "secret")
-    db.mongo_clusters.insert_one(payload_data)
-    return new_token'''
+def get_decoded_token(token):
+    return decode_token(encoded_token=token)

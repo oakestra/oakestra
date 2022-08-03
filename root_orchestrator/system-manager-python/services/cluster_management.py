@@ -3,6 +3,7 @@ import traceback
 
 from ext_requests.cluster_db import *
 from roles import securityUtils
+from datetime import datetime, timedelta
 from services.service_management import delete_service
 
 
@@ -34,15 +35,22 @@ def register_cluster(cluster, userid):
         logging.log(level=logging.ERROR, msg="Invalid input")
         return {}
 
-    cluster_of_user_identifier = userid + cluster_id
-    # TODO: We have to define the expiration date for the access token
-    secret_key = securityUtils.create_jwt_secret_key_cluster(identity=cluster_of_user_identifier)
-    # TODO: We have to define the refresh token for the pairing key
+    # change the Bearer token into a Proof of Possession token (a PoP token) by adding a cnf claim a confirmation claim
 
-    cluster['pairing_key'] = secret_key
+    # add the additional claims that must include: expiration date, secret_key2 (the one that will be returned to the
+    # front, the alg, identity and some data of the cluster - time that has been required to be added)
+
+    # sec_key = current_app.config["JWT_SECRET_KEY"]
+
+    dt_string = datetime.now().strftime("%d/%m/%Y %H:%M:%S")  # example: 25/06/2021 07:58:56
+    additional_claims = {"iat": dt_string, "aud": "addClusterAPI", "userid": userid}
+    expiry_date = timedelta(hours=5)
+
+    token = securityUtils.create_jwt_secret_key_cluster(cluster_id, expiry_date, additional_claims)
+
+    cluster['pairing_key'] = token
     mongo_update_pairing_key(userid, cluster_id, cluster)
-
-    return {"secret key": secret_key}
+    return {"secret_key": token}
 
 
 def update_cluster(cluster_id, userid, fields):

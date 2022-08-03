@@ -3,7 +3,7 @@ import json
 from bson import json_util
 from flask import flash, request
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager
+from flask_jwt_extended import JWTManager, decode_token
 
 from blueprints import blueprints
 from flask_socketio import SocketIO, emit
@@ -37,6 +37,7 @@ app.config["JWT_SECRET_KEY"] = token_hex(32)
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=10)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
 app.config["RESET_TOKEN_EXPIRES"] = timedelta(hours=3)  # for password reset
+app.config["JWT_CLUSTER_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=5)  # not used as it is inaccessible from securityUtils
 
 jwt = JWTManager(app)
 api = Api(app, spec_kwargs={"host": "oakestra.io", "x-internal-id": "1"})
@@ -108,6 +109,25 @@ def handle_init_client(message):
             'error': "Your cluster has already been attached to the Root Orchestrator"
         }
     else:
+        '''if existing_cl['pairing_key'] == message['pairing_key']:
+            app.logger.info("The keys match")
+            # TODO: Consider the case where the key is expired
+            response = {
+                'id': str(existing_cl['_id'])
+            }
+            mongo_update_pairing_complete(existing_cl['_id'])
+            net_register_cluster(
+                cluster_id=str(existing_cl['_id']),
+                cluster_address=request.remote_addr,
+                cluster_port=net_port
+            )
+            # TODO: Invalidate the key
+        else:
+            app.logger.info("The pairing does not match")
+            response = {
+                'error': "Your pairing key does not match the one generated for your cluster"
+            }'''
+        #token_info = decode_token(message['pairing_key'])
         if existing_cl['pairing_key'] == message['pairing_key']:
             app.logger.info("The keys match")
             # TODO: Consider the case where the key is expired
@@ -126,7 +146,7 @@ def handle_init_client(message):
             response = {
                 'error': "Your pairing key does not match the one generated for your cluster"
             }
-
+    
     emit('sc2', json.dumps(response), namespace='/register')
 
 
