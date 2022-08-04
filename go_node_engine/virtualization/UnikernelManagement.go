@@ -1,15 +1,21 @@
 package virtualization
 
 import (
+	"archive/tar"
 	"errors"
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
+	"internal/goarch"
+	"io"
+	"net/http"
 	"os"
 	"reflect"
+	"strings"
 	"sync"
 
+	"compress/gzip"
 	"time"
 
 	"os/exec"
@@ -26,6 +32,7 @@ type qemuDomain struct {
 }
 
 type UnikernelRuntime struct {
+	qemuCommand string
 	qemuPath    string
 	qemuDomains map[string]*qemuDomain
 	killQueue   map[string]*chan bool
@@ -36,20 +43,29 @@ var VMruntime = UnikernelRuntime{
 	channelLock: &sync.RWMutex{},
 }
 
-const local_qemu_architecutre = "qemu-system-x86_64"
-
 var libVirtSyncOnce sync.Once
 
 func GetUnikernelRuntime() *UnikernelRuntime {
 	libVirtSyncOnce.Do(func() {
-		path, err := exec.LookPath(local_qemu_architecutre)
+		var command string
+		var err error
+
+		//Check which version of qemu is required for kvm support (local arch)
+		if goarch.GOARCH == "amd64" {
+			command = "qemu-system-x86_64"
+		} else if goarch.GOARCH == "arm64" {
+			command = "qemu-system-aarch64"
+		}
+		path, err := exec.LookPath(command)
 		if err != nil {
-			logger.ErrorLogger().Fatalf("Unable to find qemu executable(%s): %v\n", local_qemu_architecutre, err)
+			logger.ErrorLogger().Fatalf("Unable to find qemu executable(%s): %v\n", command, err)
 		}
 		VMruntime.qemuPath = path
 		logger.InfoLogger().Printf("Using qemu at %s\n", path)
 		VMruntime.killQueue = make(map[string]*chan bool)
 		VMruntime.qemuDomains = make(map[string]*qemuDomain)
+		err = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
+		err = os.MkdirAll("/tmp/node_engine/inst/", 0755)
 
 	})
 	return &VMruntime
@@ -133,6 +149,98 @@ type QemuStopResult struct {
 	}
 }
 
+func GetKernelImage(kernel string, name string) *string {
+
+	path := "/tmp/node_engine/kernel/tmp/"
+	inst_path := "/tmp/node_engine/inst/"
+	filename := strings.ReplaceAll(kernel, "/", "_")
+	kernel_tar := path + filename
+	instance_path := inst_path + name + "/"
+	kernel_local := instance_path + "kernel"
+	os.Mkdir("/tmp/node_engine/inst/"+name, 0777)
+	var kimage *os.File
+	_, err := os.Stat(kernel_tar)
+	if err != nil {
+		logger.InfoLogger().Printf("Kernel not found locally")
+		kimage, err = os.Create(kernel_tar)
+
+		if err != nil {
+			logger.InfoLogger().Printf("Unable to create Kernel: %v", err)
+		}
+		defer kimage.Close()
+
+		d, err := http.Get(kernel)
+		if err != nil {
+			logger.InfoLogger().Printf("Unable to locate kernel image (%s): %v", kernel, err)
+			return nil
+		}
+		size, err := io.Copy(kimage, d.Body)
+		if err != nil {
+			logger.InfoLogger().Printf("Kernel download failed: %v", err)
+			return nil
+		}
+		d.Body.Close()
+		logger.InfoLogger().Printf("Written %d B", size)
+		kimage.Close()
+
+	} else {
+		logger.InfoLogger().Printf("Kernel found locally")
+	}
+
+	kimage, _ = os.Open(kernel_tar)
+	defer kimage.Close()
+
+	exdata, err := gzip.NewReader(kimage)
+	if err != nil {
+		logger.InfoLogger().Printf("Unable to open kernel archive: %v", err)
+		return nil
+	}
+	tardata := tar.NewReader(exdata)
+
+	for true {
+		header, err := tardata.Next()
+
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			logger.InfoLogger().Printf("Unable to read tar: %v", err)
+			return nil
+		}
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			err := os.Mkdir(instance_path+header.Name, 0777)
+			if err != nil {
+				logger.InfoLogger().Printf("Unable to create dir: %v", err)
+			}
+		case tar.TypeReg:
+			file, err := os.Create(instance_path + header.Name)
+			if err != nil {
+				logger.InfoLogger().Printf("Unable to create file: %v", err)
+			}
+			_, err = io.Copy(file, tardata)
+			if err != nil {
+				logger.InfoLogger().Printf("File copy failed: %v", err)
+			}
+		default:
+			logger.InfoLogger().Printf("ERROR: wront typeflag")
+			return nil
+
+		}
+
+	}
+	//Kernel image is expected at a fixed location within the archive ./kernel
+	_, err = os.Stat(kernel_local)
+	if err != nil {
+		logger.InfoLogger().Printf("Archive does not seem to contain the kernel image: %v", err)
+		return nil
+	}
+	logger.InfoLogger().Printf("Kernel location: %s", kernel_local)
+
+	return &kernel_local
+}
+
 func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	service model.Service,
 	killChannel *chan bool,
@@ -156,6 +264,11 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 
 	//hostname is used as name for the namespace in which the unikernel will be running in
 	hostname := genTaskID(service.Sname, service.Instance)
+	kernelPath := GetKernelImage(service.Image, hostname)
+	if kernelPath == nil {
+		logger.InfoLogger().Println("Failed to get Kernel image")
+		return
+	}
 	qemuName = fmt.Sprintf("%s,debug-threads=on", hostname)
 	qemuQmp := fmt.Sprintf("unix:./%s,server,nowait", hostname)
 	revert := func(err error) {
@@ -177,14 +290,14 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		}
 		unikraftKernelArguments = "netdev.ipv4_addr=192.168.1.2 netdev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.0 --"
 		//Command uses ip-netns to run in a different namespace
-		qemuCmd = exec.Command("ip", "netns", "exec", hostname, r.qemuPath, "-name", qemuName, "-kernel", service.Image, "-append", unikraftKernelArguments, "-m", qemuMemory, "-netdev",
+		qemuCmd = exec.Command("ip", "netns", "exec", hostname, r.qemuPath, "-name", qemuName, "-kernel", *kernelPath, "-append", unikraftKernelArguments, "-m", qemuMemory, "-netdev",
 			"tap,id=tap0,ifname=tap0,script=no,downscript=no,br=virbr0", "-device", "virtio-net,netdev=tap0,mac=52:55:00:d1:55:01",
 			"-cpu", "host", "-enable-kvm" /*"-nographic",*/, "-qmp", qemuQmp)
 
 	} else {
 		//Start Unikernel without network
 		unikraftKernelArguments = ""
-		qemuCmd = exec.Command(r.qemuPath, "-name", qemuName, "-kernel", service.Image, "-append", unikraftKernelArguments, "-m",
+		qemuCmd = exec.Command(r.qemuPath, "-name", qemuName, "-kernel", *kernelPath, "-append", unikraftKernelArguments, "-m",
 			qemuMemory, "-cpu", "host", "-enable-kvm" /*, "-nographic"*/, "-qmp", qemuQmp)
 
 	}
