@@ -2,23 +2,21 @@ package virtualization
 
 import (
 	"archive/tar"
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
-	"internal/goarch"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"reflect"
+	rt "runtime"
 	"strings"
 	"sync"
-
-	"compress/gzip"
 	"time"
-
-	"os/exec"
 
 	"github.com/digitalocean/go-qemu/qmp"
 	"github.com/struCoder/pidusage"
@@ -51,11 +49,12 @@ func GetUnikernelRuntime() *UnikernelRuntime {
 		var err error
 
 		//Check which version of qemu is required for kvm support (local arch)
-		if goarch.GOARCH == "amd64" {
+		if rt.GOARCH == "amd64" {
 			command = "qemu-system-x86_64"
-		} else if goarch.GOARCH == "arm64" {
+		} else if rt.GOARCH == "arm64" {
 			command = "qemu-system-aarch64"
 		}
+
 		path, err := exec.LookPath(command)
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Unable to find qemu executable(%s): %v\n", command, err)
@@ -149,6 +148,11 @@ type QemuStopResult struct {
 	}
 }
 
+/*
+Load the Unikernel from the URL given or used cached version.
+Return:
+*/
+
 func GetKernelImage(kernel string, name string) *string {
 
 	path := "/tmp/node_engine/kernel/tmp/"
@@ -238,7 +242,7 @@ func GetKernelImage(kernel string, name string) *string {
 	}
 	logger.InfoLogger().Printf("Kernel location: %s", kernel_local)
 
-	return &kernel_local
+	return &instance_path
 }
 
 func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
@@ -248,7 +252,8 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	errorchan chan error,
 	statusChangeNotificationHandler func(service model.Service),
 ) {
-
+	var qemuConfig QemuConfiguration
+	_ = qemuConfig
 	var qemuName string
 	//var qemuNetwork string
 	//var qemuQmp string
@@ -260,15 +265,21 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	var unikraftKernelArguments string
 
 	qemuMemory = fmt.Sprintf("%d", service.Memory)
+	qemuConfig.Memory = service.Memory
 	//qemuKernel = fmt.Sprintf("-kernel", service.Image)
 
 	//hostname is used as name for the namespace in which the unikernel will be running in
 	hostname := genTaskID(service.Sname, service.Instance)
+	qemuConfig.Name = hostname
+	qemuConfig.NSname = &hostname
 	kernelPath := GetKernelImage(service.Image, hostname)
+
 	if kernelPath == nil {
 		logger.InfoLogger().Println("Failed to get Kernel image")
 		return
 	}
+	qemuConfig.Instancepath = *kernelPath
+
 	qemuName = fmt.Sprintf("%s,debug-threads=on", hostname)
 	qemuQmp := fmt.Sprintf("unix:./%s,server,nowait", hostname)
 	revert := func(err error) {
@@ -411,7 +422,64 @@ func (r *UnikernelRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 }
 
 type QemuConfiguration struct {
-	Name       string
-	Memory     int
-	Kernelpath string
+	Name         string
+	Memory       int
+	Instancepath string
+	NSname       *string
+}
+
+func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) []string {
+	args := make([]string, 0)
+
+	//Check if Qemu needs to run in different Namespace
+	if model.GetNodeInfo().Overlay {
+		args = append(args, "ip", "netns", "exec", *q.NSname)
+	}
+	//TODO: Architecture needs to be considered
+	args = append(args, r.qemuPath)
+
+	name := fmt.Sprintf("%s,debug-threads=on", q.Name)
+	args = append(args, "-name", name)
+
+	//Kernel image
+	kernel := q.Instancepath + "kernel"
+	args = append(args, "-kernel", kernel)
+
+	//Memory
+	memory := fmt.Sprintf("%d", q.Memory)
+	args = append(args, "-m", memory)
+
+	//Network
+	if model.GetNodeInfo().Overlay {
+		//Network backend fixed at tap0 and virbr0 created inside the namespace
+		args = append(args, "-netdev", "tap,id=tap0,ifname=tap0,script=no,downscript=no,br=virbr0")
+		//Network device
+		args = append(args, "-device", "virtio-net,netdev=tap0,mac=52:55:00:d1:55:01")
+	}
+	//Kernel arguments including the network configuration
+	args = append(args, "-append")
+	args = append(args, "netdev.ipv4_addr=192.168.1.2 netdev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.0 --")
+
+	//Check if a folder is to be mounted
+	mountpath := fmt.Sprintf("%sfiles/", q.Instancepath)
+	_, err := os.Stat(mountpath)
+	if !os.IsNotExist(err) {
+		logger.InfoLogger().Println("Mounting as folder for unikernel")
+
+		//FS backend
+		fsdevarg := fmt.Sprintf("local,security_model=passthrough,id=hvirtio0,path=%s", q.Instancepath)
+		args = append(args, "-fsdev", fsdevarg)
+
+		//FS device
+		args = append(args, "-device", "virtio-9p-pci,fsdev=hvirtio0,mount_tag=fs0")
+	}
+
+	//QMP
+	Qmp := fmt.Sprintf("unix:./%s,server,nowait", q.Name)
+	args = append(args, "-qmp", Qmp)
+
+	//
+	args = append(args, "-cpu", "host", "-enable-kvm")
+
+	return args
 }
