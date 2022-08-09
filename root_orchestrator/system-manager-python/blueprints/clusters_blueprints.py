@@ -80,8 +80,8 @@ class ClustersController(MethodView):
 @clustersblp.route('/<userid>')
 class ClustersController(MethodView):
 
-    def get(self, user_id, *args, **kwargs):
-        return json_util.dumps(mongo_get_clusters_of_user(user_id))
+    def get(self, userid, *args, **kwargs):
+        return json_util.dumps(mongo_get_clusters_of_user(userid))
 
 
 @clustersblp.route('/active')

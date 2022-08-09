@@ -107,7 +107,7 @@ def mongo_update_cluster_information(cluster_id, data):
 
 
 def mongo_get_clusters_of_user(user_id):
-    return db.mongo_clusters.aggregate([{'$match': {"userId": user_id}}])
+    return db.mongo_clusters.db.clusters.aggregate([{'$match': {"userId": user_id}}])
 
 
 def mongo_add_cluster(data):

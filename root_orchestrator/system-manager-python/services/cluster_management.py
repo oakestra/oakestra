@@ -39,9 +39,12 @@ def register_cluster(cluster, userid):
     # change the Bearer token into a Proof of Possession token (a PoP token) by adding a cnf claim a confirmation claim
     # sec_key = current_app.config["JWT_SECRET_KEY"]
 
-    dt_string = datetime.now() #.strftime("%d/%m/%Y %H:%M:%S")  # example: 25/06/2021 07:58:56
-    additional_claims = {"iat": dt_string, "aud": "addClusterAPI", "sub": userid,
-                         "cluster_name": cluster['cluster_name'], "num": str(randint(0, 99999999))}
+    additional_claims = {"iat": datetime.now(), "aud": "addClusterAPI",
+                         "sub": str(userid),
+                         "cluster_name": cluster['cluster_name'],
+                         "cluster_latitude": cluster['cluster_latitude'],
+                         "cluster_longitude": cluster['cluster_longitude'],
+                         "num": str(randint(0, 99999999))}
 
     token = securityUtils.create_jwt_pairing_key_cluster(cluster_id, timedelta(hours=5), additional_claims)
 

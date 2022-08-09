@@ -78,6 +78,14 @@ app.register_blueprint(swaggerui_blueprint)
 # .......... Register clusters via WebSocket ...........#
 # ......................................................#
 
+
+def check_if_keys_match(token_info, message):
+    if token_info.get("cluster_name") == message['cluster_name'] and token_info.get("cluster_latitude") == message['latitude'] and token_info.get("cluster_longitude") == message['longitude']:
+        return True
+    else:
+        return False
+
+
 @socketio.on('connect', namespace='/register')
 def on_connect():
     app.logger.info('SocketIO - Cluster_Manager connected: {}'.format(request.remote_addr))
@@ -115,21 +123,42 @@ def handle_init_client(message):
         }
     else:
         '''try:
-            token_info = decode_token(encoded_token=message['pairing_key'])
-        except (InvalidTokenError, DecodeError):
-            raise Exception('Token not found')
-        if token_info is not None:'''
-        # take into consideration "NOT ENOUGH SEGMENTS" DECODE CATCH ERROR
+            token_info = check_jwt_token_validity(message['pairing_key'])
+            if check_if_keys_match(token_info, message):
+                app.logger.info("The keys match")
+                # TODO: Consider the case where the key is expired
+                response = {
+                    'id': str(existing_cl['_id'])
+                }
+                mongo_update_pairing_complete(existing_cl['_id'])
+                net_register_cluster(
+                    cluster_id=str(existing_cl['_id']),
+                    cluster_address=request.remote_addr,
+                    cluster_port=net_port
+                )
+                # TODO: Creates the shared secret key (with expiration date too) and send it to the cluster
+            else:
+                app.logger.info("The pairing does not match")
+                response = {
+                    'error': "Your pairing key does not match the one generated for your cluster"
+                }
+        except Exception as e:
+            if e == "No token supplied" or e == "Not enough or too many segments":
+                response = {
+                    'error': "invalid-token"
+                }
+            elif e == "Signature verification failed" or e == "Algorithm not supported":
+                response = {
+                    'error': "integrity-error"
+                }
+            else:
+                response = {
+                    'error': str(e)
+                }
 
-        token_info = check_jwt_token_validity(message['pairing_key'])
+    emit('sc2', json.dumps(response), namespace='/register')'''
 
-
-
-        if token_info is None:
-            response = {
-                'error': "Pairing key not found"
-            }
-        elif existing_cl['pairing_key'] == message['pairing_key']:
+        if existing_cl['pairing_key'] == message['pairing_key']:
             app.logger.info("The keys match")
             # TODO: Consider the case where the key is expired
             response = {
@@ -142,11 +171,6 @@ def handle_init_client(message):
                 cluster_port=net_port
             )
             # TODO: Creates the shared secret key (with expiration date too) and send it to the cluster
-
-            #dt_string = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-            #data = {"iat": dt_string, "aud": "SecretClusterKey", "cluster_name": existing_cl['cluster_name'],
-            #        "num": str(randint(0, 99999999))}
-            #create_access_token(identity=existing_cl['_id'], expires_delta=timedelta(days=30), additional_claims=data)
         else:
             app.logger.info("The pairing does not match")
             response = {

@@ -36,6 +36,8 @@ def app(request):
                     "aud": "addClusterAPI",
                     "sub": "identity",
                     "cluster_name": "dummy",
+                    "cluster_latitude": "1",
+                    "cluster_longitude": "2",
                     "num": str(42)
                 }
             )
