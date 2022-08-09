@@ -122,6 +122,9 @@ def handle_init_client(message):
         # take into consideration "NOT ENOUGH SEGMENTS" DECODE CATCH ERROR
 
         token_info = check_jwt_token_validity(message['pairing_key'])
+
+
+
         if token_info is None:
             response = {
                 'error': "Pairing key not found"
