@@ -228,7 +228,7 @@ def mongo_update_job_status(system_job_id, instancenum, status, node):
     for instance in instance_list:
         if int(instance.get('instance_number')) == int(instancenum):
             instance['status'] = status
-            if Node is not None:
+            if node is not None:
                 instance['host_ip'] = node['node_address']
                 port = node['node_info'].get('node_port')
                 if port is None:
