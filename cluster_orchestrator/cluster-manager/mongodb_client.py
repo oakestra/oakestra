@@ -184,17 +184,19 @@ def mongo_update_jobs_status(TIME_INTERVAL):
     for job in jobs:
         try:
             updated = False
+            status = "RUNNING"
             for instance in range(len(job["instance_list"])):
-                if job["instance_list"][instance].get('last_modified_timestamp',datetime.now().timestamp()) < (
+                if job["instance_list"][instance].get('last_modified_timestamp', datetime.now().timestamp()) < (
                         datetime.now().timestamp() - TIME_INTERVAL) and job["instance_list"][instance].get('status',
                                                                                                            0) not in [
                     'NODE_SCHEDULED', 'CLUSTER_SCHEDULED']:
                     print('Job is inactive: ' + str(job.get('job_name')))
                     job["instance_list"][instance]["status"] = "FAILED"
+                    status = "FAILED"
                     updated = True
             if updated:
                 mongo_jobs.db.jobs.update_one({'system_job_id': str(job['system_job_id'])},
-                                              {'$set': {'instance_list': job["instance_list"]}})
+                                              {'$set': {'instance_list': job["instance_list"], 'status': status}})
         except Exception as e:
             print(e)
 
