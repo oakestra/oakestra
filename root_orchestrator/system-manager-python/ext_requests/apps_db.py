@@ -55,9 +55,10 @@ def mongo_update_job_status(job_id, status, status_detail, instances=None):
                  }
             )
 
-    return db.mongo_services.update_one({'_id': ObjectId(job_id)},
-                                        {'$set': {'status': status, 'status_detail': status_detail}},
-                                        return_document=True)
+    return db.mongo_services.find_one_and_update(
+        {'_id': ObjectId(job_id)},
+        {'$set': {'status': status, 'status_detail': status_detail}},
+        return_document=True)
 
 
 def mongo_set_microservice_id(job_id):
