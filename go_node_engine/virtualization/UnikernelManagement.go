@@ -253,18 +253,8 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	statusChangeNotificationHandler func(service model.Service),
 ) {
 	var qemuConfig QemuConfiguration
-	_ = qemuConfig
-	var qemuName string
-	//var qemuNetwork string
-	//var qemuQmp string
-	var qemuMemory string
-	//var qemuKernel string
-	//var qemuAdditinalParameters string = "-cpu host -enable-kvm -nographic" //-daemonize
 	var qemuMonitor *qmp.SocketMonitor
 
-	var unikraftKernelArguments string
-
-	qemuMemory = fmt.Sprintf("%d", service.Memory)
 	qemuConfig.Memory = service.Memory
 	//qemuKernel = fmt.Sprintf("-kernel", service.Image)
 
@@ -273,15 +263,12 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	qemuConfig.Name = hostname
 	qemuConfig.NSname = &hostname
 	kernelPath := GetKernelImage(service.Image, hostname)
-
 	if kernelPath == nil {
 		logger.InfoLogger().Println("Failed to get Kernel image")
 		return
 	}
 	qemuConfig.Instancepath = *kernelPath
 
-	qemuName = fmt.Sprintf("%s,debug-threads=on", hostname)
-	qemuQmp := fmt.Sprintf("unix:./%s,server,nowait", hostname)
 	revert := func(err error) {
 		logger.InfoLogger().Printf("FAILED TO START")
 		startup <- false
@@ -299,19 +286,10 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 			logger.InfoLogger().Printf("Network creation for Unikernel failed: %v\n", err)
 			return
 		}
-		unikraftKernelArguments = "netdev.ipv4_addr=192.168.1.2 netdev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.0 --"
-		//Command uses ip-netns to run in a different namespace
-		qemuCmd = exec.Command("ip", "netns", "exec", hostname, r.qemuPath, "-name", qemuName, "-kernel", *kernelPath, "-append", unikraftKernelArguments, "-m", qemuMemory, "-netdev",
-			"tap,id=tap0,ifname=tap0,script=no,downscript=no,br=virbr0", "-device", "virtio-net,netdev=tap0,mac=52:55:00:d1:55:01",
-			"-cpu", "host", "-enable-kvm" /*"-nographic",*/, "-qmp", qemuQmp)
-
-	} else {
-		//Start Unikernel without network
-		unikraftKernelArguments = ""
-		qemuCmd = exec.Command(r.qemuPath, "-name", qemuName, "-kernel", *kernelPath, "-append", unikraftKernelArguments, "-m",
-			qemuMemory, "-cpu", "host", "-enable-kvm" /*, "-nographic"*/, "-qmp", qemuQmp)
-
 	}
+
+	command, args := qemuConfig.GenerateArgs(r)
+	qemuCmd = exec.Command(command, args...)
 
 	logger.InfoLogger().Printf(qemuCmd.String())
 	logger.InfoLogger().Printf("STARTING UNIKERNEL")
@@ -428,15 +406,14 @@ type QemuConfiguration struct {
 	NSname       *string
 }
 
-func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) []string {
+func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string) {
 	args := make([]string, 0)
-
+	command := r.qemuPath
 	//Check if Qemu needs to run in different Namespace
 	if model.GetNodeInfo().Overlay {
-		args = append(args, "ip", "netns", "exec", *q.NSname)
+		command = "ip"
+		args = append(args, "netns", "exec", *q.NSname, r.qemuPath)
 	}
-	//TODO: Architecture needs to be considered
-	args = append(args, r.qemuPath)
 
 	name := fmt.Sprintf("%s,debug-threads=on", q.Name)
 	args = append(args, "-name", name)
@@ -467,7 +444,7 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) []string {
 		logger.InfoLogger().Println("Mounting as folder for unikernel")
 
 		//FS backend
-		fsdevarg := fmt.Sprintf("local,security_model=passthrough,id=hvirtio0,path=%s", q.Instancepath)
+		fsdevarg := fmt.Sprintf("local,security_model=passthrough,id=hvirtio0,path=%sfiles", q.Instancepath)
 		args = append(args, "-fsdev", fsdevarg)
 
 		//FS device
@@ -481,5 +458,5 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) []string {
 	//
 	args = append(args, "-cpu", "host", "-enable-kvm")
 
-	return args
+	return command, args
 }
