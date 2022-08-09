@@ -16,7 +16,7 @@ def request_scale_up_instance(microserviceid, username):
     if application is not None:
         if microserviceid in application["microservices"]:
             # Job status to scheduling REQUESTED
-            mongo_update_job_status(microserviceid, 'REQUESTED')
+            mongo_update_job_status(microserviceid, 'REQUESTED', 'Waiting for scheduling decision')
             # Request scheduling
             threading.Thread(group=None, target=scheduler_request_deploy, args=(service, str(microserviceid),)).start()
 
