@@ -95,7 +95,7 @@ services:
       #- CLUSTER_LOCATION=${CLUSTER_LOCATION}
       - CLUSTER_LATITUDE=${CLUSTER_LATITUDE}
       - CLUSTER_LONGITUDE=${CLUSTER_LONGITUDE}
-      - CLUSTER_ATTACHMENT_KEY=${CLUSTER_KEY}  # Key to attach to a Root Orchestrator
+      - CLUSTER_PAIRING_KEY=${PAIRING_KEY}  # Key to attach to a Root Orchestrator
     depends_on:
       - mongo_cluster
       - mqtt

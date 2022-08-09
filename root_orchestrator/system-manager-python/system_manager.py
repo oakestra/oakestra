@@ -4,6 +4,7 @@ from bson import json_util
 from flask import flash, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, decode_token
+from jwt import InvalidTokenError, DecodeError
 
 from blueprints import blueprints
 from flask_socketio import SocketIO, emit
@@ -14,6 +15,7 @@ from ext_requests.cluster_db import mongo_find_by_name_and_location, mongo_updat
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
 from ext_requests.user_db import create_admin
+from roles.securityUtils import check_jwt_token_validity
 from sm_logging import configure_logging
 from flask import Flask
 from secrets import token_hex
@@ -91,7 +93,7 @@ def handle_init_client(message):
                     format(request.remote_addr, request.environ.get('REMOTE_PORT')))
     app.logger.info(message)
 
-    '''create a new method (i.e.: mongo_pair_cluster with the content of the message, update de parameters)'''
+    '''create a new method (i.e.: mongo_pair_cluster with the content of the message, update the parameters)'''
 
     net_port = message['network_component_port']
     del message['manager_port']
@@ -105,11 +107,26 @@ def handle_init_client(message):
         }
     elif existing_cl['pairing_complete']:
         app.logger.info("The pairing was already completed")
+        # TODO: Authenticate with shared key that cluster must have after the first running
+        # TODO: if key expired --> Ask for user credentials
         response = {
-            'error': "Your cluster has already been attached to the Root Orchestrator"
+            'error': "Your cluster has already been attached to the Root Orchestrator. Id of cluster: " + str(
+                existing_cl['_id'])
         }
     else:
-        '''if existing_cl['pairing_key'] == message['pairing_key']:
+        '''try:
+            token_info = decode_token(encoded_token=message['pairing_key'])
+        except (InvalidTokenError, DecodeError):
+            raise Exception('Token not found')
+        if token_info is not None:'''
+        # take into consideration "NOT ENOUGH SEGMENTS" DECODE CATCH ERROR
+
+        token_info = check_jwt_token_validity(message['pairing_key'])
+        if token_info is None:
+            response = {
+                'error': "Pairing key not found"
+            }
+        elif existing_cl['pairing_key'] == message['pairing_key']:
             app.logger.info("The keys match")
             # TODO: Consider the case where the key is expired
             response = {
@@ -121,32 +138,18 @@ def handle_init_client(message):
                 cluster_address=request.remote_addr,
                 cluster_port=net_port
             )
-            # TODO: Invalidate the key
-        else:
-            app.logger.info("The pairing does not match")
-            response = {
-                'error': "Your pairing key does not match the one generated for your cluster"
-            }'''
-        #token_info = decode_token(message['pairing_key'])
-        if existing_cl['pairing_key'] == message['pairing_key']:
-            app.logger.info("The keys match")
-            # TODO: Consider the case where the key is expired
-            response = {
-                'id': str(existing_cl['_id'])
-            }
-            mongo_update_pairing_complete(existing_cl['_id'])
-            net_register_cluster(
-                cluster_id=str(existing_cl['_id']),
-                cluster_address=request.remote_addr,
-                cluster_port=net_port
-            )
-            # TODO: Invalidate the key
+            # TODO: Creates the shared secret key (with expiration date too) and send it to the cluster
+
+            #dt_string = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            #data = {"iat": dt_string, "aud": "SecretClusterKey", "cluster_name": existing_cl['cluster_name'],
+            #        "num": str(randint(0, 99999999))}
+            #create_access_token(identity=existing_cl['_id'], expires_delta=timedelta(days=30), additional_claims=data)
         else:
             app.logger.info("The pairing does not match")
             response = {
                 'error': "Your pairing key does not match the one generated for your cluster"
             }
-    
+
     emit('sc2', json.dumps(response), namespace='/register')
 
 

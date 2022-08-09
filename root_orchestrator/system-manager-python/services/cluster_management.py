@@ -1,10 +1,10 @@
 import logging
 import traceback
+from random import randint
 
 from ext_requests.cluster_db import *
 from roles import securityUtils
 from datetime import datetime, timedelta
-from services.service_management import delete_service
 
 
 def valid_cluster_requirements(cluster):
@@ -24,6 +24,7 @@ def register_cluster(cluster, userid):
         return {"message": "No cluster data provided"}, 403
     if not valid_cluster_requirements(cluster):
         return {'message': 'Cluster name is not in the valid format'}, 422
+    # TODO: Check that the latitude and longitude provided are correct
     cl_ob = mongo_find_by_name_and_location(cluster)
     if cl_ob is not None and not cl_ob['pairing_complete']:
         return {'message': 'There is another cluster with the same exact location trying to pair'}, 422
@@ -36,21 +37,17 @@ def register_cluster(cluster, userid):
         return {}
 
     # change the Bearer token into a Proof of Possession token (a PoP token) by adding a cnf claim a confirmation claim
-
-    # add the additional claims that must include: expiration date, secret_key2 (the one that will be returned to the
-    # front, the alg, identity and some data of the cluster - time that has been required to be added)
-
     # sec_key = current_app.config["JWT_SECRET_KEY"]
 
     dt_string = datetime.now().strftime("%d/%m/%Y %H:%M:%S")  # example: 25/06/2021 07:58:56
-    additional_claims = {"iat": dt_string, "aud": "addClusterAPI", "userid": userid}
-    expiry_date = timedelta(hours=5)
+    additional_claims = {"iat": dt_string, "aud": "addClusterAPI", "sub": userid,
+                         "cluster_name": cluster['cluster_name'], "num": str(randint(0, 99999999))}
 
-    token = securityUtils.create_jwt_secret_key_cluster(cluster_id, expiry_date, additional_claims)
+    token = securityUtils.create_jwt_pairing_key_cluster(cluster_id, timedelta(hours=5), additional_claims)
 
     cluster['pairing_key'] = token
     mongo_update_pairing_key(userid, cluster_id, cluster)
-    return {"secret_key": token}
+    return {"pairing_key": token}
 
 
 def update_cluster(cluster_id, userid, fields):

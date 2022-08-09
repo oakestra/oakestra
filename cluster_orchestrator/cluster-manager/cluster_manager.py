@@ -10,7 +10,7 @@ from prometheus_client import start_http_server
 import threading
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_find_job_by_system_id, \
     mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id, mongo_remove_job_instance, \
-    mongo_create_new_job_instance
+    mongo_create_new_job_instance, mongo_add_pairing_key
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
 from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
 from cm_logging import configure_logging
@@ -27,12 +27,10 @@ MY_CHOSEN_CLUSTER_NAME = os.environ.get('CLUSTER_NAME')
 MY_CLUSTER_LATITUDE = os.environ.get('CLUSTER_LATITUDE')
 MY_CLUSTER_LONGITUDE = os.environ.get('CLUSTER_LONGITUDE')
 NETWORK_COMPONENT_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
-CLUSTER_ATTACHMENT_KEY = os.environ.get('CLUSTER_ATTACHMENT_KEY', None)
+CLUSTER_PAIRING_KEY = os.environ.get('CLUSTER_PAIRING_KEY', None)
 MY_ASSIGNED_CLUSTER_ID = None
 
 SYSTEM_MANAGER_ADDR = 'http://' + os.environ.get('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
-
-# CLUSTER_KEY =
 
 my_logger = configure_logging()
 
@@ -214,7 +212,7 @@ def handle_init_greeting(jsonarg):
         #Do we want to ask for the cluster location in the pairing process?
         'cluster_latitude': MY_CLUSTER_LATITUDE,
         'cluster_longitude': MY_CLUSTER_LONGITUDE,
-        'pairing_key': CLUSTER_ATTACHMENT_KEY
+        'pairing_key': CLUSTER_PAIRING_KEY
         #'cluster_location': MY_CLUSTER_LOCATION
     }
     time.sleep(1)  # Wait to Avoid Race Condition!
@@ -236,6 +234,7 @@ def handle_init_final(jsonarg):
 
         global MY_ASSIGNED_CLUSTER_ID
         MY_ASSIGNED_CLUSTER_ID = data['id']
+        #mongo_add_pairing_key(MY_ASSIGNED_CLUSTER_ID, CLUSTER_ATTACHMENT_KEY)
 
         sio.disconnect()
         if MY_ASSIGNED_CLUSTER_ID is not None:
