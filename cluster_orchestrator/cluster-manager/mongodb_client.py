@@ -246,6 +246,7 @@ def mongo_get_services_with_failed_instanes():
     return mongo_jobs.db.jobs.find({'$or': [
         {'instance_list.status': "FAILED"},
         {'instance_list.status': "DEAD"},
+        {'instance_list.status': "NO_WORKER_CAPACITY"},
     ]})
 
 
