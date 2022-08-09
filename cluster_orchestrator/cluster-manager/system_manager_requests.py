@@ -22,12 +22,13 @@ def send_aggregated_info_to_sm(my_id, time_interval):
 
 
 def re_deploy_dead_services_routine():
+    re_deploy_triggers = ['FAILED', 'DEAD', 'NO_WORKER_CAPACITY']
     try:
         services = mongo_get_services_with_failed_instanes()
         if services is not None:
             for service in services:
                 for instance in service.get("instance_list", []):
-                    if instance.get('status', '') == 'FAILED' or instance.get('status', '') == 'DEAD':
+                    if instance.get('status', '') in re_deploy_triggers:
                         print('FAILED INSTANCE, ATTEMPTING RE-DEPLOY')
                         threading.Thread(group=None, target=trigger_undeploy_and_re_deploy,
                                          args=(service, instance)).start()
@@ -47,7 +48,8 @@ def send_aggregated_info(my_id, data):
 def trigger_undeploy_and_re_deploy(service, instance):
     try:
         service_operations.delete_service(service.get('system_job_id'), instance.get('instance_number'))
-        service_operations.deploy_service(service, str(service.get('system_job_id')), str(instance.get('instance_number')))
+        service_operations.deploy_service(service, str(service.get('system_job_id')),
+                                          str(instance.get('instance_number')))
     except Exception as e:
         print(e)
 
