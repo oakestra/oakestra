@@ -82,16 +82,19 @@ def get_scheduler_result_and_propagate_to_edge(system_job_id, instance_number):
     data = request.json  # get POST body
     app.logger.info(data)
 
-    resulting_node_id = data.get('node').get('_id')
+    if data.get('found',False):
+        resulting_node_id = data.get('node').get('_id')
 
-    mongo_update_job_status(system_job_id, instance_number, 'NODE_SCHEDULED', data.get('node'))
-    job = mongo_find_job_by_system_id(system_job_id)
+        mongo_update_job_status(system_job_id, instance_number, 'NODE_SCHEDULED', data.get('node'))
+        job = mongo_find_job_by_system_id(system_job_id)
 
-    # Inform network plugin about the deployment
-    threading.Thread(group=None, target=network_notify_deployment,
-                     args=(str(job['system_job_id']), job)).start()
+        # Inform network plugin about the deployment
+        threading.Thread(group=None, target=network_notify_deployment,
+                         args=(str(job['system_job_id']), job)).start()
 
-    mqtt_publish_edge_deploy(resulting_node_id, job, instance_number)
+        mqtt_publish_edge_deploy(resulting_node_id, job, instance_number)
+    else:
+        mongo_update_job_status(system_job_id, instance_number, 'NO_WORKER_CAPACITY', None)
     return "ok"
 
 
