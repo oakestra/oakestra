@@ -17,13 +17,16 @@ from ext_requests.cluster_db import mongo_find_by_name_and_location, mongo_updat
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
 from ext_requests.user_db import create_admin
-from roles.securityUtils import check_jwt_token_validity, create_jwt_secret_key_cluster, jwt_auth_required
+from roles.securityUtils import check_jwt_token_validity, create_jwt_secret_key_cluster, jwt_auth_required, \
+    create_jwt_refresh_secret_key_cluster
 from sm_logging import configure_logging
 from flask import Flask
 from secrets import token_hex
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
+
+from users.auth import user_token_refresh
 
 my_logger = configure_logging()
 
@@ -80,41 +83,58 @@ app.register_blueprint(swaggerui_blueprint)
 # .......... Register clusters via WebSocket ...........#
 # ......................................................#
 
+# TODO: Test this function
+def is_key_expiring(exp):
+    now = datetime.now(timezone.utc)
+    target_timestamp = datetime.timestamp(now + timedelta(days=1))
+    if target_timestamp > exp:
+        return True
+    else:
+        return False
+
 
 def check_if_keys_match(token_info, message):
-    if token_info.get("clusterName") == message['cluster_name'] and token_info.get("latitude") == message['cluster_latitude'] and token_info.get("longitude") == message['cluster_longitude']:
+    if token_info.get("clusterName") == message['cluster_name'] and token_info.get("latitude") == message[
+        'cluster_latitude'] and token_info.get("longitude") == message['cluster_longitude']:
         return True
     else:
         return False
 
 
 def token_validation(message, key_type, cluster, net_port):
+    cluster_id = str(cluster['_id'])
     try:
         token_info = check_jwt_token_validity(message[key_type])
         if check_if_keys_match(token_info, message):
             app.logger.info("The keys match")
             # TODO: Consider the case where the key is expired
             response = {
-                'id': str(cluster['_id'])
+                'id': cluster_id
             }
             if key_type == 'pairing_key':
-                mongo_update_pairing_complete(cluster['_id'])
+                mongo_update_pairing_complete(cluster_id)
                 net_register_cluster(
-                    cluster_id=str(cluster['_id']),
+                    cluster_id=cluster_id,
                     cluster_address=request.remote_addr,
                     cluster_port=net_port
                 )
-                additional_claims = {"iat": datetime.now(), "aud": "addClusterAPI",
-                                     "sub": str(cluster['userId']),
+                additional_claims = {"iat": datetime.now(), "aud": "pairCluster",
+                                     "sub": cluster_id,
                                      "clusterName": cluster['cluster_name'],
                                      "latitude": cluster['cluster_latitude'],
                                      "longitude": cluster['cluster_longitude'],
                                      "num": str(randint(0, 99999999))}
-                secret_key = create_jwt_secret_key_cluster(str(cluster['_id']), timedelta(days=20), additional_claims)
+                secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=5), additional_claims)
+                refresh_secret_key = create_jwt_refresh_secret_key_cluster(cluster_id, timedelta(days=20))
                 response['secret key'] = secret_key
-            #else:
-                # TODO: if secret key expired --> Ask for user credentials
-                # TODO: sec_key = current_app.config["JWT_SECRET_KEY"]
+            # else:
+            # TODO: if secret key expired --> Ask for user credentials
+            # TODO: sec_key = current_app.config["JWT_SECRET_KEY"] --> maybe we don't need this
+            if is_key_expiring(token_info["exp"]):
+                # TODO: first check refresh and then access token (secret key)
+                additional_claims = {}
+                secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=5), additional_claims)
+
         else:
             app.logger.info("The pairing does not match")
             response = {
@@ -137,10 +157,26 @@ def token_validation(message, key_type, cluster, net_port):
                              "again to attach your cluster. "
                 }
             else:
-                # TODO: Ask to log in the terminal with socketio
-                response = {
-                    'error': "Your cluster's secret key has expired; please log in again to get a new one. "
-                }
+                try:
+                    additional_claims = {"iat": datetime.now(), "aud": "pairCluster",
+                                         "sub": cluster_id,
+                                         "clusterName": cluster['cluster_name'],
+                                         "latitude": cluster['cluster_latitude'],
+                                         "longitude": cluster['cluster_longitude'],
+                                         "num": str(randint(0, 99999999))}
+                    # TODO: Before creating a new secret key, check the validation of the refresh token (created at
+                    #  the same time as the secret key == access token)
+                    secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=5), additional_claims)
+                    # TODO: Ask to log in the terminal with socketio
+                except Exception as e:
+                    if e == ExpiredSignatureError:
+                        response = {
+                            'error': "Your cluster's secret key has expired; please log in again to get a new one. "
+                        }
+                    else:
+                        response = {
+                            'error': str(e)
+                        }
         else:
             response = {
                 'error': str(e)
