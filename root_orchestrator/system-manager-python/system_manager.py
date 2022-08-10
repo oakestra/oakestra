@@ -87,6 +87,46 @@ def check_if_keys_match(token_info, message):
         return False
 
 
+def token_validation(message, key_type, cluster):
+    try:
+        token_info = check_jwt_token_validity(message[key_type])
+        if check_if_keys_match(token_info, message):
+            app.logger.info("The keys match")
+            # TODO: Consider the case where the key is expired
+            response = {
+                'id': str(cluster['_id'])
+            }
+            if key_type == 'pairing_key':
+                mongo_update_pairing_complete(cluster['_id'])
+                net_register_cluster(
+                    cluster_id=str(cluster['_id']),
+                    cluster_address=request.remote_addr,
+                    cluster_port=message['network_component_port']
+                )
+            #else:
+                # TODO: if secret key expired --> Ask for user credentials
+        else:
+            app.logger.info("The pairing does not match")
+            response = {
+                'error': "Your pairing key does not match the one generated for your cluster"
+            }
+    except Exception as e:
+        #print(traceback.format_exc())
+        if str(e) == "No token supplied" or str(e) == "Not enough segments" or str(e) == "Too many segments":
+            response = {
+                'error': "The key introduced is invalid"
+            }
+        elif str(e) == "Signature verification failed" or str(e) == "Algorithm not supported":
+            response = {
+                'error': "integrity-error"
+            }
+        else:
+            response = {
+                'error': str(e)
+            }
+    return response
+
+
 @socketio.on('connect', namespace='/register')
 def on_connect():
     app.logger.info('SocketIO - Cluster_Manager connected: {}'.format(request.remote_addr))
@@ -102,9 +142,6 @@ def handle_init_client(message):
                     format(request.remote_addr, request.environ.get('REMOTE_PORT')))
     app.logger.info(message)
 
-    '''create a new method (i.e.: mongo_pair_cluster with the content of the message, update the parameters)'''
-
-    net_port = message['network_component_port']
     del message['manager_port']
     del message['network_component_port']
     app.logger.info("MONGODB - checking if the cluster introduced is in our Database...")
@@ -115,72 +152,17 @@ def handle_init_client(message):
                      "Dashboard and add your cluster there. "
         }
     elif existing_cl['pairing_complete']:
-        app.logger.info("The pairing was already completed")
-        # TODO: Authenticate with shared key that cluster must have after the first running
-        # TODO: if key expired --> Ask for user credentials
-        response = {
-            'error': "Your cluster has already been attached to the Root Orchestrator. Id of cluster: " + str(
-                existing_cl['_id'])
-        }
-    else:
-        try:
-            token_info = check_jwt_token_validity(message['pairing_key'])
-            if check_if_keys_match(token_info, message):
-                app.logger.info("The keys match")
-                # TODO: Consider the case where the key is expired
-                response = {
-                    'id': str(existing_cl['_id'])
-                }
-                mongo_update_pairing_complete(existing_cl['_id'])
-                net_register_cluster(
-                    cluster_id=str(existing_cl['_id']),
-                    cluster_address=request.remote_addr,
-                    cluster_port=net_port
-                )
-                # TODO: Creates the shared secret key (with expiration date too) and send it to the cluster
-            else:
-                app.logger.info("The pairing does not match")
-                response = {
-                    'error': "Your pairing key does not match the one generated for your cluster"
-                }
-        except Exception as e:
-            print(traceback.format_exc())
-            if e == "No token supplied" or e == "Not enough or too many segments":
-                response = {
-                    'error': "invalid-token"
-                }
-            elif e == "Signature verification failed" or e == "Algorithm not supported":
-                response = {
-                    'error': "integrity-error"
-                }
-            else:
-                response = {
-                    'error': str(e)
-                }
-
-    emit('sc2', json.dumps(response), namespace='/register')
-    '''
-
-        if existing_cl['pairing_key'] == message['pairing_key']:
-            app.logger.info("The keys match")
-            # TODO: Consider the case where the key is expired
+        if message['secret_key'] is "":
             response = {
+                'warning': "The pairing was already completed; please authenticate with the cluster's secret key",
                 'id': str(existing_cl['_id'])
             }
-            mongo_update_pairing_complete(existing_cl['_id'])
-            net_register_cluster(
-                cluster_id=str(existing_cl['_id']),
-                cluster_address=request.remote_addr,
-                cluster_port=net_port
-            )
-            # TODO: Creates the shared secret key (with expiration date too) and send it to the cluster
         else:
-            app.logger.info("The pairing does not match")
-            response = {
-                'error': "Your pairing key does not match the one generated for your cluster"
-            }
+            response = token_validation(message, 'secret_key', existing_cl)
+    else:
+        response = token_validation(message, 'pairing_key', existing_cl)
 
-    emit('sc2', json.dumps(response), namespace='/register')'''
+    emit('sc2', json.dumps(response), namespace='/register')
 
 
 @socketio.event(namespace='/register')
