@@ -5,8 +5,8 @@ from random import randint
 from bson import json_util
 from flask import flash, request
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager, decode_token
-from jwt import InvalidTokenError, DecodeError
+from flask_jwt_extended import JWTManager
+from jwt import ExpiredSignatureError
 
 from blueprints import blueprints
 from flask_socketio import SocketIO, emit
@@ -17,7 +17,7 @@ from ext_requests.cluster_db import mongo_find_by_name_and_location, mongo_updat
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
 from ext_requests.user_db import create_admin
-from roles.securityUtils import check_jwt_token_validity, create_jwt_secret_key_cluster
+from roles.securityUtils import check_jwt_token_validity, create_jwt_secret_key_cluster, jwt_auth_required
 from sm_logging import configure_logging
 from flask import Flask
 from secrets import token_hex
@@ -121,7 +121,7 @@ def token_validation(message, key_type, cluster, net_port):
                 'error': "Your pairing key does not match the one generated for your cluster"
             }
     except Exception as e:
-        #print(traceback.format_exc())
+        print(traceback.format_exc())
         if str(e) == "No token supplied" or str(e) == "Not enough segments" or str(e) == "Too many segments":
             response = {
                 'error': "The key introduced is invalid"
@@ -130,6 +130,17 @@ def token_validation(message, key_type, cluster, net_port):
             response = {
                 'error': "integrity-error"
             }
+        elif e == ExpiredSignatureError:
+            if key_type == 'pairing_key':
+                response = {
+                    'error': "Your cluster's pairing key has expired; please log in again to the Dashboard to ask "
+                             "again to attach your cluster. "
+                }
+            else:
+                # TODO: Ask to log in the terminal with socketio
+                response = {
+                    'error': "Your cluster's secret key has expired; please log in again to get a new one. "
+                }
         else:
             response = {
                 'error': str(e)
@@ -146,6 +157,7 @@ def on_connect():
     emit('sc1', {'Hello-Cluster_Manager': 'please send your cluster info'}, namespace='/register')
 
 
+@jwt_auth_required()
 @socketio.on('cs1', namespace='/register')
 def handle_init_client(message):
     app.logger.info('SocketIO - Received Cluster_Manager_to_System_Manager_1: {}:{}'.
