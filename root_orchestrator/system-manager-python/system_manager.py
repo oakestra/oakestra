@@ -1,4 +1,5 @@
 import json
+import traceback
 
 from bson import json_util
 from flask import flash, request
@@ -80,7 +81,7 @@ app.register_blueprint(swaggerui_blueprint)
 
 
 def check_if_keys_match(token_info, message):
-    if token_info.get("cluster_name") == message['cluster_name'] and token_info.get("cluster_latitude") == message['latitude'] and token_info.get("cluster_longitude") == message['longitude']:
+    if token_info.get("clusterName") == message['cluster_name'] and token_info.get("latitude") == message['cluster_latitude'] and token_info.get("longitude") == message['cluster_longitude']:
         return True
     else:
         return False
@@ -122,7 +123,7 @@ def handle_init_client(message):
                 existing_cl['_id'])
         }
     else:
-        '''try:
+        try:
             token_info = check_jwt_token_validity(message['pairing_key'])
             if check_if_keys_match(token_info, message):
                 app.logger.info("The keys match")
@@ -143,6 +144,7 @@ def handle_init_client(message):
                     'error': "Your pairing key does not match the one generated for your cluster"
                 }
         except Exception as e:
+            print(traceback.format_exc())
             if e == "No token supplied" or e == "Not enough or too many segments":
                 response = {
                     'error': "invalid-token"
@@ -156,7 +158,8 @@ def handle_init_client(message):
                     'error': str(e)
                 }
 
-    emit('sc2', json.dumps(response), namespace='/register')'''
+    emit('sc2', json.dumps(response), namespace='/register')
+    '''
 
         if existing_cl['pairing_key'] == message['pairing_key']:
             app.logger.info("The keys match")
@@ -177,7 +180,7 @@ def handle_init_client(message):
                 'error': "Your pairing key does not match the one generated for your cluster"
             }
 
-    emit('sc2', json.dumps(response), namespace='/register')
+    emit('sc2', json.dumps(response), namespace='/register')'''
 
 
 @socketio.event(namespace='/register')

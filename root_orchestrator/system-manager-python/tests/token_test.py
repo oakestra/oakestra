@@ -1,6 +1,7 @@
 import logging
 import unittest
 from datetime import timedelta, datetime
+from random import randint
 
 import pytest as pytest
 from flask import Flask, jsonify
@@ -35,10 +36,10 @@ def app(request):
                     "iat": datetime.now(),
                     "aud": "addClusterAPI",
                     "sub": "identity",
-                    "cluster_name": "dummy",
-                    "cluster_latitude": "1",
-                    "cluster_longitude": "2",
-                    "num": str(42)
+                    "clusterName": "dummy2",
+                    "latitude": "1",
+                    "longitude": "2",
+                    "num": str(randint(0, 99999999))
                 }
             )
             return jsonify(jwt=access_token)
