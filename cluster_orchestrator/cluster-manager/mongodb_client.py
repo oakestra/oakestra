@@ -103,11 +103,9 @@ def mongo_find_key_by_identifier(identifier):
     return mongo_keys.db.keys.find_one(identifier)
 
 
-def mongo_add_pairing_key(identifier, key):
+def mongo_add_secret_key(cluster_id, key):
     global mongo_keys
-    return mongo_keys.db.keys.find_one_and_update({identifier: key},
-                                                  upsert=True,
-                                                  return_document=True)
+    return mongo_keys.db.keys.update_one({'cluster id': cluster_id}, {'$set': {'shared key': key}}, upsert=True)
 
 
 def mongo_dead_nodes():

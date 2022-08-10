@@ -98,5 +98,9 @@ def create_jwt_pairing_key_cluster(identity, expiration, claims):
     return create_access_token(identity=identity, expires_delta=expiration, additional_claims=claims)
 
 
+def create_jwt_secret_key_cluster(identity, expiration, claims):
+    return create_access_token(identity=identity, expires_delta=expiration, additional_claims=claims)
+
+
 def check_jwt_token_validity(token):
     return decode_token(encoded_token=token, allow_expired=False)

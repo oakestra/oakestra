@@ -1,5 +1,6 @@
 import json
 import traceback
+from random import randint
 
 from bson import json_util
 from flask import flash, request
@@ -16,11 +17,11 @@ from ext_requests.cluster_db import mongo_find_by_name_and_location, mongo_updat
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
 from ext_requests.user_db import create_admin
-from roles.securityUtils import check_jwt_token_validity
+from roles.securityUtils import check_jwt_token_validity, create_jwt_secret_key_cluster
 from sm_logging import configure_logging
 from flask import Flask
 from secrets import token_hex
-from datetime import timedelta
+from datetime import timedelta, datetime
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
 
@@ -87,7 +88,7 @@ def check_if_keys_match(token_info, message):
         return False
 
 
-def token_validation(message, key_type, cluster):
+def token_validation(message, key_type, cluster, net_port):
     try:
         token_info = check_jwt_token_validity(message[key_type])
         if check_if_keys_match(token_info, message):
@@ -101,10 +102,19 @@ def token_validation(message, key_type, cluster):
                 net_register_cluster(
                     cluster_id=str(cluster['_id']),
                     cluster_address=request.remote_addr,
-                    cluster_port=message['network_component_port']
+                    cluster_port=net_port
                 )
+                additional_claims = {"iat": datetime.now(), "aud": "addClusterAPI",
+                                     "sub": str(cluster['userId']),
+                                     "clusterName": cluster['cluster_name'],
+                                     "latitude": cluster['cluster_latitude'],
+                                     "longitude": cluster['cluster_longitude'],
+                                     "num": str(randint(0, 99999999))}
+                secret_key = create_jwt_secret_key_cluster(str(cluster['_id']), timedelta(days=20), additional_claims)
+                response['secret key'] = secret_key
             #else:
                 # TODO: if secret key expired --> Ask for user credentials
+                # TODO: sec_key = current_app.config["JWT_SECRET_KEY"]
         else:
             app.logger.info("The pairing does not match")
             response = {
@@ -141,7 +151,7 @@ def handle_init_client(message):
     app.logger.info('SocketIO - Received Cluster_Manager_to_System_Manager_1: {}:{}'.
                     format(request.remote_addr, request.environ.get('REMOTE_PORT')))
     app.logger.info(message)
-
+    net_port = message['network_component_port']
     del message['manager_port']
     del message['network_component_port']
     app.logger.info("MONGODB - checking if the cluster introduced is in our Database...")
@@ -158,9 +168,9 @@ def handle_init_client(message):
                 'id': str(existing_cl['_id'])
             }
         else:
-            response = token_validation(message, 'secret_key', existing_cl)
+            response = token_validation(message, 'secret_key', existing_cl, net_port)
     else:
-        response = token_validation(message, 'pairing_key', existing_cl)
+        response = token_validation(message, 'pairing_key', existing_cl, net_port)
 
     emit('sc2', json.dumps(response), namespace='/register')
 

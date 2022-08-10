@@ -127,16 +127,6 @@ def mongo_delete_cluster(cluster_id):
     db.app.logger.info("MONGODB - cluster {} deleted")
 
 
-def mongo_update_pairing_key(userid, cluster_id, data):
-    db.mongo_clusters.db.clusters.find_one_and_update({'_id': ObjectId(cluster_id), 'userId': userid},
-                                                      {'$set': {'pairing_key': data.get('pairing_key')}},
-                                                      return_document=True)
-
-
-def mongo_find_by_clusterId_and_userid(cluster_id, userid):
-    return db.mongo_clusters.db.clusters.find_one({'userId': userid, '_id': ObjectId(cluster_id)})['pairing_key']
-
-
 def mongo_find_by_name_and_location(cluster):
     return db.mongo_clusters.db.clusters.find_one({'cluster_name': cluster['cluster_name'],
                                                    'cluster_latitude': cluster['cluster_latitude'],

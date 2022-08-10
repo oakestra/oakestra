@@ -36,9 +36,6 @@ def register_cluster(cluster, userid):
         logging.log(level=logging.ERROR, msg="Invalid input")
         return {}
 
-    # change the Bearer token into a Proof of Possession token (a PoP token) by adding a cnf claim a confirmation claim
-    # sec_key = current_app.config["JWT_SECRET_KEY"]
-
     additional_claims = {"iat": datetime.now(), "aud": "addClusterAPI",
                          "sub": str(userid),
                          "clusterName": cluster['cluster_name'],
@@ -48,8 +45,8 @@ def register_cluster(cluster, userid):
 
     token = securityUtils.create_jwt_pairing_key_cluster(cluster_id, timedelta(hours=5), additional_claims)
 
-    cluster['pairing_key'] = token
-    mongo_update_pairing_key(userid, cluster_id, cluster)
+    # cluster['pairing_key'] = token --> we check the validity of tokens by the decoding call
+    #mongo_update_pairing_key(userid, cluster_id, cluster)
     return {"pairing_key": token}
 
 

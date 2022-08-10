@@ -1,22 +1,19 @@
-import os
-from flask import Flask, request, jsonify
+from flask import Flask, request
 from flask_socketio import SocketIO, emit
 import json
 import socketio
-import sys
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
 from prometheus_client import start_http_server
 import threading
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_find_job_by_system_id, \
-    mongo_update_job_status, mongo_find_node_by_name, mongo_find_job_by_id, mongo_remove_job_instance, \
-    mongo_create_new_job_instance, mongo_add_pairing_key
-from mqtt_client import mqtt_init, mqtt_publish_edge_deploy, mqtt_publish_edge_delete
-from cluster_scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, scheduler_request_status
+    mongo_update_job_status, mongo_add_secret_key
+from mqtt_client import mqtt_init, mqtt_publish_edge_deploy
+from cluster_scheduler_requests import scheduler_request_status
 from cm_logging import configure_logging
 from system_manager_requests import send_aggregated_info_to_sm, re_deploy_dead_services_routine
 from analyzing_workers import looking_for_dead_workers
-from my_prometheus_client import prometheus_init_gauge_metrics, prometheus_set_metrics
+from my_prometheus_client import prometheus_init_gauge_metrics
 from network_plugin_requests import *
 import service_operations
 
@@ -30,6 +27,7 @@ NETWORK_COMPONENT_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
 CLUSTER_PAIRING_KEY = os.environ.get('CLUSTER_PAIRING_KEY', None)
 CLUSTER_SECRET_KEY = os.environ.get('CLUSTER_SECRET_KEY', None)
 MY_ASSIGNED_CLUSTER_ID = None
+MY_ASSIGNED_SECRET_KEY = None
 
 SYSTEM_MANAGER_ADDR = 'http://' + os.environ.get('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
 
@@ -216,7 +214,11 @@ def handle_init_final(jsonarg):
 
         global MY_ASSIGNED_CLUSTER_ID
         MY_ASSIGNED_CLUSTER_ID = data['id']
-        #mongo_add_pairing_key(MY_ASSIGNED_CLUSTER_ID, CLUSTER_ATTACHMENT_KEY)
+
+        global MY_ASSIGNED_SECRET_KEY
+        MY_ASSIGNED_SECRET_KEY = data['secret key']
+
+        mongo_add_secret_key(MY_ASSIGNED_CLUSTER_ID, MY_ASSIGNED_SECRET_KEY)
 
         sio.disconnect()
         if MY_ASSIGNED_CLUSTER_ID is not None:
@@ -225,6 +227,11 @@ def handle_init_final(jsonarg):
             background_job_send_aggregated_information_to_sm()
         else:
             app.logger.info('No ID received.')
+
+        if MY_ASSIGNED_SECRET_KEY is not None:
+            app.logger.info('Received shared secret key. Keep it for further cluster actions.')
+        else:
+            app.logger.info('No shared secret key received.')
 
 
 @sio.event()
