@@ -66,6 +66,7 @@ cluster_op_schema = {
         "cluster_name": {"type": "string"},
         "cluster_latitude": {"type": "string"},
         "cluster_longitude": {"type": "string"},
+        "cluster_radius": {"type": "string"},
     }
 }
 

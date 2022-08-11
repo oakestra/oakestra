@@ -83,6 +83,16 @@ app.register_blueprint(swaggerui_blueprint)
 # .......... Register clusters via WebSocket ...........#
 # ......................................................#
 
+
+def fill_additional_claims(cluster, aud):
+    return {"iat": datetime.now(), "aud": aud,
+            "sub": str(cluster['_id']), # TODO: change to username
+            "clusterName": cluster['cluster_name'],
+            "latitude": cluster['cluster_latitude'], # TODO: delete locationa param
+            "longitude": cluster['cluster_longitude'],
+            "num": str(randint(0, 99999999))}
+
+
 # TODO: Test this function
 def is_key_expiring(exp):
     now = datetime.now(timezone.utc)
@@ -105,35 +115,34 @@ def token_validation(message, key_type, cluster, net_port):
     cluster_id = str(cluster['_id'])
     try:
         token_info = check_jwt_token_validity(message[key_type])
+
         if check_if_keys_match(token_info, message):
             app.logger.info("The keys match")
-            # TODO: Consider the case where the key is expired
             response = {
                 'id': cluster_id
             }
+            # Make pairing complete, register cluster and generate shared secret key with cluster to secure each
+            # further connection
             if key_type == 'pairing_key':
                 mongo_update_pairing_complete(cluster_id)
+
                 net_register_cluster(
                     cluster_id=cluster_id,
                     cluster_address=request.remote_addr,
                     cluster_port=net_port
                 )
-                additional_claims = {"iat": datetime.now(), "aud": "pairCluster",
-                                     "sub": cluster_id,
-                                     "clusterName": cluster['cluster_name'],
-                                     "latitude": cluster['cluster_latitude'],
-                                     "longitude": cluster['cluster_longitude'],
-                                     "num": str(randint(0, 99999999))}
-                secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=5), additional_claims)
-                refresh_secret_key = create_jwt_refresh_secret_key_cluster(cluster_id, timedelta(days=20))
-                response['secret key'] = secret_key
-            # else:
-            # TODO: if secret key expired --> Ask for user credentials
-            # TODO: sec_key = current_app.config["JWT_SECRET_KEY"] --> maybe we don't need this
-            if is_key_expiring(token_info["exp"]):
-                # TODO: first check refresh and then access token (secret key)
-                additional_claims = {}
-                secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=5), additional_claims)
+
+                claims = fill_additional_claims(cluster, "connectCluster")
+                secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=5), claims)
+                refresh_secret_key = create_jwt_refresh_secret_key_cluster(cluster_id, timedelta(days=30))
+            else:
+                if is_key_expiring(token_info["exp"]):
+                    # TODO: first check refresh and then access token (secret key)
+                    claims = fill_additional_claims(cluster, "connectCluster")
+                    secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=5), claims)
+                else:
+                    secret_key = message[key_type]
+            response['secret_key'] = secret_key
 
         else:
             app.logger.info("The pairing does not match")
@@ -156,17 +165,17 @@ def token_validation(message, key_type, cluster, net_port):
                     'error': "Your cluster's pairing key has expired; please log in again to the Dashboard to ask "
                              "again to attach your cluster. "
                 }
-            else:
+            else:  # key_type == 'secret_key'
                 try:
-                    additional_claims = {"iat": datetime.now(), "aud": "pairCluster",
-                                         "sub": cluster_id,
-                                         "clusterName": cluster['cluster_name'],
-                                         "latitude": cluster['cluster_latitude'],
-                                         "longitude": cluster['cluster_longitude'],
-                                         "num": str(randint(0, 99999999))}
                     # TODO: Before creating a new secret key, check the validation of the refresh token (created at
                     #  the same time as the secret key == access token)
-                    secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=5), additional_claims)
+                    # A new token is generated in case of the old one expired
+                    claims = fill_additional_claims(cluster, "connectCluster")
+                    new_secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=5), claims)
+                    response = {
+                        'warning': "Your cluster's secret key had expired; you now have a new one.",
+                        'secret_key': new_secret_key
+                    }
                     # TODO: Ask to log in the terminal with socketio
                 except Exception as e:
                     if e == ExpiredSignatureError:
@@ -206,8 +215,7 @@ def handle_init_client(message):
     existing_cl = mongo_find_by_name_and_location(message)
     if existing_cl is None:
         response = {
-            'error': "The cluster you are trying to pair is not yet saved in our database, please log in in the "
-                     "Dashboard and add your cluster there. "
+            'error': "The cluster is not yet saved, please log in in the Dashboard and add your cluster there. "
         }
     elif existing_cl['pairing_complete']:
         if message['secret_key'] is "":

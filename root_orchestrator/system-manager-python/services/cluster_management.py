@@ -37,9 +37,9 @@ def register_cluster(cluster, userid):
         return {}
 
     additional_claims = {"iat": datetime.now(), "aud": "addClusterAPI",
-                         "sub": str(userid),
+                         "sub": str(userid),  # TODO: change to username
                          "clusterName": cluster['cluster_name'],
-                         "latitude": cluster['cluster_latitude'],
+                         "latitude": cluster['cluster_latitude'], # TODO: delete location param
                          "longitude": cluster['cluster_longitude'],
                          "num": str(randint(0, 99999999))}
 
