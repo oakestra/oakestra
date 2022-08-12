@@ -37,10 +37,8 @@ def register_cluster(cluster, userid):
         return {}
 
     additional_claims = {"iat": datetime.now(), "aud": "addClusterAPI",
-                         "sub": str(userid),  # TODO: change to username
+                         "sub": cluster['user_name'],
                          "clusterName": cluster['cluster_name'],
-                         "latitude": cluster['cluster_latitude'], # TODO: delete location param
-                         "longitude": cluster['cluster_longitude'],
                          "num": str(randint(0, 99999999))}
 
     token = securityUtils.create_jwt_pairing_key_cluster(cluster_id, timedelta(hours=5), additional_claims)
