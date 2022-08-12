@@ -37,7 +37,7 @@ type UnikernelRuntime struct {
 	channelLock *sync.RWMutex
 }
 
-var VMruntime = UnikernelRuntime{
+var ukruntime = UnikernelRuntime{
 	channelLock: &sync.RWMutex{},
 }
 
@@ -51,7 +51,7 @@ func GetUnikernelRuntime() *UnikernelRuntime {
 		//Check which version of qemu is required for kvm support (local arch)
 		if rt.GOARCH == "amd64" {
 			command = "qemu-system-x86_64"
-		} else if rt.GOARCH == "arm64" {
+		} else {
 			command = "qemu-system-aarch64"
 		}
 
@@ -59,15 +59,15 @@ func GetUnikernelRuntime() *UnikernelRuntime {
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Unable to find qemu executable(%s): %v\n", command, err)
 		}
-		VMruntime.qemuPath = path
+		ukruntime.qemuPath = path
 		logger.InfoLogger().Printf("Using qemu at %s\n", path)
-		VMruntime.killQueue = make(map[string]*chan bool)
-		VMruntime.qemuDomains = make(map[string]*qemuDomain)
+		ukruntime.killQueue = make(map[string]*chan bool)
+		ukruntime.qemuDomains = make(map[string]*qemuDomain)
 		err = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
 		err = os.MkdirAll("/tmp/node_engine/inst/", 0755)
 
 	})
-	return &VMruntime
+	return &ukruntime
 }
 
 func (r *UnikernelRuntime) StopUnikernelRuntime() {
@@ -90,7 +90,6 @@ func (r *UnikernelRuntime) StopUnikernelRuntime() {
 
 func (r *UnikernelRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
 
-	//TODO Differ between unikernels
 	killChannel := make(chan bool, 1)
 	startupChannel := make(chan bool, 0)
 	errorChannel := make(chan error, 0)
@@ -256,7 +255,6 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	var qemuMonitor *qmp.SocketMonitor
 
 	qemuConfig.Memory = service.Memory
-	//qemuKernel = fmt.Sprintf("-kernel", service.Image)
 
 	//hostname is used as name for the namespace in which the unikernel will be running in
 	hostname := genTaskID(service.Sname, service.Instance)
@@ -288,18 +286,39 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		}
 	}
 
+	qemuConfig.KernelArgs = service.Commands
+
+	//Generate the command to start Qemu with
 	command, args := qemuConfig.GenerateArgs(r)
 	qemuCmd = exec.Command(command, args...)
 
-	logger.InfoLogger().Printf(qemuCmd.String())
-	logger.InfoLogger().Printf("STARTING UNIKERNEL")
+	logger.InfoLogger().Printf("Unikernel starting command: %s", qemuCmd.String())
+
 	err = qemuCmd.Start()
 	if err != nil {
 		logger.ErrorLogger().Printf("Failed to start qemu: %v", err)
 		revert(err)
 		return
 	}
-	logger.InfoLogger().Printf("NOW RUNNING UNIKERNEL")
+	logger.InfoLogger().Println("Unikernel started")
+
+	exitStatusQemu := make(chan int)
+
+	go func(status chan int) {
+		err = qemuCmd.Wait()
+		if err != nil {
+			if e, ok := err.(*exec.ExitError); ok {
+				logger.InfoLogger().Printf("Qemu exited with code %d", e.ExitCode())
+				status <- e.ExitCode()
+			} else {
+				logger.InfoLogger().Printf("Unexpected error occured %v", err)
+				status <- -1
+			}
+		} else {
+			status <- 0
+		}
+
+	}(exitStatusQemu)
 
 	Domain := qemuDomain{
 		Name:        hostname,
@@ -308,13 +327,24 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		qemuProcess: qemuCmd.Process,
 	}
 
-	time.Sleep(100 * time.Millisecond) // Wait for qemu to properly init
 	socketPath := fmt.Sprintf("./%s", hostname)
+	for _, err := os.Stat(socketPath); errors.Is(err, os.ErrNotExist); {
+		//Wait for qemu to properly start up
+	}
+
 	logger.InfoLogger().Printf("Trying to connecto to %s", socketPath)
 	qemuMonitor, err = qmp.NewSocketMonitor("unix", socketPath, 2*time.Second)
 	if err != nil {
 		logger.InfoLogger().Printf("Failed to Create connection to QMP: %v\n", err)
 		revert(err)
+		if model.GetNodeInfo().Overlay {
+			err = requests.DeleteNamespaceForUnikernel(service.Sname, service.Instance)
+			if err != nil {
+				logger.InfoLogger().Printf("Unable to undeploy %s's network: %v", hostname, err)
+			}
+		}
+		//Kill the qemu process because of no qmp connectivity
+		qemuCmd.Process.Kill()
 		return
 	}
 
@@ -347,9 +377,11 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		r.channelLock.Unlock()
 
 		//Undeploy the network -> Delete Namespace
-		err = requests.DeleteNamespaceForUnikernel(service.Sname, service.Instance)
-		if err != nil {
-			logger.InfoLogger().Printf("Unable to undeploy %s: %v", hostname, err)
+		if model.GetNodeInfo().Overlay {
+			err = requests.DeleteNamespaceForUnikernel(service.Sname, service.Instance)
+			if err != nil {
+				logger.InfoLogger().Printf("Unable to undeploy %s's network: %v", hostname, err)
+			}
 		}
 
 		if err != nil {
@@ -361,9 +393,10 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 
 	startup <- true
 	select {
+	case <-exitStatusQemu:
+		logger.InfoLogger().Printf("Received status back from Qemu process")
 	case <-*killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for unikernel")
-
 	}
 	service.Status = model.SERVICE_DEAD
 	statusChangeNotificationHandler(service)
@@ -403,6 +436,7 @@ type QemuConfiguration struct {
 	Name         string
 	Memory       int
 	Instancepath string
+	KernelArgs   []string
 	NSname       *string
 }
 
@@ -434,8 +468,13 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string)
 		args = append(args, "-device", "virtio-net,netdev=tap0,mac=52:55:00:d1:55:01")
 	}
 	//Kernel arguments including the network configuration
+	//The arguments after -- are given to the main function of the unikernel
 	args = append(args, "-append")
-	args = append(args, "netdev.ipv4_addr=192.168.1.2 netdev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.0 --")
+	KernelArgsStr := " "
+	for _, kernelarg := range q.KernelArgs {
+		KernelArgsStr += kernelarg + " "
+	}
+	args = append(args, "netdev.ipv4_addr=192.168.1.2 netdev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.0 --"+KernelArgsStr)
 
 	//Check if a folder is to be mounted
 	mountpath := fmt.Sprintf("%sfiles/", q.Instancepath)
@@ -455,8 +494,12 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string)
 	Qmp := fmt.Sprintf("unix:./%s,server,nowait", q.Name)
 	args = append(args, "-qmp", Qmp)
 
-	//
+	//Set the cpu to host passthrough and enable kvm
 	args = append(args, "-cpu", "host", "-enable-kvm")
+
+	if rt.GOARCH != "amd64" {
+		args = append(args, "-machine", "virt")
+	}
 
 	return command, args
 }
