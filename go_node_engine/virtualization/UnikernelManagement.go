@@ -109,7 +109,6 @@ func (r *UnikernelRuntime) Deploy(service model.Service, statusChangeNotificatio
 	go r.VirtualMachineCreationRoutine(service, &killChannel, startupChannel, errorChannel, statusChangeNotificationHandler)
 
 	if <-startupChannel != true {
-		logger.InfoLogger().Printf("faield nognsfonojsfnbofnbndbodbndfobnjodgndobng\n\n")
 		return <-errorChannel
 	}
 
