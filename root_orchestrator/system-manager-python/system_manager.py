@@ -13,7 +13,8 @@ from flask_socketio import SocketIO, emit
 from pathlib import Path
 from werkzeug.utils import secure_filename, redirect
 
-from ext_requests.cluster_db import mongo_find_by_name_and_location, mongo_update_pairing_complete
+from ext_requests.cluster_db import mongo_find_by_name_and_location, mongo_update_pairing_complete, \
+    mongo_find_by_username
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
 from ext_requests.user_db import create_admin
@@ -85,11 +86,10 @@ app.register_blueprint(swaggerui_blueprint)
 
 
 def fill_additional_claims(cluster, aud):
-    return {"iat": datetime.now(), "aud": aud,
-            "sub": str(cluster['_id']), # TODO: change to username
+    return {"iat": datetime.now(),
+            "aud": aud,
+            "sub": cluster['user_name'],
             "clusterName": cluster['cluster_name'],
-            "latitude": cluster['cluster_latitude'], # TODO: delete locationa param
-            "longitude": cluster['cluster_longitude'],
             "num": str(randint(0, 99999999))}
 
 
@@ -104,8 +104,7 @@ def is_key_expiring(exp):
 
 
 def check_if_keys_match(token_info, message):
-    if token_info.get("clusterName") == message['cluster_name'] and token_info.get("latitude") == message[
-        'cluster_latitude'] and token_info.get("longitude") == message['cluster_longitude']:
+    if token_info.get("clusterName") == message['cluster_name'] and token_info.get("sub") == message['user_name']:
         return True
     else:
         return False
@@ -212,10 +211,11 @@ def handle_init_client(message):
     del message['manager_port']
     del message['network_component_port']
     app.logger.info("MONGODB - checking if the cluster introduced is in our Database...")
-    existing_cl = mongo_find_by_name_and_location(message)
+    existing_cl = mongo_find_by_username(message)
     if existing_cl is None:
         response = {
-            'error': "The cluster is not yet saved, please log in in the Dashboard and add your cluster there. "
+            'error': "The cluster is not yet saved, please log in in the Dashboard and add your cluster there. ",
+            'aixo es el username': message['user_name']
         }
     elif existing_cl['pairing_complete']:
         if message['secret_key'] is "":

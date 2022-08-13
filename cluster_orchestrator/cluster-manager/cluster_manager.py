@@ -19,18 +19,17 @@ import service_operations
 
 MY_PORT = os.environ.get('MY_PORT')
 
-MY_CHOSEN_CLUSTER_NAME = os.environ.get('CLUSTER_NAME')
-#MY_CLUSTER_LOCATION = os.environ.get('CLUSTER_LOCATION')
-MY_CLUSTER_LATITUDE = os.environ.get('CLUSTER_LATITUDE')
-MY_CLUSTER_LONGITUDE = os.environ.get('CLUSTER_LONGITUDE')
 NETWORK_COMPONENT_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
-CLUSTER_PAIRING_KEY = os.environ.get('CLUSTER_PAIRING_KEY', None)
+
+CLUSTER_NAME = os.getenv('CLUSTER_NAME')
+CLUSTER_PAIRING_KEY = os.getenv('CLUSTER_PAIRING_KEY', None)
+USER_NAME = os.getenv('USER_NAME')
+
 CLUSTER_SECRET_KEY = os.environ.get('CLUSTER_SECRET_KEY', None)
-#MY_CLUSTER_PATH = os.environ.get('MY_CLUSTER_PATH')
 MY_ASSIGNED_CLUSTER_ID = None
 MY_ASSIGNED_SECRET_KEY = None
 
-SYSTEM_MANAGER_ADDR = 'http://' + os.environ.get('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
+SYSTEM_MANAGER_ADDR = 'http://' + os.getenv('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
 
 my_logger = configure_logging()
 
@@ -187,13 +186,12 @@ def handle_init_greeting(jsonarg):
     data = {
         'manager_port': MY_PORT,
         'network_component_port': NETWORK_COMPONENT_PORT,
-        'cluster_name': MY_CHOSEN_CLUSTER_NAME,
+        'cluster_name': CLUSTER_NAME,
         'cluster_info': {},
-        'cluster_latitude': MY_CLUSTER_LATITUDE,
-        'cluster_longitude': MY_CLUSTER_LONGITUDE,
         'pairing_key': CLUSTER_PAIRING_KEY,
-        'secret_key': CLUSTER_SECRET_KEY
-        #'cluster_location': MY_CLUSTER_LOCATION
+        'secret_key': CLUSTER_SECRET_KEY,
+        'user_name': USER_NAME
+        # 'cluster_location': MY_CLUSTER_LOCATION
     }
     time.sleep(1)  # Wait to Avoid Race Condition!
 

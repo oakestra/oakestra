@@ -24,7 +24,6 @@ def register_cluster(cluster, userid):
         return {"message": "No cluster data provided"}, 403
     if not valid_cluster_requirements(cluster):
         return {'message': 'Cluster name is not in the valid format'}, 422
-    # TODO: Check that the latitude and longitude provided are correct
     cl_ob = mongo_find_by_name_and_location(cluster)
     if cl_ob is not None and not cl_ob['pairing_complete']:
         return {'message': 'There is another cluster with the same exact location trying to pair'}, 422
@@ -36,7 +35,8 @@ def register_cluster(cluster, userid):
         logging.log(level=logging.ERROR, msg="Invalid input")
         return {}
 
-    additional_claims = {"iat": datetime.now(), "aud": "addClusterAPI",
+    additional_claims = {"iat": datetime.now(),
+                         "aud": "addClusterAPI",
                          "sub": cluster['user_name'],
                          "clusterName": cluster['cluster_name'],
                          "num": str(randint(0, 99999999))}

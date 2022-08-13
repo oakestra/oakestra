@@ -138,3 +138,8 @@ def mongo_update_pairing_complete(cluster_id):
     db.mongo_clusters.db.clusters.find_one_and_update({'_id': ObjectId(cluster_id)},
                                                       {'$set': {'pairing_complete': True}},
                                                       return_document=True)
+
+
+def mongo_find_by_username(cluster):
+    return db.mongo_clusters.db.clusters.find_one({'cluster_name': cluster['cluster_name'],
+                                                   'user_name': cluster['user_name']})
