@@ -9,6 +9,7 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/requests"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -169,17 +170,20 @@ func GetKernelImage(kernel string, name string) *string {
 
 		if err != nil {
 			logger.InfoLogger().Printf("Unable to create Kernel: %v", err)
+			return nil
 		}
 		defer kimage.Close()
 
 		d, err := http.Get(kernel)
 		if err != nil {
 			logger.InfoLogger().Printf("Unable to locate kernel image (%s): %v", kernel, err)
+			os.Remove(kernel_tar)
 			return nil
 		}
 		size, err := io.Copy(kimage, d.Body)
 		if err != nil {
 			logger.InfoLogger().Printf("Kernel download failed: %v", err)
+			os.Remove(kernel_tar)
 			return nil
 		}
 		d.Body.Close()
@@ -268,7 +272,6 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	qemuConfig.Instancepath = *kernelPath
 
 	revert := func(err error) {
-		logger.InfoLogger().Printf("FAILED TO START")
 		startup <- false
 		errorchan <- err
 		r.channelLock.Lock()
@@ -328,8 +331,35 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	}
 
 	socketPath := fmt.Sprintf("./%s", hostname)
-	for _, err := os.Stat(socketPath); errors.Is(err, os.ErrNotExist); {
+	for true {
 		//Wait for qemu to properly start up
+		conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
+
+		if errors.Is(err, os.ErrNotExist) {
+			//logger.InfoLogger().Printf("Waiting: %v", err)
+			time.Sleep(10 * time.Millisecond)
+		} else if err != nil {
+			if !strings.HasSuffix(err.Error(), ": connection refused") {
+				logger.InfoLogger().Printf("Something went wrong while starting Qemu %v", err)
+				revert(err)
+				if model.GetNodeInfo().Overlay {
+					err = requests.DeleteNamespaceForUnikernel(service.Sname, service.Instance)
+					if err != nil {
+						logger.InfoLogger().Printf("Unable to undeploy %s's network: %v", hostname, err)
+					}
+				}
+				if qemuCmd.Process != nil {
+					qemuCmd.Process.Kill()
+				}
+				return
+			}
+			logger.InfoLogger().Printf("Waiting: %v", err)
+
+		} else {
+			conn.Close()
+			break
+		}
+
 	}
 
 	logger.InfoLogger().Printf("Trying to connecto to %s", socketPath)
@@ -344,7 +374,9 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 			}
 		}
 		//Kill the qemu process because of no qmp connectivity
-		qemuCmd.Process.Kill()
+		if qemuCmd.Process != nil {
+			qemuCmd.Process.Kill()
+		}
 		return
 	}
 
