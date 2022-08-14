@@ -5,6 +5,7 @@ import (
 	"go_node_engine/logger"
 	"net"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
 
@@ -30,6 +31,7 @@ type Node struct {
 	SystemInfo     map[string]string `json:"system_info"`
 	CpuUsage       float64           `json:"cpu"`
 	CpuCores       int               `json:"free_cores"`
+	CpuArch        string            `json:"architecture"`
 	MemoryUsed     float64           `json:"memory"`
 	MemoryMB       int               `json:"memory_free_in_MB"`
 	DiskInfo       map[string]string `json:"disk_info"`
@@ -49,6 +51,7 @@ func GetNodeInfo() Node {
 			Host:       getHostname(),
 			SystemInfo: getSystemInfo(),
 			CpuCores:   getCpuCores(),
+			CpuArch:    runtime.GOARCH,
 			Port:       getPort(),
 			Technology: getSupportedTechnologyList(),
 			Overlay:    false,

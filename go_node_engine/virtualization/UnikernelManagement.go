@@ -42,10 +42,10 @@ var ukruntime = UnikernelRuntime{
 	channelLock: &sync.RWMutex{},
 }
 
-var libVirtSyncOnce sync.Once
+var ukSyncOnce sync.Once
 
 func GetUnikernelRuntime() *UnikernelRuntime {
-	libVirtSyncOnce.Do(func() {
+	ukSyncOnce.Do(func() {
 		var command string
 		var err error
 
@@ -59,6 +59,7 @@ func GetUnikernelRuntime() *UnikernelRuntime {
 		path, err := exec.LookPath(command)
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Unable to find qemu executable(%s): %v\n", command, err)
+			ukruntime.qemuPath = ""
 		}
 		ukruntime.qemuPath = path
 		logger.InfoLogger().Printf("Using qemu at %s\n", path)
