@@ -2,6 +2,12 @@ package model
 
 import (
 	"fmt"
+	"go_node_engine/logger"
+	"net"
+	"os"
+	"strconv"
+	"sync"
+
 	"github.com/jaypipes/ghw"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
@@ -9,11 +15,6 @@ import (
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	psnet "github.com/shirou/gopsutil/net"
-	"go_node_engine/logger"
-	"net"
-	"os"
-	"strconv"
-	"sync"
 )
 
 const (
@@ -212,5 +213,5 @@ func getPort() string {
 }
 
 func getSupportedTechnologyList() []string {
-	return []string{CONTAINER_RUNTIME}
+	return []string{CONTAINER_RUNTIME, UNIKERNEL_RUNTIME}
 }
