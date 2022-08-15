@@ -1,7 +1,7 @@
 package playground
 
 import (
-	"NetManager/env"
+	"NetManager/TableEntryCache"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -12,7 +12,7 @@ import (
 )
 
 type SyncPacket struct {
-	EntryList []env.TableEntry `json:"entry_list"`
+	EntryList []TableEntryCache.TableEntry `json:"entry_list"`
 }
 
 func AskSync(ip string, port string, entries [][]string) error {
@@ -76,8 +76,8 @@ func handleSync(writer http.ResponseWriter, request *http.Request) {
 
 }
 
-func entriesToList(entries [][]string) []env.TableEntry {
-	res := make([]env.TableEntry, 0)
+func entriesToList(entries [][]string) []TableEntryCache.TableEntry {
+	res := make([]TableEntryCache.TableEntry, 0)
 	for _, entry := range entries {
 		res = append(res, StringToEntry(entry))
 	}

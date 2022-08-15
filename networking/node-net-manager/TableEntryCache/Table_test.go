@@ -1,4 +1,4 @@
-package env
+package TableEntryCache
 
 import (
 	"net"
@@ -202,7 +202,7 @@ func TestTableDeleteManyInstances(t *testing.T) {
 		t.Error("Table size should be 1")
 	}
 
-	if len(table.SearchByJobName("a1.a1.a2.a2")) >= 0 {
+	if len(table.SearchByJobName("a1.a1.a2.a2")) > 0 {
 		t.Errorf("a1 should not be there: %v", table.SearchByJobName("a1.a1.a2.a2"))
 	}
 }
