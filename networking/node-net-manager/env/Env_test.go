@@ -136,3 +136,70 @@ func TestTableDeleteMany(t *testing.T) {
 		t.Error("Removed the wrong entry")
 	}
 }
+
+func TestTableDeleteManyInstances(t *testing.T) {
+	table := NewTableManager()
+	entry1 := TableEntry{
+		Appname:          "a1",
+		Appns:            "a1",
+		Servicename:      "a2",
+		Servicenamespace: "a2",
+		Instancenumber:   0,
+		Cluster:          0,
+		Nodeip:           net.ParseIP("10.30.0.1"),
+		Nodeport:         1003,
+		Nsip:             net.ParseIP("10.18.0.1"),
+		ServiceIP: []ServiceIP{{
+			IpType:  RoundRobin,
+			Address: net.ParseIP("10.30.1.1"),
+		}},
+	}
+	entry2 := TableEntry{
+		Appname:          "a1",
+		Appns:            "a1",
+		Servicename:      "a2",
+		Servicenamespace: "a2",
+		Instancenumber:   1,
+		Cluster:          0,
+		Nodeip:           net.ParseIP("10.30.0.1"),
+		Nodeport:         1003,
+		Nsip:             net.ParseIP("10.18.0.2"),
+		ServiceIP: []ServiceIP{{
+			IpType:  RoundRobin,
+			Address: net.ParseIP("10.30.1.2"),
+		}},
+	}
+
+	entry3 := TableEntry{
+		Appname:          "a3",
+		Appns:            "a3",
+		Servicename:      "a2",
+		Servicenamespace: "a2",
+		Instancenumber:   1,
+		Cluster:          0,
+		Nodeip:           net.ParseIP("10.30.0.1"),
+		Nodeport:         1003,
+		Nsip:             net.ParseIP("10.18.0.3"),
+		ServiceIP: []ServiceIP{{
+			IpType:  RoundRobin,
+			Address: net.ParseIP("10.30.1.3"),
+		}},
+	}
+
+	_ = table.Add(entry1)
+	_ = table.Add(entry2)
+	_ = table.Add(entry3)
+
+	err := table.RemoveByJobName("a1.a1.a2.a2")
+	if err != nil {
+		t.Error("Error during deletion")
+	}
+
+	if len(table.translationTable) > 1 {
+		t.Error("Table size should be 1")
+	}
+
+	if len(table.SearchByJobName("a1.a1.a2.a2")) >= 0 {
+		t.Error("a1 should not be there")
+	}
+}

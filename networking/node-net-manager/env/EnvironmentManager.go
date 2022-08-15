@@ -433,6 +433,7 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 	table := env.translationTable.SearchByServiceIP(ip)
 	if len(table) > 0 {
 		//Fire table instance usage event
+		fmt.Printf("Available entry: %v \n\n", table[0])
 		events.GetInstance().Emit(events.Event{
 			EventType:   events.TableQuery,
 			EventTarget: table[0].JobName,
@@ -507,7 +508,10 @@ func (env *Environment) RefreshServiceTable(jobname string) {
 }
 
 func (env *Environment) RemoveServiceEntries(jobname string) {
-	_ = env.translationTable.RemoveByJobName(jobname)
+	err := env.translationTable.RemoveByJobName(jobname)
+	if err != nil {
+		log.Printf("CRITICAL-ERROR: %v", err)
+	}
 }
 
 func (env *Environment) RemoveNsIPEntries(nsip string) {

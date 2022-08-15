@@ -77,15 +77,21 @@ func (t *TableManager) RemoveByJobName(jobname string) error {
 	t.rwlock.Lock()
 	defer t.rwlock.Unlock()
 
-	found := -1
+	toRemoveIndices := make([]int, 0)
+
 	for i, tableElement := range t.translationTable {
 		if tableElement.JobName == jobname {
-			found = i
+			toRemoveIndices = append(toRemoveIndices, i)
 			break
 		}
 	}
-
-	return t.removeByIndex(found)
+	for _, elemIndex := range toRemoveIndices {
+		err := t.removeByIndex(elemIndex)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (t *TableManager) removeByIndex(index int) error {
