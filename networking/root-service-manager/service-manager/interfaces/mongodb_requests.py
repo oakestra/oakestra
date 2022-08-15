@@ -390,10 +390,12 @@ def mongo_register_cluster_job_interest(cluster_id, job_name):
 def mongo_remove_cluster_job_interest(cluster_id, job_name):
     global mongo_clusters
     interests = mongo_clusters.db.cluster.find_one({"cluster_id": cluster_id}).get("interests")
-    interests.delete_one(job_name)
-    mongo_clusters.db.cluster.find_one_and_update(
-        {"cluster_id": cluster_id},
-        {'$set': {
-            "interests": interests
-        }}
+    if interests is not None:
+        if job_name in interests:
+            interests.remove(job_name)
+            mongo_clusters.db.cluster.find_one_and_update(
+                {"cluster_id": cluster_id},
+                {'$set': {
+                    "interests": interests
+                }}
     )

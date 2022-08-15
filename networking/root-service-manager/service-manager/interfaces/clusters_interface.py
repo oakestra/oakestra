@@ -33,5 +33,5 @@ def request_with_retry(url, json):
     retries = Retry(total=5, backoff_factor=1, status_forcelist=[502, 503, 504])
     s.mount('http://', HTTPAdapter(max_retries=retries))
 
-    session = s.post(url=url, json=json)
+    session = s.post(url=url, json=json, timeout=2)
     return session.status_code
