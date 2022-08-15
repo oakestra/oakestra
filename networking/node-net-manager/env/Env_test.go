@@ -195,7 +195,7 @@ func TestTableDeleteManyInstances(t *testing.T) {
 
 	err := table.RemoveByJobName("a1.a1.a2.a2")
 	if err != nil {
-		t.Error("Error during deletion")
+		t.Errorf("Error during deletion: %v", err)
 	}
 
 	if len(table.translationTable) > 1 {
@@ -203,6 +203,6 @@ func TestTableDeleteManyInstances(t *testing.T) {
 	}
 
 	if len(table.SearchByJobName("a1.a1.a2.a2")) >= 0 {
-		t.Error("a1 should not be there")
+		t.Errorf("a1 should not be there: %v", table.SearchByJobName("a1.a1.a2.a2"))
 	}
 }

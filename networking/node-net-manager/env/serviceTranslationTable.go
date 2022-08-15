@@ -78,7 +78,8 @@ func (t *TableManager) RemoveByJobName(jobname string) error {
 	defer t.rwlock.Unlock()
 
 	elems := len(t.translationTable)
-	for i := 0; i < elems; i++ {
+	i := 0
+	for i < elems {
 		if t.translationTable[i].JobName == jobname {
 			err := t.removeByIndex(i)
 			if err != nil {
@@ -87,6 +88,7 @@ func (t *TableManager) RemoveByJobName(jobname string) error {
 			elems = elems - 1
 			i = i - 1
 		}
+		i++
 	}
 	return nil
 }
