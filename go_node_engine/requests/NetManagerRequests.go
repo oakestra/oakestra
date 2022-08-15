@@ -149,7 +149,7 @@ func CreateNetworkNamespaceForUnikernel(servicename string, instance int, portMa
 func DeleteNamespaceForUnikernel(servicename string, instance int) error {
 	request := connectNetworkRequest{
 		Pid:            -1,
-		Servicename:    fmt.Sprintf("%s.instance.%d", servicename, instance),
+		Servicename:    servicename,
 		Instancenumber: instance,
 	}
 	jsonReq, err := json.Marshal(request)
