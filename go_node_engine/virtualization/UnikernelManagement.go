@@ -486,7 +486,7 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string)
 
 	//Kernel image
 	kernel := q.Instancepath + "kernel"
-	args = append(args, "-kernel", kernel)
+	args = append(args, "-kernel", kernel, "-nographic")
 
 	//Memory
 	memory := fmt.Sprintf("%d", q.Memory)
