@@ -1,6 +1,7 @@
 package env
 
 import (
+	"NetManager/TableEntryCache"
 	"NetManager/events"
 	"NetManager/mqtt"
 	"NetManager/network"
@@ -21,9 +22,9 @@ import (
 const NamespaceAlreadyDeclared string = "namespace already declared"
 
 type EnvironmentManager interface {
-	GetTableEntryByServiceIP(ip net.IP) []TableEntry
-	GetTableEntryByNsIP(ip net.IP) (TableEntry, bool)
-	GetTableEntryByInstanceIP(ip net.IP) (TableEntry, bool)
+	GetTableEntryByServiceIP(ip net.IP) []TableEntryCache.TableEntry
+	GetTableEntryByNsIP(ip net.IP) (TableEntryCache.TableEntry, bool)
+	GetTableEntryByInstanceIP(ip net.IP) (TableEntryCache.TableEntry, bool)
 }
 
 type Configuration struct {
@@ -43,7 +44,7 @@ type Environment struct {
 	nextVethNumber    int
 	proxyName         string
 	config            Configuration
-	translationTable  TableManager
+	translationTable  TableEntryCache.TableManager
 	//### Deployment management variables
 	deployedServices map[string]service //all the deployed services with the ip and ports
 	nextContainerIP  net.IP             //next address for the next container to be deployed
@@ -82,7 +83,7 @@ func NewCustom(proxyname string, customConfig Configuration) *Environment {
 		nextVethNumber:    0,
 		proxyName:         proxyname,
 		config:            customConfig,
-		translationTable:  NewTableManager(),
+		translationTable:  TableEntryCache.NewTableManager(),
 		nextContainerIP:   network.NextIP(net.ParseIP(customConfig.HostBridgeIP), 1),
 		totNextAddr:       1,
 		addrCache:         make([]net.IP, 0),
@@ -428,7 +429,7 @@ func (env *Environment) CreateHostBridge() error {
 
 // GetTableEntryByServiceIP Given a ServiceIP this method performs a search in the local ServiceCache
 //If the entry is not present a TableQuery is performed and the interest registered
-func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
+func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntryCache.TableEntry {
 	//If entry already available
 	table := env.translationTable.SearchByServiceIP(ip)
 	if len(table) > 0 {
@@ -459,24 +460,24 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntry {
 
 // GetTableEntryByInstanceIP Given a ServiceIP this method performs a search in the local ServiceCache
 //If the entry is not present a TableQuery is performed and the interest registered
-func (env *Environment) GetTableEntryByInstanceIP(ip net.IP) (TableEntry, bool) {
+func (env *Environment) GetTableEntryByInstanceIP(ip net.IP) (TableEntryCache.TableEntry, bool) {
 	//If entry already available
 	table := env.translationTable.SearchByServiceIP(ip)
 	if len(table) > 0 {
 		for elemindex, elem := range table {
 			for _, elemIp := range elem.ServiceIP {
-				if elemIp.IpType == InstanceNumber && elemIp.Address.Equal(ip) {
+				if elemIp.IpType == TableEntryCache.InstanceNumber && elemIp.Address.Equal(ip) {
 					return table[elemindex], true
 				}
 			}
 		}
 	}
-	return TableEntry{}, false
+	return TableEntryCache.TableEntry{}, false
 }
 
 // GetTableEntryByNsIP Given a NamespaceIP finds the table entry. This search is local because the networking component MUST have all
 //the entries for the local deployed services.
-func (env *Environment) GetTableEntryByNsIP(ip net.IP) (TableEntry, bool) {
+func (env *Environment) GetTableEntryByNsIP(ip net.IP) (TableEntryCache.TableEntry, bool) {
 	//If entry already available
 	entry, exist := env.translationTable.SearchByNsIP(ip)
 	if exist {
@@ -486,7 +487,7 @@ func (env *Environment) GetTableEntryByNsIP(ip net.IP) (TableEntry, bool) {
 }
 
 // AddTableQueryEntry Add new entry to the resolution table
-func (env *Environment) AddTableQueryEntry(entry TableEntry) {
+func (env *Environment) AddTableQueryEntry(entry TableEntryCache.TableEntry) {
 	_ = env.translationTable.RemoveByNsip(entry.Nsip)
 	err := env.translationTable.Add(entry)
 	if err != nil {
@@ -507,7 +508,10 @@ func (env *Environment) RefreshServiceTable(jobname string) {
 }
 
 func (env *Environment) RemoveServiceEntries(jobname string) {
-	_ = env.translationTable.RemoveByJobName(jobname)
+	err := env.translationTable.RemoveByJobName(jobname)
+	if err != nil {
+		log.Printf("CRITICAL-ERROR: %v", err)
+	}
 }
 
 func (env *Environment) RemoveNsIPEntries(nsip string) {

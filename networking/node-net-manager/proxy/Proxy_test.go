@@ -1,7 +1,7 @@
 package proxy
 
 import (
-	"NetManager/env"
+	"NetManager/TableEntryCache"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"math/rand"
@@ -12,10 +12,10 @@ import (
 type FakeEnv struct {
 }
 
-func (fakeenv *FakeEnv) GetTableEntryByServiceIP(ip net.IP) []env.TableEntry {
-	entrytable := make([]env.TableEntry, 0)
+func (fakeenv *FakeEnv) GetTableEntryByServiceIP(ip net.IP) []TableEntryCache.TableEntry {
+	entrytable := make([]TableEntryCache.TableEntry, 0)
 	//If entry already available
-	entry := env.TableEntry{
+	entry := TableEntryCache.TableEntry{
 		Appname:          "a",
 		Appns:            "a",
 		Servicename:      "b",
@@ -24,12 +24,12 @@ func (fakeenv *FakeEnv) GetTableEntryByServiceIP(ip net.IP) []env.TableEntry {
 		Cluster:          0,
 		Nodeip:           net.ParseIP("10.0.0.1"),
 		Nsip:             net.ParseIP("10.19.2.12"),
-		ServiceIP: []env.ServiceIP{{
-			IpType:  env.Closest,
+		ServiceIP: []TableEntryCache.ServiceIP{{
+			IpType:  TableEntryCache.Closest,
 			Address: net.ParseIP("10.30.255.255"),
 		},
 			{
-				IpType:  env.InstanceNumber,
+				IpType:  TableEntryCache.InstanceNumber,
 				Address: net.ParseIP("10.30.255.254"),
 			}},
 	}
@@ -37,8 +37,8 @@ func (fakeenv *FakeEnv) GetTableEntryByServiceIP(ip net.IP) []env.TableEntry {
 	return entrytable
 }
 
-func (fakeenv *FakeEnv) GetTableEntryByNsIP(ip net.IP) (env.TableEntry, bool) {
-	entry := env.TableEntry{
+func (fakeenv *FakeEnv) GetTableEntryByNsIP(ip net.IP) (TableEntryCache.TableEntry, bool) {
+	entry := TableEntryCache.TableEntry{
 		Appname:          "a",
 		Appns:            "a",
 		Servicename:      "c",
@@ -47,20 +47,20 @@ func (fakeenv *FakeEnv) GetTableEntryByNsIP(ip net.IP) (env.TableEntry, bool) {
 		Cluster:          0,
 		Nodeip:           net.ParseIP("10.0.0.1"),
 		Nsip:             net.ParseIP("10.19.1.1"),
-		ServiceIP: []env.ServiceIP{{
-			IpType:  env.Closest,
+		ServiceIP: []TableEntryCache.ServiceIP{{
+			IpType:  TableEntryCache.Closest,
 			Address: net.ParseIP("10.30.255.252"),
 		},
 			{
-				IpType:  env.InstanceNumber,
+				IpType:  TableEntryCache.InstanceNumber,
 				Address: net.ParseIP("10.30.255.253"),
 			}},
 	}
 	return entry, true
 }
 
-func (fakeenv *FakeEnv) GetTableEntryByInstanceIP(ip net.IP) (env.TableEntry, bool) {
-	return env.TableEntry{}, false
+func (fakeenv *FakeEnv) GetTableEntryByInstanceIP(ip net.IP) (TableEntryCache.TableEntry, bool) {
+	return TableEntryCache.TableEntry{}, false
 }
 
 func getFakeTunnel() GoProxyTunnel {

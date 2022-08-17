@@ -10,6 +10,7 @@ def remove_interest(job_name,clientid):
     mongodb_requests.mongo_remove_interest(job_name, clientid)
     if not is_job_relevant_for_the_cluster(job_name):
         root_service_manager_requests.cloud_remove_interest(job_name)
+        pass
 
 
 def add_interest(job_name, clientid):

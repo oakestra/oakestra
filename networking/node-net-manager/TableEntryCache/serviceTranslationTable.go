@@ -1,4 +1,4 @@
-package env
+package TableEntryCache
 
 import (
 	"errors"
@@ -77,15 +77,18 @@ func (t *TableManager) RemoveByJobName(jobname string) error {
 	t.rwlock.Lock()
 	defer t.rwlock.Unlock()
 
-	found := -1
-	for i, tableElement := range t.translationTable {
-		if tableElement.JobName == jobname {
-			found = i
-			break
+	elems := len(t.translationTable)
+	for i := 0; i < elems; i++ {
+		if t.translationTable[i].JobName == jobname {
+			err := t.removeByIndex(i)
+			if err != nil {
+				return err
+			}
+			elems = elems - 1
+			i = i - 1
 		}
 	}
-
-	return t.removeByIndex(found)
+	return nil
 }
 
 func (t *TableManager) removeByIndex(index int) error {
