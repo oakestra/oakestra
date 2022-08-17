@@ -434,7 +434,6 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntryCache.Ta
 	table := env.translationTable.SearchByServiceIP(ip)
 	if len(table) > 0 {
 		//Fire table instance usage event
-		fmt.Printf("Available entry: %v \n\n", table[0])
 		events.GetInstance().Emit(events.Event{
 			EventType:   events.TableQuery,
 			EventTarget: table[0].JobName,
