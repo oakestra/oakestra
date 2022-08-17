@@ -16,6 +16,7 @@ var startSync sync.Mutex
 type jobUpdatesTimer struct {
 	eventManager events.EventManager
 	job          string
+	instance     int
 	topic        string
 	client       mqtt.Client
 	env          jobEnvironmentManagerActions
@@ -24,6 +25,7 @@ type jobUpdatesTimer struct {
 type jobEnvironmentManagerActions interface {
 	RefreshServiceTable(sname string)
 	RemoveServiceEntries(sname string)
+	IsServiceDeployed(fullSnameAndInstance string) bool
 }
 
 type mqttInterestDeregisterRequest struct {
@@ -47,23 +49,30 @@ func (jut *jobUpdatesTimer) startSelfDestructTimeout() {
 		case <-eventChan:
 			//event received, reset timer
 			continue
-		case <-time.After(5 * time.Minute):
-			//timeout job no longer required
-			break
+		case <-time.After(10 * time.Second):
+			if !jut.env.IsServiceDeployed(jut.job) {
+				//timeout job no longer required
+				startSync.Lock()
+				defer startSync.Unlock()
+				log.Printf("De-registering from %s", jut.job)
+				cleanInterestTowardsJob(jut.job)
+				jut.client.Unsubscribe(jut.topic)
+				delete(TOPICS, jut.topic) //removing topic from the topic list in case of disconnection
+				eventManager.DeRegister(events.TableQuery, jut.job)
+				jut.env.RemoveServiceEntries(jut.job)
+				runningHandlers.RemoveElem(jut.job)
+				return
+			}
+			continue
 		}
 	}
-	startSync.Lock()
-	defer startSync.Unlock()
-	log.Printf("De-registering from %s", jut.job)
-	cleanInterestTowardsJob(jut.job)
-	jut.client.Unsubscribe(jut.topic)
-	delete(TOPICS, jut.topic) //removing topic from the topic list in case of disconnection
-	eventManager.DeRegister(events.TableQuery, jut.job)
-	jut.env.RemoveServiceEntries(jut.job)
-	runningHandlers.RemoveElem(jut.job)
 }
 
-func MqttRegisterInterest(jobName string, env jobEnvironmentManagerActions) {
+// MqttRegisterInterest :
+/* Register an interest in a route for 5 minutes.
+If the route is not used for more than 5 minutes the interest is removed
+If the instance number is provided, the interest is kept until that instance is deployed in the node */
+func MqttRegisterInterest(jobName string, env jobEnvironmentManagerActions, instance ...int) {
 
 	startSync.Lock()
 	defer startSync.Unlock()
@@ -72,10 +81,17 @@ func MqttRegisterInterest(jobName string, env jobEnvironmentManagerActions) {
 		return
 	}
 
+	instanceNumber := -1
+	if len(instance) > 0 {
+		instanceNumber = instance[0]
+	}
+
 	jobTimer := jobUpdatesTimer{
 		eventManager: events.GetInstance(),
 		job:          jobName,
 		env:          env,
+		client:       mainMqttClient,
+		instance:     instanceNumber,
 	}
 
 	jobTimer.topic = "jobs/" + jobName + "/updates_available"
@@ -85,6 +101,15 @@ func MqttRegisterInterest(jobName string, env jobEnvironmentManagerActions) {
 	log.Printf("MQTT - Subscribed to %s ", jobTimer.topic)
 	runningHandlers.Add(jobTimer.job)
 	go jobTimer.startSelfDestructTimeout()
+}
+
+func MqttIsInterestRegistered(jobName string) bool {
+	startSync.Lock()
+	defer startSync.Unlock()
+	if runningHandlers.Exists(jobName) {
+		return true
+	}
+	return false
 }
 
 func cleanInterestTowardsJob(jobName string) {

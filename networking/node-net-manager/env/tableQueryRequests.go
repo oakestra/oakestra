@@ -1,6 +1,7 @@
 package env
 
 import (
+	"NetManager/TableEntryCache"
 	mqttifce "NetManager/mqtt"
 	"errors"
 	"log"
@@ -11,12 +12,12 @@ import (
 /*
 Asks the MQTT client for a table query and parses the result
 */
-func tableQueryByIP(ip string) ([]TableEntry, error) {
+func tableQueryByIP(ip string, force_optional ...bool) ([]TableEntryCache.TableEntry, error) {
 
 	log.Println("[MQTT TABLE QUERY] sip:", ip)
 	var mqttTablequery mqttifce.TablequeryMqttInterface = mqttifce.GetTableQueryRequestCacheInstance()
 
-	responseStruct, err := mqttTablequery.TableQueryByIpRequestBlocking(ip)
+	responseStruct, err := mqttTablequery.TableQueryByIpRequestBlocking(ip, force_optional...)
 	if err != nil {
 		return nil, err
 	}
@@ -27,12 +28,12 @@ func tableQueryByIP(ip string) ([]TableEntry, error) {
 /*
 Asks the MQTT client for a table query and parses the result
 */
-func tableQueryByJobName(jobname string) ([]TableEntry, error) {
+func tableQueryByJobName(jobname string, force_optional ...bool) ([]TableEntryCache.TableEntry, error) {
 
 	log.Println("[MQTT TABLE QUERY] sname:", jobname)
 	var mqttTablequery mqttifce.TablequeryMqttInterface = mqttifce.GetTableQueryRequestCacheInstance()
 
-	responseStruct, err := mqttTablequery.TableQueryByJobNameRequestBlocking(jobname)
+	responseStruct, err := mqttTablequery.TableQueryByJobNameRequestBlocking(jobname, force_optional...)
 	if err != nil {
 		return nil, err
 	}
@@ -40,23 +41,23 @@ func tableQueryByJobName(jobname string) ([]TableEntry, error) {
 	return responseParser(responseStruct)
 }
 
-func responseParser(responseStruct mqttifce.TableQueryResponse) ([]TableEntry, error) {
+func responseParser(responseStruct mqttifce.TableQueryResponse) ([]TableEntryCache.TableEntry, error) {
 	appCompleteName := strings.Split(responseStruct.JobName, ".")
 
 	if len(appCompleteName) != 4 {
 		return nil, errors.New("app complete name not of size 4")
 	}
 
-	result := make([]TableEntry, 0)
+	result := make([]TableEntryCache.TableEntry, 0)
 
 	for _, instance := range responseStruct.InstanceList {
-		sipList := make([]ServiceIP, 0)
+		sipList := make([]TableEntryCache.ServiceIP, 0)
 
 		for _, ip := range instance.ServiceIp {
 			sipList = append(sipList, toServiceIP(ip.Type, ip.Address))
 		}
 
-		entry := TableEntry{
+		entry := TableEntryCache.TableEntry{
 			JobName:          responseStruct.JobName,
 			Appname:          appCompleteName[0],
 			Appns:            appCompleteName[1],
@@ -76,20 +77,20 @@ func responseParser(responseStruct mqttifce.TableQueryResponse) ([]TableEntry, e
 	return result, nil
 }
 
-func toServiceIP(Type string, Addr string) ServiceIP {
-	ip := ServiceIP{
+func toServiceIP(Type string, Addr string) TableEntryCache.ServiceIP {
+	ip := TableEntryCache.ServiceIP{
 		IpType:  0,
 		Address: net.ParseIP(Addr),
 	}
 
 	if Type == "RR" {
-		ip.IpType = RoundRobin
+		ip.IpType = TableEntryCache.RoundRobin
 	}
 	if Type == "Closest" {
-		ip.IpType = Closest
+		ip.IpType = TableEntryCache.Closest
 	}
 	if Type == "InstanceNumber" {
-		ip.IpType = InstanceNumber
+		ip.IpType = TableEntryCache.InstanceNumber
 	}
 
 	return ip

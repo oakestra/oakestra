@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"NetManager/TableEntryCache"
 	"NetManager/env"
 	"NetManager/network"
 	"fmt"
@@ -265,7 +266,7 @@ func (proxy *GoProxyTunnel) outgoingProxy(packet gopacket.Packet) gopacket.Packe
 				instanceIP := net.IP{}
 				if instanceexist {
 					for _, sip := range instanceTableEntry.ServiceIP {
-						if sip.IpType == env.InstanceNumber {
+						if sip.IpType == TableEntryCache.InstanceNumber {
 							instanceIP = sip.Address
 						}
 					}

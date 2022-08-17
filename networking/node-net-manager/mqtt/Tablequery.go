@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"encoding/json"
+	"errors"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"log"
 	"net"
@@ -19,8 +20,8 @@ var (
 
 /*----- Mqtt Table query cache classes and interfaces -----*/
 type TablequeryMqttInterface interface {
-	TableQueryByIpRequestBlocking(sip string) (TableQueryResponse, error)
-	TableQueryByJobNameRequestBlocking(sname string) (TableQueryResponse, error)
+	TableQueryByIpRequestBlocking(sip string, force_optional ...bool) (TableQueryResponse, error)
+	TableQueryByJobNameRequestBlocking(sname string, force_optional ...bool) (TableQueryResponse, error)
 }
 
 type TableQueryRequestCache struct {
@@ -73,10 +74,22 @@ func GetTableQueryRequestCacheInstance() *TableQueryRequestCache {
 
 /*
 	Perform a table query by ServiceIp to the cluster manager
-	The call is blocking and awaits the response for a maximum of 5 seconds
+	The call is blocking and awaits the response for a maximum of 10 seconds
+	set the force value to force the table query even in the event of interest already registered. Used in case of incoming updates notification.
 */
-func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname string) (TableQueryResponse, error) {
+func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname string, force_optional ...bool) (TableQueryResponse, error) {
 	reqname := sip + sname
+
+	force := false
+	if len(force_optional) > 0 {
+		force = force_optional[0]
+	}
+
+	// If the worker node already registered an interest towards this route, avoid new requests.
+	if MqttIsInterestRegistered(reqname) && !force {
+		return TableQueryResponse{}, errors.New("interest already registered")
+	}
+
 	responseChannel := make(chan TableQueryResponse, 2)
 	var updatedRequests []chan TableQueryResponse
 
@@ -113,16 +126,16 @@ func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname
 	Perform a table query by ServiceIp to the cluster manager
 	The call is blocking and awaits the response for a maximum of 5 seconds
 */
-func (cache *TableQueryRequestCache) TableQueryByIpRequestBlocking(sip string) (TableQueryResponse, error) {
-	return cache.tableQueryRequestBlocking(sip, "")
+func (cache *TableQueryRequestCache) TableQueryByIpRequestBlocking(sip string, force_optional ...bool) (TableQueryResponse, error) {
+	return cache.tableQueryRequestBlocking(sip, "", force_optional...)
 }
 
 /*
 	Perform a table query by ServiceName to the cluster manager
 	The call is blocking and awaits the response for a maximum of 5 seconds
 */
-func (cache *TableQueryRequestCache) TableQueryByJobNameRequestBlocking(jobname string) (TableQueryResponse, error) {
-	return cache.tableQueryRequestBlocking("", jobname)
+func (cache *TableQueryRequestCache) TableQueryByJobNameRequestBlocking(jobname string, force_optional ...bool) (TableQueryResponse, error) {
+	return cache.tableQueryRequestBlocking("", jobname, force_optional...)
 }
 
 /*

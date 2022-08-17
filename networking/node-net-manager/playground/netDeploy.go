@@ -1,7 +1,7 @@
 package playground
 
 import (
-	"NetManager/env"
+	"NetManager/TableEntryCache"
 	"fmt"
 	"net"
 	"strconv"
@@ -17,7 +17,7 @@ func attachNetwork(appname string, pid int, instance int, mappings string, iip s
 	}
 
 	//update internal table entry
-	AddRoute(env.TableEntry{
+	AddRoute(TableEntryCache.TableEntry{
 		JobName:          appname,
 		Appname:          appname,
 		Appns:            "default",
@@ -28,13 +28,13 @@ func attachNetwork(appname string, pid int, instance int, mappings string, iip s
 		Nodeip:           net.ParseIP(PUBLIC_ADDRESS),
 		Nodeport:         PUBLIC_PORT,
 		Nsip:             addr,
-		ServiceIP: []env.ServiceIP{
-			env.ServiceIP{
-				IpType:  env.InstanceNumber,
+		ServiceIP: []TableEntryCache.ServiceIP{
+			TableEntryCache.ServiceIP{
+				IpType:  TableEntryCache.InstanceNumber,
 				Address: net.ParseIP(iip),
 			},
-			env.ServiceIP{
-				IpType:  env.RoundRobin,
+			TableEntryCache.ServiceIP{
+				IpType:  TableEntryCache.RoundRobin,
 				Address: net.ParseIP(sip),
 			},
 		},
@@ -43,17 +43,17 @@ func attachNetwork(appname string, pid int, instance int, mappings string, iip s
 	return fmt.Sprintf("%s", addr.String()), nil
 }
 
-func AddRoute(entry env.TableEntry) {
+func AddRoute(entry TableEntryCache.TableEntry) {
 	if !entryExist(entry) {
 		ENV.AddTableQueryEntry(entry)
 		Entries = append(Entries, EntryToString(entry))
 	}
 }
 
-func StringToEntry(entry []string) env.TableEntry {
+func StringToEntry(entry []string) TableEntryCache.TableEntry {
 	port, _ := strconv.Atoi(entry[5])
 	instance, _ := strconv.Atoi(entry[6])
-	return env.TableEntry{
+	return TableEntryCache.TableEntry{
 		JobName:          entry[0],
 		Appname:          entry[0],
 		Appns:            "default",
@@ -64,24 +64,24 @@ func StringToEntry(entry []string) env.TableEntry {
 		Nodeip:           net.ParseIP(entry[4]),
 		Nodeport:         port,
 		Nsip:             net.ParseIP(entry[1]),
-		ServiceIP: []env.ServiceIP{
+		ServiceIP: []TableEntryCache.ServiceIP{
 			{
-				IpType:  env.InstanceNumber,
+				IpType:  TableEntryCache.InstanceNumber,
 				Address: net.ParseIP(entry[2]),
 			},
 			{
-				IpType:  env.RoundRobin,
+				IpType:  TableEntryCache.RoundRobin,
 				Address: net.ParseIP(entry[3]),
 			},
 		},
 	}
 }
 
-func EntryToString(entry env.TableEntry) []string {
+func EntryToString(entry TableEntryCache.TableEntry) []string {
 	return []string{entry.Appname, fmt.Sprintf("%s", entry.Nsip.String()), fmt.Sprintf("%s", entry.ServiceIP[0].Address.String()), fmt.Sprintf("%s", entry.ServiceIP[1].Address.String()), fmt.Sprintf("%s", entry.Nodeip.String()), strconv.Itoa(entry.Nodeport), strconv.Itoa(entry.Instancenumber)}
 }
 
-func entryExist(toAdd env.TableEntry) bool {
+func entryExist(toAdd TableEntryCache.TableEntry) bool {
 	for _, entry := range Entries {
 		if entry[1] == fmt.Sprintf("%s", toAdd.Nsip.String()) {
 			return true
