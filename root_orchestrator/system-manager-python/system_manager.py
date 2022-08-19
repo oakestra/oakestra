@@ -150,13 +150,10 @@ def token_validation(message, key_type, cluster, net_port):
             }
     except Exception as e:
         print(traceback.format_exc())
-        if str(e) == "No token supplied" or str(e) == "Not enough segments" or str(e) == "Too many segments":
+        if str(e) == "No token supplied" or str(e) == "Not enough segments" or str(e) == "Too many segments" or \
+                str(e) == "Signature verification failed" or str(e) == "Algorithm not supported":
             response = {
                 'error': "The key introduced is invalid"
-            }
-        elif str(e) == "Signature verification failed" or str(e) == "Algorithm not supported":
-            response = {
-                'error': "integrity-error"
             }
         elif e == ExpiredSignatureError:
             if key_type == 'pairing_key':
@@ -214,8 +211,8 @@ def handle_init_client(message):
     existing_cl = mongo_find_by_username(message)
     if existing_cl is None:
         response = {
-            'error': "The cluster is not yet saved, please log in in the Dashboard and add your cluster there. ",
-            'aixo es el username': message['user_name']
+            'error': "The cluster information is incorrect or the cluster is not yet registered, please log in in the "
+                     "Dashboard and add your cluster there. "
         }
     elif existing_cl['pairing_complete']:
         if message['secret_key'] is "":
