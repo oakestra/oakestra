@@ -5,7 +5,7 @@ from random import randint
 from bson import json_util
 from flask import flash, request
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager
+from flask_jwt_extended import JWTManager, jwt_required
 from jwt import ExpiredSignatureError
 
 from blueprints import blueprints
@@ -19,7 +19,7 @@ from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
 from ext_requests.user_db import create_admin
 from roles.securityUtils import check_jwt_token_validity, create_jwt_secret_key_cluster, jwt_auth_required, \
-    create_jwt_refresh_secret_key_cluster
+    create_jwt_refresh_secret_key_cluster, jwt_fresh_required
 from sm_logging import configure_logging
 from flask import Flask
 from secrets import token_hex
@@ -43,9 +43,7 @@ app.config["OPENAPI_URL_PREFIX"] = '/docs'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config["JWT_SECRET_KEY"] = token_hex(32)
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=10)
-app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
 app.config["RESET_TOKEN_EXPIRES"] = timedelta(hours=3)  # for password reset
-app.config["JWT_CLUSTER_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=5)  # not used as it is inaccessible from securityUtils
 
 jwt = JWTManager(app)
 api = Api(app, spec_kwargs={"host": "oakestra.io", "x-internal-id": "1"})
@@ -94,10 +92,10 @@ def fill_additional_claims(cluster, aud):
 
 
 # TODO: Test this function
-def is_key_expiring(exp):
+def is_key_freshness_expiring(exp):
     now = datetime.now(timezone.utc)
-    target_timestamp = datetime.timestamp(now + timedelta(days=1))
-    if target_timestamp > exp:
+    target_timestamp = datetime.timestamp(now + timedelta(days=10))
+    if target_timestamp >= exp:
         return True
     else:
         return False
@@ -120,25 +118,21 @@ def token_validation(message, key_type, cluster, net_port):
             response = {
                 'id': cluster_id
             }
-            # Make pairing complete, register cluster and generate shared secret key with cluster to secure each
-            # further connection
             if key_type == 'pairing_key':
                 mongo_update_pairing_complete(cluster_id)
-
                 net_register_cluster(
                     cluster_id=cluster_id,
                     cluster_address=request.remote_addr,
                     cluster_port=net_port
                 )
-
                 claims = fill_additional_claims(cluster, "connectCluster")
-                secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=5), claims)
-                refresh_secret_key = create_jwt_refresh_secret_key_cluster(cluster_id, timedelta(days=30))
+                secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=30), claims,
+                                                           fresh=timedelta(days=3))
             else:
-                if is_key_expiring(token_info["exp"]):
-                    # TODO: first check refresh and then access token (secret key)
+                if is_key_freshness_expiring(token_info["exp"]):
                     claims = fill_additional_claims(cluster, "connectCluster")
-                    secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=5), claims)
+                    secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=30), claims,
+                                                               fresh=timedelta(days=3))
                 else:
                     secret_key = message[key_type]
             response['secret_key'] = secret_key
@@ -156,32 +150,10 @@ def token_validation(message, key_type, cluster, net_port):
                 'error': "The key introduced is invalid"
             }
         elif e == ExpiredSignatureError:
-            if key_type == 'pairing_key':
-                response = {
-                    'error': "Your cluster's pairing key has expired; please log in again to the Dashboard to ask "
-                             "again to attach your cluster. "
-                }
-            else:  # key_type == 'secret_key'
-                try:
-                    # TODO: Before creating a new secret key, check the validation of the refresh token (created at
-                    #  the same time as the secret key == access token)
-                    # A new token is generated in case of the old one expired
-                    claims = fill_additional_claims(cluster, "connectCluster")
-                    new_secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=5), claims)
-                    response = {
-                        'warning': "Your cluster's secret key had expired; you now have a new one.",
-                        'secret_key': new_secret_key
-                    }
-                    # TODO: Ask to log in the terminal with socketio
-                except Exception as e:
-                    if e == ExpiredSignatureError:
-                        response = {
-                            'error': "Your cluster's secret key has expired; please log in again to get a new one. "
-                        }
-                    else:
-                        response = {
-                            'error': str(e)
-                        }
+            response = {
+                'error': "Your token has expired; please log in again to the Dashboard to ask "
+                         "again to attach your cluster. "
+            }
         else:
             response = {
                 'error': str(e)
@@ -199,6 +171,7 @@ def on_connect():
 
 
 @jwt_auth_required()
+@jwt_fresh_required()
 @socketio.on('cs1', namespace='/register')
 def handle_init_client(message):
     app.logger.info('SocketIO - Received Cluster_Manager_to_System_Manager_1: {}:{}'.

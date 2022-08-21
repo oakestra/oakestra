@@ -40,7 +40,8 @@ def app(request):
                     "latitude": "1",
                     "longitude": "2",
                     "num": str(randint(0, 99999999))
-                }
+                },
+                fresh=True
             )
             return jsonify(jwt=access_token)
         except Exception as e:

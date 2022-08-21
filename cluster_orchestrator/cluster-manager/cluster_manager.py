@@ -24,10 +24,10 @@ NETWORK_COMPONENT_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
 CLUSTER_NAME = os.getenv('CLUSTER_NAME')
 CLUSTER_PAIRING_KEY = os.getenv('CLUSTER_PAIRING_KEY', None)
 USER_NAME = os.getenv('USER_NAME')
+#CLUSTER_SECRET_KEY = os.environ.get('CLUSTER_SECRET_KEY', None)
 
-CLUSTER_SECRET_KEY = os.environ.get('CLUSTER_SECRET_KEY', None)
-MY_ASSIGNED_CLUSTER_ID = None
 MY_ASSIGNED_SECRET_KEY = None
+MY_ASSIGNED_CLUSTER_ID = None
 
 SYSTEM_MANAGER_ADDR = 'http://' + os.getenv('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
 
@@ -189,7 +189,7 @@ def handle_init_greeting(jsonarg):
         'cluster_name': CLUSTER_NAME,
         'cluster_info': {},
         'pairing_key': CLUSTER_PAIRING_KEY,
-        'secret_key': CLUSTER_SECRET_KEY,
+        'secret_key': MY_ASSIGNED_SECRET_KEY,
         'user_name': USER_NAME
         # 'cluster_location': MY_CLUSTER_LOCATION
     }
@@ -213,8 +213,8 @@ def handle_init_final(jsonarg):
         global MY_ASSIGNED_CLUSTER_ID
         MY_ASSIGNED_CLUSTER_ID = data['id']
 
-        global MY_ASSIGNED_SECRET_KEY
-        MY_ASSIGNED_SECRET_KEY = data['secret_key']
+        #global MY_ASSIGNED_SECRET_KEY
+        MY_ASSIGNED_SECRET_KEY = "'" + data['secret_key'] + "'"
 
         mongo_add_secret_key(MY_ASSIGNED_CLUSTER_ID, MY_ASSIGNED_SECRET_KEY)
 

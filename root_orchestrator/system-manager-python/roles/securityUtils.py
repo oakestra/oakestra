@@ -70,6 +70,19 @@ def jwt_auth_required():
     return wrapper
 
 
+def jwt_fresh_required():
+    def wrapper(fn):
+        def decorator(*args, **kwargs):
+            try:
+                jwt_required(fresh=True)
+            except Exception as e:
+                print(e)
+                return {"message": "The token is not fresh anymore, please login again"}, 401
+        return decorator
+
+    return wrapper
+
+
 def get_jwt_auth_identity():
     return get_jwt_identity()
 
@@ -95,15 +108,15 @@ def create_jwt_auth_refresh_token(identity, additional_claims):
 
 
 def create_jwt_pairing_key_cluster(identity, expiration, claims):
-    return create_access_token(identity=identity, expires_delta=expiration, additional_claims=claims)
+    return create_access_token(identity=identity, expires_delta=expiration, additional_claims=claims, fresh=True)
 
 
-def create_jwt_secret_key_cluster(identity, expiration, claims):
-    return create_access_token(identity=identity, expires_delta=expiration, additional_claims=claims)
+def create_jwt_secret_key_cluster(identity, expiration, claims, fresh):
+    return create_access_token(identity=identity, expires_delta=expiration, additional_claims=claims, fresh=fresh)
 
 
 def create_jwt_refresh_secret_key_cluster(identity, expiration):
-    return create_access_token(identity=identity, expires_delta=expiration)
+    return create_refresh_token(identity=identity, expires_delta=expiration)
 
 
 def check_jwt_token_validity(token):
