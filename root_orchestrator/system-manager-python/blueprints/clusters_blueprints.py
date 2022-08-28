@@ -48,6 +48,7 @@ cluster_info_schema = {
                             "properties": {
                                 "instance_number": {"type": "string"},
                                 "status": {"type": "string"},
+                                "status_detail": {"type": "string"},
                                 "publicip": {"type": "string"}
                             }
                         }
@@ -85,6 +86,7 @@ class ClusterController(MethodView):
             result = mongo_update_job_status(
                 job_id=j.get('system_job_id'),
                 status=j.get('status'),
+                status_detail=j.get('status_detail'),
                 instances=j.get('instance_list'))
             if result is None:
                 # cluster has outdated jobs, ask to undeploy

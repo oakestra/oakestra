@@ -184,17 +184,19 @@ def mongo_update_jobs_status(TIME_INTERVAL):
     for job in jobs:
         try:
             updated = False
+            status = "RUNNING"
             for instance in range(len(job["instance_list"])):
-                if job["instance_list"][instance].get('last_modified_timestamp',datetime.now().timestamp()) < (
+                if job["instance_list"][instance].get('last_modified_timestamp', datetime.now().timestamp()) < (
                         datetime.now().timestamp() - TIME_INTERVAL) and job["instance_list"][instance].get('status',
                                                                                                            0) not in [
                     'NODE_SCHEDULED', 'CLUSTER_SCHEDULED']:
                     print('Job is inactive: ' + str(job.get('job_name')))
                     job["instance_list"][instance]["status"] = "FAILED"
+                    status = "FAILED"
                     updated = True
             if updated:
                 mongo_jobs.db.jobs.update_one({'system_job_id': str(job['system_job_id'])},
-                                              {'$set': {'instance_list': job["instance_list"]}})
+                                              {'$set': {'instance_list': job["instance_list"], 'status': status}})
         except Exception as e:
             print(e)
 
@@ -227,13 +229,14 @@ def mongo_update_job_status(system_job_id, instancenum, status, node):
     instance_list = job['instance_list']
     for instance in instance_list:
         if int(instance.get('instance_number')) == int(instancenum):
-            instance['host_ip'] = node['node_address']
-            port = node['node_info'].get('node_port')
-            if port is None:
-                port = 50011
-            instance['host_port'] = port
             instance['status'] = status
-            instance['worker_id'] = node.get('_id')
+            if node is not None:
+                instance['host_ip'] = node['node_address']
+                port = node['node_info'].get('node_port')
+                if port is None:
+                    port = 50011
+                instance['host_port'] = port
+                instance['worker_id'] = node.get('_id')
             break
     return mongo_jobs.db.jobs.update_one({'system_job_id': str(system_job_id)},
                                          {'$set': {'status': status, 'instance_list': instance_list}})
@@ -243,6 +246,7 @@ def mongo_get_services_with_failed_instanes():
     return mongo_jobs.db.jobs.find({'$or': [
         {'instance_list.status': "FAILED"},
         {'instance_list.status': "DEAD"},
+        {'instance_list.status': "NO_WORKER_CAPACITY"},
     ]})
 
 
@@ -275,6 +279,7 @@ def mongo_update_service_resources(sname, service, workerid, instance_num=0):
                 if instance_list[instance].get('worker_id') != workerid:
                     return None  # cannot update another worker's resources
                 instance_list[instance]["status"] = "RUNNING"
+                instance_list[instance]["status_detail"] = service.get("status_detail")
                 instance_list[instance]["last_modified_timestamp"] = datetime.timestamp(datetime.now())
                 instance_list[instance]["cpu"] = service.get("cpu")
                 instance_list[instance]["memory"] = service.get("memory")

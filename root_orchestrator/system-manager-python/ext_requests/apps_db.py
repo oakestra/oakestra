@@ -36,7 +36,7 @@ def mongo_get_job_status(job_id):
     return db.mongo_services.find_one({'_id': ObjectId(job_id)}, {'status': 1})['status'] + '\n'
 
 
-def mongo_update_job_status(job_id, status, instances=None):
+def mongo_update_job_status(job_id, status, status_detail, instances=None):
     job = db.mongo_services.find_one({'_id': ObjectId(job_id)})
     if job is None:
         return None
@@ -50,11 +50,15 @@ def mongo_update_job_status(job_id, status, instances=None):
                           "instance_list.$.publicip": instance.get('publicip'),
                           "instance_list.$.memory": instance.get('memory'),
                           "instance_list.$.disk": instance.get('disk'),
-                          "instance_list.$.status": instance.get('status')}
+                          "instance_list.$.status": instance.get('status'),
+                          "instance_list.$.status_detail": instance.get('status_detail', "No extra information")}
                  }
             )
 
-    return db.mongo_services.find_one({'_id': ObjectId(job_id)})
+    return db.mongo_services.find_one_and_update(
+        {'_id': ObjectId(job_id)},
+        {'$set': {'status': status, 'status_detail': status_detail}},
+        return_document=True)
 
 
 def mongo_set_microservice_id(job_id):

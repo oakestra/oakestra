@@ -72,6 +72,7 @@ def start_calc_deploy(job,job_id,instance_num):
 
     if scheduling_status == 'negative':
         app.logger.info('No active node found to schedule this job.')
+        manager_request(app, None, job, job_id, instance_num)
     else:
         app.logger.info('Chosen Node: {0}'.format(scheduling_result))
         manager_request(app, scheduling_result, job, job_id, instance_num)
