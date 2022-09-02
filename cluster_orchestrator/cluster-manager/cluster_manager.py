@@ -7,7 +7,7 @@ import time
 from prometheus_client import start_http_server
 import threading
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_find_job_by_system_id, \
-    mongo_update_job_status, mongo_add_secret_key
+    mongo_update_job_status, mongo_add_secret_key, mongo_find_key_by_id
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy
 from cluster_scheduler_requests import scheduler_request_status
 from cm_logging import configure_logging
@@ -24,7 +24,7 @@ NETWORK_COMPONENT_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
 CLUSTER_NAME = os.getenv('CLUSTER_NAME')
 CLUSTER_PAIRING_KEY = os.getenv('CLUSTER_PAIRING_KEY', None)
 USER_NAME = os.getenv('USER_NAME')
-#CLUSTER_SECRET_KEY = os.environ.get('CLUSTER_SECRET_KEY', None)
+CLUSTER_SECRET_KEY = os.environ.get('CLUSTER_SECRET_KEY', None)
 
 MY_ASSIGNED_SECRET_KEY = None
 MY_ASSIGNED_CLUSTER_ID = None
@@ -182,16 +182,17 @@ def test_disconnect():
 @sio.on('sc1', namespace='/register')
 def handle_init_greeting(jsonarg):
     app.logger.info('Websocket - received System_Manager_to_Cluster_Manager_1 : ' + str(jsonarg))
-    '''message to the root - info might be updated within the pairing key'''
+    '''message to the root'''
     data = {
         'manager_port': MY_PORT,
         'network_component_port': NETWORK_COMPONENT_PORT,
         'cluster_name': CLUSTER_NAME,
         'cluster_info': {},
         'pairing_key': CLUSTER_PAIRING_KEY,
-        'secret_key': MY_ASSIGNED_SECRET_KEY,
+        'secret_key': CLUSTER_SECRET_KEY,
+       # 'secret_key': mongo_find_key_by_id(MY_ASSIGNED_CLUSTER_ID),  # global variables set to None everytime we run
+        # todo find a way to get the cluster id
         'user_name': USER_NAME
-        # 'cluster_location': MY_CLUSTER_LOCATION
     }
     time.sleep(1)  # Wait to Avoid Race Condition!
 
@@ -213,7 +214,7 @@ def handle_init_final(jsonarg):
         global MY_ASSIGNED_CLUSTER_ID
         MY_ASSIGNED_CLUSTER_ID = data['id']
 
-        #global MY_ASSIGNED_SECRET_KEY
+        global MY_ASSIGNED_SECRET_KEY
         MY_ASSIGNED_SECRET_KEY = "'" + data['secret_key'] + "'"
 
         mongo_add_secret_key(MY_ASSIGNED_CLUSTER_ID, MY_ASSIGNED_SECRET_KEY)
@@ -227,7 +228,7 @@ def handle_init_final(jsonarg):
             app.logger.info('No ID received.')
 
         if MY_ASSIGNED_SECRET_KEY is not None:
-            app.logger.info('Received shared secret key. Keep it for further cluster actions.')
+            app.logger.info('Received shared secret key.')
         else:
             app.logger.info('No shared secret key received.')
 

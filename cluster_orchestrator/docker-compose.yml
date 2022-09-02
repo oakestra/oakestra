@@ -93,7 +93,7 @@ services:
       - MQTT_BROKER_PORT=10003
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_PAIRING_KEY=${CLUSTER_PAIRING_KEY}  # Key to attach to the Root Orchestrator
-      - CLUSTER_SECRET_KEY=${MY_ASSIGNED_SECRET_KEY}    # Key to run a cluster that it is already paired to the Root Orchestrator
+      - CLUSTER_SECRET_KEY=${CLUSTER_SECRET_KEY}    # Key to run a cluster that it is already paired to the Root Orchestrator
       - USER_NAME=${USER_NAME}
     depends_on:
       - mongo_cluster

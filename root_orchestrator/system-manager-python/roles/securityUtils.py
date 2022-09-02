@@ -77,7 +77,8 @@ def jwt_fresh_required():
                 jwt_required(fresh=True)
             except Exception as e:
                 print(e)
-                return {"message": "The token is not fresh anymore, please login again"}, 401
+                return {"message": "The token is not valid."}, 401
+            return fn(*args, **kwargs)
         return decorator
 
     return wrapper

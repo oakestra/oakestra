@@ -9,7 +9,7 @@ MONGO_PORT = os.environ.get('CLUSTER_MONGO_PORT')
 
 MONGO_ADDR_NODES = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/nodes'
 MONGO_ADDR_JOBS = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/jobs'
-MONGO_ADDR_PAIRING_KEY = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/keys'
+MONGO_ADDR_SECRET_KEY = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/keys'
 
 mongo_nodes = None
 mongo_jobs = None
@@ -25,7 +25,7 @@ def mongo_init(flask_app):
 
     mongo_nodes = PyMongo(app, uri=MONGO_ADDR_NODES)
     mongo_jobs = PyMongo(app, uri=MONGO_ADDR_JOBS)
-    mongo_keys = PyMongo(app, uri=MONGO_ADDR_PAIRING_KEY)
+    mongo_keys = PyMongo(app, uri=MONGO_ADDR_SECRET_KEY)
 
     app.logger.info("MONGODB - init mongo")
 
@@ -103,9 +103,14 @@ def mongo_find_key_by_identifier(identifier):
     return mongo_keys.db.keys.find_one(identifier)
 
 
+def mongo_find_key_by_id(cluster_id):
+    global mongo_keys
+    return mongo_keys.db.keys.find_one({'cluster_id': cluster_id}).get('secret key')
+
+
 def mongo_add_secret_key(cluster_id, key):
     global mongo_keys
-    return mongo_keys.db.keys.update_one({'cluster id': cluster_id}, {'$set': {'shared key': key}}, upsert=True)
+    return mongo_keys.db.keys.update_one({'cluster id': cluster_id}, {'$set': {'secret key': key}}, upsert=True)
 
 
 def mongo_dead_nodes():

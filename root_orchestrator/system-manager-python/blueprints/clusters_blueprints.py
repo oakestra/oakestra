@@ -11,7 +11,8 @@ from ext_requests.cluster_db import *
 import traceback
 
 clustersblp = Blueprint(
-    'Clusters', 'cluster management', url_prefix='/api/clusters'
+    'Clusters', 'cluster management', url_prefix='/api/clusters',
+    description='Operations on multiple users'
 )
 
 clusterinfo = Blueprint(
@@ -19,7 +20,8 @@ clusterinfo = Blueprint(
 )
 
 clusterblp = Blueprint(
-    'Cluster operations', 'cluster operations', url_prefix='/api/cluster'
+    'Cluster operations', 'cluster operations', url_prefix='/api/cluster',
+    description='Operations on single cluster'
 )
 
 cluster_info_schema = {

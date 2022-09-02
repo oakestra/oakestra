@@ -14,7 +14,7 @@ from pathlib import Path
 from werkzeug.utils import secure_filename, redirect
 
 from ext_requests.cluster_db import mongo_find_by_name_and_location, mongo_update_pairing_complete, \
-    mongo_find_by_username
+    mongo_find_by_username, mongo_delete_cluster
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
 from ext_requests.user_db import create_admin
@@ -92,10 +92,10 @@ def fill_additional_claims(cluster, aud):
 
 
 # TODO: Test this function
-def is_key_freshness_expiring(exp):
+def is_key_freshness_expiring(fresh_exp):
     now = datetime.now(timezone.utc)
-    target_timestamp = datetime.timestamp(now + timedelta(days=10))
-    if target_timestamp >= exp:
+    target_timestamp = datetime.timestamp(now + timedelta(days=3))
+    if target_timestamp >= fresh_exp:
         return True
     else:
         return False
@@ -129,10 +129,10 @@ def token_validation(message, key_type, cluster, net_port):
                 secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=30), claims,
                                                            fresh=timedelta(days=3))
             else:
-                if is_key_freshness_expiring(token_info["exp"]):
+                if is_key_freshness_expiring(token_info["fresh"]):
                     claims = fill_additional_claims(cluster, "connectCluster")
                     secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=30), claims,
-                                                               fresh=timedelta(days=3))
+                                                               fresh=False)
                 else:
                     secret_key = message[key_type]
             response['secret_key'] = secret_key
@@ -150,10 +150,16 @@ def token_validation(message, key_type, cluster, net_port):
                 'error': "The key introduced is invalid"
             }
         elif e == ExpiredSignatureError:
-            response = {
-                'error': "Your token has expired; please log in again to the Dashboard to ask "
-                         "again to attach your cluster. "
-            }
+            if key_type == 'pairing_key':
+                mongo_delete_cluster(str(cluster['_id']))
+                response = {
+                    'error': "Your pairing key is no longer valid. Please try to register your cluster again. "
+                }
+            else:
+                response = {
+                    'error': "Your token has expired; please log in again to the Dashboard to ask "
+                             "again to attach your cluster. "
+                }
         else:
             response = {
                 'error': str(e)
@@ -170,9 +176,10 @@ def on_connect():
     emit('sc1', {'Hello-Cluster_Manager': 'please send your cluster info'}, namespace='/register')
 
 
-@jwt_auth_required()
-@jwt_fresh_required()
+# @jwt_auth_required()    # TODO: pick the claims from the decoded token and use them for the token_validation()
+# function (if there are 2 tokens in the request...)
 @socketio.on('cs1', namespace='/register')
+@jwt_fresh_required()
 def handle_init_client(message):
     app.logger.info('SocketIO - Received Cluster_Manager_to_System_Manager_1: {}:{}'.
                     format(request.remote_addr, request.environ.get('REMOTE_PORT')))
@@ -188,7 +195,7 @@ def handle_init_client(message):
                      "Dashboard and add your cluster there. "
         }
     elif existing_cl['pairing_complete']:
-        if message['secret_key'] is "":
+        if message['secret_key'] == "":
             response = {
                 'warning': "The pairing was already completed; please authenticate with the cluster's secret key",
                 'id': str(existing_cl['_id'])
