@@ -72,6 +72,11 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 
 	var image containerd.Image
 	// pull the given image
+	image, err := r.contaierClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack)
+	if err != nil {
+		return err
+	}
+	/*##Let's alway pull the image as of now. Pull strategies to be introduced later on##
 	sysimg, err := r.contaierClient.ImageService().Get(r.ctx, service.Image)
 	if err == nil {
 		image = containerd.NewImage(r.contaierClient, sysimg)
@@ -82,7 +87,7 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 		if err != nil {
 			return err
 		}
-	}
+	}*/
 
 	killChannel := make(chan bool, 1)
 	startupChannel := make(chan bool, 0)
