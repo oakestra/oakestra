@@ -7,7 +7,7 @@ import time
 from prometheus_client import start_http_server
 import threading
 from mongodb_client import mongo_init, mongo_upsert_node, mongo_find_job_by_system_id, \
-    mongo_update_job_status, mongo_add_secret_key, mongo_find_key_by_id
+    mongo_update_job_status, mongo_add_secret_key
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy
 from cluster_scheduler_requests import scheduler_request_status
 from cm_logging import configure_logging
