@@ -53,7 +53,7 @@ def delete_service(username, serviceid):
 
 
 def update_service(username, sla, serviceid):
-    # TODO Change also job_name and redeploy service
+    # TODO Check fields and redeploy service
     apps = mongo_get_applications_of_user(username)
     for application in apps:
         if serviceid in application["microservices"]:
