@@ -1,4 +1,4 @@
-name: Docker root-system-manager-python
+name: Docker cluster-scheduler-python
 
 on:
   schedule:
