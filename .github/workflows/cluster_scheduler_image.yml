@@ -74,10 +74,10 @@ jobs:
       # https://github.com/docker/build-push-action
       - name: Build and push Docker image
         id: build-and-push
-        uses: docker/build-push-action@v1
+        uses: docker/build-push-action@v3
         with:
           context: ./cluster_orchestrator/cluster-scheduler/
-          platforms: linux/amd64,linux/arm/v7
+          platforms: linux/amd64,linux/armhf,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
