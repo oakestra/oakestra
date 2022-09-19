@@ -1,7 +1,7 @@
 if [ "$1" == "" ]; then
     echo "Architecture not set"
     echo "Usage ./install.sh <architecture>"
-    echo "supported architectures: amd64, arm-7"
+    echo "supported architectures: amd64, arm64"
     exit 1
 fi
 
@@ -30,7 +30,7 @@ else
 fi
 
 #install latest version
-sudo cp bin/NodeEngine_$1 /bin/NodeEngine
+sudo cp NodeEngine_$1 /bin/NodeEngine
 sudo chmod 755 /bin/NodeEngine
 
 [ $? -eq 0 ] && echo "Done, installation successful" || echo "Installation failed, errors reported!"
