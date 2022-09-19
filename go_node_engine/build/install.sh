@@ -11,10 +11,7 @@ if [ ! $? -eq 0 ]; then
   exit 1
 fi
 
-arch='amd64'
-if [ "$1" == "arm-7" ]; then
-    arch='arm64'
-fi
+arch="$1"
 
 #check containerd installation
 if sudo systemctl | grep -Fq 'containerd'; then

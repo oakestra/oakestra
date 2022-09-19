@@ -32,3 +32,5 @@ jobs:
         release_tag: ${{ steps.meta.outputs.tags }}
         asset_name: NodeEngine_${{ matrix.goarch }}
         extra_files: go_node_engine/build/install.sh go_node_engine/build/configure-gpu.sh
+        overwrite: TRUE
+
