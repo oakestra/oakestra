@@ -26,7 +26,7 @@ jobs:
         github_token: ${{ secrets.PACKAGES_TOKEN }}
         goos: ${{ matrix.goos }}
         goarch: ${{ matrix.goarch }}
-        goversion: "https://dl.google.com/go/go1.13.1.linux-amd64.tar.gz"
+        goversion: "https://go.dev/dl/go1.19.1.linux-amd64.tar.gz"
         project_path: "./go_node_engine"
         binary_name: "NodeEngine"
         release_tag: ${{ steps.meta.outputs.tags }}
