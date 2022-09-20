@@ -1,0 +1,36 @@
+name: Golang node enigne artifacts
+
+on:
+  schedule:
+    - cron: '16 10 * * *'
+  push:
+    branches: [ "main" ]
+    # Publish semver tags as releases.
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  releases-matrix:
+    name: Release Go Binary
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # build and publish in parallel: linux/386, linux/amd64, linux/arm64, windows/386, windows/amd64, darwin/amd64, darwin/arm64
+        goos: [linux]
+        goarch: [amd64, arm64]
+    steps:
+    - uses: actions/checkout@v3
+    - uses: wangyoucao577/go-release-action@v1.31
+      with:
+        github_token: ${{ secrets.PACKAGES_TOKEN }}
+        goos: ${{ matrix.goos }}
+        goarch: ${{ matrix.goarch }}
+        goversion: "https://go.dev/dl/go1.19.1.linux-amd64.tar.gz"
+        project_path: "./go_node_engine"
+        binary_name: "NodeEngine"
+        release_tag: ${{ steps.meta.outputs.tags }}
+        asset_name: NodeEngine_${{ matrix.goarch }}
+        extra_files: go_node_engine/build/install.sh go_node_engine/build/configure-gpu.sh
+        overwrite: TRUE
+
