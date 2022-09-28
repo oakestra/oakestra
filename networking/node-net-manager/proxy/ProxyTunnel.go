@@ -154,11 +154,9 @@ func (proxy *GoProxyTunnel) outgoingMessage() {
 			ipv4, tcp, udp := decodePacket(msg)
 
 			if ipv4 != nil {
-				fmt.Printf("Outgoing From src ip %d to dst ip %d\n", ipv4.SrcIP, ipv4.DstIP)
 
 				// continue only if the packet is udp or tcp, otherwise just drop it
 				if tcp != nil || udp != nil {
-					fmt.Printf("tcp or udp \n")
 
 					//proxyConversion
 					newPacket := proxy.outgoingProxy(ipv4, tcp, udp)
@@ -174,7 +172,7 @@ func (proxy *GoProxyTunnel) outgoingMessage() {
 					dstHost, dstPort := proxy.locateRemoteAddress(newIpLayer.(*layers.IPv4).DstIP)
 					log.Println("Sending incoming packet to: ", dstHost.String(), ":", dstPort)
 
-					//packetForwarding
+					//packetForwarding to tunnel interface
 					proxy.forward(dstHost, dstPort, newPacket, 0)
 				}
 			}
@@ -191,18 +189,13 @@ func (proxy *GoProxyTunnel) ingoingMessage() {
 			//from := msg.from
 			fmt.Printf("Ingoing packet\n")
 
-			//If this is an IP packet
+			// proceed only if this is a valid ipv4 packet
 			if ipv4 != nil {
-
-				fmt.Printf("Ingoing From src ip %d to dst ip %d\n", ipv4.SrcIP, ipv4.DstIP)
 
 				// continue only if the packet is udp or tcp, otherwise just drop it
 				if tcp != nil || udp != nil {
 
-					//if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-					fmt.Printf("tcp or udp\n")
-
-					//proxyConversion
+					// proxyConversion
 					newPacket := proxy.ingoingProxy(ipv4, tcp, udp)
 					var packetBytes []byte
 					if newPacket == nil {
@@ -212,17 +205,7 @@ func (proxy *GoProxyTunnel) ingoingMessage() {
 						packetBytes = packetToByte(newPacket)
 					}
 
-					//cache host connection
-					//proxy.HostCache.Add(HostEntry{
-					//	srcip: ipv4.SrcIP,
-					//	host:  from,
-					//})
-					//TODO: cache host connection
-					//TODO: optimize for paraller traffic
-
-					//send message to TUN
-					//proxy.tunwrite.Lock()
-					//defer proxy.tunwrite.Unlock()
+					// output to bridge interface
 					_, err := proxy.ifce.Write(packetBytes)
 					if err != nil {
 						fmt.Println("[ERROR]", err)
@@ -727,7 +710,6 @@ func decodePacket(msg []byte) (*layers.IPv4, *layers.TCP, *layers.UDP) {
 		fmt.Println("[ERROR]", err)
 		return nil, nil, nil
 	} else if ipdefrag == nil {
-		fmt.Printf("outgoing packet is a fragment \n")
 		return nil, nil, nil // packet fragment, we don't have whole packet yet.
 	}
 
@@ -752,7 +734,6 @@ func decodePacket(msg []byte) (*layers.IPv4, *layers.TCP, *layers.UDP) {
 		udplayer := packet.Layer(layers.LayerTypeTCP)
 		return ipdefrag, udplayer.(*layers.TCP), nil
 	default:
-		log.Default().Println("Unsupported transport layer")
 		return ipdefrag, nil, nil
 	}
 
