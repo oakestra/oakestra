@@ -1,7 +1,7 @@
-# EdgeIO Net
+# Oakestra Networking Component
 
-This is the networking component that enables interactions between the microservices deployed in EdgeIO. 
-The networking component resembles the multi-layer architecture of EdgeIO with the following components:
+This is the networking component that enables interactions between the microservices deployed in Oakestra. 
+The networking component resembles the multi-layer architecture of Oakestra with the following components:
 
 - Root service manager: register the cluster service manager and generates the subnetwork for each worker and cluster belonging to the infrastructure.
 - Cluster service manager: this is the direct interface towards the nodes. This resolves the addresses required by each node. 
@@ -38,8 +38,8 @@ The implementation happens at level 4, therefore as of now all the protocols abs
 
 ## Subnetworks
 
-An overlay that spans seamlessly across the platform is only possible if each node has an internal sub-network that can be used to allocate an address for each newly deployed service. When a new node is attached to EdgeIO, a new subnetwork from the original addressing space is generated. All the services belonging to that node will have private namespace addresses belonging to that subnetwork.
-As of now the network 10.16.0.0/12 represents the entire EdgeIO platform. From this base address each cluster contains subnetworks with a netmask of 26 bits that are assigned to the nodes. Each worker can then assign namespace ip addresses using the last 6 bits of the address. A namespace ip is yeat another address assigned to each instance only within the node boundaries. The address 10.30.0.0/16 is reserved to the ServiceIPs.
+An overlay that spans seamlessly across the platform is only possible if each node has an internal sub-network that can be used to allocate an address for each newly deployed service. When a new node is attached to Oakestra, a new subnetwork from the original addressing space is generated. All the services belonging to that node will have private namespace addresses belonging to that subnetwork.
+As of now the network 10.16.0.0/12 represents the entire Oakestra platform. From this base address each cluster contains subnetworks with a netmask of 26 bits that are assigned to the nodes. Each worker can then assign namespace ip addresses using the last 6 bits of the address. A namespace ip is yeat another address assigned to each instance only within the node boundaries. The address 10.30.0.0/16 is reserved to the ServiceIPs.
 This network cut enables up to ≈ 15.360 worker nodes. Each worker can instantiate ≈ 62 containers, considering the address reserved internally for the networking components. 
 
 ## Packet proxying
