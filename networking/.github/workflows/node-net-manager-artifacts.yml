@@ -2,7 +2,6 @@ name: Golang net manager artifacts
 
 on:
   push:
-    branches: [ "main" ]
     # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
 
@@ -22,7 +21,7 @@ jobs:
         github_token: ${{ secrets.PACKAGES_TOKEN }}
         goos: ${{ matrix.goos }}
         goarch: ${{ matrix.goarch }}
-        goversion: "https://go.dev/dl/go1.19.1.linux-amd64.tar.gz"
+        goversion: "https://go.dev/dl/go1.13.linux-amd64.tar.gz"
         project_path: "./node-net-manager"
         binary_name: "NetManager"
         release_tag: ${{ steps.meta.outputs.tags }}
