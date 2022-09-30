@@ -137,7 +137,7 @@ func NewEnvironmentClusterConfigured(proxyname string) *Environment {
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
-		Mtusize:                    3000,
+		Mtusize:                    1450,
 	}
 	return NewCustom(proxyname, config)
 }

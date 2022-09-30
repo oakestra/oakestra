@@ -75,8 +75,8 @@ func New() GoProxyTunnel {
 	}
 	mtusize := os.Getenv("TUN_MTU_SIZE")
 	if len(mtusize) == 0 {
-		log.Printf("Default to mtusize 3000")
-		mtusize = "3000"
+		log.Printf("Default to mtusize 1450")
+		mtusize = "1450"
 	}
 	proxySubnetworkMask := os.Getenv("PROXY_SUBNETWORK_MASK")
 	if len(proxySubnetworkMask) == 0 {
