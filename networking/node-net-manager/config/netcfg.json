@@ -1,6 +1,6 @@
 {
-  "NodePublicAddress": "",
-  "NodePublicPort": "",
-  "ClusterUrl": "",
-  "ClusterMqttPort": "",
+  "NodePublicAddress": "0.0.0.0",
+  "NodePublicPort": "50103",
+  "ClusterUrl": "0.0.0.0",
+  "ClusterMqttPort": "10003"
 }
