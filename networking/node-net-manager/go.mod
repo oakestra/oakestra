@@ -17,6 +17,7 @@ require (
 	github.com/moby/sys/signal v0.7.0 // indirect
 	github.com/opencontainers/runtime-spec v1.0.3-0.20211123151946-c2389c3cb60a
 	github.com/rivo/tview v0.0.0-20220307222120-9994674d60a8
+	github.com/songgao/packets v0.0.0-20160404182456-549a10cd4091
 	github.com/songgao/water v0.0.0-20200317203138-2b4b6d7c09d8
 	github.com/tkanos/gonfig v0.0.0-20210106201359-53e13348de2f
 	github.com/vishvananda/netlink v1.1.1-0.20211101163509-b10eb8fe5cf6
