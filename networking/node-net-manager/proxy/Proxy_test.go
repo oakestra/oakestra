@@ -82,7 +82,7 @@ func getFakeTunnel() GoProxyTunnel {
 	return tunnel
 }
 
-func getFakePacket(srcIP string, dstIP string, srcPort int, dstPort int) gopacket.Packet {
+func getFakePacket(srcIP string, dstIP string, srcPort int, dstPort int) (gopacket.Packet, *layers.IPv4, *layers.TCP) {
 	ipLayer := layers.IPv4{
 		SrcIP:    net.ParseIP(srcIP),
 		DstIP:    net.ParseIP(dstIP),
@@ -99,17 +99,17 @@ func getFakePacket(srcIP string, dstIP string, srcPort int, dstPort int) gopacke
 		ComputeChecksums: false,
 	}
 	_ = gopacket.SerializeLayers(buf, opts, &ipLayer, &tcpLayer)
-	return gopacket.NewPacket(buf.Bytes(), layers.LayerTypeIPv4, gopacket.Default)
+	return gopacket.NewPacket(buf.Bytes(), layers.LayerTypeIPv4, gopacket.Default), &ipLayer, &tcpLayer
 }
 
 func TestOutgoingProxy(t *testing.T) {
 	proxy := getFakeTunnel()
 
-	proxypacket := getFakePacket("10.19.1.1", "10.30.255.255", 666, 80)
-	noproxypacket := getFakePacket("10.19.1.1", "10.20.1.1", 666, 80)
+	_, ip, tcp := getFakePacket("10.19.1.1", "10.30.255.255", 666, 80)
+	_, noip, notcp := getFakePacket("10.19.1.1", "10.20.1.1", 666, 80)
 
-	newpacketproxy := proxy.outgoingProxy(proxypacket)
-	newpacketnoproxy := proxy.outgoingProxy(noproxypacket)
+	newpacketproxy := proxy.outgoingProxy(ip, tcp, nil)
+	newpacketnoproxy := proxy.outgoingProxy(noip, notcp, nil)
 
 	if ipLayer := newpacketproxy.Layer(layers.LayerTypeIPv4); ipLayer != nil {
 		if tcpLayer := newpacketproxy.Layer(layers.LayerTypeTCP); tcpLayer != nil {
@@ -125,28 +125,16 @@ func TestOutgoingProxy(t *testing.T) {
 			//}
 		}
 	}
-	if ipLayer := newpacketnoproxy.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-		if tcpLayer := newpacketnoproxy.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-
-			ipv4, _ := ipLayer.(*layers.IPv4)
-			dstexpected := net.ParseIP("10.20.1.1")
-			if !ipv4.DstIP.Equal(dstexpected) {
-				t.Error("dstIP = ", ipv4.DstIP.String(), "; want =", dstexpected)
-			}
-
-			tcp, _ := tcpLayer.(*layers.TCP)
-			if !(tcp.SrcPort == layers.TCPPort(666)) {
-				t.Error("srcPort = ", tcp.SrcPort.String(), "; want = ", 666)
-			}
-		}
+	if newpacketnoproxy != nil {
+		t.Error("Packet should not be proxied")
 	}
 }
 
 func TestIngoingProxy(t *testing.T) {
 	proxy := getFakeTunnel()
 
-	proxypacket := getFakePacket("10.30.0.5", "10.19.1.15", 666, 777)
-	noproxypacket := getFakePacket("10.19.2.1", "10.19.1.12", 666, 80)
+	_, ip, tcp := getFakePacket("10.30.0.5", "10.19.1.15", 666, 777)
+	_, noip, notcp := getFakePacket("10.19.2.1", "10.19.1.12", 666, 80)
 
 	//update proxy proxycache
 	entry := ConversionEntry{
@@ -159,8 +147,8 @@ func TestIngoingProxy(t *testing.T) {
 	}
 	proxy.proxycache.Add(entry)
 
-	newpacketproxy := proxy.ingoingProxy(proxypacket)
-	newpacketnoproxy := proxy.ingoingProxy(noproxypacket)
+	newpacketproxy := proxy.ingoingProxy(ip, tcp, nil)
+	newpacketnoproxy := proxy.ingoingProxy(noip, notcp, nil)
 
 	if ipLayer := newpacketproxy.Layer(layers.LayerTypeIPv4); ipLayer != nil {
 		if tcpLayer := newpacketproxy.Layer(layers.LayerTypeTCP); tcpLayer != nil {
@@ -177,19 +165,7 @@ func TestIngoingProxy(t *testing.T) {
 			//}
 		}
 	}
-	if ipLayer := newpacketnoproxy.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-		if tcpLayer := newpacketnoproxy.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-
-			ipv4, _ := ipLayer.(*layers.IPv4)
-			srcexpected := net.ParseIP("10.19.2.1")
-			if !ipv4.SrcIP.Equal(srcexpected) {
-				t.Error("dstIP = ", ipv4.SrcIP.String(), "; want =", srcexpected)
-			}
-
-			tcp, _ := tcpLayer.(*layers.TCP)
-			if !(tcp.DstPort == layers.TCPPort(80)) {
-				t.Error("srcPort = ", tcp.DstPort.String(), "; want = ", 80)
-			}
-		}
+	if newpacketnoproxy != nil {
+		t.Error("Packet should not be proxied")
 	}
 }

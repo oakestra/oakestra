@@ -60,7 +60,7 @@ func initEnv(addr string, port string) {
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
-		Mtusize:                    3000,
+		Mtusize:                    1450,
 	}
 
 	x := "0"
@@ -78,7 +78,7 @@ func initEnv(addr string, port string) {
 		AddInputField("P2P sync public port", LISTEN_PORT, 5, nil, func(text string) {
 			LISTEN_PORT = text
 		}).
-		AddInputField("MTU size", "3000", 5, nil, func(text string) {
+		AddInputField("MTU size", "1450", 5, nil, func(text string) {
 			config.Mtusize, _ = strconv.Atoi(text)
 		}).
 		AddButton("Save", func() {

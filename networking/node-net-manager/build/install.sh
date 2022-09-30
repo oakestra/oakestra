@@ -6,9 +6,9 @@ if [ "$1" == "" ]; then
     exit 1
 fi
 
-sudo cp ./build/bin/$1-NetManager /bin/NetManager
+sudo cp ./NetManager /bin/NetManager
 sudo mkdir /etc/netmanager
-sudo cp ./config/tuncfg.json /etc/netmanager/tuncfg.json
-sudo cp ./config/netcfg.json /etc/netmanager/netcfg.json
+sudo cp tuncfg.json /etc/netmanager/tuncfg.json
+sudo cp netcfg.json /etc/netmanager/netcfg.json
 
 sudo chmod 755 /bin/NetManager
