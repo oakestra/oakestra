@@ -27,7 +27,7 @@ jobs:
         goos: ${{ matrix.goos }}
         goarch: ${{ matrix.goarch }}
         goversion: "https://go.dev/dl/go1.19.1.linux-amd64.tar.gz"
-        project_path: "./note-net-manager"
+        project_path: "./node-net-manager"
         binary_name: "NetManager"
         release_tag: ${{ steps.meta.outputs.tags }}
         asset_name: NetManager_${{ matrix.goarch }}
