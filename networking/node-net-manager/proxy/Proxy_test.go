@@ -125,20 +125,8 @@ func TestOutgoingProxy(t *testing.T) {
 			//}
 		}
 	}
-	if ipLayer := newpacketnoproxy.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-		if tcpLayer := newpacketnoproxy.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-
-			ipv4, _ := ipLayer.(*layers.IPv4)
-			dstexpected := net.ParseIP("10.20.1.1")
-			if !ipv4.DstIP.Equal(dstexpected) {
-				t.Error("dstIP = ", ipv4.DstIP.String(), "; want =", dstexpected)
-			}
-
-			tcp, _ := tcpLayer.(*layers.TCP)
-			if !(tcp.SrcPort == layers.TCPPort(666)) {
-				t.Error("srcPort = ", tcp.SrcPort.String(), "; want = ", 666)
-			}
-		}
+	if newpacketnoproxy != nil {
+		t.Error("Packet should not be proxied")
 	}
 }
 
@@ -177,19 +165,7 @@ func TestIngoingProxy(t *testing.T) {
 			//}
 		}
 	}
-	if ipLayer := newpacketnoproxy.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-		if tcpLayer := newpacketnoproxy.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-
-			ipv4, _ := ipLayer.(*layers.IPv4)
-			srcexpected := net.ParseIP("10.19.2.1")
-			if !ipv4.SrcIP.Equal(srcexpected) {
-				t.Error("dstIP = ", ipv4.SrcIP.String(), "; want =", srcexpected)
-			}
-
-			tcp, _ := tcpLayer.(*layers.TCP)
-			if !(tcp.DstPort == layers.TCPPort(80)) {
-				t.Error("srcPort = ", tcp.DstPort.String(), "; want = ", 80)
-			}
-		}
+	if newpacketnoproxy != nil {
+		t.Error("Packet should not be proxied")
 	}
 }
