@@ -31,6 +31,6 @@ jobs:
         binary_name: "NetManager"
         release_tag: ${{ steps.meta.outputs.tags }}
         asset_name: NetManager_${{ matrix.goarch }}
-        extra_files: node-net-manager/install.sh  node-net-manager/config/tuncfg.json node-net-manager/config/netcfg.json
+        extra_files: node-net-manager/build/install.sh  node-net-manager/config/tuncfg.json node-net-manager/config/netcfg.json
         overwrite: TRUE
 
