@@ -1,14 +1,8 @@
 name: Golang node enigne artifacts
 
 on:
-  schedule:
-    - cron: '16 10 * * *'
   push:
-    branches: [ "main" ]
-    # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
-  pull_request:
-    branches: [ "main" ]
 
 jobs:
   releases-matrix:
