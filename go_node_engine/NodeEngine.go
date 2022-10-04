@@ -18,7 +18,7 @@ var clusterAddress = flag.String("a", "localhost", "Address of the cluster orche
 var clusterPort = flag.String("p", "10000", "Port of the cluster orchestrator")
 var overlayNetwork = flag.Int("n", -1, "Port of the NetManager component, if any. This enables the overlay network across nodes")
 
-const MONITORING_CYCLE = time.Second * 10
+const MONITORING_CYCLE = time.Second * 2
 
 func main() {
 	flag.Parse()

@@ -253,13 +253,19 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	select {
 	case exitStatus := <-exitStatusC:
 		//TODO: container exited, do something, notify to cluster manager
-		logger.InfoLogger().Printf("WARNING: Container exited %v", exitStatus.Error())
+		if err != nil {
+			return
+		}
+		logger.InfoLogger().Printf("WARNING: Container exited with status %d", exitStatus.ExitCode())
+		service.StatusDetail = fmt.Sprintf("Container exited with status: %d", exitStatus.ExitCode())
 	case <-*killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
-		//detaching network
-		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
 	}
 	service.Status = model.SERVICE_DEAD
+	//detaching network
+	if model.GetNodeInfo().Overlay {
+		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
+	}
 	statusChangeNotificationHandler(service)
 	r.removeContainer(container)
 }

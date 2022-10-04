@@ -7,7 +7,6 @@ from ext_requests.apps_db import mongo_find_job_by_id, mongo_insert_job, mongo_g
 from ext_requests.net_plugin_requests import net_inform_service_deploy, net_inform_service_undeploy
 from services.instance_management import request_scale_down_instance
 from sla.versioned_sla_parser import parse_sla_json
-from flask_smorest import abort
 
 
 def create_services_of_app(username, sla, force=False):
@@ -17,7 +16,7 @@ def create_services_of_app(username, sla, force=False):
     last_service_id = ""
     application = mongo_find_app_by_id(app_id, username)
     if application is None:
-        return {'message':"application not found"},404
+        return {'message': "application not found"}, 404
     for microservice in data.get('applications')[0].get('microservices'):
         if not valid_service(microservice):
             return {'message': "invalid service name or namespace"}, 403
@@ -29,9 +28,9 @@ def create_services_of_app(username, sla, force=False):
         add_service_to_app(app_id, last_service_id, username)
         # Inform network plugin about the new service
         try:
-            net_inform_service_deploy(service, str(last_service_id)),
+            net_inform_service_deploy(service, str(last_service_id))
         except:
-            delete_service(username,str(last_service_id))
+            delete_service(username, str(last_service_id))
             return {'message': 'failed to deploy service'}, 500
         # TODO: check if service deployed already etc. force=True must force the insertion anyway
     return {'job_id': str(last_service_id)}, 200
@@ -47,19 +46,19 @@ def delete_service(username, serviceid):
             remove_service_from_app(application["applicationID"], serviceid, username)
             # remove service from DB
             mongo_delete_job(serviceid)
-            #inform network component
+            # inform network component
             net_inform_service_undeploy(serviceid)
             return True
     return False
 
 
 def update_service(username, sla, serviceid):
-    # TODO Change also job_name and redeploy service
+    # TODO Check fields and redeploy service
     apps = mongo_get_applications_of_user(username)
     for application in apps:
         if serviceid in application["microservices"]:
-            return mongo_update_job(serviceid, sla),200
-    return {"message": "service not found"},404
+            return mongo_update_job(serviceid, sla), 200
+    return {"message": "service not found"}, 404
 
 
 def user_services(appid, username):
@@ -67,7 +66,7 @@ def user_services(appid, username):
     if application is None:
         return {"message": "app not found"}, 404
 
-    return mongo_get_jobs_of_application(appid),200
+    return mongo_get_jobs_of_application(appid), 200
 
 
 def get_service(serviceid, username):

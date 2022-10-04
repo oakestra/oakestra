@@ -1,7 +1,7 @@
 if [ "$1" == "" ]; then
     echo "Architecture not set"
     echo "Usage ./install.sh <architecture>"
-    echo "supported architectures: amd64, arm-7"
+    echo "supported architectures: amd64, arm64"
     exit 1
 fi
 
@@ -11,10 +11,7 @@ if [ ! $? -eq 0 ]; then
   exit 1
 fi
 
-arch='amd64'
-if [ "$1" == "arm-7" ]; then
-    arch='arm64'
-fi
+arch="$1"
 
 #check containerd installation
 if sudo systemctl | grep -Fq 'containerd'; then
@@ -30,7 +27,7 @@ else
 fi
 
 #install latest version
-sudo cp bin/NodeEngine_$1 /bin/NodeEngine
+sudo cp NodeEngine_$1 /bin/NodeEngine
 sudo chmod 755 /bin/NodeEngine
 
 [ $? -eq 0 ] && echo "Done, installation successful" || echo "Installation failed, errors reported!"

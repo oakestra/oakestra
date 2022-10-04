@@ -17,3 +17,4 @@ pymongo~=4.1.1
 werkzeug==2.0.3
 MarkupSafe~=2.1.1
 flask_swagger_ui
+mongomock==4.1.2

@@ -48,7 +48,7 @@ def first_fit_algorithm(job):
             logging.error("Something wrong with job requirements or node infos")
 
     # no node found
-    return 'negative', 'FAILED_NoCapacity'
+    return 'negative', None
 
 
 def deploy_on_best_among_desired_nodes(job, nodes):
@@ -75,9 +75,9 @@ def greedy_load_balanced_algorithm(job, active_nodes=None):
     target_cpu = 0
     target_mem = 0
 
-    # return if no qualified clusters found
+    # return if no qualified worker found
     if len(qualified_nodes) < 1:
-        return 'negative', 'NoActiveClusterWithCapacity'
+        return 'negative', None
 
     # return the cluster with the most cpu+ram
     for node in qualified_nodes:
@@ -85,7 +85,7 @@ def greedy_load_balanced_algorithm(job, active_nodes=None):
         mem = float(node.get('current_free_memory_in_MB'))
         if cpu >= target_cpu and mem >= target_mem:
             target_cpu = cpu
-            target_mem = target_cpu
+            target_mem = mem
             target_node = node
 
     return 'positive', target_node
