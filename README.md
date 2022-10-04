@@ -49,11 +49,18 @@ The following ports are exposed:
   - ip utils
 - port 50103 available
 
-1) First you need to install the go Node Engine. Download the latest release and use the command `./install <architecture>`. Architecture can be arm or amd64.
-1.1) As an alternative you can compile the one inside /go_node_engine
-2) (Optional, required only if you want to enable communication across the microservices) Install the [OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager) component. This version has been tested with v0.04.
-2.1) Run the NetManager using `sudo NetManager -p 6000`
+1) First you need to install the go Node Engine.
+```
+wget -c https://github.com/oakestra/oakestra/releases/download/v0.4.2/NodeEngine_$(dpkg --print-architecture).tar.gz && tar -xzf NodeEngine_$(dpkg --print-architecture).tar.gz && chmod +x install.sh && ./install.sh
+```
+2) (Optional, required only if you want to enable communication across the microservices) Install the [OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager) component using the following commsnd:
+```
+wget -c https://github.com/oakestra/oakestra-net/releases/download/v0.4.2/NetManager_$(dpkg --print-architecture).tar.gz && tar -xzf NetManager_$(dpkg --print-architecture).tar.gz && chmod +x install.sh && ./install.sh $(dpkg --print-architecture)
+```
+2.1) Configure the NetManager config file accordingly to what stated in the [NetManager Readme](https://github.com/oakestra/oakestra-net/blob/main/node-net-manager/README.md). Leave the ClusterMqttPort value to the default 10003 value.  
+2.2) Run the NetManager using `sudo NetManager -p 6000`
 3) Run the node engine: `sudo NodeEngine -a <cluster orchestrator address> -p <cluster orhcestrator port e.g. 10100> -n 6000`. If you specifcy the flag `-n 6000`, the NodeEngine expects a running NetManager component on port 6000. If this is the case, the node will start in overlay mode, enabling the networking across the deployed application. In order to do so, you need to have the Oakestra NetManager component installed on your worker node ([OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager)). If you don't which to enable the networking, simply avoid specifying the flag -n. Use NodeEngine -h for further details
+3.1) As an alternative you can run the development version of the NodeEngine moving inside `go_node_engine` and running `sudo go NodeEngine -a <cluster orchestrator address> -p <cluster orhcestrator port e.g. 10100> -n <net manager port>`
 
 # Use the APIs to deploy a new application
 
