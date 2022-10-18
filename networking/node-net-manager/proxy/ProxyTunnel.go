@@ -14,7 +14,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"runtime"
 	"strconv"
 	"sync"
 )
@@ -408,15 +407,10 @@ func (proxy *GoProxyTunnel) tunOutgoingListen() {
 	readerror := make(chan error)
 
 	//async listener
-	for i := 0; i < runtime.NumCPU(); i++ {
-		log.Println("Started outgoing listener")
-		go proxy.ifaceread(proxy.ifce, proxy.outgoingChannel, readerror)
-	}
+	go proxy.ifaceread(proxy.ifce, proxy.outgoingChannel, readerror)
+
 	//async handler
-	for i := 0; i < runtime.NumCPU(); i++ {
-		log.Println("Started outgoing handler")
-		go proxy.outgoingMessage()
-	}
+	go proxy.outgoingMessage()
 
 	proxy.isListening = true
 	log.Println("GoProxyTunnel outgoing listening started")
@@ -443,15 +437,10 @@ func (proxy *GoProxyTunnel) tunIngoingListen() {
 	readerror := make(chan error)
 
 	//async listener
-	for i := 0; i < runtime.NumCPU(); i++ {
-		log.Println("Started ingoing listener")
-		go proxy.udpread(proxy.listenConnection, proxy.incomingChannel, readerror)
-	}
+	go proxy.udpread(proxy.listenConnection, proxy.incomingChannel, readerror)
+
 	//async handler
-	for i := 0; i < runtime.NumCPU(); i++ {
-		log.Println("Started ingoing handler")
-		go proxy.ingoingMessage()
-	}
+	go proxy.ingoingMessage()
 
 	proxy.isListening = true
 	log.Println("GoProxyTunnel ingoing listening started")
