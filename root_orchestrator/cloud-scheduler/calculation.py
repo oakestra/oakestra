@@ -114,6 +114,7 @@ def extract_specs(cluster):
         'available_memory': cluster.get('memory_in_mb'),
         'available_gpu': cluster.get('total_gpu_cores') * (100 - cluster.get('total_gpu_percent')) / 100,
         'virtualization': cluster.get('virtualization'),
+        'arch' : cluster.get('arch'),
     }
 
 
@@ -131,6 +132,16 @@ def does_cluster_respects_requirements(cluster_specs, job):
         vgpu = job.get('vgpu')
 
     virtualization = job.get('virtualization')
+    if(virtualization == 'unikernel'):
+        arch = job.get('arch')
+        arch_fit = False
+        if arch:
+            for a in arch:
+                if a in cluster_specs['arch']:
+                    arch_fit = True
+                    break
+        if arch_fit == False:
+            return False
 
     if cluster_specs['available_cpu'] >= vcpu and \
             cluster_specs['available_memory'] >= memory and \

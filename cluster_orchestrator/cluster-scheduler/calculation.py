@@ -104,6 +104,7 @@ def extract_specs(node):
         'available_memory': node.get('current_free_memory_in_MB'),
         'available_gpu': len(node.get('gpu_info', [])),
         'virtualization': node.get('node_info').get('technology'),
+        'arch' : node.get('node_info').get('architecture'),
     }
 
 
@@ -121,6 +122,16 @@ def does_node_respects_requirements(node_specs, job):
         vgpu = job.get('vgpu')
 
     virtualization = job.get('virtualization')
+    if(virtualization == 'unikernel'):
+        arch = job.get('arch')
+        arch_fit = False
+        if arch:
+            for a in arch:
+                if a == node_specs['arch']:
+                    arch_fit = True
+                    break
+        if arch_fit == False:
+            return False
 
     if node_specs['available_cpu'] >= vcpu and \
             node_specs['available_memory'] >= memory and \

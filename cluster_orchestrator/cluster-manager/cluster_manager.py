@@ -72,7 +72,7 @@ def deploy_task(system_job_id, instance_number):
     except Exception as e:
         return "", 500
 
-    return 200
+    return "", 200
 
 
 @app.route('/api/result/<system_job_id>/<instance_number>', methods=['POST'])
