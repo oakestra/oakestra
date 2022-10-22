@@ -2,18 +2,20 @@ package model
 
 import (
 	"fmt"
+	"go_node_engine/logger"
+	"go_node_engine/model/gpu"
+	"net"
+	"os"
+	"runtime"
+	"strconv"
+	"sync"
+
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	psnet "github.com/shirou/gopsutil/net"
-	"go_node_engine/logger"
-	"go_node_engine/model/gpu"
-	"net"
-	"os"
-	"strconv"
-	"sync"
 )
 
 const (
@@ -29,6 +31,7 @@ type Node struct {
 	SystemInfo     map[string]string `json:"system_info"`
 	CpuUsage       float64           `json:"cpu"`
 	CpuCores       int               `json:"free_cores"`
+	CpuArch        string            `json:"architecture"`
 	MemoryUsed     float64           `json:"memory"`
 	MemoryMB       int               `json:"memory_free_in_MB"`
 	DiskInfo       map[string]string `json:"disk_info"`
@@ -53,6 +56,7 @@ func GetNodeInfo() Node {
 			Host:       getHostname(),
 			SystemInfo: getSystemInfo(),
 			CpuCores:   getCpuCores(),
+			CpuArch:    runtime.GOARCH,
 			Port:       getPort(),
 			Technology: getSupportedTechnologyList(),
 			Overlay:    false,
@@ -218,7 +222,7 @@ func getPort() string {
 }
 
 func getSupportedTechnologyList() []string {
-	return []string{CONTAINER_RUNTIME}
+	return []string{CONTAINER_RUNTIME, UNIKERNEL_RUNTIME}
 }
 
 func getGpuDriver() string {

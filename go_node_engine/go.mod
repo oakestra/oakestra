@@ -8,7 +8,9 @@ require (
 	github.com/opencontainers/runtime-spec v1.1.0-rc.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/struCoder/pidusage v0.2.1
+	github.com/vishvananda/netns v0.0.0-20211101163701-50045581ed74
 	gotest.tools v2.2.0+incompatible
+	github.com/digitalocean/go-qemu v0.0.0-20210326154740-ac9e0b687001
 )
 
 require (
@@ -18,6 +20,7 @@ require (
 	github.com/Microsoft/hcsshim v0.11.0 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/containerd/continuity v0.4.2 // indirect
+	github.com/digitalocean/go-libvirt v0.0.0-20201209184759-e2a69bcd5bd1 // indirect
 	github.com/containerd/fifo v1.1.0 // indirect
 	github.com/containerd/ttrpc v1.2.2 // indirect
 	github.com/containerd/typeurl/v2 v2.1.1 // indirect
