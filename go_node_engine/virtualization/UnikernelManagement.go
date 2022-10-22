@@ -520,7 +520,7 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string)
 	for _, kernelarg := range q.KernelArgs {
 		KernelArgsStr += kernelarg + " "
 	}
-	args = append(args, "netdev.ipv4_addr=192.168.1.2 netdev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.0 --"+KernelArgsStr)
+	args = append(args, "netdev.ipv4_addr=192.168.1.2 netdev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.252 --"+KernelArgsStr)
 
 	//Check if a folder is to be mounted
 	mountpath := fmt.Sprintf("%sfiles/", q.Instancepath)
