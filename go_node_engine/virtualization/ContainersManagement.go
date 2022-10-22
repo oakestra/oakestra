@@ -53,6 +53,7 @@ func GetContainerdClient() *ContainerRuntime {
 		runtime.killQueue = make(map[string]*chan bool)
 		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
 		runtime.forceContainerCleanup()
+		model.AddSupportedTechnology(model.CONTAINER_RUNTIME)
 	})
 	return &runtime
 }

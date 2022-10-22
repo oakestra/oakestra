@@ -221,8 +221,14 @@ func getPort() string {
 	return port
 }
 
+var SupportedTechnologies []string
+
+func AddSupportedTechnology(tech string){
+	SupportedTechnologies = append(SupportedTechnologies, tech)
+}
+
 func getSupportedTechnologyList() []string {
-	return []string{CONTAINER_RUNTIME, UNIKERNEL_RUNTIME}
+	return SupportedTechnologies
 }
 
 func getGpuDriver() string {

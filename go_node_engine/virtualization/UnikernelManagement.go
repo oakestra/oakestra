@@ -67,7 +67,7 @@ func GetUnikernelRuntime() *UnikernelRuntime {
 		ukruntime.qemuDomains = make(map[string]*qemuDomain)
 		err = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
 		err = os.MkdirAll("/tmp/node_engine/inst/", 0755)
-
+		model.AddSupportedTechnology(model.UNIKERNEL_RUNTIME)
 	})
 	return &ukruntime
 }
