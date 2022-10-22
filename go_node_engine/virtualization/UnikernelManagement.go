@@ -264,7 +264,21 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	hostname := genTaskID(service.Sname, service.Instance)
 	qemuConfig.Name = hostname
 	qemuConfig.NSname = &hostname
-	kernelPath := GetKernelImage(service.Image, hostname)
+
+	var kernelImage string = ""
+	for i, a := range service.Architectures {
+		if a == rt.GOARCH {
+			if i < len(service.UnikernelImages) {
+				kernelImage = service.UnikernelImages[i]
+			}
+		}
+	}
+
+	if kernelImage == "" {
+		logger.InfoLogger().Printf("Failed to find kernel/architecture pair.")
+	}
+
+	kernelPath := GetKernelImage(kernelImage, hostname)
 	if kernelPath == nil {
 		logger.InfoLogger().Println("Failed to get Kernel image")
 		return
