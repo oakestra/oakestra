@@ -17,7 +17,7 @@ import (
 var clusterAddress = flag.String("a", "localhost", "Address of the cluster orchestrator without port")
 var clusterPort = flag.String("p", "10000", "Port of the cluster orchestrator")
 var overlayNetwork = flag.Int("n", -1, "Port of the NetManager component, if any. This enables the overlay network across nodes")
-
+var UnikernelSupport = flag.Bool("u",false,"Set to disable Unikernel support")
 const MONITORING_CYCLE = time.Second * 2
 
 func main() {
@@ -26,10 +26,11 @@ func main() {
 	//connect to container runtime
 	runtime := virtualization.GetContainerdClient()
 	defer runtime.StopContainerdClient()
-
-	unikernelRuntime := virtualization.GetUnikernelRuntime()
-	defer unikernelRuntime.StopUnikernelRuntime()
-
+	
+	if !*UnikernelSupport {
+		unikernelRuntime := virtualization.GetUnikernelRuntime()
+		defer unikernelRuntime.StopUnikernelRuntime()
+	}
 	//hadshake with the cluster orchestrator to get mqtt port and node id
 	handshakeResult := clusterHandshake()
 
