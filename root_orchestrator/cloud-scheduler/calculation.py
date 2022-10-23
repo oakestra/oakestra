@@ -1,7 +1,7 @@
 import time
 from mongodb_client import mongo_find_cluster_by_location, is_cluster_active, mongo_find_all_active_clusters, \
     mongo_find_cluster_by_name
-
+import sys
 
 def calculate(job_id, job):
     print('calculating...')
@@ -28,8 +28,7 @@ def direct_service_mapping(job, cluster_name):
     if cluster is not None:  # cluster found by location exists
         if is_cluster_active(cluster):
             print('Cluster is active')
-            cluster_specs = extract_specs(cluster)
-            if does_cluster_respects_requirements(cluster_specs,job):
+            if does_cluster_respects_requirements(cluster,job):
                 return 'positive', cluster
             else:
                 return 'negative', 'TargetClusterNoCapacity'
@@ -47,7 +46,7 @@ def first_fit_algorithm(job):
     for cluster in active_clusters:
         print(cluster)
 
-        if does_cluster_respects_requirements(extract_specs(cluster), job):
+        if does_cluster_respects_requirements(cluster, job):
             return 'positive', cluster
 
     # no cluster found
@@ -74,7 +73,7 @@ def greedy_load_balanced_algorithm(job, active_clusters=None):
         vgpu = job.get('vgpu')
 
     for cluster in active_clusters:
-        if does_cluster_respects_requirements(extract_specs(cluster), job):
+        if does_cluster_respects_requirements(cluster, job):
             qualified_clusters.append(cluster)
 
     target_cluster = None
@@ -117,8 +116,25 @@ def extract_specs(cluster):
         'arch' : cluster.get('arch'),
     }
 
+def extract_architecture_specs(cluster,arch):
+    aggregation = cluster.get('aggregation_per_architecture',None)
+    if not aggregation is None: 
 
-def does_cluster_respects_requirements(cluster_specs, job):
+        aggregation = aggregation.get(arch,None)
+
+        if not aggregation is None:
+            return {
+                'available_cpu': aggregation.get('cpu_cores') * (100 - aggregation.get('cpu_percent')) / 100,
+                'available_memory': aggregation.get('memory_in_mb'), 'virtualization': ['unikernel'],
+                'available_gpu': 0
+            }
+    
+    return {
+        'available_cpu': 0, 'available_memory':0, 'virtualization': [], 'available_gpu': 0 
+    }
+
+
+def does_cluster_respects_requirements(cluster, job):
     memory = 0
     if job.get('memory'):
         memory = job.get('memory')
@@ -132,20 +148,26 @@ def does_cluster_respects_requirements(cluster_specs, job):
         vgpu = job.get('vgpu')
 
     virtualization = job.get('virtualization')
-    if(virtualization == 'unikernel'):
-        arch = job.get('arch')
-        arch_fit = False
-        if arch:
-            for a in arch:
-                if a in cluster_specs['arch']:
-                    arch_fit = True
-                    break
-        if arch_fit == False:
-            return False
 
-    if cluster_specs['available_cpu'] >= vcpu and \
-            cluster_specs['available_memory'] >= memory and \
-            virtualization in cluster_specs['virtualization'] and \
-            cluster_specs['available_gpu'] >= vgpu:
-        return True
+    cluster_specs = None
+
+    if virtualization == 'unikernel':
+        arch = job.get('arch')
+        if arch is None:
+            return False
+        for a in arch:
+            cluster_specs = extract_architecture_specs(cluster,a)
+            if cluster_specs['available_cpu'] >= vcpu and \
+                    cluster_specs['available_memory'] >= memory and \
+                    virtualization in cluster_specs['virtualization'] and \
+                    cluster_specs['available_gpu'] >= vgpu:
+                return True
+    else:
+        cluster_specs = extract_specs(cluster) 
+        if cluster_specs['available_cpu'] >= vcpu and \
+                cluster_specs['available_memory'] >= memory and \
+                virtualization in cluster_specs['virtualization'] and \
+                cluster_specs['available_gpu'] >= vgpu:
+            return True
+
     return False

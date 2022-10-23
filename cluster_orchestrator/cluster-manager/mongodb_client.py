@@ -125,6 +125,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     number_of_active_nodes = 0
     technology = []
     architecture = []
+    aggregation_per_architecture = {}
 
     nodes = find_all_nodes()
     for n in nodes:
@@ -150,6 +151,21 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
                 arch = n.get('node_info').get('architecture')
                 if arch is not None:
                     architecture.append(arch) if arch not in architecture else architecture
+                    aggregation = None
+                    if aggregation_per_architecture.get(arch,None) is None:
+                        aggregation_per_architecture[arch] = {}
+                        aggregation = aggregation_per_architecture[arch]
+                        aggregation["cpu_percent"] = 0
+                        aggregation["cpu_cores"] = 0
+                        aggregation["memory"] = 0
+                        aggregation["memory_in_mb"] = 0 
+                    
+                    aggregation = aggregation_per_architecture[arch]
+                    aggregation["cpu_percent"] += n.get('current_cpu_percent', 0)
+                    aggregation["cpu_cores"] += n.get('current_cpu_cores_free', 0)
+                    aggregation["memory"] += n.get('current_memory_percent', 0)
+                    aggregation["memory_in_mb"] += n.get('current_free_memory_in_MB', 0)
+                    #GPU not aggregated for unikernel
             else:
                 print('Node {0} is inactive.'.format(n.get('_id')))
         except Exception as e:
@@ -173,6 +189,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
         'jobs': jobs,
         'virtualization': technology,
         'arch' : architecture,
+        'aggregation_per_architecture' : aggregation_per_architecture,
         'more': 0
     }
 
