@@ -3,6 +3,7 @@ package main
 import (
 	"NetManager/env"
 	"NetManager/handlers"
+	"NetManager/logger"
 	"NetManager/mqtt"
 	"NetManager/network"
 	"NetManager/playground"
@@ -53,10 +54,12 @@ Endpoint: /docker/undeploy
 Usage: used to remove the network from a docker container. This method can be used only after the registration
 Method: POST
 Request Json:
+
 	{
 		serviceName:string #name used to register the service in the first place
 		instance:int
 	}
+
 Response: 200 OK or Failure code
 */
 func containerUndeploy(writer http.ResponseWriter, request *http.Request) {
@@ -82,17 +85,22 @@ func containerUndeploy(writer http.ResponseWriter, request *http.Request) {
 	writer.WriteHeader(http.StatusOK)
 }
 
-/* DEPRECATED
+/*
+	DEPRECATED
+
 Endpoint: /docker/deploy
 Usage: used to assign a network to a docker container. This method can be used only after the registration
 Method: POST
 Request Json:
+
 	{
 		containerId:string #name of the container or containerid
 		appName:string
 		instanceNumber:int
 	}
+
 Response Json:
+
 	{
 		serviceName:    string
 		nsAddress:  	string # address assigned to this container
@@ -109,13 +117,16 @@ Endpoint: /container/deploy
 Usage: used to assign a network to a generic container. This method can be used only after the registration
 Method: POST
 Request Json:
+
 	{
 		pid:string #pid of container's task
 		appName:string
 		instanceNumber:int
 		portMapppings: map[int]int (host port, container port)
 	}
+
 Response Json:
+
 	{
 		serviceName:    string
 		nsAddress:  	string # address assigned to this container
@@ -153,9 +164,11 @@ Endpoint: /register
 Usage: used to initialize the Network manager. The network manager must know his local subnetwork.
 Method: POST
 Request Json:
+
 	{
 		client_id:string # id of the worker node
 	}
+
 Response: 200 or Failure code
 */
 func register(writer http.ResponseWriter, request *http.Request) {
@@ -200,13 +213,18 @@ func register(writer http.ResponseWriter, request *http.Request) {
 func main() {
 
 	cfgFile := flag.String("cfg", "/etc/netmanager/netcfg.json", "Set a cluster IP")
-	localPort := flag.Int("p", 10010, "Default local port of the NetManager")
+	localPort := flag.Int("p", 6000, "Default local port of the NetManager")
+	debugMode := flag.Bool("D", false, "Debug mode, it enables debug-level logs")
 	p2pMode := flag.Bool("p2p", false, "Start the engine in p2p mode (playground2playground), requires the address of a peer node. Useful for debugging.")
 	flag.Parse()
 
 	err := gonfig.GetConf(*cfgFile, &Configuration)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if *debugMode {
+		logger.SetDebugMode()
 	}
 
 	log.Print(Configuration)
