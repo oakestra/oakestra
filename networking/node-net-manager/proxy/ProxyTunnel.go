@@ -3,6 +3,7 @@ package proxy
 import (
 	"NetManager/TableEntryCache"
 	"NetManager/env"
+	"NetManager/logger"
 	"NetManager/network"
 	"fmt"
 	"github.com/google/gopacket"
@@ -18,10 +19,10 @@ import (
 	"sync"
 )
 
-//Ipv4 defragger
+// Ipv4 defragger
 var defragger = ip4defrag.NewIPv4Defragmenter()
 
-//const
+// const
 var BUFFER_SIZE = 64 * 1024
 
 // Config
@@ -59,7 +60,7 @@ type GoProxyTunnel struct {
 	randseed          *rand.Rand
 }
 
-//incoming message from UDP channel
+// incoming message from UDP channel
 type incomingMessage struct {
 	from    net.UDPAddr
 	content []byte
@@ -69,27 +70,27 @@ type incomingMessage struct {
 func New() GoProxyTunnel {
 	port, err := strconv.Atoi(os.Getenv("PUBLIC_WORKER_PORT"))
 	if err != nil {
-		log.Printf("Default to tunport 50103")
+		logger.InfoLogger().Printf("Default to tunport 50103")
 		port = 50103
 	}
 	mtusize := os.Getenv("TUN_MTU_SIZE")
 	if len(mtusize) == 0 {
-		log.Printf("Default to mtusize 1450")
+		logger.InfoLogger().Printf("Default to mtusize 1450")
 		mtusize = "1450"
 	}
 	proxySubnetworkMask := os.Getenv("PROXY_SUBNETWORK_MASK")
 	if len(proxySubnetworkMask) == 0 {
-		log.Printf("Default proxy subnet mask to 255.255.0.0")
+		logger.InfoLogger().Printf("Default proxy subnet mask to 255.255.0.0")
 		proxySubnetworkMask = "255.255.0.0"
 	}
 	proxySubnetwork := os.Getenv("PROXY_SUBNETWORK")
 	if len(proxySubnetwork) == 0 {
-		log.Printf("Default proxy subnetwork to 10.30.0.0")
+		logger.InfoLogger().Printf("Default proxy subnetwork to 10.30.0.0")
 		proxySubnetwork = "10.30.0.0"
 	}
 	tunNetIP := os.Getenv("TUN_NET_IP")
 	if len(tunNetIP) == 0 {
-		log.Printf("Default to tunNetIP 10.19.1.254")
+		logger.InfoLogger().Printf("Default to tunNetIP 10.19.1.254")
 		tunNetIP = "10.19.1.254"
 	}
 	tunconfig := Configuration{
@@ -136,7 +137,7 @@ func NewCustom(configuration Configuration) GoProxyTunnel {
 	ipstring, _ := network.GetLocalIPandIface()
 	proxy.localIP = net.ParseIP(ipstring)
 
-	log.Printf("Created ProxyTun device: %s\n", proxy.ifce.Name())
+	logger.InfoLogger().Printf("Created ProxyTun device: %s\n", proxy.ifce.Name())
 
 	return proxy
 }
@@ -145,14 +146,17 @@ func (proxy *GoProxyTunnel) SetEnvironment(env env.EnvironmentManager) {
 	proxy.environment = env
 }
 
-//handler function for all outgoing messages that are received by the TUN device
+// handler function for all outgoing messages that are received by the TUN device
 func (proxy *GoProxyTunnel) outgoingMessage() {
 	for {
 		select {
 		case msg := <-proxy.outgoingChannel:
+			logger.DebugLogger().Printf("Outgoing packet ready for decode action \n")
 			ipv4, tcp, udp := decodePacket(msg)
 
 			if ipv4 != nil {
+
+				logger.DebugLogger().Printf("Outgoing packet from %s\n", ipv4.SrcIP.String())
 
 				// continue only if the packet is udp or tcp, otherwise just drop it
 				if tcp != nil || udp != nil {
@@ -160,8 +164,9 @@ func (proxy *GoProxyTunnel) outgoingMessage() {
 					//proxyConversion
 					newPacket := proxy.outgoingProxy(ipv4, tcp, udp)
 					if newPacket == nil {
-						log.Println("Unable to convert the packet")
-						return
+						//if not proxy conversion available, drop it
+						logger.ErrorLogger().Println("Unable to convert the packet")
+						continue
 					}
 
 					//newTcpLayer := newPacket.Layer(layers.LayerTypeTCP)
@@ -169,7 +174,7 @@ func (proxy *GoProxyTunnel) outgoingMessage() {
 
 					//fetch remote address
 					dstHost, dstPort := proxy.locateRemoteAddress(newIpLayer.(*layers.IPv4).DstIP)
-					log.Println("Sending incoming packet to: ", dstHost.String(), ":", dstPort)
+					logger.DebugLogger().Println("Sending incoming packet to: ", dstHost.String(), ":", dstPort)
 
 					//packetForwarding to tunnel interface
 					proxy.forward(dstHost, dstPort, newPacket, 0)
@@ -179,17 +184,17 @@ func (proxy *GoProxyTunnel) outgoingMessage() {
 	}
 }
 
-//handler function for all ingoing messages that are received by the UDP socket
+// handler function for all ingoing messages that are received by the UDP socket
 func (proxy *GoProxyTunnel) ingoingMessage() {
 	for {
 		select {
 		case msg := <-proxy.incomingChannel:
 			ipv4, tcp, udp := decodePacket(msg.content)
 			//from := msg.from
-			fmt.Printf("Ingoing packet\n")
 
 			// proceed only if this is a valid ipv4 packet
 			if ipv4 != nil {
+				logger.DebugLogger().Printf("Ingoing packet to %s\n", ipv4.DstIP.String())
 
 				// continue only if the packet is udp or tcp, otherwise just drop it
 				if tcp != nil || udp != nil {
@@ -207,7 +212,7 @@ func (proxy *GoProxyTunnel) ingoingMessage() {
 					// output to bridge interface
 					_, err := proxy.ifce.Write(packetBytes)
 					if err != nil {
-						fmt.Println("[ERROR]", err)
+						logger.ErrorLogger().Println(err)
 					}
 
 				}
@@ -216,8 +221,8 @@ func (proxy *GoProxyTunnel) ingoingMessage() {
 	}
 }
 
-//If packet destination is in the range of proxy.ProxyIpSubnetwork
-//then find enable load balancing policy and find out the actual dstIP address
+// If packet destination is in the range of proxy.ProxyIpSubnetwork
+// then find enable load balancing policy and find out the actual dstIP address
 func (proxy *GoProxyTunnel) outgoingProxy(ipv4 *layers.IPv4, tcp *layers.TCP, udp *layers.UDP) gopacket.Packet {
 	srcport := -1
 	dstport := -1
@@ -259,7 +264,7 @@ func (proxy *GoProxyTunnel) outgoingProxy(ipv4 *layers.IPv4, tcp *layers.TCP, ud
 					}
 				}
 			} else {
-				log.Println("[Error] Unable to find instance IP for service: ", ipv4.SrcIP)
+				logger.ErrorLogger().Println("Unable to find instance IP for service: ", ipv4.SrcIP)
 				return nil
 			}
 
@@ -284,8 +289,8 @@ func (proxy *GoProxyTunnel) outgoingProxy(ipv4 *layers.IPv4, tcp *layers.TCP, ud
 	return nil
 }
 
-//If packet destination port is proxy.tunnelport then is a packet forwarded by the proxy. The src address must beù
-//changed with he original packet destination
+// If packet destination port is proxy.tunnelport then is a packet forwarded by the proxy. The src address must beù
+// changed with he original packet destination
 func (proxy *GoProxyTunnel) ingoingProxy(ipv4 *layers.IPv4, tcp *layers.TCP, udp *layers.UDP) gopacket.Packet {
 
 	dstport := -1
@@ -316,7 +321,7 @@ func (proxy *GoProxyTunnel) ingoingProxy(ipv4 *layers.IPv4, tcp *layers.TCP, udp
 // start listening for packets in the TUN Proxy device
 func (proxy *GoProxyTunnel) Listen() {
 	if !proxy.isListening {
-		log.Println("Starting proxy listening mode")
+		logger.InfoLogger().Println("Starting proxy listening mode")
 		go proxy.tunOutgoingListen()
 		go proxy.tunIngoingListen()
 	}
@@ -326,7 +331,7 @@ func (proxy *GoProxyTunnel) IsListening() bool {
 	return proxy.isListening
 }
 
-//create an instance of the proxy TUN device and setup the environment
+// create an instance of the proxy TUN device and setup the environment
 func (proxy *GoProxyTunnel) createTun() {
 	//create tun device
 	config := water.Config{
@@ -338,7 +343,7 @@ func (proxy *GoProxyTunnel) createTun() {
 		log.Fatal(err)
 	}
 
-	log.Println("Bringing tun up with addr " + proxy.tunNetIP + "/12")
+	logger.InfoLogger().Println("Bringing tun up with addr " + proxy.tunNetIP + "/12")
 	cmd := exec.Command("ip", "addr", "add", proxy.tunNetIP+"/12", "dev", ifce.Name())
 	err = cmd.Run()
 	if err != nil {
@@ -351,7 +356,7 @@ func (proxy *GoProxyTunnel) createTun() {
 	}
 
 	//disabling reverse path filtering
-	log.Println("Disabling tun dev reverse path filtering")
+	logger.InfoLogger().Println("Disabling tun dev reverse path filtering")
 	cmd = exec.Command("echo", "0", ">", "/proc/sys/net/ipv4/conf/"+ifce.Name()+"/rp_filter")
 	err = cmd.Run()
 	if err != nil {
@@ -359,7 +364,7 @@ func (proxy *GoProxyTunnel) createTun() {
 	}
 
 	//Increasing the MTU on the TUN dev
-	log.Println("Changing TUN's MTU")
+	logger.InfoLogger().Println("Changing TUN's MTU")
 	cmd = exec.Command("ip", "link", "set", "dev", ifce.Name(), "mtu", proxy.mtusize)
 	err = cmd.Run()
 	if err != nil {
@@ -367,12 +372,12 @@ func (proxy *GoProxyTunnel) createTun() {
 	}
 
 	//Add network routing rule, Done by default by the system
-	log.Printf("adding routing rule for %s to %s\n", proxy.ProxyIpSubnetwork.String(), ifce.Name())
+	logger.InfoLogger().Printf("adding routing rule for %s to %s\n", proxy.ProxyIpSubnetwork.String(), ifce.Name())
 	cmd = exec.Command("ip", "route", "add", "10.30.0.0/12", "dev", ifce.Name())
 	_, _ = cmd.Output()
 
 	//add firewalls rules
-	log.Println("adding firewall roule " + ifce.Name())
+	logger.InfoLogger().Println("adding firewall roule " + ifce.Name())
 	cmd = exec.Command("iptables", "-A", "INPUT", "-i", "tun0", "-m", "state",
 		"--state", "RELATED,ESTABLISHED", "-j", "ACCEPT")
 	err = cmd.Run()
@@ -413,12 +418,12 @@ func (proxy *GoProxyTunnel) tunOutgoingListen() {
 	go proxy.outgoingMessage()
 
 	proxy.isListening = true
-	log.Println("GoProxyTunnel outgoing listening started")
+	logger.InfoLogger().Println("GoProxyTunnel outgoing listening started")
 	for {
 		select {
 		case stopmsg := <-proxy.stopChannel:
 			if stopmsg {
-				fmt.Println("Outgoing listener received stop message")
+				logger.DebugLogger().Println("Outgoing listener received stop message")
 				proxy.isListening = false
 				proxy.finishChannel <- true
 				return
@@ -443,12 +448,12 @@ func (proxy *GoProxyTunnel) tunIngoingListen() {
 	go proxy.ingoingMessage()
 
 	proxy.isListening = true
-	log.Println("GoProxyTunnel ingoing listening started")
+	logger.InfoLogger().Println("GoProxyTunnel ingoing listening started")
 	for {
 		select {
 		case stopmsg := <-proxy.stopChannel:
 			if stopmsg {
-				fmt.Println("Ingoing listener received stop message")
+				logger.DebugLogger().Println("Ingoing listener received stop message")
 				_ = proxy.listenConnection.Close()
 				proxy.isListening = false
 				proxy.finishChannel <- true
@@ -461,7 +466,7 @@ func (proxy *GoProxyTunnel) tunIngoingListen() {
 	}
 }
 
-//Given a network namespace IP find the machine IP and port for the tunneling
+// Given a network namespace IP find the machine IP and port for the tunneling
 func (proxy *GoProxyTunnel) locateRemoteAddress(nsIP net.IP) (net.IP, int) {
 
 	//check local Host Cache
@@ -474,7 +479,7 @@ func (proxy *GoProxyTunnel) locateRemoteAddress(nsIP net.IP) (net.IP, int) {
 	//if no local cache entry convert namespace IP to host IP via table query
 	tableElement, found := proxy.environment.GetTableEntryByNsIP(nsIP)
 	if found {
-		//log.Println("Remote NS IP", nsIP.String(), " translated to ", tableElement.Nodeip.String())
+		logger.DebugLogger().Println("Remote NS IP", nsIP.String(), " translated to ", tableElement.Nodeip.String())
 		return tableElement.Nodeip, tableElement.Nodeport
 	}
 
@@ -483,7 +488,7 @@ func (proxy *GoProxyTunnel) locateRemoteAddress(nsIP net.IP) (net.IP, int) {
 
 }
 
-//forward message to final destination via UDP tunneling
+// forward message to final destination via UDP tunneling
 func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket.Packet, attemptNumber int) {
 
 	if attemptNumber > 10 {
@@ -512,7 +517,7 @@ func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket
 	proxy.udpwrite.Unlock()
 	//TODO: flush connection buffer by time to time
 	if !exist {
-		log.Println("Establishing a new connection to node ", hoststring)
+		logger.DebugLogger().Println("Establishing a new connection to node ", hoststring)
 		connection, err := createUDPChannel(hoststring)
 		if nil != err {
 			return
@@ -528,7 +533,7 @@ func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket
 	_, _, err := (*con).WriteMsgUDP(packetToByte(packet), nil, nil)
 	if err != nil {
 		_ = (*con).Close()
-		log.Println("[ERROR]", err)
+		logger.ErrorLogger().Println(err)
 		connection, err := createUDPChannel(hoststring)
 		if nil != err {
 			return
@@ -545,17 +550,17 @@ func (proxy *GoProxyTunnel) forward(dstHost net.IP, dstPort int, packet gopacket
 func createUDPChannel(hoststring string) (*net.UDPConn, error) {
 	raddr, err := net.ResolveUDPAddr("udp", hoststring)
 	if err != nil {
-		log.Println("[ERROR] Unable to resolve remote addr:", err)
+		logger.ErrorLogger().Println("Unable to resolve remote addr:", err)
 		return nil, err
 	}
 	connection, err := net.DialUDP("udp", nil, raddr)
 	if nil != err {
-		log.Println("[ERROR] Unable to connect to remote addr:", err)
+		logger.ErrorLogger().Println("Unable to connect to remote addr:", err)
 		return nil, err
 	}
 	err = connection.SetWriteBuffer(BUFFER_SIZE)
 	if nil != err {
-		log.Println("[ERROR] Buffer error:", err)
+		logger.ErrorLogger().Println("Buffer error:", err)
 		return nil, err
 	}
 	return connection, nil
@@ -607,7 +612,7 @@ func packetToByte(packet gopacket.Packet) []byte {
 	newBuffer := gopacket.NewSerializeBuffer()
 	err := gopacket.SerializePacket(newBuffer, options, packet)
 	if err != nil {
-		fmt.Println("[ERROR]", err)
+		logger.ErrorLogger().Println(err)
 	}
 	return newBuffer.Bytes()
 }
@@ -648,7 +653,7 @@ func SerializePacket(dstIp net.IP, srcIp net.IP, ip *layers.IPv4, tcp *layers.TC
 func serializeTcpPacket(tcp *layers.TCP, ip *layers.IPv4) gopacket.Packet {
 	err := tcp.SetNetworkLayerForChecksum(ip)
 	if err != nil {
-		log.Println("[ERROR] ", err)
+		logger.ErrorLogger().Println(err)
 	}
 	return serializeIpPacket(ip, tcp, gopacket.Payload(tcp.Payload))
 }
@@ -656,7 +661,7 @@ func serializeTcpPacket(tcp *layers.TCP, ip *layers.IPv4) gopacket.Packet {
 func serializeUdpPacket(udp *layers.UDP, ip *layers.IPv4) gopacket.Packet {
 	err := udp.SetNetworkLayerForChecksum(ip)
 	if err != nil {
-		log.Println("[ERROR] ", err)
+		logger.ErrorLogger().Println(err)
 	}
 	return serializeIpPacket(ip, udp, gopacket.Payload(udp.Payload))
 }
@@ -665,7 +670,7 @@ func serializeIpPacket(ip *layers.IPv4, transportLayer gopacket.SerializableLaye
 	newBuffer := gopacket.NewSerializeBuffer()
 	err := ip.SerializeTo(newBuffer, gopacket.SerializeOptions{FixLengths: true, ComputeChecksums: true})
 	if err != nil {
-		log.Println("[ERROR] ", err)
+		logger.ErrorLogger().Println(err)
 	}
 
 	buffer := gopacket.NewSerializeBuffer()
@@ -677,7 +682,7 @@ func serializeIpPacket(ip *layers.IPv4, transportLayer gopacket.SerializableLaye
 		payload,
 	)
 	if err != nil {
-		log.Default().Printf("[ERROR] packet serialization failure %v\n", err)
+		logger.ErrorLogger().Printf("packet serialization failure %v\n", err)
 		return nil
 	}
 
@@ -689,14 +694,14 @@ func decodePacket(msg []byte) (*layers.IPv4, *layers.TCP, *layers.UDP) {
 	ipLayer := packet.NetworkLayer()
 
 	if ipLayer == nil {
-		log.Println("[ERROR- ipv4 decode] ")
+		logger.ErrorLogger().Println("ipv4 decode] ")
 		return nil, nil, nil
 	}
 
 	//defragment if necessary
 	ipdefrag, err := defragger.DefragIPv4(ipLayer.(*layers.IPv4))
 	if err != nil {
-		fmt.Println("[ERROR]", err)
+		logger.ErrorLogger().Println(err)
 		return nil, nil, nil
 	} else if ipdefrag == nil {
 		return nil, nil, nil // packet fragment, we don't have whole packet yet.
@@ -704,14 +709,14 @@ func decodePacket(msg []byte) (*layers.IPv4, *layers.TCP, *layers.UDP) {
 
 	pb, ok := packet.(gopacket.PacketBuilder)
 	if !ok {
-		fmt.Println("[ERROR] invalid packet builder")
+		logger.ErrorLogger().Println("invalid packet builder")
 		return nil, nil, nil
 	}
 
 	nextDecoder := ipdefrag.NextLayerType()
 	err = nextDecoder.Decode(ipdefrag.Payload, pb)
 	if err != nil {
-		fmt.Printf("[ERROR] decoder error %v\n", err)
+		logger.ErrorLogger().Printf("decoder error %v\n", err)
 		return nil, nil, nil
 	}
 
