@@ -307,12 +307,13 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						Cpu:      fmt.Sprintf("%f", sysInfo.CPU),
 						Memory:   fmt.Sprintf("%f", sysInfo.Memory),
 						Disk:     fmt.Sprintf("%d", usage.Size),
+						GPU:      model.GetGPUStatistics(task.Pid()),
 						Sname:    extractSnameFromTaskID(task.ID()),
 						Runtime:  model.CONTAINER_RUNTIME,
 						Instance: extractInstanceNumberFromTaskID(task.ID()),
 					})
 				}
-				//NOTIFY WITH THE CURRENT CONTAINERS STATUS
+				//NOTIFY CLUSTER MANAGER WITH THE CURRENT CONTAINERS STATUS
 				notifyHandler(resourceList)
 			}
 		}

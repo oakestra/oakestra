@@ -3,6 +3,7 @@ module go_node_engine
 go 1.17
 
 require (
+	github.com/NVIDIA/go-nvml v0.11.6-0
 	github.com/containerd/containerd v1.6.1
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/jaypipes/ghw v0.8.0

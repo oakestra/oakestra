@@ -19,12 +19,13 @@ type Service struct {
 }
 
 type Resources struct {
-	Cpu      string `json:"cpu"`
-	Memory   string `json:"memory"`
-	Disk     string `json:"disk"`
-	Sname    string `json:"job_name"`
-	Runtime  string `json:"virtualization"`
-	Instance int    `json:"instance"`
+	Cpu      string   `json:"cpu"`
+	Memory   string   `json:"memory"`
+	Disk     string   `json:"disk"`
+	GPU      GPUStats `json:"gpu"`
+	Sname    string   `json:"job_name"`
+	Runtime  string   `json:"virtualization"`
+	Instance int      `json:"instance"`
 }
 
 const (
