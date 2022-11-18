@@ -9,6 +9,7 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/requests"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -148,20 +149,40 @@ type QemuStopResult struct {
 	}
 }
 
+
+
+var path = "/tmp/node_engine/kernel/"
+var inst_path = "/tmp/node_engine/inst/"
 /*
 Load the Unikernel from the URL given or used cached version.
 Return:
 */
 
-func GetKernelImage(kernel string, name string) *string {
+func GetKernelImage(kernel string, name string, sname string) *string {
 
-	path := "/tmp/node_engine/kernel/tmp/"
-	inst_path := "/tmp/node_engine/inst/"
-	filename := strings.ReplaceAll(kernel, "/", "_")
-	kernel_tar := path + filename
-	instance_path := inst_path + name + "/"
-	kernel_local := instance_path + "kernel"
-	os.Mkdir("/tmp/node_engine/inst/"+name, 0777)
+
+	//filename := strings.ReplaceAll(kernel, "/", "_")
+	kernel_tar := path + sname + ".tar.gz"
+	kernel_location := path + sname + "/"
+	instance_path := inst_path + name 
+	kernel_local := kernel_location + "kernel"
+
+	/*This is to make sure that in case of a redeployment
+	Makes sure that the directory does not already exists 
+	and waits if it does*/
+	for true{
+		_, err := os.Stat(instance_path)
+		if errors.Is(err, fs.ErrNotExist) {
+			break
+		} else if err == nil {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		} else{
+			logger.InfoLogger().Printf("Problem with instance data: %v",err)
+			return nil
+		}
+	}
+	os.Mkdir(instance_path, 0777)
 	var kimage *os.File
 	_, err := os.Stat(kernel_tar)
 	if err != nil {
@@ -190,53 +211,69 @@ func GetKernelImage(kernel string, name string) *string {
 		logger.InfoLogger().Printf("Written %d B", size)
 		kimage.Close()
 
-	} else {
+	
+		os.Mkdir(kernel_location, 0777)
+		/*unpack Kernel and additional data*/
+		kimage, _ = os.Open(kernel_tar)
+		defer kimage.Close()
+
+		exdata, err := gzip.NewReader(kimage)
+
+		tardata := tar.NewReader(exdata)
+		
+		for true {
+			header, err := tardata.Next()
+
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				logger.InfoLogger().Printf("Unable to read tar: %v", err)
+				return nil
+			}
+
+			switch header.Typeflag {
+			case tar.TypeDir:
+				err := os.Mkdir(kernel_location+header.Name, 0777)
+				if err != nil {
+					logger.InfoLogger().Printf("Unable to create dir: %v", err)
+				}
+			case tar.TypeReg:
+				file, err := os.Create(kernel_location + header.Name)
+				if err != nil {
+					logger.InfoLogger().Printf("Unable to create file: %v", err)
+				}
+				_, err = io.Copy(file, tardata)
+				if err != nil {
+					logger.InfoLogger().Printf("File copy failed: %v", err)
+				}
+			default:
+				logger.InfoLogger().Printf("ERROR: incorrect typeflag")
+				return nil
+
+			}
+
+		}
+	}else {
 		logger.InfoLogger().Printf("Kernel found locally")
 	}
-
-	kimage, _ = os.Open(kernel_tar)
-	defer kimage.Close()
-
-	exdata, err := gzip.NewReader(kimage)
 	if err != nil {
 		logger.InfoLogger().Printf("Unable to open kernel archive: %v", err)
 		return nil
 	}
-	tardata := tar.NewReader(exdata)
 
-	for true {
-		header, err := tardata.Next()
+	_, err = os.Stat(kernel_location+"files")
+	if  !errors.Is(err, fs.ErrNotExist) {
+		logger.InfoLogger().Printf("Creating new instance envioument %s -> %s",kernel_location+"files",instance_path)
 
+		err = exec.Command("cp", "-r",kernel_location+"files",instance_path).Run()
 		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			logger.InfoLogger().Printf("Unable to read tar: %v", err)
-			return nil
+			logger.InfoLogger().Printf("Unable to set files: %v", err)
 		}
-
-		switch header.Typeflag {
-		case tar.TypeDir:
-			err := os.Mkdir(instance_path+header.Name, 0777)
-			if err != nil {
-				logger.InfoLogger().Printf("Unable to create dir: %v", err)
-			}
-		case tar.TypeReg:
-			file, err := os.Create(instance_path + header.Name)
-			if err != nil {
-				logger.InfoLogger().Printf("Unable to create file: %v", err)
-			}
-			_, err = io.Copy(file, tardata)
-			if err != nil {
-				logger.InfoLogger().Printf("File copy failed: %v", err)
-			}
-		default:
-			logger.InfoLogger().Printf("ERROR: wront typeflag")
-			return nil
-
-		}
-
 	}
+	
+
+
 	//Kernel image is expected at a fixed location within the archive ./kernel
 	_, err = os.Stat(kernel_local)
 	if err != nil {
@@ -247,6 +284,16 @@ func GetKernelImage(kernel string, name string) *string {
 
 	return &instance_path
 }
+
+func getUnikernelURL(position int, code string) string {
+	addr := strings.Split(code,",")
+	logger.InfoLogger().Printf("%v",addr)
+	if(position >= len(addr)){
+		return ""
+	}
+	return addr[position]
+}
+
 
 func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	service model.Service,
@@ -266,11 +313,12 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	qemuConfig.NSname = &hostname
 
 	var kernelImage string = ""
+
+	
+
 	for i, a := range service.Architectures {
 		if a == rt.GOARCH {
-			if i < len(service.UnikernelImages) {
-				kernelImage = service.UnikernelImages[i]
-			}
+			kernelImage = getUnikernelURL(i,service.Image)
 		}
 	}
 
@@ -278,19 +326,23 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		logger.InfoLogger().Printf("Failed to find kernel/architecture pair.")
 	}
 
-	kernelPath := GetKernelImage(kernelImage, hostname)
+	kernelPath := GetKernelImage(kernelImage, hostname, service.Sname)
 	if kernelPath == nil {
 		logger.InfoLogger().Println("Failed to get Kernel image")
 		return
 	}
+	qemuConfig.Kernel = path + service.Sname + "/kernel"
+
 	qemuConfig.Instancepath = *kernelPath
 
-	revert := func(err error) {
+	revert := func(err error, instance string) {
 		startup <- false
 		errorchan <- err
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
 		r.killQueue[hostname] = nil
+		os.RemoveAll(inst_path + instance)
+		logger.InfoLogger().Printf("Removing Instance data -- ")
 	}
 	var qemuCmd *exec.Cmd
 	var err error
@@ -314,7 +366,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	err = qemuCmd.Start()
 	if err != nil {
 		logger.ErrorLogger().Printf("Failed to start qemu: %v", err)
-		revert(err)
+		revert(err,hostname)
 		return
 	}
 	logger.InfoLogger().Println("Unikernel started")
@@ -344,7 +396,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		qemuProcess: qemuCmd.Process,
 	}
 
-	socketPath := fmt.Sprintf("./%s", hostname)
+	socketPath := fmt.Sprintf("%s/%s", qemuConfig.Instancepath ,hostname)
 	for true {
 		//Wait for qemu to properly start up
 		conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
@@ -355,7 +407,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		} else if err != nil {
 			if !strings.HasSuffix(err.Error(), ": connection refused") {
 				logger.InfoLogger().Printf("Something went wrong while starting Qemu %v", err)
-				revert(err)
+				revert(err,hostname)
 				if model.GetNodeInfo().Overlay {
 					err = requests.DeleteNamespaceForUnikernel(service.Sname, service.Instance)
 					if err != nil {
@@ -367,7 +419,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 				}
 				return
 			}
-			logger.InfoLogger().Printf("Waiting: %v", err)
+			//logger.InfoLogger().Printf("Waiting: %v", err)
 
 		} else {
 			conn.Close()
@@ -380,7 +432,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	qemuMonitor, err = qmp.NewSocketMonitor("unix", socketPath, 2*time.Second)
 	if err != nil {
 		logger.InfoLogger().Printf("Failed to Create connection to QMP: %v\n", err)
-		revert(err)
+		revert(err,hostname)
 		if model.GetNodeInfo().Overlay {
 			err = requests.DeleteNamespaceForUnikernel(service.Sname, service.Instance)
 			if err != nil {
@@ -429,6 +481,9 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 				logger.InfoLogger().Printf("Unable to undeploy %s's network: %v", hostname, err)
 			}
 		}
+		//Delete instance folder
+		os.RemoveAll(inst_path + hostname)
+		logger.InfoLogger().Printf("Removing Instance data %s",inst_path + hostname)
 
 		if err != nil {
 			*killChannel <- false
@@ -439,8 +494,8 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 
 	startup <- true
 	select {
-	case <-exitStatusQemu:
-		logger.InfoLogger().Printf("Received status back from Qemu process")
+	case return_value := <-exitStatusQemu:
+		logger.InfoLogger().Printf("Received status back from Qemu process %d", return_value)
 	case <-*killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for unikernel")
 	}
@@ -461,7 +516,6 @@ func (r *UnikernelRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 					logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
 					continue
 				}
-				logger.InfoLogger().Printf("%f", sysInfo.CPU)
 				resourceList = append(resourceList, model.Resources{
 					Cpu:      fmt.Sprintf("%f", sysInfo.CPU),
 					Memory:   fmt.Sprintf("%f", sysInfo.Memory),
@@ -482,6 +536,7 @@ type QemuConfiguration struct {
 	Name         string
 	Memory       int
 	Instancepath string
+	Kernel 	     string
 	KernelArgs   []string
 	NSname       *string
 }
@@ -499,8 +554,8 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string)
 	args = append(args, "-name", name)
 
 	//Kernel image
-	kernel := q.Instancepath + "kernel"
-	args = append(args, "-kernel", kernel, "-nographic")
+	//kernel := q.Instancepath + "kernel"
+	args = append(args, "-kernel", q.Kernel, "-nographic", "-nodefaults", "-no-user-config")
 
 	//Memory
 	memory := fmt.Sprintf("%d", q.Memory)
@@ -509,7 +564,7 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string)
 	//Network
 	if model.GetNodeInfo().Overlay {
 		//Network backend fixed at tap0 and virbr0 created inside the namespace
-		args = append(args, "-netdev", "tap,id=tap0,ifname=tap0,script=no,downscript=no,br=virbr0")
+		args = append(args, "-netdev", "tap,id=tap0,ifname=tap0,script=no,downscript=no,br=virbr0,vhost=on")
 		//Network device
 		args = append(args, "-device", "virtio-net,netdev=tap0,mac=52:55:00:d1:55:01")
 	}
@@ -523,21 +578,20 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string)
 	args = append(args, "netdev.ipv4_addr=192.168.1.2 netdev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.252 --"+KernelArgsStr)
 
 	//Check if a folder is to be mounted
-	mountpath := fmt.Sprintf("%sfiles/", q.Instancepath)
+	mountpath := fmt.Sprintf("%s/files/", q.Instancepath)
 	_, err := os.Stat(mountpath)
-	if !os.IsNotExist(err) {
+	if err == nil {
 		logger.InfoLogger().Println("Mounting as folder for unikernel")
 
 		//FS backend
-		fsdevarg := fmt.Sprintf("local,security_model=passthrough,id=hvirtio0,path=%sfiles", q.Instancepath)
+		fsdevarg := fmt.Sprintf("local,security_model=passthrough,id=hvirtio0,path=%s/files", q.Instancepath)
 		args = append(args, "-fsdev", fsdevarg)
 
 		//FS device
 		args = append(args, "-device", "virtio-9p-pci,fsdev=hvirtio0,mount_tag=fs0")
 	}
-
 	//QMP
-	Qmp := fmt.Sprintf("unix:./%s,server,nowait", q.Name)
+	Qmp := fmt.Sprintf("unix:%s/%s,server,nowait",q.Instancepath, q.Name)
 	args = append(args, "-qmp", Qmp)
 
 	//Set the cpu to host passthrough and enable kvm
