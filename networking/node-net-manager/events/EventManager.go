@@ -3,7 +3,6 @@ package events
 import (
 	"errors"
 	"sync"
-	"time"
 )
 
 type EventManager interface {
@@ -31,6 +30,7 @@ const (
 
 /* ------------- singleton instance ------- */
 var once sync.Once
+var rwlock sync.RWMutex
 var (
 	eventInstance EventManager
 )
@@ -47,6 +47,8 @@ func GetInstance() EventManager {
 }
 
 func (e *Events) Emit(event Event) {
+	rwlock.RLock()
+	defer rwlock.RUnlock()
 	switch event.EventType {
 	case TableQuery:
 		channel := e.eventTableQueryChannelQueue[event.EventTarget]
@@ -57,6 +59,8 @@ func (e *Events) Emit(event Event) {
 }
 
 func (e *Events) Register(eventType EventType, eventTarget string) (chan Event, error) {
+	rwlock.Lock()
+	defer rwlock.Unlock()
 	switch eventType {
 	case TableQuery:
 		channel := e.eventTableQueryChannelQueue[eventTarget]
@@ -70,17 +74,14 @@ func (e *Events) Register(eventType EventType, eventTarget string) (chan Event, 
 }
 
 func (e *Events) DeRegister(eventType EventType, eventTarget string) {
+	rwlock.Lock()
+	defer rwlock.Unlock()
 	switch eventType {
 	case TableQuery:
 		channel := e.eventTableQueryChannelQueue[eventTarget]
 		if channel != nil {
 			e.eventTableQueryChannelQueue[eventTarget] = nil
-			go deferClose(channel)
+			close(channel)
 		}
 	}
-}
-
-func deferClose(channel chan Event) {
-	time.Sleep(time.Second)
-	close(channel)
 }
