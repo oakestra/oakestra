@@ -22,31 +22,30 @@ type ConversionList struct {
 }
 
 type ProxyCache struct {
-	//todo map by address and not by destination port, this will cause troubles.
-	cache                 map[int]ConversionList //--> map[dstport]conversionlist
+	//One position for each port number. Higher mem usage but lower cpu usage
+	cache                 []ConversionList
 	conversionListMaxSize int
 	rwlock                sync.RWMutex
 }
 
 func NewProxyCache() ProxyCache {
 	return ProxyCache{
-		cache:                 make(map[int]ConversionList),
+		cache:                 make([]ConversionList, 65535),
 		conversionListMaxSize: 10,
 		rwlock:                sync.RWMutex{},
 	}
-	//TODO: Start cleanup procedure each X seconds
 }
 
-// Retrieve proxy proxycache entry based on source ip and source port and destination ServiceIP
-func (cache *ProxyCache) RetrieveByServiceIP(srcIP net.IP, srcport int, dstServiceIp net.IP, dstport int) (ConversionEntry, bool) {
+// RetrieveByServiceIP Retrieve proxy proxycache entry based on source ip and source port and destination ServiceIP
+func (cache *ProxyCache) RetrieveByServiceIP(srcip net.IP, srcport int, dstServiceIp net.IP, dstport int) (ConversionEntry, bool) {
 	cache.rwlock.Lock()
 	defer cache.rwlock.Unlock()
 
-	elem, exist := cache.cache[srcport]
-	if exist {
-		elem.lastUsed = time.Now().Unix()
+	elem := cache.cache[srcport]
+	elem.lastUsed = time.Now().Unix()
+	if elem.conversionList != nil {
 		for _, entry := range elem.conversionList {
-			if entry.dstport == dstport && entry.dstServiceIp.Equal(dstServiceIp) && entry.srcip.Equal(srcIP) {
+			if entry.dstport == dstport && entry.dstServiceIp.Equal(dstServiceIp) && entry.srcip.Equal(srcip) {
 				return entry, true
 			}
 		}
@@ -54,14 +53,14 @@ func (cache *ProxyCache) RetrieveByServiceIP(srcIP net.IP, srcport int, dstServi
 	return ConversionEntry{}, false
 }
 
-// Retrieve proxy proxycache entry based on source ip and source port and destination ip
+// RetrieveByInstanceIp Retrieve proxy proxycache entry based on source ip and source port and destination ip
 func (cache *ProxyCache) RetrieveByInstanceIp(srcip net.IP, srcport int, dstport int) (ConversionEntry, bool) {
 	cache.rwlock.Lock()
 	defer cache.rwlock.Unlock()
 
-	elem, exist := cache.cache[srcport]
-	if exist {
-		elem.lastUsed = time.Now().Unix()
+	elem := cache.cache[srcport]
+	elem.lastUsed = time.Now().Unix()
+	if elem.conversionList != nil {
 		for _, entry := range elem.conversionList {
 			if entry.dstport == dstport && entry.srcip.Equal(srcip) {
 				return entry, true
@@ -71,26 +70,23 @@ func (cache *ProxyCache) RetrieveByInstanceIp(srcip net.IP, srcport int, dstport
 	return ConversionEntry{}, false
 }
 
-// Add add new conversion entry, if srcpip && srcport already added the entry is updated
+// Add new conversion entry, if srcpip && srcport already added the entry is updated
 func (cache *ProxyCache) Add(entry ConversionEntry) {
 	cache.rwlock.Lock()
 	defer cache.rwlock.Unlock()
 
-	_, exist := cache.cache[entry.srcport]
-	if exist {
-		cache.addExisting(entry)
-	} else {
-		cache.cache[entry.srcport] = ConversionList{
-			nextEntry:      0,
-			lastUsed:       time.Now().Unix(),
-			conversionList: make([]ConversionEntry, cache.conversionListMaxSize),
-		}
-		cache.addExisting(entry)
+	elem := cache.cache[entry.srcport]
+	if elem.conversionList == nil || len(elem.conversionList) == 0 {
+		elem.nextEntry = 0
+		elem.conversionList = make([]ConversionEntry, cache.conversionListMaxSize)
 	}
+	cache.cache[entry.srcport] = elem
+
+	cache.addToConversionList(entry)
 }
 
-func (cache *ProxyCache) addExisting(entry ConversionEntry) {
-	elem, _ := cache.cache[entry.srcport]
+func (cache *ProxyCache) addToConversionList(entry ConversionEntry) {
+	elem := cache.cache[entry.srcport]
 	elem.lastUsed = time.Now().Unix()
 	alreadyExist := false
 	alreadyExistPosition := 0

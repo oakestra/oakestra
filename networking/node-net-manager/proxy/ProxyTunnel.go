@@ -50,7 +50,6 @@ type GoProxyTunnel struct {
 	bufferPort        int
 	environment       env.EnvironmentManager
 	proxycache        ProxyCache
-	HostCache         HostCache
 	localIP           net.IP
 	udpwrite          sync.RWMutex
 	tunwrite          sync.RWMutex
@@ -113,7 +112,6 @@ func NewCustom(configuration Configuration) GoProxyTunnel {
 		stopChannel:      make(chan bool),
 		connectionBuffer: make(map[string]*net.UDPConn),
 		proxycache:       NewProxyCache(),
-		HostCache:        NewHostCache(),
 		udpwrite:         sync.RWMutex{},
 		tunwrite:         sync.RWMutex{},
 		incomingChannel:  make(chan incomingMessage),
@@ -235,23 +233,28 @@ func (proxy *GoProxyTunnel) outgoingProxy(ipv4 *layers.IPv4, tcp *layers.TCP, ud
 		dstport = int(udp.DstPort)
 	}
 
-	//If packet destination is part of the ProxyIP subnetwork Make the proxy handle it
-	sameSubnetwork := proxy.ProxyIpSubnetwork.IP.Mask(proxy.ProxyIpSubnetwork.Mask).
+	//If packet destination is part of the semantic routing subnetwork let the proxy handle it
+	semanticRoutingSubnetwork := proxy.ProxyIpSubnetwork.IP.Mask(proxy.ProxyIpSubnetwork.Mask).
 		Equal(ipv4.DstIP.Mask(proxy.ProxyIpSubnetwork.Mask))
-	if sameSubnetwork {
+	if semanticRoutingSubnetwork {
 
-		//Check proxy proxycache
+		//Check is the ServiceIP is known
+		tableEntryList := proxy.environment.GetTableEntryByServiceIP(ipv4.DstIP)
+		if len(tableEntryList) < 1 {
+			logger.DebugLogger().Printf("No entries found for this service IP: %s", ipv4.DstIP.String())
+			return nil
+		}
+
+		//Check proxy proxycache (if any active flow is there already)
 		entry, exist := proxy.proxycache.RetrieveByServiceIP(ipv4.SrcIP, srcport, ipv4.DstIP, dstport)
 		if !exist || entry.dstport < 1 {
-			//If no proxycache entry ask to the environment for a TableQuery
-			tableEntryList := proxy.environment.GetTableEntryByServiceIP(ipv4.DstIP)
-
 			//If no table entry available
 			if len(tableEntryList) < 1 {
 				//discard packet
 				return nil
 			}
 			//Choose between the table entry according to the ServiceIP algorithm
+			//TODO: so far this only uses RR
 			tableEntry := tableEntryList[proxy.randseed.Intn(len(tableEntryList))]
 
 			//Find the instanceIP of the current service
@@ -469,13 +472,6 @@ func (proxy *GoProxyTunnel) tunIngoingListen() {
 // Given a network namespace IP find the machine IP and port for the tunneling
 func (proxy *GoProxyTunnel) locateRemoteAddress(nsIP net.IP) (net.IP, int) {
 
-	//check local Host Cache
-	//TODO populate local host cache
-	hostentry, exist := proxy.HostCache.Get(nsIP)
-	if exist {
-		return hostentry.host.IP, hostentry.host.Port
-	}
-
 	//if no local cache entry convert namespace IP to host IP via table query
 	tableElement, found := proxy.environment.GetTableEntryByNsIP(nsIP)
 	if found {
@@ -483,7 +479,7 @@ func (proxy *GoProxyTunnel) locateRemoteAddress(nsIP net.IP) (net.IP, int) {
 		return tableElement.Nodeip, tableElement.Nodeport
 	}
 
-	//If nothing found, just let the packet to be dropped
+	//If nothing found, just drop the packet using an invalid port
 	return nsIP, -1
 
 }
