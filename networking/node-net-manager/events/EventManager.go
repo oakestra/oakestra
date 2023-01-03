@@ -40,7 +40,7 @@ var (
 func GetInstance() EventManager {
 	once.Do(func() {
 		eventInstance = &Events{
-			eventTableQueryChannelQueue: make(map[string]chan Event, 10),
+			eventTableQueryChannelQueue: make(map[string]chan Event, 0),
 		}
 	})
 	return eventInstance
@@ -53,7 +53,10 @@ func (e *Events) Emit(event Event) {
 	case TableQuery:
 		channel := e.eventTableQueryChannelQueue[event.EventTarget]
 		if channel != nil {
-			channel <- event
+			//check channel buffer capacity to prevent blocking. If this is false, probably no receiver is active.
+			if len(channel) < cap(channel) {
+				channel <- event
+			}
 		}
 	}
 }
@@ -65,7 +68,7 @@ func (e *Events) Register(eventType EventType, eventTarget string) (chan Event, 
 	case TableQuery:
 		channel := e.eventTableQueryChannelQueue[eventTarget]
 		if channel == nil {
-			channel = make(chan Event, 0)
+			channel = make(chan Event, 10)
 		}
 		e.eventTableQueryChannelQueue[eventTarget] = channel
 		return channel, nil

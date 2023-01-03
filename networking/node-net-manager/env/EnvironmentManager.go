@@ -186,7 +186,7 @@ func (env *Environment) AttachNetworkToContainer(pid int, sname string, instance
 
 	vethIfce, err := env.createVethsPairAndAttachToBridge(sname, env.mtusize)
 	if err != nil {
-		cleanup(vethIfce)
+		go cleanup(vethIfce)
 		return nil, err
 	}
 
@@ -253,10 +253,13 @@ func (env *Environment) AttachNetworkToContainer(pid int, sname string, instance
 // returns: bridgeVeth name, free Veth name, Vether interface to the veth pair and eventually an error
 func (env *Environment) createVethsPairAndAttachToBridge(sname string, mtu int) (*netlink.Veth, error) {
 	// Retrieve current bridge
+	logger.DebugLogger().Println("Retrieving current bridge ")
 	bridge, err := netlink.LinkByName(env.config.HostBridgeName)
 	if err != nil {
+		logger.ErrorLogger().Println("Error retrieving current bridge: ", err)
 		return nil, err
 	}
+	logger.DebugLogger().Println("Retrieved current bridge")
 	hashedName := network.NameUniqueHash(sname, 4)
 	veth1name := fmt.Sprintf("veth%s%s%s", "00", strconv.Itoa(env.nextVethNumber), hashedName)
 	veth2name := fmt.Sprintf("veth%s%s%s", "01", strconv.Itoa(env.nextVethNumber), hashedName)
@@ -500,8 +503,8 @@ func (env *Environment) AddTableQueryEntry(entry TableEntryCache.TableEntry) {
 func (env *Environment) RefreshServiceTable(jobname string) {
 	logger.DebugLogger().Printf("Requested table query refresh for %s", jobname)
 	entryList, err := tableQueryByJobName(jobname, true)
-	_ = env.translationTable.RemoveByJobName(jobname)
 	if err == nil {
+		_ = env.translationTable.RemoveByJobName(jobname)
 		for _, tableEntry := range entryList {
 			env.AddTableQueryEntry(tableEntry)
 		}
