@@ -220,9 +220,9 @@ each call to this endpoint generates a new instance of the service
 
 To enable the communication between services: 
 
-1. ensure that each worker node has the [OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager) component installed, up and running before running the node engine. 
-2. Declare a rr_ip ad deploy time in the deployment descriptor 
-3. Use the rr_ip address to reference the service
+Ensure that each worker node has the [OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager) component installed, up and running before running the node engine. 
+
+You can use declare a custom IP Address that uses Round Robin policy. Just declare it using the rr_ip field in the deployment descriptor 
 
 # Frontend?
 
