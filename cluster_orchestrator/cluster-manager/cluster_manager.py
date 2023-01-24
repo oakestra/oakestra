@@ -3,6 +3,7 @@ from flask import Flask, request
 from flask_socketio import SocketIO, emit
 import json
 import socketio
+import socket
 import sys
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
@@ -53,7 +54,7 @@ BACKGROUND_JOB_INTERVAL = 5
 def hello_world():
     app.logger.info('Hello World Request')
     app.logger.info('Processing default request')
-    return "Hello, World! This is Cluster Manager's REST API"
+    return "Hello, World! This is Cluster Manager's REST API - PATCHED"
 
 
 @app.route('/status')
@@ -276,4 +277,4 @@ if __name__ == '__main__':
     import eventlet
 
     init_cm_to_sm()
-    eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)  # see README for logging notes
+    eventlet.wsgi.server(eventlet.listen(('::', int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger)  # see README for logging notes

@@ -39,6 +39,7 @@ def re_deploy_dead_services_routine():
 
 def send_aggregated_info(my_id, data):
     print('Sending aggregated information to System Manager.')
+    print(SYSTEM_MANAGER_ADDR)
     try:
         requests.post(SYSTEM_MANAGER_ADDR + '/api/information/' + str(my_id), json=data)
     except requests.exceptions.RequestException as e:

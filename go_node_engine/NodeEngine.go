@@ -57,7 +57,7 @@ func main() {
 }
 
 func clusterHandshake() requests.HandshakeAnswer {
-	logger.InfoLogger().Printf("INIT: Starting handshake with cluster orhcestrator %s:%s", *clusterAddress, *clusterPort)
+	logger.InfoLogger().Printf("INIT: Starting handshake with cluster orchestrator %s:%s", *clusterAddress, *clusterPort)
 	node := model.GetNodeInfo()
 	logger.InfoLogger().Printf("Node Statistics: \n__________________")
 	logger.InfoLogger().Printf("CPU Cores: %d", node.CpuCores)
@@ -65,6 +65,7 @@ func clusterHandshake() requests.HandshakeAnswer {
 	logger.InfoLogger().Printf("Mem Usage: %f", node.MemoryUsed)
 	logger.InfoLogger().Printf("GPU Present: %t", len(node.GpuInfo) > 0)
 	logger.InfoLogger().Printf("\n________________")
+
 	clusterReponse := requests.ClusterHandshake(*clusterAddress, *clusterPort)
 	logger.InfoLogger().Printf("Got cluster response with MQTT port %s and node ID %s", clusterReponse.MqttPort, clusterReponse.NodeId)
 
