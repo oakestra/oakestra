@@ -2,6 +2,7 @@ version: "2.4"
 services:
 
   # MQTT 
+  # Dual-Stack: DONE
   mqtt:
     image: eclipse-mosquitto:2.0
     hostname: mqtt
@@ -26,6 +27,7 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
       
   # cluster-level mongoDB
+  # Dual-Stack: DONE
   mongo_cluster:
     image: mongo:3.6
     container_name: cluster_mongo
@@ -36,12 +38,13 @@ services:
       - "10107:10107"
     volumes:
       - 'mongodb_cluster_data:/mongodb'
-    command: mongod --port 10107
+    command: mongod --port 10107 --ipv6
     # enable IPv6
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
 
-# cluster-level mongoDB
+  # cluster-level mongoDB
+  # Dual-Stack: DONE
   mongo_clusternet:
     image: mongo:3.6
     container_name: cluster_mongo_net
@@ -52,14 +55,17 @@ services:
       - "10108:10108"
     volumes:
       - 'mongodb_cluster_net_data:/mongodb'
-    command: mongod --port 10108
+    command: mongod --port 10108 --ipv6
     # enable IPv6
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
 
-# Cluster Manager
+  # Cluster Manager
+  # Dual-Stack: DONE on patched image
   cluster_service_manager:
     image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:v0.04.amd64.experimental
+    #image: cluster-service-manager
+    #build: cluster-service-manager/service-manager
     container_name: cluster_service_manager
     hostname: cluster_service_manager
     networks:
@@ -72,7 +78,7 @@ services:
       - MY_PORT=10110
       - MQTT_BROKER_PORT=10003
       - MQTT_BROKER_URL=mqtt
-      - ROOT_SERVICE_MANAGER_URL=192.168.0.107
+      - ROOT_SERVICE_MANAGER_URL=192.168.178.22
       - ROOT_SERVICE_MANAGER_PORT=10099
       - SYSTEM_MANAGER_URL=cluster_manager
       - SYSTEM_MANAGER_PORT=10000
@@ -85,7 +91,10 @@ services:
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
 
-# Cluster Manager
+  # Cluster Manager
+  # Dual-Stack:
+  # Port 10100 DONE
+  # Port 10101 TODO
   cluster_manager:
     image: cluster_manager
     build: cluster-manager/
@@ -101,7 +110,7 @@ services:
       - "10101:10101"
     environment:
       - MY_PORT=10100
-      - SYSTEM_MANAGER_URL=192.168.0.107
+      - SYSTEM_MANAGER_URL=192.168.178.22
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
       - CLUSTER_SERVICE_MANAGER_PORT=10110
@@ -123,6 +132,7 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
 
   # Cluster Scheduler
+  # Dual-Stack: DONE
   cluster_scheduler:
     image: cluster_scheduler
     build: cluster-scheduler/
@@ -149,6 +159,7 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
 
   # Redis for the Cluster Scheduler as Job Queue
+  # Dual-Stack: DONE
   cluster_redis:
     image: redis
     hostname: cluster_redis
@@ -162,6 +173,7 @@ services:
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
 
+  # Dual-Stack: DONE
   prometheus:
     image: prom/prometheus
     container_name: prometheus

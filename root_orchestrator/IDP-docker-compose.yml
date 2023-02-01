@@ -3,6 +3,7 @@ version: "2.4"
 services:
 
   # System Manager REST API of Root Orchestrator
+  # Dual-Stack: DONE
   system_manager:
     image: system_manager
     build: system-manager-python/
@@ -32,6 +33,7 @@ services:
 
 
   # MongoDB in Root Orchestrator
+  # Dual-Stack: DONE
   mongo_root:
     image: mongo:3.6
     container_name: mongo
@@ -44,12 +46,13 @@ services:
       - "10007"
     volumes:
       - 'mongodb_data:/mongodb'
-    command: mongod --port 10007
+    command: mongod --port 10007 --ipv6
     # enable IPv6
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
 
   # cluster-level mongoDB
+  # Dual-Stack: DONE
   mongo_rootnet:
     image: mongo:3.6
     container_name: mongo_net
@@ -60,14 +63,17 @@ services:
       - "10008:10008"
     volumes:
       - 'mongodb_net_data:/mongodb'
-    command: mongod --port 10008
+    command: mongod --port 10008 --ipv6
     # enable IPv6
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
 
   # Cluster Manager
+  # Dual-Stack: DONE
   root_service_manager:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:v0.04.amd64.experimental
+    #image: root-service-manager
+    #build: root-service-manager/service-manager
     container_name: root_service_manager
     hostname: root_service_manager
     networks:
@@ -89,6 +95,7 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
 
   # Redis for the Cloud Scheduler
+  # Dual-Stack: DONE
   redis:
     image: redis
     hostname: redis
@@ -101,7 +108,8 @@ services:
     # enable IPv6
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
-
+   
+  # Dual-Stack: DONE
   grafana:
     image: grafana/grafana
     hostname: grafana
@@ -115,6 +123,7 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
 
   # Cloud Scheduler
+  # Dual-Stack: DONE
   cloud_scheduler:
     image: cloud_scheduler
     build: cloud-scheduler/

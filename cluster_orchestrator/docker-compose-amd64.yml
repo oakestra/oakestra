@@ -30,13 +30,13 @@ services:
       - "10107:10107"
     volumes:
       - 'mongodb_cluster_data:/mongodb'
-    command: mongod --port 10107
+    command: mongod --port 10107 --ipv6
 
 # cluster-level mongoDB
   mongo_clusternet:
     image: mongo:3.6
     container_name: cluster_mongo_net
-    hostname: cluster_mongo_net
+    hostname: cluster_mongo_net --ipv6
     ports:
       - "10108:10108"
     volumes:
