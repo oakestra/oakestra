@@ -28,6 +28,12 @@ jobs:
       - name: set env
           run: echo "::set-env name=NOW::$(date +'%Y%m%d_%H%M%S')"
 
+      - name: 'Get Previous tag'
+          id: previoustag
+          uses: "WyriHaximus/github-action-get-previous-tag@v1"
+          with:
+            fallback: 0.4.1
+
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -78,7 +84,7 @@ jobs:
           context: ./root-service-manager/service-manager/
           platforms: linux/amd64,linux/armhf,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.NOW }}
+          tags: $${{ steps.previoustag.outputs.tag }}_{{ env.NOW }}
           labels: ${{ steps.meta.outputs.labels }}
 
       # Sign the resulting Docker image digest except on PRs.

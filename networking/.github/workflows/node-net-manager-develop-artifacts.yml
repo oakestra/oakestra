@@ -18,6 +18,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: 'Get Previous tag'
+          id: previoustag
+          uses: "WyriHaximus/github-action-get-previous-tag@v1"
+          with:
+            fallback: 0.4.1
+
       # Prepare release package using go release 1.31
       - name: Go release
         uses: wangyoucao577/go-release-action@v1.31
@@ -28,7 +34,7 @@ jobs:
           goversion: "https://go.dev/dl/go1.19.1.linux-amd64.tar.gz"
           project_path: "./node-net-manager"
           binary_name: "NetManager"
-          release_tag: develop
+          release_tag: alpha-${{ steps.previoustag.outputs.tag }}
           asset_name: NetManager_${{ matrix.goarch }}
           extra_files: node-net-manager/build/install.sh  node-net-manager/config/tuncfg.json node-net-manager/config/netcfg.json
           overwrite: TRUE
