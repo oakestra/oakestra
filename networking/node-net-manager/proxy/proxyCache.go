@@ -37,16 +37,19 @@ func NewProxyCache() ProxyCache {
 }
 
 // RetrieveByServiceIP Retrieve proxy proxycache entry based on source ip and source port and destination ServiceIP
-func (cache *ProxyCache) RetrieveByServiceIP(srcip net.IP, srcport int, dstServiceIp net.IP, dstport int) (ConversionEntry, bool) {
+func (cache *ProxyCache) RetrieveByServiceIP(srcip net.IP, instanceIP net.IP, srcport int, dstServiceIp net.IP, dstport int) (ConversionEntry, bool) {
 	cache.rwlock.Lock()
 	defer cache.rwlock.Unlock()
 
 	elem := cache.cache[srcport]
 	elem.lastUsed = time.Now().Unix()
 	if elem.conversionList != nil {
-		for _, entry := range elem.conversionList {
-			if entry.dstport == dstport && entry.dstServiceIp.Equal(dstServiceIp) && entry.srcip.Equal(srcip) {
-				return entry, true
+		for _, cacheEntry := range elem.conversionList {
+			if cacheEntry.dstport == dstport &&
+				cacheEntry.dstServiceIp.Equal(dstServiceIp) &&
+				cacheEntry.srcip.Equal(srcip) &&
+				cacheEntry.srcInstanceIp.Equal(instanceIP) {
+				return cacheEntry, true
 			}
 		}
 	}

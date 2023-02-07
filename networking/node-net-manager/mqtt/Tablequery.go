@@ -36,6 +36,7 @@ type TableQueryRequestCache struct {
 type TableQueryResponse struct {
 	JobName      string            `json:"app_name"`
 	InstanceList []ServiceInstance `json:"instance_list"`
+	QueryKey     string            `json:"query_key"`
 }
 
 type ServiceInstance struct {
@@ -98,7 +99,9 @@ func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname
 	cache.requestadd.Lock()
 	siprequests := cache.siprequests[reqname]
 	if siprequests != nil {
-		updatedRequests = *siprequests
+		cache.requestadd.Unlock()
+		return TableQueryResponse{}, errors.New("Table query already happening for this address")
+		//updatedRequests = *siprequests
 	}
 	updatedRequests = append(updatedRequests, responseChannel)
 	cache.siprequests[reqname] = &updatedRequests
@@ -116,7 +119,7 @@ func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname
 	select {
 	case result := <-responseChannel:
 		return result, nil
-	case <-time.After(10 * time.Second):
+	case <-time.After(5 * time.Second):
 		logger.ErrorLogger().Printf("TIMEOUT - Table query without response, quitting goroutine")
 	}
 
@@ -156,6 +159,7 @@ func (cache *TableQueryRequestCache) TablequeryResultMqttHandler(client mqtt.Cli
 	//extract sip and app names as query keys
 	querykeys := make([]string, 0)
 	querykeys = append(querykeys, responseStruct.JobName)
+	querykeys = append(querykeys, responseStruct.QueryKey)
 	for _, instance := range responseStruct.InstanceList {
 		for _, sip := range instance.ServiceIp {
 			querykeys = append(querykeys, sip.Address)

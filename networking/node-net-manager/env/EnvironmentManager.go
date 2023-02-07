@@ -47,10 +47,11 @@ type Environment struct {
 	config            Configuration
 	translationTable  TableEntryCache.TableManager
 	//### Deployment management variables
-	deployedServices map[string]service //all the deployed services with the ip and ports
-	nextContainerIP  net.IP             //next address for the next container to be deployed
-	totNextAddr      int                //number of addresses currently generated, max 62
-	addrCache        []net.IP           //Cache used to store the free addresses available for new containers
+	deployedServices     map[string]service //all the deployed services with the ip and ports
+	deployedServicesLock sync.RWMutex
+	nextContainerIP      net.IP   //next address for the next container to be deployed
+	totNextAddr          int      //number of addresses currently generated, max 62
+	addrCache            []net.IP //Cache used to store the free addresses available for new containers
 	//### Communication variables
 	clusterPort string
 	clusterAddr string
@@ -132,13 +133,18 @@ func NewEnvironmentClusterConfigured(proxyname string) *Environment {
 	}
 
 	logger.InfoLogger().Println("Creating with default config")
+	mtusize, err := strconv.Atoi(os.Getenv("TUN_MTU_SIZE"))
+	if mtusize < 0 || err != nil {
+		logger.InfoLogger().Printf("Default to mtusize 1450")
+		mtusize = 1450
+	}
 	config := Configuration{
 		HostBridgeName:             "goProxyBridge",
 		HostBridgeIP:               network.NextIP(net.ParseIP(subnetwork), 1).String(),
 		HostBridgeMask:             "/26",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
-		Mtusize:                    1450,
+		Mtusize:                    mtusize,
 	}
 	return NewCustom(proxyname, config)
 }
@@ -153,17 +159,27 @@ func (env *Environment) Destroy() {
 
 func (env *Environment) DetachContainer(sname string, instance int) {
 	snameAndInstance := fmt.Sprintf("%s.%d", sname, instance)
+	env.deployedServicesLock.RLock()
 	s, ok := env.deployedServices[snameAndInstance]
+	env.deployedServicesLock.RUnlock()
 	if ok {
 		_ = env.translationTable.RemoveByNsip(s.ip)
+		env.deployedServicesLock.Lock()
 		delete(env.deployedServices, snameAndInstance)
+		env.deployedServicesLock.Unlock()
 		env.freeContainerAddress(s.ip)
 		_ = network.ManageContainerPorts(s.ip.String(), s.portmapping, network.ClosePorts)
 		_ = netlink.LinkDel(s.veth)
+		//if no interest registered delete all remaining info about the service
+		if !mqtt.MqttIsInterestRegistered(sname) {
+			env.RemoveServiceEntries(sname)
+		}
 	}
 }
 
 func (env *Environment) IsServiceDeployed(jobName string) bool {
+	env.deployedServicesLock.RLock()
+	defer env.deployedServicesLock.RUnlock()
 	for _, element := range env.deployedServices {
 		if element.sname == jobName {
 			return true
@@ -240,12 +256,14 @@ func (env *Environment) AttachNetworkToContainer(pid int, sname string, instance
 		return nil, err
 	}
 
+	env.deployedServicesLock.Lock()
 	env.deployedServices[fmt.Sprintf("%s.%d", sname, instancenumber)] = service{
 		ip:          ip,
 		sname:       sname,
 		portmapping: portmapping,
 		veth:        vethIfce,
 	}
+	env.deployedServicesLock.Unlock()
 	return ip, nil
 }
 
@@ -455,9 +473,9 @@ func (env *Environment) GetTableEntryByServiceIP(ip net.IP) []TableEntryCache.Ta
 			env.AddTableQueryEntry(tableEntry)
 		}
 		table = env.translationTable.SearchByServiceIP(ip)
+		//register interest for sip as well to avoid querying the address too many times
+		mqtt.MqttRegisterInterest(ip.String(), env)
 	}
-	//register interest for sip as well to avoid querying the address too many times
-	mqtt.MqttRegisterInterest(ip.String(), env)
 
 	return table
 }

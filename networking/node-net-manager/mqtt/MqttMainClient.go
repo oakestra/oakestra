@@ -107,12 +107,11 @@ func (netmqtt *NetMqttClient) runMqttClient(opts *mqtt.ClientOptions) {
 
 func (netmqtt *NetMqttClient) PublishToBroker(topic string, payload string) error {
 	netmqtt.mqttWriteMutex.Lock()
-	defer netmqtt.mqttWriteMutex.Unlock()
 	logger.DebugLogger().Printf("MQTT - publish to - %s - the payload - %s", topic, payload)
 	token := netmqtt.mainMqttClient.Publish(fmt.Sprintf("nodes/%s/net/%s", netmqtt.clientID, topic), 1, false, payload)
+	netmqtt.mqttWriteMutex.Unlock()
 	if token.WaitTimeout(time.Second*5) && token.Error() != nil {
 		log.Printf("ERROR: MQTT PUBLISH: %s", token.Error())
-		return token.Error()
 	}
 	return nil
 }
