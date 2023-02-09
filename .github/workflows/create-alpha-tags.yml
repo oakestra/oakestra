@@ -22,4 +22,5 @@ jobs:
       run: |
         version=$(cat version.txt)
         git tag -f alpha-$version
+        git push --delete origin $version || echo "Tag alpha-$version did not exist"
         git push --tags
