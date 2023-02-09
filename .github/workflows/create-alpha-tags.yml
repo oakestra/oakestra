@@ -21,5 +21,5 @@ jobs:
     - name: Create tag
       run: |
         version=$(cat version.txt)
-        git tag alpha-$version
-        git push origin alpha-$version
+        git tag -f alpha-$version
+        git push -f origin alpha-$version
