@@ -1,0 +1,28 @@
+name: Create alpha tags
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  create_tag:
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        token: ${{ secrets.PACKAGES_TOKEN }}
+
+    - name: Get tag version
+      id: tag_version
+      run: |
+        echo "::set-output name=tag::$(cat version.txt)"
+
+    - name: Create tag
+      run: |
+        version=$(cat version.txt)
+        git tag $version
+        git push origin $version
