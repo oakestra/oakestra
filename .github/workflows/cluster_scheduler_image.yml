@@ -2,7 +2,9 @@ name: Docker cluster-scheduler-python
 
 on:
   push:
-    tags: [ 'v*.*.*' ]
+    tags:
+      - 'v*.*.*'
+      - 'alpha-v*.*.*'
 
 env:
   # Use docker.io for Docker Hub if empty
