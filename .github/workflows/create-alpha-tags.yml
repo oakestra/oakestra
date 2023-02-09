@@ -17,6 +17,10 @@ jobs:
       id: tag_version
       run: |
         echo "::set-output name=tag::$(cat version.txt)"
+    
+    - name: Fetch origin
+      run: |
+        git fetch origin
 
     - name: Create tag
       run: |
