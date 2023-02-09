@@ -2,8 +2,9 @@ name: Golang net manager artifacts
 
 on:
   push:
-    # Publish semver tags as releases.
-    tags: [ 'v*.*.*' ]
+    tags:
+      - 'v*.*.*'
+      - 'alpha-v*.*.*'
 
 jobs:
   releases-matrix:
