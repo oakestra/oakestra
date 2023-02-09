@@ -3,7 +3,7 @@ name: Docker cluster-manager-python
 on:
   push:
     branches:
-      - 'develop'
+      - develop
 
 env:
   # Use docker.io for Docker Hub if empty
