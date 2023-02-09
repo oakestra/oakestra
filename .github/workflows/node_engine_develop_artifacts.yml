@@ -3,7 +3,7 @@ name: Golang node enigne artifacts
 on:
   push:
     branches:
-      - 'develop'
+      - develop
 
 jobs:
   releases-matrix:
