@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: set env
-          run: echo "::set-env name=NOW::$(date +'%Y%m%d_%H%M%S')"
+        run: echo "::set-env name=NOW::$(date +'%Y%m%d_%H%M%S')"
 
       - name: Checkout repository
         uses: actions/checkout@v3
