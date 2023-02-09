@@ -7,8 +7,11 @@ fi
 
 systemd --version > /dev/null 2>&1
 if [ ! $? -eq 0 ]; then
-  echo "Systemd not present on this machine"
-  exit 1
+  /usr/lib/systemd/systemd --version > /dev/null 2>&1
+  if [ ! $? -eq 0 ]; then
+    echo "Systemd not present on this machine"
+    exit 1
+  fi
 fi
 
 arch="$1"
