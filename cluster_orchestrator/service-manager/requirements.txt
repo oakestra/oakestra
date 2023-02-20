@@ -1,0 +1,10 @@
+Flask
+paho-mqtt
+bson
+Flask-PyMongo
+Flask-SocketIO
+eventlet
+requests
+pyyaml
+APScheduler
+requests_mock

@@ -63,10 +63,10 @@ services:
   # Cluster Manager
   # Dual-Stack: DONE on patched image
   cluster_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:v0.04.amd64.experimental
-    #image: cluster-service-manager
-    #build: cluster-service-manager/service-manager
-    container_name: cluster_service_manager
+    #image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:v0.04.amd64.experimental
+    image: cluster-service-manager
+    build: service-manager
+    container_name: cluster_service_manager_local
     hostname: cluster_service_manager
     networks:
       - cluster_net
@@ -94,7 +94,7 @@ services:
   # Cluster Manager
   # Dual-Stack:
   # Port 10100 DONE
-  # Port 10101 TODO
+  # Port 10101 TODO ask what this port does
   cluster_manager:
     image: cluster_manager
     build: cluster-manager/

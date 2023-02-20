@@ -71,10 +71,10 @@ services:
   # Cluster Manager
   # Dual-Stack: DONE
   root_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/root-service-manager:v0.04.amd64.experimental
-    #image: root-service-manager
-    #build: root-service-manager/service-manager
-    container_name: root_service_manager
+    #image: ghcr.io/oakestra/oakestra-net/root-service-manager:v0.04.amd64.experimental
+    image: root-service-manager
+    build: service-manager
+    container_name: root_service_manager_local
     hostname: root_service_manager
     networks:
       - root_net

@@ -134,7 +134,8 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
             else:
                 print('Node {0} is inactive.'.format(n.get('_id')))
         except Exception as e:
-            print("Problem during the aggregation of the data, skipping the node: ", str(n), " - because - ", str(e))
+            #print("Problem during the aggregation of the data, skipping the node: ", str(n), " - because - ", str(e))
+            continue
 
     mongo_update_jobs_status(TIME_INTERVAL)
     jobs = mongo_find_all_jobs()
