@@ -83,8 +83,24 @@ def greedy_load_balanced_algorithm(job, active_clusters=None):
     # return if no qualified clusters found
     if not qualified_clusters:
         return 'negative', 'NoActiveClusterWithCapacity'
-
+        
     # return the cluster with the most cpu+ram
+    if job.get('virtualization') == 'unikernel':
+        arch = job.get('arch')
+        for cluster in qualified_clusters:
+            aggregation = cluster.get('aggregation_per_architecture',None)
+            for a in arch:
+                aggregation_arch = aggregation.get(a,None)
+                if not aggregation_arch:
+                    continue
+                cpu = float(aggregation_arch.get('cpu_cores',0))
+                mem = float(aggregation_arch.get('memory_in_mb',0))
+                if cpu >= target_cpu and mem >= target_mem:
+                    target_cpu = cpu
+                    target_mem = mem
+                    target_cluster = cluster
+        return 'positive', target_cluster
+    
     for cluster in qualified_clusters:
         cpu = float(cluster.get('total_cpu_cores'))
         mem = float(cluster.get('memory_in_mb'))

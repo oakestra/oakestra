@@ -149,10 +149,9 @@ type QemuStopResult struct {
 	}
 }
 
-
-
 var path = "/tmp/node_engine/kernel/"
 var inst_path = "/tmp/node_engine/inst/"
+
 /*
 Load the Unikernel from the URL given or used cached version.
 Return:
@@ -160,25 +159,24 @@ Return:
 
 func GetKernelImage(kernel string, name string, sname string) *string {
 
-
 	//filename := strings.ReplaceAll(kernel, "/", "_")
 	kernel_tar := path + sname + ".tar.gz"
 	kernel_location := path + sname + "/"
-	instance_path := inst_path + name 
+	instance_path := inst_path + name
 	kernel_local := kernel_location + "kernel"
 
 	/*This is to make sure that in case of a redeployment
-	Makes sure that the directory does not already exists 
+	Makes sure that the directory does not already exists
 	and waits if it does*/
-	for true{
+	for true {
 		_, err := os.Stat(instance_path)
 		if errors.Is(err, fs.ErrNotExist) {
 			break
 		} else if err == nil {
 			time.Sleep(10 * time.Millisecond)
 			continue
-		} else{
-			logger.InfoLogger().Printf("Problem with instance data: %v",err)
+		} else {
+			logger.InfoLogger().Printf("Problem with instance data: %v", err)
 			return nil
 		}
 	}
@@ -211,7 +209,6 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 		logger.InfoLogger().Printf("Written %d B", size)
 		kimage.Close()
 
-	
 		os.Mkdir(kernel_location, 0777)
 		/*unpack Kernel and additional data*/
 		kimage, _ = os.Open(kernel_tar)
@@ -220,7 +217,7 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 		exdata, err := gzip.NewReader(kimage)
 
 		tardata := tar.NewReader(exdata)
-		
+
 		for true {
 			header, err := tardata.Next()
 
@@ -254,7 +251,7 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 			}
 
 		}
-	}else {
+	} else {
 		logger.InfoLogger().Printf("Kernel found locally")
 	}
 	if err != nil {
@@ -262,17 +259,15 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 		return nil
 	}
 
-	_, err = os.Stat(kernel_location+"files")
-	if  !errors.Is(err, fs.ErrNotExist) {
-		logger.InfoLogger().Printf("Creating new instance envioument %s -> %s",kernel_location+"files",instance_path)
+	_, err = os.Stat(kernel_location + "files")
+	if !errors.Is(err, fs.ErrNotExist) {
+		logger.InfoLogger().Printf("Creating new instance envioument %s -> %s", kernel_location+"files", instance_path)
 
-		err = exec.Command("cp", "-r",kernel_location+"files",instance_path).Run()
+		err = exec.Command("cp", "-r", kernel_location+"files", instance_path).Run()
 		if err != nil {
 			logger.InfoLogger().Printf("Unable to set files: %v", err)
 		}
 	}
-	
-
 
 	//Kernel image is expected at a fixed location within the archive ./kernel
 	_, err = os.Stat(kernel_local)
@@ -286,14 +281,13 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 }
 
 func getUnikernelURL(position int, code string) string {
-	addr := strings.Split(code,",")
-	logger.InfoLogger().Printf("%v",addr)
-	if(position >= len(addr)){
+	addr := strings.Split(code, ",")
+	logger.InfoLogger().Printf("%v", addr)
+	if position >= len(addr) {
 		return ""
 	}
 	return addr[position]
 }
-
 
 func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	service model.Service,
@@ -306,7 +300,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	var qemuMonitor *qmp.SocketMonitor
 
 	qemuConfig.Memory = service.Memory
-
+	qemuConfig.CPU = service.Vcpus
 	//hostname is used as name for the namespace in which the unikernel will be running in
 	hostname := genTaskID(service.Sname, service.Instance)
 	qemuConfig.Name = hostname
@@ -314,11 +308,9 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 
 	var kernelImage string = ""
 
-	
-
 	for i, a := range service.Architectures {
 		if a == rt.GOARCH {
-			kernelImage = getUnikernelURL(i,service.Image)
+			kernelImage = getUnikernelURL(i, service.Image)
 		}
 	}
 
@@ -366,7 +358,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	err = qemuCmd.Start()
 	if err != nil {
 		logger.ErrorLogger().Printf("Failed to start qemu: %v", err)
-		revert(err,hostname)
+		revert(err, hostname)
 		return
 	}
 	logger.InfoLogger().Println("Unikernel started")
@@ -396,7 +388,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		qemuProcess: qemuCmd.Process,
 	}
 
-	socketPath := fmt.Sprintf("%s/%s", qemuConfig.Instancepath ,hostname)
+	socketPath := fmt.Sprintf("%s/%s", qemuConfig.Instancepath, hostname)
 	for true {
 		//Wait for qemu to properly start up
 		conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
@@ -407,7 +399,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		} else if err != nil {
 			if !strings.HasSuffix(err.Error(), ": connection refused") {
 				logger.InfoLogger().Printf("Something went wrong while starting Qemu %v", err)
-				revert(err,hostname)
+				revert(err, hostname)
 				if model.GetNodeInfo().Overlay {
 					err = requests.DeleteNamespaceForUnikernel(service.Sname, service.Instance)
 					if err != nil {
@@ -432,7 +424,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	qemuMonitor, err = qmp.NewSocketMonitor("unix", socketPath, 2*time.Second)
 	if err != nil {
 		logger.InfoLogger().Printf("Failed to Create connection to QMP: %v\n", err)
-		revert(err,hostname)
+		revert(err, hostname)
 		if model.GetNodeInfo().Overlay {
 			err = requests.DeleteNamespaceForUnikernel(service.Sname, service.Instance)
 			if err != nil {
@@ -483,7 +475,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		}
 		//Delete instance folder
 		os.RemoveAll(inst_path + hostname)
-		logger.InfoLogger().Printf("Removing Instance data %s",inst_path + hostname)
+		logger.InfoLogger().Printf("Removing Instance data %s", inst_path+hostname)
 
 		if err != nil {
 			*killChannel <- false
@@ -535,8 +527,9 @@ func (r *UnikernelRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 type QemuConfiguration struct {
 	Name         string
 	Memory       int
+	CPU          int
 	Instancepath string
-	Kernel 	     string
+	Kernel       string
 	KernelArgs   []string
 	NSname       *string
 }
@@ -557,9 +550,9 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string)
 	//kernel := q.Instancepath + "kernel"
 	args = append(args, "-kernel", q.Kernel, "-nographic", "-nodefaults", "-no-user-config")
 
-	//Memory
+	//Memory and CPU
 	memory := fmt.Sprintf("%d", q.Memory)
-	args = append(args, "-m", memory)
+	args = append(args, "-m", memory, "-smp", fmt.Sprintf("%d", q.CPU))
 
 	//Network
 	if model.GetNodeInfo().Overlay {
@@ -591,7 +584,7 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string)
 		args = append(args, "-device", "virtio-9p-pci,fsdev=hvirtio0,mount_tag=fs0")
 	}
 	//QMP
-	Qmp := fmt.Sprintf("unix:%s/%s,server,nowait",q.Instancepath, q.Name)
+	Qmp := fmt.Sprintf("unix:%s/%s,server,nowait", q.Instancepath, q.Name)
 	args = append(args, "-qmp", Qmp)
 
 	//Set the cpu to host passthrough and enable kvm
