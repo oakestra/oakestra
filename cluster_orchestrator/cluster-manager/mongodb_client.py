@@ -124,7 +124,6 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     cumulative_memory_in_mb = 0
     number_of_active_nodes = 0
     technology = []
-    architecture = []
     aggregation_per_architecture = {}
 
     nodes = find_all_nodes()
@@ -150,7 +149,6 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
                 
                 arch = n.get('node_info').get('architecture')
                 if arch is not None:
-                    architecture.append(arch) if arch not in architecture else architecture
                     aggregation = None
                     if aggregation_per_architecture.get(arch,None) is None:
                         aggregation_per_architecture[arch] = {}

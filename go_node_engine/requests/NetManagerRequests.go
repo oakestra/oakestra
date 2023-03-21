@@ -27,7 +27,6 @@ type connectNetworkRequestUnikernel struct {
 	Servicename    string `json:"serviceName"`
 	Instancenumber int    `json:"instanceNumber"`
 	PortMappings   string `json:"portMappings"`
-	IsUnikernel    bool   `json:"isUnikernel"`
 }
 
 var ongoingDeployment sync.Mutex
@@ -125,7 +124,6 @@ func CreateNetworkNamespaceForUnikernel(servicename string, instance int, portMa
 		Servicename:    servicename,
 		Instancenumber: instance,
 		PortMappings:   portMappings,
-		IsUnikernel:    true,
 	}
 	jsonReq, err := json.Marshal(request)
 	if err != nil {

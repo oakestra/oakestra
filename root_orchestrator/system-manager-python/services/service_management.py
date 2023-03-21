@@ -96,7 +96,6 @@ def generate_db_structure(application, microservice):
         microservice["RR_ip"] = addresses.get("rr_ip")  # compatibility with older netmanager versions
     if microservice["virtualization"] == "unikernel":
         microservice["arch"] = microservice["arch"]
-        #microservice["vm_images"] = microservice["images"]
     return microservice
 
 

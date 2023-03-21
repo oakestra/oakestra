@@ -129,7 +129,6 @@ def extract_specs(cluster):
         'available_memory': cluster.get('memory_in_mb'),
         'available_gpu': cluster.get('total_gpu_cores') * (100 - cluster.get('total_gpu_percent')) / 100,
         'virtualization': cluster.get('virtualization'),
-        'arch' : cluster.get('arch'),
     }
 
 def extract_architecture_specs(cluster,arch):
