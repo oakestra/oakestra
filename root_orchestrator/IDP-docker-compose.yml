@@ -10,7 +10,9 @@ services:
     hostname: system_manager
     container_name: system_manager
     networks:
-      - root_net
+      root_net:
+        ipv4_address: 192.168.128.2
+        ipv6_address: 2001:db8:a::2
     expose:
       - "10000"
     ports:
@@ -39,7 +41,9 @@ services:
     container_name: mongo
     hostname: mongo
     networks:
-      - root_net
+      root_net:
+        ipv4_address: 192.168.128.5
+        ipv6_address: 2001:db8:a::5
     ports:
       - "10007:10007"
     expose:
@@ -58,7 +62,9 @@ services:
     container_name: mongo_net
     hostname: mongo_net
     networks:
-      - root_net
+      root_net:
+        ipv4_address: 192.168.128.4
+        ipv6_address: 2001:db8:a::4
     ports:
       - "10008:10008"
     volumes:
@@ -77,7 +83,9 @@ services:
     container_name: root_service_manager_local
     hostname: root_service_manager
     networks:
-      - root_net
+      root_net:
+        ipv4_address: 192.168.128.3
+        ipv6_address: 2001:db8:a::3
     expose:
       - "10099"
     ports:
@@ -101,7 +109,9 @@ services:
     hostname: redis
     container_name: redis
     networks:
-      - root_net
+      root_net:
+        ipv4_address: 192.168.128.8
+        ipv6_address: 2001:db8:a::8
     ports:
       - "6379:6379"
     command: redis-server --requirepass cloudRedis
@@ -115,7 +125,9 @@ services:
     hostname: grafana
     container_name: grafana
     networks:
-      - root_net
+      root_net:
+        ipv4_address: 192.168.128.9
+        ipv6_address: 2001:db8:a::9
     ports:
       - 80:3000
     # enable IPv6
@@ -130,7 +142,9 @@ services:
     container_name: cloud_scheduler
     hostname: cloud_scheduler
     networks:
-      - root_net
+      root_net:
+        ipv4_address: 192.168.128.7
+        ipv6_address: 2001:db8:a::7
     expose:
       - "10004"
     ports:
@@ -159,6 +173,9 @@ networks:
   root_net:
     name: root_net
     enable_ipv6: true
+    driver: bridge
+    driver_opts:
+      com.docker.network.enable_ipv6: "true"
     ipam:
       config:
         - subnet: 2001:db8:a::/64

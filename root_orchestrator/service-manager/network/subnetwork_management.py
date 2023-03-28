@@ -1,5 +1,5 @@
 import threading
-
+import ipaddress
 from interfaces import mongodb_requests
 
 instance_ip_lock = threading.Lock()
@@ -118,7 +118,7 @@ def clear_subnetwork_ip(addr):
 '''
 ###################### IPv6
 '''
-# TODO
+# TODO tests
 def new_job_rr_address_v6(job_data):
     """
     This method is called at deploy time. Given the deployment descriptor check if a custom valid RR ip has been assigned
@@ -126,25 +126,27 @@ def new_job_rr_address_v6(job_data):
     @return: string, a new address
     @raise: exception if an invalid RR address has been provided by the user
     """
+    
     address = job_data.get('RR_ip_v6')
     job_name = job_data['app_name'] + "." + job_data['app_ns'] + "." + job_data['service_name'] + "." + job_data[
         'service_ns']
 
     if address is not None:
-        address_arr = str(address).split(".")
-        if len(address_arr) == 4:
-            if address_arr[0] != "10" or address_arr[1] != "30":
-                raise Exception("RR ip address must be in the form 10.30.x.y")
-            job = mongodb_requests.mongo_find_job_by_ip(address)
+        # because shorthand IPv6 addresses can be given in SLA, make sure to use expanded IPv6 notation for consistency with MongoDB requests
+        address_arr = ipaddress.ip_address(address).exploded.split(":")
+        if len(address_arr) == 8:
+            if address_arr[0] != "fdff" and address_arr[1][0:2] != "10":
+                raise Exception("RR ip address must be in the subnet fdff:1000::/21")
+            job = mongodb_requests.mongo_find_job_by_ip_v6(address)
             if job is not None:
                 if job['job_name'] != job_name:
-                    raise Exception("RR ip address already used by another service")
+                    raise Exception("RR_ip_v6 address already used by another service")
             return address
         else:
-            raise Exception("Invalid RR_ip address length")
-    return new_instance_ip()
+            raise Exception("Invalid RR_ip_v6 address length")
+    return new_instance_ip_v6()
 
-# TEST
+
 def new_instance_ip_v6():
     """
     Function used to assign a new instance IPv6 address for a Service that is going to be deployed.
@@ -165,7 +167,7 @@ def new_instance_ip_v6():
 
         return _addr_stringify_v6(addr)
 
-# TEST
+
 def clear_instance_ip_v6(addr):
     """
     Function used to give back an Instance address to the pool of available addresses
@@ -210,7 +212,7 @@ def clear_instance_ip_v6(addr):
 
         mongodb_requests.mongo_free_service_address_to_cache_v6(addr)
 
-# TEST
+
 def new_subnetwork_addr_v6():
     """
     Function used to generate a new subnetwork address for any worker node
@@ -228,7 +230,6 @@ def new_subnetwork_addr_v6():
         return _addr_stringify_v6(addr)
 
 
-#TODO
 def clear_subnetwork_ip_v6(addr):
     """
     Function used to give back a subnetwork address to the pool of available addresses
@@ -239,17 +240,46 @@ def clear_subnetwork_ip_v6(addr):
 
     # Check if address is in the correct rage
     assert 253 < addr[0] < 254
-    assert 0 <= addr[2] < 256
-    assert addr[3] in [0, 64, 128]
+    for n in addr[1:15]:
+        assert 0 <= n < 256
 
     with subnetip_ip_lock:
-        next_addr = mongodb_requests.mongo_get_next_subnet_ip()
+        next_addr = mongodb_requests.mongo_get_next_subnet_ip_v6()
 
         # Ensure that the give address is actually before the next address from the pool
-        assert int(str(addr[1]) + str(addr[2]) + str(addr[3])) < int(
-            str(next_addr[1]) + str(next_addr[2]) + str(next_addr[3]))
+        assert int(str(addr[0]) 
+        + str(addr[1])
+        + str(addr[2])
+        + str(addr[3])
+        + str(addr[4])
+        + str(addr[5])
+        + str(addr[6])
+        + str(addr[7])
+        + str(addr[8])
+        + str(addr[9])
+        + str(addr[10])
+        + str(addr[11])
+        + str(addr[12])
+        + str(addr[13])
+        + str(addr[14])
+        ) < int(str(next_addr[0]) 
+        + str(next_addr[1])
+        + str(next_addr[2])
+        + str(next_addr[3])
+        + str(next_addr[4])
+        + str(next_addr[5])
+        + str(next_addr[6])
+        + str(next_addr[7])
+        + str(next_addr[8])
+        + str(next_addr[9])
+        + str(next_addr[10])
+        + str(next_addr[11])
+        + str(next_addr[12])
+        + str(next_addr[13])
+        + str(next_addr[14])
+        )
 
-        mongodb_requests.mongo_free_subnet_address_to_cache(addr)
+        mongodb_requests.mongo_free_subnet_address_to_cache_v6(addr)
 
 '''
 ############ Utils
@@ -271,11 +301,18 @@ def _increase_service_address_v6(addr):
     addr_int += 1
 
     # reconvert new address part to bytearray and concatenate it with the network part of addr
-    # will raise OverflowError if address space is exhausted
-    new_addr = addr_int.to_bytes(10, byteorder='big')
-    new_addr = addr[0:6] + list(new_addr)
-
-    return list(new_addr)
+    # will raise RuntimeError if address space is exhausted
+    try:
+        new_addr = addr_int.to_bytes(10, byteorder='big')
+        new_addr = addr[0:6] + list(new_addr)
+        return new_addr
+    except OverflowError:
+        # if first fdff:0000::/21 block is full, use next one: fdff:0800::/21
+        if addr[2] == 0:
+            return [253, 255, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        # if that one is also full, no more addresses
+        else:
+            raise RuntimeError("Exhausted Instance IP address space")
 
 
 def _increase_subnetwork_address(addr):
@@ -291,24 +328,23 @@ def _increase_subnetwork_address(addr):
             raise RuntimeError("Exhausted Address Space")
     return [addr[0], new1, new2, new3]
 
+
 def _increase_subnetwork_address_v6(addr):
     # convert subnet portion of addr to int and increase by one
-    addr_int = int.from_bytes(addr[0:6], byteorder='big')
+    addr_int = int.from_bytes(addr[0:14], byteorder='big')
     addr_int += 1
 
     # reconvert new subnet part to bytearray and right pad it with 0 to length 16
-    new_subnet = addr_int.to_bytes(6, byteorder='big')
+    new_subnet = addr_int.to_bytes(14, byteorder='big')
     new_subnet += bytes(16 - (len(new_subnet) % 16))
 
-    if new_subnet[0] == 253 and \
-       new_subnet[1] == 256 and \
-       new_subnet[2] == 256 and \
-       new_subnet[3] == 256 and \
-       new_subnet[5] == 256 and \
-       new_subnet[6] == 256:
-       raise RuntimeError("Exhausted IPv6 Address Space")
+    if new_subnet[0] == 253 and new_subnet[1] == 255:
+        # if the first 16 bits are fdff, we reached the limit of worker subnetworks
+        # fc00::/120 is the first available subnetwork
+        # fdfe:ffff:ffff:ffff:ffff:ffff:ffff:0/120 is the last available subnetwork
+        raise RuntimeError("Exhausted IPv6 Address Space for workers")
 
-    return list(new_subnet)
+    return new_subnet
 
 
 def _addr_stringify(addr):

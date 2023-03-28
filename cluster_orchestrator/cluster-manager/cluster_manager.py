@@ -29,6 +29,7 @@ NETWORK_COMPONENT_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
 MY_ASSIGNED_CLUSTER_ID = None
 
 SYSTEM_MANAGER_ADDR = 'http://' + os.environ.get('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
+SYSTEM_MANAGER_ADDR_v6 = 'http://' + os.environ.get('SYSTEM_MANAGER_URL_v6') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
 
 my_logger = configure_logging()
 
@@ -236,7 +237,7 @@ def disconnect(m):
 def init_cm_to_sm():
     app.logger.info('Connecting to System_Manager...')
     try:
-        sio.connect(SYSTEM_MANAGER_ADDR + '/register', namespaces=['/register'])
+        sio.connect(SYSTEM_MANAGER_ADDR_v6 + '/register', namespaces=['/register'])
     except Exception as e:
         app.logger.error('SocketIO - Connection Establishment with System Manager failed!')
     time.sleep(1)

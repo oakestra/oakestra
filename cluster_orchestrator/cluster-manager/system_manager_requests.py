@@ -8,7 +8,7 @@ from mongodb_client import mongo_aggregate_node_information, mongo_get_services_
 from my_prometheus_client import prometheus_set_metrics
 
 SYSTEM_MANAGER_ADDR = 'http://' + os.environ.get('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
-
+SYSTEM_MANAGER_ADDR_v6 = 'http://' + os.environ.get('SYSTEM_MANAGER_URL_v6') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
 
 def send_aggregated_info_to_sm(my_id, time_interval):
     try:
@@ -38,12 +38,14 @@ def re_deploy_dead_services_routine():
 
 
 def send_aggregated_info(my_id, data):
-    print('Sending aggregated information to System Manager.')
-    print(SYSTEM_MANAGER_ADDR)
+    # TODO re-enable
+    #print('Sending aggregated information to System Manager.')
+    #print(SYSTEM_MANAGER_ADDR_v6)
     try:
-        requests.post(SYSTEM_MANAGER_ADDR + '/api/information/' + str(my_id), json=data)
+        requests.post(SYSTEM_MANAGER_ADDR_v6 + '/api/information/' + str(my_id), json=data)
     except requests.exceptions.RequestException as e:
         print('Calling System Manager /api/information not successful.')
+        print(e)
 
 
 def trigger_undeploy_and_re_deploy(service, instance):
@@ -57,7 +59,7 @@ def trigger_undeploy_and_re_deploy(service, instance):
 
 def cloud_request_incr_node(my_id):
     print('reporting to cloud about new worker node...')
-    request_addr = SYSTEM_MANAGER_ADDR + '/api/cluster/' + str(my_id) + '/incr_node'
+    request_addr = SYSTEM_MANAGER_ADDR_v6 + '/api/cluster/' + str(my_id) + '/incr_node'
     print(request_addr)
     try:
         requests.get(request_addr)

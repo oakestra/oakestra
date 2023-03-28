@@ -76,5 +76,6 @@ def _prepare_instance_dict(isntance_number, cluster_id):
     return {
         'instance_number': isntance_number,
         'instance_ip': new_instance_ip(),
+        'instance_ip_v6': new_instance_ip_v6(),
         'cluster_id': str(cluster_id),
     }

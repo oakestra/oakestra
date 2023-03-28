@@ -8,7 +8,9 @@ services:
     hostname: mqtt
     container_name: mqtt
     networks:
-      - cluster_net
+      cluster_net:
+        ipv4_address: 192.168.129.6
+        ipv6_address: 2001:db8:b::6
     expose:
       - "10003"
     ports:
@@ -33,7 +35,9 @@ services:
     container_name: cluster_mongo
     hostname: cluster_mongo
     networks:
-      - cluster_net
+      cluster_net:
+        ipv4_address: 192.168.129.5
+        ipv6_address: 2001:db8:b::5
     ports:
       - "10107:10107"
     volumes:
@@ -50,7 +54,9 @@ services:
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
     networks:
-      - cluster_net
+      cluster_net:
+        ipv4_address: 192.168.129.4
+        ipv6_address: 2001:db8:b::4
     ports:
       - "10108:10108"
     volumes:
@@ -69,7 +75,9 @@ services:
     container_name: cluster_service_manager_local
     hostname: cluster_service_manager
     networks:
-      - cluster_net
+      cluster_net:
+        ipv4_address: 192.168.129.3
+        ipv6_address: 2001:db8:b::3
     expose:
       - "10110"
     ports:
@@ -79,6 +87,7 @@ services:
       - MQTT_BROKER_PORT=10003
       - MQTT_BROKER_URL=mqtt
       - ROOT_SERVICE_MANAGER_URL=192.168.178.22
+      - ROOT_SERVICE_MANAGER_URL_v6=[2001:a61:1254:e301:7e:81c9:e604:b4a8]
       - ROOT_SERVICE_MANAGER_PORT=10099
       - SYSTEM_MANAGER_URL=cluster_manager
       - SYSTEM_MANAGER_PORT=10000
@@ -104,13 +113,16 @@ services:
       - "10100"
       - "10101"
     networks:
-      - cluster_net
+      cluster_net:
+        ipv4_address: 192.168.129.2
+        ipv6_address: 2001:db8:b::2
     ports:
       - "10100:10100"
       - "10101:10101"
     environment:
       - MY_PORT=10100
       - SYSTEM_MANAGER_URL=192.168.178.22
+      - SYSTEM_MANAGER_URL_v6=[2001:a61:1254:e301:7e:81c9:e604:b4a8]
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
       - CLUSTER_SERVICE_MANAGER_PORT=10110
@@ -139,7 +151,9 @@ services:
     container_name: cluster_scheduler
     hostname: cluster_scheduler
     networks:
-      - cluster_net
+      cluster_net:
+        ipv4_address: 192.168.129.7
+        ipv6_address: 2001:db8:b::7
     expose:
       - "10105"
     ports:
@@ -165,7 +179,9 @@ services:
     hostname: cluster_redis
     container_name: cluster_redis
     networks:
-      - cluster_net
+      cluster_net:
+        ipv4_address: 192.168.129.8
+        ipv6_address: 2001:db8:b::8   
     ports:
       - "6479:6479"
     command: redis-server --requirepass clusterRedis --port 6479
@@ -179,7 +195,9 @@ services:
     container_name: prometheus
     hostname: prometheus
     networks:
-      - cluster_net
+      cluster_net:
+        ipv4_address: 192.168.129.9
+        ipv6_address: 2001:db8:b::9
     ports:
       - 10009:9090
     volumes:
@@ -202,6 +220,9 @@ networks:
   cluster_net:
     name: cluster_net
     enable_ipv6: true
+    driver: bridge
+    driver_opts:
+      com.docker.network.enable_ipv6: "true"
     ipam:
       config:
         - subnet: 2001:db8:b::/64

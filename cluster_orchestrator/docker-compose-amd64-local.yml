@@ -102,6 +102,7 @@ services:
     environment:
       - MY_PORT=10100
       - SYSTEM_MANAGER_URL=192.168.178.22
+      - SYSTEM_MANAGER_URL_v6=[2001:a61:123a:8701:8fd1:fe65:eb97:6870]
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
       - CLUSTER_SERVICE_MANAGER_PORT=10110
