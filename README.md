@@ -398,6 +398,50 @@ each call to this endpoint generates a new instance of the service
 ### Cluster Status
 - Use `GET /api/clusters/` to get all the registered clusters.
 - Use `GET /api/clusters/active` to get all the clusters currently active and their resources.
+## Unikernel
+It is also possible to use Unikernels by changing the virtulization in of the microservice
+```json
+{
+	"sla_version": "v2.0",
+	"customerID": "Admin",
+	"applications": [{
+		"applicationID": "",
+		"application_name": "nginx",
+		"application_namespace": "test",
+		"application_desc": "Simple demo of an Nginx server Unikernel",
+		"microservices": [{
+			"microserviceID": "",
+			"microservice_name": "nginx",
+			"microservice_namespace": "test",
+			"virtualization": "unikernel",
+			"cmd": [],
+			"memory": 100,
+			"vcpus": 1,
+			"vgpus": 0,
+			"vtpus": 0,
+			"bandwidth_in": 0,
+			"bandwidth_out": 0,
+			"storage": 0,
+			"code": "https://github.com/Sabanic-P/app-nginx/releases/download/v1.0/kernel.tar.gz",
+			"arch": ["amd64"],
+			"state": "",
+			"port": "80:80",
+			"addresses": {
+				"rr_ip": "10.30.30.26"
+			},
+			"added_files": []
+		}]
+	}]
+}
+```
+Differences to Container Deployment:
+- virtualization: set to unikernel
+- code: Specifies a the remote Unikernel accessible via http(s). There can be multiple
+        Unikernels in the same string seperated via ",".
+- arch: Specifies the architecture of the Unikernel given in code. The order of
+        architectures must match the order of Unikernles given via the code field
+
+# Networking 
 
 # 🕸️ Networking
 <a name="🕸️-networking"></a>
