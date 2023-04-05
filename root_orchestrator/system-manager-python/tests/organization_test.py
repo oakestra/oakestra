@@ -19,9 +19,6 @@ def test_add_organization():
     mockdb()
 
     orga = {
-        "_id": {
-            "$oid": "6427d9f43c9f60e47cf93dca"
-        },
         "name": "root",
         "member": [
             {
@@ -56,7 +53,7 @@ def test_add_user_to_orga():
     orga_id = str(orga["_id"])
 
     # EXEC
-    organization_db.mongo_add_user_role_to_organization(str(user_id, orga_id, ["Admin"]))
+    organization_db.mongo_add_user_role_to_organization(user_id, orga_id, ["Admin"])
 
     # ASSERT
     roles = organization_db.mongo_get_roles_of_user_in_organization(user_id, orga_id)
@@ -100,9 +97,10 @@ def test_delete_role_entrys():
 
     user_db.create_admin()
     user = user_db.mongo_get_user_by_name("Admin")
+    user_id = str(user["_id"])
 
     # EXEC
-    organization_db.mongo_delete_all_role_entrys_of_user()
+    organization_db.mongo_delete_all_role_entrys_of_user(user_id)
     orga = organization_db.mongo_get_organization_by_name("root")
 
     # ASSERT
