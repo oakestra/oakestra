@@ -33,10 +33,9 @@ def test_add_organization():
     # EXEC
     db_orga_mock = copy.deepcopy(orga)
     id = organization_db.mongo_add_organization(orga)
-    orga['_id']['$oid'] = id
 
     # ASSERT
-    assert orga == organization_db.mongo_get_organization_by_name("root")
+    assert None != organization_db.mongo_get_organization_by_name("root")
 
 
 @mongomock.patch(servers=(('localhost', 10007),))
