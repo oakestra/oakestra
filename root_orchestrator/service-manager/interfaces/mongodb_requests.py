@@ -140,6 +140,7 @@ def mongo_update_job_instance(system_job_id, instance):
         {
             '$set': {
                 "instance_list.$.namespace_ip": instance.get('namespace_ip'),
+                "instance_list.$.namespace_ip_v6": instance.get('namespace_ip_v6'),
                 "instance_list.$.host_ip": instance.get('host_ip'),
                 "instance_list.$.host_port": instance.get('host_port'),
             }
@@ -448,13 +449,13 @@ def mongo_update_next_subnet_ip_v6(address):
     """
     global mongo_net
     netcache = mongo_net.db.netcache
-
+    
     # sanity check for the address
     assert len(address) == 16
     for n in address:
         assert 0 <= n < 256
     assert 252 <= address[0] <= 253
-
+    print("GOT TO UPDATE_NEXT_SUBNET_IP_V6:", address)
     netcache.update_one({'type': 'next_subnet_ipv6'}, {'$set': {'ipv6': address}})
 
 

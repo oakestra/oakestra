@@ -34,6 +34,7 @@ def system_manager_notify_deployment_status(job, worker_id):
             elem = {
                 'instance_number': instance['instance_number'],
                 'namespace_ip': instance['namespace_ip'],
+                'namespace_ip_v6': instance['namespace_ip_v6'],
                 'host_ip': instance['host_ip'],
                 'host_port': instance['host_port'],
             }

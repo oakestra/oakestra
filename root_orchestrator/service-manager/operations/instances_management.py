@@ -20,6 +20,7 @@ def update_instance_local_addresses(job_id=None, instances=None):
     for instance in instances:
         assert instance.get("instance_number") is not None
         assert instance.get("namespace_ip") is not None
+        assert instance.get("namespace_ip_v6") is not None
         assert instance.get("host_ip") is not None
         assert instance.get("host_port") is not None
 

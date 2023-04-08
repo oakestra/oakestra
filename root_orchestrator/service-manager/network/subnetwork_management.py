@@ -156,7 +156,6 @@ def new_instance_ip_v6():
     """
     with instance_ip_lock:
         addr = mongodb_requests.mongo_get_service_address_from_cache_v6()
-
         while addr is None:
             addr = mongodb_requests.mongo_get_next_service_ip_v6()
             next_addr = _increase_service_address_v6(addr)
@@ -225,7 +224,8 @@ def new_subnetwork_addr_v6():
         if addr is None:
             addr = mongodb_requests.mongo_get_next_subnet_ip_v6()
             next_addr = _increase_subnetwork_address_v6(addr)
-            mongodb_requests.mongo_update_next_subnet_ip_v6(next_addr)
+            # change bytes array to int array
+            mongodb_requests.mongo_update_next_subnet_ip_v6(list(next_addr))
 
         return _addr_stringify_v6(addr)
 

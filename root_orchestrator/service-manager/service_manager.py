@@ -71,6 +71,7 @@ def update_instance_local_deployment_addresses():
         'instances:[{
             'instance_number':int
             'namespace_ip':string
+            'namespace_ip_v6':string
             'host_ip':string
             'host_port':string
         }]

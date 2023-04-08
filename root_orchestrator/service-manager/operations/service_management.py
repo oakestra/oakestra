@@ -1,8 +1,9 @@
 from network.subnetwork_management import *
 from interfaces.mongodb_requests import *
 
-# TODO IPv6
+
 def deploy_request(deployment_descriptor=None, system_job_id=None):
+    print("GOT_DEPLOYMENT_DESC:", deployment_descriptor)
     if deployment_descriptor is None or system_job_id is None:
         return "Invalid input parameters", 400
 

@@ -73,12 +73,13 @@ def service_resolution_ip(ip_string):
             mongo_update_job_instance(job['job_name'], instance)
     return job.get("job_name"), job.get('instance_list'), job.get('service_ip_list')
 
-
+# TODO TEST
 def format_instance_response(instance_list, sip_list):
     for elem in instance_list:
         elem['service_ip'] = copy.deepcopy(sip_list)
         elem['service_ip'].append({
             "IpType": "instance_ip",
-            "Address": elem['instance_ip']
+            "Address": elem['instance_ip'],
+            "Address_v6": elem['instance_ip_v6']
         })
     return instance_list

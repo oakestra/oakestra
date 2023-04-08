@@ -91,6 +91,7 @@ def mongo_update_job_instance(job_name, instance):
             {
                 '$set': {
                     "instance_list.$.namespace_ip": instance.get('namespace_ip'),
+                    "instance_list.$.namespace_ip_v6": instance.get('namespace_ip_v6'),
                     "instance_list.$.host_ip": instance.get('host_ip'),
                     "instance_list.$.host_port": instance.get('host_port'),
                 }
@@ -125,18 +126,24 @@ def mongo_find_job_by_name(job_name):
     global mongo_jobs
     return mongo_jobs.db.jobs.find_one({'job_name': job_name})
 
-
+# TODO maybe explode IPv6?
 def mongo_find_job_by_ip(ip):
     global mongo_jobs
-    # Search by Service Ip
+    # Search by Service IP
     job = mongo_jobs.db.jobs.find_one({'service_ip_list.Address': ip})
     if job is None:
-        # Search by instance ip
+        # Search by Service IPv6
+        job = mongo_jobs.db.jobs.find_one({'service_ip_list.Address_v6': ip})
+    if job is None:
+        # Search by instance IP
         job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip': ip})
+    if job is None:
+        # Search by instance IPv6
+        job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip_v6': ip})
     return job
 
 
-def mongo_update_job_deployed(job_name, status, ns_ip, node_id, instance_number, host_ip, host_port):
+def mongo_update_job_deployed(job_name, status, ns_ip, ns_ipv6, node_id, instance_number, host_ip, host_port):
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'job_name': job_name})
     instance_list = job['instance_list']
@@ -144,6 +151,7 @@ def mongo_update_job_deployed(job_name, status, ns_ip, node_id, instance_number,
         if int(instance["instance_number"]) == int(instance_number):
             instance['worker_id'] = node_id
             instance['namespace_ip'] = ns_ip
+            instance['namespace_ip_v6'] = ns_ipv6
             instance['host_ip'] = host_ip
             instance['host_port'] = int(host_port)
             break
