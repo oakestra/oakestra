@@ -121,13 +121,15 @@ def mongo_find_job_by_ip(ip):
         job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip': ip})
     return job
 
+
+# TODO will need to be reworked, depending on architectural design decisions
 def mongo_find_job_by_ip_v6(ip):
     global mongo_jobs
     # Search by Service IPv6
     job = mongo_jobs.db.jobs.find_one({'service_ip_list.Address_v6': ip})
     if job is None:
         # Search by instance IPv6
-        job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip': ip})
+        job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip_v6': ip})
     return job
 
 def mongo_update_job_instance(system_job_id, instance):
@@ -455,7 +457,6 @@ def mongo_update_next_subnet_ip_v6(address):
     for n in address:
         assert 0 <= n < 256
     assert 252 <= address[0] <= 253
-    print("GOT TO UPDATE_NEXT_SUBNET_IP_V6:", address)
     netcache.update_one({'type': 'next_subnet_ipv6'}, {'$set': {'ipv6': address}})
 
 

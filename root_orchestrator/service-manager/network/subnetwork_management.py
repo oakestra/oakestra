@@ -331,17 +331,17 @@ def _increase_subnetwork_address(addr):
 
 def _increase_subnetwork_address_v6(addr):
     # convert subnet portion of addr to int and increase by one
-    addr_int = int.from_bytes(addr[0:14], byteorder='big')
+    addr_int = int.from_bytes(addr[0:15], byteorder='big')
     addr_int += 1
 
     # reconvert new subnet part to bytearray and right pad it with 0 to length 16
-    new_subnet = addr_int.to_bytes(14, byteorder='big')
+    new_subnet = addr_int.to_bytes(15, byteorder='big')
     new_subnet += bytes(16 - (len(new_subnet) % 16))
 
-    if new_subnet[0] == 253 and new_subnet[1] == 255:
-        # if the first 16 bits are fdff, we reached the limit of worker subnetworks
+    if new_subnet[0] == 253 and new_subnet[1] == 254:
+        # if the first 16 bits are fdfe, we reached the limit of worker subnetworks
         # fc00::/120 is the first available subnetwork
-        # fdfe:ffff:ffff:ffff:ffff:ffff:ffff:0/120 is the last available subnetwork
+        # fdfe:ffff:ffff:ffff:ffff:ffff:ffff:ff00/120 is the last available subnetwork
         raise RuntimeError("Exhausted IPv6 Address Space for workers")
 
     return new_subnet
