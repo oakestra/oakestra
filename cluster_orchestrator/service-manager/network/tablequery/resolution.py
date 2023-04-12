@@ -53,12 +53,14 @@ def service_resolution_ip(ip_string):
         instance_list: [{
                         instance_number: int
                         namespace_ip: string
+                        namespace_ip_v6: string
                         host_ip: string
                         host_port: string
                     }]
         service_ip_list: [{
                                 IpType: string
                                 Address: string
+                                Address_v6: string
                     }]
 
     """
