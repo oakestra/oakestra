@@ -7,48 +7,48 @@ mongodb_client = sys.modules['interfaces.mongodb_requests']
 def test_instance_address_base():
     mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_service_ip_v6= MagicMock(return_value=[253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-    mongodb_client.mongo_find_job_by_ip_v6 = MagicMock(return_value=None)
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
     mongodb_client.mongo_update_next_service_ip_v6 = MagicMock()
 
     ip1 = new_instance_ip_v6()
-    assert ip1 == "fd00:0000:0000:0000:0000:0000:0000:0000"
+    assert ip1 == "fdff:0000:0000:0000:0000:0000:0000:0000"
 
     mongodb_client.mongo_update_next_service_ip_v6.assert_called_with([253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
-"""
+
 def test_instance_address_complex():
-    mongodb_client.mongo_get_service_address_from_cache = MagicMock(return_value=None)
-    mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[10, 30, 0, 253])
-    mongodb_client.mongo_update_next_service_ip = MagicMock()
+    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(return_value=None)
+    mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(return_value=[253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 1, 1])
+    mongodb_client.mongo_update_next_service_ip_v6 = MagicMock()
     mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     ip1 = new_instance_ip_v6()
-    assert ip1 == "10.30.0.253"
+    assert ip1 == "fdff:0000:0000:0000:0000:0002:0000:0101"
 
-    mongodb_client.mongo_update_next_service_ip.assert_called_with([10, 30, 1, 0])
+    mongodb_client.mongo_update_next_service_ip_v6.assert_called_with([253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 1, 2])
 
 
 def test_instance_address_recycle():
     # mock mongo db
-    mongodb_client.mongo_get_service_address_from_cache = MagicMock(return_value=None)
-    mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[10, 30, 0, 0])
-    mongodb_client.mongo_update_next_service_ip = MagicMock()
-    mongodb_client.mongo_free_service_address_to_cache = MagicMock()
+    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(return_value=None)
+    mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(return_value=[253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    mongodb_client.mongo_update_next_service_ip_v6 = MagicMock()
+    mongodb_client.mongo_free_service_address_to_cache_v6 = MagicMock()
     mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     # test address generation
-    ip1 = new_instance_ip()
-    assert ip1 == "10.30.0.0"
+    ip1 = new_instance_ip_v6()
+    assert ip1 == "fdff:0000:0000:0000:0000:0000:0000:0000"
 
     # mock next address
-    mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[10, 30, 0, 1])
+    mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(return_value=[253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
 
     # test clearance condition
-    clear_instance_ip(ip1)
+    clear_instance_ip_v6(ip1)
 
-    mongodb_client.mongo_free_service_address_to_cache.assert_called_with([10, 30, 0, 0])
+    mongodb_client.mongo_free_service_address_to_cache_v6.assert_called_with([253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
-
+"""
 def test_instance_address_recycle_failure_1():
     # mock mongo db
     mongodb_client.mongo_get_service_address_from_cache = MagicMock(return_value=None)

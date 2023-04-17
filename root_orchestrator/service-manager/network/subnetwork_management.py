@@ -137,7 +137,7 @@ def new_job_rr_address_v6(job_data):
         if len(address_arr) == 8:
             if address_arr[0] != "fdff" and address_arr[1][0:2] != "10":
                 raise Exception("RR ip address must be in the subnet fdff:1000::/21")
-            job = mongodb_requests.mongo_find_job_by_ip_v6(address)
+            job = mongodb_requests.mongo_find_job_by_ip(address)
             if job is not None:
                 if job['job_name'] != job_name:
                     raise Exception("RR_ip_v6 address already used by another service")
@@ -164,7 +164,7 @@ def new_instance_ip_v6():
             if job is not None:
                 addr = None
 
-        return _addr_stringify_v6(addr)
+        return _addr_stringify(addr)
 
 
 def clear_instance_ip_v6(addr):
@@ -177,9 +177,8 @@ def clear_instance_ip_v6(addr):
 
     # Check if address is in the correct rage
     assert addr[0] == 253
-    for n in addr[1:5]:
-        assert n == 255
-
+    assert addr[1] == 255
+    assert addr[2] == 0 or addr[2] == 8
     with instance_ip_lock:
         next_addr = mongodb_requests.mongo_get_next_service_ip_v6()
 
@@ -227,7 +226,7 @@ def new_subnetwork_addr_v6():
             # change bytes array to int array
             mongodb_requests.mongo_update_next_subnet_ip_v6(list(next_addr))
 
-        return _addr_stringify_v6(addr)
+        return _addr_stringify(addr)
 
 
 def clear_subnetwork_ip_v6(addr):
@@ -348,17 +347,7 @@ def _increase_subnetwork_address_v6(addr):
 
 
 def _addr_stringify(addr):
-    res = ""
-    for n in addr:
-        res = res + str(n) + "."
-    return res[0:len(res) - 1]
-
-
-def _addr_stringify_v6(addr):
-    res = ""
-    for n in range(0, len(addr), 2):
-        res = res + hex(addr[n])[2:4].zfill(2) + hex(addr[n+1])[2:4].zfill(2) + ":"
-    return res[0:len(res) - 1]
+    return ipaddress.ip_address(bytes(addr)).exploded
 
 
 def _addr_destringify(addrstr):
