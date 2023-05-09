@@ -67,6 +67,10 @@ func EnableForwarding(bridgeName string, proxyName string) {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+	err = iptable.AppendUnique("nat", "OUTPUT", "-j", chain)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 }
 
 func EnableMasquerading(address string, mask string, bridgeName string, internetIfce string) {
@@ -142,7 +146,7 @@ func ManageContainerPorts(localContainerAddress string, portmapping string, oper
 	return nil
 }
 
-//check if the string is a valid network port
+// check if the string is a valid network port
 func isValidPort(port string) bool {
 	portInt, err := strconv.Atoi(port)
 	if err != nil {
