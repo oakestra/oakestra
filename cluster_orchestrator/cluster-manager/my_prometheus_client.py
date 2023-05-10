@@ -14,5 +14,4 @@ def prometheus_init_gauge_metrics(my_id):
 def prometheus_set_metrics(my_id, data):
     gauge_cpu.set(data.get('cpu_cores'))
     gauge_memory.set(data.get('cumulative_memory_in_mb'))
-    # TODO re-enable
-    #print('Metrics set.')
+    print('Metrics set.')

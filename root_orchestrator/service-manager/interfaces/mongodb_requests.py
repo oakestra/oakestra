@@ -111,7 +111,6 @@ def mongo_find_job_by_name(job_name):
     global mongo_jobs
     return mongo_jobs.db.jobs.find_one({'job_name': job_name})
 
-# TODO maybe explode IPv6? Check format consistency across all requests
 def mongo_find_job_by_ip(ip):
     global mongo_jobs
     print("Got search job by IP request with IP:", ip)

@@ -29,9 +29,8 @@ def handle_mqtt_message(client, userdata, message):
         payload=message.payload.decode()
     )
 
-    #TODO re-enable
-    #app.logger.info('MQTT - Received from worker: ')
-    #app.logger.info(data)
+    app.logger.info('MQTT - Received from worker: ')
+    app.logger.info(data)
 
     topic = data['topic']
 

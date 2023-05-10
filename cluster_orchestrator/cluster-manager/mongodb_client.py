@@ -65,10 +65,10 @@ def mongo_find_node_by_name(node_name):
 def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_cpu_used, cpu_cores_free, node_mem_used,
                                              node_memory_free_in_MB):
     global app, mongo_nodes
-    #TODO re-enable
-    #app.logger.info('MONGODB - update cpu and memory of worker node {0} ...'.format(node_id))
-    # o = mongo.db.nodes.find_one({'_id': node_id})
-    # print(o)
+
+    app.logger.info('MONGODB - update cpu and memory of worker node {0} ...'.format(node_id))
+    #o = mongo.db.nodes.find_one({'_id': node_id})
+    #print(o)
 
     time_now = datetime.now()
 

@@ -40,9 +40,9 @@ def re_deploy_dead_services_routine():
 
 
 def send_aggregated_info(my_id, data):
-    # TODO re-enable
-    #print('Sending aggregated information to System Manager.')
-    #print(SYSTEM_MANAGER_ADDR_v6)
+
+    print('Sending aggregated information to System Manager.')
+    print(SYSTEM_MANAGER_ADDR_v6)
     try:
         requests.post(SYSTEM_MANAGER_ADDR_v6 + '/api/information/' + str(my_id), json=data)
     except requests.exceptions.RequestException as e:

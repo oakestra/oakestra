@@ -144,6 +144,7 @@ def new_job_rr_address_v6(job_data):
             return address
         else:
             raise Exception("Invalid RR_ip_v6 address length")
+        # TODO write new function for correct subnet
     return new_instance_ip_v6()
 
 
@@ -337,17 +338,18 @@ def _increase_subnetwork_address_v6(addr):
     new_subnet = addr_int.to_bytes(15, byteorder='big')
     new_subnet += bytes(16 - (len(new_subnet) % 16))
 
-    if new_subnet[0] == 253 and new_subnet[1] == 254:
-        # if the first 16 bits are fdfe, we reached the limit of worker subnetworks
+    if new_subnet[0] == 253 and new_subnet[1] == 253:
+        # if the first 16 bits are fdfd, we reached the limit of worker subnetworks
         # fc00::/120 is the first available subnetwork
-        # fdfe:ffff:ffff:ffff:ffff:ffff:ffff:ff00/120 is the last available subnetwork
+        # fdfd:ffff:ffff:ffff:ffff:ffff:ffff:ff00/120 is the last available subnetwork
+        # fdfe::/16 is reserved for future use
         raise RuntimeError("Exhausted IPv6 Address Space for workers")
 
     return new_subnet
 
 
 def _addr_stringify(addr):
-    return ipaddress.ip_address(bytes(addr)).exploded
+    return str(ipaddress.ip_address(bytes(addr)))
 
 
 def _addr_destringify(addrstr):
