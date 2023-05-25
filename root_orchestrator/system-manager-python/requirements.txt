@@ -5,7 +5,7 @@ Flask_PyMongo
 flask_socketio
 eventlet~=0.33.0
 PyYAML~=6.0
-requests~=2.27.1
+requests~=2.31.0
 Cerberus
 prometheus-client
 jsonschema~=4.4.0
