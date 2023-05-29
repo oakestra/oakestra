@@ -4,7 +4,7 @@ import random
 import numpy as np
 import requests
 
-from calculation import AREAS
+from area_mappings import AREAS
 from mongodb_client import *
 from shapely.geometry import Point, Polygon
 from shapely.ops import nearest_points
@@ -13,8 +13,12 @@ from NetworkCoordinateSystem.network_measurements import parallel_ping
 from NetworkCoordinateSystem.vivaldi_coordinate import VivaldiCoordinate
 from NetworkCoordinateSystem.multilateration import multilateration
 
+# The test_session is used to mock the
+test_session = None
 
-def calculate(job, is_sla_violation=False, source_client_id=None, worker_ip_rtt_stats=None):
+def calculate(job, is_sla_violation=False, source_client_id=None, worker_ip_rtt_stats=None, session=None):
+    global test_session
+    test_session = session
     print('calculating...')
     # check here if job has any user preferences, e.g. on a specific node, a specific cpu architecture,
     constraints = job.get('constraints')
@@ -168,19 +172,19 @@ def create_worker_id_geolocation_info_mapping():
 def constraint_aware_scheduling(qualified_nodes, job, is_sla_violation, source_client_id, worker_ip_rtt_stats):
     # In case of a SLA violation the service should not be deployed to the violating worker.
     print(f"Qualified nodes: {[str(n.get('_id')) for n in qualified_nodes]}")
-    qualified_nodes = service_to_user_constraint_scheduling(qualified_nodes, job, is_sla_violation, source_client_id, worker_ip_rtt_stats)
+    qualified_nodes, ip_locations = service_to_user_constraint_scheduling(qualified_nodes, job, is_sla_violation, source_client_id, worker_ip_rtt_stats)
     print(f"Qualified nodes after S2U-filtering: {[str(n.get('_id')) for n in qualified_nodes]}")
     qualified_nodes, augmented_job = service_to_service_constraint_scheduling(qualified_nodes, job, source_client_id)
     print(f"Qualified nodes after S2S-filtering: {[str(n.get('_id')) for n in qualified_nodes]}")
 
     if len(qualified_nodes) == 0:
-        return 'negative', 'NoNodeFulfillsSLAConstraints', job
+        return 'negative', 'NoNodeFulfillsSLAConstraints', job, ip_locations
 
     # return first suitable node
     # shuffled_nodes = qualified_nodes.copy()
     # random.shuffle(shuffled_nodes)
     # return 'positive', shuffled_nodes[0], augmented_job
-    return 'positive', qualified_nodes[0], augmented_job
+    return 'positive', qualified_nodes[0], augmented_job, ip_locations
 
 def service_to_service_constraint_scheduling(qualified_nodes, job, source_client_id=None):
     # The worker on which the service might be deployed requires the public IP addresses and the location coordinates
@@ -252,6 +256,7 @@ def service_to_service_constraint_scheduling(qualified_nodes, job, source_client
 
 
 def service_to_user_constraint_scheduling(qualified_nodes, job, is_sla_violation, source_client_id, worker_ip_rtt_stats):
+    ip_locations = {}
     constraints = job.get('constraints')
     if len(constraints) == 0 or len(qualified_nodes) == 0:
         return qualified_nodes
@@ -264,7 +269,7 @@ def service_to_user_constraint_scheduling(qualified_nodes, job, is_sla_violation
             # If this is the initial service deployment there are no user latency information available yet.
             # Do an initial placement based on geographical proximity
             if is_sla_violation:
-                nodes = sla_alarm_latency_constraint_scheduling(constraint, qualified_nodes, source_client_id, worker_ip_rtt_stats)
+                nodes, ip_locations = sla_alarm_latency_constraint_scheduling(constraint, qualified_nodes, source_client_id, worker_ip_rtt_stats)
                 print(f"latency scheduling result: {[str(n.get('_id')) for n in nodes]}")
             else:
                 nodes = initial_latency_constraint_scheduling(constraint, qualified_nodes)
@@ -285,7 +290,7 @@ def service_to_user_constraint_scheduling(qualified_nodes, job, is_sla_violation
         if nr_constraints == len(cons):
             s2u_qualified_node_ids.append(node_id)
 
-    return [n for n in qualified_nodes if str(n.get("_id")) in s2u_qualified_node_ids]
+    return [n for n in qualified_nodes if str(n.get("_id")) in s2u_qualified_node_ids], ip_locations
 
 
 def initial_latency_constraint_scheduling(constraint, qualified_nodes):
@@ -369,7 +374,7 @@ def sla_alarm_latency_constraint_scheduling(constraint, qualified_nodes, source_
         else:
             print(f"Cluster has {qualified_nodes_size - 1} other suitable nodes. Find best target via NCS. ")
             # Add vivaldi and ping info of cluster orchestrator to data for multilateration
-            co_ip_rtt_stats = parallel_ping(worker_ip_rtt_stats.keys())
+            co_ip_rtt_stats = parallel_ping(worker_ip_rtt_stats.keys(), source_client_id)
             # Cluster orchestartor is passive member of network coordinate systems and therefore always remains in the
             # origin because it does not actively ping other nodes and updates its position.
             multilateration_data["CO"] = (np.zeros(vivaldi_dim), co_ip_rtt_stats)
@@ -404,7 +409,11 @@ def sla_alarm_latency_constraint_scheduling(constraint, qualified_nodes, source_
                         try:
                             if address is None:
                                 raise ValueError("No address found")
-                            response = requests.post(address, json=json.dumps(list(worker_ip_rtt_stats.keys())))
+                            # Note: For tests the mocked session is used
+                            if test_session is not None:
+                                response = test_session.post(address, json=json.dumps(list(worker_ip_rtt_stats.keys())))
+                            else:
+                                response = requests.post(address, json=json.dumps(list(worker_ip_rtt_stats.keys())))
                             rnd_worker_ip_rtt_stats = response.json()
                             multilateration_data[str(n.get("_id"))] = (rnd_worker_vivaldi_coord.vector, rnd_worker_ip_rtt_stats)
                         except requests.exceptions.RequestException as e:
@@ -437,7 +446,7 @@ def sla_alarm_latency_constraint_scheduling(constraint, qualified_nodes, source_
                 qualified_worker_ids = find_vivaldi_coords_in_range(min_dist_point, range, tol, vivaldi_network)
                 # closest_worker_id = find_closest_vivaldi_coord(min_dist_point, vivaldi_network)
 
-            return [n for n in qualified_nodes if str(n.get("_id")) in qualified_worker_ids and str(n.get("_id")) != source_client_id]
+            return [n for n in qualified_nodes if str(n.get("_id")) in qualified_worker_ids and str(n.get("_id")) != source_client_id], ip_locations # TODO: remove ip_location after evaluations
 
     else:
         print(f"No active nodes.")

@@ -11,5 +11,5 @@ GERMANY = Polygon([[53.69039499952727, 7.19896078851138],[54.83252457729241, 9.0
 AREAS = {
     "munich": MUNICH,
     "garching": GARCHING,
-    "germany": GERMANY # Used for testing different latency measures from requests within geremany
+    "germany": GERMANY # Used for testing different latency measures from requests within germany
 }

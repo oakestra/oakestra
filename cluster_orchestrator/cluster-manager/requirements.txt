@@ -8,7 +8,7 @@ requests
 pyyaml
 APScheduler
 prometheus-client
-shapely
+shapely==1.7.1
 alphashape
 scikit-learn
 pyproj
