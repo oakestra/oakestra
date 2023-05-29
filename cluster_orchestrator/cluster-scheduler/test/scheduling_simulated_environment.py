@@ -7,7 +7,7 @@ import os
 import sys
 import geopy.distance
 import requests
-from util import create_job, prepare, find_ip_for_id, shuffle_measurements, find_id_for_ip, vivaldi_coordinate_dimension
+from util import create_job, prepare, find_ip_for_id, shuffle_measurements, find_id_for_ip, vivaldi_coordinate_dimension, s2s_target_id
 import numpy as np
 
 myPath = os.path.dirname(os.path.abspath(__file__))
@@ -21,7 +21,7 @@ nat_results = [["overhead", "setup", "result_id", "rtt_to_trg", "viv_trg_dist",
             "min_rtt_to_trg", "s2s_cap", "rtt_to_user", "viv_user_dist", "min_rtt_to_user", "s2u_cap", "s2u_dist", "s2s_dist"]]
 
 # Number of experiments to run
-experiments = 7000
+experiments = 5000
 # Number of scheduling runs per experiment
 runs = 5
 # Number of worker nodes in the simulated edge environment
@@ -36,11 +36,11 @@ s2u_geo_location = "48.13189654815318, 11.585990847392225"
 s2u_geo_threshold = 100
 # Latency constraint for Service-to-User scheduling
 s2u_lat_area = "munich"
-# Scheduling threshold for the Service-to-User constraint in milliseconds
+# Threshold for the Service-to-User latency constraint in milliseconds
 s2u_lat_threshold = 20
-# ATTENTION: change target id in util.py accordingly to avoid false results
-s2s_target_id = "6"
+# Threshold for the Service-to-Service latency constraint in milliseconds
 s2s_lat_threshold = 20
+# Threshold for the Service-to-Service geographic constraint in kilometers
 s2s_geo_threshold = 100
 
 
@@ -119,14 +119,14 @@ class SchedulingSimulatedEnvironment(unittest.TestCase):
         global nat_results
         import os
         x = os.getcwd()
-        with open(f"results/casa_{nr_nodes}workers_{iterations}iterations_{neighbors}neighbors_{vivaldi_coordinate_dimension}dim.csv", "w", newline="") as f:
+        with open(f"results/casa_{nr_nodes}workers.csv", "w", newline="") as f:
             csv_writer = csv.writer(f, delimiter=",")
             csv_writer.writerows(casa_results)
         casa_results = [["overhead", "setup", "result_id", "rtt_to_trg", "viv_trg_dist",
                     "min_rtt_to_trg", "s2s_cap", "rtt_to_user", "viv_user_dist", "min_rtt_to_user", "s2u_cap"]]
         f.close()
 
-        with open(f"results/nat_{nr_nodes}workers_{iterations}iterations_{neighbors}neighbors_{vivaldi_coordinate_dimension}dim.csv", "w", newline="") as f:
+        with open(f"results/nat_{nr_nodes}workers_.csv", "w", newline="") as f:
             csv_writer = csv.writer(f, delimiter=",")
             csv_writer.writerows(nat_results)
         nat_results = [["overhead", "setup", "result_id", "rtt_to_trg", "viv_trg_dist",
