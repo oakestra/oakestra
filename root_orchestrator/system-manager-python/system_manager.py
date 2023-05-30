@@ -186,7 +186,7 @@ def handle_init_client(message):
                     format(request.remote_addr, request.environ.get('REMOTE_PORT')))
     app.logger.info(message)
     net_port = message['network_component_port']
-    del message['manager_port']
+    # del message['manager_port']
     del message['network_component_port']
     app.logger.info("MONGODB - checking if the cluster introduced is in our Database...")
     existing_cl = mongo_find_by_username(message)
