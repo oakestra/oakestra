@@ -14,7 +14,7 @@ from pathlib import Path
 from werkzeug.utils import secure_filename, redirect
 
 from ext_requests.cluster_db import mongo_find_by_name_and_location, mongo_update_pairing_complete, \
-    mongo_find_by_username, mongo_delete_cluster
+    mongo_find_by_username, mongo_delete_cluster, mongo_upsert_cluster
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
 from ext_requests.user_db import create_admin
@@ -108,7 +108,7 @@ def check_if_keys_match(token_info, message):
         return False
 
 
-def token_validation(message, key_type, cluster, net_port):
+def token_validation(message, key_type, cluster, net_port, cluster_ip):
     cluster_id = str(cluster['_id'])
     try:
         token_info = check_jwt_token_validity(message[key_type])
@@ -118,6 +118,7 @@ def token_validation(message, key_type, cluster, net_port):
             response = {
                 'id': cluster_id
             }
+            mongo_upsert_cluster(cluster_ip, message)
             if key_type == 'pairing_key':
                 mongo_update_pairing_complete(cluster_id)
                 net_register_cluster(
@@ -201,9 +202,9 @@ def handle_init_client(message):
                 'id': str(existing_cl['_id'])
             }
         else:
-            response = token_validation(message, 'secret_key', existing_cl, net_port)
+            response = token_validation(message, 'secret_key', existing_cl, net_port, request.remote_addr)
     else:
-        response = token_validation(message, 'pairing_key', existing_cl, net_port)
+        response = token_validation(message, 'pairing_key', existing_cl, net_port, request.remote_addr)
 
     emit('sc2', json.dumps(response), namespace='/register')
 
