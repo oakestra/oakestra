@@ -10,14 +10,11 @@ def mongo_upsert_cluster(cluster_ip, message):
     clusters = db.mongo_clusters.db.clusters
     cluster_info = message['cluster_info']
     cluster_name = message['cluster_name']
-    # cluster_location = message['cluster_location']
-    cluster_latitude = message['cluster_latitude']
-    cluster_longitude = message['cluster_longitude']
+    cluster_location = message['cluster_location']
     cluster_port = message['manager_port']
     result_obj = clusters.update_one({'cluster_name': cluster_name},
                                      {'$set': {'ip': cluster_ip, 'clusterinfo': cluster_info, 'port': cluster_port,
-                                               'cluster_latitude': cluster_latitude,
-                                               'cluster_longitude': cluster_longitude}},
+                                               'cluster_location': cluster_location}},
                                      upsert=True)
 
     cluster_obj = clusters.find_one({'cluster_name': cluster_name})
@@ -62,9 +59,9 @@ def mongo_find_cluster_by_id_and_decr_node(c_id):
     return db.mongo_clusters.db.clusters.update_one({'_id': c_id}, {'$inc': {'nodes': -1}}, upsert=True)
 
 
-def mongo_find_cluster_by_location(latitude, longitude):
+def mongo_find_cluster_by_location(location):
     try:
-        return db.mongo_clusters.db.clusters.find_one({'cluster_latitude': latitude, 'cluster_longitude': longitude})
+        return db.mongo_clusters.db.clusters.find_one({'cluster_location': location})
     except Exception as e:
         return "Error"
 
@@ -129,8 +126,7 @@ def mongo_delete_cluster(cluster_id):
 
 def mongo_find_by_name_and_location(cluster):
     return db.mongo_clusters.db.clusters.find_one({'cluster_name': cluster['cluster_name'],
-                                                   'cluster_latitude': cluster['cluster_latitude'],
-                                                   'cluster_longitude': cluster['cluster_longitude']})
+                                                   'cluster_location': cluster['cluster_location']})
 
 
 def mongo_update_pairing_complete(cluster_id):

@@ -37,8 +37,7 @@ def app(request):
                     "aud": "addClusterAPI",
                     "sub": "identity",
                     "clusterName": "dummy2",
-                    "latitude": "1",
-                    "longitude": "2",
+                    "location": "1,3,3",
                     "num": str(randint(0, 99999999))
                 },
                 fresh=True
