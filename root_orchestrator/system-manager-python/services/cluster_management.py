@@ -13,12 +13,12 @@ def valid_cluster_requirements(cluster):
     return True
 
 
-def register_cluster(cluster, userid):
+def register_cluster(cluster, username):
     if "action" in cluster:
         del cluster['action']
     if "_id" in cluster:
         del cluster['_id']
-    if userid is None:
+    if username is None:
         return {"message": "Please log in with your credentials"}, 403
     if cluster is None:
         return {"message": "No cluster data provided"}, 403
@@ -28,7 +28,7 @@ def register_cluster(cluster, userid):
     if cl_ob is not None and not cl_ob['pairing_complete']:
         return {'message': 'There is another cluster with the same exact location trying to pair'}, 422
 
-    cluster['userId'] = userid
+    cluster['user_name'] = username
     cluster['pairing_complete'] = False
     cluster_id = mongo_add_cluster(cluster)
     if cluster_id == "":

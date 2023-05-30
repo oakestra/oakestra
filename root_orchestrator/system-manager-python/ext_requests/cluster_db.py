@@ -109,7 +109,6 @@ def mongo_get_clusters_of_user(user_id):
 
 def mongo_add_cluster(data):
     db.app.logger.info("MONGODB - insert cluster...")
-    userid = data.get('userId')
     new_job = db.mongo_clusters.db.clusters.insert_one(data)
     inserted_id = new_job.inserted_id
 
