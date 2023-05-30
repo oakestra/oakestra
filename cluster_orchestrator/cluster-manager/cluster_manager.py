@@ -22,6 +22,7 @@ MY_PORT = os.environ.get('MY_PORT')
 NETWORK_COMPONENT_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
 
 CLUSTER_NAME = os.getenv('CLUSTER_NAME')
+CLUSTER_LOCATION = os.getenv('CLUSTER_LOCATION')
 CLUSTER_PAIRING_KEY = os.getenv('CLUSTER_PAIRING_KEY', None)
 USER_NAME = os.getenv('USER_NAME')
 CLUSTER_SECRET_KEY = os.environ.get('CLUSTER_SECRET_KEY', None)
@@ -190,6 +191,7 @@ def handle_init_greeting(jsonarg):
         'cluster_info': {},
         'pairing_key': CLUSTER_PAIRING_KEY,
         'secret_key': CLUSTER_SECRET_KEY,
+        'cluster_location': CLUSTER_LOCATION,
        # 'secret_key': mongo_find_key_by_id(MY_ASSIGNED_CLUSTER_ID),  # global variables set to None everytime we run
         # todo find a way to get the cluster id
         'user_name': USER_NAME
