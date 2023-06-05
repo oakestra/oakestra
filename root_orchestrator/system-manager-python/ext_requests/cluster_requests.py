@@ -13,7 +13,6 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
     # adjusted cluster_addr for ipv6
     try:
         cluster_addr = 'http://[' + cluster.get('ip') + ']:' + str(cluster.get('port')) + '/api/deploy/' + str(job_id) + "/" + str(instance_number)
-        print("Cluster_addr used: ", cluster_addr)
         job['_id'] = str(job['_id'])
         resp = requests.post(cluster_addr, json=job)
         print(resp)

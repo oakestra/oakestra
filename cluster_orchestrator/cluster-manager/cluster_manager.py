@@ -55,7 +55,7 @@ BACKGROUND_JOB_INTERVAL = 5
 def hello_world():
     app.logger.info('Hello World Request')
     app.logger.info('Processing default request')
-    return "Hello, World! This is Cluster Manager's REST API - PATCHED"
+    return "Hello, World! This is Cluster Manager's REST API - dual-stack enabled!"
 
 
 @app.route('/status')

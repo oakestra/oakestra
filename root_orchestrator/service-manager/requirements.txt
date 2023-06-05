@@ -1,8 +1,0 @@
-Flask
-Flask_PyMongo
-Flask-SocketIO
-eventlet
-PyYAML
-requests
-Cerberus
-prometheus-client

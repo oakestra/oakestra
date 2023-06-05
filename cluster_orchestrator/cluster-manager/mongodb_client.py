@@ -67,8 +67,8 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_cpu_used, cpu_cores_f
     global app, mongo_nodes
 
     app.logger.info('MONGODB - update cpu and memory of worker node {0} ...'.format(node_id))
-    #o = mongo.db.nodes.find_one({'_id': node_id})
-    #print(o)
+    # o = mongo.db.nodes.find_one({'_id': node_id})
+    # print(o)
 
     time_now = datetime.now()
 
@@ -135,7 +135,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
             else:
                 print('Node {0} is inactive.'.format(n.get('_id')))
         except Exception as e:
-            #print("Problem during the aggregation of the data, skipping the node: ", str(n), " - because - ", str(e))
+            print("Problem during the aggregation of the data, skipping the node: ", str(n), " - because - ", str(e))
             continue
 
     mongo_update_jobs_status(TIME_INTERVAL)

@@ -2,7 +2,6 @@ version: "2.4"
 services:
 
   # MQTT 
-  # Dual-Stack: DONE
   mqtt:
     image: eclipse-mosquitto:2.0
     hostname: mqtt
@@ -48,7 +47,6 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
 
   # cluster-level mongoDB
-  # Dual-Stack: DONE
   mongo_clusternet:
     image: mongo:3.6
     container_name: cluster_mongo_net
@@ -67,7 +65,6 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
 
   # Cluster Manager
-  # Dual-Stack: DONE on patched image
   cluster_service_manager:
     #image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:v0.04.amd64.experimental
     image: cluster-service-manager
@@ -87,7 +84,7 @@ services:
       - MQTT_BROKER_PORT=10003
       - MQTT_BROKER_URL=mqtt
       - ROOT_SERVICE_MANAGER_URL=192.168.178.22
-      - ROOT_SERVICE_MANAGER_URL_v6=[2001:a61:12bc:8301:aad4:89b7:65b6:5f76]
+      - ROOT_SERVICE_MANAGER_URL_v6=[2001:a61:12bc:8301:db37:2530:881:62e2]
       - ROOT_SERVICE_MANAGER_PORT=10099
       - SYSTEM_MANAGER_URL=cluster_manager
       - SYSTEM_MANAGER_PORT=10000
@@ -101,9 +98,6 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
 
   # Cluster Manager
-  # Dual-Stack:
-  # Port 10100 DONE
-  # Port 10101 TODO ask what this port does
   cluster_manager:
     image: cluster_manager
     build: cluster-manager/
@@ -122,7 +116,7 @@ services:
     environment:
       - MY_PORT=10100
       - SYSTEM_MANAGER_URL=192.168.178.22
-      - SYSTEM_MANAGER_URL_v6=[2001:a61:12bc:8301:aad4:89b7:65b6:5f76]
+      - SYSTEM_MANAGER_URL_v6=[2001:a61:12bc:8301:db37:2530:881:62e2]
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
       - CLUSTER_SERVICE_MANAGER_PORT=10110
@@ -144,7 +138,6 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
 
   # Cluster Scheduler
-  # Dual-Stack: DONE
   cluster_scheduler:
     image: cluster_scheduler
     build: cluster-scheduler/
@@ -173,7 +166,6 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
 
   # Redis for the Cluster Scheduler as Job Queue
-  # Dual-Stack: DONE
   cluster_redis:
     image: redis
     hostname: cluster_redis
@@ -189,7 +181,6 @@ services:
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
 
-  # Dual-Stack: DONE
   prometheus:
     image: prom/prometheus
     container_name: prometheus
