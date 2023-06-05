@@ -1,5 +1,5 @@
 from blueprints.schema_wrapper import SchemaWrapper
-from roles.securityUtils import jwt_auth_required, identity_is_username
+from roles.securityUtils import jwt_auth_required, identity_is_username, get_jwt_organization
 from users.auth import user_get_roles
 from flask_smorest import Blueprint, Api, abort
 from flask.views import MethodView
@@ -23,7 +23,8 @@ class UserPermissionController(MethodView):
     @jwt_auth_required()
     @identity_is_username()
     def get(self, username):
-        user = user_get_roles(username)
+        organization_id = get_jwt_organization()
+        user = user_get_roles(username, organization_id)
         print(user)
         if user is not None:
             return {"roles": user['roles']}
