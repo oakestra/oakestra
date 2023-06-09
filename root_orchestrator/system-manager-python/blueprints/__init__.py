@@ -6,6 +6,7 @@ from blueprints.authentication_blueprints import loginbp
 from blueprints.deployment_blueprints import deploybp
 from blueprints.applications_blueprints import applicationsblp,applicationblp
 from blueprints.users_blueprints import userbp, usersbp
+from blueprints.organization_blueprints import organizationblp
 
 blueprints = [
     serviceblp,
@@ -19,5 +20,6 @@ blueprints = [
     usersbp,
     schedulingbp,
     clusterinfo,
-    clustersbp
+    clustersbp,
+    organizationblp
 ]
