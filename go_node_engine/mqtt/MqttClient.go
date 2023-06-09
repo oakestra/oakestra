@@ -126,6 +126,7 @@ func deleteHandler(client mqtt.Client, msg mqtt.Message) {
 	err = runtime.Undeploy(service.Sname, service.Instance)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to undeploy application: %s", err.Error())
+		return
 	}
 	service.Status = model.SERVICE_UNDEPLOYED
 	ReportServiceStatus(service)
