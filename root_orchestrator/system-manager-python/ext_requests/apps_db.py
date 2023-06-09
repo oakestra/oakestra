@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from bson import ObjectId
 
 import ext_requests.mongodb_client as db
@@ -43,12 +45,15 @@ def mongo_update_job_status(job_id, status, status_detail, instances=None):
     instance_list = job.get('instance_list')
     if instances is not None:
         for instance in instances:
+            current_time = datetime.now()
+            cpu_update = {'value': instance.get('cpu'), 'timestamp': current_time}
+            memory_update = {'value': instance.get('memory'), 'timestamp': current_time}
             db.mongo_services.update_one(
                 {'_id': ObjectId(job_id),
                  "instance_list": {'$elemMatch': {'instance_number': instance['instance_number']}}},
-                {'$set': {"instance_list.$.cpu": instance.get('cpu'),
-                          "instance_list.$.publicip": instance.get('publicip'),
-                          "instance_list.$.memory": instance.get('memory'),
+                {'$push': {"instance_list.$.cpu": {'$each': [cpu_update], '$slice': -100}},
+                 '$push': {"instance_list.$.memory": {'$each': [memory_update], '$slice': -100}},
+                 '$set': {"instance_list.$.publicip": instance.get('publicip'),
                           "instance_list.$.disk": instance.get('disk'),
                           "instance_list.$.status": instance.get('status'),
                           "instance_list.$.status_detail": instance.get('status_detail', "No extra information")}
