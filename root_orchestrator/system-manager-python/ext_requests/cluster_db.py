@@ -90,8 +90,10 @@ def mongo_update_cluster_information(cluster_id, data):
     db.mongo_clusters.db.clusters.find_one_and_update(
         {'_id': ObjectId(cluster_id)},
         {
-            '$push': {'cpu_history': {'$each': [cpu_update], '$slice': -100}},
-            '$push': {'memory_history': {'$each': [memory_update], '$slice': -100}},
+            '$push': {
+                "cpu_history": {'$each': [cpu_update], '$slice': -100},
+                "memory_history": {'$each': [memory_update], '$slice': -100}
+            },
             '$set': {'aggregated_cpu_percent': cpu_percent, 'total_cpu_cores': cpu_cores,
                   'total_gpu_cores': gpu_cores, 'total_gpu_percent': gpu_percent,
                   'aggregated_memory_percent': memory_percent, 'memory_in_mb': memory_in_mb,
