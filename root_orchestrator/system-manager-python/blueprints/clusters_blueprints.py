@@ -67,7 +67,6 @@ cluster_op_schema = {
     "properties": {
         "cluster_name": {"type": "string"},
         "cluster_location": {"type": "string"},
-        "user_name": {"type": "string"}
     }
 }
 
