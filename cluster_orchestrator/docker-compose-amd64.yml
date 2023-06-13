@@ -36,7 +36,7 @@ services:
   mongo_clusternet:
     image: mongo:3.6
     container_name: cluster_mongo_net
-    hostname: cluster_mongo_net --ipv6
+    hostname: cluster_mongo_net
     ports:
       - "10108:10108"
     volumes:
