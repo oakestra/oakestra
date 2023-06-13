@@ -168,8 +168,8 @@ services:
       - CLUSTER_SCHEDULER_PORT=10105
       - MQTT_BROKER_URL=localhost
       - MQTT_BROKER_PORT=10003
-      - CLUSTER_NAME=WALHALLA
-      - CLUSTER_LOCATION=PARIS
+      - CLUSTER_NAME=${CLUSTER_NAME}
+      - CLUSTER_LOCATION=${CLUSTER_LOCATION}
     depends_on:
       - mongo_cluster
       - mqtt
