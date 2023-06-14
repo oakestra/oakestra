@@ -1,5 +1,6 @@
 import json
 import threading
+import socket
 
 from bson import json_util, ObjectId
 from flask import flash, request
@@ -157,4 +158,4 @@ def upload_file():
 if __name__ == '__main__':
     import eventlet
 
-    eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)
+    eventlet.wsgi.server(eventlet.listen(('::', int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger)

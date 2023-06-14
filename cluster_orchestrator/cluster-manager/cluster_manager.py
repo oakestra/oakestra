@@ -3,6 +3,7 @@ from flask import Flask, request
 from flask_socketio import SocketIO, emit
 import json
 import socketio
+import socket
 import sys
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
@@ -28,6 +29,7 @@ NETWORK_COMPONENT_PORT = os.environ.get('CLUSTER_SERVICE_MANAGER_PORT')
 MY_ASSIGNED_CLUSTER_ID = None
 
 SYSTEM_MANAGER_ADDR = 'http://' + os.environ.get('SYSTEM_MANAGER_URL') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
+SYSTEM_MANAGER_ADDR_v6 = 'http://' + os.environ.get('SYSTEM_MANAGER_URL_v6') + ':' + os.environ.get('SYSTEM_MANAGER_PORT')
 
 my_logger = configure_logging()
 
@@ -53,7 +55,7 @@ BACKGROUND_JOB_INTERVAL = 5
 def hello_world():
     app.logger.info('Hello World Request')
     app.logger.info('Processing default request')
-    return "Hello, World! This is Cluster Manager's REST API"
+    return "Hello, World! This is Cluster Manager's REST API - dual-stack enabled!"
 
 
 @app.route('/status')
@@ -235,7 +237,7 @@ def disconnect(m):
 def init_cm_to_sm():
     app.logger.info('Connecting to System_Manager...')
     try:
-        sio.connect(SYSTEM_MANAGER_ADDR + '/register', namespaces=['/register'])
+        sio.connect(SYSTEM_MANAGER_ADDR_v6 + '/register', namespaces=['/register'])
     except Exception as e:
         app.logger.error('SocketIO - Connection Establishment with System Manager failed!')
     time.sleep(1)
@@ -276,4 +278,4 @@ if __name__ == '__main__':
     import eventlet
 
     init_cm_to_sm()
-    eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)  # see README for logging notes
+    eventlet.wsgi.server(eventlet.listen(('::', int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger)  # see README for logging notes
