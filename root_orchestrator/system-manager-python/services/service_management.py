@@ -93,7 +93,8 @@ def generate_db_structure(application, microservice):
         microservice["virtualization"] = "docker"
     addresses = microservice.get("addresses")
     if addresses is not None:
-        microservice["RR_ip"] = addresses.get("rr_ip")  # compatibility with older netmanager versions
+        microservice["RR_ip"] = addresses.get("rr_ip")          # compatibility with older netmanager versions
+        microservice["RR_ip_v6"] = addresses.get("rr_ip_v6")  
     return microservice
 
 
