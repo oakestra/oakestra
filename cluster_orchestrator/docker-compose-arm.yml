@@ -46,7 +46,7 @@ services:
 
 # Cluster Manager
   cluster_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:v0.04.arm.experimental
+    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
     container_name: cluster_service_manager
     hostname: cluster_service_manager
     expose:

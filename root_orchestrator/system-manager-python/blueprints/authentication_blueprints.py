@@ -6,6 +6,7 @@ from roles.securityUtils import *
 from flask_smorest import Api, abort
 from blueprints.jwt_wrapper import BlueprintExt
 from flask.views import MethodView
+from bson import json_util
 
 loginbp = BlueprintExt(
     'Login', 'auth', url_prefix='/api/auth'
@@ -16,6 +17,7 @@ login_schema = {
     "properties": {
         "username": {"type": "string"},
         "password": {"type": "string"},
+        "organization": {"type" : "string"},
     }
 }
 register_schema = {
@@ -54,7 +56,8 @@ class UserRegisterController(Resource):
     @require_role(Role.ADMIN)
     def post(self, *args,  **kwargs):
         content = request.get_json()
-        return user_register(content)
+        organization_id = get_jwt_organization()
+        return json_util.dumps(user_register(content, organization_id))
 
 
 @loginbp.route("/refresh")

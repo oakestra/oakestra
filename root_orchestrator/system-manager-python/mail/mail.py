@@ -1,8 +1,9 @@
+import os
 import smtplib
 from email.message import EmailMessage
 
-gmail_user = 'edgeio.team@gmail.com'
-gmail_password = 'Edge10.pas21'
+gmail_user = os.environ.get('MAIL_USER', '')
+gmail_password = os.environ.get('MAIL_PASSWORD', '')
 
 
 class MailFactory:
@@ -37,9 +38,9 @@ class RegistrationMailFactory(MailFactory):
 
     def create_message(self) -> EmailMessage:
         msg = EmailMessage()
-        msg['Subject'] = "EdgeIO-Project | Registration successful"
-        content = 'Welcome to EdgeIO-Team!\n' \
-                  'You are successfully registered at EdgeIO-Project!\n' \
+        msg['Subject'] = "Oakestra-Project | Registration successful"
+        content = 'Welcome to Oakestra-Team!\n' \
+                  'You are successfully registered at Oakestra-Project!\n' \
                   'Your username: {username}\n' \
                   'Your password: {password}\n' \
                   'Your roles: {roles}'
@@ -55,7 +56,7 @@ class UserUpdateMailFactory(MailFactory):
 
     def create_message(self) -> EmailMessage:
         msg = EmailMessage()
-        msg['Subject'] = "EdgeIO-Project | User account updated"
+        msg['Subject'] = "Oakestra-Project | User account updated"
         content = 'Hi {username}!\n' \
                   'You account was updated by one of our admins.\n' \
                   'Your new data is: \n' \
@@ -72,7 +73,7 @@ class UserUpdateMailFactory(MailFactory):
 class ResetPasswordMailFactory(MailFactory):
     def create_message(self) -> EmailMessage:
         msg = EmailMessage()
-        msg['Subject'] = "EdgeIO-Project | Please reset your password"
+        msg['Subject'] = "Oakestra-Project | Please reset your password"
         content = 'Hi {username}!\n' \
                   'We are sorry that you lost your password!\n' \
                   'To reset your password, press: {link}\n' \

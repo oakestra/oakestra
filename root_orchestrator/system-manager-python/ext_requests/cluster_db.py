@@ -69,6 +69,9 @@ def mongo_find_cluster_by_location(location):
 def mongo_update_cluster_information(cluster_id, data):
     """Save aggregated Cluster Information"""
 
+    datetime_now = datetime.now()
+    datetime_now_timestamp = datetime.timestamp(datetime_now)
+
     cpu_percent = data.get('cpu_percent')
     cpu_cores = data.get('cpu_cores')
     memory_percent = data.get('memory_percent')
@@ -80,13 +83,18 @@ def mongo_update_cluster_information(cluster_id, data):
     virtualization = data.get('virtualization')
     more = data.get('more')
     worker_groups = data.get('worker_groups')
+    cpu_update = {'value': cpu_percent, 'timestamp': datetime_now_timestamp}
+    memory_update = {'value': memory_percent, 'timestamp': datetime_now_timestamp}
 
-    datetime_now = datetime.now()
-    datetime_now_timestamp = datetime.timestamp(datetime_now)
 
     db.mongo_clusters.db.clusters.find_one_and_update(
         {'_id': ObjectId(cluster_id)},
-        {'$set': {'aggregated_cpu_percent': cpu_percent, 'total_cpu_cores': cpu_cores,
+        {
+            '$push': {
+                "cpu_history": {'$each': [cpu_update], '$slice': -100},
+                "memory_history": {'$each': [memory_update], '$slice': -100}
+            },
+            '$set': {'aggregated_cpu_percent': cpu_percent, 'total_cpu_cores': cpu_cores,
                   'total_gpu_cores': gpu_cores, 'total_gpu_percent': gpu_percent,
                   'aggregated_memory_percent': memory_percent, 'memory_in_mb': memory_in_mb,
                   'active_nodes': nodes, 'virtualization': virtualization, 'more': more,

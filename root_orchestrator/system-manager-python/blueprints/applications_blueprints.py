@@ -99,7 +99,8 @@ class MultipleApplicationControllerUser(Resource):
     @jwt_required()
     def get(self, userid):
         current_user = get_jwt_identity()
-        user = mongo_get_user_by_name(current_user)
+        organization_id = get_jwt_organization()
+        user = mongo_get_user_by_name(current_user, organization_id)
         if userid != str(user['_id']):
             abort(401, {"message": "Unauthorized"})
         return json_util.dumps(users_apps(current_user))
