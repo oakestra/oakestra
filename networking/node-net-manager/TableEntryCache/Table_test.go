@@ -1,6 +1,7 @@
 package TableEntryCache
 
 import (
+	"fmt"
 	"net"
 	"testing"
 )
@@ -137,7 +138,7 @@ func TestTableDeleteMany(t *testing.T) {
 	}
 }
 
-func TestTableDeleteManyInstances(t *testing.T) {
+func TestTableDeleteManyInstances_1(t *testing.T) {
 	table := NewTableManager()
 	entry1 := TableEntry{
 		Appname:          "a1",
@@ -200,6 +201,59 @@ func TestTableDeleteManyInstances(t *testing.T) {
 
 	if len(table.translationTable) > 1 {
 		t.Error("Table size should be 1")
+	}
+
+	if len(table.SearchByJobName("a1.a1.a2.a2")) > 0 {
+		t.Errorf("a1 should not be there: %v", table.SearchByJobName("a1.a1.a2.a2"))
+	}
+}
+
+func TestTableDeleteManyInstances_2(t *testing.T) {
+	table := NewTableManager()
+	entry1 := TableEntry{
+		Appname:          "a1",
+		Appns:            "a1",
+		Servicename:      "a2",
+		Servicenamespace: "a2",
+		JobName:          "a1.a1.a2.a2",
+		Instancenumber:   0,
+		Cluster:          0,
+		Nodeip:           net.ParseIP("10.30.0.1"),
+		Nodeport:         1003,
+		Nsip:             net.ParseIP("10.18.0.1"),
+		ServiceIP: []ServiceIP{{
+			IpType:  RoundRobin,
+			Address: net.ParseIP("10.30.1.1"),
+		}},
+	}
+	entry2 := TableEntry{
+		Appname:          "a1",
+		Appns:            "a1",
+		Servicename:      "a2",
+		Servicenamespace: "a2",
+		JobName:          "a1.a1.a2.a2",
+		Instancenumber:   1,
+		Cluster:          0,
+		Nodeip:           net.ParseIP("10.30.0.1"),
+		Nodeport:         1003,
+		Nsip:             net.ParseIP("10.18.0.2"),
+		ServiceIP: []ServiceIP{{
+			IpType:  RoundRobin,
+			Address: net.ParseIP("10.30.1.2"),
+		}},
+	}
+
+	_ = table.Add(entry1)
+	_ = table.Add(entry2)
+
+	err := table.RemoveByJobName("a1.a1.a2.a2")
+	if err != nil {
+		t.Errorf("Error during deletion: %v", err)
+	}
+
+	if len(table.translationTable) != 0 {
+		fmt.Printf("%v", table.translationTable)
+		t.Error(fmt.Sprintf("Table size should be 0, instead is %d", len(table.translationTable)))
 	}
 
 	if len(table.SearchByJobName("a1.a1.a2.a2")) > 0 {

@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/tkanos/gonfig"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 )
@@ -25,6 +25,11 @@ type undeployRequest struct {
 
 type registerRequest struct {
 	ClientID string `json:"client_id"`
+}
+
+type DeployResponse struct {
+	ServiceName string `json:"serviceName"`
+	NsAddress   string `json:"nsAddress"`
 }
 
 type netConfiguration struct {
@@ -71,7 +76,7 @@ func containerUndeploy(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	reqBody, _ := ioutil.ReadAll(request.Body)
+	reqBody, _ := io.ReadAll(request.Body)
 	var requestStruct undeployRequest
 	err := json.Unmarshal(reqBody, &requestStruct)
 	if err != nil {
@@ -141,22 +146,41 @@ func containerDeploy(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	reqBody, _ := ioutil.ReadAll(request.Body)
+	reqBody, _ := io.ReadAll(request.Body)
 	log.Println("ReqBody received :", reqBody)
-	var requestStruct handlers.ContainerDeployRequest
-	err := json.Unmarshal(reqBody, &requestStruct)
+	var deployTask handlers.ContainerDeployTask
+	err := json.Unmarshal(reqBody, &deployTask)
 	if err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
 	}
-	requestStruct.PublicAddr = Configuration.NodePublicAddress
-	requestStruct.PublicPort = Configuration.NodePublicPort
-	requestStruct.Env = Env
-	requestStruct.Writer = &writer
-	requestStruct.Finish = make(chan bool, 0)
-	log.Println(requestStruct)
+	deployTask.PublicAddr = Configuration.NodePublicAddress
+	deployTask.PublicPort = Configuration.NodePublicPort
+	deployTask.Env = Env
+	deployTask.Writer = &writer
+	deployTask.Finish = make(chan handlers.TaskReady)
 
-	handlers.NewDeployTaskQueue().NewTask(&requestStruct)
-	<-requestStruct.Finish
+	logger.DebugLogger().Println(deployTask)
+	handlers.NewDeployTaskQueue().NewTask(&deployTask)
+
+	result := <-deployTask.Finish
+	if result.Err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	//if deploy succesfull -> answer the caller
+	response := DeployResponse{
+		ServiceName: deployTask.ServiceName,
+		NsAddress:   result.IP.String(),
+	}
+
+	logger.InfoLogger().Println("Response to /container/deploy: ", response)
+
+	writer.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(writer).Encode(response)
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 /*
@@ -174,7 +198,7 @@ Response: 200 or Failure code
 func register(writer http.ResponseWriter, request *http.Request) {
 	log.Println("Received HTTP request - /register ")
 
-	reqBody, _ := ioutil.ReadAll(request.Body)
+	reqBody, _ := io.ReadAll(request.Body)
 	var requestStruct registerRequest
 	err := json.Unmarshal(reqBody, &requestStruct)
 	if err != nil {
@@ -197,7 +221,7 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	WorkerID = requestStruct.ClientID
 
 	//initialize mqtt connection to the broker
-	mqtt.InitMqtt(requestStruct.ClientID, Configuration.ClusterUrl, Configuration.ClusterMqttPort)
+	mqtt.InitNetMqttClient(requestStruct.ClientID, Configuration.ClusterUrl, Configuration.ClusterMqttPort)
 
 	//initialize the proxy tunnel
 	Proxy = proxy.New()

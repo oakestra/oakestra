@@ -2,15 +2,17 @@ package handlers
 
 import (
 	"NetManager/env"
+	"NetManager/logger"
 	"NetManager/mqtt"
-	"encoding/json"
-	"log"
+	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
 )
 
-type ContainerDeployRequest struct {
+type ContainerDeployTask struct {
 	Pid            int    `json:"pid"`
 	ServiceName    string `json:"serviceName"`
 	Instancenumber int    `json:"instanceNumber"`
@@ -19,20 +21,20 @@ type ContainerDeployRequest struct {
 	PublicPort     string
 	Env            *env.Environment
 	Writer         *http.ResponseWriter
-	Finish         chan bool
+	Finish         chan TaskReady
 }
 
-type DeployResponse struct {
-	ServiceName string `json:"serviceName"`
-	NsAddress   string `json:"nsAddress"`
+type TaskReady struct {
+	IP  net.IP
+	Err error
 }
 
 type deployTaskQueue struct {
-	newTask chan *ContainerDeployRequest
+	newTask chan *ContainerDeployTask
 }
 
 type DeployTaskQueue interface {
-	NewTask(request *ContainerDeployRequest)
+	NewTask(request *ContainerDeployTask)
 }
 
 var once sync.Once
@@ -42,14 +44,14 @@ func NewDeployTaskQueue() DeployTaskQueue {
 
 	once.Do(func() {
 		taskQueue = deployTaskQueue{
-			newTask: make(chan *ContainerDeployRequest, 50),
+			newTask: make(chan *ContainerDeployTask, 50),
 		}
 		go taskQueue.taskExecutor()
 	})
 	return &taskQueue
 }
 
-func (t *deployTaskQueue) NewTask(request *ContainerDeployRequest) {
+func (t *deployTaskQueue) NewTask(request *ContainerDeployTask) {
 	t.newTask <- request
 }
 
@@ -57,32 +59,38 @@ func (t *deployTaskQueue) taskExecutor() {
 	for true {
 		select {
 		case task := <-t.newTask:
-			deploymentHandler(task)
-			task.Finish <- true
+			//deploy the network stack in the container
+			addr, err := deploymentHandler(task)
+			if err != nil {
+				logger.ErrorLogger().Println("[ERROR]: ", err)
+			}
+			task.Finish <- TaskReady{
+				IP:  addr,
+				Err: err,
+			}
+			//asynchronously update proxy tables
+			updateInternalProxyDataStructures(task)
 		}
 	}
 }
 
-func deploymentHandler(requestStruct *ContainerDeployRequest) {
-	writer := *requestStruct.Writer
+func deploymentHandler(requestStruct *ContainerDeployTask) (net.IP, error) {
 
 	//get app full name
 	appCompleteName := strings.Split(requestStruct.ServiceName, ".")
 	if len(appCompleteName) != 4 {
-		writer.WriteHeader(http.StatusBadRequest)
-		return
+		return nil, errors.New(fmt.Sprintf("Invalid app name: %s", appCompleteName))
 	}
 
 	//attach network to the container
 	addr, err := requestStruct.Env.AttachNetworkToContainer(requestStruct.Pid, requestStruct.ServiceName, requestStruct.Instancenumber, requestStruct.PortMappings)
 	if err != nil {
-		log.Println("[ERROR]:", err)
-		writer.WriteHeader(http.StatusBadRequest)
-		return
+		logger.ErrorLogger().Println("[ERROR]:", err)
+		return nil, err
 	}
 
-	//notify net-component
-	mqtt.NotifyDeploymentStatus(
+	//notify to net-component
+	err = mqtt.NotifyDeploymentStatus(
 		requestStruct.ServiceName,
 		"DEPLOYED",
 		requestStruct.Instancenumber,
@@ -90,23 +98,19 @@ func deploymentHandler(requestStruct *ContainerDeployRequest) {
 		requestStruct.PublicAddr,
 		requestStruct.PublicPort,
 	)
-
-	//update internal table entry
-	requestStruct.Env.RefreshServiceTable(requestStruct.ServiceName)
-
-	mqtt.MqttRegisterInterest(requestStruct.ServiceName, requestStruct.Env, requestStruct.Instancenumber)
-
-	//answer the caller
-	response := DeployResponse{
-		ServiceName: requestStruct.ServiceName,
-		NsAddress:   addr.String(),
+	if err != nil {
+		logger.ErrorLogger().Println("[ERROR]:", err)
+		return nil, err
 	}
 
-	log.Println("Response to /container/deploy: ", response)
+	return addr, nil
+}
 
-	writer.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(writer).Encode(response)
-	if err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
+func updateInternalProxyDataStructures(requestStruct *ContainerDeployTask) {
+	//Update internal table entry if an interest has not been set already.
+	//Otherwise, do nothing, the net will autonomously update.
+	if !mqtt.MqttIsInterestRegistered(requestStruct.ServiceName) {
+		requestStruct.Env.RefreshServiceTable(requestStruct.ServiceName)
+		mqtt.MqttRegisterInterest(requestStruct.ServiceName, requestStruct.Env, requestStruct.Instancenumber)
 	}
 }

@@ -141,7 +141,7 @@ func (t *TableManager) SearchByJobName(jobname string) []TableEntry {
 	return results
 }
 
-//Sanity chceck for Appname and namespace
+// Sanity chceck for Appname and namespace
 // 0<len(Appname)<11
 // 0<len(Appns)<11
 // 0<len(Servicename)<11
@@ -189,4 +189,13 @@ func (t *TableManager) isValid(entry TableEntry) bool {
 		return false
 	}
 	return true
+}
+
+func IsNamespaceStillValid(nsip net.IP, table *[]TableEntry) bool {
+	for _, entry := range *table {
+		if entry.Nsip.Equal(nsip) {
+			return true
+		}
+	}
+	return false
 }

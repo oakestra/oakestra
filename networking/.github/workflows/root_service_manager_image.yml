@@ -2,8 +2,9 @@ name: Docker root-service-manager-python
 
 on:
   push:
-    # Publish semver tags as releases.
-    tags: [ 'v*.*.*' ]
+    tags:
+      - 'v*.*.*'
+      - 'alpha-v*.*.*'
 
 env:
   # Use docker.io for Docker Hub if empty
