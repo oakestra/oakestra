@@ -1,7 +1,5 @@
 from datetime import datetime
-
 from bson import ObjectId
-
 import ext_requests.mongodb_client as db
 
 
@@ -45,7 +43,7 @@ def mongo_update_job_status(job_id, status, status_detail, instances=None):
     instance_list = job.get('instance_list')
     if instances is not None:
         for instance in instances:
-            current_time = datetime.now()
+            current_time = datetime.now().isoformat()
             cpu_update = {'value': instance.get('cpu'), 'timestamp': current_time}
             memory_update = {'value': instance.get('memory'), 'timestamp': current_time}
             db.mongo_services.update_one(
