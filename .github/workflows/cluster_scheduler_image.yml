@@ -59,7 +59,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |
-            latest=${{ if startsWith(github.ref, 'refs/tags/alpha') }}false{{ else }}true{{ endif }}
+            latest=${{!startsWith(github.ref, 'refs/tags/alpha')}}
 
       - name: Set up QEMU
         id: qemu
