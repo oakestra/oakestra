@@ -12,7 +12,7 @@ docker-compose up --build
 
 The following ports are exposed:
 
-- Port 80 - Grafana Dashboard (It can be used to monitor the clsuter status)
+- Port 80 - Grafana Dashboard (It can be used to monitor the cluster status)
 - Port 10000 - System Manager (It needs to be accessible from the Cluster Orchestrator)
 
 
@@ -53,14 +53,14 @@ The following ports are exposed:
 ```
 wget -c https://github.com/oakestra/oakestra/releases/download/v0.4.2/NodeEngine_$(dpkg --print-architecture).tar.gz && tar -xzf NodeEngine_$(dpkg --print-architecture).tar.gz && chmod +x install.sh && ./install.sh
 ```
-2) (Optional, required only if you want to enable communication across the microservices) Install the [OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager) component using the following commsnd:
+2) (Optional, required only if you want to enable communication across the microservices) Install the [OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager) component using the following command:
 ```
 wget -c https://github.com/oakestra/oakestra-net/releases/download/v0.4.2/NetManager_$(dpkg --print-architecture).tar.gz && tar -xzf NetManager_$(dpkg --print-architecture).tar.gz && chmod +x install.sh && ./install.sh $(dpkg --print-architecture)
 ```
-2.1) Configure the NetManager config file accordingly to what stated in the [NetManager Readme](https://github.com/oakestra/oakestra-net/blob/main/node-net-manager/README.md). Leave the ClusterMqttPort value to the default 10003 value.  
+2.1) Configure the NetManager config file accordingly to what is stated in the [NetManager Readme](https://github.com/oakestra/oakestra-net/blob/main/node-net-manager/README.md). Leave the ClusterMqttPort value to the default 10003 value.  
 2.2) Run the NetManager using `sudo NetManager -p 6000`
-3) Run the node engine: `sudo NodeEngine -a <cluster orchestrator address> -p <cluster orhcestrator port e.g. 10100> -n 6000`. If you specifcy the flag `-n 6000`, the NodeEngine expects a running NetManager component on port 6000. If this is the case, the node will start in overlay mode, enabling the networking across the deployed application. In order to do so, you need to have the Oakestra NetManager component installed on your worker node ([OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager)). If you don't which to enable the networking, simply avoid specifying the flag -n. Use NodeEngine -h for further details
-3.1) As an alternative you can run the development version of the NodeEngine moving inside `go_node_engine` and running `sudo go NodeEngine -a <cluster orchestrator address> -p <cluster orhcestrator port e.g. 10100> -n <net manager port>`
+3) Run the node engine: `sudo NodeEngine -a <cluster orchestrator address> -p <cluster orchestrator port e.g. 10100> -n 6000`. If you specify the flag `-n 6000`, the NodeEngine expects a running NetManager component on port 6000. If this is the case, the node will start in overlay mode, enabling networking across the deployed application. In order to do so, you need to have the Oakestra NetManager component installed on your worker node ([OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager)). If you don't which to enable the networking, simply avoid specifying the flag -n. Use NodeEngine -h for further details
+3.1) As an alternative you can run the development version of the NodeEngine moving inside `go_node_engine` and running `sudo go NodeEngine -a <cluster orchestrator address> -p <cluster orchestrator port e.g. 10100> -n <net manager port>`
 
 # Use the APIs to deploy a new application
 
@@ -68,7 +68,7 @@ wget -c https://github.com/oakestra/oakestra-net/releases/download/v0.4.2/NetMan
 
 In order to deploy a container a deployment descriptor must be passed to the deployment command. 
 The deployment descriptor contains all the information that Oakestra needs in order to achieve a complete
-deploy in the system. 
+deployed in the system. 
 
 Since version 0.4, Oakestra (previously, EdgeIO) uses the following deployment descriptor format. 
 
@@ -148,12 +148,12 @@ This is a detailed description of the deployment descriptor fields currently imp
       - Fully qualified service name:
         - microservice_name: name of the service (max 10 char, no symbols)
         - microservice_namespace: namespace of the service, used to reference different deployment of the same service. Examples of namespace name can be `default` or `production` or `test` (max 10 char, no symbols)
-      - virtualization: currently the only uspported virtualization is `container`
+      - virtualization: currently the only unsupported virtualization is `container`
       - cmd: list of the commands to be executed inside the container at startup
       - vcpu,vgpu,memory: minimum cpu/gpu vcores and memory amount needed to run the container
       - vtpus: currently not implemented
       - storage: minimum storage size required (currently the scheduler does not take this value into account)
-      - bandwidth_in/out: minimum required bandwith on the worker node. (currently the scheduler does not take this value into account)
+      - bandwidth_in/out: minimum required bandwidth on the worker node. (currently the scheduler does not take this value into account)
       - port: port mapping for the container in the syntax hostport_1:containerport_1\[/protocol];hostport_2:containerport_2\[/protocol] (default protocol is tcp)
       - addresses: allows to specify a custom ip address to be used to balance the traffic across all the service instances. 
         - rr\_ip: [optional filed] This field allows you to setup a custom Round Robin network address to reference all the instances belonging to this service. This address is going to be permanently bounded to the service. The address MUST be in the form `10.30.x.y` and must not collide with any other Instance Address or Service IP in the system, otherwise an error will be returned. If you don't specify a RR_ip and you don't set this field, a new address will be generated by the system.
@@ -172,7 +172,7 @@ This is a detailed description of the deployment descriptor fields currently imp
     ```
  
 ## Login
-After running a cluster you can use the debug OpenAPI page to interact with the apis and use the infrastructure
+After running a cluster you can use the debug OpenAPI page to interact with the apis and use the infrastructure.
 
 connect to `<root_orch_ip>:10000/api/docs`
 
@@ -196,7 +196,7 @@ After you authenticate with the login function, you can try out to deploy the fi
 
 The response contains the Application id and the id for all the application's services. Now the application and the services are registered to the platform. It's time to deploy the service instances! 
 
-You can always remove or create a new service for the application using the /api/services endpoints
+You can always remove or create a new service for the application using the /api/services endpoints.
 
 ## Deploy an instance of a registered service 
 
@@ -218,13 +218,13 @@ each call to this endpoint generates a new instance of the service
 
 # Networking 
 
-To enable the communication between services: 
+To enable communication between services: 
 
 Ensure that each worker node has the [OakestraNet/Node_net_manager](https://github.com/oakestra/oakestra-net/tree/main/node-net-manager) component installed, up and running before running the node engine. 
 
-You can use declare a custom IP Address that uses Round Robin policy. Just declare it using the rr_ip field in the deployment descriptor 
+You can use declare a custom IP Address that uses Round-robin policy. Just declare it using the rr_ip field in the deployment descriptor. 
 
 # Frontend?
 
-To make your life easire you can run the Oakestra front-end.
+To make your life easier you can run the Oakestra front end.
 Check the [Dashboard](https://github.com/oakestra/dashboard) repository for further info.
