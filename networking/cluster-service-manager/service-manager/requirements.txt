@@ -12,7 +12,6 @@ Flask==2.3.2
 Flask-PyMongo==2.3.0
 Flask-SocketIO==5.3.4
 greenlet==2.0.2
-idna==3.4
 importlib-metadata==6.8.0
 itsdangerous==2.1.2
 Jinja2==3.1.2
@@ -30,4 +29,3 @@ six==1.16.0
 tzlocal==5.0.1
 urllib3==2.0.3
 Werkzeug==2.3.6
-zipp==3.16.0
