@@ -161,10 +161,9 @@ def mongo_get_interest_workers(job_name):
     job = mongo_jobs.db.jobs.find_one({'job_name': job_name})
     if job is not None:
         interested_nodes = job.get("interested_nodes")
-        if interested_nodes is None:
-            return []
-        else:
+        if interested_nodes is not None:
             return interested_nodes
+    return []
 
 
 def mongo_add_interest(job_name, clientid):
