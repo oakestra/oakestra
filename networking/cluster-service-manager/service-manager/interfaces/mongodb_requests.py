@@ -106,15 +106,20 @@ def mongo_update_job_instance(job_name, instance):
 
 def mongo_remove_job_instance(job_name, instance_number):
     global mongo_jobs
-    if int(instance_number) == -1:
-        mongo_jobs.db.jobs.find_one_and_update(
+    delete = False
+    if int(instance_number) > -1:
+        job = mongo_jobs.db.jobs.find_one_and_update(
             {'job_name': job_name},
-            {'$set': {'instance_list': []}}
+            {'$pull': {'instance_list': {'instance_number': instance_number}}},
+            return_document=True
         )
+        if len(job['instance_list']) < 1:
+            delete = True
     else:
-        mongo_jobs.db.jobs.find_one_and_update(
-            {'job_name': job_name},
-            {'$pull': {'instance_list': {'instance_number': instance_number}}}
+        delete = True
+    if delete:
+        mongo_jobs.db.jobs.delete_one(
+            {'job_name': job_name}
         )
 
 
