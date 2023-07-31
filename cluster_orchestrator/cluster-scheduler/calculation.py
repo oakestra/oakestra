@@ -52,12 +52,15 @@ def first_fit_algorithm(job):
 
 
 def deploy_on_best_among_desired_nodes(job, nodes):
-    desired_nodes_list = nodes.split(';')
     active_nodes = mongo_find_all_active_nodes()
     selected_nodes = []
-    for node in active_nodes:
-        if node['node_info']['host'] in desired_nodes_list:
-            selected_nodes.append(node)
+    if nodes is None or nodes == "":
+        selected_nodes = active_nodes
+    else:
+        desired_nodes_list = nodes.split(';')
+        for node in active_nodes:
+            if node['node_info']['host'] in desired_nodes_list:
+                selected_nodes.append(node)
     return greedy_load_balanced_algorithm(job, active_nodes=selected_nodes)
 
 
