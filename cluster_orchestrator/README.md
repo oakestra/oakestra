@@ -74,5 +74,21 @@ HTTP scheduling answer from scheduler back to cluster manager. A list of workers
   - export CLUSTER_NAME=" < name of the cluster > "
   - export CLUSTER_LOCATION=" < location of the cluster > "
 
-- Use the docker-compose.yml with `docker-compose up` to start the mqtt broker and the database of the cluster-orchestrator.
- 
+- Use the docker-compose.yml with `docker-compose -f docker-compose.yml up --build` to start the cluster components.
+
+N.b. if you're using docker compoe with **sudo** don't forget to use the -E flag E.g., **sudo -E docker-compose etc..**. This will export the env variables. 
+
+## Customize deployment
+
+It's possible to use the docker ovveride functionality to exclude or customize the cluster orchestrator deployment. 
+
+E.g.: Exclude network component:
+
+`docker-compose -f docker-compose.yml -f override-no-network.yml up --build`
+
+
+E.g.: Customize network component version
+
+- open and edit `override-custom-serivce-manager.yml` with the correct container image 
+- run the orchestrator with the ovverride file: `docker-compose -f docker-compose.yml -f override-custom-service-manager.yml up --build`
+
