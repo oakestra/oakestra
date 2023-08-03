@@ -20,3 +20,4 @@ flask_swagger_ui
 mongomock==4.1.2
 pytest~=7.1.2
 PyJWT~=2.4.0
+cryptography

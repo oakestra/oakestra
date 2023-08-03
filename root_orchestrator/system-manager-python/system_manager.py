@@ -17,6 +17,7 @@ from ext_requests.cluster_db import mongo_find_by_name_and_location, mongo_updat
     mongo_find_by_username, mongo_delete_cluster, mongo_upsert_cluster
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
+from ext_requests.jwt_generator_requests import get_public_key
 from ext_requests.user_db import create_admin
 from roles.securityUtils import check_jwt_token_validity, create_jwt_secret_key_cluster, jwt_auth_required, \
     create_jwt_refresh_secret_key_cluster, jwt_fresh_required
@@ -41,7 +42,8 @@ app.config['API_TITLE'] = 'Oakestra root api'
 app.config['API_VERSION'] = 'v1'
 app.config["OPENAPI_URL_PREFIX"] = '/docs'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config["JWT_SECRET_KEY"] = token_hex(32)
+app.config["JWT_ALGORITHM"] = "RS256"
+app.config["JWT_PUBLIC_KEY"] = get_public_key()
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=10)
 app.config["RESET_TOKEN_EXPIRES"] = timedelta(hours=3)  # for password reset
 
@@ -84,7 +86,7 @@ app.register_blueprint(swaggerui_blueprint)
 
 
 def fill_additional_claims(cluster, aud):
-    return {"iat": datetime.now(),
+    return {"iat": datetime.now().timestamp(),
             "aud": aud,
             "sub": cluster['user_name'],
             "clusterName": cluster['cluster_name'],

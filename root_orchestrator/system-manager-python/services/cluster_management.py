@@ -35,9 +35,9 @@ def register_cluster(cluster, username):
         logging.log(level=logging.ERROR, msg="Invalid input")
         return {}
 
-    additional_claims = {"iat": datetime.now(),
+    additional_claims = {"iat": datetime.now().timestamp(),
                          "aud": "addClusterAPI",
-                         "sub": cluster['user_name'],
+                         "sub": cluster['user_name'], # BUG: Overrides cluster_id from identity
                          "clusterName": cluster['cluster_name'],
                          "num": str(randint(0, 99999999))}
 

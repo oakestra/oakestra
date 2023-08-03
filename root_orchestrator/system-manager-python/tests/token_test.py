@@ -33,7 +33,7 @@ def app(request):
                 "identity",
                 timedelta(days=5),
                 {
-                    "iat": datetime.now(),
+                    "iat": datetime.now().timestamp(),
                     "aud": "addClusterAPI",
                     "sub": "identity",
                     "clusterName": "dummy2",
