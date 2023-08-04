@@ -2,8 +2,8 @@ Flask
 paho-mqtt
 bson
 Flask-PyMongo
-Flask-SocketIO
-eventlet
+Flask-SocketIO==4.3.1
+eventlet==0.30.2
 requests
 pyyaml
 APScheduler

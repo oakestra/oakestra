@@ -1,0 +1,10 @@
+version: "3.3"
+
+services:
+
+  # Remove Root dashboard
+  dashboard:
+    deploy:
+      mode: replicated
+      replicas: 0
+
