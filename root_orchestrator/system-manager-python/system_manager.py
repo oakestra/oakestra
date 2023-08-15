@@ -21,6 +21,7 @@ from ext_requests.cluster_db import mongo_update_cluster_information, mongo_get_
     mongo_find_all_active_clusters, mongo_find_cluster_by_location, mongo_find_cluster_by_id_and_set_number_of_nodes, \
     mongo_upsert_cluster
 from ext_requests.cluster_requests import *
+from ext_requests.jwt_generator_requests import get_public_key
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
 from ext_requests.scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, \
@@ -47,7 +48,8 @@ app.config['API_TITLE'] = 'Oakestra root api'
 app.config['API_VERSION'] = 'v1'
 app.config["OPENAPI_URL_PREFIX"] = '/docs'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config["JWT_SECRET_KEY"] = token_hex(32)
+app.config["JWT_ALGORITHM"] = "RS256"
+app.config["JWT_PUBLIC_KEY"] = get_public_key()
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=10)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
 app.config["RESET_TOKEN_EXPIRES"] = timedelta(hours=3)  # for password reset

@@ -16,6 +16,7 @@ services:
       - mongo_root
       - cloud_scheduler
       - root_service_manager
+      - jwt_generator
     environment:
       - CLOUD_MONGO_URL=mongo
       - CLOUD_MONGO_PORT=10007
@@ -23,6 +24,8 @@ services:
       - CLOUD_SCHEDULER_PORT=10004
       - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10099
+      - JWT_GENERATOR_URL=jwt_generator
+      - JWT_GENERATOR_PORT=10011
 
 
   # MongoDB in Root Orchestrator
@@ -107,6 +110,17 @@ services:
     depends_on:
       - redis
       - mongo_root
+
+  jwt_generator:
+    image: michaelschlicker/simple-jwt-generator:0.1
+    container_name: jwt_generator
+    hostname: jwt_generator
+    expose:
+      - "10011"
+    ports:
+      - "10011:10011"
+    environment:
+      - JWT_GENERATOR_PORT=10011
 
 
 volumes:
