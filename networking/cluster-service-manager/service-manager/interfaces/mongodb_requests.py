@@ -22,6 +22,9 @@ def mongo_init(flask_app):
     mongo_nodes = PyMongo(app, uri=MONGO_ADDR_NODES)
     mongo_jobs = PyMongo(app, uri=MONGO_ADDR_JOBS)
 
+    #initialize jobs db
+    mongo_jobs.db.jobs.drop()
+
     app.logger.info("MONGODB - init mongo")
 
 
@@ -71,7 +74,27 @@ def mongo_insert_job(job):
 
 def mongo_remove_job(job_name):
     global mongo_jobs
-    mongo_jobs.db.job.delete_one({"job_name", job_name})
+    mongo_jobs.db.jobs.delete_one({"job_name": job_name})
+
+
+def mongo_update_job(job):
+    if job is None:
+        return
+    if job.get("job_name", "") == "":
+        return
+
+    current_job = mongo_jobs.db.jobs.find_one(
+        {
+            'job_name': job.get("job_name")
+        })
+
+    # If job exists, update the instances
+    if current_job is not None:
+        for instance in job.get('instance_list', []):
+            mongo_update_job_instance(job_name=job.get("job_name"), instance=instance)
+    # Otherwise, insert the job
+    else:
+        mongo_insert_job(job)
 
 
 def mongo_update_job_instance(job_name, instance):
@@ -118,9 +141,7 @@ def mongo_remove_job_instance(job_name, instance_number):
     else:
         delete = True
     if delete:
-        mongo_jobs.db.jobs.delete_one(
-            {'job_name': job_name}
-        )
+        mongo_remove_job(job_name)
 
 
 def mongo_find_job_by_name(job_name):

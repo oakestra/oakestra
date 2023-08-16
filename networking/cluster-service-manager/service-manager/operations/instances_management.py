@@ -1,7 +1,7 @@
 from threading import Thread
 
 from interfaces import mongodb_requests
-from interfaces.mongodb_requests import mongo_update_job_instance
+from interfaces.mongodb_requests import mongo_update_job_instance, mongo_update_job
 from network.tablequery import resolution
 from network.tablequery import interests
 from interfaces import mqtt_client, root_service_manager_requests, mongodb_requests
@@ -48,8 +48,9 @@ def instance_updates(job_name, instancenum, type):
 def _update_cache_and_workers(job_name, instancenum, type):
     if type == "DEPLOYMENT":
         query_result = root_service_manager_requests.cloud_table_query_service_name(job_name)
-        for instance in query_result['instance_list']:
-            mongodb_requests.mongo_update_job_instance(job_name=job_name, instance=instance)
+        mongo_update_job(query_result)
+        #for instance in query_result['instance_list']:
+        #    mongodb_requests.mongo_update_job_instance(job_name=job_name, instance=instance)
     else:
         mongodb_requests.mongo_remove_job_instance(job_name=job_name, instance_number=instancenum)
 
