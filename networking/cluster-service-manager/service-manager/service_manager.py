@@ -13,6 +13,7 @@ MY_PORT = os.environ.get('MY_PORT') or 10200
 my_logger = configure_logging()
 app = Flask(__name__)
 socketio = SocketIO(app, async_mode='eventlet', logger=True, engineio_logger=True, cors_allowed_origins='*')
+app.config['LOGGING_FILTERS'] = ['flask.logging.threaded']
 app.logger.addHandler(my_logger)
 mongo_init(app)
 mqtt_init(app)
