@@ -11,11 +11,21 @@ During implementation, some components could be changed/renamed/replaced/merged.
 
 ## Usage
 
-- Use the docker-compose.yml with `docker-compose -f docker-compose.yml up --build` to start the cloud components.
+Export the environment variables with the public ip/URL where the root orchestrator will be exposed.
+
+```
+export SYSTEM_MANAGER_URL=<IP ADDRESS OF THE NODE HOSTING THE ROOT ORCHESTRATOR>
+```
+
+Then se the docker-compose.yml with `docker-compose -f docker-compose.yml up --build` to start the root components.
 
 ## Customize deployment
 
 It's possible to use the docker ovveride functionality to exclude or customize the root orchestrator deployment. 
+
+E.g.: Do not deploy the dahboard:
+
+`docker-compose -f docker-compose.yml -f override-no-dashboard.yml up --build`
 
 E.g.: Exclude network component:
 
