@@ -35,7 +35,7 @@ export SYSTEM_MANAGER_URL=<IP address>
 
 A location can be in the following forms:
 - < STRING > representing a location name. E.g., `my_home`
-- LATITUDE,LONGITUDE,RADIUS representing the geographical area covered by this cluster. E.g., `48.1397,11.5451,100`, which represents an area of 100Km from Munich city center.  
+- LATITUDE,LONGITUDE,RADIUS representing the geographical area covered by this cluster. E.g., `48.1397,11.5451,1000`, which represents an area of 1km from Munich city center.  
 
 **2)** Clone and move inside the repo
 
