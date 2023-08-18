@@ -4,15 +4,15 @@ Oakestra is an orchestration platform designed for Edge Computing.
 Popular orchestration platforms such as Kubernetes or K3s struggle at maintaining workloads across heterogeneous and constrained devices. 
 Oakestra is build from the ground up to support computation in a flexible way at the edge. 
 
-🌐 Read more about the project at: [oakestra.io](oakestra.io)
+🌐 Read more about the project at: [oakestra.io](http://oakestra.io)
 
-📚 Check out the project wiki at: [oakestra.io/docs](oakestra.io/docs)
+📚 Check out the project wiki at: [oakestra.io/docs](http://oakestra.io/docs)
 
 # 🌳 Get Started
 
 Before being able to deploy your first application, we must create a fully functional Oakestra Root 🫚, to that we attach the clusters 🪵, and to each cluster we attach at least one worker node 🍃.
 
-In this get-started guide, we place everything on the same machine. More complex setups can be composed following our wiki at [oakestra.io/docs/getstarted/get-started-cluster](oakestra.io/docs/getstarted/get-started-cluster/).
+In this get-started guide, we place everything on the same machine. More complex setups can be composed following our wiki at [oakestra.io/docs/getstarted/get-started-cluster](http://oakestra.io/docs/getstarted/get-started-cluster/).
 
 ### Requirements 
 
