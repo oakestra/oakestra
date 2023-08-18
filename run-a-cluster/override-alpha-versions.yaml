@@ -16,11 +16,11 @@ services:
   cloud_scheduler:
     image: ghcr.io/oakestra/oakestra/cloud-scheduler:alpha-v0.4.203
 
-# Cluster Manager
+  # Cluster Manager
   cluster_service_manager:
     image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:alpha-v0.4.203
 
-# Cluster Manager
+  # Cluster Manager
   cluster_manager:
     image: ghcr.io/oakestra/oakestra/cluster-manager:alpha-v0.4.203
 
