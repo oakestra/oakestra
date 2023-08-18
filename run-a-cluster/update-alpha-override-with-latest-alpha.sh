@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CURRENT=$(cat override-alpha-versions.yaml | grep alpha- -m 1 | cut -d ':' -f 3)
+CURRENT=$(cat override-alpha-versions.yaml | grep alpha- -m 1 | cut -d ':' -f 3 | sed 's/ //g')
 function get_latest_alpha_tag() {
   repository_url="https://api.github.com/repos/oakestra/oakestra"
   curl -s "$repository_url/tags" | grep "alpha-" -m 1 | sed 's/"//g' | cut -d ':' -f 2 | sed 's/,//g' | sed 's/ //g'
@@ -10,7 +10,7 @@ LATEST=$(get_latest_alpha_tag)
 echo Current tag: $CURRENT
 echo Latest tag: $LATEST
 
-if [[ "$CURRENT" == "$LATEST" ]]; then
+if [[ "$CURRENT" != "$LATEST" ]]; then
 
   printf "Do you want to update with the latest alpha? (y/n) "
   read answer
