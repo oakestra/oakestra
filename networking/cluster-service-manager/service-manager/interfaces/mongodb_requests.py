@@ -175,7 +175,7 @@ def mongo_update_job_deployed(job_name, status, ns_ip, node_id, instance_number,
             instance['host_ip'] = host_ip
             instance['host_port'] = int(host_port)
             break
-    return mongo_jobs.db.jobs.update_one({'job_name': job_name},
+    return mongo_jobs.db.jobs.find_one_and_update({'job_name': job_name},
                                          {'$set': {'status': status, 'instance_list': instance_list}},
                                          return_document=True)
 
