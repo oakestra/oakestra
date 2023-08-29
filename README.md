@@ -66,7 +66,7 @@ Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follow
 {
   "NodePublicAddress": "<IP ADDRESS OF THIS DEVICE>",
   "NodePublicPort": "<PORT REACHABLE FROM OUTSIDE, use 50103 as default>",
-  "ClusterUrl": "localhost",
+  "ClusterUrl": "<IP Address of cluster orchestrator or 0.0.0.0 if deployed on the same machine>",
   "ClusterMqttPort": "10003"
 }
 ```
