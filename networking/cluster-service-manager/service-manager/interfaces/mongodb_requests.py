@@ -165,7 +165,9 @@ def mongo_find_job_by_ip(ip):
 def mongo_update_job_deployed(job_name, status, ns_ip, node_id, instance_number, host_ip, host_port):
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'job_name': job_name})
-    instance_list = job['instance_list']
+    if job is None:
+        return None
+    instance_list = job.get('instance_list',[])
     for instance in instance_list:
         if int(instance["instance_number"]) == int(instance_number):
             instance['worker_id'] = node_id
@@ -174,7 +176,8 @@ def mongo_update_job_deployed(job_name, status, ns_ip, node_id, instance_number,
             instance['host_port'] = int(host_port)
             break
     return mongo_jobs.db.jobs.update_one({'job_name': job_name},
-                                         {'$set': {'status': status, 'instance_list': instance_list}})
+                                         {'$set': {'status': status, 'instance_list': instance_list}},
+                                         return_document=True)
 
 
 def mongo_find_job_by_id(id):

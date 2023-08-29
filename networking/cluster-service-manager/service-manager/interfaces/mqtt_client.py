@@ -1,5 +1,5 @@
 import re
-
+import traceback
 from interfaces.mongodb_requests import mongo_find_node_by_id_and_update_subnetwork
 from network.deployment import *
 from network.tablequery import resolution, interests
@@ -75,7 +75,11 @@ def _deployment_handler(client_id, payload):
     instance_number = payload.get('instance_number')
     host_ip = payload.get('host_ip')
     host_port = payload.get('host_port')
-    deployment_status_report(appname, status, nsIp, client_id, instance_number, host_ip, host_port)
+    try:
+        deployment_status_report(appname, status, nsIp, client_id, instance_number, host_ip, host_port)
+    except Exception as e:
+        traceback.print_exc()
+        print(e)
 
 
 def _undeployment_handler(client_id, payload):
