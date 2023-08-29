@@ -136,8 +136,11 @@ def mongo_remove_job_instance(job_name, instance_number):
             {'$pull': {'instance_list': {'instance_number': instance_number}}},
             return_document=True
         )
-        if len(job['instance_list']) < 1:
-            delete = True
+        if job is not None:
+            if job['instance_list'] is None:
+                delete = True
+            if len(job['instance_list']) < 1:
+                delete = True
     else:
         delete = True
     if delete:
