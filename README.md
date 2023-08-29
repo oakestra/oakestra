@@ -78,7 +78,7 @@ sudo NetManager -p 6000
 
 On a different shell, start the NodeEngine with the -6000 paramenter to connect to the NetManager. 
 ```
-sudo NodeEngine -n 6000 -p 10100
+sudo NodeEngine -n 6000 -p 10100 -a <Cluster Orchestrator IP Address>
 ```
 
 If you see the NodeEngine reporting metrics to the Cluster...
