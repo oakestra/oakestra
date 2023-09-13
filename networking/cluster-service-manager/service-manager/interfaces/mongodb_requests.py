@@ -22,6 +22,9 @@ def mongo_init(flask_app):
     mongo_nodes = PyMongo(app, uri=MONGO_ADDR_NODES)
     mongo_jobs = PyMongo(app, uri=MONGO_ADDR_JOBS)
 
+    #initialize jobs db
+    mongo_jobs.db.jobs.drop()
+
     app.logger.info("MONGODB - init mongo")
 
 
@@ -71,7 +74,27 @@ def mongo_insert_job(job):
 
 def mongo_remove_job(job_name):
     global mongo_jobs
-    mongo_jobs.db.job.delete_one({"job_name", job_name})
+    mongo_jobs.db.jobs.delete_one({"job_name": job_name})
+
+
+def mongo_update_job(job):
+    if job is None:
+        return
+    if job.get("job_name", "") == "":
+        return
+
+    current_job = mongo_jobs.db.jobs.find_one(
+        {
+            'job_name': job.get("job_name")
+        })
+
+    # If job exists, update the instances
+    if current_job is not None:
+        for instance in job.get('instance_list', []):
+            mongo_update_job_instance(job_name=job.get("job_name"), instance=instance)
+    # Otherwise, insert the job
+    else:
+        mongo_insert_job(job)
 
 
 def mongo_update_job_instance(job_name, instance):
@@ -106,16 +129,22 @@ def mongo_update_job_instance(job_name, instance):
 
 def mongo_remove_job_instance(job_name, instance_number):
     global mongo_jobs
-    if int(instance_number) == -1:
-        mongo_jobs.db.jobs.find_one_and_update(
+    delete = False
+    if int(instance_number) > -1:
+        job = mongo_jobs.db.jobs.find_one_and_update(
             {'job_name': job_name},
-            {'$set': {'instance_list': []}}
+            {'$pull': {'instance_list': {'instance_number': instance_number}}},
+            return_document=True
         )
+        if job is not None:
+            if job['instance_list'] is None:
+                delete = True
+            if len(job['instance_list']) < 1:
+                delete = True
     else:
-        mongo_jobs.db.jobs.find_one_and_update(
-            {'job_name': job_name},
-            {'$pull': {'instance_list': {'instance_number': instance_number}}}
-        )
+        delete = True
+    if delete:
+        mongo_remove_job(job_name)
 
 
 def mongo_find_job_by_name(job_name):
@@ -136,7 +165,9 @@ def mongo_find_job_by_ip(ip):
 def mongo_update_job_deployed(job_name, status, ns_ip, node_id, instance_number, host_ip, host_port):
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'job_name': job_name})
-    instance_list = job['instance_list']
+    if job is None:
+        return None
+    instance_list = job.get('instance_list',[])
     for instance in instance_list:
         if int(instance["instance_number"]) == int(instance_number):
             instance['worker_id'] = node_id
@@ -144,8 +175,9 @@ def mongo_update_job_deployed(job_name, status, ns_ip, node_id, instance_number,
             instance['host_ip'] = host_ip
             instance['host_port'] = int(host_port)
             break
-    return mongo_jobs.db.jobs.update_one({'job_name': job_name},
-                                         {'$set': {'status': status, 'instance_list': instance_list}})
+    return mongo_jobs.db.jobs.find_one_and_update({'job_name': job_name},
+                                         {'$set': {'status': status, 'instance_list': instance_list}},
+                                         return_document=True)
 
 
 def mongo_find_job_by_id(id):
@@ -161,10 +193,9 @@ def mongo_get_interest_workers(job_name):
     job = mongo_jobs.db.jobs.find_one({'job_name': job_name})
     if job is not None:
         interested_nodes = job.get("interested_nodes")
-        if interested_nodes is None:
-            return []
-        else:
+        if interested_nodes is not None:
             return interested_nodes
+    return []
 
 
 def mongo_add_interest(job_name, clientid):
