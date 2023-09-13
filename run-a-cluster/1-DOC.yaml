@@ -2,6 +2,15 @@ version: "3.3"
 
 services:
 
+  dashboard:
+    image: ghcr.io/oakestra/dashboard:latest
+    ports:
+      - '80:80'
+    restart: unless-stopped
+    container_name: oaekstra-frontend-container
+    environment:
+      - API_ADDRESS=${SYSTEM_MANAGER_URL}:10000
+
   # System Manager REST API of Root Orchestrator
   system_manager:
     image: ghcr.io/oakestra/oakestra/root-system-manager:latest

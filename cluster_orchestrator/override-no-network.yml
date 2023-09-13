@@ -1,0 +1,10 @@
+version: "3.3"
+
+services:
+
+  # Remove cluster service manager by scaling down the replicas
+  cluster_service_manager:
+    deploy:
+      mode: replicated
+      replicas: 0
+

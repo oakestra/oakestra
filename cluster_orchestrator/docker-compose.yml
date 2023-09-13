@@ -3,7 +3,7 @@ services:
 
   # MQTT 
   mqtt:
-    image: eclipse-mosquitto:1.6
+    image: eclipse-mosquitto:2.0
     hostname: mqtt
     container_name: mqtt
     expose:
@@ -14,8 +14,6 @@ services:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
       - /mosquitto/data
       - /mosquitto/log
-    networks:
-      - default
     healthcheck:
       test: [ "CMD-SHELL", "timeout -t 5 mosquitto_sub -t '$$SYS/#' -C 1 | grep -v Error || exit 1" ]
       interval: 10s
@@ -34,7 +32,40 @@ services:
       - 'mongodb_cluster_data:/mongodb'
     command: mongod --port 10107
 
+# cluster-level mongoDB
+  mongo_clusternet:
+    image: mongo:3.6
+    container_name: cluster_mongo_net
+    hostname: cluster_mongo_net
+    ports:
+      - "10108:10108"
+    volumes:
+      - 'mongodb_cluster_net_data:/mongodb'
+    command: mongod --port 10108
 
+
+# Cluster Manager
+  cluster_service_manager:
+    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
+    container_name: cluster_service_manager
+    hostname: cluster_service_manager
+    expose:
+      - "10110"
+    ports:
+      - "10110:10110"
+    environment:
+      - MY_PORT=10110
+      - MQTT_BROKER_PORT=10003
+      - MQTT_BROKER_URL=mqtt
+      - ROOT_SERVICE_MANAGER_URL=${SYSTEM_MANAGER_URL}
+      - ROOT_SERVICE_MANAGER_PORT=10099
+      - SYSTEM_MANAGER_URL=cluster_manager
+      - SYSTEM_MANAGER_PORT=10000
+      - CLUSTER_MONGO_URL=cluster_mongo_net
+      - CLUSTER_MONGO_PORT=10108
+    depends_on:
+      - mongo_clusternet
+      - mqtt
 
 # Cluster Manager
   cluster_manager:
@@ -66,6 +97,7 @@ services:
       - mongo_cluster
       - mqtt
       - cluster_scheduler
+      - cluster_service_manager
 
 
   # Cluster Scheduler
@@ -116,4 +148,6 @@ services:
 
 volumes:
   mongodb_cluster_data:
+    driver: local
+  mongodb_cluster_net_data:
     driver: local

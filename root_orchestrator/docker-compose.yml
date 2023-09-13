@@ -1,7 +1,7 @@
 version: "3.3"
 
 services:
-  
+
   # System Manager REST API of Root Orchestrator
   system_manager:
     image: system_manager
@@ -12,9 +12,10 @@ services:
       - "10000"
     ports:
       - "10000:10000"
-    depends_on: 
-      - mongo
+    depends_on:
+      - mongo_root
       - cloud_scheduler
+      - root_service_manager
     environment:
       - CLOUD_MONGO_URL=mongo
       - CLOUD_MONGO_PORT=10007
@@ -25,7 +26,7 @@ services:
 
 
   # MongoDB in Root Orchestrator
-  mongo:
+  mongo_root:
     image: mongo:3.6
     container_name: mongo
     hostname: mongo
@@ -37,14 +38,42 @@ services:
       - 'mongodb_data:/mongodb'
     command: mongod --port 10007
 
+  # cluster-level mongoDB
+  mongo_rootnet:
+    image: mongo:3.6
+    container_name: mongo_net
+    hostname: mongo_net
+    ports:
+      - "10008:10008"
+    volumes:
+      - 'mongodb_net_data:/mongodb'
+    command: mongod --port 10008
+
+
+  # Cluster Manager
+  root_service_manager:
+    image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
+    container_name: root_service_manager
+    hostname: root_service_manager
+    expose:
+      - "10099"
+    ports:
+      - "10099:10099"
+    environment:
+      - MY_PORT=10099
+      - SYSTEM_MANAGER_URL=system_manager
+      - SYSTEM_MANAGER_PORT=10000
+      - CLOUD_MONGO_URL=mongo_net
+      - CLOUD_MONGO_PORT=10008
+    depends_on:
+      - mongo_rootnet
+
 
   # Redis for the Cloud Scheduler
   redis:
     image: redis
     hostname: redis
     container_name: redis
-    expose:
-      - "6379"
     ports:
       - "6379:6379"
     command: redis-server --requirepass cloudRedis
@@ -55,8 +84,16 @@ services:
     hostname: grafana
     container_name: grafana
     ports:
-      - 80:3000
+      - 3000:3000
 
+  dashboard:
+    image: ghcr.io/oakestra/dashboard:latest
+    ports:
+      - '80:80'
+    restart: unless-stopped
+    container_name: oaekstra-frontend-container
+    environment:
+      - API_ADDRESS=${SYSTEM_MANAGER_URL}:10000
 
   # Cloud Scheduler
   cloud_scheduler:
@@ -77,9 +114,11 @@ services:
       - REDIS_ADDR=redis://:cloudRedis@redis:6379
     depends_on:
       - redis
-      - mongo
+      - mongo_root
 
 
 volumes:
   mongodb_data:
+    driver: local
+  mongodb_net_data:
     driver: local

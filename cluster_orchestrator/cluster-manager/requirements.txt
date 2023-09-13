@@ -1,10 +1,12 @@
-Flask
+Flask~=2.1.1
+marshmallow~=3.15.0
 paho-mqtt
 bson
 Flask-PyMongo
-Flask-SocketIO
-eventlet
+Flask-SocketIO==4.3.1
+eventlet==0.31.0
 requests
 pyyaml
 APScheduler
 prometheus-client
+werkzeug==2.0.3
