@@ -1,25 +1,27 @@
-import logging
-import traceback
-import json
-
 from bson import json_util
 from flask.views import MethodView
 from flask import request
-from flask_smorest import Blueprint, Api, abort
+from flask_jwt_extended import get_jwt_identity, jwt_required
+from flask_smorest import Blueprint, abort
 
-from ext_requests.cluster_requests import cluster_request_to_delete_job, cluster_request_to_delete_job_by_ip
-from services.service_management import delete_service
+from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from ext_requests.apps_db import mongo_update_job_status
-from ext_requests.cluster_db import mongo_get_all_clusters, mongo_find_all_active_clusters, \
-    mongo_update_cluster_information, mongo_find_cluster_by_id
-from services.instance_management import instance_scale_up_scheduled_handler
+from services.cluster_management import *
+from ext_requests.cluster_db import *
+import traceback
 
-clustersbp = Blueprint(
-    'Clusters', 'cluster management', url_prefix='/api/clusters'
+clustersblp = Blueprint(
+    'Clusters', 'cluster management', url_prefix='/api/clusters',
+    description='Operations on multiple users'
 )
 
 clusterinfo = Blueprint(
-    'Clusterinfo', 'cluster informations', url_prefix='/api/information'
+    'Clusterinfo', 'cluster information', url_prefix='/api/information'
+)
+
+clusterblp = Blueprint(
+    'Cluster operations', 'cluster operations', url_prefix='/api/cluster',
+    description='Operations on single cluster'
 )
 
 cluster_info_schema = {
@@ -59,15 +61,31 @@ cluster_info_schema = {
     }
 }
 
+'''Base model to add a cluster as a single simple node'''
+cluster_op_schema = {
+    "type": "object",
+    "properties": {
+        "cluster_name": {"type": "string"},
+        "cluster_location": {"type": "string"},
+    }
+}
 
-@clustersbp.route('/')
+
+@clustersblp.route('/')
 class ClustersController(MethodView):
 
     def get(self, *args, **kwargs):
         return json_util.dumps(mongo_get_all_clusters())
 
 
-@clustersbp.route('/active')
+@clustersblp.route('/<userid>')
+class ClustersController(MethodView):
+
+    def get(self, userid, *args, **kwargs):
+        return json_util.dumps(mongo_get_clusters_of_user(userid))
+
+
+@clustersblp.route('/active')
 class ActiveClustersController(MethodView):
 
     def get(self, *args, **kwargs):
@@ -93,3 +111,49 @@ class ClusterController(MethodView):
                 cluster_request_to_delete_job_by_ip(j.get('system_job_id'), -1, request.remote_addr)
 
         return 'ok'
+
+
+@clusterblp.route('/add')
+class ClusterController(MethodView):
+
+    @clusterblp.arguments(schema=cluster_op_schema, location="json", validate=False, unknown=True)
+    @clusterblp.response(200, content_type="application/json")
+    @jwt_required()
+    def post(self, args, *kwargs):
+        data = request.get_json()
+        current_user = get_jwt_identity()
+        try:
+            resp = register_cluster(data, current_user)
+            return resp
+        except Exception as e:
+            traceback.print_exc()
+            abort(401, {"message": str(e)})
+
+
+@clusterblp.route('/<cluster_id>')
+class ApplicationController(MethodView):
+
+    @clusterblp.response(200, content_type="application/json")
+    @jwt_required()
+    def get(self, cluster_id, *args, **kwargs):
+        try:
+            current_user = get_jwt_identity()
+            return json_util.dumps(get_user_cluster(current_user, cluster_id))
+        except Exception as e:
+            return abort(404, {"message": e})
+
+    # TODO: treat exception
+    @jwt_required()
+    def delete(self, cluster_id):
+        delete_cluster(cluster_id)
+        return {"message": "Cluster Deleted"}
+
+    @jwt_required()
+    def put(self, cluster_id, *args, **kwargs):
+        print(request.get_json())
+        try:
+            current_user = get_jwt_identity()
+            update_cluster(cluster_id, current_user, request.get_json())
+            return {"message": "Cluster is updated"}
+        except ConnectionError as e:
+            abort(404, {"message": e})

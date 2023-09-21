@@ -1,4 +1,4 @@
-from blueprints.clusters_blueprints import clusterinfo, clustersbp
+from blueprints.clusters_blueprints import clusterinfo, clustersblp, clusterblp
 from blueprints.scheduling_blueprints import schedulingbp
 from blueprints.services_blueprints import serviceblp, servicesblp
 from blueprints.authorization_blueprints import permissionbp
@@ -20,6 +20,7 @@ blueprints = [
     usersbp,
     schedulingbp,
     clusterinfo,
-    clustersbp,
-    organizationblp
+    organizationblp,
+    clustersblp,
+    clusterblp
 ]

@@ -1,39 +1,33 @@
 import json
-import threading
+import traceback
+from random import randint
 
-from bson import json_util, ObjectId
+from bson import json_util
 from flask import flash, request
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager
+from flask_jwt_extended import JWTManager, jwt_required
+from jwt import ExpiredSignatureError
 
 from blueprints import blueprints
 from flask_socketio import SocketIO, emit
-from markupsafe import escape
 from pathlib import Path
 from werkzeug.utils import secure_filename, redirect
 
-# from blueprints.applications_blueprints import *
-# from blueprints.authentication_blueprints import *
-# from blueprints.authorization_blueprints import *
-# from blueprints.deployment_blueprints import DeployInstanceController
-from ext_requests.apps_db import mongo_update_job_status_and_instances, mongo_find_job_by_id
-from ext_requests.cluster_db import mongo_update_cluster_information, mongo_get_all_clusters, \
-    mongo_find_all_active_clusters, mongo_find_cluster_by_location, mongo_find_cluster_by_id_and_set_number_of_nodes, \
-    mongo_upsert_cluster
-from ext_requests.cluster_requests import *
+from ext_requests.cluster_db import mongo_find_by_name_and_location, mongo_update_pairing_complete, \
+    mongo_find_by_username, mongo_delete_cluster, mongo_upsert_cluster
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import *
-from ext_requests.scheduler_requests import scheduler_request_deploy, scheduler_request_replicate, \
-    scheduler_request_status
 from ext_requests.user_db import create_admin
+from roles.securityUtils import check_jwt_token_validity, create_jwt_secret_key_cluster, jwt_auth_required, \
+    create_jwt_refresh_secret_key_cluster, jwt_fresh_required
 from sm_logging import configure_logging
 from flask import Flask
 from secrets import token_hex
-from datetime import timedelta
-from flask_smorest import Blueprint, Api, abort
+from datetime import timedelta, datetime, timezone
+from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
 
-# from blueprints.users_blueprints import *
+from users.auth import user_token_refresh
 
 my_logger = configure_logging()
 
@@ -49,7 +43,6 @@ app.config["OPENAPI_URL_PREFIX"] = '/docs'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config["JWT_SECRET_KEY"] = token_hex(32)
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=10)
-app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
 app.config["RESET_TOKEN_EXPIRES"] = timedelta(hours=3)  # for password reset
 
 jwt = JWTManager(app)
@@ -85,8 +78,95 @@ swaggerui_blueprint = get_swaggerui_blueprint(
 )
 app.register_blueprint(swaggerui_blueprint)
 
+
 # .......... Register clusters via WebSocket ...........#
 # ......................................................#
+
+
+def fill_additional_claims(cluster, aud):
+    return {"iat": datetime.now(),
+            "aud": aud,
+            "sub": cluster['user_name'],
+            "clusterName": cluster['cluster_name'],
+            "num": str(randint(0, 99999999))}
+
+
+# TODO: Test this function
+def is_key_freshness_expiring(fresh_exp):
+    now = datetime.now(timezone.utc)
+    target_timestamp = datetime.timestamp(now + timedelta(days=3))
+    if target_timestamp >= fresh_exp:
+        return True
+    else:
+        return False
+
+
+def check_if_keys_match(token_info, message):
+    if token_info.get("clusterName") == message['cluster_name'] and token_info.get("sub") == message['user_name']:
+        return True
+    else:
+        return False
+
+
+def token_validation(message, key_type, cluster, net_port, cluster_ip):
+    cluster_id = str(cluster['_id'])
+    try:
+        token_info = check_jwt_token_validity(message[key_type])
+
+        if check_if_keys_match(token_info, message):
+            app.logger.info("The keys match")
+            response = {
+                'id': cluster_id
+            }
+            mongo_upsert_cluster(cluster_ip, message)
+            if key_type == 'pairing_key':
+                mongo_update_pairing_complete(cluster_id)
+                net_register_cluster(
+                    cluster_id=cluster_id,
+                    cluster_address=request.remote_addr,
+                    cluster_port=net_port
+                )
+                claims = fill_additional_claims(cluster, "connectCluster")
+                secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=30), claims,
+                                                           fresh=timedelta(days=3))
+            else:
+                if is_key_freshness_expiring(token_info["fresh"]):
+                    claims = fill_additional_claims(cluster, "connectCluster")
+                    secret_key = create_jwt_secret_key_cluster(cluster_id, timedelta(days=30), claims,
+                                                               fresh=False)
+                else:
+                    secret_key = message[key_type]
+            response['secret_key'] = secret_key
+
+        else:
+            app.logger.info("The pairing does not match")
+            response = {
+                'error': "Your pairing key does not match the one generated for your cluster"
+            }
+    except Exception as e:
+        print(traceback.format_exc())
+        if str(e) == "No token supplied" or str(e) == "Not enough segments" or str(e) == "Too many segments" or \
+                str(e) == "Signature verification failed" or str(e) == "Algorithm not supported":
+            response = {
+                'error': "The key introduced is invalid"
+            }
+        elif e == ExpiredSignatureError:
+            if key_type == 'pairing_key':
+                mongo_delete_cluster(str(cluster['_id']))
+                response = {
+                    'error': "Your pairing key is no longer valid. Please try to register your cluster again. "
+                }
+            else:
+                response = {
+                    'error': "Your token has expired; please log in again to the Dashboard to ask "
+                             "again to attach your cluster. "
+                }
+        else:
+            response = {
+                'error': str(e)
+            }
+    return response
+
 
 @socketio.on('connect', namespace='/register')
 def on_connect():
@@ -97,24 +177,36 @@ def on_connect():
     emit('sc1', {'Hello-Cluster_Manager': 'please send your cluster info'}, namespace='/register')
 
 
+# @jwt_auth_required()    # TODO: pick the claims from the decoded token and use them for the token_validation()
+# function (if there are 2 tokens in the request...)
 @socketio.on('cs1', namespace='/register')
+@jwt_fresh_required()
 def handle_init_client(message):
     app.logger.info('SocketIO - Received Cluster_Manager_to_System_Manager_1: {}:{}'.
                     format(request.remote_addr, request.environ.get('REMOTE_PORT')))
     app.logger.info(message)
+    net_port = message['network_component_port']
+    # del message['manager_port']
+    del message['network_component_port']
+    app.logger.info("MONGODB - checking if the cluster introduced is in our Database...")
+    existing_cl = mongo_find_by_username(message)
+    if existing_cl is None:
+        response = {
+            'error': "The cluster information is incorrect or the cluster is not yet registered, please log in in the "
+                     "Dashboard and add your cluster there. "
+        }
+    elif existing_cl['pairing_complete']:
+        if message['secret_key'] == "":
+            response = {
+                'warning': "The pairing was already completed; please authenticate with the cluster's secret key",
+                'id': str(existing_cl['_id'])
+            }
+        else:
+            response = token_validation(message, 'secret_key', existing_cl, net_port, request.remote_addr)
+    else:
+        response = token_validation(message, 'pairing_key', existing_cl, net_port, request.remote_addr)
 
-    cid = mongo_upsert_cluster(cluster_ip=request.remote_addr, message=message)
-    x = {
-        'id': str(cid)
-    }
-
-    net_register_cluster(
-        cluster_id=str(cid),
-        cluster_address=request.remote_addr,
-        cluster_port=message['network_component_port']
-    )
-
-    emit('sc2', json.dumps(x), namespace='/register')
+    emit('sc2', json.dumps(response), namespace='/register')
 
 
 @socketio.event(namespace='/register')

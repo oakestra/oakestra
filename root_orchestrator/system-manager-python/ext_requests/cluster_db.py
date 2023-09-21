@@ -101,3 +101,40 @@ def mongo_update_cluster_information(cluster_id, data):
                   'last_modified': datetime_now, 'last_modified_timestamp': datetime_now_timestamp,
                   'worker_groups': worker_groups}},
         upsert=True)
+
+
+def mongo_get_clusters_of_user(user_id):
+    return db.mongo_clusters.db.clusters.aggregate([{'$match': {"userId": user_id}}])
+
+
+def mongo_add_cluster(data):
+    db.app.logger.info("MONGODB - insert cluster...")
+    new_job = db.mongo_clusters.db.clusters.insert_one(data)
+    inserted_id = new_job.inserted_id
+
+    db.app.logger.info("MONGODB - cluster {} inserted".format(str(inserted_id)))
+    db.mongo_clusters.db.clusters.find_one_and_update({'_id': ObjectId(inserted_id)},
+                                                      {'$set': data}, return_document=True)
+    return str(inserted_id)
+
+
+def mongo_delete_cluster(cluster_id):
+    db.mongo_clusters.db.clusters.find_one_and_delete({'_id': ObjectId(cluster_id)})
+    db.app.logger.info("MONGODB - cluster {} deleted")
+
+
+def mongo_find_by_name_and_location(cluster):
+    return db.mongo_clusters.db.clusters.find_one({'cluster_name': cluster['cluster_name'],
+                                                   'cluster_location': cluster['cluster_location']})
+
+
+def mongo_update_pairing_complete(cluster_id):
+    db.app.logger.info("MONGODB - update pairing key...")
+    db.mongo_clusters.db.clusters.find_one_and_update({'_id': ObjectId(cluster_id)},
+                                                      {'$set': {'pairing_complete': True}},
+                                                      return_document=True)
+
+
+def mongo_find_by_username(cluster):
+    return db.mongo_clusters.db.clusters.find_one({'cluster_name': cluster['cluster_name'],
+                                                   'user_name': cluster['user_name']})
