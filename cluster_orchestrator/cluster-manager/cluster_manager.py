@@ -206,7 +206,7 @@ def handle_init_final(jsonarg):
     sio.disconnect()
     if MY_ASSIGNED_CLUSTER_ID is not None:
         app.logger.info('Received ID. Go ahead with Background Jobs')
-        prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID)
+        prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID,app.logger)
         background_job_send_aggregated_information_to_sm()
     else:
         app.logger.info('No ID received.')
