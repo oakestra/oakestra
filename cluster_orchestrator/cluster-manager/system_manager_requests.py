@@ -17,7 +17,7 @@ def send_aggregated_info_to_sm(my_id, time_interval):
         data = mongo_aggregate_node_information(time_interval)
         threading.Thread(group=None, target=send_aggregated_info,
                          args=(my_id, data)).start()
-        prometheus_set_metrics(my_id=my_id, data=data)
+        prometheus_set_metrics(data)
     except Exception as e:
         print(e)
         traceback.print_exc()
