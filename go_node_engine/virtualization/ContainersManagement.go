@@ -11,7 +11,7 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/struCoder/pidusage"
+	"github.com/shirou/gopsutil/docker"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
@@ -38,7 +38,9 @@ var runtime = ContainerRuntime{
 var containerdSingletonCLient sync.Once
 var startContainerMonitoring sync.Once
 
-const NAMESPACE = "edge.io"
+const NAMESPACE = "oakestra"
+const CGROUP_BASE_CPU = "/sys/fs/cgroup/cpu,cpuacct/" + NAMESPACE
+const CGROUP_BASE_MEM = "/sys/fs/cgroup/memory/" + NAMESPACE
 
 func GetContainerdClient() *ContainerRuntime {
 	containerdSingletonCLient.Do(func() {
@@ -280,18 +282,24 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 				if err != nil {
 					logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 				}
+
 				resourceList := make([]model.Resources, 0)
+
 				for _, container := range deployedContainers {
-					task, err := container.Task(r.ctx, nil)
+
+					cpu, err := docker.CgroupCPU(container.ID(), CGROUP_BASE_CPU)
 					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+						logger.ErrorLogger().Printf("Unable to fetch container CPU: %v", err)
 						continue
 					}
-					sysInfo, err := pidusage.GetStat(int(task.Pid()))
+					cpu.Total()
+
+					mem, err := docker.CgroupMem(container.ID(), CGROUP_BASE_MEM)
 					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
+						logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
 						continue
 					}
+
 					containerMetadata, err := container.Info(r.ctx)
 					if err != nil {
 						logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
@@ -304,12 +312,12 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						continue
 					}
 					resourceList = append(resourceList, model.Resources{
-						Cpu:      fmt.Sprintf("%f", sysInfo.CPU),
-						Memory:   fmt.Sprintf("%f", sysInfo.Memory),
+						Cpu:      fmt.Sprintf("%f", cpu.Total()),
+						Memory:   fmt.Sprintf("%f", float64(mem.MemUsageInBytes)),
 						Disk:     fmt.Sprintf("%d", usage.Size),
-						Sname:    extractSnameFromTaskID(task.ID()),
+						Sname:    extractSnameFromTaskID(container.ID()),
 						Runtime:  model.CONTAINER_RUNTIME,
-						Instance: extractInstanceNumberFromTaskID(task.ID()),
+						Instance: extractInstanceNumberFromTaskID(container.ID()),
 					})
 				}
 				//NOTIFY WITH THE CURRENT CONTAINERS STATUS
