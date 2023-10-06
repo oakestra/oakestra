@@ -150,7 +150,7 @@ func getMemoryMB() int {
 		logger.ErrorLogger().Printf("Error: %s", err.Error())
 		return 0
 	}
-	return int(mem.Free >> 20)
+	return int(mem.Available >> 20)
 }
 
 func getMemoryUsage() float64 {
