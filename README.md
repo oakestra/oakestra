@@ -74,7 +74,7 @@ sudo -E docker-compose -f run-a-cluster/1-DOC.yaml up
 **1-DOC** stands for 1 Device One Cluster, meaning that all the components are deployed locally. 
 
 ### Your first worker node 🍃
-<a name="your-first-worker-node 🍃"></a>
+<a name="your-first-worker-node-🍃"></a>
 
 Download and install the Node Engine and the Network Manager:
 ```
