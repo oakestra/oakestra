@@ -9,7 +9,7 @@ logger = None
 def add_or_set_metric(name, value):
     global metrics, logger
     metrics_name = "_gauge_" + str(name) + "_" + str(cluster_id)
-    if type(value) is not list and type(value) is not dict:
+    if type(value) is not list and type(value) is not dict and value is not None:
         try:
             if metrics_name in metrics:
                 metrics[metrics_name].set(value)

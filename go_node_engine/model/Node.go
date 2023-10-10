@@ -35,6 +35,7 @@ type Node struct {
 	NetworkInfo    map[string]string `json:"network_info"`
 	GpuDriver      string            `json:"gpu_driver"`
 	GpuUsage       float64           `json:"gpu_usage"`
+	GpuCores       int               `json:"gpu_cores"`
 	GpuTemp        float64           `json:"gpu_temp"`
 	GpuMemUsage    float64           `json:"gpu_mem_used"`
 	GpuTotMem      float64           `json:"gpu_tot_mem"`
@@ -98,6 +99,8 @@ func (n *Node) updateDynamicInfo() {
 		n.GpuUsage = 0
 		n.GpuMemUsage = 0
 		n.GpuTotMem = 0
+		n.GpuCores = 0
+		logger.ErrorLogger().Printf("Unable to set GPU Info: %v", err)
 	}
 	defer nvml.Shutdown()
 
@@ -105,7 +108,9 @@ func (n *Node) updateDynamicInfo() {
 	n.GpuTotMem = getTotGpuMem()
 	n.GpuMemUsage = getGpuMemUsage()
 	n.GpuUsage = getGpuUsage()
+	n.GpuCores = getGpuCores()
 	n.GpuTemp = getGpuTemp()
+
 }
 
 func SetNodeId(id string) {
@@ -252,10 +257,29 @@ func getGpuMemUsage() float64 {
 		if err != nil {
 			return 0.0
 		}
-		totMem += float64(*status.Utilization.Memory)
-
+		totMem += float64(*status.Memory.Global.Used) * 100 / float64(*status.Memory.Global.Used+*status.Memory.Global.Free)
 	}
 	return totMem / float64(count)
+}
+
+func getGpuCores() int {
+	count, err := nvml.GetDeviceCount()
+	if err != nil {
+		return 0.0
+	}
+
+	totCores := 0
+	for i := uint(0); i < count; i++ {
+		device, err := nvml.NewDevice(i)
+
+		status, err := device.Status()
+		if err != nil {
+			return 0.0
+		}
+		totCores += int(*status.Clocks.Cores)
+
+	}
+	return totCores
 }
 
 func getGpuUsage() float64 {

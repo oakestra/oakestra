@@ -43,11 +43,7 @@ def handle_mqtt_message(client, userdata, message):
 
     # if topic starts with nodes and ends with information
     if re_nodes_information_topic is not None:
-        cpu_used = payload.get('cpu')
-        mem_used = payload.get('memory')
-        cpu_cores_free = payload.get('free_cores')
-        memory_free_in_MB = payload.get('memory_free_in_MB')
-        mongo_find_node_by_id_and_update_cpu_mem(client_id, cpu_used, cpu_cores_free, mem_used, memory_free_in_MB)
+        mongo_find_node_by_id_and_update_cpu_mem(client_id, payload)
     if re_job_deployment_topic is not None:
         sname = payload.get('sname')
         status = payload.get('status')
