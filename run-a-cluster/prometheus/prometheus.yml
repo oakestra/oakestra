@@ -17,4 +17,4 @@ scrape_configs:
     # metrics_path defaults to '/metrics'
     # scheme defaults to 'http'.
     static_configs:
-    - targets: ['cluster_manager:10001']
+    - targets: ['0.0.0.0:10001']
