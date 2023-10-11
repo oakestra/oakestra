@@ -238,7 +238,6 @@ func getGpuDriver() string {
 }
 
 func getGpuMemUsage() float64 {
-
 	n, err := gpu.NvsmiDeviceCount()
 	if err != nil || n == 0 {
 		return 0
@@ -246,15 +245,18 @@ func getGpuMemUsage() float64 {
 
 	totMem := 0.0
 	for i := 0; i < n; i++ {
-		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "utilization.memory")
+		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.used")
 		if err != nil {
 			return 0
 		}
-		mem, err := strconv.Atoi(res)
-		if err != nil {
-			return 0
+		totm := getTotGpuMem()
+		if totm >= 0 {
+			currmem, err := strconv.Atoi(res)
+			if err != nil {
+				return 0
+			}
+			totMem += float64(currmem) * 100 / getTotGpuMem()
 		}
-		totMem += float64(mem)
 	}
 	return totMem / float64(n)
 }
