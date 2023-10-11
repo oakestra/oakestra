@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
@@ -10,6 +9,7 @@ import (
 	"github.com/shirou/gopsutil/mem"
 	psnet "github.com/shirou/gopsutil/net"
 	"go_node_engine/logger"
+	"go_node_engine/model/gpu"
 	"net"
 	"os"
 	"strconv"
@@ -92,18 +92,6 @@ func (n *Node) updateDynamicInfo() {
 	n.NetworkInfo = getNetworkInfo()
 
 	// GPU Info
-	err := nvml.Init()
-	if err != nil {
-		n.GpuDriver = "None"
-		n.GpuTemp = 0
-		n.GpuUsage = 0
-		n.GpuMemUsage = 0
-		n.GpuTotMem = 0
-		n.GpuCores = 0
-		logger.ErrorLogger().Printf("Unable to set GPU Info: %v", err)
-	}
-	defer nvml.Shutdown()
-
 	n.GpuDriver = getGpuDriver()
 	n.GpuTotMem = getTotGpuMem()
 	n.GpuMemUsage = getGpuMemUsage()
@@ -234,110 +222,110 @@ func getSupportedTechnologyList() []string {
 }
 
 func getGpuDriver() string {
-	version, err := nvml.GetDriverVersion()
+	n, err := gpu.NvsmiDeviceCount()
 	if err != nil {
-		return ""
+		return "-"
 	}
 
-	return version
+	for i := 0; i < n; i++ {
+		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "driver_version")
+		if err != nil {
+			return "-"
+		}
+		return res
+	}
+	return "-"
 }
 
 func getGpuMemUsage() float64 {
 
-	count, err := nvml.GetDeviceCount()
-	if err != nil {
-		return 0.0
+	n, err := gpu.NvsmiDeviceCount()
+	if err != nil || n == 0 {
+		return 0
 	}
 
 	totMem := 0.0
-	for i := uint(0); i < count; i++ {
-		device, err := nvml.NewDevice(i)
-
-		status, err := device.Status()
+	for i := 0; i < n; i++ {
+		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "utilization.memory")
 		if err != nil {
-			return 0.0
+			return 0
 		}
-		totMem += float64(*status.Memory.Global.Used) * 100 / float64(*status.Memory.Global.Used+*status.Memory.Global.Free)
+		mem, err := strconv.Atoi(res)
+		if err != nil {
+			return 0
+		}
+		totMem += float64(mem)
 	}
-	return totMem / float64(count)
+	return totMem / float64(n)
 }
 
 func getGpuCores() int {
-	count, err := nvml.GetDeviceCount()
-	if err != nil {
-		return 0.0
+	n, err := gpu.NvsmiDeviceCount()
+	if err != nil || n == 0 {
+		return 0
 	}
-
-	totCores := 0
-	for i := uint(0); i < count; i++ {
-		device, err := nvml.NewDevice(i)
-
-		status, err := device.Status()
-		if err != nil {
-			return 0.0
-		}
-		totCores += int(*status.Clocks.Cores)
-
-	}
-	return totCores
+	return n
 }
 
 func getGpuUsage() float64 {
-	count, err := nvml.GetDeviceCount()
-	if err != nil {
-		return 0.0
+	n, err := gpu.NvsmiDeviceCount()
+	if err != nil || n == 0 {
+		return 0
 	}
 
 	totUage := 0.0
-	for i := uint(0); i < count; i++ {
-		device, err := nvml.NewDevice(i)
-
-		status, err := device.Status()
+	for i := 0; i < n; i++ {
+		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "utilization.gpu")
 		if err != nil {
-			return 0.0
+			return 0
 		}
-		totUage += float64(*status.Utilization.GPU)
-
+		gpuusage, err := strconv.Atoi(res)
+		if err != nil {
+			return 0
+		}
+		totUage += float64(gpuusage)
 	}
-	return totUage / float64(count)
+	return totUage / float64(n)
 }
 
 func getTotGpuMem() float64 {
-	count, err := nvml.GetDeviceCount()
-	if err != nil {
-		return 0.0
+	n, err := gpu.NvsmiDeviceCount()
+	if err != nil || n == 0 {
+		return 0
 	}
 
 	totMem := 0.0
-	for i := uint(0); i < count; i++ {
-		device, err := nvml.NewDevice(i)
-
-		status, err := device.Status()
+	for i := 0; i < n; i++ {
+		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.total")
 		if err != nil {
-			return 0.0
+			return 0
 		}
-		totMem += float64(*status.Memory.Global.Free + *status.Memory.Global.Used)
-
+		gpuMem, err := strconv.Atoi(res)
+		if err != nil {
+			return 0
+		}
+		totMem += float64(gpuMem)
 	}
 	return totMem
 }
 
 func getGpuTemp() float64 {
-	count, err := nvml.GetDeviceCount()
-	if err != nil {
-		return 0.0
+	n, err := gpu.NvsmiDeviceCount()
+	if err != nil || n == 0 {
+		return 0
 	}
 
 	totTemp := 0.0
-	for i := uint(0); i < count; i++ {
-		device, err := nvml.NewDevice(i)
-
-		status, err := device.Status()
+	for i := 0; i < n; i++ {
+		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "temperature.gpu")
 		if err != nil {
-			return 0.0
+			return 0
 		}
-		totTemp += float64(*status.Temperature)
-
+		currTemp, err := strconv.Atoi(res)
+		if err != nil {
+			return 0
+		}
+		totTemp += float64(currTemp)
 	}
-	return totTemp / float64(count)
+	return totTemp / float64(n)
 }
