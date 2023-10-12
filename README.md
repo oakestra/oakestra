@@ -1,6 +1,6 @@
 ![Oakestra](res/oakestra-white.png)
 
-Oakestra is an orchestration platform designed for Edge Computing.
+**Oakestra** is an orchestration platform designed for Edge Computing.
 Popular orchestration platforms such as Kubernetes or K3s struggle at maintaining workloads across heterogeneous and constrained devices. 
 Oakestra is build from the ground up to support computation in a flexible way at the edge. 
 
@@ -8,29 +8,49 @@ Oakestra is build from the ground up to support computation in a flexible way at
 
 📚 Check out the project wiki at: [oakestra.io/docs](http://oakestra.io/docs)
 
-# 🌳 Get Started
+---
 
-Before being able to deploy your first application, we must create a fully functional Oakestra Root 🫚, to that we attach the clusters 🪵, and to each cluster we attach at least one worker node 🍃.
+#### Table of Contents  
+- [🌳 Get Started](#🌳-get-started)  
+  - [Requirements](#requirements)
+  - [Your first cluster 🪵](#your-first-cluster-🪵)
+  - [Your first worker node 🍃](#your-first-worker-node-🍃)
+  - [Your first application 💻](#your-first-application-💻)
+- [🎯 Troubleshoot ](#🎯-troubleshoot)  
+- [🛠️ How to create a development cluster](#🛠️-how-to-create-a-development-cluster)  
+- [🎼 Deployment descriptor](#🎼-deployment-descriptor)  
+- [🩻 Use the APIs to deploy a new application and check clusters status](#🩻-use-the-apis-to-deploy-a-new-application-and-check-clusters-status)  
+- [🕸️ Networking ](#🕸️-networking)  
+---
+
+# 🌳 Get Started
+<a name="🌳-get-started"></a>
+
+Before being able to deploy your first application, we must create a fully functional Oakestra Root 👑, to that we attach the clusters 🪵, and to each cluster we attach at least one worker node 🍃.
 
 In this get-started guide, we place everything on the same machine. More complex setups can be composed following our wiki at [oakestra.io/docs/getstarted/get-started-cluster](http://oakestra.io/docs/getstarted/get-started-cluster/).
 
 ### Requirements 
+<a name="requirements"></a>
 
 - Linux machine with iptables
 - Docker + Docker Compose 
 
 ### Your first cluster 🪵
+<a name="your-first-cluster-🪵"></a>
 Let's start our Root, the dashboard, and a cluster orchestrator all together.
 
 **1)** Let's set the initial environment variables
 
-```
+```bash
 ## Choose a unique name for your cluster
 export CLUSTER_NAME=My_Awesome_Cluster
 ## Give a name or geo coordinates to the current location
 export CLUSTER_LOCATION=My_Awesome_Apartment
 ## IP address where this root component can be reached to access the APIs
 export SYSTEM_MANAGER_URL=<IP address>
+# Note: Use a non-loopback interface IP (e.g. any of your real interfaces that have internet access).
+# "0.0.0.0" leads to server issues
 ```
 
 A location can be in the following forms:
@@ -39,19 +59,22 @@ A location can be in the following forms:
 
 **2)** Clone and move inside the repo
 
-```
+```bash
+# Feel free to use https or ssh for cloning
 git clone https://github.com/oakestra/oakestra.git && cd oakestra
 ```
 
-**3)** Start the root and cluster orchestrator using the 1-DOC.yaml compose file.
+**3)** Start the root and cluster orchestrator using the `1-DOC.yaml` compose file.
 
-```
+```bash
 sudo -E docker-compose -f run-a-cluster/1-DOC.yaml up
+# If this should not work for you try "docker compose" instead
 ```
 
-1-DOC stands for 1 Device One Cluster, meaning that all the components are deployed locally. 
+**1-DOC** stands for 1 Device One Cluster, meaning that all the components are deployed locally. 
 
 ### Your first worker node 🍃
+<a name="your-first-worker-node-🍃"></a>
 
 Download and install the Node Engine and the Network Manager:
 ```
@@ -62,7 +85,7 @@ wget -c https://github.com/oakestra/oakestra-net/releases/download/v0.4.203/NetM
 ```
 
 Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follows:
-```
+```json
 {
   "NodePublicAddress": "<IP ADDRESS OF THIS DEVICE>",
   "NodePublicPort": "<PORT REACHABLE FROM OUTSIDE, use 50103 as default>",
@@ -85,12 +108,16 @@ If you see the NodeEngine reporting metrics to the Cluster...
 
 🏆 Success!
 
-### Your first application️ 💻
+### Your first application 💻
+<a name="your-first-application-💻"></a>
 
 Let's use the dashboard to deploy you first application. 
 
-navigate to `http://SYSTEM_MANAGER_URL` and login with the default credentials: User: Admin   Pw: Admin
-Deactivate the Organization flag for now. 
+Navigate to `http://SYSTEM_MANAGER_URL` and login with the default credentials:
+-  Username: `Admin`
+-  Password: `Admin`
+
+Deactivate the Organization flag for now. *(Not like it is depicted in the reference image)*
 
 ![](https://hackmd.io/_uploads/H1-Wncoh2.png)
 
@@ -115,7 +142,8 @@ The Node IP field represents the address where you can reach your service.
 
 You can try in your browser if you can see your nginx application at `http://NODE_IP/`
 
-# 🎯 Troubleshoot  
+# 🎯 Troubleshoot
+<a name="🎯-troubleshoot"></a>
 
 - #### 1-DOC startup sends a warning regarding missing cluster name or location.
   After exporting the env variables at step 1, if you're using sudo with docker-compose, remember the `-E` parameter.
@@ -134,7 +162,8 @@ You can try in your browser if you can see your nginx application at `http://NOD
 
 - #### Other stuff? Contact us on Discord!
 
-# 🛠️ How to create a development cluster 
+# 🛠️ How to create a development cluster
+<a name="🛠️-how-to-create-a-development-cluster"></a>
 
 ### Root Orchestrator 
 
@@ -198,6 +227,7 @@ Then configure the NetManager and perform the startup as usual.
 
 
 # 🎼 Deployment descriptor
+<a name="🎼-deployment-descriptor"></a>
 
 Together with the application, it's possible to perform a deployment by passing a deployment descriptor (or SLA) in `.json` format to the APIs or the frontend.
 
@@ -317,6 +347,8 @@ From the dashboard you can create the application graphically and set the servic
 ```
  
 # 🩻  Use the APIs to deploy a new application and check clusters status
+<a name="🩻-use-the-apis-to-deploy-a-new-application-and-check-clusters-status"></a>
+
 
 ### Login
 After running a cluster you can use the debug OpenAPI page to interact with the apis and use the infrastructure.
@@ -367,6 +399,7 @@ each call to this endpoint generates a new instance of the service
 - Use `GET /api/clusters/` to get all the registered clusters.
 - Use `GET /api/clusters/active` to get all the clusters currently active and their resources.
 
-# 🕸️ Networking 
+# 🕸️ Networking
+<a name="🕸️-networking"></a>
 
 The network component is maintained in: [https://www.oakestra.io/docs/networking](https://www.oakestra.io/docs/networking)
