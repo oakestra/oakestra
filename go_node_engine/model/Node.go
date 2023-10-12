@@ -93,7 +93,7 @@ func (n *Node) updateDynamicInfo() {
 
 	// GPU Info
 	n.GpuDriver = getGpuDriver()
-	n.GpuTotMem = getTotGpuMem()
+	n.GpuTotMem = getTotGpuMemFreeMB()
 	n.GpuMemUsage = getGpuMemUsage()
 	n.GpuUsage = getGpuUsage()
 	n.GpuCores = getGpuCores()
@@ -299,6 +299,27 @@ func getTotGpuMem() float64 {
 	totMem := 0.0
 	for i := 0; i < n; i++ {
 		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.total")
+		if err != nil {
+			return 0
+		}
+		gpuMem, err := strconv.Atoi(res)
+		if err != nil {
+			return 0
+		}
+		totMem += float64(gpuMem)
+	}
+	return totMem
+}
+
+func getTotGpuMemFreeMB() float64 {
+	n, err := gpu.NvsmiDeviceCount()
+	if err != nil || n == 0 {
+		return 0
+	}
+
+	totMem := 0.0
+	for i := 0; i < n; i++ {
+		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.free")
 		if err != nil {
 			return 0
 		}
