@@ -3,11 +3,11 @@ module go_node_engine
 go 1.19
 
 require (
-	github.com/NVIDIA/gpu-monitoring-tools v0.0.0-20211102125545-5a2c58442e48
 	github.com/containerd/containerd v1.7.6
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/opencontainers/runtime-spec v1.1.0-rc.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
+	github.com/struCoder/pidusage v0.2.1
 	gotest.tools v2.2.0+incompatible
 )
 
