@@ -1,0 +1,35 @@
+{
+  "sla_version" : "v2.0",
+  "customerID" : "Admin",
+  "applications" : [
+    {
+      "applicationID": "627527c1a4a5edb43d085f37",
+      "application_name": "test",
+      "application_namespace": "test",
+      "microservices": [
+        {
+          "microserviceID": "",
+          "microservice_name": "test",
+          "microservice_namespace": "test",
+          "virtualization": "container",
+          "memory": 0,
+          "vcpus": 0,
+          "vgpus": 0,
+          "vtpus": 0,
+          "bandwidth_in": 0,
+          "bandwidth_out": 0,
+          "storage": 0,
+          "code": "docker.io/library/nginx",
+          "state": "",
+          "port": "80:80",
+          "cmd": [
+            "ls"
+          ],
+          "added_files": [],
+          "constraints": [],
+          "connectivity": []
+        }
+      ]
+    }
+  ]
+}
