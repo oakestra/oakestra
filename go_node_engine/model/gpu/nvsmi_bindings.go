@@ -14,6 +14,8 @@ const (
 	formatArg = "--format=csv,noheader,nounits"
 )
 
+// NvsmiQuery Query to nvidia-smi. Refer to https://nvidia.custhelp.com/app/answers/detail/a_id/3751/~/useful-nvidia-smi-queries
+// For the available query
 func NvsmiQuery(id string, query string) (string, error) {
 	var out bytes.Buffer
 
@@ -27,6 +29,7 @@ func NvsmiQuery(id string, query string) (string, error) {
 	return strings.TrimSpace(out.String()), nil
 }
 
+// NvsmiDeviceCount Counts the available nvidia-smi compatible GPUs in the machine
 func NvsmiDeviceCount() (int, error) {
 	var out bytes.Buffer
 
