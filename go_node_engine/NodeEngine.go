@@ -63,7 +63,7 @@ func clusterHandshake() requests.HandshakeAnswer {
 	logger.InfoLogger().Printf("CPU Cores: %d", node.CpuCores)
 	logger.InfoLogger().Printf("CPU Usage: %f", node.CpuUsage)
 	logger.InfoLogger().Printf("Mem Usage: %f", node.MemoryUsed)
-	logger.InfoLogger().Printf("GPU Present: %t", len(node.GpuInfo) > 0)
+	logger.InfoLogger().Printf("GPU Driver: %s", node.GpuDriver)
 	logger.InfoLogger().Printf("\n________________")
 	clusterReponse := requests.ClusterHandshake(*clusterAddress, *clusterPort)
 	logger.InfoLogger().Printf("Got cluster response with MQTT port %s and node ID %s", clusterReponse.MqttPort, clusterReponse.NodeId)
