@@ -41,7 +41,6 @@ var containerdSingletonCLient sync.Once
 var startContainerMonitoring sync.Once
 
 const NAMESPACE = "oakestra"
-const CGROUP_BASE_CPU = "/sys/fs/cgroup/cpu,cpuacct/" + NAMESPACE
 const CGROUP_BASE_MEM = "/sys/fs/cgroup/memory/" + NAMESPACE
 
 func GetContainerdClient() *ContainerRuntime {
