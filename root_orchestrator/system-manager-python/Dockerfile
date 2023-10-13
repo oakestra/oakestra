@@ -1,9 +1,9 @@
-FROM python:3.10
+FROM python:3.10-alpine
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
 ADD requirements.txt /
 
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt --no-cache-dir && rm /requirements.txt
 
 ADD . /
 
