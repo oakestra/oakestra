@@ -62,8 +62,7 @@ def mongo_find_node_by_name(node_name):
         return 'Error'
 
 
-def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_cpu_used, cpu_cores_free, node_mem_used,
-                                             node_memory_free_in_MB):
+def mongo_find_node_by_id_and_update_cpu_mem(node_id,  node_payload):
     global app, mongo_nodes
     app.logger.info('MONGODB - update cpu and memory of worker node {0} ...'.format(node_id))
     # o = mongo.db.nodes.find_one({'_id': node_id})
@@ -73,9 +72,20 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_cpu_used, cpu_cores_f
 
     mongo_nodes.db.nodes.find_one_and_update(
         {'_id': ObjectId(node_id)},
-        {'$set': {'current_cpu_percent': node_cpu_used, 'current_cpu_cores_free': cpu_cores_free,
-                  'current_memory_percent': node_mem_used, 'current_free_memory_in_MB': node_memory_free_in_MB,
-                  'last_modified': time_now, 'last_modified_timestamp': datetime.timestamp(time_now)}},
+        {'$set': {
+            'current_cpu_percent': node_payload.get('cpu',0),
+            'current_cpu_cores_free': node_payload.get('free_cores',0),
+            'current_memory_percent': node_payload.get('memory',0),
+            'current_free_memory_in_MB': node_payload.get('memory_free_in_MB',0),
+            'gpu_driver': node_payload.get('gpu_driver', "-"),
+            'gpu_usage': node_payload.get('gpu_usage', 0),
+            'gpu_cores': node_payload.get('gpu_cores', 0),
+            'gpu_temp': node_payload.get('gpu_temp', 0),
+            'gpu_mem_used': node_payload.get('gpu_mem_used', 0),
+            'gpu_tot_mem': node_payload.get('gpu_tot_mem', 0),
+            'last_modified': time_now,
+            'last_modified_timestamp': datetime.timestamp(time_now)}
+        },
         upsert=True)
 
     return 1
@@ -105,8 +115,12 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     cumulative_cpu = 0
     cumulative_cpu_cores = 0
     cumulative_memory = 0
+    gpu_tot_mem = 0
+    gpu_mem_used = 0
+    gpu_temp = 0
+    gpu_drivers = []
+    gpu_usage = 0
     gpu_cores = 0
-    gpu_percent = 0
     cumulative_memory_in_mb = 0
     number_of_active_nodes = 0
     technology = []
@@ -122,11 +136,12 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
                 cumulative_cpu_cores += n.get('current_cpu_cores_free', 0)
                 cumulative_memory += n.get('current_memory_percent', 0)
                 cumulative_memory_in_mb += n.get('current_free_memory_in_MB', 0)
-                gpu_info = n.get('gpu_info')
-                gpu_cores = 0
-                if gpu_info:
-                    gpu_cores = len(gpu_info)
-                gpu_percent += n.get('gpu_percent', 0)
+                gpu_drivers.append(n.get('gpu_driver', "-"))
+                gpu_usage += n.get('gpu_usage', 0)
+                gpu_cores += n.get('gpu_cores', 0)
+                gpu_temp += n.get('gpu_temp', 0)
+                gpu_tot_mem += n.get('gpu_tot_mem', 0)
+                gpu_mem_used += n.get('gpu_mem_used', 0)
                 number_of_active_nodes += 1
                 for t in n.get('node_info').get('technology'):
                     technology.append(t) if t not in technology else technology
@@ -139,10 +154,22 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     mongo_update_jobs_status(TIME_INTERVAL)
     jobs = mongo_find_all_jobs()
 
-    return {'cpu_percent': cumulative_cpu, 'memory_percent': cumulative_memory,
-            'cpu_cores': cumulative_cpu_cores, 'cumulative_memory_in_mb': cumulative_memory_in_mb,
-            'gpu_cores': gpu_cores, 'gpu_percent': gpu_percent,
-            'number_of_nodes': number_of_active_nodes, 'jobs': jobs, 'virtualization': technology, 'more': 0}
+    return {
+        'cpu_percent': cumulative_cpu,
+        'memory_percent': cumulative_memory,
+        'cpu_cores': cumulative_cpu_cores,
+        'cumulative_memory_in_mb': cumulative_memory_in_mb,
+        'gpu_drivers': gpu_drivers,
+        'gpu_percent': gpu_usage,
+        'gpu_cores': gpu_cores,
+        'gpu_temp': gpu_temp,
+        'gpu_tot_mem': gpu_tot_mem,
+        'gpu_mem_used': gpu_mem_used,
+        'number_of_nodes': number_of_active_nodes,
+        'jobs': jobs,
+        'virtualization': technology,
+        'more': 0
+    }
 
 
 # ................. Job Operations .......................#

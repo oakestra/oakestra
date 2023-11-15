@@ -11,6 +11,8 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/shirou/gopsutil/docker"
+	"github.com/shirou/gopsutil/process"
 	"github.com/struCoder/pidusage"
 	"go_node_engine/logger"
 	"go_node_engine/model"
@@ -38,7 +40,8 @@ var runtime = ContainerRuntime{
 var containerdSingletonCLient sync.Once
 var startContainerMonitoring sync.Once
 
-const NAMESPACE = "edge.io"
+const NAMESPACE = "oakestra"
+const CGROUP_BASE_MEM = "/sys/fs/cgroup/memory/" + NAMESPACE
 
 func GetContainerdClient() *ContainerRuntime {
 	containerdSingletonCLient.Do(func() {
@@ -270,6 +273,30 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	r.removeContainer(container)
 }
 
+func getTotalCpuUsageByPid(pid int32) (float64, error) {
+	totCpu := 0.0
+	procs, err := process.NewProcess(pid)
+	if err != nil {
+		logger.ErrorLogger().Printf("ERROR: %v", err)
+		return 0, err
+	}
+
+	children, err := procs.Children()
+	if err != nil {
+		return 0, err
+	}
+
+	for _, child := range children {
+		cpuUsage, err := child.CPUPercent()
+		if err != nil {
+			logger.ErrorLogger().Printf("ERROR: %v", err)
+			return 0, err
+		}
+		totCpu += cpuUsage
+	}
+	return totCpu / float64(model.GetNodeInfo().CpuCores), nil
+}
+
 func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
 	//start container monitoring service
 	startContainerMonitoring.Do(func() {
@@ -280,18 +307,32 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 				if err != nil {
 					logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 				}
+
 				resourceList := make([]model.Resources, 0)
+
 				for _, container := range deployedContainers {
 					task, err := container.Task(r.ctx, nil)
 					if err != nil {
 						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
 						continue
 					}
-					sysInfo, err := pidusage.GetStat(int(task.Pid()))
+
+					cpuUsage, err := getTotalCpuUsageByPid(int32(task.Pid()))
 					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
+						sysInfo, err := pidusage.GetStat(int(task.Pid()))
+						if err != nil {
+							logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
+							continue
+						}
+						cpuUsage = sysInfo.CPU / float64(model.GetNodeInfo().CpuCores)
+					}
+
+					mem, err := docker.CgroupMem(container.ID(), CGROUP_BASE_MEM)
+					if err != nil {
+						logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
 						continue
 					}
+
 					containerMetadata, err := container.Info(r.ctx)
 					if err != nil {
 						logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
@@ -304,12 +345,12 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						continue
 					}
 					resourceList = append(resourceList, model.Resources{
-						Cpu:      fmt.Sprintf("%f", sysInfo.CPU),
-						Memory:   fmt.Sprintf("%f", sysInfo.Memory),
+						Cpu:      fmt.Sprintf("%f", cpuUsage),
+						Memory:   fmt.Sprintf("%f", float64(mem.MemUsageInBytes)),
 						Disk:     fmt.Sprintf("%d", usage.Size),
-						Sname:    extractSnameFromTaskID(task.ID()),
+						Sname:    extractSnameFromTaskID(container.ID()),
 						Runtime:  model.CONTAINER_RUNTIME,
-						Instance: extractInstanceNumberFromTaskID(task.ID()),
+						Instance: extractInstanceNumberFromTaskID(container.ID()),
 					})
 				}
 				//NOTIFY WITH THE CURRENT CONTAINERS STATUS
