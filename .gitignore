@@ -56,3 +56,6 @@ deployment_helper/support/EdgeIO*
 
 # releases
 *.zip
+
+# vscode
+.vscode/
