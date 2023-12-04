@@ -2,7 +2,7 @@ import os
 from flask import Flask
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
-from clusters_blueprint import get_resource_blueprint
+from resources_blueprint import get_resource_blueprint
 from mongodb_client import mongo_init
 
 MY_PORT = os.environ.get("MY_PORT") or 10009
