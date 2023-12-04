@@ -39,7 +39,6 @@ def mongo_find_clusters_by_filter(filter):
 
 def mongo_find_active_clusters():
     now_timestamp = datetime.now().timestamp()
-    print (now_timestamp - CLUSTERS_FRESHNESS_INTERVAL)
     return mongo_find_clusters_by_filter(
         {'last_modified_timestamp': {'$gt': now_timestamp - CLUSTERS_FRESHNESS_INTERVAL}}
     )
