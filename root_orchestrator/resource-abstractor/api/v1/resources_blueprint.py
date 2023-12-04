@@ -24,6 +24,7 @@ class ResourceSchema(Schema):
     total_cpu_cores = fields.Integer()
     total_gpu_cores = fields.Integer()
     virtualization = fields.List(fields.String())
+    last_modified_timestamp = fields.Double()
 
 class ResourceFilterSchema(Schema):
     active = fields.Boolean()
