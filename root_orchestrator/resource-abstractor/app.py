@@ -2,7 +2,7 @@ import os
 from flask import Flask
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
-from resources_blueprint import get_resource_blueprint
+from api.v1.resources_blueprint import get_resource_blueprint
 from mongodb_client import mongo_init
 
 MY_PORT = os.environ.get("MY_PORT") or 10009
@@ -28,7 +28,7 @@ swaggerui_blueprint = get_swaggerui_blueprint(
     },
 )
 app.register_blueprint(swaggerui_blueprint)
-api.register_blueprint(get_resource_blueprint())
+api.register_blueprint(get_resource_blueprint(), url_prefix='/api/v1')
 
 
 @app.route('/', methods=['GET'])

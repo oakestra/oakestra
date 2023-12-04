@@ -6,7 +6,7 @@ from bson.objectid import ObjectId
 from werkzeug.exceptions import NotFound, BadRequest
 
 resourceblp = Blueprint(
-    'Resource Info', 'resource info', url_prefix='/api/info'
+    'Resource Info', 'resource info', url_prefix='/info'
 )
 
 def get_resource_blueprint():
