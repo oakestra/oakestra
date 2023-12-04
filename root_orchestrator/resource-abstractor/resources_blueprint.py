@@ -1,6 +1,6 @@
 from flask_smorest import Blueprint
 from flask.views import MethodView
-from mongodb_client import mongo_get_all_clusters, mongo_get_cluster_by_id
+from mongodb_client import mongo_find_all_clusters, mongo_find_cluster_by_id, mongo_find_active_clusters
 from marshmallow import Schema, fields
 from bson.objectid import ObjectId
 from werkzeug.exceptions import NotFound, BadRequest
@@ -25,24 +25,31 @@ class ResourceSchema(Schema):
     total_gpu_cores = fields.Integer()
     virtualization = fields.List(fields.String())
 
+class ResourceFilterSchema(Schema):
+    active = fields.Boolean()
+
 @resourceblp.route('/')
 class AllResourcesController(MethodView):
 
+    @resourceblp.arguments(ResourceFilterSchema, location='query')
     @resourceblp.response(200, ResourceSchema(many=True), content_type="application/json")
-    def get(self, *args, **kwargs):
+    def get(self, args, *kwargs):
         # TODO: support pagination
-        clusters = list(mongo_get_all_clusters())
-        return clusters
+        active = args.get('active')
+        if active:
+            return list(mongo_find_active_clusters())
+        
+        return list(mongo_find_all_clusters())
     
 @resourceblp.route('/<resourceId>')
 class ResourceController(MethodView):
 
     @resourceblp.response(200, ResourceSchema(), content_type="application/json")
-    def get(self, resourceId, *args, **kwargs):
+    def get(self, resourceId, args, *kwargs):
         if ObjectId.is_valid(resourceId) is False:
             raise BadRequest()
         
-        cluster = mongo_get_cluster_by_id(resourceId)
+        cluster = mongo_find_cluster_by_id(resourceId)
         if cluster is None:
             raise NotFound()
 
