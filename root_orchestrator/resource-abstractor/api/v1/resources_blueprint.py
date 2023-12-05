@@ -55,3 +55,4 @@ class ResourceController(MethodView):
             raise NotFound()
 
         return cluster
+    
