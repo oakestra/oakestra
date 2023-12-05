@@ -14,7 +14,7 @@ mongo_clusers = None
 app = None
 
 def mongo_init(flask_app):
-    global mongo_clusters, mongo_jobs
+    global mongo_clusters
     global app
 
     app = flask_app
@@ -28,17 +28,20 @@ def mongo_init(flask_app):
 # .................... Cluster operations ................#
 ###########################################################
 
-def mongo_find_all_clusters():
-    return mongo_clusters.db.clusters.find()
-
-def mongo_find_cluster_by_id(cluster_id):
-    return mongo_clusters.db.clusters.find_one({"_id": ObjectId(cluster_id)})
-
-def mongo_find_clusters_by_filter(filter):
+def find_clusters_by_filter(filter):
     return mongo_clusters.db.clusters.find(filter)
 
-def mongo_find_active_clusters():
+def find_all_clusters():
+    return mongo_clusters.db.clusters.find()
+
+def find_cluster_by_id(cluster_id):
+    return mongo_clusters.db.clusters.find_one({"_id": ObjectId(cluster_id)})
+
+def find_active_clusters():
     now_timestamp = datetime.now().timestamp()
-    return mongo_find_clusters_by_filter(
+    return find_clusters_by_filter(
         {'last_modified_timestamp': {'$gt': now_timestamp - CLUSTERS_FRESHNESS_INTERVAL}}
     )
+
+def find_cluster_by_name(name):
+    return mongo_clusters.db.clusters.find_one({"name": name})

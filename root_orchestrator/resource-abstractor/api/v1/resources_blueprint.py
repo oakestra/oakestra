@@ -1,12 +1,12 @@
 from flask_smorest import Blueprint
 from flask.views import MethodView
-from mongodb_client import mongo_find_all_clusters, mongo_find_cluster_by_id, mongo_find_active_clusters
+from mongodb_client import find_all_clusters, find_cluster_by_id, find_active_clusters
 from marshmallow import Schema, fields
 from bson.objectid import ObjectId
 from werkzeug.exceptions import NotFound, BadRequest
 
 resourceblp = Blueprint(
-    'Resource Info', 'resource info', url_prefix='/info'
+    'Resource Info', 'resource info', url_prefix='/resources'
 )
 
 def get_resource_blueprint():
@@ -38,9 +38,9 @@ class AllResourcesController(MethodView):
         # TODO: support pagination
         active = args.get('active')
         if active:
-            return list(mongo_find_active_clusters())
+            return list(find_active_clusters())
         
-        return list(mongo_find_all_clusters())
+        return list(find_all_clusters())
     
 @resourceblp.route('/<resourceId>')
 class ResourceController(MethodView):
@@ -50,7 +50,7 @@ class ResourceController(MethodView):
         if ObjectId.is_valid(resourceId) is False:
             raise BadRequest()
         
-        cluster = mongo_find_cluster_by_id(resourceId)
+        cluster = find_cluster_by_id(resourceId)
         if cluster is None:
             raise NotFound()
 

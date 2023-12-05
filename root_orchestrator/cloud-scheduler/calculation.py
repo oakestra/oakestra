@@ -1,6 +1,4 @@
-import time
-from mongodb_client import mongo_find_cluster_by_location, is_cluster_active, mongo_find_all_active_clusters, \
-    mongo_find_cluster_by_name
+from resources import cluster_operations, resource_helper
 
 
 def calculate(job_id, job):
@@ -14,7 +12,6 @@ def calculate(job_id, job):
 
 
 def constraint_based_scheduling(job, constraints):
-    clusters = mongo_find_all_active_clusters()
     for constraint in constraints:
         type = constraint.get('type')
         if type == 'direct':
@@ -23,10 +20,10 @@ def constraint_based_scheduling(job, constraints):
 
 
 def direct_service_mapping(job, cluster_name):
-    cluster = mongo_find_cluster_by_name(cluster_name)  # can return None
+    cluster = cluster_operations.get_resource_by_name(cluster_name)  # can return None
 
     if cluster is not None:  # cluster found by location exists
-        if is_cluster_active(cluster):
+        if resource_helper.is_cluster_active(cluster):
             print('Cluster is active')
             cluster_specs = extract_specs(cluster)
             if does_cluster_respects_requirements(cluster_specs,job):
@@ -41,7 +38,7 @@ def direct_service_mapping(job, cluster_name):
 
 def first_fit_algorithm(job):
     """Which of the clusters fits the Qos of the deployment file as the first"""
-    active_clusters = mongo_find_all_active_clusters()
+    active_clusters = cluster_operations.get_resources(active=True)
 
     print('active_clusters: ')
     for cluster in active_clusters:
@@ -58,7 +55,7 @@ def greedy_load_balanced_algorithm(job, active_clusters=None):
     """Which of the clusters have the most capacity for a given job"""
 
     if active_clusters is None:
-        active_clusters = mongo_find_all_active_clusters()
+        active_clusters = cluster_operations.get_resources(active=True)
     qualified_clusters = []
 
     memory = 0
