@@ -18,4 +18,4 @@ ENV MY_PORT=10011
 
 EXPOSE 10011
 
-CMD ["python", "resource_abstractor.py"]
+CMD ["python", "app.py"]
