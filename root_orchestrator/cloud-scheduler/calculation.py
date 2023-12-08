@@ -1,4 +1,4 @@
-from resources import cluster_operations, resource_helper
+from resource_management import cluster_operations, resource_helper
 
 
 def calculate(job_id, job):

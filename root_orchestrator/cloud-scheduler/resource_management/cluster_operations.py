@@ -20,7 +20,7 @@ def get_resource_by_id(resource_id):
         # TODO check body not empty.
         return response.json()
     except exceptions.RequestException as e:
-        print('Calling Resource Abstractor /api/v1/resources/{resource_id} not successful.')
+        print(f'Calling Resource Abstractor /api/v1/resources/{resource_id} not successful.')
     
     return None
 
@@ -32,5 +32,12 @@ def get_resource_by_name(resource_name):
     for resource in resources:
         if resource.get('cluster_name') == resource_name:
             return resource
+    
+    return None
+
+def get_resource_by_job_id(job_id):
+    resource = get_resources(job_id=job_id)
+    if resource.len() > 0:
+        return resource[0]
     
     return None
