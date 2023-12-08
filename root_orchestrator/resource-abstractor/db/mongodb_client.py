@@ -52,5 +52,8 @@ def find_cluster_by_name(name):
 # .................... Job operations ................#
 ########################################################
 
+def find_all_jobs():
+    return mongo_jobs.db.jobs.find()
+
 def find_job_by_id(job_id):
     return mongo_jobs.db.jobs.find_one({"_id": ObjectId(job_id)})
