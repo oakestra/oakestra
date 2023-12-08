@@ -16,4 +16,4 @@ export CLUSTER_MONGO_PORT=10007
 
 export MY_PORT=10011
 
-.venv/bin/python resource_abstractor.py &
+.venv/bin/python app.py &
