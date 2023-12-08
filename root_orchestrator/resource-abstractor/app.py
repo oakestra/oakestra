@@ -31,7 +31,7 @@ swaggerui_blueprint = get_swaggerui_blueprint(
 app.register_blueprint(swaggerui_blueprint)
 
 for blp in blueprints:
-    api.register_blueprint(blp, url_prefix='/api/v1')
+    api.register_blueprint(blp)
 
 @app.route('/', methods=['GET'])
 def hello_world():

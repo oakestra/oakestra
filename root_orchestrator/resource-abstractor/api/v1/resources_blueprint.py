@@ -7,7 +7,7 @@ from werkzeug import exceptions
 from db import *
 
 resourcesblp = Blueprint(
-    'Resource Info', 'resource info', url_prefix='/resources'
+    'Resources Info', 'resources_info', url_prefix='/api/v1/resources'
 )
 
 class ResourceSchema(Schema):
@@ -31,12 +31,10 @@ class ResourceFilterSchema(Schema):
 @resourcesblp.route('/')
 class AllResourcesController(MethodView):
 
-    # TODO: support pagination
     @resourcesblp.arguments(ResourceFilterSchema, location='query')
     @resourcesblp.response(200, ResourceSchema(many=True), content_type="application/json")
     def get(self, args, *kwargs):
 
-        # TODO: need better way to handle query params
         active = args.get('active')
         job_id = args.get('job_id')
         if job_id:

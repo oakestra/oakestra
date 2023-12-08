@@ -6,7 +6,7 @@ from bson.objectid import ObjectId
 from werkzeug import exceptions
 
 jobsblp = Blueprint(
-    'Jobs Api', url_prefix='/jobs'
+    'Jobs Api', 'jobs_api', url_prefix='/api/v1/jobs'
 )
 
 class JobSchema(Schema):
