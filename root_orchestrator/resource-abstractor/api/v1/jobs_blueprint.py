@@ -1,7 +1,7 @@
 from flask_smorest import Blueprint
 from flask.views import MethodView
 from marshmallow import Schema, fields
-from db import find_all_jobs, find_job_by_id
+from db import *
 from bson.objectid import ObjectId
 from werkzeug import exceptions
 
@@ -18,6 +18,7 @@ class JobSchema(Schema):
     instance_list = fields.List(fields.Dict())
     service_ip_list = fields.List(fields.Dict())
     last_modified_timestamp = fields.Float()
+    cluster = fields.String()
 
 @jobsblp.route('/')
 class AllJobsController(MethodView):
@@ -40,3 +41,11 @@ class JobController(MethodView):
             raise exceptions.NotFound()
 
         return job
+    
+    @jobsblp.response(200, content_type="application/json")
+    def patch(self, jobId, args, *kwargs):
+        if ObjectId.is_valid(jobId) is False:
+            raise exceptions.BadRequest()
+        
+        update_job(jobId, args)
+             
