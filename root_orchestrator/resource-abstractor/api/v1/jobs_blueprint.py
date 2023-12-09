@@ -1,7 +1,7 @@
 from flask_smorest import Blueprint
 from flask.views import MethodView
 from marshmallow import Schema, fields
-from db import *
+from db.mongodb_client import find_all_jobs, find_job_by_id, update_job
 from bson.objectid import ObjectId
 from werkzeug import exceptions
 

@@ -4,7 +4,7 @@ from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
 
 from api.v1 import blueprints
-from db import mongo_init
+from db.mongodb_client import mongo_init
 
 MY_PORT = os.environ.get("MY_PORT") or 10009
 

@@ -4,7 +4,7 @@ from marshmallow import Schema, fields
 from bson.objectid import ObjectId
 from werkzeug import exceptions
 
-from db import *
+from db.mongodb_client import find_all_clusters, find_cluster_by_id, find_active_clusters, find_job_by_id
 
 resourcesblp = Blueprint(
     'Resources Info', 'resources_info', url_prefix='/api/v1/resources'
