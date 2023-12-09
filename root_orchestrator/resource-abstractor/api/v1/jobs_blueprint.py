@@ -13,12 +13,16 @@ class JobSchema(Schema):
     id = fields.String(attribute='_id')
     system_job_id = fields.String()
     job_name = fields.String()
+    service_name = fields.String()
+    code = fields.String()
+    cmd = fields.List(fields.String())
     status = fields.String()
     replicas = fields.Integer()
     instance_list = fields.List(fields.Dict())
     service_ip_list = fields.List(fields.Dict())
     last_modified_timestamp = fields.Float()
     cluster = fields.String()
+    status = fields.String()
 
 
 @jobsblp.route('/')
@@ -43,9 +47,18 @@ class JobController(MethodView):
 
         return job
     
+    @jobsblp.arguments(JobSchema(), location='json')
     @jobsblp.response(200, content_type="application/json")
-    def patch(self, jobId, body):
-        if ObjectId.is_valid(jobId) is False:
+    def patch(self, *args, **kwargs):
+        job_id = kwargs['jobId']
+        data = None
+        if args and len(args) > 0 and args[0] and type(args[0]) is dict:
+            data = args[0]
+        
+        if data is None:
+            raise exceptions.BadRequest()
+        
+        if ObjectId.is_valid(job_id) is False:
             raise exceptions.BadRequest()
         
         update_job(jobId, body)
