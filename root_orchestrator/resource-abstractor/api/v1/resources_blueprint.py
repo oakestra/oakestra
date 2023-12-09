@@ -33,11 +33,15 @@ class AllResourcesController(MethodView):
 
     @resourcesblp.arguments(ResourceFilterSchema, location='query')
     @resourcesblp.response(200, ResourceSchema(many=True), content_type="application/json")
-    def get(self, args, *kwargs):
+    def get(self, query={}):
 
-        active = args.get('active')
-        job_id = args.get('job_id')
+        #TODO: figure out a better way to handle query params
+        active = query.get('active')
+        job_id = query.get('job_id')
         if job_id:
+            if ObjectId.is_valid(job_id) is False:
+                raise exceptions.BadRequest()
+        
             job = find_job_by_id(job_id)
             cluster_id = job.get('cluster_id')
             cluster = find_cluster_by_id(cluster_id)
@@ -51,7 +55,7 @@ class AllResourcesController(MethodView):
 class ResourceController(MethodView):
 
     @resourcesblp.response(200, ResourceSchema(), content_type="application/json")
-    def get(self, resourceId, args, *kwargs):
+    def get(self, resourceId):
         if ObjectId.is_valid(resourceId) is False:
             raise exceptions.BadRequest()
         

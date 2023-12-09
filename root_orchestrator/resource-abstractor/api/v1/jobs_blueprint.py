@@ -20,11 +20,12 @@ class JobSchema(Schema):
     last_modified_timestamp = fields.Float()
     cluster = fields.String()
 
+
 @jobsblp.route('/')
 class AllJobsController(MethodView):
 
     @jobsblp.response(200, JobSchema(many=True), content_type="application/json")
-    def get(self, args, *kwargs):
+    def get(self):
         # TODO: support pagination
         return list(find_all_jobs())
 
@@ -32,7 +33,7 @@ class AllJobsController(MethodView):
 class JobController(MethodView):
 
     @jobsblp.response(200, JobSchema(), content_type="application/json")
-    def get(self, jobId, args, *kwargs):
+    def get(self, jobId):
         if ObjectId.is_valid(jobId) is False:
             raise exceptions.BadRequest()
         
@@ -43,9 +44,9 @@ class JobController(MethodView):
         return job
     
     @jobsblp.response(200, content_type="application/json")
-    def patch(self, jobId, args, *kwargs):
+    def patch(self, jobId, body):
         if ObjectId.is_valid(jobId) is False:
             raise exceptions.BadRequest()
         
-        update_job(jobId, args)
+        update_job(jobId, body)
              
