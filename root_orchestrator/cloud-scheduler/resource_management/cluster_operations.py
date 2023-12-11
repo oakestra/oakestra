@@ -25,19 +25,15 @@ def get_resource_by_id(resource_id):
     return None
 
 def get_resource_by_name(resource_name):
-    resources = get_resources()
-    if resources is None:
+    resources = get_resources(cluster_name=resource_name)
+    if resources is None or len(resources) == 0:
         return None
     
-    for resource in resources:
-        if resource.get('cluster_name') == resource_name:
-            return resource
-    
-    return None
+    return resources[0]
 
 def get_resource_by_job_id(job_id):
-    resource = get_resources(job_id=job_id)
-    if resource.len() > 0:
-        return resource[0]
+    resources = get_resources(job_id=job_id)
+    if resources is None or len(resources) == 0:
+        return None
     
-    return None
+    return resources[0]
