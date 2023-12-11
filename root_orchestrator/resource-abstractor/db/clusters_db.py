@@ -11,4 +11,3 @@ def find_cluster_by_id(cluster_id):
 
 def find_cluster_by_name(name):
     return db.mongo_clusters.db.clusters.find_one({"cluster_name": name})
-
