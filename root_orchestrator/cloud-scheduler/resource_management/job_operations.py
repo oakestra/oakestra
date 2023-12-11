@@ -23,7 +23,7 @@ def get_job_by_id(job_id):
     except exceptions.RequestException as e:
         print(f'Calling Resource Abstractor /api/v1/resources/{job_id} not successful.')
     
-    return []
+    return None
 
 def update_job_status(job_id, status):
     request_address = f'{JOBS_API}/{job_id}'

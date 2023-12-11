@@ -22,7 +22,7 @@ def get_resource_by_id(resource_id):
     except exceptions.RequestException as e:
         print(f'Calling Resource Abstractor /api/v1/resources/{resource_id} not successful.')
     
-    return []
+    return None
 
 def get_resource_by_name(resource_name):
     resources = get_resources(cluster_name=resource_name)
