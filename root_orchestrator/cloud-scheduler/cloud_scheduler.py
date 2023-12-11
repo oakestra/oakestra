@@ -6,10 +6,9 @@ from celery import Celery
 from celery.schedules import crontab
 
 from manager_requests import manager_request
-from calculation import calculate, same_cluster_replication
+from calculation import calculate
 from cs_logging import configure_logging
-from resource_management.job_operations import get_job_by_id, update_job_status
-from resource_management.cluster_operations import get_resource_by_job_id
+from resource_management.job_operations import update_job_status
 
 
 CLUSTER_SCREENING_INTERVAL = 60
@@ -49,22 +48,6 @@ def deploy_task():
     job_id = data['system_job_id']
     start_calc.delay(job_id, job)
     return "ok"
-
-
-@app.route('/api/calculate/replicate', methods=['GET', 'POST'])
-def replicate():
-    app.logger.info('Incoming Request /replicate')
-    data = request.json
-    job_id = data.get('job')
-    desired_replicas = data.get('replicas')
-
-    job_obj = get_job_by_id(job_id)
-    current_replicas = job_obj.get('replicas')
-    cluster_obj_of_job = get_resource_by_job_id(job_id)
-
-    if same_cluster_replication(job_obj, desired_replicas):
-        print('replicate in same cluster possible. Result: contact same cluster...')
-        manager_request(cluster_obj_of_job, job_id, job_obj, desired_replicas)
 
 
 #  @celeryapp.on_after_configure.connect

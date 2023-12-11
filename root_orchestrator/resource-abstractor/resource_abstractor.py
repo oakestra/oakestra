@@ -6,7 +6,7 @@ from flask_swagger_ui import get_swaggerui_blueprint
 from db.mongodb_client import mongo_init
 from api.v1 import blueprints
 
-MY_PORT = os.environ.get("MY_PORT")
+RESOURCE_ABSTRACTOR_PORT = os.environ.get("MY_PORT")
 
 app = Flask(__name__)
 
@@ -34,8 +34,8 @@ for blp in blueprints:
     api.register_blueprint(blp)
 
 @app.route('/', methods=['GET'])
-def hello_world():
-    return "Hello, World! This is the Resource Abstractor.\n"
+def health():
+    return "Ok"
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=MY_PORT, debug=False)
+    app.run(host='0.0.0.0', port=RESOURCE_ABSTRACTOR_PORT, debug=False)
