@@ -48,8 +48,10 @@ class AllResourcesController(MethodView):
                 raise exceptions.NotFound()
             
             cluster_id = job.get('cluster_id')
+            if cluster_id is None:
+                raise exceptions.NotFound()
             filter['cluster_id'] = cluster_id
-            
+
         filter = build_filter(query)
         
         return list(find_clusters(filter))
