@@ -61,5 +61,5 @@ class JobController(MethodView):
         if ObjectId.is_valid(job_id) is False:
             raise exceptions.BadRequest()
         
-        update_job(jobId, body)
+        update_job(job_id, data)
              
