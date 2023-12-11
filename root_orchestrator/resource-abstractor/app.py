@@ -3,10 +3,10 @@ from flask import Flask
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
 
-from api.v1 import blueprints
 from db.mongodb_client import mongo_init
+from api.v1 import blueprints
 
-MY_PORT = os.environ.get("MY_PORT") or 10009
+MY_PORT = os.environ.get("MY_PORT")
 
 app = Flask(__name__)
 
