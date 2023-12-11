@@ -49,7 +49,8 @@ class AllResourcesController(MethodView):
             
             cluster_id = job.get('cluster_id')
             filter['cluster_id'] = cluster_id
-            filter = build_filter(query)
+            
+        filter = build_filter(query)
         
         return list(find_clusters(filter))
     
