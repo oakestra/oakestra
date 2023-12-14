@@ -7,6 +7,7 @@ from operations import instances_management, cluster_management
 from operations import service_management
 from net_logging import configure_logging
 import os
+import socket
 
 my_logger = configure_logging()
 
@@ -195,4 +196,4 @@ if __name__ == '__main__':
     import eventlet
 
     mongo_init(app)
-    eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)
+    eventlet.wsgi.server(eventlet.listen(('::', int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger)
