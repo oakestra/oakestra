@@ -26,5 +26,4 @@ Python 3.8
 - flask-swagger-ui
 - marshmallow
 
-
 The resource abstractor could be written in another language, just by exposing the same endpoints and database API.

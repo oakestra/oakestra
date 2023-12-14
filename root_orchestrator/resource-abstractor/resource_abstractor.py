@@ -35,7 +35,7 @@ for blp in blueprints:
 
 @app.route('/', methods=['GET'])
 def health():
-    return "Ok"
+    return "ok"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=RESOURCE_ABSTRACTOR_PORT, debug=False)
