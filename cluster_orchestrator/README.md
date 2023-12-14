@@ -92,3 +92,16 @@ E.g.: Customize network component version
 - open and edit `override-custom-serivce-manager.yml` with the correct container image 
 - run the orchestrator with the ovverride file: `docker-compose -f docker-compose.yml -f override-custom-service-manager.yml up --build`
 
+
+E.g.: Enable IPv6 for container deployments
+
+`docker-compose -f docker-compose.yml -f override-ipv6-enabled.yml`
+
+This override sets up a bridged docker network, assigning each container a static IPv4+IPv6 address.
+Note that the IP protocol version used for connection establishment using hostname resolution depends on the implementation.
+
+
+In case you want to verify, that the services use IPv6 for management traffic you can use the `override-ipv6-addressed.yml` file.
+It replaces the hostnames used in the environment variables with the hosts' static IPv6 addresses.
+
+`docker-compose -f docker-compose.yml -f override-ipv6-addressed.yml`
