@@ -50,7 +50,7 @@ class AllResourcesController(MethodView):
             if job is None:
                 raise exceptions.NotFound()
             
-            cluster_id = job.get('cluster_id')
+            cluster_id = job.get('cluster')
             if cluster_id is None:
                 raise exceptions.NotFound()
             filter['cluster_id'] = cluster_id
