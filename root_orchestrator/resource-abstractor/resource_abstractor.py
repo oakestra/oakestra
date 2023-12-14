@@ -6,7 +6,7 @@ from flask_swagger_ui import get_swaggerui_blueprint
 from db.mongodb_client import mongo_init
 from api.v1 import blueprints
 
-RESOURCE_ABSTRACTOR_PORT = os.environ.get("MY_PORT")
+RESOURCE_ABSTRACTOR_PORT = os.environ.get("RESOURCE_ABSTRACTOR_PORT")
 
 app = Flask(__name__)
 
