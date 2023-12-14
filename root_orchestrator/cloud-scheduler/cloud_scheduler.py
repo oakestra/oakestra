@@ -8,7 +8,7 @@ from celery.schedules import crontab
 from manager_requests import manager_request
 from calculation import calculate
 from cs_logging import configure_logging
-from resource_management.job_operations import update_job_status
+from resource_management import job_operations
 
 
 CLUSTER_SCREENING_INTERVAL = 60
@@ -69,7 +69,7 @@ def start_calc(job_id, job):
     scheduling_status, scheduling_result = calculate(job_id, job)
     print(scheduling_result)
     if scheduling_status == 'negative':
-        update_job_status(job_id, scheduling_result)
+        job_operations.update_job_status(job_id, scheduling_result)
     else:
         cluster_id = scheduling_result.get('_id')
         #mongo_update_job_status_and_cluster(job_id, 'CLUSTER_SCHEDULED', cluster_id)
