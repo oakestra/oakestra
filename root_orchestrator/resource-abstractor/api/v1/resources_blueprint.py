@@ -23,6 +23,9 @@ class ResourceSchema(Schema):
     memory_in_mb = fields.Integer()
     total_cpu_cores = fields.Integer()
     total_gpu_cores = fields.Integer()
+    available_cpu = fields.Float()
+    available_memory = fields.Float()
+    available_gpu = fields.Integer()
     virtualization = fields.List(fields.String())
     last_modified_timestamp = fields.Float()
 
