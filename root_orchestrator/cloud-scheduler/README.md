@@ -18,16 +18,17 @@ A job which is requested by the user, can have different status.
 - Celery creates one worker and calculates job by job
 - Celery uses Redis database as Queue for jobs
 - Cloud Scheduler sends result back by calling System Manager's REST API
-- Currently, the Cloud Scheduler directly uses the mongoDB in the Root Orchestrator
+- Cloud Scheduler accesses clusters and jobs db through the resource abstractor microservice.
 
 
 ## Built With
 
 ```Python
 flask
-flask_pymongo
 celery
+click
 redis
+requests
 ```
 
 ## Create Python Dependency Graph

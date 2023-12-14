@@ -10,7 +10,7 @@ def get_jobs(**kwargs):
         response = get(request_address, params=kwargs)
         return response.json()
     except exceptions.RequestException as e:
-        print('Calling Resource Abstractor /api/v1/resources not successful.')
+        print('Calling Resource Abstractor /api/v1/jobs not successful.')
     
     return []
 
@@ -21,7 +21,7 @@ def get_job_by_id(job_id):
         # TODO check body not empty.
         return response.json()
     except exceptions.RequestException as e:
-        print(f'Calling Resource Abstractor /api/v1/resources/{job_id} not successful.')
+        print(f'Calling Resource Abstractor /api/v1/jobs/{job_id} not successful.')
     
     return None
 
@@ -31,6 +31,6 @@ def update_job_status(job_id, status):
         response = patch(request_address, json={'status': status})
         return response
     except exceptions.RequestException as e:
-        print(f'Calling Resource Abstractor /api/v1/resources/{job_id} not successful.')
+        print(f'Calling Resource Abstractor /api/v1/jobs/{job_id} not successful.')
     
     return None
