@@ -53,6 +53,7 @@ class AllResourcesController(MethodView):
             cluster_id = job.get('cluster')
             if cluster_id is None:
                 raise exceptions.NotFound()
+            
             filter['cluster_id'] = cluster_id
 
         filter = build_filter(query)
