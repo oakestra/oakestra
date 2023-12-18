@@ -1,5 +1,7 @@
 package model
 
+import runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
+
 type Service struct {
 	JobID        string   `json:"_id"`
 	Sname        string   `json:"job_name"`
@@ -16,6 +18,7 @@ type Service struct {
 	Vcpus        int      `json:"vcpus"`
 	Memory       int      `json:"memory"`
 	Pid          int
+	Sandbox      *runtimeapi.PodSandboxConfig
 }
 
 type Resources struct {

@@ -2,22 +2,18 @@ package virtualization
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/containerd/containerd"
-	"github.com/containerd/containerd/cio"
-	"github.com/containerd/containerd/containers"
-	"github.com/containerd/containerd/contrib/nvidia"
 	"github.com/containerd/containerd/namespaces"
-	"github.com/containerd/containerd/oci"
-	"github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/shirou/gopsutil/docker"
+	"github.com/google/uuid"
 	"github.com/shirou/gopsutil/process"
-	"github.com/struCoder/pidusage"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
-	"io/ioutil"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 	"os"
 	"reflect"
 	"strconv"
@@ -27,29 +23,52 @@ import (
 )
 
 type ContainerRuntime struct {
-	contaierClient *containerd.Client
-	killQueue      map[string]*chan bool
-	channelLock    *sync.RWMutex
-	ctx            context.Context
+	containerClient runtimeapi.RuntimeServiceClient
+	imageClient     runtimeapi.ImageServiceClient
+	killQueue       map[string]*chan bool
+	channelLock     *sync.RWMutex
+	ctx             context.Context
 }
+
+// maxMsgSize use 16MB as the default message size limit.
+// grpc library default is 4MB
+const maxMsgSize = 1024 * 1024 * 16
+const connectionTimeout = 30 * time.Second
 
 var runtime = ContainerRuntime{
 	channelLock: &sync.RWMutex{},
 }
 
-var containerdSingletonCLient sync.Once
+var containerSingletonClient sync.Once
 var startContainerMonitoring sync.Once
 
 const NAMESPACE = "oakestra"
-const CGROUP_BASE_MEM = "/sys/fs/cgroup/memory/" + NAMESPACE
 
 func GetContainerdClient() *ContainerRuntime {
-	containerdSingletonCLient.Do(func() {
-		client, err := containerd.New("/run/containerd/containerd.sock")
+
+	runtimeAddress := os.Getenv("OAKESTRA.CONTAINER.RUNTIME")
+
+	//Connect to container and image runtime
+	containerSingletonClient.Do(func() {
+		var dialOpts []grpc.DialOption
+		ctx, _ := context.WithTimeout(context.Background(), connectionTimeout)
+		dialOpts = append(dialOpts,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize)))
+
+		conn, err := grpc.DialContext(ctx, fmt.Sprintf("unix://%s", runtimeAddress), dialOpts...)
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Unable to start the container engine: %v\n", err)
 		}
-		runtime.contaierClient = client
+
+		runtime.containerClient = runtimeapi.NewRuntimeServiceClient(conn)
+		runtime.imageClient = runtimeapi.NewImageServiceClient(conn)
+
+		//verify if connection to runtime works
+		if _, err := runtime.containerClient.Version(ctx, &runtimeapi.VersionRequest{}); err != nil {
+			logger.ErrorLogger().Fatalf("Connection to container %s runtime failed: %v\n", runtimeAddress, err)
+		}
+
 		runtime.killQueue = make(map[string]*chan bool)
 		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
 		runtime.forceContainerCleanup()
@@ -57,7 +76,7 @@ func GetContainerdClient() *ContainerRuntime {
 	return &runtime
 }
 
-func (r *ContainerRuntime) StopContainerdClient() {
+func (r *ContainerRuntime) StopContainerClient() {
 	r.channelLock.Lock()
 	taskIDs := reflect.ValueOf(r.killQueue).MapKeys()
 	r.channelLock.Unlock()
@@ -68,28 +87,26 @@ func (r *ContainerRuntime) StopContainerdClient() {
 			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", taskid.String(), err)
 		}
 	}
-	r.contaierClient.Close()
 }
 
 func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
 
-	var image containerd.Image
-	// pull the given image
-	sysimg, err := r.contaierClient.ImageService().Get(r.ctx, service.Image)
-	if err == nil {
-		image = containerd.NewImage(r.contaierClient, sysimg)
-	} else {
-		logger.ErrorLogger().Printf("Error retrieving the image: %v \n Trying to pull the image online.", err)
+	image := runtimeapi.ImageSpec{Image: service.Image}
 
-		image, err = r.contaierClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack)
-		if err != nil {
-			return err
-		}
+	// pull the given image
+	service.Sandbox = getSandboxConfig(&service)
+
+	_, err := r.imageClient.PullImage(r.ctx, &runtimeapi.PullImageRequest{
+		Image:         &image,
+		SandboxConfig: service.Sandbox,
+	})
+	if err != nil {
+		return err
 	}
 
 	killChannel := make(chan bool, 1)
-	startupChannel := make(chan bool, 0)
-	errorChannel := make(chan error, 0)
+	startupChannel := make(chan bool)
+	errorChannel := make(chan error)
 
 	r.channelLock.RLock()
 	el, servicefound := r.killQueue[genTaskID(service.Sname, service.Instance)]
@@ -99,14 +116,14 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 		r.killQueue[genTaskID(service.Sname, service.Instance)] = &killChannel
 		r.channelLock.Unlock()
 	} else {
-		return errors.New("Service already deployed")
+		return errors.New("service already deployed")
 	}
 
 	// create startup routine which will accompany the container through its lifetime
 	go r.containerCreationRoutine(
 		r.ctx,
-		image,
-		service,
+		&image,
+		&service,
 		startupChannel,
 		errorChannel,
 		&killChannel,
@@ -145,8 +162,8 @@ func (r *ContainerRuntime) Undeploy(service string, instance int) error {
 
 func (r *ContainerRuntime) containerCreationRoutine(
 	ctx context.Context,
-	image containerd.Image,
-	service model.Service,
+	image *runtimeapi.ImageSpec,
+	service *model.Service,
 	startup chan bool,
 	errorchan chan error,
 	killChannel *chan bool,
@@ -163,77 +180,96 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		r.killQueue[hostname] = nil
 	}
 
-	//create container general oci specs
-	specOpts := []oci.SpecOpts{
-		oci.WithImageConfig(image),
-		oci.WithHostHostsFile,
-		oci.WithHostname(hostname),
-		oci.WithEnv(append([]string{fmt.Sprintf("HOSTNAME=%s", hostname)}, service.Env...)),
+	envs := make([]*runtimeapi.KeyValue, 0)
+	for _, env := range service.Env {
+		keyval := strings.Split(env, "=")
+		envs = append(envs, &runtimeapi.KeyValue{
+			Key:   keyval[0],
+			Value: keyval[1],
+		})
 	}
-	//add user defined commands
-	if len(service.Commands) > 0 {
-		specOpts = append(specOpts, oci.WithProcessArgs(service.Commands...))
-	}
+
+	args := make([]string, 0)
+	cdidevices := make([]*runtimeapi.CDIDevice, 0)
+
 	//add GPU if needed
+	runtimeHandler := ""
 	if service.Vgpus > 0 {
-		specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(0), nvidia.WithAllCapabilities))
+		runtimeHandler = "nvidia-container-runtime"
+		args = append(args, "nvidia-container-runtime")
+		cdidevices = append(cdidevices, &runtimeapi.CDIDevice{
+			Name: "nvidia.com/gpu",
+		})
 		logger.InfoLogger().Printf("NVIDIA - Adding GPU driver")
 	}
-	//add resolve file with default google dns
-	resolvconfFile, err := getGoogleDNSResolveConf()
-	if err != nil {
-		revert(err)
-		return
-	}
-	defer resolvconfFile.Close()
-	_ = resolvconfFile.Chmod(444)
-	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile.Name()))
 
-	// create the container
-	container, err := r.contaierClient.NewContainer(
-		ctx,
-		hostname,
-		containerd.WithImage(image),
-		containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", hostname), image),
-		containerd.WithNewSpec(specOpts...),
-	)
+	sandbox, err := r.containerClient.RunPodSandbox(r.ctx, &runtimeapi.RunPodSandboxRequest{
+		Config:         service.Sandbox,
+		RuntimeHandler: runtimeHandler,
+	})
 	if err != nil {
-		revert(err)
+		logger.ErrorLogger().Printf("%v", err)
 		return
 	}
+	service.Sandbox.Metadata.Uid = sandbox.PodSandboxId
+	//cleanup sandbox
+	defer func() {
+		_, _ = r.containerClient.RemovePodSandbox(r.ctx, &runtimeapi.RemovePodSandboxRequest{
+			PodSandboxId: sandbox.PodSandboxId,
+		})
+	}()
 
-	//	start task
-	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStdio))
+	logger.InfoLogger().Printf("Creating Container %s", service.Sname)
+	containerResponse, err := r.containerClient.CreateContainer(r.ctx, &runtimeapi.CreateContainerRequest{
+		PodSandboxId: sandbox.PodSandboxId,
+		Config: &runtimeapi.ContainerConfig{
+			Metadata: &runtimeapi.ContainerMetadata{
+				Name:    service.Sandbox.GetMetadata().Name,
+				Attempt: 0,
+			},
+			Image:      image,
+			Command:    service.Commands,
+			Envs:       envs,
+			LogPath:    service.Sandbox.LogDirectory,
+			Stdin:      false,
+			StdinOnce:  false,
+			Tty:        false,
+			Args:       args,
+			CDIDevices: cdidevices,
+			Labels:     map[string]string{"oakestra": "oakestra"},
+		},
+		SandboxConfig: service.Sandbox,
+	})
 	if err != nil {
-		logger.ErrorLogger().Printf("ERROR: containerd task creation failure: %v", err)
-		_ = container.Delete(ctx)
-		revert(err)
+		logger.ErrorLogger().Printf("%v", err)
 		return
 	}
-	defer func(ctx context.Context, task containerd.Task) {
-		err := killTask(ctx, task, container)
+	defer func(ctx context.Context, containerId string) {
+		err := r.removeContainer(containerId)
 		//removing from killqueue
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
 		r.killQueue[hostname] = nil
 		if err != nil {
-			*killChannel <- false
+			if len(*killChannel) < cap(*killChannel) {
+				*killChannel <- false
+			}
 		} else {
-			*killChannel <- true
+			if len(*killChannel) < cap(*killChannel) {
+				*killChannel <- true
+			}
 		}
-	}(ctx, task)
+	}(ctx, containerResponse.GetContainerId())
 
-	// get wait channel
-	exitStatusC, err := task.Wait(ctx)
+	taskpid, err := r.getSandboxPid(sandbox.PodSandboxId)
 	if err != nil {
-		logger.ErrorLogger().Printf("ERROR: containerd task wait failure: %v", err)
+		logger.ErrorLogger().Printf("Unable to get container PID: %v", err)
 		revert(err)
 		return
 	}
 
 	// if Overlay mode is active then attach network to the task
 	if model.GetNodeInfo().Overlay {
-		taskpid := int(task.Pid())
 		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
@@ -243,8 +279,12 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 
 	// execute the image's task
-	if err := task.Start(ctx); err != nil {
-		logger.ErrorLogger().Printf("ERROR: containerd task start failure: %v", err)
+	logger.InfoLogger().Printf("Starting Container %s", containerResponse.ContainerId)
+	_, err = r.containerClient.StartContainer(ctx, &runtimeapi.StartContainerRequest{
+		ContainerId: containerResponse.ContainerId,
+	})
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to get container PID: %v", err)
 		revert(err)
 		return
 	}
@@ -252,25 +292,38 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// adv startup finished
 	startup <- true
 
-	// wait for manual task kill or task finish
-	select {
-	case exitStatus := <-exitStatusC:
-		//TODO: container exited, do something, notify to cluster manager
-		if err != nil {
-			return
+	// detach network when task is dead
+	defer func() {
+		service.Status = model.SERVICE_DEAD
+		//detaching network
+		if model.GetNodeInfo().Overlay {
+			_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
 		}
-		logger.InfoLogger().Printf("WARNING: Container exited with status %d", exitStatus.ExitCode())
-		service.StatusDetail = fmt.Sprintf("Container exited with status: %d", exitStatus.ExitCode())
-	case <-*killChannel:
-		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
+		statusChangeNotificationHandler(*service)
+		_ = r.removeContainer(containerResponse.ContainerId)
+
+	}()
+
+	// wait for manual task kill or task exit != CONTAINER_RUNNING
+	for {
+		select {
+		//check status every 1 second
+		case <-time.NewTimer(time.Second * 5).C:
+			//TODO: container exited, do something, notify to cluster manager
+			status, err := r.containerClient.ContainerStatus(ctx, &runtimeapi.ContainerStatusRequest{ContainerId: containerResponse.ContainerId})
+			if err != nil {
+				logger.ErrorLogger().Printf("%v", err)
+				return
+			}
+			if status.GetStatus().State != runtimeapi.ContainerState_CONTAINER_RUNNING {
+				logger.ErrorLogger().Printf("Container Stopped Running, ExitCode: %s", status.GetStatus().ExitCode)
+				service.StatusDetail = fmt.Sprintf("Container exited with status: %d", status.GetStatus().ExitCode)
+				return
+			}
+		case <-*killChannel:
+			logger.InfoLogger().Printf("Kill channel message received for task %s", containerResponse.ContainerId)
+		}
 	}
-	service.Status = model.SERVICE_DEAD
-	//detaching network
-	if model.GetNodeInfo().Overlay {
-		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
-	}
-	statusChangeNotificationHandler(service)
-	r.removeContainer(container)
 }
 
 func getTotalCpuUsageByPid(pid int32) (float64, error) {
@@ -300,58 +353,46 @@ func getTotalCpuUsageByPid(pid int32) (float64, error) {
 func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
 	//start container monitoring service
 	startContainerMonitoring.Do(func() {
-		for true {
+		for {
 			select {
 			case <-time.After(every):
-				deployedContainers, err := r.contaierClient.Containers(r.ctx)
+				sandboxes, err := r.containerClient.ListPodSandbox(r.ctx, &runtimeapi.ListPodSandboxRequest{})
 				if err != nil {
 					logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 				}
 
 				resourceList := make([]model.Resources, 0)
 
-				for _, container := range deployedContainers {
-					task, err := container.Task(r.ctx, nil)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
-						continue
-					}
+				for _, sandbox := range sandboxes.Items {
+					if sandbox.GetMetadata().Namespace == NAMESPACE {
 
-					cpuUsage, err := getTotalCpuUsageByPid(int32(task.Pid()))
-					if err != nil {
-						sysInfo, err := pidusage.GetStat(int(task.Pid()))
+						stats, err := r.containerClient.PodSandboxStats(r.ctx, &runtimeapi.PodSandboxStatsRequest{
+							PodSandboxId: sandbox.Id,
+						})
 						if err != nil {
-							logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
+							logger.ErrorLogger().Printf("Unable to fetch data for container: %s", sandbox.Metadata.Name)
 							continue
 						}
-						cpuUsage = sysInfo.CPU / float64(model.GetNodeInfo().CpuCores)
-					}
 
-					mem, err := docker.CgroupMem(container.ID(), CGROUP_BASE_MEM)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
-						continue
-					}
+						taskpid, err := r.getSandboxPid(sandbox.Id)
+						if err != nil {
+							if err != nil {
+								logger.ErrorLogger().Printf("Unable to fetch pid for container: %s", sandbox.Metadata.Name)
+								continue
+							}
+						}
+						cpuUsage, err := getTotalCpuUsageByPid(int32(taskpid))
 
-					containerMetadata, err := container.Info(r.ctx)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
-						continue
+						resourceList = append(resourceList, model.Resources{
+							Cpu:      fmt.Sprintf("%f", cpuUsage),
+							Memory:   fmt.Sprintf("%f", float64(stats.GetStats().Linux.Memory.UsageBytes.GetValue())),
+							Disk:     fmt.Sprintf("%d", int(stats.GetStats().GetLinux().Containers[0].WritableLayer.GetUsedBytes().GetValue())),
+							Sname:    extractSnameFromTaskID(sandbox.Metadata.Name),
+							Runtime:  model.CONTAINER_RUNTIME,
+							Instance: extractInstanceNumberFromTaskID(sandbox.Metadata.Name),
+						})
+
 					}
-					currentsnapshotter := r.contaierClient.SnapshotService(containerd.DefaultSnapshotter)
-					usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
-						continue
-					}
-					resourceList = append(resourceList, model.Resources{
-						Cpu:      fmt.Sprintf("%f", cpuUsage),
-						Memory:   fmt.Sprintf("%f", float64(mem.MemUsageInBytes)),
-						Disk:     fmt.Sprintf("%d", usage.Size),
-						Sname:    extractSnameFromTaskID(container.ID()),
-						Runtime:  model.CONTAINER_RUNTIME,
-						Instance: extractInstanceNumberFromTaskID(container.ID()),
-					})
 				}
 				//NOTIFY WITH THE CURRENT CONTAINERS STATUS
 				notifyHandler(resourceList)
@@ -361,75 +402,37 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 }
 
 func (r *ContainerRuntime) forceContainerCleanup() {
-	deployedContainers, err := r.contaierClient.Containers(r.ctx)
-	if err != nil {
-		logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
-	}
-	for _, container := range deployedContainers {
-		r.removeContainer(container)
-	}
-}
-
-func (r *ContainerRuntime) removeContainer(container containerd.Container) {
-	logger.InfoLogger().Printf("Clenaning up container: %s", container.ID())
-	task, err := container.Task(r.ctx, nil)
-	if err != nil {
-		logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
-	}
-	if err == nil {
-		err = killTask(r.ctx, task, container)
+	deployedContainers, _ := r.containerClient.ListContainers(r.ctx, &runtimeapi.ListContainersRequest{
+		Filter: &runtimeapi.ContainerFilter{
+			LabelSelector: map[string]string{"oakestra": "oakestra"},
+		},
+	})
+	for _, container := range deployedContainers.Containers {
+		err := r.removeContainer(container.Id)
 		if err != nil {
-			logger.ErrorLogger().Printf("Unable to fetch kill task: %v", err)
+			logger.ErrorLogger().Printf("%v", err)
 		}
 	}
-	err = container.Delete(r.ctx)
+	sandboxes, err := r.containerClient.ListPodSandbox(r.ctx, &runtimeapi.ListPodSandboxRequest{})
 	if err != nil {
-		logger.ErrorLogger().Printf("Unable to delete container: %v", err)
+		logger.ErrorLogger().Printf("%v", err)
 	}
-}
-
-func withCustomResolvConf(src string) func(context.Context, oci.Client, *containers.Container, *oci.Spec) error {
-	return func(_ context.Context, _ oci.Client, _ *containers.Container, s *oci.Spec) error {
-		s.Mounts = append(s.Mounts, specs.Mount{
-			Destination: "/etc/resolv.conf",
-			Type:        "bind",
-			Source:      src,
-			Options:     []string{"rbind", "ro"},
+	for _, sandbox := range sandboxes.Items {
+		_, _ = r.containerClient.RemovePodSandbox(r.ctx, &runtimeapi.RemovePodSandboxRequest{
+			PodSandboxId: sandbox.Id,
 		})
-		return nil
 	}
 }
 
-func getGoogleDNSResolveConf() (*os.File, error) {
-	file, err := ioutil.TempFile("/tmp", "edgeio-resolv-conf")
-	if err != nil {
-		logger.ErrorLogger().Printf("Unable to create temp resolv file: %v", err)
-		return nil, err
-	}
-	_, err = file.WriteString(fmt.Sprintf("nameserver 8.8.8.8\n"))
-	if err != nil {
-		logger.ErrorLogger().Printf("Unable to write temp resolv file: %v", err)
-		return nil, err
-	}
-	return file, err
-}
-
-func killTask(ctx context.Context, task containerd.Task, container containerd.Container) error {
-	//removing the task
-	p, err := task.LoadProcess(ctx, task.ID(), nil)
-	if err != nil {
-		logger.ErrorLogger().Printf("ERROR deleting the task, LoadProcess: %v", err)
-		return err
-	}
-	_, err = p.Delete(ctx, containerd.WithProcessKill)
-	if err != nil {
-		logger.ErrorLogger().Printf("ERROR deleting the task, Delete: %v", err)
-		return err
-	}
-	_, _ = task.Delete(ctx)
-	_ = container.Delete(ctx)
-
-	logger.ErrorLogger().Printf("Task %s terminated", task.ID())
+func (r *ContainerRuntime) removeContainer(containerid string) error {
+	_, _ = r.containerClient.StopContainer(r.ctx, &runtimeapi.StopContainerRequest{
+		ContainerId: containerid,
+		Timeout:     0,
+	})
+	_, _ = r.containerClient.RemoveContainer(r.ctx, &runtimeapi.RemoveContainerRequest{
+		ContainerId: containerid,
+	})
+	logger.ErrorLogger().Printf("Task %s terminated", containerid)
 	return nil
 }
 
@@ -457,4 +460,43 @@ func extractInstanceNumberFromTaskID(taskid string) int {
 
 func genTaskID(sname string, instancenumber int) string {
 	return fmt.Sprintf("%s.instance.%d", sname, instancenumber)
+}
+
+func getSandboxConfig(service *model.Service) *runtimeapi.PodSandboxConfig {
+	taskId := genTaskID(service.Sname, service.Instance)
+
+	//TODO: This runs using default CNI, therefore oakestra net will fail to setup. We need to use oakestra-net as CNI.
+	return &runtimeapi.PodSandboxConfig{
+		Metadata: &runtimeapi.PodSandboxMetadata{
+			Name:      genTaskID(service.Sname, service.Instance),
+			Namespace: NAMESPACE,
+			Uid:       uuid.New().String(),
+		},
+		Hostname:     taskId,
+		LogDirectory: fmt.Sprintf("/tmp/%s.log", taskId),
+		DnsConfig: &runtimeapi.DNSConfig{
+			Servers: []string{"8.8.8.8"},
+		},
+	}
+
+}
+
+func (r *ContainerRuntime) getSandboxPid(sandboxid string) (int, error) {
+	sandboxStatus, err := r.containerClient.PodSandboxStatus(r.ctx, &runtimeapi.PodSandboxStatusRequest{
+		PodSandboxId: sandboxid,
+		Verbose:      true,
+	})
+	if err != nil {
+		return 0, err
+	}
+	var infoMap map[string]interface{}
+	err = json.Unmarshal([]byte(sandboxStatus.Info["info"]), &infoMap)
+	if err != nil {
+		return 0, err
+	}
+	pid := int(infoMap["pid"].(float64))
+	if err != nil {
+		return 0, err
+	}
+	return pid, nil
 }
