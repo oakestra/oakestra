@@ -61,6 +61,7 @@ def mongo_update_job_status(job_id, status, status_detail, instances=None):
                         "instance_list.$.disk": instance.get('disk'),
                         "instance_list.$.status": instance.get('status'),
                         "instance_list.$.status_detail": instance.get('status_detail', "No extra information"),
+                        "instance_list.$.logs": instance.get('logs', ""),
                     }
                 }
             )

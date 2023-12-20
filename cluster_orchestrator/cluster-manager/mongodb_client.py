@@ -62,7 +62,7 @@ def mongo_find_node_by_name(node_name):
         return 'Error'
 
 
-def mongo_find_node_by_id_and_update_cpu_mem(node_id,  node_payload):
+def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_payload):
     global app, mongo_nodes
     app.logger.info('MONGODB - update cpu and memory of worker node {0} ...'.format(node_id))
     # o = mongo.db.nodes.find_one({'_id': node_id})
@@ -73,10 +73,10 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id,  node_payload):
     mongo_nodes.db.nodes.find_one_and_update(
         {'_id': ObjectId(node_id)},
         {'$set': {
-            'current_cpu_percent': node_payload.get('cpu',0),
-            'current_cpu_cores_free': node_payload.get('free_cores',0),
-            'current_memory_percent': node_payload.get('memory',0),
-            'current_free_memory_in_MB': node_payload.get('memory_free_in_MB',0),
+            'current_cpu_percent': node_payload.get('cpu', 0),
+            'current_cpu_cores_free': node_payload.get('free_cores', 0),
+            'current_memory_percent': node_payload.get('memory', 0),
+            'current_free_memory_in_MB': node_payload.get('memory_free_in_MB', 0),
             'gpu_driver': node_payload.get('gpu_driver', "-"),
             'gpu_usage': node_payload.get('gpu_usage', 0),
             'gpu_cores': node_payload.get('gpu_cores', 0),
@@ -311,6 +311,7 @@ def mongo_update_service_resources(sname, service, workerid, instance_num=0):
                 instance_list[instance]["cpu"] = service.get("cpu")
                 instance_list[instance]["memory"] = service.get("memory")
                 instance_list[instance]["disk"] = service.get("disk")
+                instance_list[instance]["logs"] = service.get("logs", "")
                 return mongo_jobs.db.jobs.update_one({'job_name': sname},
                                                      {'$set': {'instance_list': instance_list}})
     else:
