@@ -311,6 +311,7 @@ def mongo_update_service_resources(sname, service, workerid, instance_num=0):
                 instance_list[instance]["cpu"] = service.get("cpu")
                 instance_list[instance]["memory"] = service.get("memory")
                 instance_list[instance]["disk"] = service.get("disk")
+                instance_list[instance]["logs"] = service.get("logs")
                 return mongo_jobs.db.jobs.update_one({'job_name': sname},
                                                      {'$set': {'instance_list': instance_list}})
     else:
