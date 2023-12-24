@@ -19,6 +19,7 @@ class ResourceSchema(Schema):
     ip = fields.String()
     port = fields.String()
     active_nodes = fields.Integer()
+    active = fields.Boolean()
 
     memory_in_mb = fields.Integer()
     total_cpu_cores = fields.Integer()
@@ -55,7 +56,6 @@ class AllResourcesController(MethodView):
                 raise exceptions.NotFound()
             
             filter['cluster_id'] = cluster_id
-
         filter = build_filter(query)
         
         return list(find_clusters(filter))

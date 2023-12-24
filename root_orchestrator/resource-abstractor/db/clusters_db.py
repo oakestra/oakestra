@@ -1,13 +1,14 @@
 from bson.objectid import ObjectId
-from .clusters_helper import is_cluster_active
 
+from .clusters_helper import is_cluster_active
 import db.mongodb_client as db
 
 
 CLUSTERS_FRESHNESS_INTERVAL = 30
 
 def find_clusters(filter):
-    clusters = db.mongo_clusters.db.clusters.find(filter)
+    # TODO find a way to add active field to the query without iterating over the results or realizing the query.
+    clusters = list(db.mongo_clusters.db.clusters.find(filter))
     for cluster in clusters:
         cluster['active'] = is_cluster_active(cluster)
 
