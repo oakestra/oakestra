@@ -15,3 +15,8 @@ def build_filter(query):
     filter.pop('job_id', None)
     filter.pop('active', None)
     return filter
+
+def is_cluster_active(cluster):
+    timestamp_now = datetime.now().timestamp()
+    last_modified_cluster = cluster.get('last_modified_timestamp')
+    return last_modified_cluster >= timestamp_now - CLUSTERS_FRESHNESS_INTERVAL
