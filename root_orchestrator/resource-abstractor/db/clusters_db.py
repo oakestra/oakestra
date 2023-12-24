@@ -1,16 +1,16 @@
 from bson.objectid import ObjectId
 
-from .clusters_helper import is_cluster_active
+from .clusters_helper import get_freshness_threshhold
 import db.mongodb_client as db
 
-
 def find_clusters(filter):
-    # TODO find a way to add active field to the query without iterating over the results or realizing the query.
-    clusters = list(db.mongo_clusters.db.clusters.find(filter))
-    for cluster in clusters:
-        cluster['active'] = is_cluster_active(cluster)
-
-    return clusters;
+    pipeline = [
+        {"$match": filter},
+        {"$addFields": {
+            "active": {"$gt": ["$last_modified_timestamp", get_freshness_threshhold()]}
+        }}
+    ]
+    return db.mongo_clusters.db.clusters.aggregate(pipeline)
 
 def find_cluster_by_id(cluster_id):
     cluster = find_clusters({"_id": ObjectId(cluster_id)})
