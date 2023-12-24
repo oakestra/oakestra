@@ -3,11 +3,14 @@ from _datetime import datetime
 
 CLUSTERS_FRESHNESS_INTERVAL = 30
 
+def get_active_filter():
+    now_timestamp = datetime.now().timestamp()
+    return {'$gt': now_timestamp - CLUSTERS_FRESHNESS_INTERVAL}
+
 def build_filter(query):
     filter = query
     if filter.get('active'):
-        now_timestamp = datetime.now().timestamp()
-        filter['last_modified_timestamp'] = {'$gt': now_timestamp - CLUSTERS_FRESHNESS_INTERVAL}
+        filter['last_modified_timestamp'] = get_active_filter()
     if filter.get('cluster_id'):
         filter['_id'] = ObjectId(filter.get('cluster_id'))
         
