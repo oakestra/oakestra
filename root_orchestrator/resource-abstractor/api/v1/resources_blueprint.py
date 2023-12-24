@@ -5,7 +5,7 @@ from bson.objectid import ObjectId
 from werkzeug import exceptions
 
 from db.clusters_db import find_clusters, find_cluster_by_id
-from db.clusters_filter_helper import build_filter
+from db.clusters_helper import build_filter
 from db.jobs_db import find_job_by_id
 
 resourcesblp = Blueprint(
