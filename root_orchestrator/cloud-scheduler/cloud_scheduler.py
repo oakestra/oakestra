@@ -46,6 +46,7 @@ def deploy_task():
     start_calc.delay(job_id, job)
     return "ok"
 
+
 #  @celeryapp.on_after_configure.connect
 #  def setup_periodic_tasks(sender, **kwargs):
 # Calls test('hello') every 10 seconds.
