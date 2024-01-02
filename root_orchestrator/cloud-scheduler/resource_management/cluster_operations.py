@@ -1,7 +1,11 @@
 import os
 from requests import get, exceptions
 
-RESOURCE_ABSTRACTOR_ADDR = f"http://{os.environ.get('RESOURCE_ABSTRACTOR_URL')}:{os.environ.get('RESOURCE_ABSTRACTOR_PORT')}"
+
+RESOURCE_ABSTRACTOR_ADDR = (
+    f"http://{os.environ.get('RESOURCE_ABSTRACTOR_URL')}:"
+    f"{os.environ.get('RESOURCE_ABSTRACTOR_PORT')}"
+)
 
 
 def get_resources(**kwargs):
@@ -9,7 +13,7 @@ def get_resources(**kwargs):
     try:
         response = get(request_address, params=kwargs)
         return response.json()
-    except exceptions.RequestException as e:
+    except exceptions.RequestException:
         print("Calling Resource Abstractor /api/v1/resources not successful.")
 
     return []
@@ -21,7 +25,7 @@ def get_resource_by_id(resource_id):
         response = get(request_address)
         # TODO check body not empty.
         return response.json()
-    except exceptions.RequestException as e:
+    except exceptions.RequestException:
         print(f"Calling Resource Abstractor /api/v1/resources/{resource_id} not successful.")
 
     return None
