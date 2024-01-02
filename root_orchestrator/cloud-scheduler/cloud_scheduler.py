@@ -46,23 +46,6 @@ def deploy_task():
     start_calc.delay(job_id, job)
     return "ok"
 
-
-@app.route("/api/calculate/replicate", methods=["GET", "POST"])
-def replicate():
-    app.logger.info("Incoming Request /replicate")
-    data = request.json
-    job_id = data.get("job")
-    desired_replicas = data.get("replicas")
-
-    job_obj = mongo_find_job_by_id(job_id)
-    job_obj.get("replicas")  # current_replicas
-    cluster_obj_of_job = find_cluster_by_job(job_id)
-
-    if same_cluster_replication(job_obj, desired_replicas):
-        print("replicate in same cluster possible. Result: contact same cluster...")
-        manager_request(cluster_obj_of_job, job_id, job_obj, desired_replicas)
-
-
 #  @celeryapp.on_after_configure.connect
 #  def setup_periodic_tasks(sender, **kwargs):
 # Calls test('hello') every 10 seconds.
