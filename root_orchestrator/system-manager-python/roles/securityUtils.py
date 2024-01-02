@@ -1,7 +1,13 @@
-from flask_jwt_extended import get_jwt_identity, jwt_required, create_access_token, create_refresh_token, get_jwt, \
-    verify_jwt_in_request
-
 from ext_requests.user_db import mongo_get_user_by_name
+from flask_jwt_extended import (
+    create_access_token,
+    create_refresh_token,
+    get_jwt,
+    get_jwt_identity,
+    jwt_required,
+    verify_jwt_in_request,
+)
+
 
 class Role:
     ADMIN = "Admin"
@@ -9,11 +15,13 @@ class Role:
     APP_Provider = "Application_Provider"
     INF_Provider = "Infrastructure_Provider"
 
+
 not_authorized = {"message": "You have not enough permissions!"}, 403
+
 
 def user_has_role(user, role):
     claims = get_jwt_auth_claims()
-    return role in claims['roles']
+    return role in claims["roles"]
 
 
 def require_role(required_role):
@@ -34,9 +42,9 @@ def require_role(required_role):
 
 def identity_is_username():
     def decorator(func):
-        def wrapper(*args,**kwargs):
+        def wrapper(*args, **kwargs):
             current_user = get_jwt_auth_identity()
-            if current_user == kwargs['username']:
+            if current_user == kwargs["username"]:
                 return func(*args, **kwargs)
             else:
                 return not_authorized
@@ -60,7 +68,7 @@ def jwt_auth_required():
                 print(e)
                 return {"message": "Missing authentication token"}, 401
             claims = get_jwt()
-            if not ('file_access_token' in claims and claims['file_access_token']):
+            if not ("file_access_token" in claims and claims["file_access_token"]):
                 return fn(*args, **kwargs)
             else:
                 return {"message": "Only access token allowed"}, 401

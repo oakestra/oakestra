@@ -22,6 +22,7 @@ type Resources struct {
 	Cpu      string `json:"cpu"`
 	Memory   string `json:"memory"`
 	Disk     string `json:"disk"`
+	Logs     string `json:"logs"`
 	Sname    string `json:"job_name"`
 	Runtime  string `json:"virtualization"`
 	Instance int    `json:"instance"`
