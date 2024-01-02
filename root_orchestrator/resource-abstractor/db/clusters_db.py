@@ -1,7 +1,7 @@
+import db.mongodb_client as db
 from bson.objectid import ObjectId
 
 from .clusters_helper import get_freshness_threshhold
-import db.mongodb_client as db
 
 
 def find_clusters(filter):

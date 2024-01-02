@@ -1,6 +1,6 @@
 import os
-from requests import get, exceptions
 
+from requests import exceptions, get
 
 RESOURCE_ABSTRACTOR_ADDR = (
     f"http://{os.environ.get('RESOURCE_ABSTRACTOR_URL')}:"

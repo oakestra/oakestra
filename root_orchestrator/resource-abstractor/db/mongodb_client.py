@@ -1,4 +1,5 @@
 import os
+
 from flask_pymongo import PyMongo
 
 MONGO_URL = os.environ.get("CLOUD_MONGO_URL")

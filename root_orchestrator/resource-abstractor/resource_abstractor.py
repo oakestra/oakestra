@@ -1,10 +1,10 @@
 import os
+
+from api.v1 import blueprints
+from db.mongodb_client import mongo_init
 from flask import Flask
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
-
-from db.mongodb_client import mongo_init
-from api.v1 import blueprints
 
 RESOURCE_ABSTRACTOR_PORT = os.environ.get("RESOURCE_ABSTRACTOR_PORT")
 

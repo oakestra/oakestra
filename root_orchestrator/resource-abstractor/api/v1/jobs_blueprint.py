@@ -1,10 +1,9 @@
-from flask_smorest import Blueprint
-from flask.views import MethodView
-from marshmallow import Schema, fields
 from bson.objectid import ObjectId
-from werkzeug import exceptions
-
 from db.jobs_db import find_all_jobs, find_job_by_id, update_job
+from flask.views import MethodView
+from flask_smorest import Blueprint
+from marshmallow import Schema, fields
+from werkzeug import exceptions
 
 jobsblp = Blueprint("Jobs Api", "jobs_api", url_prefix="/api/v1/jobs")
 

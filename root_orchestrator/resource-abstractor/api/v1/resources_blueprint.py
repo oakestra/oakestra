@@ -1,12 +1,11 @@
-from flask_smorest import Blueprint
-from flask.views import MethodView
-from marshmallow import Schema, fields
 from bson.objectid import ObjectId
-from werkzeug import exceptions
-
-from db.clusters_db import find_clusters, find_cluster_by_id
+from db.clusters_db import find_cluster_by_id, find_clusters
 from db.clusters_helper import build_filter
 from db.jobs_db import find_job_by_id
+from flask.views import MethodView
+from flask_smorest import Blueprint
+from marshmallow import Schema, fields
+from werkzeug import exceptions
 
 resourcesblp = Blueprint("Resources Info", "resources_info", url_prefix="/api/v1/resources")
 
