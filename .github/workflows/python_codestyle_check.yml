@@ -1,0 +1,27 @@
+name: Python Codestyle Check
+
+on: [push, pull_request]
+
+jobs:
+  style-check:
+    runs-on: ubuntu-latest
+    steps: 
+      - uses: actions/checkout@v3
+      # https://black.readthedocs.io/en/stable/integrations/github_actions.html
+      - name: black formatter check
+        uses: psf/black@stable
+        with:
+          options: "--check --diff --verbose --line-length 100"
+          src: "."
+      # https://github.com/marketplace/actions/python-flake8
+      - name: flake8 linter check
+        uses: julianwachholz/flake8-action@v2
+        with:
+          checkName: "Python Lint"
+          # path/to/files
+          path: .
+          # plugins: flake8-spellcheck
+          config: setup.cfg
+      # https://github.com/marketplace/actions/python-isort
+      - name: isort imports check
+        uses: isort/isort-action@v1

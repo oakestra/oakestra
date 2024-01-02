@@ -35,13 +35,13 @@ sla_schema = {
                                     "type": "array",
                                     "items": {
                                         "type": "string",
-                                    }
+                                    },
                                 },
                                 "environment": {
                                     "type": "array",
                                     "items": {
                                         "type": "string",
-                                    }
+                                    },
                                 },
                                 "sla_violation_strategy": {"type": "string"},
                                 "target_node": {"type": "string"},
@@ -58,22 +58,22 @@ sla_schema = {
                                                     "from": {"type": "string"},
                                                     "to": {"type": "string"},
                                                     "start": {"type": "string"},
-                                                }
-                                            }
+                                                },
+                                            },
                                         },
-                                    }
+                                    },
                                 },
                                 "added_files": {
                                     "type": "array",
                                     "items": {
                                         "type": "string",
-                                    }
+                                    },
                                 },
                                 "args": {
                                     "type": "array",
                                     "items": {
                                         "type": "string",
-                                    }
+                                    },
                                 },
                                 "constraints": {
                                     "type": "array",
@@ -83,21 +83,23 @@ sla_schema = {
                                             "type": {"type": "string"},
                                             "area": {"type": "string"},
                                             "cluster": {"type": "string"},
-                                            "node":     {"type": "string"},
+                                            "node": {"type": "string"},
                                             "location": {"type": "string"},
                                             "threshold": {"type": "number"},
                                             "rigidness": {"type": "number"},
                                             "convergence_time": {"type": "integer"},
                                         },
-                                        "required": ["type"]
-                                    }
+                                        "required": ["type"],
+                                    },
                                 },
                                 "connectivity": {
                                     "type": "array",
                                     "items": {
                                         "type": "object",
                                         "properties": {
-                                            "target_microservice_id": {"type": "string"},  # was integer
+                                            "target_microservice_id": {
+                                                "type": "string"
+                                            },  # was integer
                                             "con_constraints": {
                                                 "type": "array",
                                                 "items": {
@@ -108,32 +110,50 @@ sla_schema = {
                                                         "rigidness": {"type": "number"},
                                                         "convergence_time": {"type": "integer"},
                                                     },
-                                                    "required": ["type", "threshold", "rigidness", "convergence_time"]
-                                                }
+                                                    "required": [
+                                                        "type",
+                                                        "threshold",
+                                                        "rigidness",
+                                                        "convergence_time",
+                                                    ],
+                                                },
                                             },
                                         },
-                                        "required": ["target_microservice_id", "con_constraints"]
-                                    }
+                                        "required": [
+                                            "target_microservice_id",
+                                            "con_constraints",
+                                        ],
+                                    },
                                 },
                             },
-                            "required": ["microserviceID", "microservice_name", "virtualization", "memory", "storage",
-                                         "code"]
+                            "required": [
+                                "microserviceID",
+                                "microservice_name",
+                                "virtualization",
+                                "memory",
+                                "storage",
+                                "code",
+                            ],
                         },
                         "exclusiveMinimum": 0,
                     },
                 },
                 "required": ["applicationID", "application_name", "microservices"],
-            }
+            },
         },
         "args": {
             "type": "array",
             "items": {
                 "type": "string",
-            }
+            },
         },
     },
-    "required": ["sla_version", "customerID", "applications"]
+    "required": ["sla_version", "customerID", "applications"],
 }
 
-sla_microservice_schema = sla_schema["properties"]["applications"]["items"]["properties"]["microservices"]["items"]
-sla_microservices_schema = sla_schema["properties"]["applications"]["items"]["properties"]["microservices"]
+sla_microservice_schema = sla_schema["properties"]["applications"]["items"]["properties"][
+    "microservices"
+]["items"]
+sla_microservices_schema = sla_schema["properties"]["applications"]["items"]["properties"][
+    "microservices"
+]

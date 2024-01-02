@@ -1,5 +1,3 @@
-import json
-
 import jsonschema
 from sla.schema import sla_schema
 
