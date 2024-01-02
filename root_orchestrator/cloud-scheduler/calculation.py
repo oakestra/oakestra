@@ -23,7 +23,7 @@ def direct_service_mapping(job, cluster_name):
     cluster = cluster_operations.get_resource_by_name(cluster_name)  # can return None
 
     if cluster is not None:  # cluster found by location exists
-        if cluster['active']:
+        if cluster["active"]:
             print("Cluster is active")
             cluster_specs = extract_specs(cluster)
             if does_cluster_respects_requirements(cluster_specs, job):
