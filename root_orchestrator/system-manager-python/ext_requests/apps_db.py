@@ -50,24 +50,22 @@ def mongo_update_job_status(job_id, status, status_detail, instances=None):
             # cpu_update = {"value": instance.get("cpu"), "timestamp": current_time}
             # memory_update = {"value": instance.get("memory"), "timestamp": current_time}
             db.mongo_services.update_one(
+                {"_id": ObjectId(job_id),
+                 "instance_list": {"$elemMatch": {"instance_number": instance["instance_number"]}}},
                 {
-                    "_id": ObjectId(job_id),
-                    "instance_list": {
-                        "$elemMatch": {"instance_number": instance["instance_number"]}
+                    "$push": {
+                        "instance_list.$.cpu_history": {"$each": [cpu_update], "$slice": -100},
+                        "instance_list.$.memory_history": {'$each': [memory_update], '$slice': -100}
                     },
-                },
-                {
                     "$set": {
                         "instance_list.$.cpu": instance.get("cpu"),
                         "instance_list.$.memory": instance.get("memory"),
                         "instance_list.$.publicip": instance.get("publicip"),
                         "instance_list.$.disk": instance.get("disk"),
                         "instance_list.$.status": instance.get("status"),
-                        "instance_list.$.status_detail": instance.get(
-                            "status_detail", "No extra information"
-                        ),
+                        "instance_list.$.status_detail": instance.get("status_detail", "No extra information"),
                         "instance_list.$.logs": instance.get("logs", ""),
-                    },
+                    }
                 }
             )
 
