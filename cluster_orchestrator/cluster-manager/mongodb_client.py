@@ -137,7 +137,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
                 cumulative_cpu_cores += n.get('current_cpu_cores_free', 0)
                 cumulative_memory += n.get('current_memory_percent', 0)
                 cumulative_memory_in_mb += n.get('current_free_memory_in_MB', 0)
-                gpu_drivers = gpu_drivers.append(n.get('gpu_driver', "-"))
+                gpu_drivers.append(n.get('gpu_driver', "-"))
                 gpu_usage += n.get('gpu_usage', 0)
                 gpu_cores += n.get('gpu_cores', 0)
                 gpu_temp += n.get('gpu_temp', 0)
