@@ -6,22 +6,26 @@ def get_fake_sla_app(name, services=None):
     if services is not None:
         for service in services:
             microservice_list.append(service)
-    return {'sla_version': 'v2.0',
-            "customerID": "Admin",
-            'applications': [{
+    return {
+        "sla_version": "v2.0",
+        "customerID": "Admin",
+        "applications": [
+            {
                 "application_name": name,
                 "application_namespace": name,
                 "application_desc": "No description here",
                 "applicationID": "",
                 "microservices": microservice_list,
-            }]}
+            }
+        ],
+    }
 
 
 def get_fake_db_app(name, services=None):
     microservice_list = []
     if services is not None:
         for service in services:
-            microservice_list.append(service['microserviceID'])
+            microservice_list.append(service["microserviceID"])
     return {
         "application_name": name,
         "application_namespace": name,
@@ -30,9 +34,16 @@ def get_fake_db_app(name, services=None):
     }
 
 
-def get_fake_sla_service(name, namespace="test", image="", virt='container', requirements=None, addresses=None):
+def get_fake_sla_service(
+    name,
+    namespace="test",
+    image="",
+    virt="container",
+    requirements=None,
+    addresses=None,
+):
     if addresses is None:
-        addresses=[]
+        addresses = []
     return {
         "microserviceID": "",
         "microservice_name": name,
@@ -53,8 +64,18 @@ def get_fake_sla_service(name, namespace="test", image="", virt='container', req
     }
 
 
-def get_fake_db_service(name, namespace="test", appname='app', appns='test', appid='42', image="", virt='docker',
-                        requirements=None, instances=None, rrip=None):
+def get_fake_db_service(
+    name,
+    namespace="test",
+    appname="app",
+    appns="test",
+    appid="42",
+    image="",
+    virt="docker",
+    requirements=None,
+    instances=None,
+    rrip=None,
+):
     instance_list = []
     if instances is not None:
         for instance in instances:
@@ -78,7 +99,11 @@ def get_fake_db_service(name, namespace="test", appname='app', appns='test', app
 def get_full_random_sla_app():
     app = get_fake_sla_app(str(randint(0, 99999)))
     for i in range(randint(1, 15)):
-        service = get_fake_sla_service(str(i), image="docker.io/library/nginx:latest", virt="container",
-                                       addresses={"RR_ip": "10.30.0." + str(i)})
-        app['applications'][0]['microservices'].append(service)
+        service = get_fake_sla_service(
+            str(i),
+            image="docker.io/library/nginx:latest",
+            virt="container",
+            addresses={"RR_ip": "10.30.0." + str(i)},
+        )
+        app["applications"][0]["microservices"].append(service)
     return app

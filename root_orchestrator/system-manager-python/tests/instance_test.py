@@ -13,5 +13,3 @@ class InstanceTestCase(unittest.TestCase):
 
     def test_scale_down(self):
         pass
-
-

@@ -41,7 +41,10 @@ var containerdSingletonCLient sync.Once
 var startContainerMonitoring sync.Once
 
 const NAMESPACE = "oakestra"
-const CGROUP_BASE_MEM = "/sys/fs/cgroup/memory/" + NAMESPACE
+const CGROUPV1_BASE_MEM = "/sys/fs/cgroup/memory/" + NAMESPACE
+const CGROUPV2_BASE_MEM = "/sys/fs/cgroup/" + NAMESPACE
+const LOG_DIR = "/tmp"
+const LOG_SIZE = 1024 //bytes
 
 func GetContainerdClient() *ContainerRuntime {
 	containerdSingletonCLient.Do(func() {
@@ -203,8 +206,15 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		return
 	}
 
-	//	start task
-	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStdio))
+	//	start task with /tmp/hostname default log directory
+	file, err := os.OpenFile(fmt.Sprintf("%s/%s", LOG_DIR, hostname), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		revert(err)
+		return
+	}
+	defer file.Close()
+	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStreams(nil, file, file)))
+
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR: containerd task creation failure: %v", err)
 		_ = container.Delete(ctx)
@@ -328,7 +338,7 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						cpuUsage = sysInfo.CPU / float64(model.GetNodeInfo().CpuCores)
 					}
 
-					mem, err := docker.CgroupMem(container.ID(), CGROUP_BASE_MEM)
+					mem, err := r.getContainerMemoryUsage(container.ID())
 					if err != nil {
 						logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
 						continue
@@ -345,12 +355,16 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
 						continue
 					}
+
+					logs := r.getLogs(container.ID())
+
 					resourceList = append(resourceList, model.Resources{
 						Cpu:      fmt.Sprintf("%f", cpuUsage),
-						Memory:   fmt.Sprintf("%f", float64(mem.MemUsageInBytes)),
+						Memory:   fmt.Sprintf("%f", mem),
 						Disk:     fmt.Sprintf("%d", usage.Size),
 						Sname:    extractSnameFromTaskID(container.ID()),
 						Runtime:  string(model.CONTAINER_RUNTIME),
+						Logs:     logs,
 						Instance: extractInstanceNumberFromTaskID(container.ID()),
 					})
 				}
@@ -387,6 +401,47 @@ func (r *ContainerRuntime) removeContainer(container containerd.Container) {
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to delete container: %v", err)
 	}
+}
+
+// reads the last 100 bytes of the logfile of a container
+func (r *ContainerRuntime) getLogs(containerID string) string {
+
+	file, err := os.Open(fmt.Sprintf("%s/%s", LOG_DIR, containerID))
+	if err != nil {
+		logger.ErrorLogger().Printf("%v", err)
+		return ""
+	}
+	defer file.Close()
+
+	buf := make([]byte, LOG_SIZE)
+	stat, err := file.Stat()
+	if err != nil {
+		logger.ErrorLogger().Printf("%v", err)
+		return ""
+	}
+
+	var start int64 = 0
+	if stat.Size()-LOG_SIZE < 0 {
+		start = 0
+	} else {
+		start = stat.Size() - LOG_SIZE
+	}
+	n, err := file.ReadAt(buf, start)
+	if err != nil {
+		return string(buf[:n])
+	}
+	return string(buf[:n])
+}
+
+func (r *ContainerRuntime) getContainerMemoryUsage(containerID string) (float64, error) {
+	mem, err := docker.CgroupMem(containerID, CGROUPV1_BASE_MEM)
+	if err != nil {
+		mem, err = docker.CgroupMem(containerID, CGROUPV2_BASE_MEM)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return float64(mem.MemUsageInBytes), nil
 }
 
 func withCustomResolvConf(src string) func(context.Context, oci.Client, *containers.Container, *oci.Spec) error {

@@ -1,9 +1,17 @@
 import logging
-import threading
 
-from ext_requests.apps_db import mongo_find_job_by_id, mongo_insert_job, mongo_get_applications_of_user, \
-    mongo_delete_job, mongo_update_job, mongo_find_app_by_id, mongo_get_jobs_of_application, mongo_get_all_jobs, \
-    mongo_set_microservice_id, mongo_update_application_microservices
+from ext_requests.apps_db import (
+    mongo_delete_job,
+    mongo_find_app_by_id,
+    mongo_find_job_by_id,
+    mongo_get_all_jobs,
+    mongo_get_applications_of_user,
+    mongo_get_jobs_of_application,
+    mongo_insert_job,
+    mongo_set_microservice_id,
+    mongo_update_application_microservices,
+    mongo_update_job,
+)
 from ext_requests.net_plugin_requests import net_inform_service_deploy, net_inform_service_undeploy
 from services.instance_management import request_scale_down_instance
 from sla.versioned_sla_parser import parse_sla_json
@@ -12,14 +20,14 @@ from sla.versioned_sla_parser import parse_sla_json
 def create_services_of_app(username, sla, force=False):
     data = parse_sla_json(sla)
     logging.log(logging.INFO, sla)
-    app_id = data.get('applications')[0]["applicationID"]
+    app_id = data.get("applications")[0]["applicationID"]
     last_service_id = ""
     application = mongo_find_app_by_id(app_id, username)
     if application is None:
-        return {'message': "application not found"}, 404
-    for microservice in data.get('applications')[0].get('microservices'):
+        return {"message": "application not found"}, 404
+    for microservice in data.get("applications")[0].get("microservices"):
         if not valid_service(microservice):
-            return {'message': "invalid service name or namespace"}, 403
+            return {"message": "invalid service name or namespace"}, 403
         # Insert job into database
         service = generate_db_structure(application, microservice)
         last_service_id = mongo_insert_job(service)
@@ -29,11 +37,11 @@ def create_services_of_app(username, sla, force=False):
         # Inform network plugin about the new service
         try:
             net_inform_service_deploy(service, str(last_service_id))
-        except:
+        except Exception:
             delete_service(username, str(last_service_id))
-            return {'message': 'failed to deploy service'}, 500
+            return {"message": "failed to deploy service"}, 500
         # TODO: check if service deployed already etc. force=True must force the insertion anyway
-    return {'job_id': str(last_service_id)}, 200
+    return {"job_id": str(last_service_id)}, 200
 
 
 def delete_service(username, serviceid):
@@ -93,7 +101,9 @@ def generate_db_structure(application, microservice):
         microservice["virtualization"] = "docker"
     addresses = microservice.get("addresses")
     if addresses is not None:
-        microservice["RR_ip"] = addresses.get("rr_ip")  # compatibility with older netmanager versions
+        microservice["RR_ip"] = addresses.get(
+            "rr_ip"
+        )  # compatibility with older netmanager versions
     if microservice["virtualization"] == "unikernel":
         microservice["arch"] = microservice["arch"]
     return microservice
@@ -101,19 +111,19 @@ def generate_db_structure(application, microservice):
 
 def add_service_to_app(app_id, service_id, userid):
     application = mongo_find_app_by_id(app_id, userid)
-    application['microservices'].append(service_id)
-    mongo_update_application_microservices(app_id, application['microservices'])
+    application["microservices"].append(service_id)
+    mongo_update_application_microservices(app_id, application["microservices"])
 
 
 def remove_service_from_app(app_id, service_id, userid):
     application = mongo_find_app_by_id(app_id, userid)
-    application['microservices'].remove(service_id)
-    mongo_update_application_microservices(app_id, application['microservices'])
+    application["microservices"].remove(service_id)
+    mongo_update_application_microservices(app_id, application["microservices"])
 
 
 def valid_service(service):
-    if len(service['microservice_name']) > 10 or len(service['microservice_name']) < 1:
+    if len(service["microservice_name"]) > 10 or len(service["microservice_name"]) < 1:
         return False
-    if len(service['microservice_namespace']) > 10 or len(service['microservice_namespace']) < 1:
+    if len(service["microservice_namespace"]) > 10 or len(service["microservice_namespace"]) < 1:
         return False
     return True
