@@ -18,9 +18,11 @@ import (
 	psnet "github.com/shirou/gopsutil/net"
 )
 
+type RuntimeType string
+
 const (
-	CONTAINER_RUNTIME = "docker"
-	UNIKERNEL_RUNTIME = "unikernel"
+	CONTAINER_RUNTIME RuntimeType = "docker"
+	UNIKERNEL_RUNTIME RuntimeType = "unikernel"
 )
 
 type Node struct {
@@ -42,15 +44,16 @@ type Node struct {
 	GpuTemp        float64           `json:"gpu_temp"`
 	GpuMemUsage    float64           `json:"gpu_mem_used"`
 	GpuTotMem      float64           `json:"gpu_tot_mem"`
-	Technology     []string          `json:"technology"`
+	Technology     []RuntimeType     `json:"technology"`
 	Overlay        bool
+	LogDirectory   string
 	NetManagerPort int
 }
 
 var once sync.Once
 var node Node
 
-func GetNodeInfo() Node {
+func GetNodeInfo() *Node {
 	once.Do(func() {
 		node = Node{
 			Host:       getHostname(),
@@ -58,12 +61,16 @@ func GetNodeInfo() Node {
 			CpuCores:   getCpuCores(),
 			CpuArch:    runtime.GOARCH,
 			Port:       getPort(),
-			Technology: getSupportedTechnologyList(),
+			Technology: make([]RuntimeType, 0),
 			Overlay:    false,
 		}
 	})
 	node.updateDynamicInfo()
-	return node
+	return &node
+}
+
+func (n *Node) SetLogDirectory(dir string) {
+	n.LogDirectory = dir
 }
 
 func GetDynamicInfo() Node {
@@ -221,14 +228,12 @@ func getPort() string {
 	return port
 }
 
-var SupportedTechnologies []string
-
-func AddSupportedTechnology(tech string){
-	SupportedTechnologies = append(SupportedTechnologies, tech)
+func (n *Node) AddSupportedTechnology(tech RuntimeType) {
+	n.Technology = append(n.Technology, tech)
 }
 
-func getSupportedTechnologyList() []string {
-	return SupportedTechnologies
+func (n *Node) GetSupportedTechnologyList() []RuntimeType {
+	return n.Technology
 }
 
 func getGpuDriver() string {

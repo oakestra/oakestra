@@ -53,7 +53,7 @@ func GetContainerdClient() *ContainerRuntime {
 		runtime.killQueue = make(map[string]*chan bool)
 		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
 		runtime.forceContainerCleanup()
-		model.AddSupportedTechnology(model.CONTAINER_RUNTIME)
+		model.GetNodeInfo().AddSupportedTechnology(model.CONTAINER_RUNTIME)
 	})
 	return &runtime
 }
@@ -350,7 +350,7 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						Memory:   fmt.Sprintf("%f", float64(mem.MemUsageInBytes)),
 						Disk:     fmt.Sprintf("%d", usage.Size),
 						Sname:    extractSnameFromTaskID(container.ID()),
-						Runtime:  model.CONTAINER_RUNTIME,
+						Runtime:  string(model.CONTAINER_RUNTIME),
 						Instance: extractInstanceNumberFromTaskID(container.ID()),
 					})
 				}

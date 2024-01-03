@@ -68,7 +68,7 @@ func GetUnikernelRuntime() *UnikernelRuntime {
 		ukruntime.qemuDomains = make(map[string]*qemuDomain)
 		err = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
 		err = os.MkdirAll("/tmp/node_engine/inst/", 0755)
-		model.AddSupportedTechnology(model.UNIKERNEL_RUNTIME)
+		model.GetNodeInfo().AddSupportedTechnology(model.UNIKERNEL_RUNTIME)
 	})
 	return &ukruntime
 }
@@ -369,7 +369,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		err = qemuCmd.Wait()
 		if err != nil {
 			if e, ok := err.(*exec.ExitError); ok {
-				logger.InfoLogger().Printf("Qemu exited with code %d", e.ExitCode())
+				logger.InfoLogger().Printf("Qemu exited with code %d and error %s", e.ExitCode(), string(e.Stderr))
 				status <- e.ExitCode()
 			} else {
 				logger.InfoLogger().Printf("Unexpected error occured %v", err)
@@ -378,7 +378,6 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		} else {
 			status <- 0
 		}
-
 	}(exitStatusQemu)
 
 	Domain := qemuDomain{
@@ -389,8 +388,8 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	}
 
 	socketPath := fmt.Sprintf("%s/%s", qemuConfig.Instancepath, hostname)
-	for true {
-		//Wait for qemu to properly start up
+	for i := 0; i < 3; i++ {
+		//Wait for qemu to properly start up maximum 3 times
 		conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
 
 		if errors.Is(err, os.ErrNotExist) {
@@ -420,7 +419,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 
 	}
 
-	logger.InfoLogger().Printf("Trying to connecto to %s", socketPath)
+	logger.InfoLogger().Printf("Trying to connec to to %s", socketPath)
 	qemuMonitor, err = qmp.NewSocketMonitor("unix", socketPath, 2*time.Second)
 	if err != nil {
 		logger.InfoLogger().Printf("Failed to Create connection to QMP: %v\n", err)
@@ -513,7 +512,7 @@ func (r *UnikernelRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 					Memory:   fmt.Sprintf("%f", sysInfo.Memory),
 					Disk:     fmt.Sprintf("%d", 0),
 					Sname:    domain.Sname,
-					Runtime:  model.UNIKERNEL_RUNTIME,
+					Runtime:  string(model.UNIKERNEL_RUNTIME),
 					Instance: domain.Instance,
 				})
 
@@ -545,6 +544,10 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string)
 
 	name := fmt.Sprintf("%s,debug-threads=on", q.Name)
 	args = append(args, "-name", name)
+
+	//Set qemu log folder
+	serialiface := fmt.Sprintf("file:%s/%s", model.GetNodeInfo().LogDirectory, q.Name)
+	args = append(args, "-serial", serialiface)
 
 	//Kernel image
 	//kernel := q.Instancepath + "kernel"

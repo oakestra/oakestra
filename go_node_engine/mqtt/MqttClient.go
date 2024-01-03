@@ -103,7 +103,7 @@ func deployHandler(client mqtt.Client, msg mqtt.Message) {
 	}
 	//handle deployment in background
 	go func() {
-		runtime := virtualization.GetRuntime(service.Runtime)
+		runtime := virtualization.GetRuntime(model.RuntimeType(service.Runtime))
 		err = runtime.Deploy(service, ReportServiceStatus)
 		service.Status = model.SERVICE_ACTIVE
 		if err != nil {
@@ -122,7 +122,7 @@ func deleteHandler(client mqtt.Client, msg mqtt.Message) {
 		logger.ErrorLogger().Printf("ERROR: unable to unmarshal cluster orch request: %v", err)
 		return
 	}
-	runtime := virtualization.GetRuntime(service.Runtime)
+	runtime := virtualization.GetRuntime(model.RuntimeType(service.Runtime))
 	err = runtime.Undeploy(service.Sname, service.Instance)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to undeploy application: %s", err.Error())

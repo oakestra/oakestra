@@ -16,7 +16,7 @@ type RuntimeMonitoring interface {
 
 type RuntimeType string
 
-func GetRuntime(runtime string) RuntimeInterface {
+func GetRuntime(runtime model.RuntimeType) RuntimeInterface {
 	if runtime == model.CONTAINER_RUNTIME {
 		return GetContainerdClient()
 	}
@@ -26,7 +26,7 @@ func GetRuntime(runtime string) RuntimeInterface {
 	return nil
 }
 
-func GetRuntimeMonitoring(runtime string) RuntimeMonitoring {
+func GetRuntimeMonitoring(runtime model.RuntimeType) RuntimeMonitoring {
 	if runtime == model.CONTAINER_RUNTIME {
 		return GetContainerdClient()
 	}
