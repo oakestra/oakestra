@@ -55,6 +55,8 @@ def mongo_update_job_status(job_id, status, status_detail, instances=None):
                     "instance_list": {
                         "$elemMatch": {"instance_number": instance["instance_number"]}
                     },
+                },
+                {
                     "$set": {
                         "instance_list.$.cpu": instance.get("cpu"),
                         "instance_list.$.memory": instance.get("memory"),
