@@ -512,6 +512,7 @@ func (r *UnikernelRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 					Memory:   fmt.Sprintf("%f", sysInfo.Memory),
 					Disk:     fmt.Sprintf("%d", 0),
 					Sname:    domain.Sname,
+					Logs:     getLogs(domain.Name),
 					Runtime:  string(model.UNIKERNEL_RUNTIME),
 					Instance: domain.Instance,
 				})
