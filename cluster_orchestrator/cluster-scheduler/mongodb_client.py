@@ -94,9 +94,7 @@ def mongo_set_job_as_scheduled(job_id, node_id):
     )
 
     # for the node, add a job
-    mongo_nodes.db.nodes.update_one(
-        {"_id": ObjectId(node_id)}, {"$push": {"jobs": job_id}}
-    )
+    mongo_nodes.db.nodes.update_one({"_id": ObjectId(node_id)}, {"$push": {"jobs": job_id}})
     return 1
 
 

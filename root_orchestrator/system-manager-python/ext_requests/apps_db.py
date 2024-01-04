@@ -38,10 +38,7 @@ def mongo_get_all_jobs():
 
 
 def mongo_get_job_status(job_id):
-    return (
-        db.mongo_services.find_one({"_id": ObjectId(job_id)}, {"status": 1})["status"]
-        + "\n"
-    )
+    return db.mongo_services.find_one({"_id": ObjectId(job_id)}, {"status": 1})["status"] + "\n"
 
 
 def mongo_update_job_status(job_id, status, status_detail, instances=None):
@@ -183,9 +180,7 @@ def mongo_find_cluster_of_job(job_id, instance_num):
     )  # return just the assgined cluster of the job
     for instance in job_obj.get("instance_list"):
         if instance["instance_number"] == int(instance_num) or instance_num == -1:
-            return db.mongo_clusters.db.clusters.find_one(
-                ObjectId(instance["cluster_id"])
-            )
+            return db.mongo_clusters.db.clusters.find_one(ObjectId(instance["cluster_id"]))
 
 
 # ......... APPLICATIONS .........
@@ -246,9 +241,7 @@ def mongo_update_application_microservices(app_id, microservices):
 
 
 def mongo_delete_application(app_id, userid):
-    db.mongo_applications.find_one_and_delete(
-        {"_id": ObjectId(app_id), "userId": userid}
-    )
+    db.mongo_applications.find_one_and_delete({"_id": ObjectId(app_id), "userId": userid})
     return db.mongo_applications.find()  # return the application list
 
 

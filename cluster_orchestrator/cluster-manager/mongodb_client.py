@@ -156,7 +156,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
                 for t in n.get("node_info").get("technology"):
                     technology.append(t) if t not in technology else technology
 
-                arch = n.get('node_info').get('architecture')
+                arch = n.get("node_info").get("architecture")
                 if arch is not None:
                     aggregation = None
                     if aggregation_per_architecture.get(arch, None) is None:
@@ -168,10 +168,10 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
                         aggregation["memory_in_mb"] = 0
 
                     aggregation = aggregation_per_architecture[arch]
-                    aggregation["cpu_percent"] += n.get('current_cpu_percent', 0)
-                    aggregation["cpu_cores"] += n.get('current_cpu_cores_free', 0)
-                    aggregation["memory"] += n.get('current_memory_percent', 0)
-                    aggregation["memory_in_mb"] += n.get('current_free_memory_in_MB', 0)
+                    aggregation["cpu_percent"] += n.get("current_cpu_percent", 0)
+                    aggregation["cpu_cores"] += n.get("current_cpu_cores_free", 0)
+                    aggregation["memory"] += n.get("current_memory_percent", 0)
+                    aggregation["memory_in_mb"] += n.get("current_free_memory_in_MB", 0)
                     # GPU not aggregated for unikernel
             else:
                 print("Node {0} is inactive.".format(n.get("_id")))
@@ -252,7 +252,7 @@ def mongo_update_jobs_status(TIME_INTERVAL):
             status = "RUNNING"
             for instance in range(len(job["instance_list"])):
                 if job["instance_list"][instance].get(
-                        "last_modified_timestamp", datetime.now().timestamp()
+                    "last_modified_timestamp", datetime.now().timestamp()
                 ) < (datetime.now().timestamp() - TIME_INTERVAL) and job["instance_list"][
                     instance
                 ].get(
