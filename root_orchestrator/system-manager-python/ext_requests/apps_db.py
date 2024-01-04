@@ -2,6 +2,7 @@ import ext_requests.mongodb_client as db
 from bson import ObjectId
 from datetime import datetime
 
+
 # ....... Job operations .........
 ##################################
 
@@ -10,13 +11,13 @@ def mongo_insert_job(microservice):
     db.app.logger.info("MONGODB - insert job...")
     # jobname and details generation
     job_name = (
-        microservice["app_name"]
-        + "."
-        + microservice["app_ns"]
-        + "."
-        + microservice["microservice_name"]
-        + "."
-        + microservice["microservice_namespace"]
+            microservice["app_name"]
+            + "."
+            + microservice["app_ns"]
+            + "."
+            + microservice["microservice_name"]
+            + "."
+            + microservice["microservice_namespace"]
     )
     microservice["job_name"] = job_name
     job_content = {
@@ -116,7 +117,7 @@ def mongo_find_job_by_ip(ip):
 
 
 def mongo_update_job_status_and_instances(
-    job_id, status, next_instance_progressive_number, instance_list
+        job_id, status, next_instance_progressive_number, instance_list
 ):
     print("Updating Job Status and assigning a cluster for this job...")
     db.mongo_services.update_one(

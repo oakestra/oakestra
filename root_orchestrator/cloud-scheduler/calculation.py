@@ -18,8 +18,8 @@ def calculate(job_id, job):
 def constraint_based_scheduling(job, constraints):
     mongo_find_all_active_clusters()
     for constraint in constraints:
-        type = constraint.get("type")
-        if type == "direct":
+        constraint_type = constraint.get("type")
+        if constraint_type == "direct":
             return direct_service_mapping(job, constraint.get("cluster"))
     return greedy_load_balanced_algorithm(job=job)
 
@@ -30,7 +30,7 @@ def direct_service_mapping(job, cluster_name):
     if cluster is not None:  # cluster found by location exists
         if is_cluster_active(cluster):
             print("Cluster is active")
-            if does_cluster_respects_requirements(cluster,job):
+            if does_cluster_respects_requirements(cluster, job):
                 return "positive", cluster
             else:
                 return "negative", "TargetClusterNoCapacity"
@@ -90,13 +90,13 @@ def greedy_load_balanced_algorithm(job, active_clusters=None):
     if job.get("virtualization") == "unikernel":
         arch = job.get("arch")
         for cluster in qualified_clusters:
-            aggregation = cluster.get("aggregation_per_architecture",None)
+            aggregation = cluster.get("aggregation_per_architecture", None)
             for a in arch:
-                aggregation_arch = aggregation.get(a,None)
+                aggregation_arch = aggregation.get(a, None)
                 if not aggregation_arch:
                     continue
-                cpu = float(aggregation_arch.get("cpu_cores",0))
-                mem = float(aggregation_arch.get("memory_in_mb",0))
+                cpu = float(aggregation_arch.get("cpu_cores", 0))
+                mem = float(aggregation_arch.get("memory_in_mb", 0))
                 if cpu >= target_cpu and mem >= target_mem:
                     target_cpu = cpu
                     target_mem = mem
@@ -125,23 +125,20 @@ def same_cluster_replication(job_obj, cluster_obj, replicas):
 
 def extract_specs(cluster):
     return {
-        "available_cpu": cluster.get("total_cpu_cores")
-        * (100 - cluster.get("aggregated_cpu_percent"))
-        / 100,
+        "available_cpu": cluster.get("total_cpu_cores") * (100 - cluster.get("aggregated_cpu_percent")) / 100,
         "available_memory": cluster.get("memory_in_mb"),
-        "available_gpu": cluster.get("total_gpu_cores")
-        * (100 - cluster.get("total_gpu_percent"))
-        / 100,
+        "available_gpu": cluster.get("total_gpu_cores") * (100 - cluster.get("total_gpu_percent")) / 100,
         "virtualization": cluster.get("virtualization"),
     }
 
-def extract_architecture_specs(cluster,arch):
-    aggregation = cluster.get('aggregation_per_architecture',None)
-    if not aggregation is None:
 
-        aggregation = aggregation.get(arch,None)
+def extract_architecture_specs(cluster, arch):
+    aggregation = cluster.get('aggregation_per_architecture', None)
+    if aggregation is not None:
 
-        if not aggregation is None:
+        aggregation = aggregation.get(arch, None)
+
+        if aggregation is not None:
             return {
                 "available_cpu": aggregation.get("cpu_cores") * (100 - aggregation.get("cpu_percent")) / 100,
                 "available_memory": aggregation.get("memory_in_mb"), "virtualization": ["unikernel"],
@@ -149,7 +146,7 @@ def extract_architecture_specs(cluster,arch):
             }
 
     return {
-        'available_cpu': 0, 'available_memory':0, 'virtualization': [], 'available_gpu': 0
+        'available_cpu': 0, 'available_memory': 0, 'virtualization': [], 'available_gpu': 0
     }
 
 
@@ -175,7 +172,7 @@ def does_cluster_respects_requirements(cluster, job):
         if arch is None:
             return False
         for a in arch:
-            cluster_specs = extract_architecture_specs(cluster,a)
+            cluster_specs = extract_architecture_specs(cluster, a)
             if cluster_specs["available_cpu"] >= vcpu and \
                     cluster_specs["available_memory"] >= memory and \
                     virtualization in cluster_specs["virtualization"] and \
