@@ -1,6 +1,7 @@
+from datetime import datetime
+
 import ext_requests.mongodb_client as db
 from bson import ObjectId
-from datetime import datetime
 
 
 # ....... Job operations .........
