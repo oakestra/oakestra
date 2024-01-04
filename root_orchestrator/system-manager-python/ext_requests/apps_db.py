@@ -3,7 +3,6 @@ from datetime import datetime
 import ext_requests.mongodb_client as db
 from bson import ObjectId
 
-
 # ....... Job operations .........
 ##################################
 
