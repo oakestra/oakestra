@@ -125,28 +125,37 @@ def same_cluster_replication(job_obj, cluster_obj, replicas):
 
 def extract_specs(cluster):
     return {
-        "available_cpu": cluster.get("total_cpu_cores") * (100 - cluster.get("aggregated_cpu_percent")) / 100,
+        "available_cpu": cluster.get("total_cpu_cores")
+        * (100 - cluster.get("aggregated_cpu_percent"))
+        / 100,
         "available_memory": cluster.get("memory_in_mb"),
-        "available_gpu": cluster.get("total_gpu_cores") * (100 - cluster.get("total_gpu_percent")) / 100,
+        "available_gpu": cluster.get("total_gpu_cores")
+        * (100 - cluster.get("total_gpu_percent"))
+        / 100,
         "virtualization": cluster.get("virtualization"),
     }
 
 
 def extract_architecture_specs(cluster, arch):
-    aggregation = cluster.get('aggregation_per_architecture', None)
+    aggregation = cluster.get("aggregation_per_architecture", None)
     if aggregation is not None:
-
         aggregation = aggregation.get(arch, None)
 
         if aggregation is not None:
             return {
-                "available_cpu": aggregation.get("cpu_cores") * (100 - aggregation.get("cpu_percent")) / 100,
-                "available_memory": aggregation.get("memory_in_mb"), "virtualization": ["unikernel"],
-                "available_gpu": 0
+                "available_cpu": aggregation.get("cpu_cores")
+                * (100 - aggregation.get("cpu_percent"))
+                / 100,
+                "available_memory": aggregation.get("memory_in_mb"),
+                "virtualization": ["unikernel"],
+                "available_gpu": 0,
             }
 
     return {
-        'available_cpu': 0, 'available_memory': 0, 'virtualization': [], 'available_gpu': 0
+        "available_cpu": 0,
+        "available_memory": 0,
+        "virtualization": [],
+        "available_gpu": 0,
     }
 
 
@@ -173,17 +182,21 @@ def does_cluster_respects_requirements(cluster, job):
             return False
         for a in arch:
             cluster_specs = extract_architecture_specs(cluster, a)
-            if cluster_specs["available_cpu"] >= vcpu and \
-                    cluster_specs["available_memory"] >= memory and \
-                    virtualization in cluster_specs["virtualization"] and \
-                    cluster_specs["available_gpu"] >= vgpu:
+            if (
+                cluster_specs["available_cpu"] >= vcpu
+                and cluster_specs["available_memory"] >= memory
+                and virtualization in cluster_specs["virtualization"]
+                and cluster_specs["available_gpu"] >= vgpu
+            ):
                 return True
     else:
         cluster_specs = extract_specs(cluster)
-        if cluster_specs["available_cpu"] >= vcpu and \
-                cluster_specs["available_memory"] >= memory and \
-                virtualization in cluster_specs["virtualization"] and \
-                cluster_specs["available_gpu"] >= vgpu:
+        if (
+            cluster_specs["available_cpu"] >= vcpu
+            and cluster_specs["available_memory"] >= memory
+            and virtualization in cluster_specs["virtualization"]
+            and cluster_specs["available_gpu"] >= vgpu
+        ):
             return True
 
     return False

@@ -11,13 +11,13 @@ def mongo_insert_job(microservice):
     db.app.logger.info("MONGODB - insert job...")
     # jobname and details generation
     job_name = (
-            microservice["app_name"]
-            + "."
-            + microservice["app_ns"]
-            + "."
-            + microservice["microservice_name"]
-            + "."
-            + microservice["microservice_namespace"]
+        microservice["app_name"]
+        + "."
+        + microservice["app_ns"]
+        + "."
+        + microservice["microservice_name"]
+        + "."
+        + microservice["microservice_namespace"]
     )
     microservice["job_name"] = job_name
     job_content = {
@@ -38,7 +38,10 @@ def mongo_get_all_jobs():
 
 
 def mongo_get_job_status(job_id):
-    return db.mongo_services.find_one({"_id": ObjectId(job_id)}, {"status": 1})["status"] + "\n"
+    return (
+        db.mongo_services.find_one({"_id": ObjectId(job_id)}, {"status": 1})["status"]
+        + "\n"
+    )
 
 
 def mongo_update_job_status(job_id, status, status_detail, instances=None):
@@ -52,12 +55,22 @@ def mongo_update_job_status(job_id, status, status_detail, instances=None):
             cpu_update = {"value": instance.get("cpu"), "timestamp": current_time}
             memory_update = {"value": instance.get("memory"), "timestamp": current_time}
             db.mongo_services.update_one(
-                {"_id": ObjectId(job_id),
-                 "instance_list": {"$elemMatch": {"instance_number": instance["instance_number"]}}},
+                {
+                    "_id": ObjectId(job_id),
+                    "instance_list": {
+                        "$elemMatch": {"instance_number": instance["instance_number"]}
+                    },
+                },
                 {
                     "$push": {
-                        "instance_list.$.cpu_history": {"$each": [cpu_update], "$slice": -100},
-                        "instance_list.$.memory_history": {'$each': [memory_update], '$slice': -100}
+                        "instance_list.$.cpu_history": {
+                            "$each": [cpu_update],
+                            "$slice": -100,
+                        },
+                        "instance_list.$.memory_history": {
+                            "$each": [memory_update],
+                            "$slice": -100,
+                        },
                     },
                     "$set": {
                         "instance_list.$.cpu": instance.get("cpu"),
@@ -65,10 +78,12 @@ def mongo_update_job_status(job_id, status, status_detail, instances=None):
                         "instance_list.$.publicip": instance.get("publicip"),
                         "instance_list.$.disk": instance.get("disk"),
                         "instance_list.$.status": instance.get("status"),
-                        "instance_list.$.status_detail": instance.get("status_detail", "No extra information"),
+                        "instance_list.$.status_detail": instance.get(
+                            "status_detail", "No extra information"
+                        ),
                         "instance_list.$.logs": instance.get("logs", ""),
-                    }
-                }
+                    },
+                },
             )
 
     return db.mongo_services.find_one_and_update(
@@ -117,7 +132,7 @@ def mongo_find_job_by_ip(ip):
 
 
 def mongo_update_job_status_and_instances(
-        job_id, status, next_instance_progressive_number, instance_list
+    job_id, status, next_instance_progressive_number, instance_list
 ):
     print("Updating Job Status and assigning a cluster for this job...")
     db.mongo_services.update_one(
@@ -168,7 +183,9 @@ def mongo_find_cluster_of_job(job_id, instance_num):
     )  # return just the assgined cluster of the job
     for instance in job_obj.get("instance_list"):
         if instance["instance_number"] == int(instance_num) or instance_num == -1:
-            return db.mongo_clusters.db.clusters.find_one(ObjectId(instance["cluster_id"]))
+            return db.mongo_clusters.db.clusters.find_one(
+                ObjectId(instance["cluster_id"])
+            )
 
 
 # ......... APPLICATIONS .........
@@ -229,7 +246,9 @@ def mongo_update_application_microservices(app_id, microservices):
 
 
 def mongo_delete_application(app_id, userid):
-    db.mongo_applications.find_one_and_delete({"_id": ObjectId(app_id), "userId": userid})
+    db.mongo_applications.find_one_and_delete(
+        {"_id": ObjectId(app_id), "userId": userid}
+    )
     return db.mongo_applications.find()  # return the application list
 
 
