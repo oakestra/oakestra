@@ -309,11 +309,12 @@ This is a detailed description of the deployment descriptor fields currently imp
       - Fully qualified service name:
         - microservice_name: name of the service (max 10 char, no symbols)
         - microservice_namespace: namespace of the service, used to reference different deployment of the same service. Examples of namespace name can be `default` or `production` or `test` (max 10 char, no symbols)
-      - virtualization: currently the only unsupported virtualization is `container`
-      - cmd: list of the commands to be executed inside the container at startup
+      - virtualization: currently the supported virtualization are `container` or `unikernel`
+      - cmd: list of the commands to be executed inside the container at startup or the unikernel parameters
       - environment: list of the environment variables to be set, E.g.: ['VAR=fOO'].
       - vcpu,vgpu,memory: minimum cpu/gpu vcores and memory amount needed to run the container
       - vtpus: currently not implemented
+      - code: public link of OCI container image (e.g. `docker.io/library/nginx:latest`) or link to unikernel image in `.tar.gz` format (e.g. `http://<hosting-url-and-port>/nginx_x86.tar.gz`).
       - storage: minimum storage size required (currently the scheduler does not take this value into account)
       - bandwidth_in/out: minimum required bandwidth on the worker node. (currently the scheduler does not take this value into account)
       - port: port mapping for the container in the syntax hostport_1:containerport_1\[/protocol];hostport_2:containerport_2\[/protocol] (default protocol is tcp)
