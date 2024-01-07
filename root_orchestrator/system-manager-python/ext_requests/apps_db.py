@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import ext_requests.mongodb_client as db
 from bson import ObjectId
 
@@ -46,14 +48,26 @@ def mongo_update_job_status(job_id, status, status_detail, instances=None):
     job.get("instance_list")
     if instances is not None:
         for instance in instances:
-            # current_time = datetime.now().isoformat()
-            # cpu_update = {"value": instance.get("cpu"), "timestamp": current_time}
-            # memory_update = {"value": instance.get("memory"), "timestamp": current_time}
+            current_time = datetime.now().isoformat()
+            cpu_update = {"value": instance.get("cpu"), "timestamp": current_time}
+            memory_update = {"value": instance.get("memory"), "timestamp": current_time}
             db.mongo_services.update_one(
                 {
                     "_id": ObjectId(job_id),
                     "instance_list": {
                         "$elemMatch": {"instance_number": instance["instance_number"]}
+                    },
+                },
+                {
+                    "$push": {
+                        "instance_list.$.cpu_history": {
+                            "$each": [cpu_update],
+                            "$slice": -100,
+                        },
+                        "instance_list.$.memory_history": {
+                            "$each": [memory_update],
+                            "$slice": -100,
+                        },
                     },
                     "$set": {
                         "instance_list.$.cpu": instance.get("cpu"),
@@ -66,7 +80,7 @@ def mongo_update_job_status(job_id, status, status_detail, instances=None):
                         ),
                         "instance_list.$.logs": instance.get("logs", ""),
                     },
-                }
+                },
             )
 
     return db.mongo_services.find_one_and_update(

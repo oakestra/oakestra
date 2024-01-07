@@ -2,23 +2,27 @@ package model
 
 import (
 	"fmt"
+	"go_node_engine/logger"
+	"go_node_engine/model/gpu"
+	"net"
+	"os"
+	"runtime"
+	"strconv"
+	"sync"
+
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	psnet "github.com/shirou/gopsutil/net"
-	"go_node_engine/logger"
-	"go_node_engine/model/gpu"
-	"net"
-	"os"
-	"strconv"
-	"sync"
 )
 
+type RuntimeType string
+
 const (
-	CONTAINER_RUNTIME = "docker"
-	UNIKERNEL_RUNTIME = "unikernel"
+	CONTAINER_RUNTIME RuntimeType = "docker"
+	UNIKERNEL_RUNTIME RuntimeType = "unikernel"
 )
 
 type Node struct {
@@ -29,6 +33,7 @@ type Node struct {
 	SystemInfo     map[string]string `json:"system_info"`
 	CpuUsage       float64           `json:"cpu"`
 	CpuCores       int               `json:"free_cores"`
+	CpuArch        string            `json:"architecture"`
 	MemoryUsed     float64           `json:"memory"`
 	MemoryMB       int               `json:"memory_free_in_MB"`
 	DiskInfo       map[string]string `json:"disk_info"`
@@ -39,27 +44,33 @@ type Node struct {
 	GpuTemp        float64           `json:"gpu_temp"`
 	GpuMemUsage    float64           `json:"gpu_mem_used"`
 	GpuTotMem      float64           `json:"gpu_tot_mem"`
-	Technology     []string          `json:"technology"`
+	Technology     []RuntimeType     `json:"technology"`
 	Overlay        bool
+	LogDirectory   string
 	NetManagerPort int
 }
 
 var once sync.Once
 var node Node
 
-func GetNodeInfo() Node {
+func GetNodeInfo() *Node {
 	once.Do(func() {
 		node = Node{
 			Host:       getHostname(),
 			SystemInfo: getSystemInfo(),
 			CpuCores:   getCpuCores(),
+			CpuArch:    runtime.GOARCH,
 			Port:       getPort(),
-			Technology: getSupportedTechnologyList(),
+			Technology: make([]RuntimeType, 0),
 			Overlay:    false,
 		}
 	})
 	node.updateDynamicInfo()
-	return node
+	return &node
+}
+
+func (n *Node) SetLogDirectory(dir string) {
+	n.LogDirectory = dir
 }
 
 func GetDynamicInfo() Node {
@@ -217,8 +228,12 @@ func getPort() string {
 	return port
 }
 
-func getSupportedTechnologyList() []string {
-	return []string{CONTAINER_RUNTIME}
+func (n *Node) AddSupportedTechnology(tech RuntimeType) {
+	n.Technology = append(n.Technology, tech)
+}
+
+func (n *Node) GetSupportedTechnologyList() []RuntimeType {
+	return n.Technology
 }
 
 func getGpuDriver() string {
