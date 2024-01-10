@@ -352,6 +352,9 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	//Generate the command to start Qemu with
 	command, args := qemuConfig.GenerateArgs(r)
 	qemuCmd = exec.Command(command, args...)
+	qemuStdout, qemuStderr := new(strings.Builder), new(strings.Builder)
+	qemuCmd.Stdout = qemuStdout
+	qemuCmd.Stderr = qemuStderr
 
 	logger.InfoLogger().Printf("Unikernel starting command: %s", qemuCmd.String())
 
@@ -367,6 +370,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 
 	go func(status chan int) {
 		err = qemuCmd.Wait()
+		logger.InfoLogger().Printf("Qemu stdout: %s\n Qemu stderr: %s\n", qemuStdout.String(), qemuStderr.String())
 		if err != nil {
 			if e, ok := err.(*exec.ExitError); ok {
 				logger.InfoLogger().Printf("Qemu exited with code %d and error %s", e.ExitCode(), string(e.Stderr))
