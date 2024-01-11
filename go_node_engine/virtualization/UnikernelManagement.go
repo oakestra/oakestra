@@ -66,8 +66,10 @@ func GetUnikernelRuntime() *UnikernelRuntime {
 		logger.InfoLogger().Printf("Using qemu at %s\n", path)
 		ukruntime.killQueue = make(map[string]*chan bool)
 		ukruntime.qemuDomains = make(map[string]*qemuDomain)
+		os.RemoveAll("/tmp/node_engine/")
 		err = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
 		err = os.MkdirAll("/tmp/node_engine/inst/", 0755)
+		err = os.MkdirAll("/tmp/node_engine/qmp/", 0755)
 		model.GetNodeInfo().AddSupportedTechnology(model.UNIKERNEL_RUNTIME)
 	})
 	return &ukruntime
@@ -588,11 +590,15 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string)
 		fsdevarg := fmt.Sprintf("local,security_model=passthrough,id=hvirtio0,path=%s/files", q.Instancepath)
 		args = append(args, "-fsdev", fsdevarg)
 
+		fsdevarg2 := fmt.Sprintf("local,security_model=passthrough,id=hvirtio1,path=%s/files", q.Instancepath)
+		args = append(args, "-fsdev", fsdevarg2)
+
 		//FS device
 		args = append(args, "-device", "virtio-9p-pci,fsdev=hvirtio0,mount_tag=fs0")
+		args = append(args, "-device", "virtio-9p-pci,fsdev=hvirtio1,mount_tag=fs1")
 	}
 	//QMP
-	Qmp := fmt.Sprintf("unix:%s/%s,server,nowait", q.Instancepath, q.Name)
+	Qmp := fmt.Sprintf("unix:/tmp/node_engine/qmp/%s,server=on,wait=off", q.Name)
 	args = append(args, "-qmp", Qmp)
 
 	//Set the cpu to host passthrough and enable kvm
