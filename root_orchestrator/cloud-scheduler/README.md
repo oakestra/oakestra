@@ -25,6 +25,7 @@ A job which is requested by the user, can have different status.
 
 ```Python
 flask
+flask_pymongo
 celery
 click
 redis
