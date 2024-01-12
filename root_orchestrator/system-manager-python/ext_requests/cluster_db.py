@@ -100,6 +100,8 @@ def mongo_update_cluster_information(cluster_id, data):
     cpu_update = {"value": cpu_percent, "timestamp": datetime_now_timestamp}
     memory_update = {"value": memory_percent, "timestamp": datetime_now_timestamp}
 
+    aggregation_per_architecture = data.get("aggregation_per_architecture", {})
+
     db.mongo_clusters.db.clusters.find_one_and_update(
         {"_id": ObjectId(cluster_id)},
         {
@@ -115,6 +117,7 @@ def mongo_update_cluster_information(cluster_id, data):
                 "aggregated_memory_percent": memory_percent,
                 "memory_in_mb": memory_in_mb,
                 "active_nodes": nodes,
+                "aggregation_per_architecture": aggregation_per_architecture,
                 "virtualization": virtualization,
                 "more": more,
                 "last_modified": datetime_now,

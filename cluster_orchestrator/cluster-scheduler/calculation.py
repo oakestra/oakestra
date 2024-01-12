@@ -18,8 +18,8 @@ def calculate(app, job):
 def constraint_based_scheduling(job, constraints):
     mongo_find_all_active_nodes()
     for constraint in constraints:
-        type = constraint.get("type")
-        if type == "direct":
+        constraint_type = constraint.get("type")
+        if constraint_type == "direct":
             return deploy_on_best_among_desired_nodes(job, constraint.get("node"))
     return greedy_load_balanced_algorithm(job=job)
 
@@ -105,6 +105,7 @@ def extract_specs(node):
         "available_memory": node.get("current_free_memory_in_MB", 0),
         "available_gpu": len(node.get("gpu_info", [])),
         "virtualization": node.get("node_info", {}).get("technology", []),
+        "arch": node.get("node_info").get("architecture"),
     }
 
 
@@ -122,6 +123,16 @@ def does_node_respects_requirements(node_specs, job):
         vgpu = job.get("vgpu")
 
     virtualization = job.get("virtualization")
+    if virtualization == "unikernel":
+        arch = job.get("arch")
+        arch_fit = False
+        if arch:
+            for a in arch:
+                if a == node_specs["arch"]:
+                    arch_fit = True
+                    break
+        if not arch_fit:
+            return False
 
     if (
         node_specs["available_cpu"] >= vcpu

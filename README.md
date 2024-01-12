@@ -108,6 +108,8 @@ If you see the NodeEngine reporting metrics to the Cluster...
 
 🏆 Success!
 
+#### ✨🆕✨ If the worker node machine has [KVM](https://phoenixnap.com/kb/ubuntu-install-kvm) installed and it supports nested virtualization, you can add the flag `-u=true` to the NodeEngine startup command to enable Oakestra Unikernel deployment support for this machine.
+
 ### Your first application 💻
 <a name="your-first-application-💻"></a>
 
@@ -309,11 +311,12 @@ This is a detailed description of the deployment descriptor fields currently imp
       - Fully qualified service name:
         - microservice_name: name of the service (max 10 char, no symbols)
         - microservice_namespace: namespace of the service, used to reference different deployment of the same service. Examples of namespace name can be `default` or `production` or `test` (max 10 char, no symbols)
-      - virtualization: currently the only unsupported virtualization is `container`
-      - cmd: list of the commands to be executed inside the container at startup
+      - virtualization: currently the supported virtualization are `container` or (✨🆕✨) `unikernel`
+      - cmd: list of the commands to be executed inside the container at startup or the unikernel parameters
       - environment: list of the environment variables to be set, E.g.: ['VAR=fOO'].
       - vcpu,vgpu,memory: minimum cpu/gpu vcores and memory amount needed to run the container
       - vtpus: currently not implemented
+      - code: public link of OCI container image (e.g. `docker.io/library/nginx:latest`) or (✨🆕✨) link to unikernel image in `.tar.gz` format (e.g. `http://<hosting-url-and-port>/nginx_x86.tar.gz`).
       - storage: minimum storage size required (currently the scheduler does not take this value into account)
       - bandwidth_in/out: minimum required bandwidth on the worker node. (currently the scheduler does not take this value into account)
       - port: port mapping for the container in the syntax hostport_1:containerport_1\[/protocol];hostport_2:containerport_2\[/protocol] (default protocol is tcp)
@@ -398,6 +401,50 @@ each call to this endpoint generates a new instance of the service
 ### Cluster Status
 - Use `GET /api/clusters/` to get all the registered clusters.
 - Use `GET /api/clusters/active` to get all the clusters currently active and their resources.
+## Unikernel
+It is also possible to use Unikernels by changing the virtulization in of the microservice
+```json
+{
+	"sla_version": "v2.0",
+	"customerID": "Admin",
+	"applications": [{
+		"applicationID": "",
+		"application_name": "nginx",
+		"application_namespace": "test",
+		"application_desc": "Simple demo of an Nginx server Unikernel",
+		"microservices": [{
+			"microserviceID": "",
+			"microservice_name": "nginx",
+			"microservice_namespace": "test",
+			"virtualization": "unikernel",
+			"cmd": [],
+			"memory": 100,
+			"vcpus": 1,
+			"vgpus": 0,
+			"vtpus": 0,
+			"bandwidth_in": 0,
+			"bandwidth_out": 0,
+			"storage": 0,
+			"code": "https://github.com/Sabanic-P/app-nginx/releases/download/v1.0/kernel.tar.gz",
+			"arch": ["amd64"],
+			"state": "",
+			"port": "80:80",
+			"addresses": {
+				"rr_ip": "10.30.30.26"
+			},
+			"added_files": []
+		}]
+	}]
+}
+```
+Differences to Container Deployment:
+- virtualization: set to unikernel
+- code: Specifies a the remote Unikernel accessible via http(s). There can be multiple
+        Unikernels in the same string seperated via ",".
+- arch: Specifies the architecture of the Unikernel given in code. The order of
+        architectures must match the order of Unikernles given via the code field
+
+# Networking 
 
 # 🕸️ Networking
 <a name="🕸️-networking"></a>

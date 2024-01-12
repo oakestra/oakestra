@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/containerd/containerd v1.7.6
+	github.com/digitalocean/go-qemu v0.0.0-20210326154740-ac9e0b687001
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/opencontainers/runtime-spec v1.1.0-rc.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
@@ -21,6 +22,7 @@ require (
 	github.com/containerd/fifo v1.1.0 // indirect
 	github.com/containerd/ttrpc v1.2.2 // indirect
 	github.com/containerd/typeurl/v2 v2.1.1 // indirect
+	github.com/digitalocean/go-libvirt v0.0.0-20201209184759-e2a69bcd5bd1 // indirect
 	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
