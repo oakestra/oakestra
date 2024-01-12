@@ -110,7 +110,7 @@ services:
       - SYSTEM_MANAGER_URL=system_manager
       - SYSTEM_MANAGER_PORT=10000
       - RESOURCE_ABSTRACTOR_URL=resource_abstractor
-      - RESOURCE_ABSTRACTOR_PORT=10011
+      - RESOURCE_ABSTRACTOR_PORT=11011
       - REDIS_ADDR=redis://:cloudRedis@redis:6379
     depends_on:
       - redis
@@ -123,11 +123,11 @@ services:
     container_name: resource_abstractor
     hostname: resource_abstractor
     expose:
-      - "10011"
+      - "11011"
     ports:
-      - "10011:10011"
+      - "11011:11011"
     environment:
-      - RESOURCE_ABSTRACTOR_PORT=10011
+      - RESOURCE_ABSTRACTOR_PORT=11011
       - CLOUD_MONGO_URL=mongo
       - CLOUD_MONGO_PORT=10007
     depends_on:

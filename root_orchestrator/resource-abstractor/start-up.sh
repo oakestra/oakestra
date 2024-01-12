@@ -11,6 +11,6 @@ export FLASK_DEBUG=False
 export CLOUD_MONGO_URL=localhost
 export CLOUD_MONGO_PORT=10007
 
-export RESOURCE_ABSTRACTOR_PORT=10011
+export RESOURCE_ABSTRACTOR_PORT=11011
 
 .venv/bin/python resource_abstractor.py
