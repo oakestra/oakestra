@@ -4,12 +4,13 @@ import (
 	"NetManager/env"
 	"NetManager/proxy"
 	"fmt"
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 	"log"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 var PUBLIC_ADDRESS = ""
@@ -86,6 +87,8 @@ func initEnv(addr string, port string) {
 			yint, _ := strconv.Atoi(y)
 			config.HostBridgeIP = fmt.Sprintf("10.19.%s.%d", x, yint+1)
 			ENV = env.NewCustom(PROXY.HostTUNDeviceName, config)
+			env.InitUnikernelDeployment(ENV)
+			env.InitContainerDeployment(ENV)
 			PROXY.SetEnvironment(ENV)
 			go HandleHttpSyncRequests(LISTEN_PORT)
 			gotoMenu()

@@ -11,11 +11,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/tkanos/gonfig"
 	"io"
 	"log"
 	"net/http"
+
+	"github.com/gorilla/mux"
+	"github.com/tkanos/gonfig"
 )
 
 type undeployRequest struct {
@@ -43,52 +44,15 @@ func handleRequests(port int) {
 	netRouter := mux.NewRouter().StrictSlash(true)
 	netRouter.HandleFunc("/register", register).Methods("POST")
 	netRouter.HandleFunc("/docker/deploy", dockerDeploy).Methods("POST")
-	netRouter.HandleFunc("/container/deploy", containerDeploy).Methods("POST")
-	netRouter.HandleFunc("/docker/undeploy", containerUndeploy).Methods("POST")
-	netRouter.HandleFunc("/container/undeploy", containerUndeploy).Methods("POST")
+
+	handlers.RegisterAllManagers(&Env, &WorkerID, Configuration.NodePublicAddress, Configuration.NodePublicPort, netRouter)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), netRouter))
 }
 
-var Env *env.Environment
+var Env env.Environment
 var Proxy proxy.GoProxyTunnel
 var WorkerID string
 var Configuration netConfiguration
-
-/*
-Endpoint: /docker/undeploy
-Usage: used to remove the network from a docker container. This method can be used only after the registration
-Method: POST
-Request Json:
-
-	{
-		serviceName:string #name used to register the service in the first place
-		instance:int
-	}
-
-Response: 200 OK or Failure code
-*/
-func containerUndeploy(writer http.ResponseWriter, request *http.Request) {
-	log.Println("Received HTTP request - /container/undeploy ")
-
-	if WorkerID == "" {
-		log.Printf("[ERROR] Node not initialized")
-		writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	reqBody, _ := io.ReadAll(request.Body)
-	var requestStruct undeployRequest
-	err := json.Unmarshal(reqBody, &requestStruct)
-	if err != nil {
-		writer.WriteHeader(http.StatusBadRequest)
-	}
-
-	log.Println(requestStruct)
-
-	Env.DetachContainer(requestStruct.Servicename, requestStruct.Instancenumber)
-
-	writer.WriteHeader(http.StatusOK)
-}
 
 /*
 	DEPRECATED
@@ -115,72 +79,6 @@ func dockerDeploy(writer http.ResponseWriter, request *http.Request) {
 	log.Println("Received HTTP request - /docker/deploy ")
 	writer.WriteHeader(299)
 	_, _ = writer.Write([]byte("DEPRECATED API"))
-}
-
-/*
-Endpoint: /container/deploy
-Usage: used to assign a network to a generic container. This method can be used only after the registration
-Method: POST
-Request Json:
-
-	{
-		pid:string #pid of container's task
-		appName:string
-		instanceNumber:int
-		portMapppings: map[int]int (host port, container port)
-	}
-
-Response Json:
-
-	{
-		serviceName:    string
-		nsAddress:  	string # address assigned to this container
-	}
-*/
-func containerDeploy(writer http.ResponseWriter, request *http.Request) {
-	log.Println("Received HTTP request - /container/deploy ")
-
-	if WorkerID == "" {
-		log.Printf("[ERROR] Node not initialized")
-		writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	reqBody, _ := io.ReadAll(request.Body)
-	log.Println("ReqBody received :", reqBody)
-	var deployTask handlers.ContainerDeployTask
-	err := json.Unmarshal(reqBody, &deployTask)
-	if err != nil {
-		writer.WriteHeader(http.StatusBadRequest)
-	}
-	deployTask.PublicAddr = Configuration.NodePublicAddress
-	deployTask.PublicPort = Configuration.NodePublicPort
-	deployTask.Env = Env
-	deployTask.Writer = &writer
-	deployTask.Finish = make(chan handlers.TaskReady)
-
-	logger.DebugLogger().Println(deployTask)
-	handlers.NewDeployTaskQueue().NewTask(&deployTask)
-
-	result := <-deployTask.Finish
-	if result.Err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	//if deploy succesfull -> answer the caller
-	response := DeployResponse{
-		ServiceName: deployTask.ServiceName,
-		NsAddress:   result.IP.String(),
-	}
-
-	logger.InfoLogger().Println("Response to /container/deploy: ", response)
-
-	writer.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(writer).Encode(response)
-	if err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-	}
 }
 
 /*
@@ -228,8 +126,9 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	Proxy.Listen()
 
 	//initialize the Env Manager
-	Env = env.NewEnvironmentClusterConfigured(Proxy.HostTUNDeviceName)
-	Proxy.SetEnvironment(Env)
+	Env = *env.NewEnvironmentClusterConfigured(Proxy.HostTUNDeviceName)
+
+	Proxy.SetEnvironment(&Env)
 
 	writer.WriteHeader(http.StatusOK)
 }

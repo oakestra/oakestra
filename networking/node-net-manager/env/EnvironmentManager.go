@@ -9,13 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/vishvananda/netlink"
-	"github.com/vishvananda/netns"
+ 	"github.com/vishvananda/netns"
 	"log"
 	"net"
 	"os"
 	"os/exec"
 	"runtime"
-	"runtime/debug"
 	"strconv"
 	"sync"
 )
@@ -157,25 +156,6 @@ func (env *Environment) Destroy() {
 	})
 }
 
-func (env *Environment) DetachContainer(sname string, instance int) {
-	snameAndInstance := fmt.Sprintf("%s.%d", sname, instance)
-	env.deployedServicesLock.RLock()
-	s, ok := env.deployedServices[snameAndInstance]
-	env.deployedServicesLock.RUnlock()
-	if ok {
-		_ = env.translationTable.RemoveByNsip(s.ip)
-		env.deployedServicesLock.Lock()
-		delete(env.deployedServices, snameAndInstance)
-		env.deployedServicesLock.Unlock()
-		env.freeContainerAddress(s.ip)
-		_ = network.ManageContainerPorts(s.ip.String(), s.portmapping, network.ClosePorts)
-		_ = netlink.LinkDel(s.veth)
-		//if no interest registered delete all remaining info about the service
-		if !mqtt.MqttIsInterestRegistered(sname) {
-			env.RemoveServiceEntries(sname)
-		}
-	}
-}
 
 func (env *Environment) IsServiceDeployed(jobName string) bool {
 	env.deployedServicesLock.RLock()
@@ -191,80 +171,6 @@ func (env *Environment) IsServiceDeployed(jobName string) bool {
 // ConfigureDockerNetwork creates a docker network compatible with the enviornment and returns it
 func (env *Environment) ConfigureDockerNetwork(containername string) (string, error) {
 	return "", errors.New("not yet implemented")
-}
-
-// AttachNetworkToContainer Attach a Docker container to the bridge and the current network environment
-func (env *Environment) AttachNetworkToContainer(pid int, sname string, instancenumber int, portmapping string) (net.IP, error) {
-
-	cleanup := func(veth *netlink.Veth) {
-		_ = netlink.LinkDel(veth)
-	}
-
-	vethIfce, err := env.createVethsPairAndAttachToBridge(sname, env.mtusize)
-	if err != nil {
-		go cleanup(vethIfce)
-		return nil, err
-	}
-
-	// Attach veth2 to the docker container
-	logger.DebugLogger().Println("Attaching peerveth to container ")
-	peerVeth, err := netlink.LinkByName(vethIfce.PeerName)
-	if err != nil {
-		cleanup(vethIfce)
-		return nil, err
-	}
-	if err := netlink.LinkSetNsPid(peerVeth, pid); err != nil {
-		cleanup(vethIfce)
-		return nil, err
-	}
-
-	//generate a new ip for this container
-	ip, err := env.generateAddress()
-	if err != nil {
-		cleanup(vethIfce)
-		return nil, err
-	}
-
-	// set ip to the container veth
-	logger.DebugLogger().Println("Assigning ip ", ip.String()+env.config.HostBridgeMask, " to container ")
-	if err := env.addPeerLinkNetwork(pid, ip.String()+env.config.HostBridgeMask, vethIfce.PeerName); err != nil {
-		cleanup(vethIfce)
-		env.freeContainerAddress(ip)
-		return nil, err
-	}
-
-	//Add traffic route to bridge
-	logger.DebugLogger().Println("Setting container routes ")
-	if err = env.setContainerRoutes(pid, vethIfce.PeerName); err != nil {
-		cleanup(vethIfce)
-		env.freeContainerAddress(ip)
-		return nil, err
-	}
-
-	env.BookVethNumber()
-
-	if err = env.setVethFirewallRules(vethIfce.Name); err != nil {
-		env.freeContainerAddress(ip)
-		cleanup(vethIfce)
-		return nil, err
-	}
-
-	if err = network.ManageContainerPorts(ip.String(), portmapping, network.OpenPorts); err != nil {
-		debug.PrintStack()
-		env.freeContainerAddress(ip)
-		cleanup(vethIfce)
-		return nil, err
-	}
-
-	env.deployedServicesLock.Lock()
-	env.deployedServices[fmt.Sprintf("%s.%d", sname, instancenumber)] = service{
-		ip:          ip,
-		sname:       sname,
-		portmapping: portmapping,
-		veth:        vethIfce,
-	}
-	env.deployedServicesLock.Unlock()
-	return ip, nil
 }
 
 // create veth pair and connect one to the host bridge
@@ -377,6 +283,26 @@ func (env *Environment) addPeerLinkNetwork(nspid int, addr string, vethname stri
 	return err
 }
 
+// setup the address of the network namespace veth based on Ns name
+func (env *Environment) addPeerLinkNetworkByNsName(NsName string, addr string, vethname string) error {
+	netlinkAddr, err := netlink.ParseAddr(addr)
+	if err != nil {
+		return err
+	}
+	err = env.execInsideNsByName(NsName, func() error {
+		link, err := netlink.LinkByName(vethname)
+		if err != nil {
+			return err
+		}
+		err = netlink.AddrAdd(link, netlinkAddr)
+		if err == nil {
+			err = netlink.LinkSetUp(link)
+		}
+		return err
+	})
+	return err
+}
+
 // Execute function inside a namespace
 func (env *Environment) execInsideNs(pid int, function func() error) error {
 	var containerNs netns.NsHandle
@@ -388,6 +314,28 @@ func (env *Environment) execInsideNs(pid int, function func() error) error {
 	if err == nil {
 		defer stdNetns.Close()
 		containerNs, err = netns.GetFromPid(pid)
+		if err == nil {
+			defer netns.Set(stdNetns)
+			err = netns.Set(containerNs)
+			if err == nil {
+				err = function()
+			}
+		}
+	}
+	return err
+}
+
+// Execute function inside a namespace based on Ns name
+func (env *Environment) execInsideNsByName(Nsname string, function func() error) error {
+	var containerNs netns.NsHandle
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	stdNetns, err := netns.Get()
+	if err == nil {
+		defer stdNetns.Close()
+		containerNs, err = netns.GetFromName(Nsname)
 		if err == nil {
 			defer netns.Set(stdNetns)
 			err = netns.Set(containerNs)
@@ -560,3 +508,4 @@ func (env *Environment) generateAddress() (net.IP, error) {
 func (env *Environment) freeContainerAddress(ip net.IP) {
 	env.addrCache = append(env.addrCache, ip)
 }
+

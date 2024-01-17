@@ -17,6 +17,7 @@ type ContainerDeployTask struct {
 	ServiceName    string `json:"serviceName"`
 	Instancenumber int    `json:"instanceNumber"`
 	PortMappings   string `json:"portMappings"`
+	Runtime        string
 	PublicAddr     string
 	PublicPort     string
 	Env            *env.Environment
@@ -83,7 +84,9 @@ func deploymentHandler(requestStruct *ContainerDeployTask) (net.IP, error) {
 	}
 
 	//attach network to the container
-	addr, err := requestStruct.Env.AttachNetworkToContainer(requestStruct.Pid, requestStruct.ServiceName, requestStruct.Instancenumber, requestStruct.PortMappings)
+	netHandler := env.GetNetDeployment(requestStruct.Runtime)
+	addr, err := netHandler.DeployNetwork(requestStruct.Pid, requestStruct.ServiceName, requestStruct.Instancenumber, requestStruct.PortMappings)
+
 	if err != nil {
 		logger.ErrorLogger().Println("[ERROR]:", err)
 		return nil, err
