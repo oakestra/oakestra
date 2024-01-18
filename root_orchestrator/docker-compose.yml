@@ -115,7 +115,6 @@ services:
     depends_on:
       - redis
       - resource_abstractor
-      - mongo_root
 
   resource_abstractor:
     image: resource_abstractor
