@@ -11,7 +11,7 @@ resourcesblp = Blueprint("Resources Info", "resources_info", url_prefix="/api/v1
 
 
 class ResourceSchema(Schema):
-    id = fields.String(attribute="_id")
+    _id = fields.String()
     cluster_name = fields.String()
     cluster_location = fields.String()
     ip = fields.String()
@@ -22,9 +22,9 @@ class ResourceSchema(Schema):
     memory_in_mb = fields.Integer()
     total_cpu_cores = fields.Integer()
     total_gpu_cores = fields.Integer()
-    available_cpu = fields.Float()
+    aggregated_cpu_percent = fields.Float()
     available_memory = fields.Float()
-    available_gpu = fields.Integer()
+    total_gpu_percent = fields.Integer()
     virtualization = fields.List(fields.String())
     last_modified_timestamp = fields.Float()
 
