@@ -210,10 +210,13 @@ services:
       - CLUSTER_MANAGER_PORT=10100
       - CLUSTER_MONGO_URL=localhost
       - CLUSTER_MONGO_PORT=10107
+      - RESOURCE_ABSTRACTOR_URL=localhost
+      - RESOURCE_ABSTRACTOR_PORT=11011
       - REDIS_ADDR=redis://:clusterRedis@localhost:6479
     depends_on:
       - cluster_redis
       - mongo_cluster
+      - resource_abstractor
 
 
   # Redis for the Cluster Scheduler as Job Queue
