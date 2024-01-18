@@ -82,6 +82,18 @@ services:
     container_name: grafana
     network_mode: "host"
 
+  resource_abstractor:
+    image: resource_abstractor
+    build: resource-abstractor/
+    container_name: resource_abstractor
+    hostname: resource_abstractor
+    network_mode: "host"
+    environment:
+      - RESOURCE_ABSTRACTOR_PORT=11011
+      - CLOUD_MONGO_URL=mongo
+      - CLOUD_MONGO_PORT=10007
+    depends_on:
+      - mongo_root
 
   # Cloud Scheduler
   cloud_scheduler:
