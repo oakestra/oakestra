@@ -82,6 +82,17 @@ services:
     container_name: grafana
     network_mode: "host"
 
+  resource_abstractor:
+    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:latest
+    container_name: resource_abstractor
+    hostname: resource_abstractor
+    network_mode: "host"
+    environment:
+      - RESOURCE_ABSTRACTOR_PORT=11011
+      - CLOUD_MONGO_URL=localhost
+      - CLOUD_MONGO_PORT=10007
+    depends_on:
+      - mongo_root
 
   # Cloud Scheduler
   cloud_scheduler:
@@ -93,12 +104,12 @@ services:
       - MY_PORT=10004
       - SYSTEM_MANAGER_URL=localhost
       - SYSTEM_MANAGER_PORT=10000
-      - CLOUD_MONGO_URL=localhost
-      - CLOUD_MONGO_PORT=10007
+      - RESOURCE_ABSTRACTOR_URL=localhost
+      - RESOURCE_ABSTRACTOR_PORT=11011
       - REDIS_ADDR=redis://:cloudRedis@localhost:6379
     depends_on:
       - redis
-      - mongo_root
+      - resource_abstractor
 
   # MQTT
   mqtt:
