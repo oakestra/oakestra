@@ -89,7 +89,7 @@ services:
     network_mode: "host"
     environment:
       - RESOURCE_ABSTRACTOR_PORT=11011
-      - CLOUD_MONGO_URL=mongo
+      - CLOUD_MONGO_URL=localhost
       - CLOUD_MONGO_PORT=10007
     depends_on:
       - mongo_root
