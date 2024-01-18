@@ -163,7 +163,7 @@ services:
     image: ghcr.io/oakestra/oakestra/cluster-manager:latest
     container_name: cluster_manager
     hostname: cluster_manager
-    command: bash -c 'sleep 2; python cluster_manager.py'
+    command: bash -c 'sleep 15; python cluster_manager.py'
     network_mode: "host"
     environment:
       - MY_PORT=10100
