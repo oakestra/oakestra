@@ -10,7 +10,7 @@ services:
 
   # Cluster Manager
   root_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/root-service-manager:alpha-v0.4.300
+    image: ghcr.io/oakestra/oakestra-net/root-service-manager:v0.4.204
 
   resource_abstractor:
     image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.300
@@ -21,7 +21,7 @@ services:
 
   # Cluster Manager
   cluster_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:alpha-v0.4.300
+    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:v0.4.204
 
   # Cluster Manager
   cluster_manager:
