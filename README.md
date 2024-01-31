@@ -128,21 +128,41 @@ Add a new application, and specify the app name, namespace, and description.
 **N.b.: Max 8 characters for app name and namespace**
 ![](https://hackmd.io/_uploads/H1HGnqjnh.png)
 
-Add a new service to the application and set the service name, namespace, and image as follows
-![](fig/fig-service-deploy.png)
-- Service Name: `nginx`
-- Service namespace: `test`
-- Virtualization: `Container`
-- Code: `docker.io/library/nginx:latest`
-- Port: `80:80` we map port 80 to external port 80
+Then, create a new service using the <img src="https://hackmd.io/_uploads/BkaUb7utp.png" style="width:10em"\> button. 
 
-Now hit the Deploy All button to deploy all the configured services. 
-After a while, you should see the service up and running. Click it to get more info. 
-![](fig/fig-deployed.png)
+Fill the form using the following values: 
+**N.b.: Max 8 characters for service name and namespace**
+![image](https://hackmd.io/_uploads/BysAV7uta.png)
 
-The Node IP field represents the address where you can reach your service. 
+```
+Service name: nginx
+Namespace: test
+Virtualization: Container
+Memory: 100MB
+Vcpus: 1
+Vgpus: 0
+Vtpus: 0
+Bandwidth in/out: 0
+Storage: 0
+Port: 80
+Code: docker.io/library/nginx:latest
+```
 
-You can try in your browser if you can see your nginx application at `http://NODE_IP/`
+Finally, deploy the application using the deploy button.
+
+<img src="https://hackmd.io/_uploads/rkvdHQdt6.png" style="width:15em"\>
+
+Check the application status, IP address, and logs.
+
+<img src="https://hackmd.io/_uploads/r1YoSQdFT.png" style="width:15em"\>
+
+![image](https://hackmd.io/_uploads/HyX6HmutT.png)
+
+![image](https://hackmd.io/_uploads/Bkh0QmOF6.png)
+
+The Node IP field represents the address where you can reach your service. Let's try to use our browser now to navigate to the IP 131.159.24.51 used by this application. 
+
+![image](https://hackmd.io/_uploads/HkPGUXOt6.png)
 
 # 🎯 Troubleshoot
 <a name="🎯-troubleshoot"></a>
