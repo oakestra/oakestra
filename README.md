@@ -128,7 +128,7 @@ Add a new application, and specify the app name, namespace, and description.
 **N.b.: Max 8 characters for app name and namespace**
 ![](https://hackmd.io/_uploads/H1HGnqjnh.png)
 
-Then, create a new service using the <img src="https://hackmd.io/_uploads/BkaUb7utp.png" style="width:10em"\> button. 
+Then, create a new service using the <img src="https://hackmd.io/_uploads/BkaUb7utp.png" style="width:10em"/> button. 
 
 Fill the form using the following values: 
 **N.b.: Max 8 characters for service name and namespace**
@@ -150,11 +150,15 @@ Code: docker.io/library/nginx:latest
 
 Finally, deploy the application using the deploy button.
 
-<img src="https://hackmd.io/_uploads/rkvdHQdt6.png" style="width:15em"\>
+<p>
+<img src="https://hackmd.io/_uploads/rkvdHQdt6.png" style="width:15em"/>
+</p>
 
 Check the application status, IP address, and logs.
 
-<img src="https://hackmd.io/_uploads/r1YoSQdFT.png" style="width:15em"\>
+<p>
+<img src="https://hackmd.io/_uploads/r1YoSQdFT.png" style="width:15em"/>
+</p>
 
 ![image](https://hackmd.io/_uploads/HyX6HmutT.png)
 
