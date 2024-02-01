@@ -1,5 +1,6 @@
 import json
 import os
+import socket
 from datetime import timedelta
 from pathlib import Path
 from secrets import token_hex
@@ -72,6 +73,7 @@ swaggerui_blueprint = get_swaggerui_blueprint(
     config={"app_name": "Oakestra root orchestrator"},
 )
 app.register_blueprint(swaggerui_blueprint)
+
 
 # .......... Register clusters via WebSocket ...........#
 # ......................................................#
@@ -151,4 +153,4 @@ def upload_file():
 if __name__ == "__main__":
     import eventlet
 
-    eventlet.wsgi.server(eventlet.listen(("0.0.0.0", int(MY_PORT))), app, log=my_logger)
+    eventlet.wsgi.server(eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger)
