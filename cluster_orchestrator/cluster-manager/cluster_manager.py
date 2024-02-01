@@ -4,6 +4,7 @@ import time
 
 import service_operations
 import socketio
+import socket
 from analyzing_workers import looking_for_dead_workers
 from apscheduler.schedulers.background import BackgroundScheduler
 from cluster_scheduler_requests import scheduler_request_status
@@ -291,5 +292,5 @@ if __name__ == "__main__":
 
     init_cm_to_sm()
     eventlet.wsgi.server(
-        eventlet.listen(("0.0.0.0", int(MY_PORT))), app, log=my_logger
+        eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger
     )  # see README for logging notes
