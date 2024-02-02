@@ -246,3 +246,7 @@ volumes:
     driver: local
   mongodb_cluster_net_data:
     driver: local
+
+networks:
+  ip6net:
+    enable_ipv6: true
