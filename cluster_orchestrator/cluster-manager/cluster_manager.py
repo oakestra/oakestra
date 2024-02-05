@@ -1,10 +1,10 @@
 import json
 import os
+import socket
 import time
 
 import service_operations
 import socketio
-import socket
 from analyzing_workers import looking_for_dead_workers
 from apscheduler.schedulers.background import BackgroundScheduler
 from cluster_scheduler_requests import scheduler_request_status

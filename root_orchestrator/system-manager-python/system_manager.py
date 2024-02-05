@@ -153,4 +153,6 @@ def upload_file():
 if __name__ == "__main__":
     import eventlet
 
-    eventlet.wsgi.server(eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger)
+    eventlet.wsgi.server(
+        eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger
+    )
