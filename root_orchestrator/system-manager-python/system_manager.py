@@ -11,6 +11,7 @@ from ext_requests.cluster_db import mongo_upsert_cluster
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import net_register_cluster
 from ext_requests.user_db import create_admin
+from ext_requests.cluster_requests import is_4to6_mapped, extract_v4_address_from_v6_mapped
 from flask import Flask, flash, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -101,12 +102,16 @@ def handle_init_client(message):
     )
     app.logger.info(message)
 
-    cid = mongo_upsert_cluster(cluster_ip=request.remote_addr, message=message)
+    cluster_address = request.remote_addr
+    if is_4to6_mapped(cluster_address):
+        cluster_address = extract_v4_address_from_v6_mapped(cluster_address)
+
+    cid = mongo_upsert_cluster(cluster_ip=cluster_address, message=message)
     x = {"id": str(cid)}
 
     net_register_cluster(
         cluster_id=str(cid),
-        cluster_address=request.remote_addr,
+        cluster_address=cluster_address,
         cluster_port=message["network_component_port"],
     )
 

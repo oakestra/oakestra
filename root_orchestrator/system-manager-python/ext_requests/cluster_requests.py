@@ -23,6 +23,16 @@ def add_brackets_if_ipv6(address):
         return address
 
 
+def is_4to6_mapped(address):
+    """Checks if the given address is 4-to-6 mapped."""
+    return is_ipv6(address) and address.startswith("::")
+
+
+def extract_v4_address_from_v6_mapped(address):
+    """Returns IPv4 address, given address is a 4-to-6 mapped IP address"""
+    return address.split(":")[3]
+
+
 def cluster_request_to_deploy(cluster_id, job_id, instance_number):
     print("propagate to cluster...")
     cluster = mongo_find_cluster_by_id(cluster_id)
