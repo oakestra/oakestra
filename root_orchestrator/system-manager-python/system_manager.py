@@ -8,10 +8,10 @@ from secrets import token_hex
 from blueprints import blueprints
 from bson import json_util
 from ext_requests.cluster_db import mongo_upsert_cluster
+from ext_requests.cluster_requests import extract_v4_address_from_v6_mapped, is_4to6_mapped
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import net_register_cluster
 from ext_requests.user_db import create_admin
-from ext_requests.cluster_requests import is_4to6_mapped, extract_v4_address_from_v6_mapped
 from flask import Flask, flash, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
