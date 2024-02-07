@@ -1,5 +1,6 @@
 import json
 import os
+import socket
 import time
 
 import service_operations
@@ -291,5 +292,5 @@ if __name__ == "__main__":
 
     init_cm_to_sm()
     eventlet.wsgi.server(
-        eventlet.listen(("0.0.0.0", int(MY_PORT))), app, log=my_logger
+        eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger
     )  # see README for logging notes
