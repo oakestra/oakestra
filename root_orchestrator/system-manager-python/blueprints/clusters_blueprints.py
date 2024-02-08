@@ -9,6 +9,7 @@ from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint
+from utils.network import sanitize
 
 clustersbp = Blueprint("Clusters", "cluster management", url_prefix="/api/clusters")
 
@@ -82,6 +83,7 @@ class ClusterController(MethodView):
             )
             if result is None:
                 # cluster has outdated jobs, ask to undeploy
-                cluster_request_to_delete_job_by_ip(j.get("system_job_id"), -1, request.remote_addr)
+                addr = sanitize(request.remote_addr)
+                cluster_request_to_delete_job_by_ip(j.get("system_job_id"), -1, addr)
 
         return "ok"

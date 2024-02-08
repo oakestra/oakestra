@@ -8,7 +8,6 @@ from secrets import token_hex
 from blueprints import blueprints
 from bson import json_util
 from ext_requests.cluster_db import mongo_upsert_cluster
-from ext_requests.cluster_requests import extract_v4_address_from_v6_mapped, is_4to6_mapped
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import net_register_cluster
 from ext_requests.user_db import create_admin
@@ -19,6 +18,7 @@ from flask_smorest import Api
 from flask_socketio import SocketIO, emit
 from flask_swagger_ui import get_swaggerui_blueprint
 from sm_logging import configure_logging
+from utils.network import sanitize
 from werkzeug.utils import redirect, secure_filename
 
 my_logger = configure_logging()
@@ -102,9 +102,7 @@ def handle_init_client(message):
     )
     app.logger.info(message)
 
-    cluster_address = request.remote_addr
-    if is_4to6_mapped(cluster_address):
-        cluster_address = extract_v4_address_from_v6_mapped(cluster_address)
+    cluster_address = sanitize(request.remote_addr)
 
     cid = mongo_upsert_cluster(cluster_ip=cluster_address, message=message)
     x = {"id": str(cid)}
