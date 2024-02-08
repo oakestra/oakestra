@@ -6,6 +6,10 @@ services:
       root_net:
         ipv4_address: 192.168.128.2
         ipv6_address: 2001:db8:a::2
+    environment:
+      - CLOUD_MONGO_URL=[2001:db8:a::5]
+      - CLOUD_SCHEDULER_URL=[2001:db8:a::7]
+      - NET_PLUGIN_URL=[2001:db8:a::3]
 
   mongo_root:
     networks:
@@ -13,10 +17,6 @@ services:
         ipv4_address: 192.168.128.5
         ipv6_address: 2001:db8:a::5
     command: mongod --port 10007 --ipv6
-    environment:
-      - CLOUD_MONGO_URL=[2001:db8:a::5]
-      - CLOUD_SCHEDULER_URL=[2001:db8:a::7]
-      - NET_PLUGIN_URL=[2001:db8:a::3]
 
   mongo_rootnet:
     networks:
@@ -60,7 +60,6 @@ services:
     environment:
       - SYSTEM_MANAGER_URL=[2001:db8:a::2]
       - RESOURCE_ABSTRACTOR=[2001:db8:a::10]
-      - CLOUD_MONGO_URL=[2001:db8:a::5]
 
   resource_abstractor:
     networks:
