@@ -103,9 +103,3 @@ Usage: `docker-compose -f docker-compose.yml -f override-ipv6-enabled.yml`
 This override sets up a bridged docker network, assigning each container a static IPv4+IPv6 address.
 Note that the IP protocol version used for connection establishment using hostname resolution depends on the implementation.
 Example: IPv6 server receiving IPv4 request -> source address is in 4-to-6 mapped format (http://mars.tekkom.dk/w/index.php/IPv4-Mapped_IPv6_Address)
-
-In case you want to verify, that the services use IPv6 for management traffic you can use the `override-ipv6-addressed.yml` file.
-It replaces the hostnames used in the environment variables with the hosts' static IPv6 addresses.
-Additionally it prevents the above example to occur.
-
-Usage: `docker-compose -f docker-compose.yml -f override-ipv6-addressed.yml`
