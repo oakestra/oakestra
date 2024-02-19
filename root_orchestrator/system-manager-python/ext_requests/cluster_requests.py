@@ -120,3 +120,29 @@ def cluster_request_to_move_within_cluster(cluster_obj, job_id, node_from, node_
         return 1
     except requests.exceptions.RequestException:
         print("Calling Cluster Orchestrator /api/move not successful.")
+
+
+# ............................... #
+#       Gateway Requests          #
+# ............................... #
+
+
+def cluster_request_to_deploy_gateway(cluster_id, microservice):
+    print("propagate to cluster [deploy gateway]... ")
+    cluster_obj = mongo_find_cluster_by_id(cluster_id)
+
+    cluster_addr = (
+        "http://"
+        + sanitize(cluster_obj.get("ip"), request=True)
+        + ":"
+        + str(cluster_obj.get("port"))
+        + "/api/gateway/deploy"
+    )
+    try:
+        # embed cluster_id into struct
+        microservice["cluster_id"] = cluster_id
+        resp = requests.post(cluster_addr, json=microservice)
+        return resp.json, resp.status_code
+    except requests.exceptions.RequestException:
+        print("Calling Cluster Orchestrator /api/gateway/deploy not successful.")
+        return "", 500
