@@ -159,3 +159,24 @@ sla_microservice_schema = sla_schema["properties"]["applications"]["items"]["pro
 sla_microservices_schema = sla_schema["properties"]["applications"]["items"]["properties"][
     "microservices"
 ]
+
+gateway_schema = {
+    "type": "object",
+    "properties": {
+        "sla_version": {"type": "string"},
+        "customerID": {"type": "string"},
+        "microservices": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "microserviceID": {"type": "string"},
+                    "microservice_name": {"type": "string"},
+                    "exposed_port": {"type": "integer"},
+                },
+                "required": ["microserviceID", "exposed_port"],
+            },
+        },
+    },
+    "required": ["sla_version", "customerID", "microservices"],
+}
