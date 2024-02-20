@@ -3,6 +3,7 @@ import os
 import socket
 import time
 
+import gateway_operations
 import service_operations
 import socketio
 from analyzing_workers import looking_for_dead_workers
@@ -116,6 +117,55 @@ def delete_service(system_job_id, instance_number):
     except Exception:
         return "", 500
 
+    return "ok", 200
+
+
+@app.route("/api/gateway/deploy", methods=["POST"])
+def deploy_gateway():
+    app.logger.info("Incoming Request /api/gateway/deploy")
+    json_data = request.json
+    try:
+        gateway = gateway_operations.deploy_gateway(json_data)
+    except Exception:
+        return "", 500
+    return gateway, 200
+
+
+@app.route("/api/gateway/<gateway_id>", methods=["POST, PUT", "DELETE"])
+def handle_gateway(gateway_id):
+    app.logger.info("Incoming Request {} /api/gateway/{}".format(request.method, gateway_id))
+    json_data = request.json
+    try:
+        # TODO: implement me
+        if request.method == "POST":
+            return gateway_operations.handle_gateway_post(gateway_id, json_data)
+        if request.method == "PUT":
+            return gateway_operations.handle_gateway_put(gateway_id, json_data)
+        if request.method == "DELETE":
+            return gateway_operations.handle_gateway_delete(gateway_id)
+    except Exception:
+        return "", 500
+    return 200
+
+
+@app.route("/api/net/register", methods=["POST"])
+def register_netmanager():
+    app.logger.info("Incoming Request POST /api/net/register")
+    json_data = request.json
+    try:
+        id = gateway_operations.register_netmanager(json_data)
+    except Exception:
+        return "", 500
+    return id, 200
+
+
+@app.route("/api/net/<netmanager_id>", methods=["DELETE"])
+def delete_netmanager(netmanager_id):
+    app.logger.info("Incoming Request DELETE /api/net/{}".format(netmanager_id))
+    try:
+        gateway_operations.delete_netmanager(netmanager_id)
+    except Exception:
+        return "", 500
     return "ok", 200
 
 

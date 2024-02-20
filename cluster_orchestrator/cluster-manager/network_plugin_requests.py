@@ -28,3 +28,28 @@ def network_notify_migration(job_id, job):
 
 def network_notify_undeployment(job_id, job):
     pass
+
+
+def network_notify_gateway_deploy(gateway_node_data):
+    print("Sending gateway registration information to the network component")
+    try:
+        resp = requests.post(
+            SERVICE_MANAGER_ADDR + "/api/net/gateway/deploy", json=gateway_node_data
+        )
+        return resp.json, resp.status_code
+    except requests.exceptions.RequestException:
+        print("Calling Service Manager /api/net/gateway/deploy not successul")
+        return "", 500
+
+
+def network_notify_gateway_update(gateway_id, service_info):
+    print("Sending gateway update information to the network component")
+    data = {}
+    data["gateway_id"] = gateway_id
+    del service_info["_id"]
+    data["service"] = service_info
+    print("updating gateway for service-manager:", service_info)
+    try:
+        requests.post(SERVICE_MANAGER_ADDR + "/api/net/gateway/update", json=data)
+    except requests.exceptions.RequestException:
+        print("Calling Service Manager /api/net/gateway/deploy not successul")

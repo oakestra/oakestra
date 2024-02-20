@@ -109,3 +109,23 @@ def mqtt_publish_edge_delete(worker_id, job_name, instance_number, runtime="dock
         "instance_number": int(instance_number),
     }
     mqtt.publish(topic, json.dumps(data))
+
+
+def mqtt_publish_firewall_deploy(worker_id, firewall_id):
+    topic = "nodes/" + worker_id + "/net/firewall/deploy"
+    data = {"firewall_id": firewall_id}
+    mqtt.publish(topic, json.dumps(data))
+
+
+def mqtt_publish_new_firewall_rule(worker_id, service):
+    topic = "nodes/" + worker_id + "/net/firewall/update"
+    service["_id"] = str(service["_id"])
+    print("json dumping: ", service)
+    print(json.dumps(service))
+    mqtt.publish(topic, json.dumps(service))
+
+
+def mqtt_publish_gateway_deploy(worker_id, gateway_id):
+    topic = "nodes/" + worker_id + "/net/gateway/deploy"
+    data = {"gateway_id": gateway_id}
+    mqtt.publish(topic, json.dumps(data))
