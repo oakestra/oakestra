@@ -42,10 +42,14 @@ def mongo_init(flask_app):
 
 
 def mongo_upsert_node(obj):
-    global app, mongo_nodes
+    global app, mongo_nodes, mongo_gateway_netmanagers
     app.logger.info("MONGODB - upserting node...")
     json_node_info = obj["node_info"]
     node_info_hostname = json_node_info.get("host")
+
+    # find previously registered netmanager and delete
+    # to prevent it from being a gateway deployment candidate
+    mongo_gateway_netmanagers.find_one_and_delete({"host": node_info_hostname})
 
     nodes = mongo_nodes.db.nodes
     # find node by hostname and if it exists, just upsert
