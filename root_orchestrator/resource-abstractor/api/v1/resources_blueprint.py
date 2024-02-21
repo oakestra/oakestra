@@ -24,7 +24,6 @@ class ResourceSchema(Schema):
     total_gpu_cores = fields.Integer()
     aggregated_cpu_percent = fields.Float()
     aggregation_per_architecture = fields.Dict()
-    available_cpu = fields.Float()
     available_memory = fields.Float()
     total_gpu_percent = fields.Integer()
     virtualization = fields.List(fields.String())
