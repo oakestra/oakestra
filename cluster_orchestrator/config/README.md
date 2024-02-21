@@ -1,10 +1,10 @@
 # Alert/Logging Service
-A service that collects alarms and notifications from the platform. This service can be used to signal things to the **app provider** or **infrastructure manager**.
+
 ## Overview
 
-This memo briefly describe a proposal and possible architecture for integrating Loki and Promtail with Grafana for efficient log aggregation and visualization. Following proposals aims to expand the boundaries also to metrics and tracing, partially evaluating and testing the analyzed solutions.
+This memo briefly describe a proposal and possible architecture for integrating Loki and Promtail with Grafana for efficient log aggregation and visualization.
 
-## [#Issue 225](https://github.com/oakestra/oakestra/issues/225)
+## \#Issue 225
 ### Requirements
 
 
@@ -69,11 +69,6 @@ Query-based filtering (*by LogQL*) allows *only* to filter based on the `labels`
 
 Regarding the **alarming** feature, the described context allows to define default alarm based on `labels` and manipulations of the most relevant attribute `line` (*usually specified in LogQL*) previously extracted from container logs. An example of [alarming rule](https://grafana.com/blog/2020/08/27/the-concise-guide-to-labels-in-loki/) can be found in [alerts/alert.yaml](./alerts/alert.yaml). 
 
-#### Cluster Orchestrator
-As required by the decoupling and avoid overload of information from cluster component to root, the same considerations apply for cluster orchestrator's components: the components to monitor has been tagged with a different label so the cluster-specific logging services (*mainly `cluster_loki`, `cluster_promtail`, beside `cluster_grfana`*) perform service discovery only on the tagged instances.
-
-As stated in the general requirements, also the worker node propagation has been evaluated against Promtail [scrape_configs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config) that offers mainly *docker, docker_swarm, file, http, k8s, openstack, etc* service discovery to monitor log of several type of instances, along the widely-used and supported logging on `*.log` volumes.
-
 
 ## Implemented
 Update the `docker-compose.yml` adding:
@@ -126,14 +121,10 @@ allows to obtain the following labels on a given example log:
 ![](https://i.postimg.cc/vmRLK956/gnome-shell-screenshot-ci1z6e.png)
 Loki alerts defined in [rules.yml](./alerts/rules.yml) are correctly loaded by Grafana:
 ![Alerts](https://i.postimg.cc/1t1HN9nQ/gnome-shell-screenshot-axktf5.png)
-
-The same considerations apply also to cluster components. Here an example of Loki-defined alarm firing on `cluster_manager` log fire condition:
-![](https://i.postimg.cc/MZ9449Tf/gnome-shell-screenshot-919e9b.png)
-
-## Proposal 2 - [SigNoz - 16k star](https://signoz.io/docs/) 
+## Proposal 2 - SigNoz
 SigNoz is an open-source OpenTelemetry-compliant observability tool that helps you monitor your applications and troubleshoot problems. It provides traces, metrics, and logs under a single pane of glass. It is available both as an open-source software and a cloud offering.
 
-With SigNoz, you can:
+With SigNoz, you can do the following:
 
 - Visualise Traces, Metrics, and Logs in a single pane of glass
 - Monitor application metrics like p99 latency, error rates for your services, external API calls, and individual endpoints.
@@ -144,38 +135,15 @@ With SigNoz, you can:
 - Record exceptions automatically in Python, Java, Ruby, and Javascript
 - Easy to set alerts with DIY query builder
 
-Interesting benchmarking evaluations ([Ingestion benchmark results](https://signoz.io/blog/logs-performance-benchmark/?utm_source=github-readme&utm_medium=logs-benchmark))
+Interesting benchmarking evaluations ([Ingestion becnhmark results](https://signoz.io/blog/logs-performance-benchmark/?utm_source=github-readme&utm_medium=logs-benchmark))
 
-### Pros
-- OSS, OTel compliant
-- Zero-configuration startup for logs/metrics of K8s clusters
-- Automatic computation of 99p, 95p and multiple error metrics
-- Large community, active Slack channel for support directly from mantainers
-
-### Cons
-- Frequent update break previous versions
-- Not extensively documented as Grafana OSS-based stack
-- Limited set of features regarding alarming/logging/metrics
-
-***N.B.: alerting only on [logs metrics](https://signoz.io/docs/userguide/alerts-management/), not on pure logs***
+***N.B.: alerting only on [metrics](https://signoz.io/docs/userguide/alerts-management/)***
 
 
-## Proposal 3 - LGTM stack \#TBA
-- Loki (Log Aggregation)
-- Grafana Dashboard (Telemetry Visualization)
-- Tempo (Trace Aggregation)
-- Mimir (Metrics Aggregation)
-
-
-### Resources
+## Proposal 3 - LGTM stack
 - [e2e LGTM stack](https://levelup.gitconnected.com/setting-up-an-end-to-end-monitoring-system-with-grafana-stack-lgtm-1c534ebdf17b)
 - [Scale Observability with Mimir, Loki and Tempo - ObservabilityCON](https://grafana.com/go/observabilitycon/2022/lgtm-scale-observability-with-mimir-loki-and-tempo/)
 ## Explore resources
 - [Grafana Loki parse nginx-like logs](https://grafana.com/blog/2021/08/09/new-in-loki-2.3-logql-pattern-parser-makes-it-easier-to-extract-data-from-unstructured-logs/)
 - [Processing Log Lines - Grafana Loki Github](https://github.com/jafernandez73/grafana-loki/blob/master/docs/logentry/processing-log-lines.md)
 - [LGMPP - Github](https://github.com/wick02/monitoring/tree/main)
-- [Play with Mimir](https://grafana.com/tutorials/play-with-grafana-mimir/) 
-- [Loki getting started](https://github.com/grafana/loki/tree/main/examples/getting-started)
-- [New in Grafana Loki 2.4](https://www.youtube.com/watch?v=M8nYWBpbwWg)
-- [Ward Bekker's gist](https://gist.github.com/wardbekker/6abde118f530a725e60acb5adb04508a)
-- [Getting started with Grafana Mimir](https://www.youtube.com/watch?v=pTkeucnnoJg)

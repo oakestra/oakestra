@@ -1,0 +1,41 @@
+groups:
+  - name: rate-alerting
+    interval: 10s
+    rules:
+      - alert: LogStreamErrorRate
+        expr: |
+          (sum by (container_name)(rate({logstream="stdout"}[10s])) > 0.5)
+        for: 10s
+        labels:
+            severity: warning
+            team: devops
+            category: logs
+        annotations:
+            title: "High ErrorLogRate Alert"
+            description: "something is logging a lot on stdout"
+            impact: "impact"
+            action: "action"
+            dashboard: "https://grafana.com/service-dashboard"
+            runbook: "https://wiki.com"
+            logurl: "https://grafana.com/log-explorer"
+      - alert: ContainerLogAlert
+        expr: |
+          (sum by (job,container_name)(rate({job="containerlogs"}[1s])) > 2)
+        for: 10s
+        labels:
+            severity: warning
+            team: devops
+            category: logs
+        annotations:
+            title: "High Containerlog Load Alert"
+            description: "something is logging a lot"
+            impact: "impact"
+            action: "action"
+            dashboard: "https://grafana.com/service-dashboard"
+            runbook: "https://wiki.com"
+            logurl: "https://grafana.com/log-explorer"
+
+
+
+
+
