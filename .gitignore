@@ -58,3 +58,10 @@ deployment_helper/support/EdgeIO*
 *.zip
 .vscode/settings.json
 .vscode/launch.json
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.env
