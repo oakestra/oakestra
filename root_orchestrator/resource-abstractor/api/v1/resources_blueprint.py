@@ -1,4 +1,4 @@
-from bson import ObjectId, json_util
+from bson import ObjectId
 from db.clusters_db import (
     create_cluster,
     find_cluster_by_id,
@@ -10,10 +10,29 @@ from db.jobs_db import find_job_by_id
 from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint
-from marshmallow import Schema, fields
+from marshmallow import INCLUDE, Schema, fields
 from werkzeug import exceptions
 
 resourcesblp = Blueprint("Resources Info", "resources_info", url_prefix="/api/v1/resources")
+
+
+class ResourceSchema(Schema):
+    _id = fields.String()
+    cluster_name = fields.String()
+    cluster_location = fields.String()
+    ip = fields.String()
+    port = fields.String()
+    active_nodes = fields.Integer()
+    active = fields.Boolean()
+
+    memory_in_mb = fields.Integer()
+    total_cpu_cores = fields.Integer()
+    total_gpu_cores = fields.Integer()
+    aggregated_cpu_percent = fields.Float()
+    available_memory = fields.Float()
+    total_gpu_percent = fields.Integer()
+    virtualization = fields.List(fields.String())
+    last_modified_timestamp = fields.Float()
 
 
 class ResourceFilterSchema(Schema):
@@ -25,6 +44,7 @@ class ResourceFilterSchema(Schema):
 
 @resourcesblp.route("/")
 class AllResourcesController(MethodView):
+    @resourcesblp.response(200, ResourceSchema(many=True), content_type="application/json")
     @resourcesblp.arguments(ResourceFilterSchema, location="query")
     def get(self, query={}):
         filter = query
@@ -44,16 +64,19 @@ class AllResourcesController(MethodView):
             filter["cluster_id"] = cluster_id
         filter = build_filter(query)
 
-        return json_util.dumps(find_clusters(filter))
+        return list(find_clusters(filter))
 
+    @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
+    @resourcesblp.response(200, ResourceSchema, content_type="application/json")
     def put(self, *args, **kwargs):
         data = request.json
 
-        return json_util.dumps(create_cluster(data))
+        return create_cluster(data)
 
 
 @resourcesblp.route("/<resourceId>")
 class ResourceController(MethodView):
+    @resourcesblp.response(200, ResourceSchema, content_type="application/json")
     def get(self, resourceId):
         if ObjectId.is_valid(resourceId) is False:
             raise exceptions.BadRequest()
@@ -62,8 +85,9 @@ class ResourceController(MethodView):
         if cluster is None:
             raise exceptions.NotFound()
 
-        return json_util.dumps(cluster)
+        return cluster
 
+    @resourcesblp.response(200, ResourceSchema, content_type="application/json")
     def patch(self, *args, **kwargs):
         resource_id = kwargs["resourceId"]
         data = request.json
@@ -71,4 +95,4 @@ class ResourceController(MethodView):
         if ObjectId.is_valid(resource_id) is False:
             raise exceptions.BadRequest()
 
-        return json_util.dumps(update_cluster_information(resource_id, data))
+        return update_cluster_information(resource_id, data)
