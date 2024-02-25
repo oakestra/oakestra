@@ -58,7 +58,7 @@ def get_resource_by_ip(ip):
 def update_cluster_information(cluster_id, data):
     request_address = f"{RESOURCE_ABSTRACTOR_ADDR}/api/v1/resources/{cluster_id}"
     try:
-        response = patch(request_address, data)
+        response = patch(request_address, json=data)
         return response.json()
     except exceptions.RequestException:
         print(f"Calling Resource Abstractor /api/v1/resources/{cluster_id} not successful.")
@@ -69,7 +69,7 @@ def update_cluster_information(cluster_id, data):
 def create_cluster(data):
     request_address = f"{RESOURCE_ABSTRACTOR_ADDR}/api/v1/resources"
     try:
-        response = put(request_address, data)
+        response = put(request_address, json=data)
         return response.json()
     except exceptions.RequestException:
         print("Calling Resource Abstractor /api/v1/resources not successful.")

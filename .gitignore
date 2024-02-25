@@ -65,3 +65,6 @@ venv/
 env/
 ENV/
 .env
+
+# logs
+*.log*

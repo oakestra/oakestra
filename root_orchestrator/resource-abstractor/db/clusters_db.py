@@ -6,7 +6,7 @@ from db.clusters_helper import get_freshness_threshhold
 
 
 def create_cluster(data):
-    db.mongo_clusters.update_one(
+    return db.mongo_clusters.find_one_and_update(
         {"cluster_name": data["cluster_name"]},
         {
             "$set": {
@@ -17,9 +17,8 @@ def create_cluster(data):
             }
         },
         upsert=True,
+        return_document=True,
     )
-
-    return data
 
 
 def find_clusters(filter):
