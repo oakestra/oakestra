@@ -23,7 +23,7 @@ class JobController(MethodView):
         if job is None:
             raise exceptions.NotFound()
 
-        return job
+        return json_util.dumps(job)
 
     def patch(self, *args, **kwargs):
         job_id = kwargs["jobId"]
@@ -37,4 +37,4 @@ class JobController(MethodView):
         if ObjectId.is_valid(job_id) is False:
             raise exceptions.BadRequest()
 
-        update_job(job_id, data)
+        return json_util.dumps(update_job(job_id, data))

@@ -6,13 +6,13 @@ from ext_requests.apps_db import (
     mongo_update_job_status,
     mongo_update_job_status_and_instances,
 )
-from ext_requests.cluster_db import mongo_find_cluster_by_id
 from ext_requests.cluster_requests import cluster_request_to_delete_job, cluster_request_to_deploy
 from ext_requests.net_plugin_requests import (
     net_inform_instance_deploy,
     net_inform_instance_undeploy,
 )
 from ext_requests.scheduler_requests import scheduler_request_deploy
+from ras_client import cluster_operations
 
 
 def request_scale_up_instance(microserviceid, username):
@@ -62,7 +62,7 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
 def instance_scale_up_scheduled_handler(job_id, cluster_id):
     job = mongo_find_job_by_id(job_id)
     if job is not None:
-        cluster = mongo_find_cluster_by_id(cluster_id)
+        cluster = cluster_operations.get_resource_by_id(cluster_id)
         instance_number = job["next_instance_progressive_number"]
         instance_info = {
             "instance_number": instance_number,

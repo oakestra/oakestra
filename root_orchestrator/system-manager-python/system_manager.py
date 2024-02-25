@@ -7,7 +7,6 @@ from secrets import token_hex
 
 from blueprints import blueprints
 from bson import json_util
-from ext_requests.cluster_db import mongo_upsert_cluster
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import net_register_cluster
 from ext_requests.user_db import create_admin
@@ -17,6 +16,7 @@ from flask_jwt_extended import JWTManager
 from flask_smorest import Api
 from flask_socketio import SocketIO, emit
 from flask_swagger_ui import get_swaggerui_blueprint
+from ras_client import cluster_operations
 from sm_logging import configure_logging
 from werkzeug.utils import redirect, secure_filename
 
@@ -101,11 +101,13 @@ def handle_init_client(message):
     )
     app.logger.info(message)
 
-    cid = mongo_upsert_cluster(cluster_ip=request.remote_addr, message=message)
-    x = {"id": str(cid)}
+    message["cluster_ip"] = request.remote_addr
+    cluster = cluster_operations.create_cluster(message)
+    cid = str(cluster["_id"])
+    x = {"id": cid}
 
     net_register_cluster(
-        cluster_id=str(cid),
+        cluster_id=cid,
         cluster_address=request.remote_addr,
         cluster_port=message["network_component_port"],
     )

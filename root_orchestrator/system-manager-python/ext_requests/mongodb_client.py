@@ -9,6 +9,7 @@ MONGO_ADDR_CLUSTERS = "mongodb://" + str(MONGO_URL) + ":" + str(MONGO_PORT) + "/
 MONGO_ADDR_JOBS = "mongodb://" + str(MONGO_URL) + ":" + str(MONGO_PORT) + "/jobs"
 MONGO_ADDR_USERS = "mongodb://" + str(MONGO_URL) + ":" + str(MONGO_PORT) + "/users"
 
+# TODO remove mongo_clusters - its not used anywhere but tests
 mongo_clusters = None
 mongo_jobs = None
 mongo_users = None

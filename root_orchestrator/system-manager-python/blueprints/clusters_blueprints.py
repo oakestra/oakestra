@@ -1,17 +1,11 @@
-from bson import json_util
 from ext_requests.apps_db import mongo_update_job_status
-from ext_requests.cluster_db import (
-    mongo_find_all_active_clusters,
-    mongo_get_all_clusters,
-    mongo_update_cluster_information,
-)
 from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint
+from ras_client import cluster_operations
 
 clustersbp = Blueprint("Clusters", "cluster management", url_prefix="/api/clusters")
-
 clusterinfo = Blueprint("Clusterinfo", "cluster informations", url_prefix="/api/information")
 
 cluster_info_schema = {
@@ -55,13 +49,13 @@ cluster_info_schema = {
 @clustersbp.route("/")
 class ClustersController(MethodView):
     def get(self, *args, **kwargs):
-        return json_util.dumps(mongo_get_all_clusters())
+        return cluster_operations.get_all_clusters()
 
 
 @clustersbp.route("/active")
 class ActiveClustersController(MethodView):
     def get(self, *args, **kwargs):
-        return json_util.dumps(mongo_find_all_active_clusters())
+        return cluster_operations.get_resources(active=True)
 
 
 @clusterinfo.route("/<clusterid>")
@@ -71,7 +65,10 @@ class ClusterController(MethodView):
     )
     def post(self, *args, **kwargs):
         data = request.json
-        mongo_update_cluster_information(kwargs["clusterid"], data)
+        cluster_id = kwargs["clusterid"]
+        cluster_operations.update_cluster_information(cluster_id, data)
+
+        # TODO: fire an event to react to the cluster update, and move this logic somewhere else.
         jobs = data.get("jobs")
         for j in jobs:
             result = mongo_update_job_status(

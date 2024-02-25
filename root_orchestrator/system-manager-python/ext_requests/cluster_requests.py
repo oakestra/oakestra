@@ -3,7 +3,7 @@ import socket
 
 import requests
 from ext_requests.apps_db import mongo_find_cluster_of_job, mongo_find_job_by_id
-from ext_requests.cluster_db import mongo_find_cluster_by_id, mongo_find_cluster_by_ip
+from ras_client import cluster_operations
 
 
 def is_ipv6(address):
@@ -25,7 +25,7 @@ def add_brackets_if_ipv6(address):
 
 def cluster_request_to_deploy(cluster_id, job_id, instance_number):
     print("propagate to cluster...")
-    cluster = mongo_find_cluster_by_id(cluster_id)
+    cluster = cluster_operations.get_resource_by_id(cluster_id)
     job = mongo_find_job_by_id(job_id)
     try:
         cluster_addr = (
@@ -68,7 +68,7 @@ def cluster_request_to_delete_job(job_id, instance_number):
 
 def cluster_request_to_delete_job_by_ip(job_id, instance_number, ip):
     try:
-        cluster = mongo_find_cluster_by_ip(ip)
+        cluster = cluster_operations.get_resource_by_ip(ip)
         cluster_addr = (
             "http://"
             + add_brackets_if_ipv6(cluster.get("ip"))

@@ -2,6 +2,7 @@ from datetime import datetime
 
 import ext_requests.mongodb_client as db
 from bson import ObjectId
+from ras_client import cluster_operations
 
 # ....... Job operations .........
 ##################################
@@ -180,7 +181,7 @@ def mongo_find_cluster_of_job(job_id, instance_num):
     )  # return just the assgined cluster of the job
     for instance in job_obj.get("instance_list"):
         if instance["instance_number"] == int(instance_num) or instance_num == -1:
-            return db.mongo_clusters.db.clusters.find_one(ObjectId(instance["cluster_id"]))
+            return cluster_operations.get_resource_by_id(instance["cluster_id"])
 
 
 # ......... APPLICATIONS .........

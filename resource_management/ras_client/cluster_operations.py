@@ -1,6 +1,6 @@
 import os
 
-from requests import exceptions, get
+from requests import exceptions, get, patch, put
 
 RESOURCE_ABSTRACTOR_ADDR = (
     f"http://{os.environ.get('RESOURCE_ABSTRACTOR_URL')}:"
@@ -45,3 +45,33 @@ def get_resource_by_job_id(job_id):
         return None
 
     return resources[0]
+
+
+def get_resource_by_ip(ip):
+    resources = get_resources(ip=ip)
+    if resources is None or len(resources) == 0:
+        return None
+
+    return resources[0]
+
+
+def update_cluster_information(cluster_id, data):
+    request_address = f"{RESOURCE_ABSTRACTOR_ADDR}/api/v1/resources/{cluster_id}"
+    try:
+        response = patch(request_address, data)
+        return response.json()
+    except exceptions.RequestException:
+        print(f"Calling Resource Abstractor /api/v1/resources/{cluster_id} not successful.")
+
+    return None
+
+
+def create_cluster(data):
+    request_address = f"{RESOURCE_ABSTRACTOR_ADDR}/api/v1/resources"
+    try:
+        response = put(request_address, data)
+        return response.json()
+    except exceptions.RequestException:
+        print("Calling Resource Abstractor /api/v1/resources not successful.")
+
+    return None
