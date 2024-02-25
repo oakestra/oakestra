@@ -2,7 +2,7 @@ from datetime import datetime
 
 import db.mongodb_client as db
 from bson.objectid import ObjectId
-from clusters_helper import get_freshness_threshhold
+from db.clusters_helper import get_freshness_threshhold
 
 
 def create_cluster(data):

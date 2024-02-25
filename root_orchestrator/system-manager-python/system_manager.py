@@ -16,7 +16,7 @@ from flask_jwt_extended import JWTManager
 from flask_smorest import Api
 from flask_socketio import SocketIO, emit
 from flask_swagger_ui import get_swaggerui_blueprint
-from ras_client import cluster_operations
+from rasclient import cluster_operations
 from sm_logging import configure_logging
 from werkzeug.utils import redirect, secure_filename
 

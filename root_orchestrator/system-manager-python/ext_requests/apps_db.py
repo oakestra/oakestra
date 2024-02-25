@@ -2,7 +2,7 @@ from datetime import datetime
 
 import ext_requests.mongodb_client as db
 from bson import ObjectId
-from ras_client import cluster_operations
+from rasclient import cluster_operations
 
 # ....... Job operations .........
 ##################################

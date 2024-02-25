@@ -3,7 +3,7 @@ import socket
 
 import requests
 from ext_requests.apps_db import mongo_find_cluster_of_job, mongo_find_job_by_id
-from ras_client import cluster_operations
+from rasclient import cluster_operations
 
 
 def is_ipv6(address):

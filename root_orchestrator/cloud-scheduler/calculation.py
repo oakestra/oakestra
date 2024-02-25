@@ -1,4 +1,4 @@
-from ras_client import cluster_operations
+from rasclient import cluster_operations
 
 
 def calculate(job_id, job):

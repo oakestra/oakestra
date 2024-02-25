@@ -12,7 +12,7 @@ from ext_requests.net_plugin_requests import (
     net_inform_instance_undeploy,
 )
 from ext_requests.scheduler_requests import scheduler_request_deploy
-from ras_client import cluster_operations
+from rasclient import cluster_operations
 
 
 def request_scale_up_instance(microserviceid, username):
