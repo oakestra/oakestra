@@ -7,7 +7,6 @@ from db.clusters_db import (
 )
 from db.clusters_helper import build_filter
 from db.jobs_db import find_job_by_id
-from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import INCLUDE, Schema, fields
@@ -69,7 +68,12 @@ class AllResourcesController(MethodView):
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
     def put(self, *args, **kwargs):
-        data = request.json
+        data = None
+        if args and len(args) > 0 and args[0] and type(args[0]) is dict:
+            data = args[0]
+
+        if data is None:
+            raise exceptions.BadRequest()
 
         return create_cluster(data)
 
@@ -87,10 +91,16 @@ class ResourceController(MethodView):
 
         return cluster
 
+    @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
     def patch(self, *args, **kwargs):
         resource_id = kwargs["resourceId"]
-        data = request.json
+        data = None
+        if args and len(args) > 0 and args[0] and type(args[0]) is dict:
+            data = args[0]
+
+        if data is None:
+            raise exceptions.BadRequest()
 
         if ObjectId.is_valid(resource_id) is False:
             raise exceptions.BadRequest()
