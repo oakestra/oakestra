@@ -44,8 +44,8 @@ class ResourceFilterSchema(Schema):
 
 @resourcesblp.route("/")
 class AllResourcesController(MethodView):
-    @resourcesblp.response(200, ResourceSchema(many=True), content_type="application/json")
     @resourcesblp.arguments(ResourceFilterSchema, location="query")
+    @resourcesblp.response(200, ResourceSchema(many=True), content_type="application/json")
     def get(self, query={}):
         filter = query
         job_id = filter.get("job_id")
