@@ -10,6 +10,7 @@ from services.gateway_management import (
     create_gateway_service,
     delete_service_gateway,
     get_service_gateway,
+    get_all_gateways,
 )
 from sla.schema import gateway_schema
 
@@ -92,4 +93,4 @@ class MultipleGatewayController(Resource):
     @jwt_required()
     @require_role(Role.ADMIN)
     def get(self, *args, **kwargs):
-        return json_util.dumps(mongo_get_all_gateways())
+        return json_util.dumps(get_all_gateways())

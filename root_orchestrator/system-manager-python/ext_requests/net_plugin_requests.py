@@ -107,20 +107,20 @@ def net_register_cluster(cluster_id, cluster_address, cluster_port):
         logging.error("Calling network plugin " + request_addr + " Request Exception.")
 
 
-def net_inform_gateway_deploy(gateway_id, gateway):
+def net_get_all_gateways():
     """
-    Inform the network plugin about the gateway component to deploy on a node
+    Ask network plugins about all currently deployed gateways
     """
-    logging.debug("new job: communicating gateway deployment to net component...")
-    request_addr = NET_PLUGIN_ADDR + "/api/gateway/deploy"
+    logging.debug("new job: ask net component about deployed gateways")
+    request_addr = NET_PLUGIN_ADDR + "/api/net/gateway"
     try:
-        r = requests.post(request_addr, json=gateway)
+        r = requests.get(request_addr)
         logging.debug(r)
         r.raise_for_status()
+        return r.json()
     except requests.exceptions.ConnectionError:
         logging.error("Calling network plugin " + request_addr + " Connection error.")
     except requests.exceptions.Timeout:
         logging.error("Calling network plugin " + request_addr + " Timeout error.")
     except requests.exceptions.RequestException:
         logging.error("Calling network plugin " + request_addr + " Request Exception.")
-    return

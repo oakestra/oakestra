@@ -52,23 +52,18 @@ def deploy_gateway_process_on_cluster(cluster_id):
     if idle_node is None:
         return None
 
-    print("idle node: ", idle_node)
     gateway_node_data = prepare_gateway_node_entry(idle_node, cluster_id)
-    print("gateway_node_data: ", gateway_node_data)
+
+    # notify cluster service-manager
+    deployed_gateway, status = network_notify_gateway_deploy(gateway_node_data)
+    if status != 200:
+        return None
 
     # remove netmanager entry from table of netmanagers
     # and add to active gateways
     mongo_add_gateway_node(gateway_node_data)
-    gateway_node_data["_id"] = str(gateway_node_data["_id"])
 
-    # notify cluster service-manager
-    deployed_gateway, status = network_notify_gateway_deploy(gateway_node_data)
-    print("returned gateway from service-manager: ", deployed_gateway)
-    # TODO: add deployed gateway data to db
-    if status != 200:
-        return None
-    print("returning deploy_gateway_process_on_cluster: ", gateway_node_data)
-    return gateway_node_data
+    return deployed_gateway
 
 
 def update_gateway_service_exposal(gateway_id, service):
@@ -134,9 +129,11 @@ def prepare_gateway_node_entry(node_info, cluster_id):
     if node_info.get("ipv6") != "":
         data["gateway_ipv6"] = node_info["ipv6"]
     data["host"] = node_info["host"]
-    # TODO: rename to host_port for clarity
-    data["port"] = node_info["port"]
+    # used for proxy tunneling
+    data["host_port"] = node_info["port"]
     data["cluster_id"] = cluster_id
-    data["used_ports"] = []
+    # list of ports in use which cannot be used for gateway exposure
+    data["used_ports"] = [node_info["port"]]
+    # list of services this gateway exposes
     data["services"] = []
     return data

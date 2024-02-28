@@ -173,6 +173,7 @@ gateway_schema = {
                     "microserviceID": {"type": "string"},
                     "microservice_name": {"type": "string"},
                     "exposed_port": {"type": "integer"},
+                    "routing_policy": {"type": "string"},
                 },
                 "required": ["microserviceID", "exposed_port"],
             },

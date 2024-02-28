@@ -126,9 +126,9 @@ def deploy_gateway():
     json_data = request.json
     try:
         gateway = gateway_operations.deploy_gateway(json_data)
+        return gateway, 200
     except Exception:
         return "", 500
-    return gateway, 200
 
 
 @app.route("/api/gateway/<gateway_id>", methods=["POST, PUT", "DELETE"])
@@ -139,8 +139,10 @@ def handle_gateway(gateway_id):
         # TODO: implement me
         if request.method == "POST":
             return gateway_operations.handle_gateway_post(gateway_id, json_data)
+        # TODO: implement me
         if request.method == "PUT":
             return gateway_operations.handle_gateway_put(gateway_id, json_data)
+        # TODO: implement me
         if request.method == "DELETE":
             return gateway_operations.handle_gateway_delete(gateway_id)
     except Exception:
