@@ -1,3 +1,8 @@
+![workflow code style](https://github.com/oakestra/oakestra/actions/workflows/python_codestyle_check.yml/badge.svg)
+![example artifacts](https://github.com/oakestra/oakestra/actions/workflows/node_engine_artifacts.yml/badge.svg)
+![example artifacts](https://github.com/oakestra/oakestra/actions/workflows/root_system_manager_tests.yml/badge.svg)
+[![Stable](https://img.shields.io/badge/Latest%20Stable-v0.4.204-green.svg)](https://github.com/oakestra/oakestra/tree/v0.4.204)
+[![Github All Releases](https://img.shields.io/github/downloads/oakestra/oakestra/total.svg)]()
 ![Oakestra](res/oakestra-white.png)
 
 **Oakestra** is an orchestration platform designed for Edge Computing.
@@ -188,11 +193,12 @@ The Node IP field represents the address where you can reach your service. Let's
 
 - #### Other stuff? Contact us on Discord!
 
-# 🛠️ How to create a development cluster
+# 🛠️ How to create a multi-cluster setup
 <a name="🛠️-how-to-create-a-development-cluster"></a>
 
 ### Root Orchestrator 
 
+First, initialize a Root orchestrator. 
 On a Linux machine first, install Docker and Docker-compose. Then, run the following commands to set up the Root Orchestrator components.
 
 ```bash
@@ -209,7 +215,7 @@ The following ports are exposed:
 
 ### Cluster Orchestrator
 
-For each one of the cluster orchestrators that needs to be deployed 
+For each cluster, install one cluster orchestrator. 
 
 - Log into the target machine/vm you intend to use
 - Install Docker and Docker-compose.
@@ -234,7 +240,7 @@ The following ports are exposed:
 
 ### Worker nodes -  Node Engine
 
-You can either use the pre-compiled binaries or compile them on your own. 
+For each worker node you can either use the pre-compiled binaries or compile them on your own. 
 
 *Requirements*
 - Linux OS with the following packages installed (Ubuntu and many other distributions natively supports them)
@@ -251,6 +257,7 @@ cd go_node_engine/build
 
 Then configure the NetManager and perform the startup as usual. 
 
+N.b. each worker node can now be configured to work with a different cluster.  
 
 # 🎼 Deployment descriptor
 <a name="🎼-deployment-descriptor"></a>
@@ -468,7 +475,6 @@ Differences to Container Deployment:
 - arch: Specifies the architecture of the Unikernel given in code. The order of
         architectures must match the order of Unikernles given via the code field
 
-# Networking 
 
 # 🕸️ Networking
 <a name="🕸️-networking"></a>
