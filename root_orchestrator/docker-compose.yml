@@ -95,7 +95,7 @@ services:
       - "6379:6379"
     command: redis-server --requirepass cloudRedis
 
-
+  # Observability Stack
   grafana:
     image: grafana/grafana
     hostname: grafana
@@ -116,14 +116,14 @@ services:
       - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
 
     command: -config.file=/etc/loki/config.yml
-    #logging: *default-logging
+    #logging:
+    #  driver: none
 
   promtail:
     image:  grafana/promtail:2.9.2
     container_name: promtail
     volumes:
       - ./config/promtail.yml:/etc/promtail/config.yml
-      - ./config/logs.logs:/etc/promtail/logs.logs
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock
     command: 

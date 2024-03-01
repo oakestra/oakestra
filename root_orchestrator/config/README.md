@@ -1,181 +1,130 @@
-# Alert/Logging Service
-A service that collects alarms and notifications from the platform. This service can be used to signal things to the **app provider** or **infrastructure manager**.
-## Overview
-
-This memo briefly describe a proposal and possible architecture for integrating Loki and Promtail with Grafana for efficient log aggregation and visualization. Following proposals aims to expand the boundaries also to metrics and tracing, partially evaluating and testing the analyzed solutions.
-
-## [#Issue 225](https://github.com/oakestra/oakestra/issues/225)
-### Requirements
+# Alert & Logging Configuration
 
 
-A service that collects alarms and notifications from the platform. This service can be used to signal things to the app provider or infrastructure manager.
-This service can be part of root and cluster orchestrator and:
+## Monitoring Services
+The proposed toolset for logs and alerting is based on:
+- [Loki](https://grafana.com/docs/loki/latest/) is a highly-available, multi-tenant log aggregation system inspired by Prometheus. It focuses on logs instead of metrics, collecting logs via push instead of pull.
+- [Promtail](https://grafana.com/docs/loki/latest/send-data/promtail/) is an agent deployed on machines running applications to ship local logs to a Grafana Loki instance. It supports native log scraping from existing Docker containers.
+- [Grafana](https://grafana.com/docs/) is already in use for cluster metrics. Use Loki as data source for both logs and alerting.
 
-- At root level, collects cluster's alarms and notifications + internal root notifications
-- At cluster level, collects node alarms and notifications + internal cluster notifications
+The high-level composition of the service is here sketched:
+![observe-arch](https://i.postimg.cc/vBZWQVLR/arch1.png)
+*Promtail* perform service discovery based on labels: the root components are tagged with `logging=promtail`, while the cluster component are retrieved by the Promtail at cluster level by the label `logging=cluster_promtail`. 
 
-We need to define:
+At **root level**, each service is specified by:
+- `loki:3100`
+- `promtail`
+- `grafana:3000`
 
-- **Alarms types/priorities** (e.g., Failure, SLA violation...)
-- **Notification types** (e.g., deployment succeeded, new worker node)
-- **Scope**s (e.g., cluster, worker, root)
-- **Propagation strategies** (E.g., how to send the notification from a worker node?)
+At **cluster level**, each service is specified by:
+- `cluster_loki:3101`
+- `cluster_promtail`
+- `cluster_grafana:3001`
 
-## [Proposal 1](https://github.com/oakestra/oakestra/issues/225#issuecomment-1945745102) \#225
-Loki+Promtail in combination with Grafana
-- Loki is a highly-available, multi-tenant log aggregation system inspired by Prometheus. It focuses on logs instead of metrics, collecting logs via push instead of pull.
-- Promtail is an agent deployed on machines running applications to ship local logs to a Grafana Loki instance. It supports native log scraping from existing Docker containers.
-- Grafana is already in use for cluster metrics. This proposal suggests setting up a new data source (Grafana logs) for logs visualization.
-
-### Architecture
-
-#### Root Orchestrator
-
-1. **Custom Grafana Configuration:**
-   - Introduce a custom configuration for the Grafana container with a pre-defined root Loki data source.
-
-   Example:
-   ```yaml
-   datasources:
-     - name: MyLoki
-       type: loki
-       url: http://loki:3100
-       access: proxy
-       jsonData:
-         maxLines: 1000
-
-
-# Checklist
-Most of the consideration here reported apply also to **Cluster Orchestrator** components. 
-## Discussion
-The proposed solution involving Loki, Promtail and Grafana allows only to filter the container logs based on filtering at query level as adding more `labels` (*beside `container_name`, `logstream`, `jobs` and other few relevant parameter*) in [promptail.yml](./promtail.yml) results in degrading performance (*as [Grafana suggest](https://grafana.com/blog/2020/08/27/the-concise-guide-to-labels-in-loki/)*). 
-
-Query-based filtering (*by LogQL*) allows *only* to filter based on the `labels` and, most relevant, specific conditions reported in the `line` parameter (*e.g. specifying, fixed a `container_name` or `logstream`, if a log `line` contains **warning**, **errno**, **HTTP 400**, etc*). Here an example from [./promtail.yml](promtail.yml) of some relevant and non relevant `labels` extraction (*full list on [Prometheus configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#docker_sd_config)*):
-```yaml
-      - source_labels: ['__meta_docker_container_name']
-        regex: '/(.*)'
-        target_label: 'container_name'
-      - source_labels: ['__meta_docker_container_log_stream']
-        target_label: 'logstream'
-      - source_labels: ['__meta_docker_container_label_logging_jobname']
-        target_label: 'job'
-      - source_labels: ['__meta_docker_port_private']
-        target_label: 'container_port_private'
-      - source_labels: ['__meta_docker_port_public']
-        target_label: 'container_port_public'
-      - source_labels: ['__meta_docker_port_public_ip']
-        target_label: 'container_port_public_ip'
+Both two levels use different volumes for the configuration of the three services, respectively in [root_orchestrator/config/](../config/) and [cluster_orchestrator/config/](../../cluster_orchestrator/config/). Both `config` folders are structured as:
+```bash
+├── alerts
+│   └── rules.yml           #Loki rules for alerting based on Promtail ingested logs
+├── grafana-datasources.yml # Loki datasource setup
+├── loki.yml                # Ingestion, storage config
+├── promtail.yml            # Service discovery & static logs configuration
 ```
-
-Regarding the **alarming** feature, the described context allows to define default alarm based on `labels` and manipulations of the most relevant attribute `line` (*usually specified in LogQL*) previously extracted from container logs. An example of [alarming rule](https://grafana.com/blog/2020/08/27/the-concise-guide-to-labels-in-loki/) can be found in [alerts/alert.yaml](./alerts/alert.yaml). 
-
-#### Cluster Orchestrator
-As required by the decoupling and avoid overload of information from cluster component to root, the same considerations apply for cluster orchestrator's components: the components to monitor has been tagged with a different label so the cluster-specific logging services (*mainly `cluster_loki`, `cluster_promtail`, beside `cluster_grfana`*) perform service discovery only on the tagged instances.
-
-As stated in the general requirements, also the worker node propagation has been evaluated against Promtail [scrape_configs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config) that offers mainly *docker, docker_swarm, file, http, k8s, openstack, etc* service discovery to monitor log of several type of instances, along the widely-used and supported logging on `*.log` volumes.
+The configuration files can also be written at runtime but the volumes link allows a faster startup and configuration reload at runtime.
 
 
-## Implemented
-Update the `docker-compose.yml` adding:
-- `grafana/loki:2.9.2` container (*[Simple Scalable Deployment](https://grafana.com/docs/loki/latest/get-started/deployment-modes/), useful for memory, balancing and replica configu at [Grafana Loki Config Nuances](https://medium.com/lonto-digital-services-integrator/grafana-loki-configuration-nuances-2e9b94da4ac1)*)
-- `grafana/promtail:2.9.2` container
-
-Root components istances (`root_service_manager`, `system_manager`, `cloud_scheduler`, `resource_abstractor`) has been tagged with `logging=promtail` to allows Promtail to perform service discovery and monitor the logs only of those istances. 
-
-### Filtering
-Fine-grained information can be extracted from logs by **Promtail** [Pipeline stages](https://grafana.com/docs/loki/latest/send-data/promtail/stages/), allowing to define **parsing, transform, action and filtering** stages based on the log format. Regarding the root components, they emit mainly logs following the format:
-- *Cloud scheduler*: `"%(asctime)s - - - %(name)s - %(levelname)s - %(message)s"`
-- *System manager*: `"%(asctime)s - %(name)s - %(levelname)s - %(message)s"`
-
-Non-default logs are emitted specifying `stdout`,`stderr` or using `printf` with direct error messages (*e.g. `logging.error("Calling network plugin " + request_addr + " Connection error.")`*).
-
-Pipeline stages has been defined as follows (*source: [./promtail.yml](./promtail.yml)*):
+> ⚠️ 
+> The *observability stack* can be ovverided to exclude the deployments of the three services at root/cluster deployment by:
+ ```bash
+ docker-compose -f docker-compose.yml -f override-no-observe.yml up --build
+ ```
+> ⚠️ 
+> Both `loki` and `cluster_loki` logging output has been inhibited to avoid **output verbosity**. This configuration can be changed both at root/cluster level by modifying [docker-compose.yml](../docker-compose.yml) and removing:
 ```yaml
-      - regex: #Regex cloud scheduler default log
-          expression: '^(?P<timestamp>.*?) - - - (?P<logger_name>.*?) - (?P<log_level>.*?) - (?P<message>.*)$'
-          labels:
-            timestamp: timestamp
-            logger_name: logger_name
-            log_level: log_level
-            message: message
-      - regex: #Regex for system manager default log
-          expression: '^(?P<timestamp>.*?) - (?P<logger_name>.*?) - (?P<log_level>.*?) - (?P<addr>.*?) - - (?P<date>.*?) (?P<time>.*?) (?P<message>.*)$'
-          labels:
-            timestamp: timestamp
-            logger_name: logger_name
-            log_level: log_level
-            message: message
+    logging:
+      driver: none
 ```
-but despite the [Promtail Troubleshooting & Validation](https://grafana.com/docs/loki/latest/send-data/promtail/troubleshooting/#inspecting-pipeline-stages), it results in *unsuccessfull parsing stage* as seems that the non-uniformity of logs does not allows to filter out the matching logs. The different logs structure involves defining ad-hoc [regex (Go RE2)](https://grafana.com/docs/loki/latest/query/log_queries/#regular-expression) in combination with different pipeline stages (*e.g. `docker{}, cri{}, multiline` etc*).  An example of complex parsing is briefly described in [Grafana Loki Parsing Logs Blog](https://grafana.com/blog/2020/10/28/loki-2.0-released-transform-logs-as-youre-querying-them-and-set-up-alerts-within-loki/). Some possible solutions:
-- Uniform logging using `json.dumps()`, allowing simple `json: {}` pipeline
-- Define specific multistage pipelines, customizing the `regex` expressions to capture relevant info for each component
-- Filter relevant info in Grafana dashboard at visualization level
+### Monitoring granularity configuration
+The [promtail.yml](./promtail.yml) configuration is analyzed in each section, starting from the scraper source:
+```yaml
+- job_name: root_logs_scraper
+  docker_sd_configs: # Service discovery
+  - host: unix:///var/run/docker.sock
+    refresh_interval: 5s
+    filters:
+    - name: label
+      values: ["logging=promtail"]
+```
+The default labels for service discovery target `docker_sd_config` has been identified as the following:
+```yaml
+  - source_labels: ['__meta_docker_container_id']
+    target_label: 'container_id'
+  - source_labels: ['__meta_docker_network_ip']
+    target_label: 'container_ip'
+  - source_labels: ['__meta_docker_container_name']
+    regex: '/(.*)'
+    target_label: 'container_name'
+  - source_labels: ['__meta_docker_container_log_stream']
+    target_label: 'logstream'
+  - source_labels: ['__meta_docker_container_label_logging_jobname']
+    target_label: 'job'
+
+```
+More base labels can be extracted based on the [docker_sd_configs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#docker_sd_config) configuration. A careful evaluation of which labels are useful and which values can assume must be priorly done to avoid perfromance degradation at ingestion level.
+
+#### Labels granularity
+The specific logging format for each service allows also to exploit automatic filtering and extraction of labels by using [Prontail Pipeline stages](https://grafana.com/docs/loki/latest/send-data/promtail/stages/), here specified:
+```yaml
+  pipeline_stages:
+  - json:
+       expressions:
+         level: level
+         service: service
+         filename: filename
+  - regex: #Regex for `default` logging format
+      expression: '(?P<level>[^\[\]]+?)(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (?P<service>[^:]+) (?P<file>[^:]+):(?P<line>\d+)\] (?P<message>.+)'
+  - logfmt:
+        mapping:
+          level:
+          service:
+          file:
+  - labels:
+      level: level
+      service: service
+      file: line
+```
+If one of the format matches the ingested log lines, the specified list of labels are extracted. 
+
 ### Alarming
-Alarm has been evaluated by defining Loki [./rules.yml](./alerts/rules.yml): the alert definition and evaluation can be defined by LogQL queries, based on Promptail base `labels` or define complex query to extract info from `line` label. 
+The [rules.yml](./alerts/rules.yml) contains the rules expression in [LogQL](https://grafana.com/docs/loki/latest/query/) based on the ***labels*** extracted by Promtail.
+Both the **service discovery** and **pipeline stages** labels can also be used in [rules.yml](./alerts/rules.yml) to detect specific conditions on extracted labels.
 
-
-## Tested
-Logs from root components can be filtered based on `line` text content, as shown:
-![Monitoring](https://i.postimg.cc/vTLxxxSw/monitoring-root.jpg)
-
-Filtering at visualization level, like
-```regex
-{job="containerlogs"} | regexp `^(?P<timestamp>.*?) - (?P<logger_name>.*?) - (?P<log_level>.*?) - (?P<ip>.*?) - - \[(?P<time>[^\]]*)\] (?P<message>.*)$` 
+Here the `rules.yaml` configuration defining two generic alarm based on *base labels*:
+```yaml
+    rules: 
+      - alert: SystemManagerErrorAlert #Service-specifix rule
+        expr: |
+          (count_over_time({container_name="system_manager"} | level = `E` [1m]) > 1)
+        for: 1m
+        labels:
+            severity: error
+            team: infrastructure
+            category: logs
+        annotations:
+            title: "System Manager Error Log Alert"
+            description: "Service reported an error in the last 1 minute"
+            impact: "impact"
+            action: "action"
+      - alert: StderrHighLoadAlert # Output target generic rules
+        expr: |
+          count_over_time({logstream="stderr"} [1m]) > 10
+        for: 10s
+        labels:
+            severity: warning
+            team: infrastructure
+            category: logs
+        annotations:
+            title: "Standard Error High Load Alert"
+            description: "Service reported high load on stderr in the last 1 minute"
+            impact: "impact"
+            action: "action"
 ```
-allows to obtain the following labels on a given example log:
-![](https://i.postimg.cc/vmRLK956/gnome-shell-screenshot-ci1z6e.png)
-Loki alerts defined in [rules.yml](./alerts/rules.yml) are correctly loaded by Grafana:
-![Alerts](https://i.postimg.cc/1t1HN9nQ/gnome-shell-screenshot-axktf5.png)
-
-The same considerations apply also to cluster components. Here an example of Loki-defined alarm firing on `cluster_manager` log fire condition:
-![](https://i.postimg.cc/MZ9449Tf/gnome-shell-screenshot-919e9b.png)
-
-## Proposal 2 - [SigNoz - 16k star](https://signoz.io/docs/) 
-SigNoz is an open-source OpenTelemetry-compliant observability tool that helps you monitor your applications and troubleshoot problems. It provides traces, metrics, and logs under a single pane of glass. It is available both as an open-source software and a cloud offering.
-
-With SigNoz, you can:
-
-- Visualise Traces, Metrics, and Logs in a single pane of glass
-- Monitor application metrics like p99 latency, error rates for your services, external API calls, and individual endpoints.
-- Find the root cause of the problem by going to the exact traces which are causing the problem and see detailed flamegraphs of individual request traces.
-- Run aggregates on trace data to get business-relevant metrics
-- Filter and query logs, build dashboards and alerts based on attributes in logs
-- Monitor infrastructure metrics such as CPU utilization or memory usage
-- Record exceptions automatically in Python, Java, Ruby, and Javascript
-- Easy to set alerts with DIY query builder
-
-Interesting benchmarking evaluations ([Ingestion benchmark results](https://signoz.io/blog/logs-performance-benchmark/?utm_source=github-readme&utm_medium=logs-benchmark))
-
-### Pros
-- OSS, OTel compliant
-- Zero-configuration startup for logs/metrics of K8s clusters
-- Automatic computation of 99p, 95p and multiple error metrics
-- Large community, active Slack channel for support directly from mantainers
-
-### Cons
-- Frequent update break previous versions
-- Not extensively documented as Grafana OSS-based stack
-- Limited set of features regarding alarming/logging/metrics
-
-***N.B.: alerting only on [logs metrics](https://signoz.io/docs/userguide/alerts-management/), not on pure logs***
-
-
-## Proposal 3 - LGTM stack \#TBA
-- Loki (Log Aggregation)
-- Grafana Dashboard (Telemetry Visualization)
-- Tempo (Trace Aggregation)
-- Mimir (Metrics Aggregation)
-
-
-### Resources
-- [e2e LGTM stack](https://levelup.gitconnected.com/setting-up-an-end-to-end-monitoring-system-with-grafana-stack-lgtm-1c534ebdf17b)
-- [Scale Observability with Mimir, Loki and Tempo - ObservabilityCON](https://grafana.com/go/observabilitycon/2022/lgtm-scale-observability-with-mimir-loki-and-tempo/)
-## Explore resources
-- [Grafana Loki parse nginx-like logs](https://grafana.com/blog/2021/08/09/new-in-loki-2.3-logql-pattern-parser-makes-it-easier-to-extract-data-from-unstructured-logs/)
-- [Processing Log Lines - Grafana Loki Github](https://github.com/jafernandez73/grafana-loki/blob/master/docs/logentry/processing-log-lines.md)
-- [LGMPP - Github](https://github.com/wick02/monitoring/tree/main)
-- [Play with Mimir](https://grafana.com/tutorials/play-with-grafana-mimir/) 
-- [Loki getting started](https://github.com/grafana/loki/tree/main/examples/getting-started)
-- [New in Grafana Loki 2.4](https://www.youtube.com/watch?v=M8nYWBpbwWg)
-- [Ward Bekker's gist](https://gist.github.com/wardbekker/6abde118f530a725e60acb5adb04508a)
-- [Getting started with Grafana Mimir](https://www.youtube.com/watch?v=pTkeucnnoJg)

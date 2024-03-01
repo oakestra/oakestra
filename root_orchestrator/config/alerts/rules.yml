@@ -1,39 +1,34 @@
 groups:
   - name: rate-alerting
     interval: 10s
-    rules:
-      - alert: LogStreamErrorRate
+    rules: 
+      - alert: SystemManagerErrorAlert
         expr: |
-          (sum by (container_name)(rate({logstream="stdout"}[10s])) > 0.5)
+          (count_over_time({container_name="system_manager"} | level = `E` [1m]) > 1)
+        for: 1m
+        labels:
+            severity: error
+            team: infrastructure
+            category: logs
+        annotations:
+            title: "System Manager Error Log Alert"
+            description: "Service reported an error in the last 1 minute"
+            impact: "impact"
+            action: "action"
+      - alert: StderrHighLoadAlert
+        expr: |
+          count_over_time({logstream="stderr"} [1m]) > 10
         for: 10s
         labels:
             severity: warning
-            team: devops
+            team: infrastructure
             category: logs
         annotations:
-            title: "High ErrorLogRate Alert"
-            description: "something is logging a lot on stdout"
+            title: "Standard Error High Load Alert"
+            description: "Service reported high load on stderr in the last 1 minute"
             impact: "impact"
             action: "action"
-            dashboard: "https://grafana.com/service-dashboard"
-            runbook: "https://wiki.com"
-            logurl: "https://grafana.com/log-explorer"
-      - alert: ContainerLogAlert
-        expr: |
-          (sum by (job,container_name)(rate({job="containerlogs"}[1s])) > 2)
-        for: 10s
-        labels:
-            severity: warning
-            team: devops
-            category: logs
-        annotations:
-            title: "High Containerlog Load Alert"
-            description: "something is logging a lot"
-            impact: "impact"
-            action: "action"
-            dashboard: "https://grafana.com/service-dashboard"
-            runbook: "https://wiki.com"
-            logurl: "https://grafana.com/log-explorer"
+            
 
 
 
