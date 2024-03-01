@@ -6,6 +6,7 @@ By our design, a Cluster Orchestrator contains:
 - a scheduler
 - a Cluster Manager
 - a database (mongoDB)
+- log monitoring and alerting service composed of three services (*Promtail, Loki & Grafana services, more at [Alarming \& Logging configuration](../root_orchestrator/config/README.md)*)
 
 The edge nodes push cpu+memory data to the mqtt-broker.
 
@@ -92,3 +93,6 @@ E.g.: Customize network component version
 - open and edit `override-custom-serivce-manager.yml` with the correct container image 
 - run the orchestrator with the ovverride file: `docker-compose -f docker-compose.yml -f override-custom-service-manager.yml up --build`
 
+
+E.g.: Exclude [observability stack](../root_orchestrator/config/README.md) 
+`docker-compose -f docker-compose.yml -f override-no-observe.yml up --build`

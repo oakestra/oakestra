@@ -1,4 +1,13 @@
 version: "3.3"
+
+x-logging:
+  &default-logging
+  driver: "json-file"
+  options:
+    max-size: "1m"
+    max-file: "1"
+    tag: "{{.Name}}"
+
 services:
 
   # MQTT 
@@ -6,6 +15,9 @@ services:
     image: eclipse-mosquitto:2.0
     hostname: mqtt
     container_name: mqtt
+    labels:
+      logging: "cluster_promtail"
+      logging_jobname: "containerlogs"
     expose:
       - "10003"
     ports:
@@ -19,6 +31,7 @@ services:
       interval: 10s
       timeout: 10s
       retries: 6
+    logging: *default-logging
 
       
   # cluster-level mongoDB
@@ -48,6 +61,9 @@ services:
   cluster_service_manager:
     image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
     container_name: cluster_service_manager
+    labels:
+      logging: "cluster_promtail"
+      logging_jobname: "containerlogs"
     hostname: cluster_service_manager
     expose:
       - "10110"
@@ -66,12 +82,16 @@ services:
     depends_on:
       - mongo_clusternet
       - mqtt
+    logging: *default-logging
 
 # Cluster Manager
   cluster_manager:
     image: cluster_manager
     build: cluster-manager/
     container_name: cluster_manager
+    labels:
+      logging: "cluster_promtail"
+      logging_jobname: "containerlogs"
     hostname: cluster_manager
     expose:
       - "10100"
@@ -98,6 +118,8 @@ services:
       - mqtt
       - cluster_scheduler
       - cluster_service_manager
+    logging: *default-logging
+
 
 
   # Cluster Scheduler
@@ -105,6 +127,9 @@ services:
     image: cluster_scheduler
     build: cluster-scheduler/
     container_name: cluster_scheduler
+    labels:
+      logging: "cluster_promtail"
+      logging_jobname: "containerlogs"
     hostname: cluster_scheduler
     expose:
       - "10105"
@@ -120,6 +145,7 @@ services:
     depends_on:
       - cluster_redis
       - mongo_cluster
+    logging: *default-logging
 
 
   # Redis for the Cluster Scheduler as Job Queue
@@ -144,6 +170,42 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
     depends_on:
       - cluster_manager
+  # Observability stack (Grafana, Loki, Promtail)
+  cluster_grafana:
+    image: grafana/grafana
+    hostname: cluster_grafana
+    container_name: cluster_grafana
+    ports:
+      - 3001:3000
+    volumes:
+      - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml
+    logging: *default-logging
+
+  cluster_loki:
+    container_name: cluster_loki
+    image: grafana/loki:2.9.2
+    ports:
+      - 3101:3100
+    volumes:
+      - ./config/loki.yml:/etc/loki/config.yml
+      - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
+
+    command: -config.file=/etc/loki/config.yml
+    logging:
+      driver: none
+  cluster_promtail:
+    image:  grafana/promtail:2.9.2
+    container_name: cluster_promtail
+    volumes:
+      - ./config/promtail.yml:/etc/promtail/config.yml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: 
+      - '--config.file=/etc/promtail/config.yml'
+      - '--server.enable-runtime-reload'
+    depends_on:
+      - cluster_loki
+    logging: *default-logging
 
 
 volumes:

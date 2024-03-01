@@ -6,6 +6,7 @@ By design, the centralized Root Orchestrator contains
 - a Database (mongodb) to store data about the participating clusters
 - a Scheduler which calculates task-to-cluster affinity
 - some Monitoring solution (first prototype shows read-only Grafana Dashboards which collect metrics from Prometheus instances on each cluster orchestrator)
+    - Minimal logs extraction and alarming configuration by using Promtail, Loki & Grafana services, as documented in [./config/README.md](./config/README.md) 
 
 During implementation, some components could be changed/renamed/replaced/merged.
 
@@ -38,3 +39,6 @@ E.g.: Customize network component version
 - run the orchestrator with the ovverride file: `docker-compose -f docker-compose.yml -f override-custom-service-manager.yml up --build`
 
 
+E.g.: Exclude [observability stack](./config/README.md) 
+
+`docker-compose -f docker-compose.yml -f override-no-observe.yml up --build`

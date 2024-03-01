@@ -1,0 +1,36 @@
+groups:
+  - name: rate-alerting
+    interval: 10s
+    rules: 
+      - alert: SystemManagerErrorAlert
+        expr: |
+          (count_over_time({container_name="system_manager"} | level = `E` [1m]) > 1)
+        for: 1m
+        labels:
+            severity: error
+            team: infrastructure
+            category: logs
+        annotations:
+            title: "System Manager Error Log Alert"
+            description: "Service reported an error in the last 1 minute"
+            impact: "impact"
+            action: "action"
+      - alert: StderrHighLoadAlert
+        expr: |
+          count_over_time({logstream="stderr"} [1m]) > 10
+        for: 10s
+        labels:
+            severity: warning
+            team: infrastructure
+            category: logs
+        annotations:
+            title: "Standard Error High Load Alert"
+            description: "Service reported high load on stderr in the last 1 minute"
+            impact: "impact"
+            action: "action"
+            
+
+
+
+
+
