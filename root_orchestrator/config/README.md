@@ -128,3 +128,65 @@ Here the `rules.yaml` configuration defining two generic alarm based on *base la
             impact: "impact"
             action: "action"
 ```
+
+## Logging 
+This section briefly provides an overview of logging approach proposed and implemented at the moment of this memo. Most of the format and guidelines here specified are assumed be valid for all services both at root and cluster level.
+
+The logging is perfomed by a wrapper of `logging` library that implement the specification here described.  
+The logging wrapper support three format (*at the moment*):
+- `default`
+- `json`
+- `logfmt`
+
+
+The format configuration can be explictly setted in the logging module for each service (*e.g [sm_logging.py](../system-manager-python/sm_logging.py) for `system_manager`* or *<service_name>_logging.py where provided*); by default, the `default` format is used. For the purpose of modularity, a `CustomLogger` is used in (*optional*) combination with three `CustomFormatter` to be able to support seamlessly the conversion from a format to another. 
+
+
+The `default` logging format have the following structure:
+```bash
+	[Lmmdd hh:mm:ss.uuuuuu svc file:line] msg key1=value1 key2=value2 ...
+```
+where the fields are defined as follows:
+```bash
+	L                   A single character, representing the log level (eg 'I' for INFO)
+	mm                  The month (zero padded; ie May is '05')
+	dd                  The day (zero padded)
+	hh:mm:ss.uuuuuu     Time in hours, minutes and fractional seconds
+	svc                 The service name (e.g. `system_manager`)
+	file                The file name
+	line                The line number
+	msg                 The user-supplied message
+    extra               Contextual parameters that can be passed by using `extra` dict
+```
+The folowwing format is encoded in the `standard` format. As a `logging` wrapper, it support the [logging levels](https://docs.python.org/3/library/logging.html#levels) `INFO`, `DEBUG`, `WARNING`, `ERROR`, `CRITICAL` and `NOTSET`.  
+
+As an example of usage, consider the call:
+```python
+ctx = {"url": url, "headers": headers, "data": data}
+logger.info("HTTP POST request sent", extra={'context': ctx})
+```
+That generate the following log line according to `default` format:
+```bash
+[I2024-02-28 10:43:27 system_manager wsgi.py.py:639] HTTP POST request sent url=https://192.168.1.5/api/node/register headers={'Content-Type': 'application/json'} data={...}
+```
+The `extra` optinal dictionary in combination with the `context` dictionary allows to log additional contextual information and, if the configured according to [labels granularity](#labels-granularity) allows filtering and/or alerting on those fine-grained parameters.
+
+According to the specification, the `json` log format output:
+```json
+{
+  "level": "INFO",
+  "timestamp": "2024-02-28T09:43:27.000Z",
+  "service": "system_manager",
+  "filename": "wsgi.py",
+  "line_no": 639,
+  "message": "HTTP POST request sent",
+  "context": {
+    ...
+  }
+}
+
+```
+While for `logfmt` format:
+```log
+level=INFO ts=1651254607.000176 service=system_manager file=wsgi.py file_no=639 message='HTTP POST request sent' url=https://192.168.1.5/api/node/register headers='{"Content-Type": "application/json"}' data='{"key1": "value1", "key2": 123}'
+```
