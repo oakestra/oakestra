@@ -170,7 +170,7 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
     depends_on:
       - cluster_manager
-  
+  # Observability stack (Grafana, Loki, Promtail)
   cluster_grafana:
     image: grafana/grafana
     hostname: cluster_grafana
@@ -191,13 +191,13 @@ services:
       - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
 
     command: -config.file=/etc/loki/config.yml
-
+    logging:
+      driver: none
   cluster_promtail:
     image:  grafana/promtail:2.9.2
     container_name: cluster_promtail
     volumes:
       - ./config/promtail.yml:/etc/promtail/config.yml
-      - ./config/logs.logs:/etc/promtail/logs.logs
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock
     command: 

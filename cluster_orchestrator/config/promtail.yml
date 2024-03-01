@@ -1,54 +1,54 @@
+# Further configuration options are available at:
 # https://grafana.com/docs/loki/latest/clients/promtail/configuration/
-# https://docs.docker.com/engine/api/v1.41/#operation/ContainerList
 
 server:
-  http_listen_port: 9081
+  http_listen_port: 9080
   grpc_listen_port: 0
-  enable_runtime_reload: true #Reload by /reload endpoint
+  enable_runtime_reload: true
 
 positions:
   filename: /tmp/positions.yaml
 
+
 clients:
-  - url: http://cluster_loki:3101/loki/api/v1/push
+- url: http://cluster_loki:3101/loki/api/v1/push
 
 scrape_configs:
-  - job_name: cluster_logs_scraper 
-    docker_sd_configs:
-      - host: unix:///var/run/docker.sock
-        refresh_interval: 5s
-        filters:
-          - name: label
-            values: ["logging=cluster_promtail"] 
-    relabel_configs:
-      - source_labels: ['__meta_docker_container_name']
-        regex: '/(.*)'
-        target_label: 'container_name'
-      - source_labels: ['__meta_docker_container_log_stream']
-        target_label: 'logstream'
-      - source_labels: ['__meta_docker_container_label_logging_jobname']
-        target_label: 'job'
-      - source_labels: ['__meta_docker_port_private']
-        target_label: 'container_port_private'
-      - source_labels: ['__meta_docker_port_public']
-        target_label: 'container_port_public'
-      - source_labels: ['__meta_docker_port_public_ip']
-        target_label: 'container_port_public_ip'
-    pipeline_stages:
-      - regex: #Regex for all other root components logs
-          expression: '^(?P<timestamp>.*?) - - - (?P<logger_name>.*?) - (?P<log_level>.*?) - (?P<message>.*)$'
-          labels:
-            timestamp: timestamp
-            logger_name: logger_name
-            log_level: log_level
-            message: message
-      - regex: #Regex for root system manager logs
-          expression: '^(?P<timestamp>.*?) - (?P<logger_name>.*?) - (?P<log_level>.*?) - (?P<message>.*)$'
-          labels:
-            timestamp: timestamp
-            logger_name: logger_name
-            log_level: log_level
-            message: message
-      
-       
+- job_name: root_logs_scraper
+  docker_sd_configs:
+  - host: unix:///var/run/docker.sock
+    refresh_interval: 5s
+    filters:
+    - name: label
+      values: ["logging=cluster_promtail"]
+  relabel_configs:
+  - source_labels: ['__meta_docker_container_id']
+    target_label: 'container_id'
+  - source_labels: ['__meta_docker_network_ip']
+    target_label: 'container_ip'
+  - source_labels: ['__meta_docker_container_name']
+    regex: '/(.*)'
+    target_label: 'container_name'
+  - source_labels: ['__meta_docker_container_log_stream']
+    target_label: 'logstream'
+  - source_labels: ['__meta_docker_container_label_logging_jobname']
+    target_label: 'job'
+
+  pipeline_stages:
+  - json:
+       expressions:
+         level: level
+         service: service
+         filename: filename
+  - regex: #Regex for `default` logging format
+      expression: '(?P<level>[^\[\]]+?)(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (?P<service>[^:]+) (?P<file>[^:]+):(?P<line>\d+)\] (?P<message>.+)'
+  - labels:
+      level: level
+      service: service
+      file: line
+
+
+
+        
+
 
