@@ -1,8 +1,6 @@
-from datetime import datetime
-
 import ext_requests.mongodb_client as db
 from bson import ObjectId
-from rasclient import cluster_operations
+from rasclient import cluster_operations, job_operations
 
 # ....... Job operations .........
 ##################################
@@ -27,161 +25,84 @@ def mongo_insert_job(microservice):
     }
 
     # job insertion
-    new_job = db.mongo_services.find_one_and_update(
-        {"job_name": job_name}, {"$set": job_content}, upsert=True, return_document=True
-    )
+    new_job = job_operations.create_job(job_content)
     db.app.logger.info("MONGODB - job {} inserted".format(str(new_job.get("_id"))))
     return str(new_job.get("_id"))
 
 
 def mongo_get_all_jobs():
-    return db.mongo_services.find()
-
-
-def mongo_get_job_status(job_id):
-    return db.mongo_services.find_one({"_id": ObjectId(job_id)}, {"status": 1})["status"] + "\n"
-
-
-def mongo_update_job_status(job_id, status, status_detail, instances=None):
-    job = db.mongo_services.find_one({"_id": ObjectId(job_id)})
-    if job is None:
-        return None
-    job.get("instance_list")
-    if instances is not None:
-        for instance in instances:
-            current_time = datetime.now().isoformat()
-            cpu_update = {"value": instance.get("cpu"), "timestamp": current_time}
-            memory_update = {"value": instance.get("memory"), "timestamp": current_time}
-            db.mongo_services.update_one(
-                {
-                    "_id": ObjectId(job_id),
-                    "instance_list": {
-                        "$elemMatch": {"instance_number": instance["instance_number"]}
-                    },
-                },
-                {
-                    "$push": {
-                        "instance_list.$.cpu_history": {
-                            "$each": [cpu_update],
-                            "$slice": -100,
-                        },
-                        "instance_list.$.memory_history": {
-                            "$each": [memory_update],
-                            "$slice": -100,
-                        },
-                    },
-                    "$set": {
-                        "instance_list.$.cpu": instance.get("cpu"),
-                        "instance_list.$.memory": instance.get("memory"),
-                        "instance_list.$.publicip": instance.get("publicip"),
-                        "instance_list.$.disk": instance.get("disk"),
-                        "instance_list.$.status": instance.get("status"),
-                        "instance_list.$.status_detail": instance.get(
-                            "status_detail", "No extra information"
-                        ),
-                        "instance_list.$.logs": instance.get("logs", ""),
-                    },
-                },
-            )
-
-    return db.mongo_services.find_one_and_update(
-        {"_id": ObjectId(job_id)},
-        {"$set": {"status": status, "status_detail": status_detail}},
-        return_document=True,
-    )
-
-
-def mongo_set_microservice_id(job_id):
-    return db.mongo_services.update_one(
-        {"_id": ObjectId(job_id)}, {"$set": {"microserviceID": job_id}}
-    )
-
-
-def mongo_update_job_net_status(job_id, instances):
-    job = db.mongo_services.find_one({"_id": ObjectId(job_id)})
-    instance_list = job["instance_list"]
-    for instance in instances:
-        instance_num = instance["instance_number"]
-        elem = instance_list[instance_num]
-        elem["namespace_ip"] = instance["namespace_ip"]
-        elem["host_ip"] = instance["host_ip"]
-        elem["host_port"] = instance["host_port"]
-        instance_list[instance_num] = elem
-    db.mongo_services.update_one(
-        {"_id": ObjectId(job_id)}, {"$set": {"instance_list": instance_list}}
-    )
+    return job_operations.get_jobs()
 
 
 def mongo_find_job_by_id(job_id):
-    return db.mongo_services.find_one(ObjectId(job_id))
+    return job_operations.get_job_by_id(job_id)
 
 
-def mongo_find_job_by_name(job_name):
-    return db.mongo_services.find_one({"job_name": job_name})
+def mongo_update_job_status(job_id, status, status_detail, instances=None):
+    job = mongo_find_job_by_id(job_id)
 
-
-def mongo_find_job_by_ip(ip):
-    # Search by Service Ip
-    job = db.mongo_services.find_one({"service_ip_list.Address": ip})
     if job is None:
-        # Search by instance ip
-        job = db.mongo_services.find_one({"instance_list.instance_ip": ip})
-    return job
+        return None
+
+    if instances is not None:
+        for instance in instances:
+            job_operations.update_job_instance(job_id, instance["instance_number"], instance)
+
+    return job_operations.update_job_status(job_id, status, status_detail)
+
+
+def mongo_set_microservice_id(job_id):
+    return job_operations.update_job(job_id, {"microserviceID": job_id})
 
 
 def mongo_update_job_status_and_instances(
     job_id, status, next_instance_progressive_number, instance_list
 ):
     print("Updating Job Status and assigning a cluster for this job...")
-    db.mongo_services.update_one(
-        {"_id": ObjectId(job_id)},
+    job_operations.update_job(
+        job_id,
         {
-            "$set": {
-                "status": status,
-                "next_instance_progressive_number": next_instance_progressive_number,
-                "instance_list": instance_list,
-            }
+            "status": status,
+            "next_instance_progressive_number": next_instance_progressive_number,
+            "instance_list": instance_list,
         },
     )
 
 
 def mongo_get_jobs_of_application(app_id):
-    return db.mongo_services.aggregate([{"$match": {"applicationID": app_id}}])
+    return job_operations.get_jobs({"applicationID": app_id})
 
 
 def mongo_update_job(job_id, job):
     db.app.logger.info("MONGODB - update job...")
-    job = db.mongo_services.find_one_and_update(
-        {"_id": ObjectId(job_id)}, {"$set": job}, return_document=True
-    )
+    job = job_operations.update_job(job_id, job)
     db.app.logger.info("MONGODB - job {} updated")
     return job
 
 
 def mongo_delete_job(job_id):
     db.app.logger.info("MONGODB - delete job...")
-    db.mongo_services.find_one_and_delete({"_id": ObjectId(job_id)})
+    job_operations.delete_job(job_id)
     db.app.logger.info("MONGODB - job {} deleted")
     # return mongo_frontend_jobs.find()
 
 
-def mongo_get_job_usage(job_id):
-    db.app.logger.info("MONGODB - get usage...")
-    job = db.mongo_services.find_one(ObjectId(job_id))
-    if "usage" in job:
-        return job["usage"]
-    else:
-        return None
-
-
 def mongo_find_cluster_of_job(job_id, instance_num):
     db.app.logger.info("Find job by Id and return cluster...")
-    job_obj = db.mongo_services.find_one(
-        {"_id": ObjectId(job_id)}, {"instance_list": 1}
-    )  # return just the assgined cluster of the job
-    for instance in job_obj.get("instance_list"):
-        if instance["instance_number"] == int(instance_num) or instance_num == -1:
-            return cluster_operations.get_resource_by_id(instance["cluster_id"])
+    query = {}
+
+    if instance_num != -1:
+        query["instance_list"] = int(instance_num)
+
+    job_obj = mongo_find_job_by_id(job_id)
+
+    if job_obj is None:
+        return None
+
+    instances = job_obj.get("instance_list")
+    if instances and len(instances) > 0:
+        instance = job_obj["instance_list"][0]
+        return cluster_operations.get_resource_by_id(instance["cluster_id"])
 
 
 # ......... APPLICATIONS .........

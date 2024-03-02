@@ -2,8 +2,8 @@ import logging
 import socket
 
 import requests
-from ext_requests.apps_db import mongo_find_cluster_of_job, mongo_find_job_by_id
-from rasclient import cluster_operations
+from ext_requests.apps_db import mongo_find_cluster_of_job
+from rasclient import cluster_operations, job_operations
 
 
 def is_ipv6(address):
@@ -26,7 +26,7 @@ def add_brackets_if_ipv6(address):
 def cluster_request_to_deploy(cluster_id, job_id, instance_number):
     print("propagate to cluster...")
     cluster = cluster_operations.get_resource_by_id(cluster_id)
-    job = mongo_find_job_by_id(job_id)
+    job = job_operations.get_job_by_id(job_id)
     try:
         cluster_addr = (
             "http://"
@@ -58,7 +58,7 @@ def cluster_request_to_delete_job(job_id, instance_number):
             + "/"
             + str(instance_number)
         )
-        resp = requests.get(cluster_addr)
+        resp = requests.get(cluster_addr)  # TODO: why is it a get and not a delete?
         print(resp)
     except Exception as e:
         logging.error(e)
