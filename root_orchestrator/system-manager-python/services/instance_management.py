@@ -12,7 +12,7 @@ from ext_requests.net_plugin_requests import (
     net_inform_instance_undeploy,
 )
 from ext_requests.scheduler_requests import scheduler_request_deploy
-from rasclient import cluster_operations
+from rasclient import app_operations, cluster_operations, job_operations
 
 
 def request_scale_up_instance(microserviceid, username):
@@ -39,11 +39,11 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
     remove the instance <which_one> of a service.
     which_one default value is -1 which means "all instances"
     """
-    service = mongo_find_job_by_id(microserviceid)
-    application = mongo_find_app_by_id(str(service["applicationID"]), username)
+    service = job_operations.get_job_by_id(microserviceid)
+    application = app_operations.get_app_by_id(str(service["applicationID"]), username)
     if application is not None:
         if microserviceid in application["microservices"]:
-            service = mongo_find_job_by_id(microserviceid)
+            service = job_operations.get_job_by_id(microserviceid)
             instances = service.get("instance_list")
             if len(instances) > 0:
                 for instance in instances:

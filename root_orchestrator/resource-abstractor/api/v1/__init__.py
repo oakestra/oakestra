@@ -1,4 +1,7 @@
-from .jobs_blueprint import jobsblp
-from .resources_blueprint import resourcesblp
+from api.v1 import apps_blueprint, jobs_blueprint, resources_blueprint
 
-blueprints = [resourcesblp, jobsblp]
+blueprints = [
+    resources_blueprint.resourcesblp,
+    apps_blueprint.applicationblp,
+    jobs_blueprint.jobsblp,
+]

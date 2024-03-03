@@ -1,6 +1,5 @@
 from blueprints.schema_wrapper import SchemaWrapper
 from bson import json_util
-from ext_requests.apps_db import mongo_get_all_applications
 from ext_requests.user_db import mongo_get_user_by_name
 from flask import request
 from flask.views import MethodView
@@ -13,6 +12,7 @@ from roles.securityUtils import Role, get_jwt_organization, require_role
 # ......................................................#
 from services.application_management import (
     delete_app,
+    get_all_applications,
     get_user_app,
     register_app,
     update_app,
@@ -120,4 +120,4 @@ class MultipleApplicationController(Resource):
     @jwt_required()
     @require_role(Role.ADMIN)
     def get(self, *args, **kwargs):
-        return json_util.dumps(mongo_get_all_applications())
+        return json_util.dumps(get_all_applications())

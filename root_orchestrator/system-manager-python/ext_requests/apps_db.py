@@ -1,6 +1,6 @@
 import ext_requests.mongodb_client as db
 from bson import ObjectId
-from rasclient import cluster_operations, job_operations
+from rasclient import app_operations, cluster_operations, job_operations
 
 # ....... Job operations .........
 ##################################
@@ -111,13 +111,14 @@ def mongo_find_cluster_of_job(job_id, instance_num):
 
 def mongo_add_application(application):
     db.app.logger.info("MONGODB - insert application...")
-    application.get("userId")
-    new_job = db.mongo_applications.insert_one(application)
+
+    if application.get("userId") is None:
+        return None
+
+    new_job = app_operations.create_app(application.get("userId"), application)
     inserted_id = new_job.inserted_id
     db.app.logger.info("MONGODB - app {} inserted".format(str(inserted_id)))
-    db.mongo_applications.find_one_and_update(
-        {"_id": inserted_id}, {"$set": {"applicationID": str(inserted_id)}}
-    )
+
     return str(inserted_id)
 
 

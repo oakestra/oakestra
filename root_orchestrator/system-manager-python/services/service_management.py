@@ -7,12 +7,11 @@ from ext_requests.apps_db import (
     mongo_get_all_jobs,
     mongo_get_applications_of_user,
     mongo_get_jobs_of_application,
-    mongo_insert_job,
     mongo_set_microservice_id,
-    mongo_update_application_microservices,
     mongo_update_job,
 )
 from ext_requests.net_plugin_requests import net_inform_service_deploy, net_inform_service_undeploy
+from rasclient import app_operations, job_operations
 from services.instance_management import request_scale_down_instance
 from sla.versioned_sla_parser import parse_sla_json
 
@@ -22,7 +21,7 @@ def create_services_of_app(username, sla, force=False):
     logging.log(logging.INFO, sla)
     app_id = data.get("applications")[0]["applicationID"]
     last_service_id = ""
-    application = mongo_find_app_by_id(app_id, username)
+    application = app_operations.get_app_by_id(app_id, username)
     if application is None:
         return {"message": "application not found"}, 404
     for microservice in data.get("applications")[0].get("microservices"):
@@ -30,7 +29,8 @@ def create_services_of_app(username, sla, force=False):
             return {"message": "invalid service name or namespace"}, 403
         # Insert job into database
         service = generate_db_structure(application, microservice)
-        last_service_id = mongo_insert_job(service)
+        last_service = job_operations.create_job(service)
+        last_service_id = last_service.get("_id")
         # Insert job into app's services list
         mongo_set_microservice_id(last_service_id)
         add_service_to_app(app_id, last_service_id, username)
@@ -45,7 +45,7 @@ def create_services_of_app(username, sla, force=False):
 
 
 def delete_service(username, serviceid):
-    apps = mongo_get_applications_of_user(username)
+    apps = app_operations.get_user_apps(username)
     for application in apps:
         if serviceid in application["microservices"]:
             # undeploy instances
@@ -110,15 +110,15 @@ def generate_db_structure(application, microservice):
 
 
 def add_service_to_app(app_id, service_id, userid):
-    application = mongo_find_app_by_id(app_id, userid)
+    application = app_operations.get_app_by_id(app_id, userid)
     application["microservices"].append(service_id)
-    mongo_update_application_microservices(app_id, application["microservices"])
+    app_operations.update_app(app_id, userid, {"microservices": application["microservices"]})
 
 
 def remove_service_from_app(app_id, service_id, userid):
-    application = mongo_find_app_by_id(app_id, userid)
+    application = app_operations.get_app_by_id(app_id, userid)
     application["microservices"].remove(service_id)
-    mongo_update_application_microservices(app_id, application["microservices"])
+    app_operations.update_app(app_id, userid, {"microservices": application["microservices"]})
 
 
 def valid_service(service):

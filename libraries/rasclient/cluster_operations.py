@@ -1,77 +1,37 @@
-import os
+from rasclient.client_helper import RESOURCE_ABSTRACTOR_ADDR, make_request
+from requests import get, patch, put
 
-from requests import exceptions, get, patch, put
-
-RESOURCE_ABSTRACTOR_ADDR = (
-    f"http://{os.environ.get('RESOURCE_ABSTRACTOR_URL')}:"
-    f"{os.environ.get('RESOURCE_ABSTRACTOR_PORT')}"
-)
+RESOURCES_API = f"{RESOURCE_ABSTRACTOR_ADDR}/api/v1/resources"
 
 
 def get_resources(**kwargs):
-    request_address = RESOURCE_ABSTRACTOR_ADDR + "/api/v1/resources"
-    try:
-        response = get(request_address, params=kwargs)
-        return response.json()
-    except exceptions.RequestException:
-        print("Calling Resource Abstractor /api/v1/resources not successful.")
-
-    return []
+    return make_request(get, RESOURCES_API, params=kwargs) or []
 
 
 def get_resource_by_id(resource_id):
-    request_address = RESOURCE_ABSTRACTOR_ADDR + f"/api/v1/resources/{resource_id}"
-    try:
-        response = get(request_address)
-        # TODO check body not empty.
-        return response.json()
-    except exceptions.RequestException:
-        print(f"Calling Resource Abstractor /api/v1/resources/{resource_id} not successful.")
-
-    return None
+    request_address = f"{RESOURCES_API}/{resource_id}"
+    return make_request(get, request_address)
 
 
 def get_resource_by_name(resource_name):
     resources = get_resources(cluster_name=resource_name)
-    if resources is None or len(resources) == 0:
-        return None
-
-    return resources[0]
+    return resources[0] if resources else None
 
 
 def get_resource_by_job_id(job_id):
     resources = get_resources(job_id=job_id)
-    if resources is None or len(resources) == 0:
-        return None
-
-    return resources[0]
+    return resources[0] if resources else None
 
 
 def get_resource_by_ip(ip):
     resources = get_resources(ip=ip)
-    if resources is None or len(resources) == 0:
-        return None
-
-    return resources[0]
+    return resources[0] if resources else None
 
 
 def update_cluster_information(cluster_id, data):
-    request_address = f"{RESOURCE_ABSTRACTOR_ADDR}/api/v1/resources/{cluster_id}"
-    try:
-        response = patch(request_address, json=data)
-        return response.json()
-    except exceptions.RequestException:
-        print(f"Calling Resource Abstractor /api/v1/resources/{cluster_id} not successful.")
-
-    return None
+    request_address = f"{RESOURCES_API}/{cluster_id}"
+    return make_request(patch, request_address, json=data)
 
 
 def create_cluster(data):
-    request_address = f"{RESOURCE_ABSTRACTOR_ADDR}/api/v1/resources"
-    try:
-        response = put(request_address, json=data)
-        return response.json()
-    except exceptions.RequestException:
-        print("Calling Resource Abstractor /api/v1/resources not successful.")
-
-    return None
+    return make_request(put, RESOURCES_API, json=data)
