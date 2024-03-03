@@ -1,19 +1,33 @@
 import logging
 
-from ext_requests.apps_db import (
-    mongo_delete_job,
-    mongo_find_app_by_id,
-    mongo_find_job_by_id,
-    mongo_get_all_jobs,
-    mongo_get_applications_of_user,
-    mongo_get_jobs_of_application,
-    mongo_set_microservice_id,
-    mongo_update_job,
-)
 from ext_requests.net_plugin_requests import net_inform_service_deploy, net_inform_service_undeploy
 from rasclient import app_operations, job_operations
 from services.instance_management import request_scale_down_instance
 from sla.versioned_sla_parser import parse_sla_json
+
+
+def insert_job(microservice):
+    logging.log(logging.INFO, "MONGODB - insert job...")
+    # jobname and details generation
+    job_name = (
+        microservice["app_name"]
+        + "."
+        + microservice["app_ns"]
+        + "."
+        + microservice["microservice_name"]
+        + "."
+        + microservice["microservice_namespace"]
+    )
+    microservice["job_name"] = job_name
+    job_content = {
+        "job_name": job_name,
+        **microservice,  # The content of the input file
+    }
+
+    # job insertion
+    new_job = job_operations.create_job(job_content)
+    logging.log(logging.INFO, "MONGODB - job {} inserted".format(str(new_job.get("_id"))))
+    return str(new_job.get("_id"))
 
 
 def create_services_of_app(username, sla, force=False):
@@ -29,10 +43,10 @@ def create_services_of_app(username, sla, force=False):
             return {"message": "invalid service name or namespace"}, 403
         # Insert job into database
         service = generate_db_structure(application, microservice)
-        last_service = job_operations.create_job(service)
+        last_service = insert_job(service)
         last_service_id = last_service.get("_id")
         # Insert job into app's services list
-        mongo_set_microservice_id(last_service_id)
+        job_operations.update_job(last_service_id, {"microserviceID": last_service_id})
         add_service_to_app(app_id, last_service_id, username)
         # Inform network plugin about the new service
         try:
@@ -44,6 +58,14 @@ def create_services_of_app(username, sla, force=False):
     return {"job_id": str(last_service_id)}, 200
 
 
+# TODO: have logging moved to resource abstractor
+def delete_job(job_id):
+    logging.log(logging.INFO, "MONGODB - delete job...")
+    job_operations.delete_job(job_id)
+    logging.log(logging.INFO, "MONGODB - job {} deleted")
+    # return mongo_frontend_jobs.find()
+
+
 def delete_service(username, serviceid):
     apps = app_operations.get_user_apps(username)
     for application in apps:
@@ -53,7 +75,7 @@ def delete_service(username, serviceid):
             # remove service from app's services list
             remove_service_from_app(application["applicationID"], serviceid, username)
             # remove service from DB
-            mongo_delete_job(serviceid)
+            delete_job(serviceid)
             # inform network component
             net_inform_service_undeploy(serviceid)
             return True
@@ -62,30 +84,34 @@ def delete_service(username, serviceid):
 
 def update_service(username, sla, serviceid):
     # TODO Check fields and redeploy service
-    apps = mongo_get_applications_of_user(username)
+    apps = app_operations.get_user_apps(username)
     for application in apps:
         if serviceid in application["microservices"]:
-            return mongo_update_job(serviceid, sla), 200
+            # TODO have entity related logging in resource abstractor
+            logging.log(logging.INFO, "MONGODB - update job...")
+            job = job_operations.update_job(serviceid, sla)
+            logging.log(logging.INFO, "MONGODB - job {} updated")
+            return job, 200
     return {"message": "service not found"}, 404
 
 
 def user_services(appid, username):
-    application = mongo_find_app_by_id(appid, username)
+    application = app_operations.get_app_by_id(appid, username)
     if application is None:
         return {"message": "app not found"}, 404
 
-    return mongo_get_jobs_of_application(appid), 200
+    return job_operations.get_jobs({"applicationID": appid}), 200
 
 
 def get_service(serviceid, username):
-    apps = mongo_get_applications_of_user(username)
+    apps = app_operations.get_user_apps(username)
     for application in apps:
         if serviceid in application["microservices"]:
-            return mongo_find_job_by_id(serviceid)
+            return job_operations.get_job_by_id(serviceid)
 
 
 def get_all_services():
-    return mongo_get_all_jobs()
+    return job_operations.get_jobs()
 
 
 def generate_db_structure(application, microservice):

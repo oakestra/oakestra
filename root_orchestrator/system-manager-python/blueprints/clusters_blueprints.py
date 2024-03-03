@@ -1,9 +1,9 @@
-from ext_requests.apps_db import mongo_update_job_status
 from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from rasclient import cluster_operations
+from services.instance_management import update_job_status
 
 clustersbp = Blueprint("Clusters", "cluster management", url_prefix="/api/clusters")
 clusterinfo = Blueprint("Clusterinfo", "cluster informations", url_prefix="/api/information")
@@ -71,7 +71,7 @@ class ClusterController(MethodView):
         # TODO: fire an event to react to the cluster update, and move this logic somewhere else.
         jobs = data.get("jobs")
         for j in jobs:
-            result = mongo_update_job_status(
+            result = update_job_status(
                 job_id=j.get("system_job_id"),
                 status=j.get("status"),
                 status_detail=j.get("status_detail"),

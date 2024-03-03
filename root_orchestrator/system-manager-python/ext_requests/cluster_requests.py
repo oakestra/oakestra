@@ -2,8 +2,8 @@ import logging
 import socket
 
 import requests
-from ext_requests.apps_db import mongo_find_cluster_of_job
 from rasclient import cluster_operations, job_operations
+from services.cluster_management import find_cluster_of_job
 
 
 def is_ipv6(address):
@@ -46,7 +46,7 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
 
 
 def cluster_request_to_delete_job(job_id, instance_number):
-    cluster = mongo_find_cluster_of_job(job_id, int(instance_number))
+    cluster = find_cluster_of_job(job_id, int(instance_number))
     try:
         cluster_addr = (
             "http://"
