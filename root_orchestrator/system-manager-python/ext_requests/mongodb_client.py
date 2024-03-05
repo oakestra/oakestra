@@ -17,7 +17,6 @@ mongo_applications = None
 mongo_services = None
 mongo_organization = None
 mongo_gateways = None
-mongo_gateway_nodes = None
 mongo_gateway_services = None
 
 app = None
@@ -28,7 +27,7 @@ CLUSTERS_FRESHNESS_INTERVAL = 45
 def mongo_init(flask_app):
     global app, mongo_clusters, mongo_jobs, mongo_users
     global mongo_applications, mongo_services, mongo_organization
-    global mongo_gateways, mongo_gateway_nodes, mongo_gateway_services
+    global mongo_gateways, mongo_gateway_services
 
     app = flask_app
 
@@ -39,7 +38,6 @@ def mongo_init(flask_app):
     mongo_applications = mongo_jobs.db["apps"]
     mongo_services = mongo_jobs.db["jobs"]
     mongo_gateways = PyMongo(app, uri=MONGO_ADDR_GATEWAYS)
-    mongo_gateway_nodes = mongo_gateways.db["nodes"]
     mongo_gateway_services = mongo_gateways.db["services"]
 
     app.logger.info("MONGODB - init mongo")

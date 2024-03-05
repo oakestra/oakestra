@@ -4,62 +4,6 @@ from bson import ObjectId
 # ....... Gateway Operations ........ #
 #######################################
 
-
-def mongo_add_gateway_node(entry):
-    db.app.logger.info("MONGODB - insert {} node to gateway nodes db...".format(entry["type"]))
-    new_node = db.mongo_gateway_nodes.insert_one(entry)
-    inserted_id = new_node.inserted_id
-    db.app.logger.info("MONGODB - node {} added to gateway nodes db".format(str(inserted_id)))
-    return str(inserted_id)
-
-
-def mongo_delete_gateway_node(node_id):
-    db.app.logger.info("MONGODB - delete node from gateway nodes db...")
-    db.mongo_gateway_nodes.delete(ObjectId(node_id))
-    db.app.logger.info("MONGODB - firewall {} deleted from gateway nodes db".format(str(node_id)))
-    return
-
-
-def mongo_get_node_by_id(node_id):
-    return db.mongo_gateway_nodes.find_one(ObjectId(node_id))
-
-
-def mongo_get_node_by_ip(node_ip):
-    return db.mongo_gateway_nodes.find_one({"node_ip": node_ip})
-
-
-def mongo_update_node_services(node_id, service_id, port):
-    return db.mongo_gateway_nodes.update(
-        ObjectId(node_id), {"$push": {"microservices": service_id, "used_ports": port}}
-    )
-
-
-def mongo_find_gateways_by_cluster(cluster_id):
-    # retrieve all gateway nodes of cluster
-    return db.mongo_gateway_nodes.find({"cluster_id": cluster_id})
-
-
-# TODO
-def mongo_update_gateway_status(cluster_id, status, status_note):
-    db.mongo_gateway_nodes.insert_one(
-        {"cluster_id": cluster_id, "status": status, "status_note": status_note}
-    )
-
-
-def mongo_delete_gateway(gateway_id):
-    db.app.logger.info("MONGODB - delete gateway...")
-    db.mongo_gateway_nodes.find_one_and_delete({"_id": ObjectId(gateway_id)})
-    db.app.logger.info("MONGODB - gateway {} deleted")
-
-
-def mongo_find_gateway_by_id(gateway_id):
-    return db.mongo_gateway_nodes.find_one(ObjectId(gateway_id))
-
-
-def mongo_get_all_gateways():
-    return db.mongo_gateway_nodes.find()
-
-
 # services #
 # ........ #
 

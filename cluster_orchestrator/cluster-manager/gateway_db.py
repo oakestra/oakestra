@@ -16,7 +16,8 @@ def mongo_add_gateway_node(gateway):
 
 def mongo_add_gateway_service_to_node(gateway_id, service):
     db.mongo_gateway_nodes.update_one(
-        {"gateway_id": gateway_id}, {"$addToSet": {"services": service}}
+        {"gateway_id": gateway_id},
+        {"$addToSet": {"services": service, "used_ports": service["exposed_port"]}},
     )
 
 
@@ -26,10 +27,6 @@ def mongo_get_gateway_node(node_id):
 
 def mongo_delete_gateway_node(gateway_id):
     return db.mongo_gateway_nodes.delete_one(ObjectId(gateway_id))
-
-
-def mongo_get_gateways_of_cluster():
-    return db.mongo_gateway_nodes.find({"type": "gateway"})
 
 
 def mongo_find_available_gateway_by_port(port):
@@ -102,5 +99,4 @@ def mongo_delete_netmanager_client(netmanager_id):
 
 def mongo_find_available_idle_worker():
     # fetch one idle node from database
-    # TODO: tidy entry return
     return db.mongo_gateway_netmanagers.find_one()

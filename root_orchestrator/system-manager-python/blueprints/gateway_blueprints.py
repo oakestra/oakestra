@@ -1,6 +1,5 @@
 from blueprints.schema_wrapper import SchemaWrapper
 from bson import json_util
-from ext_requests.gateway_db import mongo_get_all_gateways
 from flask import request
 from flask_jwt_extended import jwt_required
 from flask_restful import Resource
