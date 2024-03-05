@@ -19,8 +19,10 @@ def create_gateway_service(current_user, sla):
     # TODO: implement current_user check of service, maybe use organizations?
     data = parse_sla_json(sla)
     logging.log(logging.INFO, sla)
-    services = data.get("microservice")
+    services = data.get("microservices")
     for microservice in services:
+        # create own microservice response dict
+        response[microservice["microserviceID"]] = {}
         # check if service is deployed
         service = mongo_get_service_instances_by_id(microservice["microserviceID"])
         if service is None:
@@ -56,6 +58,7 @@ def create_gateway_service(current_user, sla):
 
         # fetch the clusters of running target service instances
         clusters = mongo_get_clusters_of_active_service_instances(microservice["microserviceID"])
+
         for cluster_id in clusters:
             # notify cluster to enable gateway for microservice if possible
             logging.log(
@@ -74,11 +77,9 @@ def create_gateway_service(current_user, sla):
                 "message": {
                     "microservice": microservice["microserviceID"],
                     "gateways": {
-                        "v4": "{}:{}".format(
-                            gateway.get("gateway_ipv4"), microservice["exposed_port"]
-                        ),
+                        "v4": "{}:{}".format(gateway.get("host_ip"), microservice["exposed_port"]),
                         "v6": "[{}]:{}".format(
-                            gateway.get("gateway_ipv6"), microservice["exposed_port"]
+                            gateway.get("host_ip_v6"), microservice["exposed_port"]
                         ),
                     },
                 },

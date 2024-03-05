@@ -33,13 +33,13 @@ def deploy_gateway(service):
         # if no gateway available, deploy a new one
         # returns None if no gateway is available
         gateway = deploy_gateway_process_on_cluster(cluster_id)
-        # if deployment impossible, return 500
+        # if deployment impossible, raise exception to return 500
         if gateway is None:
             mongo_delete_gateway_service(service_id=service["microserviceID"])
             raise Exception("no gateways available")
 
     # update its firewall rules
-    update_gateway_service_exposal(gateway["gateway_id"], service)
+    update_gateway_service_exposal(gateway, service)
 
     return gateway
 
@@ -56,7 +56,9 @@ def deploy_gateway_process_on_cluster(cluster_id):
 
     # notify cluster service-manager
     deployed_gateway, status = network_notify_gateway_deploy(gateway_node_data)
+    # gw_job
     if status != 200:
+        # TODO: cleanup
         return None
 
     # remove netmanager entry from table of netmanagers
@@ -66,12 +68,12 @@ def deploy_gateway_process_on_cluster(cluster_id):
     return deployed_gateway
 
 
-def update_gateway_service_exposal(gateway_id, service):
+def update_gateway_service_exposal(gateway, service):
     service_info = prepare_gateway_node_service_entry(service)
-    mongo_add_gateway_service_to_node(gateway_id, service_info)
+    mongo_add_gateway_service_to_node(gateway["gateway_id"], service_info)
 
     # send notification to service-manager
-    network_notify_gateway_update(gateway_id, service_info)
+    network_notify_gateway_update(gateway, service_info)
     return
 
 
