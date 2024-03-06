@@ -32,6 +32,9 @@ def deploy_gateway(service):
     # get a deployed gateway
     # able to expose the requested service on the desired port
     gateway = mongo_find_available_gateway_by_port(service["exposed_port"])
+    if gateway is not None:
+        del gateway["_id"]
+
     if gateway is None:
         # if no gateway available, deploy a new one
         # returns None if no gateway is available
