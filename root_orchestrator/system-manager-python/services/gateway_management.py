@@ -63,7 +63,7 @@ def create_gateway_service(current_user, sla):
             # notify cluster to enable gateway for microservice if possible
             logging.log(
                 logging.INFO,
-                "deploying service {} on cluster {}".format(microservice, cluster_id),
+                "deploying gateway for service {} on cluster {}".format(microservice, cluster_id),
             )
             gateway, status = cluster_request_to_deploy_gateway(cluster_id, microservice)
             print(gateway)

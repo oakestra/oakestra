@@ -26,7 +26,7 @@ def mongo_get_gateway_node(node_id):
 
 
 def mongo_delete_gateway_node(gateway_id):
-    return db.mongo_gateway_nodes.delete_one(ObjectId(gateway_id))
+    return db.mongo_gateway_nodes.delete_one({"gateway_id": gateway_id})
 
 
 def mongo_find_available_gateway_by_port(port):
@@ -48,7 +48,6 @@ def mongo_get_service_instance_node_information(service_id):
 
 def mongo_add_gateway_service(service):
     db.app.logger.info("MONGODB - insert service to gateway db...")
-    service["_id"] = ObjectId(service["_id"])
     new_service = db.mongo_gateway_services.insert_one(service)
     inserted_id = new_service.inserted_id
     db.app.logger.info("MONGODB - service {} added to gateway db".format(str(inserted_id)))
