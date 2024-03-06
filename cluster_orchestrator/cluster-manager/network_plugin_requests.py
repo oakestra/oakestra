@@ -42,14 +42,15 @@ def network_notify_gateway_deploy(gateway_node_data):
         return "", 500
 
 
-def network_notify_gateway_update(gateway, service_info):
-    print("Sending gateway update information to the network component")
-    data = {}
-    data["gateway_id"] = gateway["gateway_id"]
-    del service_info["_id"]
-    data["service"] = service_info
+def network_notify_gateway_service_update(gateway_id, service_info):
+    print("Sending gateway service expose information to the network component")
     print("updating gateway for service-manager:", service_info)
     try:
-        requests.post(SERVICE_MANAGER_ADDR + "/api/net/gateway/update", json=data)
+        requests.post(
+            SERVICE_MANAGER_ADDR + "/api/net/gateway/{}/service".format(gateway_id),
+            json=service_info,
+        )
     except requests.exceptions.RequestException:
-        print("Calling Service Manager /api/net/gateway/deploy not successul")
+        print(
+            "Calling Service Manager /api/net/gateway/{}/service not successul".format(gateway_id)
+        )

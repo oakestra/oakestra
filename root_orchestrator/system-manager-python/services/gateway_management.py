@@ -54,7 +54,7 @@ def create_gateway_service(current_user, sla):
         # add the service to be exposed to collection of exposed services
         logging.log(logging.INFO, microservice)
         mongo_add_gateway_service(microservice)
-        microservice["_id"] = str(microservice["_id"])
+        del microservice["_id"]
 
         # fetch the clusters of running target service instances
         clusters = mongo_get_clusters_of_active_service_instances(microservice["microserviceID"])
@@ -66,6 +66,7 @@ def create_gateway_service(current_user, sla):
                 "deploying service {} on cluster {}".format(microservice, cluster_id),
             )
             gateway, status = cluster_request_to_deploy_gateway(cluster_id, microservice)
+            print(gateway)
             if status != 200:
                 mongo_remove_gateway_service(microservice)
                 response[microservice["microserviceID"]][cluster_id] = {
@@ -77,9 +78,13 @@ def create_gateway_service(current_user, sla):
                 "message": {
                     "microservice": microservice["microserviceID"],
                     "gateways": {
-                        "v4": "{}:{}".format(gateway.get("host_ip"), microservice["exposed_port"]),
+                        "v4": "{}:{}".format(
+                            gateway.get("instance_list")[0].get("host_ip"),
+                            microservice["exposed_port"],
+                        ),
                         "v6": "[{}]:{}".format(
-                            gateway.get("host_ip_v6"), microservice["exposed_port"]
+                            gateway.get("instance_list")[0].get("host_ip_v6"),
+                            microservice["exposed_port"],
                         ),
                     },
                 },

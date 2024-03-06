@@ -42,9 +42,7 @@ class GatewayController(Resource):
         data = request.get_json()
         current_user = get_jwt_auth_identity()
         result, code = create_gateway_service(current_user, data)
-        if code != 200:
-            abort(code, result)
-        return json_util.dumps(result)
+        return json_util.dumps(result), code
 
 
 @gatewayblp.route("/<service_id>")

@@ -1,4 +1,3 @@
-from bson import ObjectId
 from gateway_db import (
     mongo_add_gateway_node,
     mongo_add_gateway_service,
@@ -9,7 +8,10 @@ from gateway_db import (
     mongo_find_available_idle_worker,
     mongo_register_netmanager_client,
 )
-from network_plugin_requests import network_notify_gateway_deploy, network_notify_gateway_update
+from network_plugin_requests import (
+    network_notify_gateway_deploy,
+    network_notify_gateway_service_update,
+)
 
 
 def deploy_gateway(service):
@@ -39,7 +41,7 @@ def deploy_gateway(service):
             raise Exception("no gateways available")
 
     # update its firewall rules
-    update_gateway_service_exposal(gateway, service)
+    deploy_gateway_service_exposure(gateway.get("gateway_id"), service)
 
     return gateway
 
@@ -55,25 +57,22 @@ def deploy_gateway_process_on_cluster(cluster_id):
     gateway_node_data = prepare_gateway_node_entry(idle_node, cluster_id)
 
     # notify cluster service-manager
-    deployed_gateway, status = network_notify_gateway_deploy(gateway_node_data)
-    # gw_job
+    deployed_gateway_job, status = network_notify_gateway_deploy(gateway_node_data)
     if status != 200:
-        # TODO: cleanup
         return None
 
     # remove netmanager entry from table of netmanagers
     # and add to active gateways
     mongo_add_gateway_node(gateway_node_data)
 
-    return deployed_gateway
+    return deployed_gateway_job
 
 
-def update_gateway_service_exposal(gateway, service):
-    service_info = prepare_gateway_node_service_entry(service)
-    mongo_add_gateway_service_to_node(gateway["gateway_id"], service_info)
+def deploy_gateway_service_exposure(gateway_id, service):
+    mongo_add_gateway_service_to_node(gateway_id, service)
 
     # send notification to service-manager
-    network_notify_gateway_update(gateway, service_info)
+    network_notify_gateway_service_update(gateway_id, service)
     return
 
 
@@ -90,11 +89,6 @@ def handle_gateway_put(gateway_id, data):
 def handle_gateway_delete(gateway_id):
     # TODO: handle_gateway_delete
     return
-
-
-def prepare_gateway_node_service_entry(service):
-    service["_id"] = ObjectId(service["_id"])
-    return service
 
 
 # register a new netmanager to the cluster
