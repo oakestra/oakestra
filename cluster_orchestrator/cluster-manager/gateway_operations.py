@@ -27,6 +27,7 @@ def deploy_gateway(service):
 
     # add service to collection of exposed services
     mongo_add_gateway_service(service)
+    print(service)
 
     # get a deployed gateway
     # able to expose the requested service on the desired port
@@ -34,6 +35,7 @@ def deploy_gateway(service):
     if gateway is None:
         # if no gateway available, deploy a new one
         # returns None if no gateway is available
+        print("deploying gateway on cluster:", cluster_id)
         gateway = deploy_gateway_process_on_cluster(cluster_id)
         # if deployment impossible, raise exception to return 500
         if gateway is None:
@@ -52,6 +54,7 @@ def deploy_gateway_process_on_cluster(cluster_id):
     # find idle netmanager
     idle_node = mongo_find_available_idle_worker()
     if idle_node is None:
+        print("no idle node available")
         return None
 
     gateway_node_data = prepare_gateway_node_entry(idle_node, cluster_id)
@@ -59,6 +62,7 @@ def deploy_gateway_process_on_cluster(cluster_id):
     # notify cluster service-manager
     deployed_gateway_job, status = network_notify_gateway_deploy(gateway_node_data)
     if status != 200:
+        print("got status:", status)
         return None
 
     # remove netmanager entry from table of netmanagers

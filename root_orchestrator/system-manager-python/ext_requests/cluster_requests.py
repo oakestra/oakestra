@@ -143,6 +143,7 @@ def cluster_request_to_deploy_gateway(cluster_id, microservice):
         microservice["cluster_id"] = cluster_id
         resp = requests.post(cluster_addr, json=microservice)
         return resp.json(), resp.status_code
-    except requests.exceptions.RequestException:
+    except requests.exceptions.RequestException as e:
+        print(e)
         print("Calling Cluster Orchestrator /api/gateway/deploy not successful.")
         return {}, 500

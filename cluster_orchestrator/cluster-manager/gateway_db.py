@@ -51,10 +51,12 @@ def mongo_add_gateway_service(service):
     new_service = db.mongo_gateway_services.insert_one(service)
     inserted_id = new_service.inserted_id
     db.app.logger.info("MONGODB - service {} added to gateway db".format(str(inserted_id)))
-    return str(inserted_id)
 
 
 def mongo_get_gateway_service(service_id):
+    db.app.logger.info(
+        "MONGODB - looking for a gateway already exposing microservice {}".format(service_id)
+    )
     return db.mongo_gateway_services.find_one({"microserviceID": service_id})
 
 
@@ -98,4 +100,5 @@ def mongo_delete_netmanager_client(netmanager_id):
 
 def mongo_find_available_idle_worker():
     # fetch one idle node from database
+    db.app.logger.info("MONGODB - fetching idle netmanager")
     return db.mongo_gateway_netmanagers.find_one()
