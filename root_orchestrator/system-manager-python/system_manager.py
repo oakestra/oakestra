@@ -18,6 +18,7 @@ from flask_smorest import Api
 from flask_socketio import SocketIO, emit
 from flask_swagger_ui import get_swaggerui_blueprint
 from sm_logging import configure_logging
+from utils.network import sanitize
 from werkzeug.utils import redirect, secure_filename
 
 my_logger = configure_logging()
@@ -101,12 +102,14 @@ def handle_init_client(message):
     )
     app.logger.info(message)
 
-    cid = mongo_upsert_cluster(cluster_ip=request.remote_addr, message=message)
+    cluster_address = sanitize(request.remote_addr)
+
+    cid = mongo_upsert_cluster(cluster_ip=cluster_address, message=message)
     x = {"id": str(cid)}
 
     net_register_cluster(
         cluster_id=str(cid),
-        cluster_address=request.remote_addr,
+        cluster_address=cluster_address,
         cluster_port=message["network_component_port"],
     )
 
