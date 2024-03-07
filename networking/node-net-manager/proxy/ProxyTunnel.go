@@ -6,13 +6,12 @@ import (
 	"NetManager/logger"
 	"NetManager/proxy/iputils"
 	"fmt"
-	"math/rand"
-	"net"
-	"sync"
-
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/songgao/water"
+	"math/rand"
+	"net"
+	"sync"
 )
 
 // const
@@ -20,15 +19,15 @@ var BUFFER_SIZE = 64 * 1024
 
 // Config
 type Configuration struct {
-	HostTUNDeviceName         string
-	ProxySubnetwork           string
-	ProxySubnetworkMask       string
-	TunNetIP                  string
-	Mtusize                   string
-	TunNetIPv6                string
-	ProxySubnetworkIPv6       string
-	TunnelPort                int
-	ProxySubnetworkIPv6Prefix int
+	HostTUNDeviceName         string `json:"HostTunnelDeviceName"`
+	ProxySubnetwork           string `json:"ProxySubnetwork"`
+	ProxySubnetworkMask       string `json:"ProxySubnetworkMask"`
+	TunNetIP                  string `json:"TunnelIP"`
+	TunnelPort                int    `json:"TunnelPort"`
+	Mtusize                   int    `json:"MTUSize"`
+	TunNetIPv6                string `json:"TunNetIPv6"`
+	ProxySubnetworkIPv6       string `json:"ProxySubnetworkIPv6"`
+	ProxySubnetworkIPv6Prefix int    `json:"ProxySubnetworkIPv6Prefix"`
 }
 
 type GoProxyTunnel struct {

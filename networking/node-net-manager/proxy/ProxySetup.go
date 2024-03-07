@@ -4,6 +4,7 @@ import (
 	"NetManager/env"
 	"NetManager/logger"
 	"NetManager/network"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -18,61 +19,32 @@ import (
 
 // create a  new GoProxyTunnel with the configuration from the custom local file
 func New() GoProxyTunnel {
-	port, err := strconv.Atoi(os.Getenv("PUBLIC_WORKER_PORT"))
+	// load netcfg.json
+	cfg, err := os.Open("/etc/netmanager/tuncfg.json")
 	if err != nil {
-		logger.InfoLogger().Printf("Default to tunport 50103")
-		port = 50103
+		logger.ErrorLogger().Println(err)
 	}
-	mtusize := os.Getenv("TUN_MTU_SIZE")
-	if len(mtusize) == 0 {
-		logger.InfoLogger().Printf("Default to mtusize 1450")
-		mtusize = "1450"
-	}
-	proxySubnetworkMask := os.Getenv("PROXY_SUBNETWORK_MASK")
-	if len(proxySubnetworkMask) == 0 {
-		logger.InfoLogger().Printf("Default proxy subnet mask to 255.255.0.0")
-		proxySubnetworkMask = "255.255.0.0"
-	}
-	proxySubnetwork := os.Getenv("PROXY_SUBNETWORK")
-	if len(proxySubnetwork) == 0 {
-		logger.InfoLogger().Printf("Default proxy subnetwork to 10.30.0.0")
-		proxySubnetwork = "10.30.0.0"
-	}
-	tunNetIP := os.Getenv("TUN_NET_IP")
-	if len(tunNetIP) == 0 {
-		logger.InfoLogger().Printf("Default to tunNetIP 10.19.1.254")
-		tunNetIP = "10.19.1.254"
-	}
+	defer cfg.Close()
 
-	// IPv6
-	tunNetIPv6 := os.Getenv("TUN_NET_IPv6")
-	if len(tunNetIPv6) == 0 {
-		logger.InfoLogger().Printf("Default to tunNetIPv6 fcef::dead:beef")
-		tunNetIPv6 = "fcef::dead:beef"
-	}
-	proxyIPv6Subnetwork := os.Getenv("PROXY_IPv6_SUBNETWORK")
-	if len(proxyIPv6Subnetwork) == 0 {
-		logger.InfoLogger().Printf("Default to proxy IPv6 subnetwork fc00::")
-		proxyIPv6Subnetwork = "fc00::"
-	}
-	proxyIPv6SubnetworkPrefix, err := strconv.Atoi(os.Getenv("PROXY_IPv6_SUBNETWORKPREFIX"))
-	if err != nil {
-		logger.InfoLogger().Printf("Default to proxy IPv6 network prefix 7")
-		proxyIPv6SubnetworkPrefix = 7
-	}
-
-	tunconfig := Configuration{
+	defaultconfig := Configuration{
 		HostTUNDeviceName:         "goProxyTun",
-		ProxySubnetwork:           proxySubnetwork,
-		ProxySubnetworkMask:       proxySubnetworkMask,
-		TunNetIP:                  tunNetIP,
-		TunnelPort:                port,
-		Mtusize:                   mtusize,
-		TunNetIPv6:                tunNetIPv6,
-		ProxySubnetworkIPv6Prefix: proxyIPv6SubnetworkPrefix,
-		ProxySubnetworkIPv6:       proxyIPv6Subnetwork,
+		TunNetIP:                  "10.19.1.254",
+		ProxySubnetwork:           "10.30.0.0",
+		ProxySubnetworkMask:       "255.255.0.0",
+		TunnelPort:                50103,
+		Mtusize:                   1450,
+		TunNetIPv6:                "fcef::dead:beef",
+		ProxySubnetworkIPv6:       "fc00::",
+		ProxySubnetworkIPv6Prefix: 7,
 	}
-	return NewCustom(tunconfig)
+
+	jsonparser := json.NewDecoder(cfg)
+	if err = jsonparser.Decode(&defaultconfig); err != nil {
+		logger.ErrorLogger().Println("error parsing tuncfg.json", err)
+	}
+
+	logger.InfoLogger().Printf("Utilizing config: %v", defaultconfig)
+	return NewCustom(defaultconfig)
 }
 
 // create a  new GoProxyTunnel with a custom configuration
@@ -88,11 +60,11 @@ func NewCustom(configuration Configuration) GoProxyTunnel {
 		tunwrite:         sync.RWMutex{},
 		incomingChannel:  make(chan incomingMessage, 1000),
 		outgoingChannel:  make(chan outgoingMessage, 1000),
-		mtusize:          configuration.Mtusize,
+		mtusize:          strconv.Itoa(configuration.Mtusize),
 		randseed:         rand.New(rand.NewSource(42)),
 	}
 
-	//parse configuration file
+	// parse configuration file
 	tunconfig := configuration
 	proxy.HostTUNDeviceName = tunconfig.HostTUNDeviceName
 	proxy.ProxyIpSubnetwork = net.IPNet{
@@ -107,10 +79,10 @@ func NewCustom(configuration Configuration) GoProxyTunnel {
 		Mask: net.CIDRMask(tunconfig.ProxySubnetworkIPv6Prefix, 128),
 	}
 	proxy.tunNetIPv6 = tunconfig.TunNetIPv6
-	//create the TUN device
+	// create the TUN device
 	proxy.createTun()
 
-	//set local ip
+	// set local ip
 	ipstring, _ := network.GetLocalIPandIface()
 	proxy.localIP = net.ParseIP(ipstring)
 
@@ -227,4 +199,28 @@ func (proxy *GoProxyTunnel) createTun() {
 	proxy.HostTUNDeviceName = ifce.Name()
 	proxy.ifce = ifce
 	proxy.listenConnection = lstnConn
+}
+
+// Configuration implements Stringer interface
+func (c *Configuration) String() string {
+	return fmt.Sprintf(
+		"HostTUNDeviceName: %s\n"+
+			"TunnelIP: %s\n"+
+			"ProxySubnetwork: %s\n"+
+			"ProxySubnetworkMask: %s\n"+
+			"TunnelPort: %d\n"+
+			"MTUSize: %d\n"+
+			"TunNetIPv6: %s\n"+
+			"ProxySubnetworkIPv6: %s\n"+
+			"ProxySubnetworkIPv6Prefix: %d\n",
+		c.HostTUNDeviceName,
+		c.TunNetIP,
+		c.ProxySubnetwork,
+		c.ProxySubnetworkMask,
+		c.TunnelPort,
+		c.Mtusize,
+		c.TunNetIPv6,
+		c.ProxySubnetworkIPv6,
+		c.ProxySubnetworkIPv6Prefix,
+	)
 }
