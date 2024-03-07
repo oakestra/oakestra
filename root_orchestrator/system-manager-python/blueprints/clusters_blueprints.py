@@ -4,6 +4,7 @@ from flask.views import MethodView
 from flask_smorest import Blueprint
 from rasclient import cluster_operations
 from services.instance_management import update_job_status
+from utils.network import sanitize
 
 clustersbp = Blueprint("Clusters", "cluster management", url_prefix="/api/clusters")
 clusterinfo = Blueprint("Clusterinfo", "cluster informations", url_prefix="/api/information")
@@ -79,6 +80,7 @@ class ClusterController(MethodView):
             )
             if result is None:
                 # cluster has outdated jobs, ask to undeploy
-                cluster_request_to_delete_job_by_ip(j.get("system_job_id"), -1, request.remote_addr)
+                addr = sanitize(request.remote_addr)
+                cluster_request_to_delete_job_by_ip(j.get("system_job_id"), -1, addr)
 
         return "ok"
