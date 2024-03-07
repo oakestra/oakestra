@@ -2,9 +2,9 @@ import json
 import unittest
 from unittest.mock import patch
 
-from api.v1.apps_blueprint import applicationblp  # noqa: E402 F401
+from api.v1.apps_blueprint import applicationblp
 from bson import ObjectId
-from flask import Flask  # noqa: E402
+from flask import Flask
 
 # Add the parent directory to sys.path
 
