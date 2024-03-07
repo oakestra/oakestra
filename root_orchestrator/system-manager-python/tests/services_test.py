@@ -1,5 +1,4 @@
 import copy
-import importlib
 import sys
 import unittest
 from unittest.mock import ANY, MagicMock
@@ -13,10 +12,9 @@ sys.modules["ext_requests.net_plugin_requests"] = unittest.mock.Mock()
 net_plugin = sys.modules["ext_requests.net_plugin_requests"]
 net_plugin.net_inform_service_deploy = MagicMock()
 
-# Note:
-# We need to run the code above before importing the following, otherwise errors occur.
-# We could simply use normal imports and it will work, but this violates the PEP8 code style.
-sm = importlib.import_module("services.service_management")
+# we ignore E402 because we need to import the service_management module after the mock
+from services import service_management as sm  # noqa: E402
+
 create_services_of_app = sm.create_services_of_app
 delete_service = sm.delete_service
 generate_db_structure = sm.generate_db_structure
