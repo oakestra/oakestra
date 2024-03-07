@@ -18,9 +18,11 @@ func TestTableInsertSuccessfull(t *testing.T) {
 		Nodeip:           net.ParseIP("10.30.0.1"),
 		Nodeport:         1003,
 		Nsip:             net.ParseIP("10.18.0.1"),
+		Nsipv6:           net.ParseIP("fc00::1"),
 		ServiceIP: []ServiceIP{{
-			IpType:  RoundRobin,
-			Address: net.ParseIP("10.30.1.1"),
+			IpType:     RoundRobin,
+			Address:    net.ParseIP("10.30.1.1"),
+			Address_v6: net.ParseIP("fdff:2000::1"),
 		}},
 	}
 
@@ -46,9 +48,11 @@ func TestTableInsertError(t *testing.T) {
 		Nodeip:           nil,
 		Nodeport:         1003,
 		Nsip:             net.ParseIP("10.18.0.1"),
+		Nsipv6:           net.ParseIP("fc00::1"),
 		ServiceIP: []ServiceIP{{
-			IpType:  RoundRobin,
-			Address: net.ParseIP("10.30.1.1"),
+			IpType:     RoundRobin,
+			Address:    net.ParseIP("10.30.1.1"),
+			Address_v6: net.ParseIP("fdff:2000::1"),
 		}},
 	}
 
@@ -70,15 +74,49 @@ func TestTableDeleteOne(t *testing.T) {
 		Nodeip:           net.ParseIP("10.30.0.1"),
 		Nodeport:         1003,
 		Nsip:             net.ParseIP("10.18.0.1"),
+		Nsipv6:           net.ParseIP("fc00::1"),
 		ServiceIP: []ServiceIP{{
-			IpType:  RoundRobin,
-			Address: net.ParseIP("10.30.1.1"),
+			IpType:     RoundRobin,
+			Address:    net.ParseIP("10.30.1.1"),
+			Address_v6: net.ParseIP("fdff:2000::1"),
 		}},
 	}
 
 	_ = table.Add(entry)
 
 	err := table.RemoveByNsip(net.ParseIP("10.18.0.1"))
+	if err != nil {
+		t.Error("Error during deletion")
+	}
+
+	if len(table.translationTable) > 0 {
+		t.Error("Table size should be zero")
+	}
+}
+
+func TestTableDeleteOne_v6(t *testing.T) {
+	table := NewTableManager()
+	entry := TableEntry{
+		Appname:          "a1",
+		Appns:            "a1",
+		Servicename:      "a2",
+		Servicenamespace: "a2",
+		Instancenumber:   0,
+		Cluster:          0,
+		Nodeip:           net.ParseIP("10.30.0.1"),
+		Nodeport:         1003,
+		Nsip:             net.ParseIP("10.18.0.1"),
+		Nsipv6:           net.ParseIP("fc00::1"),
+		ServiceIP: []ServiceIP{{
+			IpType:     RoundRobin,
+			Address:    net.ParseIP("10.30.1.1"),
+			Address_v6: net.ParseIP("fdff:2000::1"),
+		}},
+	}
+
+	_ = table.Add(entry)
+
+	err := table.RemoveByNsip(net.ParseIP("fc00::1"))
 	if err != nil {
 		t.Error("Error during deletion")
 	}
@@ -100,9 +138,11 @@ func TestTableDeleteMany(t *testing.T) {
 		Nodeip:           net.ParseIP("10.30.0.1"),
 		Nodeport:         1003,
 		Nsip:             net.ParseIP("10.18.0.1"),
+		Nsipv6:           net.ParseIP("fc00::1"),
 		ServiceIP: []ServiceIP{{
-			IpType:  RoundRobin,
-			Address: net.ParseIP("10.30.1.1"),
+			IpType:     RoundRobin,
+			Address:    net.ParseIP("10.30.1.1"),
+			Address_v6: net.ParseIP("fdff:2000::1"),
 		}},
 	}
 	entry2 := TableEntry{
@@ -115,9 +155,11 @@ func TestTableDeleteMany(t *testing.T) {
 		Nodeip:           net.ParseIP("10.30.0.1"),
 		Nodeport:         1003,
 		Nsip:             net.ParseIP("10.18.21.1"),
+		Nsipv6:           net.ParseIP("fc00::211"),
 		ServiceIP: []ServiceIP{{
-			IpType:  RoundRobin,
-			Address: net.ParseIP("10.30.1.1"),
+			IpType:     RoundRobin,
+			Address:    net.ParseIP("10.30.1.1"),
+			Address_v6: net.ParseIP("fdff:2000::1"),
 		}},
 	}
 
@@ -125,6 +167,60 @@ func TestTableDeleteMany(t *testing.T) {
 	_ = table.Add(entry2)
 
 	err := table.RemoveByNsip(net.ParseIP("10.18.21.1"))
+	if err != nil {
+		t.Error("Error during deletion")
+	}
+
+	if len(table.translationTable) > 1 {
+		t.Error("Table size should be 1")
+	}
+
+	if table.translationTable[0].Appname != "a1" {
+		t.Error("Removed the wrong entry")
+	}
+}
+
+func TestTableDeleteMany_v6(t *testing.T) {
+	table := NewTableManager()
+	entry1 := TableEntry{
+		Appname:          "a1",
+		Appns:            "a1",
+		Servicename:      "a2",
+		Servicenamespace: "a2",
+		Instancenumber:   0,
+		Cluster:          0,
+		Nodeip:           net.ParseIP("10.30.0.1"),
+		Nodeport:         1003,
+		Nsip:             net.ParseIP("10.18.0.1"),
+		Nsipv6:           net.ParseIP("fc00::1"),
+		ServiceIP: []ServiceIP{{
+			IpType:     RoundRobin,
+			Address:    net.ParseIP("10.30.1.1"),
+			Address_v6: net.ParseIP("fdff:2000::1"),
+		}},
+	}
+	entry2 := TableEntry{
+		Appname:          "a2",
+		Appns:            "a2",
+		Servicename:      "a3",
+		Servicenamespace: "a3",
+		Instancenumber:   0,
+		Cluster:          0,
+		Nodeip:           net.ParseIP("10.30.0.1"),
+		Nodeport:         1003,
+		Nsip:             net.ParseIP("10.18.21.1"),
+		Nsipv6:           net.ParseIP("fc00::211"),
+		ServiceIP: []ServiceIP{{
+			IpType:     RoundRobin,
+			Address:    net.ParseIP("10.30.1.1"),
+			Address_v6: net.ParseIP("fdff:2000::1"),
+		}},
+	}
+
+	_ = table.Add(entry1)
+	_ = table.Add(entry2)
+
+	err := table.RemoveByNsip(net.ParseIP("fc00::211"))
 	if err != nil {
 		t.Error("Error during deletion")
 	}
@@ -151,9 +247,11 @@ func TestTableDeleteManyInstances_1(t *testing.T) {
 		Nodeip:           net.ParseIP("10.30.0.1"),
 		Nodeport:         1003,
 		Nsip:             net.ParseIP("10.18.0.1"),
+		Nsipv6:           net.ParseIP("fc00::1"),
 		ServiceIP: []ServiceIP{{
-			IpType:  RoundRobin,
-			Address: net.ParseIP("10.30.1.1"),
+			IpType:     RoundRobin,
+			Address:    net.ParseIP("10.30.1.1"),
+			Address_v6: net.ParseIP("fdff:2000::1"),
 		}},
 	}
 	entry2 := TableEntry{
@@ -167,9 +265,11 @@ func TestTableDeleteManyInstances_1(t *testing.T) {
 		Nodeip:           net.ParseIP("10.30.0.1"),
 		Nodeport:         1003,
 		Nsip:             net.ParseIP("10.18.0.2"),
+		Nsipv6:           net.ParseIP("fc00::2"),
 		ServiceIP: []ServiceIP{{
-			IpType:  RoundRobin,
-			Address: net.ParseIP("10.30.1.2"),
+			IpType:     RoundRobin,
+			Address:    net.ParseIP("10.30.1.2"),
+			Address_v6: net.ParseIP("fdff:2000::2"),
 		}},
 	}
 
@@ -184,9 +284,11 @@ func TestTableDeleteManyInstances_1(t *testing.T) {
 		Nodeip:           net.ParseIP("10.30.0.1"),
 		Nodeport:         1003,
 		Nsip:             net.ParseIP("10.18.0.3"),
+		Nsipv6:           net.ParseIP("fc00::3"),
 		ServiceIP: []ServiceIP{{
-			IpType:  RoundRobin,
-			Address: net.ParseIP("10.30.1.3"),
+			IpType:     RoundRobin,
+			Address:    net.ParseIP("10.30.1.3"),
+			Address_v6: net.ParseIP("fdff:2000::3"),
 		}},
 	}
 
@@ -221,9 +323,11 @@ func TestTableDeleteManyInstances_2(t *testing.T) {
 		Nodeip:           net.ParseIP("10.30.0.1"),
 		Nodeport:         1003,
 		Nsip:             net.ParseIP("10.18.0.1"),
+		Nsipv6:           net.ParseIP("fc00::1"),
 		ServiceIP: []ServiceIP{{
-			IpType:  RoundRobin,
-			Address: net.ParseIP("10.30.1.1"),
+			IpType:     RoundRobin,
+			Address:    net.ParseIP("10.30.1.1"),
+			Address_v6: net.ParseIP("fdff:2000:1"),
 		}},
 	}
 	entry2 := TableEntry{
@@ -237,9 +341,11 @@ func TestTableDeleteManyInstances_2(t *testing.T) {
 		Nodeip:           net.ParseIP("10.30.0.1"),
 		Nodeport:         1003,
 		Nsip:             net.ParseIP("10.18.0.2"),
+		Nsipv6:           net.ParseIP("fc00::2"),
 		ServiceIP: []ServiceIP{{
-			IpType:  RoundRobin,
-			Address: net.ParseIP("10.30.1.2"),
+			IpType:     RoundRobin,
+			Address:    net.ParseIP("10.30.1.2"),
+			Address_v6: net.ParseIP("fdff:2000:2"),
 		}},
 	}
 

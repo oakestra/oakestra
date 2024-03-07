@@ -9,6 +9,7 @@ def deploy_request(deployment_descriptor=None, system_job_id=None):
     s_ip = [{
         "IpType": 'RR',
         "Address": new_job_rr_address(deployment_descriptor),
+        "Address_v6": new_job_rr_address_v6(deployment_descriptor)
     }]
     job_id = mongo_insert_job(
         {

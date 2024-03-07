@@ -37,8 +37,11 @@ def _get_fake_cluster():
 
 def test_deploy_request():
     mongodb_client.mongo_get_service_address_from_cache = MagicMock(return_value=None)
+    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(return_value=None) 
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[10, 30, 0, 253])
+    mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(return_value=[253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1])
     mongodb_client.mongo_update_next_service_ip = MagicMock()
+    mongodb_client.mongo_update_next_service_ip_v6 = MagicMock()
     mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
     mongodb_client.mongo_create_job_instance = MagicMock()
 
@@ -52,14 +55,18 @@ def test_deploy_request():
         instance={
             "instance_number": 0,
             "instance_ip": "10.30.0.253",
+            "instance_ip_v6": "fdff::1:101",
             "cluster_id": "abc"
         }
     )
 
 def test_deploy_request_2_instances():
     mongodb_client.mongo_get_service_address_from_cache = MagicMock(return_value=None)
+    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[10, 30, 0, 253])
+    mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(return_value=[253, 255, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255])
     mongodb_client.mongo_update_next_service_ip = MagicMock()
+    mongodb_client.mongo_update_next_service_ip_v6 = MagicMock()
     mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
     mongodb_client.mongo_create_job_instance = MagicMock()
 
@@ -73,12 +80,17 @@ def test_deploy_request_2_instances():
         instance={
             "instance_number": 0,
             "instance_ip": "10.30.0.253",
+            "instance_ip_v6": "fdff:ff:ffff:ffff:ffff:ffff:ffff:ffff",
             "cluster_id": "abc"
         }
     )
 
     mongodb_client.mongo_update_next_service_ip.assert_called_with([10, 30, 1, 0])
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[10, 30, 1, 0])
+    
+    mongodb_client.mongo_update_next_service_ip_v6.assert_called_with([253, 255, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(return_value=[253, 255, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    
     res, code = operations.instances_management.deploy_request("123", 1, "abc")
 
     assert code == 200
@@ -89,12 +101,17 @@ def test_deploy_request_2_instances():
         instance={
             "instance_number": 1,
             "instance_ip": "10.30.1.0",
+            "instance_ip_v6": "fdff:800::",
             "cluster_id": "abc"
         }
     )
 
     mongodb_client.mongo_update_next_service_ip.assert_called_with([10, 30, 1, 1])
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[10, 30, 1, 1])
+    
+    mongodb_client.mongo_update_next_service_ip_v6.assert_called_with([253, 255, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
+    mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(return_value=[253, 255, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
+     
     res, code = operations.instances_management.deploy_request("123", 2, "abc")
 
     assert code == 200
@@ -105,6 +122,7 @@ def test_deploy_request_2_instances():
         instance={
             "instance_number": 2,
             "instance_ip": "10.30.1.1",
+            "instance_ip_v6": "fdff:800::1",
             "cluster_id": "abc"
         }
     )
@@ -118,6 +136,7 @@ def test_deploy_completed_cluster_notification():
     instances = [{
         "instance_number": 0,
         "namespace_ip": "0.0.0.0",
+        "namespace_ip_v6": "::",
         "host_ip": "0.0.0.0",
         "host_port": "5000"
     }]

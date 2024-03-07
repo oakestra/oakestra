@@ -19,6 +19,7 @@ type undeployRequest struct {
 type DeployResponse struct {
 	ServiceName string `json:"serviceName"`
 	NsAddress   string `json:"nsAddress"`
+	NsAddressv6 string `json:"nsAddressv6"`
 }
 
 var AvailableRuntimes = make(map[string]func() ManagerInterface)

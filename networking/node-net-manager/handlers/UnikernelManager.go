@@ -85,6 +85,7 @@ func (m *UnikernelManager) CreateUnikernelNamesapce(writer http.ResponseWriter, 
 	response := DeployResponse{
 		ServiceName: requestStruct.ServiceName,
 		NsAddress:   result.IP.String(),
+		NsAddressv6: result.IPv6.String(),
 	}
 
 	logger.InfoLogger().Println("Response to /container/deploy: ", response)

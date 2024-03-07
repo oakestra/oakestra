@@ -7,6 +7,12 @@ from network.utils import sanitize
 from operations import instances_management, cluster_management
 from operations import service_management
 from net_logging import configure_logging
+from network import routes_interests, subnetwork_management
+from network.tablequery import *
+from network import subnetwork_management, routes_interests
+from operations import instances_management, cluster_management
+from operations import service_management
+from net_logging import configure_logging
 import os
 import socket
 
@@ -82,6 +88,7 @@ def update_instance_local_deployment_addresses():
         'instances:[{
             'instance_number':int
             'namespace_ip':string
+            'namespace_ip_v6':string
             'host_ip':string
             'host_port':string
         }]
@@ -214,7 +221,8 @@ def subnet_request():
     Returns a new subnetwork address
     """
     addr = subnetwork_management.new_subnetwork_addr()
-    return {"subnet_addr": addr}
+    addrv6 = subnetwork_management.new_subnetwork_addr_v6()
+    return {'subnet_addr': addr, 'subnet_addr_v6': addrv6}
 
 
 if __name__ == "__main__":

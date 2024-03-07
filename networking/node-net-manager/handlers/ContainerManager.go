@@ -95,6 +95,7 @@ func (m *ContainerManager) containerDeploy(writer http.ResponseWriter, request *
 	response := DeployResponse{
 		ServiceName: deployTask.ServiceName,
 		NsAddress:   result.IP.String(),
+		NsAddressv6: result.IPv6.String(),
 	}
 
 	logger.InfoLogger().Println("Response to /container/deploy: ", response)
