@@ -9,7 +9,7 @@ from marshmallow import INCLUDE, Schema, fields
 applicationblp = Blueprint(
     "Application operations",
     "applications",
-    url_prefix="/api/application",
+    url_prefix="/api/v1/application",
     description="Operations on single application",
 )
 
