@@ -79,11 +79,11 @@ def create_gateway_service(current_user, sla):
                     "microservice": microservice["microserviceID"],
                     "gateways": {
                         "v4": "{}:{}".format(
-                            gateway.get("instance_list")[0].get("host_ip"),
+                            gateway.get("gateway_ipv4"),
                             microservice["exposed_port"],
                         ),
                         "v6": "[{}]:{}".format(
-                            gateway.get("instance_list")[0].get("host_ip_v6"),
+                            gateway.get("gateway_ipv6"),
                             microservice["exposed_port"],
                         ),
                     },

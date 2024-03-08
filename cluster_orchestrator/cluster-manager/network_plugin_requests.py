@@ -36,7 +36,7 @@ def network_notify_gateway_deploy(gateway_node_data):
         resp = requests.post(
             SERVICE_MANAGER_ADDR + "/api/net/gateway/deploy", json=gateway_node_data
         )
-        return resp.json(), resp.status_code
+        return "ok", resp.status_code
     except requests.exceptions.RequestException as e:
         print(e)
         print("Calling Service Manager /api/net/gateway/deploy not successul")

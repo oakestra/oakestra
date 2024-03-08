@@ -32,8 +32,6 @@ def deploy_gateway(service):
     # get a deployed gateway
     # able to expose the requested service on the desired port
     gateway = mongo_find_available_gateway_by_port(service["exposed_port"])
-    if gateway is not None:
-        del gateway["_id"]
 
     if gateway is None:
         # if no gateway available, deploy a new one
@@ -43,6 +41,8 @@ def deploy_gateway(service):
         if gateway is None:
             mongo_delete_gateway_service(service_id=service["microserviceID"])
             raise Exception("no gateways available")
+
+    del gateway["_id"]
 
     # update its firewall rules
     deploy_gateway_service_exposure(gateway.get("gateway_id"), service)
@@ -61,7 +61,7 @@ def deploy_gateway_process_on_cluster(cluster_id):
     gateway_node_data = prepare_gateway_node_entry(idle_node, cluster_id)
 
     # notify cluster service-manager
-    deployed_gateway_job, status = network_notify_gateway_deploy(gateway_node_data)
+    _, status = network_notify_gateway_deploy(gateway_node_data)
     if status != 200:
         return None
 
@@ -69,7 +69,7 @@ def deploy_gateway_process_on_cluster(cluster_id):
     # and add to active gateways
     mongo_add_gateway_node(gateway_node_data)
 
-    return deployed_gateway_job
+    return gateway_node_data
 
 
 def deploy_gateway_service_exposure(gateway_id, service):
