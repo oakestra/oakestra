@@ -2,7 +2,6 @@ import logging
 from re import search
 
 from ext_requests.cluster_requests import cluster_request_to_deploy_gateway
-from ext_requests.net_plugin_requests import net_get_all_gateways
 from ext_requests.gateway_db import (
     mongo_add_gateway_service,
     mongo_get_clusters_of_active_service_instances,
@@ -10,6 +9,7 @@ from ext_requests.gateway_db import (
     mongo_get_service_instances_by_id,
     mongo_remove_gateway_service,
 )
+from ext_requests.net_plugin_requests import net_get_all_gateways
 from sla.versioned_sla_parser import parse_sla_json
 
 
@@ -54,7 +54,7 @@ def create_gateway_service(current_user, sla):
         # add the service to be exposed to collection of exposed services
         logging.log(logging.INFO, microservice)
         mongo_add_gateway_service(microservice)
-        del microservice["_id"]
+        microservice.pop("_id", None)
 
         # fetch the clusters of running target service instances
         clusters = mongo_get_clusters_of_active_service_instances(microservice["microserviceID"])

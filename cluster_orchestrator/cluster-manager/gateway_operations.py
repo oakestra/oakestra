@@ -23,11 +23,11 @@ def deploy_gateway(service):
     """
 
     cluster_id = service["cluster_id"]
-    del service["cluster_id"]
+    service.pop("cluster_id", None)
 
     # add service to collection of exposed services
     mongo_add_gateway_service(service)
-    del service["_id"]
+    service.pop("_id", None)
 
     # get a deployed gateway
     # able to expose the requested service on the desired port
@@ -42,7 +42,7 @@ def deploy_gateway(service):
             mongo_delete_gateway_service(service_id=service["microserviceID"])
             raise Exception("no gateways available")
 
-    del gateway["_id"]
+    gateway.pop("_id", None)
 
     # update its firewall rules
     deploy_gateway_service_exposure(gateway.get("gateway_id"), service)
@@ -68,6 +68,7 @@ def deploy_gateway_process_on_cluster(cluster_id):
     # remove netmanager entry from table of netmanagers
     # and add to active gateways
     mongo_add_gateway_node(gateway_node_data)
+    gateway_node_data.pop("_id", None)
 
     return gateway_node_data
 

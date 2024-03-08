@@ -8,8 +8,8 @@ from roles.securityUtils import Role, get_jwt_auth_identity, jwt_auth_required, 
 from services.gateway_management import (
     create_gateway_service,
     delete_service_gateway,
-    get_service_gateway,
     get_all_gateways,
+    get_service_gateway,
 )
 from sla.schema import gateway_schema
 
