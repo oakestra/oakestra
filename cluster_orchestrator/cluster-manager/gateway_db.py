@@ -41,6 +41,10 @@ def mongo_get_service_instance_node_information(service_id):
     return db.mongo_jobs.db.jobs.distinct("instance_list.worker_id", {"microserviceID": service_id})
 
 
+def mongo_check_if_host_is_gateway(hostname):
+    return db.mongo_gateway_nodes.find_one({"host": hostname})
+
+
 # ............................... #
 #   Gateway Service operations    #
 # ............................... #

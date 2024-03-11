@@ -40,14 +40,18 @@ func main() {
 	}
 	// hadshake with the cluster orchestrator to get mqtt port and node id
 	handshakeResult := clusterHandshake()
+	if handshakeResult.NodeId == "node is a gateway" {
+		logger.ErrorLogger().Fatalln("This worker is already working as a gateway. Exiting.")
+		return
+	}
 
 	// enable overlay network if required
 	if *overlayNetwork > 0 {
+		model.EnableOverlay(*overlayNetwork)
 		err := requests.RegisterSelfToNetworkComponent()
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Unable to register to NetManager: %v", err)
 		}
-		model.EnableOverlay(*overlayNetwork)
 	}
 
 	// binding the node MQTT client

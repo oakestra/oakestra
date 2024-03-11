@@ -18,6 +18,7 @@ from mongodb_client import (
     mongo_update_job_status,
     mongo_upsert_node,
 )
+from gateway_db import mongo_check_if_host_is_gateway
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy
 from my_prometheus_client import prometheus_init_gauge_metrics
 from network_plugin_requests import network_notify_deployment
@@ -191,6 +192,11 @@ def http_node_registration():
     data = request.json  # get POST body
     data.get("token")  # registration_token
     # TODO: check and generate tokens
+
+    # check if node is registered as gateway
+    host_is_gateway = mongo_check_if_host_is_gateway(data.get("host"))
+    if host_is_gateway is not None:
+        return {"id": "node is a gateway"}, 403
     client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": data})
     response = {
         "id": str(client_id),
