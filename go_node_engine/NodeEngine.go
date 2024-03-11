@@ -14,21 +14,23 @@ import (
 	"time"
 )
 
-var clusterAddress = flag.String("a", "localhost", "Address of the cluster orchestrator without port")
-var clusterPort = flag.String("p", "10000", "Port of the cluster orchestrator")
-var overlayNetwork = flag.Int("n", -1, "Port of the NetManager component, if any. This enables the overlay network across nodes")
-var UnikernelSupport = flag.Bool("u", false, "Set to enable Unikernel support")
-var LogDirectory = flag.String("logs", "/tmp", "Directory for application's logs")
+var (
+	clusterAddress   = flag.String("a", "localhost", "Address of the cluster orchestrator without port")
+	clusterPort      = flag.String("p", "10000", "Port of the cluster orchestrator")
+	overlayNetwork   = flag.Int("n", -1, "Port of the NetManager component, if any. This enables the overlay network across nodes")
+	UnikernelSupport = flag.Bool("u", false, "Set to enable Unikernel support")
+	LogDirectory     = flag.String("logs", "/tmp", "Directory for application's logs")
+)
 
 const MONITORING_CYCLE = time.Second * 2
 
 func main() {
 	flag.Parse()
 
-	//set log directory
+	// set log directory
 	model.GetNodeInfo().SetLogDirectory(*LogDirectory)
 
-	//connect to container runtime
+	// connect to container runtime
 	runtime := virtualization.GetContainerdClient()
 	defer runtime.StopContainerdClient()
 
@@ -36,24 +38,24 @@ func main() {
 		unikernelRuntime := virtualization.GetUnikernelRuntime()
 		defer unikernelRuntime.StopUnikernelRuntime()
 	}
-	//hadshake with the cluster orchestrator to get mqtt port and node id
+	// hadshake with the cluster orchestrator to get mqtt port and node id
 	handshakeResult := clusterHandshake()
 
-	//enable overlay network if required
+	// enable overlay network if required
 	if *overlayNetwork > 0 {
-		model.EnableOverlay(*overlayNetwork)
 		err := requests.RegisterSelfToNetworkComponent()
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Unable to register to NetManager: %v", err)
 		}
+		model.EnableOverlay(*overlayNetwork)
 	}
 
-	//binding the node MQTT client
+	// binding the node MQTT client
 	mqtt.InitMqtt(handshakeResult.NodeId, *clusterAddress, handshakeResult.MqttPort)
 
-	//starting node status background job.
+	// starting node status background job.
 	jobs.NodeStatusUpdater(MONITORING_CYCLE, mqtt.ReportNodeInformation)
-	//starting container resources background monitor.
+	// starting container resources background monitor.
 	jobs.StartServicesMonitoring(MONITORING_CYCLE, mqtt.ReportServiceResources)
 
 	// catch SIGETRM or SIGINTERRUPT
