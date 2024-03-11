@@ -13,7 +13,7 @@ services:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:v0.4.204
 
   resource_abstractor:
-    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.300
+    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.301
 
   # Cloud Scheduler
   cloud_scheduler:
