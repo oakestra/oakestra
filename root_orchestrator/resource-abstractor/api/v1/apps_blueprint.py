@@ -3,7 +3,6 @@ import json
 from db import apps_db
 from flask import request
 from flask.views import MethodView
-from flask_restful import Resource
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
 
@@ -22,7 +21,7 @@ class ApplicationFilterSchema(Schema):
 
 
 @applicationblp.route("/")
-class ApplicationsController(Resource):
+class ApplicationsController(MethodView):
     @applicationblp.arguments(ApplicationFilterSchema, location="query")
     def get(self, query={}):
         return json.dumps(list(apps_db.find_apps(query)), default=str)
