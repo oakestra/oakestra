@@ -40,10 +40,6 @@ func main() {
 	}
 	// hadshake with the cluster orchestrator to get mqtt port and node id
 	handshakeResult := clusterHandshake()
-	if handshakeResult.NodeId == "node is a gateway" {
-		logger.ErrorLogger().Fatalln("This worker is already working as a gateway. Exiting.")
-		return
-	}
 
 	// enable overlay network if required
 	if *overlayNetwork > 0 {

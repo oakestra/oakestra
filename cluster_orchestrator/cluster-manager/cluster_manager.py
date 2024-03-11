@@ -12,13 +12,13 @@ from cluster_scheduler_requests import scheduler_request_status
 from cm_logging import configure_logging
 from flask import Flask, request
 from flask_socketio import SocketIO, emit
+from gateway_db import mongo_check_if_host_is_gateway
 from mongodb_client import (
     mongo_find_job_by_system_id,
     mongo_init,
     mongo_update_job_status,
     mongo_upsert_node,
 )
-from gateway_db import mongo_check_if_host_is_gateway
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy
 from my_prometheus_client import prometheus_init_gauge_metrics
 from network_plugin_requests import network_notify_deployment
@@ -196,7 +196,7 @@ def http_node_registration():
     # check if node is registered as gateway
     host_is_gateway = mongo_check_if_host_is_gateway(data.get("host"))
     if host_is_gateway is not None:
-        return {"id": "node is a gateway"}, 403
+        return "", 403
     client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": data})
     response = {
         "id": str(client_id),
