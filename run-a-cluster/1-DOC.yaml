@@ -53,7 +53,7 @@ services:
 
   # Cluster Manager
   root_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/root-service-manager:alpha-v0.4.301
+    image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
     container_name: root_service_manager
     hostname: root_service_manager
     network_mode: "host"
@@ -83,7 +83,7 @@ services:
     network_mode: "host"
 
   resource_abstractor:
-    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:latest
+    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.301
     container_name: resource_abstractor
     hostname: resource_abstractor
     network_mode: "host"
