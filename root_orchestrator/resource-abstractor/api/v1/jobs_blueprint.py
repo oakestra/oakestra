@@ -1,28 +1,15 @@
+import json
+
 from bson.objectid import ObjectId
 from db import jobs_db
 from db.jobs_helper import build_filter
+from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint
-from marshmallow import INCLUDE, Schema, fields
+from marshmallow import Schema, fields
 from werkzeug import exceptions
 
 jobsblp = Blueprint("Jobs Api", "jobs_api", url_prefix="/api/v1/jobs")
-
-
-class JobSchema(Schema):
-    _id = fields.String()
-    system_job_id = fields.String()
-    job_name = fields.String()
-    service_name = fields.String()
-    code = fields.String()
-    cmd = fields.List(fields.String())
-    status = fields.String()
-    replicas = fields.Integer()
-    instance_list = fields.List(fields.Dict())
-    service_ip_list = fields.List(fields.Dict())
-    last_modified_timestamp = fields.Float()
-    cluster = fields.String()
-    status = fields.String()
 
 
 class JobFilterSchema(Schema):
@@ -31,25 +18,21 @@ class JobFilterSchema(Schema):
 
 @jobsblp.route("/")
 class AllJobsController(MethodView):
-    @jobsblp.response(200, JobSchema(many=True), content_type="application/json")
     def get(self):
-        return list(jobs_db.find_all_jobs())
+        return json.dumps(list(jobs_db.find_jobs()), default=str)
 
-    @jobsblp.arguments(JobSchema(unknown=INCLUDE), location="json")
-    @jobsblp.response(201, JobSchema, content_type="application/json")
-    def post(self, data, **kwargs):
-        return jobs_db.create_job(data)
+    def post(self, *args, **kwargs):
+        data = request.json
+        return json.dumps(jobs_db.create_job(data), default=str)
 
-    @jobsblp.arguments(JobSchema(unknown=INCLUDE), location="json")
-    @jobsblp.response(200, JobSchema, content_type="application/json")
-    def put(self, data, **kwargs):
-        return jobs_db.create_update_job(data)
+    def put(self, *args, **kwargs):
+        data = request.json
+        return json.dumps(jobs_db.create_update_job(data), default=str)
 
 
 @jobsblp.route("/<jobId>")
 class JobController(MethodView):
     @jobsblp.arguments(JobFilterSchema, location="query")
-    @jobsblp.response(200, JobSchema, content_type="application/json")
     def get(self, query, **kwargs):
         job_id = kwargs.get("jobId")
         if ObjectId.is_valid(job_id) is False:
@@ -60,33 +43,32 @@ class JobController(MethodView):
         if job is None:
             raise exceptions.NotFound()
 
-        return job
+        return json.dumps(job, default=str)
 
-    @jobsblp.arguments(JobSchema(unknown=INCLUDE), location="json")
-    @jobsblp.response(200, JobSchema, content_type="application/json")
-    def patch(self, data, **kwargs):
+    def patch(self, *args, **kwargs):
+        data = request.json
         job_id = kwargs.get("jobId")
 
         if ObjectId.is_valid(job_id) is False:
             raise exceptions.BadRequest()
 
-        return jobs_db.update_job(job_id, data)
+        return json.dumps(jobs_db.update_job(job_id, data), default=str)
 
-    def delete(self, jobid, *args, **kwargs):
-        if ObjectId.is_valid(jobid) is False:
+    def delete(self, *args, **kwargs):
+        job_id = kwargs.get("jobId")
+        if ObjectId.is_valid(job_id) is False:
             raise exceptions.BadRequest()
 
-        return jobs_db.delete_job(jobid)
+        return json.dumps(jobs_db.delete_job(job_id), default=str)
 
 
 @jobsblp.route("/<jobId>/<instanceId>")
 class JobInstanceController(MethodView):
-    @jobsblp.arguments(JobSchema(unknown=INCLUDE), location="json")
-    @jobsblp.response(200, JobSchema, content_type="application/json")
-    def patch(self, data, **kwargs):
+    def patch(self, *args, **kwargs):
+        data = request.json
         job_id = kwargs.get("jobId")
         instance_id = kwargs.get("instanceId")
         if ObjectId.is_valid(job_id) is False:
             raise exceptions.BadRequest()
 
-        return jobs_db.update_job_instance(job_id, instance_id, data)
+        return json.dumps(jobs_db.update_job_instance(job_id, instance_id, data), default=str)

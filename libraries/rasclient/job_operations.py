@@ -8,6 +8,10 @@ def get_jobs(**kwargs):
     return make_request(get, JOBS_API, params=kwargs) or []
 
 
+def get_jobs_of_application(application_id):
+    return make_request(get, JOBS_API, params={"applicationID": application_id}) or []
+
+
 def get_job_by_id(job_id, filter={}):
     request_address = f"{JOBS_API}/{job_id}"
     return make_request(get, request_address, params=filter)

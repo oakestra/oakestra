@@ -26,7 +26,11 @@ def insert_job(microservice):
 
     # job insertion
     new_job = job_operations.create_job(job_content)
-    logging.log(logging.INFO, "MONGODB - job {} inserted".format(str(new_job.get("_id"))))
+    if new_job is None:
+        logging.log(logging.ERROR, f"job not inserted - {job_name}")
+        return None
+
+    logging.log(logging.INFO, "job {} inserted".format(str(new_job.get("_id"))))
     return str(new_job.get("_id"))
 
 
@@ -44,6 +48,10 @@ def create_services_of_app(username, sla, force=False):
         # Insert job into database
         service = generate_db_structure(application, microservice)
         last_service_id = insert_job(service)
+        if last_service_id is None:
+            # TODO: what should be done to previously inserted services?
+            continue
+
         # Insert job into app's services list
         job_operations.update_job(last_service_id, {"microserviceID": last_service_id})
         add_service_to_app(app_id, last_service_id, username)
@@ -86,10 +94,12 @@ def update_service(username, sla, serviceid):
     apps = app_operations.get_user_apps(username)
     for application in apps:
         if serviceid in application["microservices"]:
-            # TODO have entity related logging in resource abstractor
-            logging.log(logging.INFO, "MONGODB - update job...")
+            logging.log(logging.INFO, f"update job - {serviceid}...")
             job = job_operations.update_job(serviceid, sla)
-            logging.log(logging.INFO, "MONGODB - job {} updated")
+            if job is None:
+                logging.log(logging.ERROR, "job not updated")
+                continue
+            logging.log(logging.INFO, "job {} updated")
             return job, 200
     return {"message": "service not found"}, 404
 
@@ -99,7 +109,7 @@ def user_services(appid, username):
     if application is None:
         return {"message": "app not found"}, 404
 
-    return job_operations.get_jobs({"applicationID": appid}), 200
+    return job_operations.get_jobs_of_application(appid), 200
 
 
 def get_service(serviceid, username):
