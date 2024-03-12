@@ -50,7 +50,7 @@ cluster_info_schema = {
 @clustersbp.route("/")
 class ClustersController(MethodView):
     def get(self, *args, **kwargs):
-        return cluster_operations.get_all_clusters()
+        return cluster_operations.get_resources()
 
 
 @clustersbp.route("/active")
