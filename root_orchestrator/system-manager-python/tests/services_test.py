@@ -1,57 +1,70 @@
 import copy
+import os
 import sys
-import unittest
-from unittest.mock import ANY, MagicMock
+from unittest.mock import ANY, MagicMock, Mock, patch
 
 import mongomock as mongomock
 import pymongo
+import pytest
 from ext_requests import apps_db, mongodb_client
-from tests.utils import get_full_random_sla_app
+from rasclient import app_operations
+from testcontainers.compose import DockerCompose
+from tests.utils import get_full_random_sla_app  # noqa: E402
 
-sys.modules["ext_requests.net_plugin_requests"] = unittest.mock.Mock()
+sys.modules["ext_requests.net_plugin_requests"] = Mock()
 net_plugin = sys.modules["ext_requests.net_plugin_requests"]
 net_plugin.net_inform_service_deploy = MagicMock()
 
 # we ignore E402 because we need to import the service_management module after the mock
-from services import service_management as sm  # noqa: E402
+from services.service_management import (  # noqa: E402
+    create_services_of_app,
+    delete_service,
+    generate_db_structure,
+    get_all_services,
+    get_service,
+    update_service,
+    user_services,
+)
 
-create_services_of_app = sm.create_services_of_app
-delete_service = sm.delete_service
-generate_db_structure = sm.generate_db_structure
-get_all_services = sm.get_all_services
-get_service = sm.get_service
-update_service = sm.update_service
-user_services = sm.user_services
+current_dir = os.path.dirname(os.path.abspath(__file__))
 
 
-@mongomock.patch(servers=(("localhost", 10007),))
-def test_create_service_with_app():
-    # SETUP
-    mockdb()
+@pytest.fixture(scope="session")
+def resource_abstractor():
+    with DockerCompose(current_dir) as compose:
+        service_uri = "http://localhost:21011"  # TODO: have it fetched from compose object.
+        compose.wait_for(service_uri)
+        yield service_uri
 
-    sla = get_full_random_sla_app()
-    db_app_mock = copy.deepcopy(sla)
 
-    db_app_mock["applications"][0]["userId"] = "Admin"
-    db_app_mock["applications"][0]["microservices"] = []
-    app_id = apps_db.mongo_add_application(db_app_mock["applications"][0])
-    sla["applications"][0]["applicationID"] = app_id
+def test_create_service_with_app(resource_abstractor):
+    with patch("rasclient.client_helper.RESOURCE_ABSTRACTOR_ADDR", new=str(resource_abstractor)):
+        sla = get_full_random_sla_app()
+        mock_data = copy.deepcopy(sla)
 
-    microservices = sla["applications"][0]["microservices"]
-    last_service = microservices[len(microservices) - 1]
-    last_service = generate_db_structure(db_app_mock["applications"][0], last_service)
+        mock_data["applications"][0]["userId"] = "Admin"
+        mock_data["applications"][0]["microservices"] = []
 
-    # EXEC
-    result, code = create_services_of_app("Admin", sla)
+        created_app = app_operations.create_app("Admin", mock_data["applications"][0])
+        app_id = created_app["applicationID"]
+        sla["applications"][0]["applicationID"] = app_id
 
-    # ASSERT
-    assert code == 200
-    db_app_result = apps_db.mongo_find_app_by_name_and_namespace(
-        sla["applications"][0]["application_name"],
-        sla["applications"][0]["application_namespace"],
-    )
-    net_plugin.net_inform_service_deploy.assert_called_with(last_service, ANY)
-    assert len(db_app_result["microservices"]) == len(sla["applications"][0]["microservices"])
+        microservices = sla["applications"][0]["microservices"]
+        last_service = microservices[len(microservices) - 1]
+        last_service = generate_db_structure(created_app, last_service)
+
+        # EXEC
+        result, code = create_services_of_app("Admin", sla)
+
+        # ASSERT
+        assert code == 200
+        db_app_result = app_operations.get_app_by_name_and_namespace(
+            sla["applications"][0]["application_name"],
+            sla["applications"][0]["application_namespace"],
+            "Admin",
+        )
+        net_plugin.net_inform_service_deploy.assert_called_with(last_service, ANY)
+        assert len(db_app_result["microservices"]) == len(sla["applications"][0]["microservices"])
 
 
 @mongomock.patch(servers=(("localhost", 10007),))
@@ -73,7 +86,6 @@ def test_create_service_without_app():
     assert db_app_result is None
 
 
-@mongomock.patch(servers=(("localhost", 10007),))
 def test_create_invalid_service_name():
     # SETUP
     mockdb()
