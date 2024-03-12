@@ -43,8 +43,7 @@ def create_services_of_app(username, sla, force=False):
             return {"message": "invalid service name or namespace"}, 403
         # Insert job into database
         service = generate_db_structure(application, microservice)
-        last_service = insert_job(service)
-        last_service_id = last_service.get("_id")
+        last_service_id = insert_job(service)
         # Insert job into app's services list
         job_operations.update_job(last_service_id, {"microserviceID": last_service_id})
         add_service_to_app(app_id, last_service_id, username)

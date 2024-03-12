@@ -37,29 +37,26 @@ class AllJobsController(MethodView):
 
     @jobsblp.arguments(JobSchema(unknown=INCLUDE), location="json")
     @jobsblp.response(201, JobSchema, content_type="application/json")
-    def post(self, *args, **kwargs):
-        data = args[0]
-
+    def post(self, data, **kwargs):
         return jobs_db.create_job(data)
 
     @jobsblp.arguments(JobSchema(unknown=INCLUDE), location="json")
-    @jobsblp.response(200, JobSchema(many=True), content_type="application/json")
-    def put(self, *args, **kwargs):
-        data = args[0]
-
+    @jobsblp.response(200, JobSchema, content_type="application/json")
+    def put(self, data, **kwargs):
         return jobs_db.create_update_job(data)
 
 
-@jobsblp.route("/<jobid>")
+@jobsblp.route("/<jobId>")
 class JobController(MethodView):
     @jobsblp.arguments(JobFilterSchema, location="query")
     @jobsblp.response(200, JobSchema, content_type="application/json")
-    def get(self, jobid, query={}):
-        if ObjectId.is_valid(jobid) is False:
+    def get(self, query, **kwargs):
+        job_id = kwargs.get("jobId")
+        if ObjectId.is_valid(job_id) is False:
             raise exceptions.BadRequest()
 
         filter = build_filter(query)
-        job = jobs_db.find_job_by_id(jobid, filter)
+        job = jobs_db.find_job_by_id(job_id, filter)
         if job is None:
             raise exceptions.NotFound()
 
@@ -67,13 +64,13 @@ class JobController(MethodView):
 
     @jobsblp.arguments(JobSchema(unknown=INCLUDE), location="json")
     @jobsblp.response(200, JobSchema, content_type="application/json")
-    def patch(self, jobid, *args, **kwargs):
-        data = args[0]
+    def patch(self, data, **kwargs):
+        job_id = kwargs.get("jobId")
 
-        if ObjectId.is_valid(jobid) is False:
+        if ObjectId.is_valid(job_id) is False:
             raise exceptions.BadRequest()
 
-        return jobs_db.update_job(jobid, data)
+        return jobs_db.update_job(job_id, data)
 
     def delete(self, jobid, *args, **kwargs):
         if ObjectId.is_valid(jobid) is False:
@@ -82,14 +79,14 @@ class JobController(MethodView):
         return jobs_db.delete_job(jobid)
 
 
-@jobsblp.route("/<jobid>/<instance>")
+@jobsblp.route("/<jobId>/<instanceId>")
 class JobInstanceController(MethodView):
     @jobsblp.arguments(JobSchema(unknown=INCLUDE), location="json")
     @jobsblp.response(200, JobSchema, content_type="application/json")
-    def patch(self, jobid, instance, *args, **kwargs):
-        data = args[0]
-
-        if ObjectId.is_valid(jobid) is False:
+    def patch(self, data, **kwargs):
+        job_id = kwargs.get("jobId")
+        instance_id = kwargs.get("instanceId")
+        if ObjectId.is_valid(job_id) is False:
             raise exceptions.BadRequest()
 
-        return jobs_db.update_job_instance(jobid, instance, data)
+        return jobs_db.update_job_instance(job_id, instance_id, data)

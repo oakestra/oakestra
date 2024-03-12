@@ -6,11 +6,11 @@ from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
 
-applicationblp = Blueprint(
-    "Application operations",
+applicationsblp = Blueprint(
+    "Applications operations",
     "applications",
-    url_prefix="/api/v1/application",
-    description="Operations on single application",
+    url_prefix="/api/v1/applications",
+    description="Operations on applications",
 )
 
 
@@ -20,26 +20,27 @@ class ApplicationFilterSchema(Schema):
     userId = fields.String()
 
 
-@applicationblp.route("/")
+@applicationsblp.route("/")
 class ApplicationsController(MethodView):
-    @applicationblp.arguments(ApplicationFilterSchema, location="query")
+    @applicationsblp.arguments(ApplicationFilterSchema, location="query")
     def get(self, query={}):
         return json.dumps(list(apps_db.find_apps(query)), default=str)
 
     def post(self, *args, **kwargs):
         data = request.get_json()
-        return json.dump(apps_db.create_app(data), default=str)
+        return json.dumps(apps_db.create_app(data), default=str)
 
 
-@applicationblp.route("/<appid>")
+@applicationsblp.route("/<appId>")
 class ApplicationController(MethodView):
-    @applicationblp.arguments(ApplicationFilterSchema, location="query")
-    def get(self, appid, query={}):
-        return json.dump(apps_db.find_app_by_id(appid), default=str)
+    @applicationsblp.arguments(ApplicationFilterSchema, location="query")
+    def get(self, query, **kwargs):
+        app_id = kwargs.get("appId")
+        return json.dumps(apps_db.find_app_by_id(app_id, query), default=str)
 
-    def delete(self, appid, *args, **kwargs):
-        return json.dump(apps_db.delete_app(appid), default=str)
+    def delete(self, appId, *args, **kwargs):
+        return json.dumps(apps_db.delete_app(appId), default=str)
 
-    def patch(self, appid, *args, **kwargs):
+    def patch(self, appId, *args, **kwargs):
         data = request.get_json()
-        return json.dump(apps_db.update_app(appid, data), default=str)
+        return json.dumps(apps_db.update_app(appId, data), default=str)

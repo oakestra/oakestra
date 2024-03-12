@@ -6,8 +6,8 @@ def find_apps(filter={}):
     return db.mongo_apps.find(filter)
 
 
-def find_app_by_id(app_id):
-    filter["_id"] = ObjectId(app_id)
+def find_app_by_id(app_id, extra_filter={}):
+    filter = {**extra_filter, "_id": ObjectId(app_id)}
     app = list(find_apps(filter=filter))
 
     return app[0] if app else None

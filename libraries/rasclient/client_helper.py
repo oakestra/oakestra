@@ -8,7 +8,8 @@ RESOURCE_ABSTRACTOR_ADDR = (
 )
 
 
-def make_request(method, url, **kwargs):
+def make_request(method, api, **kwargs):
+    url = f"{RESOURCE_ABSTRACTOR_ADDR}{api}"
     try:
         response = method(url, **kwargs)
         return response.json()

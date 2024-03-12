@@ -1,7 +1,7 @@
-from rasclient.client_helper import RESOURCE_ABSTRACTOR_ADDR, make_request
+from rasclient.client_helper import make_request
 from requests import get, patch, put
 
-RESOURCES_API = f"{RESOURCE_ABSTRACTOR_ADDR}/api/v1/resources"
+RESOURCES_API = "/api/v1/resources"
 
 
 def get_resources(**kwargs):

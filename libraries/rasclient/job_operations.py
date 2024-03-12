@@ -1,7 +1,7 @@
-from rasclient.client_helper import RESOURCE_ABSTRACTOR_ADDR, make_request
+from rasclient.client_helper import make_request
 from requests import delete, get, patch, put
 
-JOBS_API = f"{RESOURCE_ABSTRACTOR_ADDR}/api/v1/jobs"
+JOBS_API = "/api/v1/jobs"
 
 
 def get_jobs(**kwargs):

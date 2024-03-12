@@ -67,14 +67,7 @@ class AllResourcesController(MethodView):
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
-    def put(self, *args, **kwargs):
-        data = None
-        if args and len(args) > 0 and args[0] and type(args[0]) is dict:
-            data = args[0]
-
-        if data is None:
-            raise exceptions.BadRequest()
-
+    def put(self, data, **kwargs):
         return create_cluster(data)
 
 
@@ -93,14 +86,8 @@ class ResourceController(MethodView):
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
-    def patch(self, *args, **kwargs):
-        resource_id = kwargs["resourceId"]
-        data = None
-        if args and len(args) > 0 and args[0] and type(args[0]) is dict:
-            data = args[0]
-
-        if data is None:
-            raise exceptions.BadRequest()
+    def patch(self, data, **kwargs):
+        resource_id = kwargs.get("resourceId")
 
         if ObjectId.is_valid(resource_id) is False:
             raise exceptions.BadRequest()

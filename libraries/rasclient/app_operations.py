@@ -1,7 +1,7 @@
-from rasclient.client_helper import RESOURCE_ABSTRACTOR_ADDR, make_request
+from rasclient.client_helper import make_request
 from requests import delete, get, patch, post
 
-APPS_API = f"{RESOURCE_ABSTRACTOR_ADDR}/api/v1/apps"
+APPS_API = "/api/v1/applications"
 
 
 def get_apps(**kwargs):
@@ -20,7 +20,8 @@ def get_app_by_name_and_namespace(app_name, app_ns, user_id, filter={}):
         "application_name": app_name,
         "application_namespace": app_ns,
     }
-    return make_request(get, APPS_API, params=filter)
+    result = make_request(get, APPS_API, params=filter)
+    return result[0] if result else None
 
 
 def get_app_by_id(app_id, user_id, filter={}):
