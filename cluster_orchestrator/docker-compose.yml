@@ -15,9 +15,6 @@ services:
     image: eclipse-mosquitto:2.0
     hostname: mqtt
     container_name: mqtt
-    labels:
-      logging: "cluster_promtail"
-      logging_jobname: "containerlogs"
     expose:
       - "10003"
     ports:
@@ -31,7 +28,6 @@ services:
       interval: 10s
       timeout: 10s
       retries: 6
-    logging: *default-logging
 
       
   # cluster-level mongoDB
@@ -170,6 +166,8 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
     depends_on:
       - cluster_manager
+
+
   # Observability stack (Grafana, Loki, Promtail)
   cluster_grafana:
     image: grafana/grafana
@@ -179,6 +177,8 @@ services:
       - 3001:3000
     volumes:
       - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./config/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+      - ./config/dashboards:/var/lib/grafana/dashboards
     logging: *default-logging
 
   cluster_loki:
@@ -191,8 +191,7 @@ services:
       - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
 
     command: -config.file=/etc/loki/config.yml
-    logging:
-      driver: none
+    logging: *default-logging
   cluster_promtail:
     image:  grafana/promtail:2.9.2
     container_name: cluster_promtail
