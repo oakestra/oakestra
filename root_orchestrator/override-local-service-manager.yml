@@ -1,0 +1,5 @@
+version: "3.3"
+
+services:
+  root_service_manager:
+    image: local_root_service_manager

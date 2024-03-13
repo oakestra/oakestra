@@ -1,0 +1,5 @@
+version: "3.3"
+
+services:
+  cluster_service_manager:
+    image: local_cluster_service_manager

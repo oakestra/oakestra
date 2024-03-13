@@ -84,4 +84,4 @@ def start_calc(job_id, job):
 
 
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=MY_PORT)
+    app.run(debug=False, host="::", port=MY_PORT)
