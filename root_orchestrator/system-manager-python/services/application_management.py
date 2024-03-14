@@ -65,7 +65,7 @@ def delete_app(appid, userid):
     for service_id in application.get("microservices"):
         delete_service(userid, service_id)
 
-    return app_operations.delete_app(appid, userid)
+    return app_operations.delete_app(appid)
 
 
 def users_apps(userid):

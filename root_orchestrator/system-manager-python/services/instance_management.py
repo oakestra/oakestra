@@ -26,7 +26,7 @@ def update_job_status_and_instances(
     job_id, status, next_instance_progressive_number, instance_list
 ):
     print("Updating Job Status and assigning a cluster for this job...")
-    job_operations.update_job(
+    updated_job = job_operations.update_job(
         job_id,
         {
             "status": status,
@@ -34,6 +34,8 @@ def update_job_status_and_instances(
             "instance_list": instance_list,
         },
     )
+    if updated_job is None:
+        print(f"Updating job-{job_id} status failed")
 
 
 def request_scale_up_instance(microserviceid, username):
@@ -82,25 +84,30 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
 
 def instance_scale_up_scheduled_handler(job_id, cluster_id):
     job = job_operations.get_job_by_id(job_id)
-    if job is not None:
-        cluster = cluster_operations.get_resource_by_id(cluster_id)
-        instance_number = job["next_instance_progressive_number"]
-        instance_info = {
-            "instance_number": instance_number,
-            "cluster_id": cluster_id,
-            "cluster_location": cluster.get("cluster_location", "location-unknown"),
-        }
-        instance_list = job["instance_list"]
-        instance_list.append(instance_info)
+    if job is None:
+        return
 
-        update_job_status_and_instances(
-            job_id=job_id,
-            status="CLUSTER_SCHEDULED",
-            next_instance_progressive_number=instance_number + 1,
-            instance_list=instance_list,
-        )
+    cluster = cluster_operations.get_resource_by_id(cluster_id)
+    if cluster is None:
+        return
 
-        # inform network component
-        net_inform_instance_deploy(str(job_id), instance_number, cluster_id)
+    instance_number = job["next_instance_progressive_number"]
+    instance_info = {
+        "instance_number": instance_number,
+        "cluster_id": cluster_id,
+        "cluster_location": cluster.get("cluster_location", "location-unknown"),
+    }
+    instance_list = job["instance_list"]
+    instance_list.append(instance_info)
 
-        cluster_request_to_deploy(cluster_id, job_id, instance_number)
+    update_job_status_and_instances(
+        job_id=job_id,
+        status="CLUSTER_SCHEDULED",
+        next_instance_progressive_number=instance_number + 1,
+        instance_list=instance_list,
+    )
+
+    # inform network component
+    net_inform_instance_deploy(str(job_id), instance_number, cluster_id)
+
+    cluster_request_to_deploy(cluster_id, job_id, instance_number)

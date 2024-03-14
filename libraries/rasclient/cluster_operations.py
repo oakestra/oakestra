@@ -18,11 +18,6 @@ def get_resource_by_name(resource_name):
     return resources[0] if resources else None
 
 
-def get_resource_by_job_id(job_id):
-    resources = get_resources(job_id=job_id)
-    return resources[0] if resources else None
-
-
 def get_resource_by_ip(ip):
     resources = get_resources(ip=ip)
     return resources[0] if resources else None

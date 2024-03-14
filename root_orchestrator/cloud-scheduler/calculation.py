@@ -20,19 +20,19 @@ def constraint_based_scheduling(job, constraints):
 
 
 def direct_service_mapping(job, cluster_name):
-    cluster = cluster_operations.get_resource_by_name(cluster_name)  # can return None
+    cluster = cluster_operations.get_resource_by_name(cluster_name)
 
-    if cluster is not None:  # cluster found by location exists
-        if cluster["active"]:
-            print("Cluster is active")
-            if does_cluster_respects_requirements(cluster, job):
-                return "positive", cluster
-            else:
-                return "negative", "TargetClusterNoCapacity"
-        else:
-            return "negative", "TargetClusterNotActive"
-    else:
-        return "negative", "TargetClusterNotFound"  # no cluster Found
+    if cluster is None:
+        return "negative", "TargetClusterNotFound"
+
+    if not cluster["active"]:
+        return "negative", "TargetClusterNotActive"
+
+    print("Cluster is active")
+    if not does_cluster_respects_requirements(cluster, job):
+        return "negative", "TargetClusterNoCapacity"
+
+    return "positive", cluster
 
 
 def first_fit_algorithm(job):

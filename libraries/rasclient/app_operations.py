@@ -41,6 +41,6 @@ def update_app(app_id, user_id, data):
     return make_request(patch, request_address, json=data)
 
 
-def delete_app(app_id, user_id):
+def delete_app(app_id):
     request_address = f"{APPS_API}/{app_id}"
     return make_request(delete, request_address)

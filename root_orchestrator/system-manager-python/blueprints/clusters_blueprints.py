@@ -1,7 +1,7 @@
 from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from flask import request
 from flask.views import MethodView
-from flask_smorest import Blueprint
+from flask_smorest import Blueprint, abort
 from rasclient import cluster_operations
 from services.instance_management import update_job_status
 from utils.network import sanitize
@@ -67,7 +67,9 @@ class ClusterController(MethodView):
     def post(self, *args, **kwargs):
         data = request.json
         cluster_id = kwargs["clusterid"]
-        cluster_operations.update_cluster_information(cluster_id, data)
+        updated_cluster = cluster_operations.update_cluster_information(cluster_id, data)
+        if updated_cluster is None:
+            return abort(400, "Updating cluster failed")
 
         # TODO: fire an event to react to the cluster update, and move this logic somewhere else.
         jobs = data.get("jobs")
