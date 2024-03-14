@@ -10,15 +10,14 @@ from ext_requests.scheduler_requests import scheduler_request_deploy
 from resource_abstractor_client import app_operations, cluster_operations, job_operations
 
 
-def update_job_status(job_id, status, status_detail, instances=None):
+def update_job_status(job_id, status, status_detail, instances=[]):
     job = job_operations.get_job_by_id(job_id)
 
     if job is None:
         return None
 
-    if instances is not None:
-        for instance in instances:
-            job_operations.update_job_instance(job_id, instance["instance_number"], instance)
+    for instance in instances:
+        job_operations.update_job_instance(job_id, instance["instance_number"], instance)
 
     return job_operations.update_job_status(job_id, status, status_detail)
 
@@ -41,20 +40,27 @@ def update_job_status_and_instances(
 
 def request_scale_up_instance(microserviceid, username):
     service = job_operations.get_job_by_id(microserviceid)
+    if service is None:
+        logging.warn(f"Service {microserviceid} not found")
+        return
+
     application = app_operations.get_app_by_id(str(service["applicationID"]), username)
-    if application is not None:
-        if microserviceid in application["microservices"]:
-            # Job status to scheduling REQUESTED
-            update_job_status(microserviceid, "REQUESTED", "Waiting for scheduling decision")
-            # Request scheduling
-            threading.Thread(
-                group=None,
-                target=scheduler_request_deploy,
-                args=(
-                    service,
-                    str(microserviceid),
-                ),
-            ).start()
+    if application is None:
+        logging.warn(f"Application {service['applicationID']} not found")
+        return
+
+    if microserviceid in application["microservices"]:
+        # Job status to scheduling REQUESTED
+        update_job_status(microserviceid, "REQUESTED", "Waiting for scheduling decision")
+        # Request scheduling
+        threading.Thread(
+            group=None,
+            target=scheduler_request_deploy,
+            args=(
+                service,
+                str(microserviceid),
+            ),
+        ).start()
 
 
 def request_scale_down_instance(microserviceid, username, which_one=-1):
@@ -63,23 +69,29 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
     which_one default value is -1 which means "all instances"
     """
     service = job_operations.get_job_by_id(microserviceid)
+    if service is None:
+        logging.warn(f"Service {microserviceid} not found")
+        return
+
     application = app_operations.get_app_by_id(str(service["applicationID"]), username)
-    if application is not None:
-        if microserviceid in application["microservices"]:
-            service = job_operations.get_job_by_id(microserviceid)
-            instances = service.get("instance_list")
-            if len(instances) > 0:
-                for instance in instances:
-                    if which_one == instance["instance_number"] or which_one == -1:
-                        net_inform_instance_undeploy(microserviceid, which_one)
-                        cluster_request_to_delete_job(microserviceid, instance["instance_number"])
-                        instances.remove(instance)
-                update_job_status_and_instances(
-                    microserviceid,
-                    service["status"],
-                    service["next_instance_progressive_number"],
-                    instances,
-                )
+    if application is None:
+        logging.warn(f"Application {service['applicationID']} not found")
+        return
+
+    if microserviceid in application["microservices"]:
+        instances = service.get("instance_list")
+        if len(instances) > 0:
+            for instance in instances:
+                if which_one == instance["instance_number"] or which_one == -1:
+                    net_inform_instance_undeploy(microserviceid, which_one)
+                    cluster_request_to_delete_job(microserviceid, instance["instance_number"])
+                    instances.remove(instance)
+            update_job_status_and_instances(
+                microserviceid,
+                service["status"],
+                service["next_instance_progressive_number"],
+                instances,
+            )
 
 
 def instance_scale_up_scheduled_handler(job_id, cluster_id):

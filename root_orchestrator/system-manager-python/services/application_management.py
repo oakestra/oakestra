@@ -1,3 +1,4 @@
+import logging
 import traceback
 
 from resource_abstractor_client import app_operations
@@ -21,7 +22,10 @@ def register_app(applications, userid):
         application["userId"] = userid
         microservices = application.get("microservices")
         application["microservices"] = []
+
         app = app_operations.create_app(userid, application)
+        if app is None:
+            return {"message": "error during the registration of the application"}, 500
 
         app_id = app.get("_id")
         # register microservices as well if any
@@ -62,6 +66,10 @@ def update_app(appid, userid, fields):
 
 def delete_app(appid, userid):
     application = get_user_app(userid, appid)
+    if application is None:
+        logging.warn(f"Application {appid} not found")
+        return
+
     for service_id in application.get("microservices"):
         delete_service(userid, service_id)
 

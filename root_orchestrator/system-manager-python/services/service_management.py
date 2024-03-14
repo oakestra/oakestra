@@ -27,10 +27,10 @@ def insert_job(microservice):
     # job insertion
     new_job = job_operations.create_job(job_content)
     if new_job is None:
-        logging.log(logging.ERROR, f"job not inserted - {job_name}")
+        logging.error(f"job not inserted - {job_name}")
         return None
 
-    logging.log(logging.INFO, "job {} inserted".format(str(new_job.get("_id"))))
+    logging.info("job {} inserted".format(str(new_job.get("_id"))))
     return str(new_job.get("_id"))
 
 
@@ -40,6 +40,7 @@ def create_services_of_app(username, sla, force=False):
     app_id = data.get("applications")[0]["applicationID"]
     last_service_id = ""
     application = app_operations.get_app_by_id(app_id, username)
+
     if application is None:
         return {"message": "application not found"}, 404
     for microservice in data.get("applications")[0].get("microservices"):
@@ -53,6 +54,7 @@ def create_services_of_app(username, sla, force=False):
             continue
 
         # Insert job into app's services list
+        # TODO what should be done if updating job or application fails?
         job_operations.update_job(last_service_id, {"microserviceID": last_service_id})
         add_service_to_app(app_id, last_service_id, username)
         # Inform network plugin about the new service
@@ -66,7 +68,7 @@ def create_services_of_app(username, sla, force=False):
 
 
 def delete_job(job_id):
-    logging.log(logging.INFO, "delete job...")
+    logging.info("delete job...")
     job_operations.delete_job(job_id)
 
 
@@ -88,12 +90,15 @@ def update_service(username, sla, serviceid):
     for application in apps:
         if serviceid in application["microservices"]:
             logging.log(logging.INFO, f"update job - {serviceid}...")
+
             job = job_operations.update_job(serviceid, sla)
             if job is None:
                 logging.log(logging.ERROR, "job not updated")
                 continue
+
             logging.log(logging.INFO, "job {} updated")
             return job, 200
+
     return {"message": "service not found"}, 404
 
 
