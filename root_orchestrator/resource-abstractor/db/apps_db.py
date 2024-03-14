@@ -26,13 +26,7 @@ def update_app(app_id, data):
     )
 
 
-def _create_app(app_data):
-    res = db.mongo_apps.insert_one(app_data)
-
-    return res.inserted_id
-
-
 def create_app(app_data):
-    inserted_id = _create_app(app_data)
+    inserted = db.mongo_apps.insert_one(app_data)
 
-    return update_app(str(inserted_id), {"applicationID": str(inserted_id)})
+    return update_app(str(inserted.inserted_id), {"applicationID": str(inserted.inserted_id)})

@@ -2,7 +2,7 @@ from datetime import datetime
 
 import db.mongodb_client as db
 from bson.objectid import ObjectId
-from db.clusters_helper import get_freshness_threshhold
+from db.clusters_helper import get_freshness_threshold
 
 
 def create_cluster(data):
@@ -26,7 +26,7 @@ def find_clusters(filter):
         {"$match": filter},
         {
             "$addFields": {
-                "active": {"$gt": ["$last_modified_timestamp", get_freshness_threshhold()]}
+                "active": {"$gt": ["$last_modified_timestamp", get_freshness_threshold()]}
             }
         },
     ]
@@ -51,7 +51,6 @@ def update_cluster_information(cluster_id, data):
     nodes = data.get("number_of_nodes")
     gpu_cores = data.get("gpu_cores")
     gpu_percent = data.get("gpu_percent")
-    # technology = data.get('technology')
     virtualization = data.get("virtualization")
     more = data.get("more")
     worker_groups = data.get("worker_groups")

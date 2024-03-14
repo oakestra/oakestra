@@ -107,7 +107,6 @@ def handle_init_client(message):
     message["cluster_ip"] = cluster_address
     cluster = cluster_operations.create_cluster(message)
     cid = str(cluster["_id"])
-    x = {"id": cid}
 
     net_register_cluster(
         cluster_id=cid,
@@ -115,7 +114,7 @@ def handle_init_client(message):
         cluster_port=message["network_component_port"],
     )
 
-    emit("sc2", json.dumps(x), namespace="/register")
+    emit("sc2", json.dumps({"id": cid}), namespace="/register")
 
 
 @socketio.event(namespace="/register")

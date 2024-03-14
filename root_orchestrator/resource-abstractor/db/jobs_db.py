@@ -62,16 +62,10 @@ def update_job_instance(job_id, instance_number, job_data):
     )
 
 
-def _create_job(job_data):
-    res = db.mongo_jobs.insert_one(job_data)
-
-    return res.inserted_id
-
-
 def create_job(job_data):
-    inserted_id = _create_job(job_data)
+    inserted = db.mongo_jobs.insert_one(job_data)
 
-    return db.mongo_jobs.find_one({"_id": inserted_id})
+    return db.mongo_jobs.find_one({"_id": inserted.inserted_id})
 
 
 def create_update_job(job_data):
@@ -80,7 +74,5 @@ def create_update_job(job_data):
 
     if job:
         return update_job(str(job.get("_id")), job_data)
-    else:
-        return create_job(job_data)
 
-    return job
+    return create_job(job_data)

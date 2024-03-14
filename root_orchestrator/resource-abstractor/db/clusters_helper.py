@@ -4,7 +4,7 @@ from bson.objectid import ObjectId
 CLUSTERS_FRESHNESS_INTERVAL = 30
 
 
-def get_freshness_threshhold():
+def get_freshness_threshold():
     now_timestamp = datetime.now().timestamp()
     return now_timestamp - CLUSTERS_FRESHNESS_INTERVAL
 
@@ -12,7 +12,7 @@ def get_freshness_threshhold():
 def build_filter(query):
     filter = query
     if filter.get("active"):
-        filter["last_modified_timestamp"] = {"$gt": get_freshness_threshhold()}
+        filter["last_modified_timestamp"] = {"$gt": get_freshness_threshold()}
     if filter.get("cluster_id"):
         filter["_id"] = ObjectId(filter.get("cluster_id"))
 

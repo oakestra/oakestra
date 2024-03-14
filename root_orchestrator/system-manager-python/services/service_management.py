@@ -65,25 +65,18 @@ def create_services_of_app(username, sla, force=False):
     return {"job_id": str(last_service_id)}, 200
 
 
-# TODO: have logging moved to resource abstractor
 def delete_job(job_id):
-    logging.log(logging.INFO, "MONGODB - delete job...")
+    logging.log(logging.INFO, "delete job...")
     job_operations.delete_job(job_id)
-    logging.log(logging.INFO, "MONGODB - job {} deleted")
-    # return mongo_frontend_jobs.find()
 
 
 def delete_service(username, serviceid):
     apps = app_operations.get_user_apps(username)
     for application in apps:
         if serviceid in application["microservices"]:
-            # undeploy instances
             request_scale_down_instance(serviceid, username)
-            # remove service from app's services list
             remove_service_from_app(application["applicationID"], serviceid, username)
-            # remove service from DB
             delete_job(serviceid)
-            # inform network component
             net_inform_service_undeploy(serviceid)
             return True
     return False
