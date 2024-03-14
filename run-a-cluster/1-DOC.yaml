@@ -83,7 +83,7 @@ services:
     network_mode: "host"
 
   resource_abstractor:
-    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:latest
+    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.301
     container_name: resource_abstractor
     hostname: resource_abstractor
     network_mode: "host"
