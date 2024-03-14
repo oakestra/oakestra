@@ -1,3 +1,4 @@
+import logging
 import os
 
 from requests import exceptions
@@ -15,6 +16,6 @@ def make_request(method, api, **kwargs):
         response.raise_for_status()
         return response.json()
     except exceptions.RequestException:
-        print(f"Calling {url} not successful.")
+        logging.warning(f"Calling {url} not successful.")
 
     return None

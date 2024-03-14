@@ -1,3 +1,4 @@
+import logging
 import threading
 
 from ext_requests.cluster_requests import cluster_request_to_delete_job, cluster_request_to_deploy
@@ -25,7 +26,7 @@ def update_job_status(job_id, status, status_detail, instances=None):
 def update_job_status_and_instances(
     job_id, status, next_instance_progressive_number, instance_list
 ):
-    print("Updating Job Status and assigning a cluster for this job...")
+    logging.info("Updating Job Status and assigning a cluster for this job...")
     updated_job = job_operations.update_job(
         job_id,
         {
@@ -35,12 +36,11 @@ def update_job_status_and_instances(
         },
     )
     if updated_job is None:
-        print(f"Updating job-{job_id} status failed")
+        logging.info(f"Updating job-{job_id} status failed")
 
 
 def request_scale_up_instance(microserviceid, username):
     service = job_operations.get_job_by_id(microserviceid)
-    print(service)
     application = app_operations.get_app_by_id(str(service["applicationID"]), username)
     if application is not None:
         if microserviceid in application["microservices"]:
