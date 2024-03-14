@@ -23,7 +23,7 @@ gatewayblp = Blueprint(
     description="Operations on gateway network functions exposing services",
 )
 
-gateway_registration_response_schema = {"type": "array", "items": {"type": "string"}}
+gateway_registration_response_schema = {}
 
 service_response_schema = {}
 gateway_response_schema = {}

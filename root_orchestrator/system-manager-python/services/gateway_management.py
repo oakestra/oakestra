@@ -52,7 +52,7 @@ def create_gateway_service(current_user, sla):
         microservice["job_name"] = service["job_name"]
 
         # add the service to be exposed to collection of exposed services
-        logging.log(logging.INFO, microservice)
+        logging.log(logging.DEBUG, microservice)
         mongo_add_gateway_service(microservice)
         microservice.pop("_id", None)
 
@@ -99,8 +99,8 @@ def get_all_gateways():
 
 
 def get_service_gateway(user, service_id):
-    return {"message" "implement me!"}, 200
+    return {"message": "implement me!"}, 200
 
 
 def delete_service_gateway(user, service_id):
-    return {"message" "implement me!"}, 200
+    return {"message": "implement me!"}, 200
