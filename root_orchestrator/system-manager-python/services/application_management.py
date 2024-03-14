@@ -1,6 +1,6 @@
 import traceback
 
-from rasclient import app_operations
+from resource_abstractor_client import app_operations
 from services.service_management import create_services_of_app, delete_service
 
 

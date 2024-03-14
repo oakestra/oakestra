@@ -1,7 +1,7 @@
 import logging
 
 from ext_requests.net_plugin_requests import net_inform_service_deploy, net_inform_service_undeploy
-from rasclient import app_operations, job_operations
+from resource_abstractor_client import app_operations, job_operations
 from services.instance_management import request_scale_down_instance
 from sla.versioned_sla_parser import parse_sla_json
 

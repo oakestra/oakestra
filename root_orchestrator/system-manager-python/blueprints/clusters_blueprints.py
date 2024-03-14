@@ -2,7 +2,7 @@ from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
-from rasclient import cluster_operations
+from resource_abstractor_client import cluster_operations
 from services.instance_management import update_job_status
 from utils.network import sanitize
 

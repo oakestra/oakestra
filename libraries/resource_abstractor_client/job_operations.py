@@ -1,5 +1,5 @@
-from rasclient.client_helper import make_request
 from requests import delete, get, patch, put
+from resource_abstractor_client.client_helper import make_request
 
 JOBS_API = "/api/v1/jobs"
 

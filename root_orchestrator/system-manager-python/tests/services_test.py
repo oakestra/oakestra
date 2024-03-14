@@ -4,7 +4,7 @@ import sys
 from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
-from rasclient import app_operations, job_operations
+from resource_abstractor_client import app_operations, job_operations
 from testcontainers.compose import DockerCompose
 from tests.utils import get_first_app, get_full_random_sla_app
 
@@ -35,7 +35,10 @@ def resource_abstractor():
 
 
 def test_create_service_with_app(resource_abstractor):
-    with patch("rasclient.client_helper.RESOURCE_ABSTRACTOR_ADDR", new=str(resource_abstractor)):
+    with patch(
+        "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
+        new=str(resource_abstractor),
+    ):
         sla = get_full_random_sla_app()
         sla_first_app = get_first_app(sla)
         app_mock = copy.deepcopy(sla_first_app)
@@ -65,7 +68,10 @@ def test_create_service_with_app(resource_abstractor):
 
 
 def test_create_service_without_app(resource_abstractor):
-    with patch("rasclient.client_helper.RESOURCE_ABSTRACTOR_ADDR", new=str(resource_abstractor)):
+    with patch(
+        "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
+        new=str(resource_abstractor),
+    ):
         # SETUP
         sla = get_full_random_sla_app()
         sla_first_app = get_first_app(sla)
@@ -85,7 +91,10 @@ def test_create_service_without_app(resource_abstractor):
 
 
 def test_create_invalid_service_name(resource_abstractor):
-    with patch("rasclient.client_helper.RESOURCE_ABSTRACTOR_ADDR", new=str(resource_abstractor)):
+    with patch(
+        "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
+        new=str(resource_abstractor),
+    ):
         sla = get_full_random_sla_app()
         sla_first_app = get_first_app(sla)
         app_mock = copy.deepcopy(sla_first_app)
@@ -106,7 +115,10 @@ def test_create_invalid_service_name(resource_abstractor):
 
 
 def test_create_invalid_service_namespace(resource_abstractor):
-    with patch("rasclient.client_helper.RESOURCE_ABSTRACTOR_ADDR", new=str(resource_abstractor)):
+    with patch(
+        "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
+        new=str(resource_abstractor),
+    ):
         sla = get_full_random_sla_app()
         sla_first_app = get_first_app(sla)
         app_mock = copy.deepcopy(sla_first_app)
@@ -129,7 +141,10 @@ def test_create_invalid_service_namespace(resource_abstractor):
 
 
 def test_delete_service(resource_abstractor):
-    with patch("rasclient.client_helper.RESOURCE_ABSTRACTOR_ADDR", new=str(resource_abstractor)):
+    with patch(
+        "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
+        new=str(resource_abstractor),
+    ):
         sla = get_full_random_sla_app()
         sla_first_app = get_first_app(sla)
         app_mock = copy.deepcopy(sla_first_app)
@@ -166,7 +181,10 @@ def test_delete_service(resource_abstractor):
 
 
 def test_update_service(resource_abstractor):
-    with patch("rasclient.client_helper.RESOURCE_ABSTRACTOR_ADDR", new=str(resource_abstractor)):
+    with patch(
+        "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
+        new=str(resource_abstractor),
+    ):
         sla = get_full_random_sla_app()
         sla_first_app = get_first_app(sla)
         app_mock = copy.deepcopy(sla_first_app)
@@ -198,7 +216,10 @@ def test_update_service(resource_abstractor):
 
 
 def test_update_service_not_found(resource_abstractor):
-    with patch("rasclient.client_helper.RESOURCE_ABSTRACTOR_ADDR", new=str(resource_abstractor)):
+    with patch(
+        "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
+        new=str(resource_abstractor),
+    ):
         sla = get_full_random_sla_app()
         sla_first_app = get_first_app(sla)
         app_mock = copy.deepcopy(sla_first_app)
@@ -228,7 +249,10 @@ def test_update_service_not_found(resource_abstractor):
 
 
 def test_get_user_services(resource_abstractor):
-    with patch("rasclient.client_helper.RESOURCE_ABSTRACTOR_ADDR", new=str(resource_abstractor)):
+    with patch(
+        "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
+        new=str(resource_abstractor),
+    ):
         sla = get_full_random_sla_app()
         sla_first_app = get_first_app(sla)
         app_mock = copy.deepcopy(sla_first_app)
@@ -258,7 +282,10 @@ def test_get_user_services(resource_abstractor):
 
 
 def test_get_services(resource_abstractor):
-    with patch("rasclient.client_helper.RESOURCE_ABSTRACTOR_ADDR", new=str(resource_abstractor)):
+    with patch(
+        "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
+        new=str(resource_abstractor),
+    ):
         sla = get_full_random_sla_app()
         sla_first_app = get_first_app(sla)
         app_mock = copy.deepcopy(sla_first_app)

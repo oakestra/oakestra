@@ -1,7 +1,7 @@
 import logging
 
 import requests
-from rasclient import cluster_operations, job_operations
+from resource_abstractor_client import cluster_operations, job_operations
 from services.cluster_management import find_cluster_of_job
 from utils.network import sanitize
 

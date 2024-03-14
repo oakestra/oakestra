@@ -6,7 +6,7 @@ from ext_requests.net_plugin_requests import (
     net_inform_instance_undeploy,
 )
 from ext_requests.scheduler_requests import scheduler_request_deploy
-from rasclient import app_operations, cluster_operations, job_operations
+from resource_abstractor_client import app_operations, cluster_operations, job_operations
 
 
 def update_job_status(job_id, status, status_detail, instances=None):

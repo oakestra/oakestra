@@ -1,6 +1,6 @@
 import logging
 
-from rasclient import cluster_operations, job_operations
+from resource_abstractor_client import cluster_operations, job_operations
 
 
 def find_cluster_of_job(job_id, instance_num):
