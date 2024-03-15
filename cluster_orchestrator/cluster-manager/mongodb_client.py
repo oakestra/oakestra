@@ -9,20 +9,30 @@ MONGO_PORT = os.environ.get("CLUSTER_MONGO_PORT")
 
 MONGO_ADDR_NODES = "mongodb://" + str(MONGO_URL) + ":" + str(MONGO_PORT) + "/nodes"
 MONGO_ADDR_JOBS = "mongodb://" + str(MONGO_URL) + ":" + str(MONGO_PORT) + "/jobs"
+MONGO_ADDR_GATEWAYS = "mongodb://" + str(MONGO_URL) + ":" + str(MONGO_PORT) + "/gateways"
 
 mongo_nodes = None
 mongo_jobs = None
+mongo_gateways = None
+mongo_gateway_services = None
+mongo_gateway_nodes = None
+mongo_gateway_netmanagers = None
 app = None
 
 
 def mongo_init(flask_app):
     global app
     global mongo_nodes, mongo_jobs
+    global mongo_gateways, mongo_gateway_services, mongo_gateway_nodes, mongo_gateway_netmanagers
 
     app = flask_app
 
     mongo_nodes = PyMongo(app, uri=MONGO_ADDR_NODES)
     mongo_jobs = PyMongo(app, uri=MONGO_ADDR_JOBS)
+    mongo_gateways = PyMongo(app, uri=MONGO_ADDR_GATEWAYS)
+    mongo_gateway_nodes = mongo_gateways.db["nodes"]
+    mongo_gateway_services = mongo_gateways.db["services"]
+    mongo_gateway_netmanagers = mongo_gateways.db["netmanagers"]
 
     app.logger.info("MONGODB - init mongo")
 
@@ -32,10 +42,14 @@ def mongo_init(flask_app):
 
 
 def mongo_upsert_node(obj):
-    global app, mongo_nodes
+    global app, mongo_nodes, mongo_gateway_netmanagers
     app.logger.info("MONGODB - upserting node...")
     json_node_info = obj["node_info"]
     node_info_hostname = json_node_info.get("host")
+
+    # find previously registered netmanager and delete
+    # to prevent it from being a gateway deployment candidate
+    mongo_gateway_netmanagers.find_one_and_delete({"host": node_info_hostname})
 
     nodes = mongo_nodes.db.nodes
     # find node by hostname and if it exists, just upsert
