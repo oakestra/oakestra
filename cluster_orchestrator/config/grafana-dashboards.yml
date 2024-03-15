@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: "Cluster Orchestrator - Infrastructure Provider Dashboard"
+    orgId: 1
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 1
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

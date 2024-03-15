@@ -1,0 +1,18 @@
+version: "3.3"
+
+services:
+
+  # Remove observability services for cluster components
+  cluster_promtail:
+    deploy:
+      mode: replicated
+      replicas: 0
+  cluster_loki:
+    deploy:
+      mode: replicated
+      replicas: 0
+  cluster_grafana:
+    deploy:
+      mode: replicated
+      replicas: 0
+
