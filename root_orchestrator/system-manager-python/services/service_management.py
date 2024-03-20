@@ -53,7 +53,9 @@ def create_services_of_app(username, sla, force=False):
         service = generate_db_structure(application, microservice)
         last_service_id = insert_job(service)
         if last_service_id is None:
-            logging.warning(f"service not inserted for {app_id} - {service['service_name']}")
+            logging.warning(
+                f"service not inserted for app-{app_id}, service-{service['service_name']}"
+            )
             # TODO: add a reason why it failed.
             failed_services.append({"service_name": service["service_name"], "status": 500})
             continue
