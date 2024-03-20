@@ -105,18 +105,21 @@ def delete_service(username, serviceid):
 
 def update_service(username, sla, serviceid):
     # TODO Check fields and redeploy service
-    apps = app_operations.get_user_apps(username)
-    for application in apps:
-        if serviceid in application["microservices"]:
-            logging.log(logging.INFO, f"update job - {serviceid}...")
+    # TODO this function is currently causing a lof of issues as such it is commented it out.
+    # https://github.com/oakestra/oakestra/pull/282#discussion_r1526433174
 
-            job = job_operations.update_job(serviceid, sla)
-            if job is None:
-                logging.log(logging.ERROR, "job not updated")
-                continue
+    # apps = app_operations.get_user_apps(username)
+    # for application in apps:
+    #     if serviceid in application["microservices"]:
+    #         logging.log(logging.INFO, f"update job - {serviceid}...")
 
-            logging.log(logging.INFO, "job {} updated")
-            return job, 200
+    #         job = job_operations.update_job(serviceid, sla)
+    #         if job is None:
+    #             logging.log(logging.ERROR, "job not updated")
+    #             continue
+
+    #         logging.log(logging.INFO, "job {} updated")
+    #         return job, 200
 
     return {"message": "service not found"}, 404
 
