@@ -93,6 +93,9 @@ def delete_job(job_id):
 
 def delete_service(username, serviceid):
     apps = app_operations.get_user_apps(username)
+    if not apps:
+        return False
+
     for application in apps:
         if serviceid in application["microservices"]:
             request_scale_down_instance(serviceid, username)
@@ -134,13 +137,19 @@ def user_services(appid, username):
 
 def get_service(serviceid, username):
     apps = app_operations.get_user_apps(username)
+    if not apps:
+        return None
+
     for application in apps:
         if serviceid in application["microservices"]:
             return job_operations.get_job_by_id(serviceid)
 
 
 def get_all_services():
-    return job_operations.get_jobs()
+    services = job_operations.get_jobs()
+    if services is None:
+        return {"message": "failed to retrieve jobs/services"}, 500
+    return services, 200
 
 
 def generate_db_structure(application, microservice):

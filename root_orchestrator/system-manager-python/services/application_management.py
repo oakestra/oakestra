@@ -5,6 +5,13 @@ from resource_abstractor_client import app_operations
 from services.service_management import create_services_of_app, delete_service
 
 
+def get_user_apps(userid):
+    user_apps = app_operations.get_user_apps(userid)
+    if user_apps is None:
+        return {"message": "error fetching user apps"}, 500
+    return user_apps, 200
+
+
 def register_app(applications, userid):
     for application in applications["applications"]:
         if app_operations.get_app_by_name_and_namespace(
@@ -50,7 +57,7 @@ def register_app(applications, userid):
                     delete_app(app_id, userid)
                     return {"message": "error during the registration of the microservices"}, 500
 
-    return app_operations.get_user_apps(userid), 200
+    return get_user_apps(userid)
 
 
 def update_app(appid, userid, fields):
@@ -76,12 +83,11 @@ def delete_app(appid, userid):
     return app_operations.delete_app(appid)
 
 
-def users_apps(userid):
-    return app_operations.get_user_apps(userid)
-
-
 def get_user_app(userid, appid):
-    return app_operations.get_app_by_id(appid, userid)
+    app = app_operations.get_app_by_id(appid, userid)
+    if app is None:
+        return {"message": "Application not found"}, 404
+    return app, 200
 
 
 def valid_app_requirements(app):
@@ -93,4 +99,7 @@ def valid_app_requirements(app):
 
 
 def get_all_applications():
-    return app_operations.get_apps()
+    apps = app_operations.get_apps()
+    if apps is None:
+        return {"message": "error fetching all apps"}, 500
+    return apps, 200

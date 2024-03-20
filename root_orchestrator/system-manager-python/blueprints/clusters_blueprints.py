@@ -1,3 +1,4 @@
+from bson import json_util
 from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from flask import request
 from flask.views import MethodView
@@ -50,13 +51,19 @@ cluster_info_schema = {
 @clustersbp.route("/")
 class ClustersController(MethodView):
     def get(self, *args, **kwargs):
-        return cluster_operations.get_resources()
+        clusters = cluster_operations.get_resources()
+        if clusters is None:
+            return abort(500, "Getting clusters failed")
+        return json_util.dumps(clusters)
 
 
 @clustersbp.route("/active")
 class ActiveClustersController(MethodView):
     def get(self, *args, **kwargs):
-        return cluster_operations.get_resources(active=True)
+        clusters = cluster_operations.get_resources(active=True)
+        if clusters is None:
+            return abort(500, "Getting clusters failed")
+        return json_util.dumps(clusters)
 
 
 @clusterinfo.route("/<clusterid>")

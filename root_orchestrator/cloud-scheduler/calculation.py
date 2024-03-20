@@ -37,7 +37,7 @@ def direct_service_mapping(job, cluster_name):
 
 def first_fit_algorithm(job):
     """Which of the clusters fits the Qos of the deployment file as the first"""
-    active_clusters = cluster_operations.get_resources(active=True)
+    active_clusters = cluster_operations.get_resources(active=True) or []
 
     print("active_clusters: ")
     for cluster in active_clusters:
@@ -54,7 +54,7 @@ def greedy_load_balanced_algorithm(job, active_clusters=None):
     """Which of the clusters have the most capacity for a given job"""
 
     if active_clusters is None:
-        active_clusters = cluster_operations.get_resources(active=True)
+        active_clusters = cluster_operations.get_resources(active=True) or []
     qualified_clusters = []
 
     # memory = 0

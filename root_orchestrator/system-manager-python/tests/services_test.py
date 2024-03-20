@@ -299,7 +299,9 @@ def test_get_services(resource_abstractor):
         result, code = create_services_of_app("Admin", sla)
 
         # EXEC
-        services = get_all_services()
+        services, code = get_all_services()
+        assert code == 200
+
         for service in list(services):
             service_result = get_service(service["microserviceID"], "Admin")
             # ASSERT

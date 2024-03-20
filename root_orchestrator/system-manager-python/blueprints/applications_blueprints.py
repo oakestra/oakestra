@@ -14,9 +14,9 @@ from services.application_management import (
     delete_app,
     get_all_applications,
     get_user_app,
+    get_user_apps,
     register_app,
     update_app,
-    users_apps,
 )
 from sla.schema import sla_schema
 
@@ -53,7 +53,11 @@ class ApplicationController(MethodView):
     def get(self, appid, *args, **kwargs):
         try:
             current_user = get_jwt_identity()
-            return json_util.dumps(get_user_app(current_user, appid))
+            result, code = get_user_app(current_user, appid)
+            if code != 200:
+                abort(code, result)
+            return json_util.dumps(result)
+
         except Exception as e:
             return abort(404, {"message": e})
 
@@ -108,7 +112,10 @@ class MultipleApplicationControllerUser(Resource):
         user = mongo_get_user_by_name(current_user, organization_id)
         if userid != str(user["_id"]):
             abort(401, {"message": "Unauthorized"})
-        return json_util.dumps(users_apps(current_user))
+        result, code = get_user_apps(current_user)
+        if code != 200:
+            abort(code, result)
+        return json_util.dumps(result)
 
 
 # For the Admin to get all applications
@@ -120,4 +127,7 @@ class MultipleApplicationController(Resource):
     @jwt_required()
     @require_role(Role.ADMIN)
     def get(self, *args, **kwargs):
-        return json_util.dumps(get_all_applications())
+        result, code = get_all_applications()
+        if code != 200:
+            abort(code, result)
+        return json_util.dumps(result)
