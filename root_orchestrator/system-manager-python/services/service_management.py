@@ -43,6 +43,9 @@ def create_services_of_app(username, sla, force=False):
 
     if application is None:
         return {"message": "application not found"}, 404
+
+    deployed_services = []
+    failed_services = []
     for microservice in data.get("applications")[0].get("microservices"):
         if not valid_service(microservice):
             return {"message": "invalid service name or namespace"}, 403
@@ -50,21 +53,35 @@ def create_services_of_app(username, sla, force=False):
         service = generate_db_structure(application, microservice)
         last_service_id = insert_job(service)
         if last_service_id is None:
-            # TODO: what should be done to previously inserted services?
+            logging.warning(f"service not inserted for {app_id} - {service['service_name']}")
+            # TODO: add a reason why it failed.
+            failed_services.append({"service_name": service["service_name"], "status": 500})
             continue
 
         # Insert job into app's services list
         # TODO what should be done if updating job or application fails?
         job_operations.update_job(last_service_id, {"microserviceID": last_service_id})
         add_service_to_app(app_id, last_service_id, username)
-        # Inform network plugin about the new service
         try:
+            # Inform network plugin about the new service
             net_inform_service_deploy(service, str(last_service_id))
+            deployed_services.append({"service_name": service["service_name"], "status": 200})
         except Exception:
             delete_service(username, str(last_service_id))
-            return {"message": "failed to deploy service"}, 500
+            failed_services.append(
+                {
+                    "service_name": service["service_name"],
+                    "message": "failed to deploy service",
+                    "status": 500,
+                }
+            )
+
         # TODO: check if service deployed already etc. force=True must force the insertion anyway
-    return {"job_id": str(last_service_id)}, 200
+    return {
+        "job_id": str(last_service_id),
+        "deployed_services": deployed_services,
+        "failed_services": failed_services,
+    }, 200
 
 
 def delete_job(job_id):
