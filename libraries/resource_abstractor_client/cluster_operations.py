@@ -5,7 +5,7 @@ RESOURCES_API = "/api/v1/resources"
 
 
 def get_resources(**kwargs):
-    return make_request(get, RESOURCES_API, params=kwargs) or []
+    return make_request(get, RESOURCES_API, params=kwargs)
 
 
 def get_resource_by_id(resource_id):

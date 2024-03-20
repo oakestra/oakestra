@@ -5,11 +5,11 @@ JOBS_API = "/api/v1/jobs"
 
 
 def get_jobs(**kwargs):
-    return make_request(get, JOBS_API, params=kwargs) or []
+    return make_request(get, JOBS_API, params=kwargs)
 
 
 def get_jobs_of_application(application_id):
-    return get_jobs(applicationID=application_id) or []
+    return get_jobs(applicationID=application_id)
 
 
 def get_job_by_id(job_id, filter={}):

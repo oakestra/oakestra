@@ -5,12 +5,12 @@ APPS_API = "/api/v1/applications"
 
 
 def get_apps(**kwargs):
-    return make_request(get, APPS_API, params=kwargs) or []
+    return make_request(get, APPS_API, params=kwargs)
 
 
 def get_user_apps(user_id, filter={}):
     filter = {**filter, "userId": user_id}
-    return make_request(get, APPS_API, params=filter) or []
+    return make_request(get, APPS_API, params=filter)
 
 
 def get_app_by_name_and_namespace(app_name, app_ns, user_id, filter={}):
