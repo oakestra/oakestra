@@ -79,13 +79,12 @@ class ServiceController(MethodView):
         """
         try:
             username = get_jwt_auth_identity()
-            job = (request.get_json()["applications"][0])["microservices"][0]
-            if "_id" in job:
-                del job["_id"]
-            result, status = service_management.update_service(username, job, serviceid)
+            data = request.get_json()
+            replace = request.args.get("replace")
+            job, status = service_management.update_service(username, data, serviceid, replace)
             if status != 200:
-                abort(status, result)
-            return {}
+                abort(status, job)
+            return json_util.dumps(job)
         except ConnectionError as e:
             abort(404, {"message": e})
 
