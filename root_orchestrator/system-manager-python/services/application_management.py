@@ -72,8 +72,8 @@ def update_app(appid, userid, fields):
 
 
 def delete_app(appid, userid):
-    application = get_user_app(userid, appid)
-    if application is None:
+    application, code = get_user_app(userid, appid)
+    if code != 200:
         logging.warn(f"Application {appid} not found")
         return
 
