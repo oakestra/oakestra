@@ -56,8 +56,8 @@ class ApplicationController(MethodView):
             result, code = get_user_app(current_user, appid)
             if code != 200:
                 abort(code, result)
-            return json_util.dumps(result)
-
+                # TODO Frontend should be able to handle the _id being a string and not an object.
+                return {**result, "_id": {"$oid": str(result["_id"])}}
         except Exception as e:
             return abort(404, {"message": e})
 
@@ -97,7 +97,9 @@ class CreateApplicationController(Resource):
         result, code = register_app(data, current_user)
         if code != 200:
             abort(code, result)
-        return json_util.dumps(result)
+
+        # TODO Frontend should be able to handle the _id being a string and not an object.
+        return json_util.dumps({**result, "_id": {"$oid": str(result["_id"])}})
 
 
 @applicationsblp.route("/<userid>")
@@ -115,6 +117,11 @@ class MultipleApplicationControllerUser(Resource):
         result, code = get_user_apps(current_user)
         if code != 200:
             abort(code, result)
+
+        # TODO Frontend should be able to handle the _id being a string and not an object.
+        for i in range(len(result)):
+            result[i]["_id"] = {"$oid": result[i]["_id"]}
+
         return json_util.dumps(result)
 
 
@@ -130,4 +137,9 @@ class MultipleApplicationController(Resource):
         result, code = get_all_applications()
         if code != 200:
             abort(code, result)
+
+        # TODO Frontend should be able to handle the _id being a string and not an object.
+        for i in range(len(result)):
+            result[i]["_id"] = {"$oid": result[i]["_id"]}
+
         return json_util.dumps(result)
