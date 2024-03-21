@@ -72,10 +72,10 @@ def update_app(appid, userid, fields):
 
 
 def delete_app(appid, userid):
-    application, code = get_user_app(userid, appid)
-    if code != 200:
+    application = app_operations.get_app_by_id(appid, userid)
+    if application is None:
         logging.warn(f"Application {appid} not found")
-        return
+        return None
 
     for service_id in application.get("microservices"):
         delete_service(userid, service_id)
