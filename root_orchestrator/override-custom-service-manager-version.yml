@@ -4,5 +4,5 @@ services:
 
   # Remove Root service maanger to disable network capabilities
   root_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/root-service-manager:alpha-v0.4.203
+    image: ghcr.io/oakestra/oakestra-net/root-service-manager:alpha-v0.4.301
 
