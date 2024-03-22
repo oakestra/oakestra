@@ -28,5 +28,5 @@ def update_cluster_information(cluster_id, data):
     return make_request(patch, request_address, json=data)
 
 
-def create_cluster(data):
+def upsert_cluster(data):
     return make_request(put, RESOURCES_API, json=data)

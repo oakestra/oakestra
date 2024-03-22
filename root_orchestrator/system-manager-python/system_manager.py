@@ -103,9 +103,16 @@ def handle_init_client(message):
     app.logger.info(message)
 
     cluster_address = sanitize(request.remote_addr)
-
     message["cluster_ip"] = cluster_address
-    cluster = cluster_operations.create_cluster(message)
+    cluster_data = {
+        "ip": message["cluster_ip"],
+        "clusterinfo": message["cluster_info"],
+        "port": message["manager_port"],
+        "cluster_location": message["cluster_location"],
+        "cluster_name": message["cluster_name"],
+    }
+
+    cluster = cluster_operations.upsert_cluster(cluster_data)
     if cluster is None:
         app.logger.error("Creating cluster failed")
         return

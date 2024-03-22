@@ -1,10 +1,5 @@
 from bson import ObjectId
-from db.clusters_db import (
-    create_cluster,
-    find_cluster_by_id,
-    find_clusters,
-    update_cluster_information,
-)
+from db import clusters_db
 from db.clusters_helper import build_filter
 from db.jobs_db import find_job_by_id
 from flask.views import MethodView
@@ -63,12 +58,18 @@ class AllResourcesController(MethodView):
             filter["cluster_id"] = cluster_id
         filter = build_filter(query)
 
-        return list(find_clusters(filter))
+        return list(clusters_db.find_clusters(filter))
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
     def put(self, data, **kwargs):
-        return create_cluster(data)
+        resource_name = data.get("cluster_name")
+
+        cluster = clusters_db.find_cluster_by_name(resource_name)
+        if cluster:
+            return clusters_db.update_cluster(str(cluster["_id"]), data)
+
+        return clusters_db.create_cluster(data)
 
 
 @resourcesblp.route("/<resourceId>")
@@ -78,7 +79,7 @@ class ResourceController(MethodView):
         if ObjectId.is_valid(resourceId) is False:
             raise exceptions.BadRequest()
 
-        cluster = find_cluster_by_id(resourceId)
+        cluster = clusters_db.find_cluster_by_id(resourceId)
         if cluster is None:
             raise exceptions.NotFound()
 
@@ -92,4 +93,4 @@ class ResourceController(MethodView):
         if ObjectId.is_valid(resource_id) is False:
             raise exceptions.BadRequest()
 
-        return update_cluster_information(resource_id, data)
+        return clusters_db.update_cluster_information(resource_id, data)

@@ -6,17 +6,15 @@ from db.clusters_helper import get_freshness_threshold
 
 
 def create_cluster(data):
+    inserted = db.mongo_clusters.insert_one(data)
+
+    return db.mongo_clusters.find_one({"_id": inserted.inserted_id})
+
+
+def update_cluster(cluster_id, data):
     return db.mongo_clusters.find_one_and_update(
-        {"cluster_name": data["cluster_name"]},
-        {
-            "$set": {
-                "ip": data["cluster_ip"],
-                "clusterinfo": data["cluster_info"],
-                "port": data["manager_port"],
-                "cluster_location": data["cluster_location"],
-            }
-        },
-        upsert=True,
+        {"_id": ObjectId(cluster_id)},
+        {"$set": data},
         return_document=True,
     )
 
@@ -36,6 +34,10 @@ def find_clusters(filter):
 def find_cluster_by_id(cluster_id):
     cluster = list(find_clusters({"_id": ObjectId(cluster_id)}))
     return cluster[0] if cluster else None
+
+
+def find_cluster_by_name(cluster_name):
+    return db.mongo_clusters.find_one({"cluster_name": cluster_name})
 
 
 def update_cluster_information(cluster_id, data):
