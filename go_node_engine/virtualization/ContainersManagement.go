@@ -4,16 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/containerd/containerd"
-	"github.com/containerd/containerd/cio"
-	"github.com/containerd/containerd/containers"
-	"github.com/containerd/containerd/contrib/nvidia"
-	"github.com/containerd/containerd/namespaces"
-	"github.com/containerd/containerd/oci"
-	"github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/shirou/gopsutil/docker"
-	"github.com/shirou/gopsutil/process"
-	"github.com/struCoder/pidusage"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
@@ -24,6 +14,17 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/cio"
+	"github.com/containerd/containerd/containers"
+	"github.com/containerd/containerd/contrib/nvidia"
+	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/oci"
+	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/shirou/gopsutil/docker"
+	"github.com/shirou/gopsutil/process"
+	"github.com/struCoder/pidusage"
 )
 
 type ContainerRuntime struct {
@@ -264,6 +265,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// wait for manual task kill or task finish
 	select {
 	case exitStatus := <-exitStatusC:
+		if exitStatus.ExitCode() == 0 && service.OneShot {
+			service.Status = model.SERVICE_COMPLETED		
+		}
 		//TODO: container exited, do something, notify to cluster manager
 		if err != nil {
 			return
@@ -273,7 +277,11 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	case <-*killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
 	}
-	service.Status = model.SERVICE_DEAD
+
+	if service.Status != model.SERVICE_COMPLETED {
+		service.Status = model.SERVICE_DEAD
+	}
+
 	//detaching network
 	if model.GetNodeInfo().Overlay {
 		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
