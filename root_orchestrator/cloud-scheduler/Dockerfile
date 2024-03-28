@@ -1,6 +1,8 @@
 FROM python:3.8.5-slim-buster
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
+# Installing git to be able to install oakestra libraries. 
+RUN apt-get update && apt-get install -y --no-install-recommends git
 RUN mkdir /app
 ADD requirements.txt /app
 WORKDIR /app

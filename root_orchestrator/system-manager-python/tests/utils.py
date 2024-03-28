@@ -107,3 +107,7 @@ def get_full_random_sla_app():
         )
         app["applications"][0]["microservices"].append(service)
     return app
+
+
+def get_first_app(apps):
+    return apps["applications"][0]

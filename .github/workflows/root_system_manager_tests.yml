@@ -19,7 +19,7 @@ jobs:
       - name: Install pytest
         working-directory: root_orchestrator/system-manager-python
         run: |
-          pip install pytest coverage
+          pip install pytest coverage testcontainers
 
       - name: Install dependencies
         working-directory: root_orchestrator/system-manager-python

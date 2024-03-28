@@ -1,4 +1,4 @@
-from resource_management import cluster_operations
+from resource_abstractor_client import cluster_operations
 
 
 def calculate(job_id, job):
@@ -20,24 +20,24 @@ def constraint_based_scheduling(job, constraints):
 
 
 def direct_service_mapping(job, cluster_name):
-    cluster = cluster_operations.get_resource_by_name(cluster_name)  # can return None
+    cluster = cluster_operations.get_resource_by_name(cluster_name)
 
-    if cluster is not None:  # cluster found by location exists
-        if cluster["active"]:
-            print("Cluster is active")
-            if does_cluster_respects_requirements(cluster, job):
-                return "positive", cluster
-            else:
-                return "negative", "TargetClusterNoCapacity"
-        else:
-            return "negative", "TargetClusterNotActive"
-    else:
-        return "negative", "TargetClusterNotFound"  # no cluster Found
+    if cluster is None:
+        return "negative", "TargetClusterNotFound"
+
+    if not cluster["active"]:
+        return "negative", "TargetClusterNotActive"
+
+    print("Cluster is active")
+    if not does_cluster_respects_requirements(cluster, job):
+        return "negative", "TargetClusterNoCapacity"
+
+    return "positive", cluster
 
 
 def first_fit_algorithm(job):
     """Which of the clusters fits the Qos of the deployment file as the first"""
-    active_clusters = cluster_operations.get_resources(active=True)
+    active_clusters = cluster_operations.get_resources(active=True) or []
 
     print("active_clusters: ")
     for cluster in active_clusters:
@@ -54,7 +54,7 @@ def greedy_load_balanced_algorithm(job, active_clusters=None):
     """Which of the clusters have the most capacity for a given job"""
 
     if active_clusters is None:
-        active_clusters = cluster_operations.get_resources(active=True)
+        active_clusters = cluster_operations.get_resources(active=True) or []
     qualified_clusters = []
 
     # memory = 0

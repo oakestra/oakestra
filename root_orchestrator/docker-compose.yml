@@ -21,9 +21,10 @@ services:
       - CLOUD_MONGO_PORT=10007
       - CLOUD_SCHEDULER_URL=cloud_scheduler
       - CLOUD_SCHEDULER_PORT=10004
+      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10099
-
 
   # MongoDB in Root Orchestrator
   mongo_root:
@@ -49,7 +50,6 @@ services:
       - 'mongodb_net_data:/mongodb'
     command: mongod --port 10008
 
-
   # Cluster Manager
   root_service_manager:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
@@ -68,7 +68,6 @@ services:
     depends_on:
       - mongo_rootnet
 
-
   # Redis for the Cloud Scheduler
   redis:
     image: redis
@@ -77,7 +76,6 @@ services:
     ports:
       - "6379:6379"
     command: redis-server --requirepass cloudRedis
-
 
   grafana:
     image: grafana/grafana
@@ -131,7 +129,6 @@ services:
       - CLOUD_MONGO_PORT=10007
     depends_on:
       - mongo_root
-
 
 volumes:
   mongodb_data:
