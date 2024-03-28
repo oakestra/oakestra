@@ -312,7 +312,7 @@ E.g.: `deploy_curl_application.yaml`
           "storage": 0,
           "code": "docker.io/library/nginx:latest",
           "state": "",
-          "port": "6080:60/tcp",
+          "port": "6080:80/tcp",
           "addresses": {
             "rr_ip": "10.30.30.30"
           },
