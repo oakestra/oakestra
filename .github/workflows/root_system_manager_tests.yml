@@ -26,6 +26,11 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Build Docker images
+        working-directory: root_orchestrator/resource-abstractor
+        run: |
+          docker build -t resource_abstractor:test .
+
       - name: Run test suite
         working-directory: root_orchestrator/system-manager-python
         run: |
