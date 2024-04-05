@@ -1,0 +1,151 @@
+version: "3.3"
+services:
+
+  # MQTT 
+  mqtt:
+    image: eclipse-mosquitto:2.0
+    hostname: mqtt
+    container_name: mqtt
+    expose:
+      - "10003"
+    ports:
+      - "10003:10003"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - /mosquitto/data
+      - /mosquitto/log
+    healthcheck:
+      test: [ "CMD-SHELL", "timeout -t 5 mosquitto_sub -t '$$SYS/#' -C 1 | grep -v Error || exit 1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+
+      
+  # cluster-level mongoDB
+  mongo_cluster:
+    image: mongo:3.6
+    container_name: cluster_mongo
+    hostname: cluster_mongo
+    ports:
+      - "10107:10107"
+    volumes:
+      - 'mongodb_cluster_data:/mongodb'
+    command: mongod --port 10107
+
+# cluster-level mongoDB
+  mongo_clusternet:
+    image: mongo:3.6
+    container_name: cluster_mongo_net
+    hostname: cluster_mongo_net
+    ports:
+      - "10108:10108"
+    volumes:
+      - 'mongodb_cluster_net_data:/mongodb'
+    command: mongod --port 10108
+
+
+# Cluster Manager
+  cluster_service_manager:
+    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
+    container_name: cluster_service_manager
+    hostname: cluster_service_manager
+    expose:
+      - "10110"
+    ports:
+      - "10110:10110"
+    environment:
+      - MY_PORT=10110
+      - MQTT_BROKER_PORT=10003
+      - MQTT_BROKER_URL=mqtt
+      - ROOT_SERVICE_MANAGER_URL=${SYSTEM_MANAGER_URL}
+      - ROOT_SERVICE_MANAGER_PORT=10099
+      - SYSTEM_MANAGER_URL=cluster_manager
+      - SYSTEM_MANAGER_PORT=10000
+      - CLUSTER_MONGO_URL=cluster_mongo_net
+      - CLUSTER_MONGO_PORT=10108
+    depends_on:
+      - mongo_clusternet
+      - mqtt
+
+# Cluster Manager
+  cluster_manager:
+    image: ghcr.io/oakestra/oakestra/cluster-manager:latest
+    container_name: cluster_manager
+    hostname: cluster_manager
+    expose:
+      - "10100"
+      - "10101"
+    ports:
+      - "10100:10100"
+      - "10101:10101"
+    environment:
+      - MY_PORT=10100
+      - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
+      - SYSTEM_MANAGER_PORT=10000
+      - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
+      - CLUSTER_SERVICE_MANAGER_PORT=10110
+      - CLUSTER_MONGO_URL=cluster_mongo
+      - CLUSTER_MONGO_PORT=10107
+      - CLUSTER_SCHEDULER_URL=cluster_scheduler
+      - CLUSTER_SCHEDULER_PORT=10105
+      - MQTT_BROKER_URL=mqtt
+      - MQTT_BROKER_PORT=10003
+      - CLUSTER_NAME=${CLUSTER_NAME}
+      - CLUSTER_LOCATION=${CLUSTER_LOCATION}
+    depends_on:
+      - mongo_cluster
+      - mqtt
+      - cluster_scheduler
+      - cluster_service_manager
+
+
+  # Cluster Scheduler
+  cluster_scheduler:
+    image: ghcr.io/oakestra/oakestra/cluster-scheduler:latest
+    container_name: cluster_scheduler
+    hostname: cluster_scheduler
+    expose:
+      - "10105"
+    ports:
+      - "10105:10105"
+    environment:
+      - MY_PORT=10105
+      - CLUSTER_MANAGER_URL=cluster_manager
+      - CLUSTER_MANAGER_PORT=10100
+      - CLUSTER_MONGO_URL=cluster_mongo
+      - CLUSTER_MONGO_PORT=10107
+      - REDIS_ADDR=redis://:clusterRedis@cluster_redis:6479
+    depends_on:
+      - cluster_redis
+      - mongo_cluster
+
+
+  # Redis for the Cluster Scheduler as Job Queue
+  cluster_redis:
+    image: redis
+    hostname: cluster_redis
+    container_name: cluster_redis
+    ports:
+      - "6479:6479"
+    command: redis-server --requirepass clusterRedis --port 6479
+
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    hostname: prometheus
+    ports:
+      - 10009:9090
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    depends_on:
+      - cluster_manager
+
+
+volumes:
+  mongodb_cluster_data:
+    driver: local
+  mongodb_cluster_net_data:
+    driver: local
