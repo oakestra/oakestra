@@ -37,7 +37,7 @@ services:
       - 'mongodb_data:/mongodb'
     command: mongod --port 10007
 
-  # cluster-level mongoDB
+  # root-level mongoDB
   mongo_rootnet:
     image: mongo:3.6
     container_name: mongo_net
@@ -49,7 +49,7 @@ services:
     command: mongod --port 10008
 
 
-  # Cluster Manager
+  # root service manager
   root_service_manager:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
     container_name: root_service_manager
@@ -110,6 +110,8 @@ services:
       - RESOURCE_ABSTRACTOR_URL=resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - REDIS_ADDR=redis://:cloudRedis@redis:6379
+      - CLOUD_MONGO_URL=mongo # for compatibility with version 0.4.300
+      - CLOUD_MONGO_PORT=10007 # for compatibility with version 0.4.300
     depends_on:
       - redis
       - resource_abstractor
