@@ -22,7 +22,7 @@ Oakestra is build from the ground up to support computation in a flexible way at
   - [Your first worker node 🍃](#your-first-worker-node-🍃)
   - [Your first application 💻](#your-first-application-💻)
 - [🎯 Troubleshoot ](#🎯-troubleshoot)  
-- [🛠️ How to create a development cluster](#🛠️-how-to-create-a-development-cluster)  
+- [🛠️ How to create a multi cluster setup](#🛠️-how-to-create-a-development-cluster)  
 - [🎼 Deployment descriptor](#🎼-deployment-descriptor)  
 - [🩻 Use the APIs to deploy a new application and check clusters status](#🩻-use-the-apis-to-deploy-a-new-application-and-check-clusters-status)  
 - [🕸️ Networking ](#🕸️-networking)  
