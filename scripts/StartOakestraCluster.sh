@@ -2,7 +2,7 @@
 echo 🌳 Running Oakestra Cluster 
 
 #Oakestra branch?
-if [-z "$OAKESTRA_BRANCH" ]; then
+if [ -z "$OAKESTRA_BRANCH" ]; then
     OAKESTRA_BRANCH='main'
 fi
 
