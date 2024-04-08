@@ -39,54 +39,22 @@ In this get-started guide, we place everything on the same machine. More complex
 <a name="requirements"></a>
 
 - Linux machine with iptables
-- Docker + Docker Compose 
+- Docker + Docker Compose v2
 
 ### Your first cluster 🪵
 <a name="your-first-cluster-🪵"></a>
-Let's start our Root, the dashboard, and a cluster orchestrator all together.
-
-**1)** Let's set the initial environment variables
+Let's start our Root, the dashboard, and a cluster orchestrator on your machine. We call this setup 1-DOC which stands for 1 Device One Cluster, meaning that all the components are deployed locally. 
 
 ```bash
-## Choose a unique name for your cluster
-export CLUSTER_NAME=My_Awesome_Cluster
-## Give a name or geo coordinates to the current location
-export CLUSTER_LOCATION=My_Awesome_Apartment
-## IP address where this root component can be reached to access the APIs
-export SYSTEM_MANAGER_URL=<IP address>
-# Note: Use a non-loopback interface IP (e.g. any of your real interfaces that have internet access).
-# "0.0.0.0" leads to server issues
+curl -sfL oakestra.io/getstarted.sh | sh - 
 ```
-
-A location can be in the following forms:
-- < STRING > representing a location name. E.g., `my_home`
-- LATITUDE,LONGITUDE,RADIUS representing the geographical area covered by this cluster. E.g., `48.1397,11.5451,1000`, which represents an area of 1km from Munich city center.  
-
-**2)** Clone and move inside the repo
-
-```bash
-# Feel free to use https or ssh for cloning
-git clone https://github.com/oakestra/oakestra.git && cd oakestra
-```
-
-**3)** Start the root and cluster orchestrator using the `1-DOC.yaml` compose file.
-
-```bash
-sudo -E docker-compose -f run-a-cluster/1-DOC.yaml up
-# If this should not work for you try "docker compose" instead
-```
-
-**1-DOC** stands for 1 Device One Cluster, meaning that all the components are deployed locally. 
 
 ### Your first worker node 🍃
 <a name="your-first-worker-node-🍃"></a>
 
 Download and install the Node Engine and the Network Manager:
 ```
-wget -c https://github.com/oakestra/oakestra/releases/download/v0.4.203/NodeEngine_$(dpkg --print-architecture).tar.gz && tar -xzf NodeEngine_$(dpkg --print-architecture).tar.gz && chmod +x install.sh && mv NodeEngine NodeEngine_$(dpkg --print-architecture) && ./install.sh $(dpkg --print-architecture)
-```
-```
-wget -c https://github.com/oakestra/oakestra-net/releases/download/v0.4.203/NetManager_$(dpkg --print-architecture).tar.gz && tar -xzf NetManager_$(dpkg --print-architecture).tar.gz && chmod +x install.sh && ./install.sh $(dpkg --print-architecture)
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/InstallOakestraWorker.sh | sh -  
 ```
 
 Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follows:
@@ -197,15 +165,25 @@ The Node IP field represents the address where you can reach your service. Let's
 <a name="🛠️-how-to-create-a-development-cluster"></a>
 
 ### Root Orchestrator 
+Initialize a standalone root orchestrator. 
 
-First, initialize a Root orchestrator. 
-On a Linux machine first, install Docker and Docker-compose. Then, run the following commands to set up the Root Orchestrator components.
+On a Linux machine first, install Docker and Docker compose v2. 
 
-```bash
-export SYSTEM_MANAGER_URL=<Address of current machine> #Used by the dashboard
-cd root_orchestrator/
-docker-compose up --build 
+Then export SYSTEM_MANAGER_URL=<Address of current machine> #Used by the dashboard
+
+To run the Root orchestrator from the pre-compiled images:
+- (optional) setup a repository branch e.g., `export OAKESTRA_BRANCH=develop`, default branch is `main`.
+- (optional) setup comma-separated list of custom override files for docker compose e.g., `export OVERRIDE_FILES=override-alpha-versions.yaml`
+- Download setup and startup the root orchestrator simply running:
 ```
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/StartOakestraRoot.sh | sh - 
+```
+
+> If you wish to build the Root Orchestrator by yourself from source code, clone the repo and run:
+> ```bash
+> cd root_orchestrator/
+> docker-compose up --build 
+> ```
 
 The following ports are exposed:
 
@@ -215,33 +193,50 @@ The following ports are exposed:
 
 ### Cluster Orchestrator
 
-For each cluster, install one cluster orchestrator. 
+For each cluster, we need at least a machine running the clsuter orchestrator. 
 
 - Log into the target machine/vm you intend to use
-- Install Docker and Docker-compose.
+- Install Docker and Docker compose v2.
 - Export the required parameters:
 
-```
-export SYSTEM_MANAGER_URL=" < ip address of the root orchestrator > "
-export CLUSTER_NAME=" < name of the cluster > "
-export CLUSTER_LOCATION=" < location of the cluster > "
-```
-
-- Then, run the following commands to set up the Cluster Orchestrator components. 
-
 ```bash
-cd cluster_orchestrator/
-docker-compose up --build 
+## Choose a unique name for your cluster
+export CLUSTER_NAME=My_Awesome_Cluster
+
+## Optional: Give a name or geo coordinates to the current location. Default location set to coordinates of your IP
+#export CLUSTER_LOCATION=My_Awesome_Apartment
+
+## IP address where this root component can be reached to access the APIs
+export SYSTEM_MANAGER_URL=<IP address>
+# Note: Use a non-loopback interface IP (e.g. any of your real interfaces that have internet access).
+# "0.0.0.0" leads to server issues
 ```
+
+You can run the cluster orchestrator using the pre-compiled images:
+- (optional) setup a repository branch e.g., `export OAKESTRA_BRANCH=develop`, default branch is `main`.
+- (optional) setup comma-separated list of custom override files for docker compose e.g., `export OVERRIDE_FILES=override-alpha-versions.yaml`
+- (optional) setup a custom cluster location e.g., `export CLUSTER_LOCATION=<latitude>,<longitude>,<radius>`, default location is automatically inferred from the public IP address of the machine. 
+- Download and start the cluster orchestrator components:
+```
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/StartOakestraCluster.sh | sh - 
+```
+
+>If you wish yo build the cluster orchestrator yourself simply clone the repo and run:
+> ```bash
+> export CLUSTER_LOCATION=My_Awesome_Apartment #If building the code this is not optional anymore
+> cd cluster_orchestrator/
+> docker-compose up --build 
+> ```
 
 The following ports are exposed:
 
 - 10100 Cluster Manager (needs to be accessible by the Node Engine)
 
-### Worker nodes -  Node Engine
+### Worker nodes 
 
-For each worker node you can either use the pre-compiled binaries or compile them on your own. 
+For each worker node you can either use the pre-compiled binaries (check [🌳 Get Started](#🌳-get-started) ) as usual or compile them on your own. 
 
+#### Build your node engine
 *Requirements*
 - Linux OS with the following packages installed (Ubuntu and many other distributions natively supports them)
   - iptable
@@ -258,6 +253,8 @@ cd go_node_engine/build
 Then configure the NetManager and perform the startup as usual. 
 
 N.b. each worker node can now be configured to work with a different cluster.  
+
+Alternatively you can install the latest stable binaeries
 
 # 🎼 Deployment descriptor
 <a name="🎼-deployment-descriptor"></a>
@@ -284,7 +281,7 @@ E.g.: `deploy_curl_application.yaml`
           "microservice_name": "curl",
           "microservice_namespace": "test",
           "virtualization": "container",
-          "cmd": ["sh", "-c", "tail -f /dev/null"],
+          "cmd": ["sh", "-c", "curl 10.30.55.55 ; sleep 5"],
           "memory": 100,
           "vcpus": 1,
           "vgpus": 0,
@@ -294,8 +291,9 @@ E.g.: `deploy_curl_application.yaml`
           "storage": 0,
           "code": "docker.io/curlimages/curl:7.82.0",
           "state": "",
-          "port": "9080",
-          "added_files": []
+          "port": "",
+          "added_files": [],
+          "constraints":[]
         },
         {
           "microserviceID": "",
@@ -312,9 +310,9 @@ E.g.: `deploy_curl_application.yaml`
           "storage": 0,
           "code": "docker.io/library/nginx:latest",
           "state": "",
-          "port": "6080:80/tcp",
+          "port": "80:80/tcp",
           "addresses": {
-            "rr_ip": "10.30.30.30"
+            "rr_ip": "10.30.55.55"
           },
           "added_files": []
         }
@@ -368,16 +366,36 @@ This is a detailed description of the deployment descriptor fields currently imp
     ```
     
 #### Dashboard SLA descriptor
-From the dashboard you can create the application graphically and set the services via SLA. In that case you need to submit a different SLA, contianing only the microservice list:
+From the dashboard you can create the application graphically and set the services via SLA. In that case you need to submit a different SLA, contianing only the microservice list, e.g.:
 
 ```json
 {
-  "microservices": [
-    {
-      ...
-    }
-  ]
+      "microservices" : [
+        {
+          "microserviceID": "",
+          "microservice_name": "nginx",
+          "microservice_namespace": "test",
+          "virtualization": "container",
+          "cmd": [],
+          "memory": 100,
+          "vcpus": 1,
+          "vgpus": 0,
+          "vtpus": 0,
+          "bandwidth_in": 0,
+          "bandwidth_out": 0,
+          "storage": 0,
+          "code": "docker.io/library/nginx:latest",
+          "state": "",
+          "port": "",
+          "addresses": {
+            "rr_ip": "10.30.55.55"
+          },
+          "added_files": [],
+          "constraints": []
+        }
+      ]
 }
+
 ```
  
 # 🩻  Use the APIs to deploy a new application and check clusters status
