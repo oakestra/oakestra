@@ -169,7 +169,10 @@ Initialize a standalone root orchestrator.
 
 On a Linux machine first, install Docker and Docker compose v2. 
 
-Then export SYSTEM_MANAGER_URL=<Address of current machine> #Used by the dashboard
+First configure the address used by the dashboard to reach your APIs by running:
+
+`export SYSTEM_MANAGER_URL=<Address of current machine>`
+
 
 To run the Root orchestrator from the pre-compiled images:
 - (optional) setup a repository branch e.g., `export OAKESTRA_BRANCH=develop`, default branch is `main`.
