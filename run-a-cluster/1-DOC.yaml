@@ -119,6 +119,8 @@ services:
       - RESOURCE_ABSTRACTOR_URL=resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - REDIS_ADDR=redis://:cloudRedis@redis:6379
+      - CLOUD_MONGO_URL=mongo #adding this for consistency with version 0.4.300
+      - CLOUD_MONGO_PORT=10007 #adding this for consistency with version 0.4.300
     depends_on:
       - redis
       - resource_abstractor
