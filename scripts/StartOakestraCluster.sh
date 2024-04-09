@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 echo 🌳 Running Oakestra Cluster 
 
-#Alpha version required?
-if [ "$1" = "alpha" ]; then
-    OAK_OVERRIDES="-f override-alpha-versions.yaml"
+#Oakestra branch?
+if [ -z "$OAKESTRA_BRANCH" ]; then
+    OAKESTRA_BRANCH='main'
 fi
 
 if [ ! -z "$CLUSTER_LOCATION" ]; then
@@ -14,7 +14,44 @@ if [ ! -z "$CLUSTER_NAME" ]; then
     cluster_name=$CLUSTER_NAME
 fi
 
+# Check if docker and docker compose installed 
+if [ ! -x "$(command -v docker)" ]; then
+  echo "Docker is not installed. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/engine/install/"
+  exit 1
+fi
+echo Checking docker compose version
+sudo docker compose version
+if [ $? -ne 0 ]; then
+    echo "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
+    exit 1
+fi
+
 if [ -z "$cluster_location" ]; then
+
+    # Installs jq if not present
+    if [ ! -x "$(command -v jq)" ]; then
+        echo "jq is not installed. Installing..."
+        # Detect OS
+        if [ "$(uname)" == "Darwin" ]; then
+            # Install jq on macOS using Homebrew
+            if ! command -v brew &> /dev/null; then
+            echo "Homebrew is not installed. Please install Homebrew and re-run the script."
+            exit 1
+            fi
+            brew install jq
+        else
+            # Install jq on Ubuntu/Debian based systems using apt
+            sudo apt update && sudo apt install jq
+        fi
+        echo "jq installation complete."
+    else
+        echo "jq is already installed."
+    fi
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to install jq. Please install it manually."
+        exit 1
+    fi
+
     # get public IP
     PUBLIC_IP=$(curl -sLf "https://api.ipify.org")
     if [ $? -ne 0 ]; then
@@ -75,16 +112,39 @@ if [ -z "$SYSTEM_MANAGER_URL" ]; then
     exit 1
 fi
 
+rm -rf ~/oakestra 2> /dev/null
 mkdir ~/oakestra 2> /dev/null
 
 cd ~/oakestra 2> /dev/null
 
-wget -c https://raw.githubusercontent.com/oakestra/oakestra/develop/run-a-cluster/cluster-orchestrator.yml 2> /dev/null
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/cluster-orchestrator.yml > cluster-orchestrator.yml
 
 mkdir prometheus 2> /dev/null
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/run-a-cluster/prometheus/prometheus.yml > prometheus/prometheus.yaml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/prometheus/prometheus.yml > prometheus/prometheus.yaml
 
 mkdir mosquitto 2> /dev/null
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/run-a-cluster/mosquitto/mosquitto.conf > mosquitto/mosquitto.conf
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/mosquitto/mosquitto.conf > mosquitto/mosquitto.conf
 
-sudo -E docker compose -f cluster-orchestrator.yml $OAK_OVERRIDES up
+
+#If additional override files provided, download them
+OAK_OVERRIDES=''
+
+if [ ! -z "$OVERRIDE_FILES" ]; then
+    IFS=, 
+    # Split the string into an array using read -r -a
+    for element in $OVERRIDE_FILES
+    do
+        echo "Download override: $element"
+        wget -c https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/$element 2> /dev/null
+        OAK_OVERRIDES="${OAK_OVERRIDES}-f ${element} " 
+    done
+    IFS= 
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to retrieve the override."
+        exit 1
+    fi
+fi
+command_exec="sudo -E docker compose -f cluster-orchestrator.yml ${OAK_OVERRIDES}up"
+echo executing "$command_exec"
+
+eval "$command_exec"
