@@ -6,12 +6,51 @@ if [ -z "$OAKESTRA_BRANCH" ]; then
     OAKESTRA_BRANCH='main'
 fi
 
+# Check if docker and docker compose installed 
+if [ ! -x "$(command -v docker)" ]; then
+  echo "Docker is not installed. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/engine/install/"
+  exit 1
+fi
+
+echo Checking docker compose version
+sudo docker compose version
+if [ $? -ne 0 ]; then
+    echo "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
+    exit 1
+fi
+
+# Detect OS
+current_os=$(uname)
+
+# Installs jq if not present
+if [ ! -x "$(command -v jq)" ]; then
+  echo "jq is not installed. Installing..."
+  if [ $current_os = "Darwin" ]; then
+    # Install jq on macOS using Homebrew
+    brew install jq
+  else
+    # Install jq on Ubuntu/Debian based systems using apt
+    sudo apt update && sudo apt install jq
+  fi
+  echo "jq installation complete."
+else
+  echo "jq is already installed."
+fi
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to install jq. Please install it manually."
+    exit 1
+fi
+
 #Default configuration?
 if [ "$2" != "custom" ]; then
     echo 🔧 Using default configuration
     
     # get IP address of this machine
-    export SYSTEM_MANAGER_URL=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
+    if [ $current_os = "Darwin" ]; then
+        export SYSTEM_MANAGER_URL=$(ipconfig getifaddr en0)
+    else
+        export SYSTEM_MANAGER_URL=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
+    fi
     if [ $? -ne 0 ]; then
         echo "Error: Failed to retrieve interface IP."
         exit 1
@@ -44,9 +83,9 @@ fi
 rm -rf ~/oakestra 2> /dev/null
 mkdir ~/oakestra 2> /dev/null
 
-cd ~/oakestra 2> /dev/null
+cd ~/oakestra 
 
-wget -c https://raw.githubusercontent.com/oakestra/oakestra/develop/run-a-cluster/1-DOC.yaml 2> /dev/null
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/run-a-cluster/1-DOC.yaml > 1-DOC.yaml
 
 mkdir prometheus 2> /dev/null
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/run-a-cluster/prometheus/prometheus.yml > prometheus/prometheus.yaml

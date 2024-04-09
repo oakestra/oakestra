@@ -6,12 +6,29 @@ if [-z "$OAKESTRA_BRANCH" ]; then
     OAKESTRA_BRANCH='main'
 fi
 
+# Check if docker and docker compose installed 
+if [ ! -x "$(command -v docker)" ]; then
+  echo "Docker is not installed. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/engine/install/"
+  exit 1
+fi
+echo Checking docker compose version
+sudo docker compose version
+if [ $? -ne 0 ]; then
+    echo "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
+    exit 1
+fi
+
 #Default configuration?
-if [ "$2" != "custom" ]; then
+if [ -z "$SYSTEM_MANAGER_URL" ]; then
     echo 🔧 Using default configuration
     
     # get IP address of this machine
-    export SYSTEM_MANAGER_URL=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
+    # get IP address of this machine
+    if [ $current_os = "Darwin" ]; then
+        export SYSTEM_MANAGER_URL=$(ipconfig getifaddr en0)
+    else
+        export SYSTEM_MANAGER_URL=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
+    fi
     if [ $? -ne 0 ]; then
         echo "Error: Failed to retrieve interface IP."
         exit 1
@@ -24,7 +41,7 @@ mkdir ~/oakestra 2> /dev/null
 
 cd ~/oakestra 2> /dev/null
 
-wget -c https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/root-orchestrator.yml 2> /dev/null
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/root-orchestrator.yml > root-orchestrator.yml
 
 mkdir prometheus 2> /dev/null
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/prometheus/prometheus.yml > prometheus/prometheus.yaml
