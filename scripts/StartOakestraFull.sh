@@ -85,13 +85,13 @@ mkdir ~/oakestra 2> /dev/null
 
 cd ~/oakestra 
 
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/run-a-cluster/1-DOC.yaml > 1-DOC.yaml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/1-DOC.yaml > 1-DOC.yaml
 
 mkdir prometheus 2> /dev/null
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/run-a-cluster/prometheus/prometheus.yml > prometheus/prometheus.yaml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/prometheus/prometheus.yml > prometheus/prometheus.yaml
 
 mkdir mosquitto 2> /dev/null
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/run-a-cluster/mosquitto/mosquitto.conf > mosquitto/mosquitto.conf
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/mosquitto/mosquitto.conf > mosquitto/mosquitto.conf
 
 #If additional override files provided, download them
 OAK_OVERRIDES=''
