@@ -49,6 +49,8 @@ Let's start our Root, the dashboard, and a cluster orchestrator on your machine.
 curl -sfL oakestra.io/getstarted.sh | sh - 
 ```
 
+> You can turn off the cluster using `docker compose -f ~/oakestra/1-DOC.yaml down`
+
 ### Your first worker node 🍃
 <a name="your-first-worker-node-🍃"></a>
 
