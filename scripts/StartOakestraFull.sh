@@ -111,7 +111,15 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
         exit 1
     fi
 fi
-command_exec="sudo -E docker compose -f 1-DOC.yaml ${OAK_OVERRIDES}up"
+command_exec="sudo -E docker compose -f 1-DOC.yaml ${OAK_OVERRIDES}up -d"
 echo executing "$command_exec"
 
 eval "$command_exec"
+
+echo 
+echo 🌳 Oakestra 1-DOC is now starting up...
+echo
+echo 🖥️ Oakestra dashboard available at http://$SYSTEM_MANAGER_URL
+echo 📊 Grafana dashboard available at http://$SYSTEM_MANAGER_URL:3000
+echo 📈 You can access the APIs at http://$SYSTEM_MANAGER_URL:10000/api/docs
+echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/oakestra/1-DOC.yaml down
