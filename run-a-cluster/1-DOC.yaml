@@ -205,7 +205,7 @@ services:
       - MQTT_BROKER_URL=mqtt
       - ROOT_SERVICE_MANAGER_URL=root_service_manager
       - ROOT_SERVICE_MANAGER_PORT=10099
-      - SYSTEM_MANAGER_URL=system_manager
+      - SYSTEM_MANAGER_URL=cluster_manager
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_MONGO_URL=cluster_mongo_net
       - CLUSTER_MONGO_PORT=10108
