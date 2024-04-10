@@ -58,3 +58,8 @@ deployment_helper/support/EdgeIO*
 *.zip
 .vscode/settings.json
 .vscode/launch.json
+go_node_engine/.DS_Store
+go_node_engine/build/.DS_Store
+root_orchestrator/.DS_Store
+root_orchestrator/system-manager-python/.DS_Store
+.DS_Store
