@@ -76,9 +76,11 @@ services:
     hostname: root_service_manager
     labels:
       logging: "promtail"
-      logging_jobname: "rootlogs"
+      logging_jobname: "rootlogs"  
     expose:
       - "10099"
+    ports:
+      - "10099:10099"
     environment:
       - MY_PORT=10099
       - SYSTEM_MANAGER_URL=system_manager
@@ -203,7 +205,7 @@ services:
       - MY_PORT=10110
       - MQTT_BROKER_PORT=10003
       - MQTT_BROKER_URL=mqtt
-      - ROOT_SERVICE_MANAGER_URL=root_service_manager
+      - ROOT_SERVICE_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - ROOT_SERVICE_MANAGER_PORT=10099
       - SYSTEM_MANAGER_URL=cluster_manager
       - SYSTEM_MANAGER_PORT=10000
@@ -231,7 +233,7 @@ services:
       logging_jobname: "clusterlogs"
     environment:
       - MY_PORT=10100
-      - SYSTEM_MANAGER_URL=system_manager
+      - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
       - CLUSTER_SERVICE_MANAGER_PORT=10110
