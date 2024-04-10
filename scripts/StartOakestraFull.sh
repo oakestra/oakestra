@@ -85,13 +85,16 @@ mkdir ~/oakestra 2> /dev/null
 
 cd ~/oakestra 
 
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/1-DOC.yaml > 1-DOC.yaml
 
-mkdir prometheus 2> /dev/null
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/prometheus/prometheus.yml > prometheus/prometheus.yaml
+chmod +x downloadConfigFiles.sh
+./downloadConfigFiles.sh run-a-cluster
 
-mkdir mosquitto 2> /dev/null
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/mosquitto/mosquitto.conf > mosquitto/mosquitto.conf
+if [ $? -ne 0 ]; then
+        echo "Error: Failed to retrieve config files"
+        exit 1
+fi
 
 #If additional override files provided, download them
 OAK_OVERRIDES=''
