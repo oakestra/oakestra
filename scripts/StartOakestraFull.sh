@@ -89,7 +89,7 @@ curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/s
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/1-DOC.yaml > 1-DOC.yaml
 
 chmod +x downloadConfigFiles.sh
-sh -c downloadConfigFiles.sh run-a-cluster
+./downloadConfigFiles.sh run-a-cluster
 
 if [ $? -ne 0 ]; then
         echo "Error: Failed to retrieve config files"
