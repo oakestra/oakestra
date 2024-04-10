@@ -1,0 +1,18 @@
+version: "3.3"
+
+services:
+
+  # Remove observability services for root components
+  promtail:
+    deploy:
+      mode: replicated
+      replicas: 0
+  loki:
+    deploy:
+      mode: replicated
+      replicas: 0
+  grafana:
+    deploy:
+      mode: replicated
+      replicas: 0
+

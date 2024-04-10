@@ -88,7 +88,13 @@ cd ~/oakestra
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/1-DOC.yaml > 1-DOC.yaml
 
-downloadConfigFiles run-a-cluster
+chmod +x downloadConfigFiles.sh
+sh -c downloadConfigFiles.sh run-a-cluster
+
+if [ $? -ne 0 ]; then
+        echo "Error: Failed to retrieve config files"
+        exit 1
+fi
 
 #If additional override files provided, download them
 OAK_OVERRIDES=''
@@ -99,7 +105,7 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
     for element in $OVERRIDE_FILES
     do
         echo "Download override: $element"
-        wget -c https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/$element 2> /dev/null
+        curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/$element > $element
         OAK_OVERRIDES="${OAK_OVERRIDES}-f ${element} " 
     done
     IFS= 

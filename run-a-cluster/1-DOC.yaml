@@ -1,4 +1,11 @@
 version: "3.3"
+x-logging:
+  &default-logging
+  driver: "json-file"
+  options:
+    max-size: "1m"
+    max-file: "1"
+    tag: "{{.Name}}"
 
 services:
 
@@ -16,6 +23,9 @@ services:
     image: ghcr.io/oakestra/oakestra/root-system-manager:latest
     hostname: system_manager
     container_name: system_manager
+    labels:
+      logging: "promtail"
+      logging_jobname: "rootlogs"
     expose:
       - "10000"
     ports:
@@ -49,11 +59,14 @@ services:
     image: mongo:3.6
     container_name: mongo_net
     hostname: mongo_net
+    labels:
+      logging: "promtail"
     expose:
       - "10008"
     volumes:
       - 'mongodb_net_data:/mongodb'
     command: mongod --port 10008
+    logging: *default-logging
 
 
   # Cluster Manager
@@ -61,8 +74,13 @@ services:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
     container_name: root_service_manager
     hostname: root_service_manager
+    labels:
+      logging: "promtail"
+      logging_jobname: "rootlogs"  
     expose:
       - "10099"
+    ports:
+      - "10099:10099"
     environment:
       - MY_PORT=10099
       - SYSTEM_MANAGER_URL=system_manager
@@ -71,6 +89,7 @@ services:
       - CLOUD_MONGO_PORT=10008
     depends_on:
       - mongo_rootnet
+    logging: *default-logging
 
 
   # Redis for the Cloud Scheduler
@@ -82,18 +101,13 @@ services:
       - "6379"
     command: redis-server --requirepass cloudRedis
 
-
-  grafana:
-    image: grafana/grafana
-    hostname: grafana
-    container_name: grafana
-    ports:
-      - 3000:3000
-
   resource_abstractor:
     image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.301
     container_name: resource_abstractor
     hostname: resource_abstractor
+    labels:
+      logging: "promtail"
+      logging_jobname: "rootlogs"
     expose:
       - "11011"
     ports:
@@ -104,12 +118,17 @@ services:
       - CLOUD_MONGO_PORT=10007
     depends_on:
       - mongo_root
+    logging: *default-logging
+
 
   # Cloud Scheduler
   cloud_scheduler:
     image: ghcr.io/oakestra/oakestra/cloud-scheduler:latest
     container_name: cloud_scheduler
     hostname: cloud_scheduler
+    labels:
+      logging: "promtail"
+      logging_jobname: "rootlogs"
     expose:
       - "10004"
     environment:
@@ -124,6 +143,8 @@ services:
     depends_on:
       - redis
       - resource_abstractor
+    logging: *default-logging
+
 
   # MQTT
   mqtt:
@@ -173,6 +194,9 @@ services:
     image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
     container_name: cluster_service_manager
     hostname: cluster_service_manager
+    labels:
+      logging: "promtail"
+      logging_jobname: "clusterlogs"
     expose:
       - "10110"
     ports:
@@ -181,15 +205,16 @@ services:
       - MY_PORT=10110
       - MQTT_BROKER_PORT=10003
       - MQTT_BROKER_URL=mqtt
-      - ROOT_SERVICE_MANAGER_URL=root_service_manager
+      - ROOT_SERVICE_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - ROOT_SERVICE_MANAGER_PORT=10099
-      - SYSTEM_MANAGER_URL=system_manager
+      - SYSTEM_MANAGER_URL=cluster_manager
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_MONGO_URL=cluster_mongo_net
       - CLUSTER_MONGO_PORT=10108
     depends_on:
       - mongo_clusternet
       - mqtt
+    logging: *default-logging
 
 # Cluster Manager
   cluster_manager:
@@ -203,9 +228,12 @@ services:
       - "10100:10100"
       - "10101:10101"
     command: bash -c 'sleep 15; python cluster_manager.py'
+    labels:
+      logging: "promtail"
+      logging_jobname: "clusterlogs"
     environment:
       - MY_PORT=10100
-      - SYSTEM_MANAGER_URL=system_manager
+      - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
       - CLUSTER_SERVICE_MANAGER_PORT=10110
@@ -223,6 +251,7 @@ services:
       - cluster_scheduler
       - cluster_service_manager
       - system_manager
+    logging: *default-logging
 
 
   # Cluster Scheduler
@@ -230,6 +259,9 @@ services:
     image: ghcr.io/oakestra/oakestra/cluster-scheduler:latest
     container_name: cluster_scheduler
     hostname: cluster_scheduler
+    labels:
+      logging: "promtail"
+      logging_jobname: "clusterlogs"
     expose:
       - "10105"
     environment:
@@ -242,6 +274,7 @@ services:
     depends_on:
       - cluster_redis
       - mongo_cluster
+    logging: *default-logging
 
 
   # Redis for the Cluster Scheduler as Job Queue
@@ -264,6 +297,47 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
     depends_on:
       - cluster_manager
+  
+
+  # Observability Stack (Promtail, Loki, Grafana)
+  grafana:
+    image: grafana/grafana
+    hostname: grafana
+    container_name: grafana
+    ports:
+      - 3000:3000
+    volumes:
+      - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./config/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+      - ./config/dashboards:/var/lib/grafana/dashboards
+    logging: *default-logging
+
+
+  loki:
+    container_name: loki
+    image: grafana/loki:2.9.2
+    ports:
+      - 3100:3100
+    volumes:
+      - ./config/loki.yml:/etc/loki/config.yml
+      - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
+
+    command: -config.file=/etc/loki/config.yml
+
+
+  promtail:
+    image:  grafana/promtail:2.9.2
+    container_name: promtail
+    volumes:
+      - ./config/promtail.yml:/etc/promtail/config.yml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: 
+      - '--config.file=/etc/promtail/config.yml'
+      - '--server.enable-runtime-reload'
+    depends_on:
+      - loki
+    logging: *default-logging
 
 volumes:
   mongodb_data:
@@ -274,6 +348,7 @@ volumes:
     driver: local
   mongodb_cluster_net_data:
     driver: local
+  
 
 networks:
   ip6net:

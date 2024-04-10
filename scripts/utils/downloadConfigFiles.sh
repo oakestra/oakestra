@@ -1,5 +1,7 @@
+#!/bin/bash
+
 mkdir -p config/alerts 2> /dev/null
-mkdir -p config/dashbaords 2> /dev/null
+mkdir -p config/dashboards 2> /dev/null
 mkdir prometheus 2> /dev/null
 mkdir mosquitto 2> /dev/null
 
