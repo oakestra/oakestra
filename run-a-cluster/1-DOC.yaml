@@ -99,14 +99,6 @@ services:
       - "6379"
     command: redis-server --requirepass cloudRedis
 
-
-  grafana:
-    image: grafana/grafana
-    hostname: grafana
-    container_name: grafana
-    ports:
-      - 3000:3000
-
   resource_abstractor:
     image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.301
     container_name: resource_abstractor
