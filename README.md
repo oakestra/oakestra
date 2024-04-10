@@ -26,6 +26,7 @@ Oakestra is build from the ground up to support computation in a flexible way at
 - [🎼 Deployment descriptor](#🎼-deployment-descriptor)  
 - [🩻 Use the APIs to deploy a new application and check clusters status](#🩻-use-the-apis-to-deploy-a-new-application-and-check-clusters-status)  
 - [🕸️ Networking ](#🕸️-networking)  
+- [📈 Monitoring ](#📈-monitoring)  
 ---
 
 # 🌳 Get Started
@@ -503,3 +504,16 @@ Differences to Container Deployment:
 <a name="🕸️-networking"></a>
 
 The network component is maintained in: [https://www.oakestra.io/docs/networking](https://www.oakestra.io/docs/networking)
+
+# 📈 Monitoring
+<a name="📈-monitoring"></a>
+The **infrastructure monitoring stack** provided is built on Grafana OSS toolset. It monitors both *root* and *cluster* services for comprehensive visibility. Default Grafana Dashboard credentials can be used:
+-  Username: `admin`
+-  Password: `admin`
+
+To access the provisioned dashboards at:
+- **Root Infrastructure**: `<root_orch_ip>:3000`
+- **Cluster Infrastructure**: `<cluster_orch_ip>:3001`
+
+More details about monitoring stack can be found in [config/README.md](./root_orchestrator/config/README.md).
+
