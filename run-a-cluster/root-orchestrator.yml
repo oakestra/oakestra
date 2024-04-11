@@ -1,23 +1,12 @@
 version: "3.3"
 
-x-logging: &default-logging
-  driver: "json-file"
-  options:
-    max-size: "1m"
-    max-file: "1"
-    tag: "{{.Name}}"
-
 services:
 
   # System Manager REST API of Root Orchestrator
   system_manager:
-    image: system_manager
-    build: system-manager-python/
+    image: ghcr.io/oakestra/oakestra/root-system-manager:latest
     hostname: system_manager
     container_name: system_manager
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
     expose:
       - "10000"
     ports:
@@ -31,11 +20,9 @@ services:
       - CLOUD_MONGO_PORT=10007
       - CLOUD_SCHEDULER_URL=cloud_scheduler
       - CLOUD_SCHEDULER_PORT=10004
-      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
-      - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10099
-    logging: *default-logging
+
 
   # MongoDB in Root Orchestrator
   mongo_root:
@@ -50,7 +37,7 @@ services:
       - 'mongodb_data:/mongodb'
     command: mongod --port 10007
 
-  # cluster-level mongoDB
+  # root-level mongoDB
   mongo_rootnet:
     image: mongo:3.6
     container_name: mongo_net
@@ -61,13 +48,11 @@ services:
       - 'mongodb_net_data:/mongodb'
     command: mongod --port 10008
 
-  # Cluster Manager
+
+  # root service manager
   root_service_manager:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
     container_name: root_service_manager
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
     hostname: root_service_manager
     expose:
       - "10099"
@@ -82,6 +67,7 @@ services:
     depends_on:
       - mongo_rootnet
 
+
   # Redis for the Cloud Scheduler
   redis:
     image: redis
@@ -91,45 +77,13 @@ services:
       - "6379:6379"
     command: redis-server --requirepass cloudRedis
 
-  # Observability Stack
+
   grafana:
     image: grafana/grafana
     hostname: grafana
     container_name: grafana
     ports:
       - 3000:3000
-    volumes:
-      - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml
-      - ./config/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml
-      - ./config/dashboards:/var/lib/grafana/dashboards
-    logging: *default-logging
-
-  loki:
-    container_name: loki
-    image: grafana/loki:2.9.2
-    ports:
-      - 3100:3100
-    volumes:
-      - ./config/loki.yml:/etc/loki/config.yml
-      - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
-
-    command: -config.file=/etc/loki/config.yml
-    #logging:
-    #  driver: none
-
-  promtail:
-    image: grafana/promtail:2.9.2
-    container_name: promtail
-    volumes:
-      - ./config/promtail.yml:/etc/promtail/config.yml
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    command:
-      - '--config.file=/etc/promtail/config.yml'
-      - '--server.enable-runtime-reload'
-    depends_on:
-      - loki
-    logging: *default-logging
 
   dashboard:
     image: ghcr.io/oakestra/dashboard:latest
@@ -142,12 +96,8 @@ services:
 
   # Cloud Scheduler
   cloud_scheduler:
-    image: cloud_scheduler
-    build: cloud-scheduler/
+    image: ghcr.io/oakestra/oakestra/cloud-scheduler:latest
     container_name: cloud_scheduler
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
     hostname: cloud_scheduler
     expose:
       - "10004"
@@ -160,18 +110,15 @@ services:
       - RESOURCE_ABSTRACTOR_URL=resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - REDIS_ADDR=redis://:cloudRedis@redis:6379
+      - CLOUD_MONGO_URL=mongo # for compatibility with version 0.4.300
+      - CLOUD_MONGO_PORT=10007 # for compatibility with version 0.4.300
     depends_on:
       - redis
       - resource_abstractor
-    logging: *default-logging
 
   resource_abstractor:
-    image: resource_abstractor
-    build: resource-abstractor/
+    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.301
     container_name: resource_abstractor
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
     hostname: resource_abstractor
     expose:
       - "11011"
@@ -183,6 +130,7 @@ services:
       - CLOUD_MONGO_PORT=10007
     depends_on:
       - mongo_root
+
 
 volumes:
   mongodb_data:

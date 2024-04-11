@@ -68,3 +68,6 @@ ENV/
 
 # logs
 *.log*
+
+# macOS system
+.DS_Store
