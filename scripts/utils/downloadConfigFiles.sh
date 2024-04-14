@@ -74,10 +74,10 @@ esac
 
 # Download configuration files one by one
 for file_spec in "${config_files[@]}"; do
-  local source_url="${base_url}/${file_spec%%:}"  
-  local dest_path="${file_spec##*:}"             
+   source_url="${base_url}/${file_spec%%:}"  
+   dest_path="${file_spec##*:}"
   curl -sfL "$source_url" > "$dest_path"
-  echo "Downloaded $dest_path"
+  echo "Downloaded $source_url to $dest_path"
 done
 
 echo "Configuration files downloaded successfully!"
