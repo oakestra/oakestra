@@ -1,17 +1,83 @@
 #!/bin/bash
 
-mkdir -p config/alerts 2> /dev/null
-mkdir -p config/dashboards 2> /dev/null
-mkdir prometheus 2> /dev/null
-mkdir mosquitto 2> /dev/null
+# Create directories silently
+mk_dir() {
+  local dir_path="$1"
+  mkdir -p "$dir_path" 2> /dev/null
+}
 
-repo_folder=$1
+# Repository folder as first argument
+repo_folder="$1"
 
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/$repo_folder/prometheus/prometheus.yml > prometheus/prometheus.yaml
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/$repo_folder/mosquitto/mosquitto.conf > mosquitto/mosquitto.conf
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/$repo_folder/config/grafana-dashboards.yml > config/grafana-dashboards.yml
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/$repo_folder/config/grafana-datasources.yml > config/grafana-datasources.yml
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/$repo_folder/config/loki.yml > config/loki.yml
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/$repo_folder/config/promtail.yml > config/promtail.yml
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/$repo_folder/config/alerts/rules.yml > config/alerts/rules.yml
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/$repo_folder/config/dashboards/dashboard.json > config/dashboards/dashboard.json
+# "1DOC" for 1DOC configuration, "root" for root orchestrator, "cluster" for cluster orchestrator
+layer="$2"
+
+# Base URL for downloads
+base_url="https://raw.githubusercontent.com/TheDarkPyotr/oakestra/$OAKESTRA_BRANCH/$repo_folder"
+
+# Configuration files for 1DOC
+DOC_config_files=(
+  "mosquitto/mosquitto.conf:mosquitto.conf"
+  "prometheus/prometheus.yml:prometheus.yml"
+  "config/grafana-dashboards.yml:grafana-dashboards.yml"
+  "config/grafana-datasources.yml:grafana-datasources.yml"
+  "config/loki.yml:loki.yml"
+  "config/promtail.yml:promtail.yml"
+  "config/alerts/rules.yml:rules.yml"
+  "config/dashboards/dashboard.json:dashboard.json"
+)
+
+# Configuration files for root (excluding mosquitto.conf)
+root_config_files=(
+  "prometheus/prometheus.yml:prometheus.yml"
+  "config/grafana-dashboards.yml:grafana-dashboards.yml"
+  "config/grafana-datasources.yml:grafana-datasources.yml"
+  "config/loki.yml:loki.yml"
+  "config/promtail.yml:promtail.yml"
+  "config/alerts/rules.yml:rules.yml"
+  "config/dashboards/dashboard.json:dashboard.json"
+)
+
+cluster_config_files=(
+  "mosquitto/mosquitto.conf:mosquitto.conf"
+  "prometheus/prometheus.yml:prometheus.yml"
+  "config/grafana-dashboards.yml:grafana-dashboards.yml"
+  "config/grafana-datasources.yml:grafana-datasources.yml"
+  "config/loki.yml:loki.yml"
+  "config/promtail.yml:promtail.yml"
+  "config/alerts/rules.yml:rules.yml"
+  "config/dashboards/dashboard.json:dashboard.json"
+)
+
+# Create directories
+mk_dir "prometheus"
+mk_dir "mosquitto"
+mk_dir "config/alerts"
+mk_dir "config/dashboards"
+
+# Download configuration files based on layer
+case "$layer" in
+  "1DOC")
+    config_files=("${DOC_config_files[@]}")
+    ;;
+  "root")
+    config_files=("${root_config_files[@]}")
+    ;;
+  "cluster")
+    config_files=("${cluster_config_files[@]}")
+    ;;
+  *)
+    echo "Error: Invalid layer '$layer'. Valid options are '1DOC','root' or 'cluster'."
+    exit 1
+    ;;
+esac
+
+# Download configuration files one by one
+for file_spec in "${config_files[@]}"; do
+  local source_url="${base_url}/${file_spec%%:}"  
+  local dest_path="${file_spec##*:}"             
+  curl -sfL "$source_url" > "$dest_path"
+  echo "Downloaded $dest_path"
+done
+
+echo "Configuration files downloaded successfully!"

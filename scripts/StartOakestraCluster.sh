@@ -112,20 +112,25 @@ if [ -z "$SYSTEM_MANAGER_URL" ]; then
     exit 1
 fi
 
+ls -al
+
 rm -rf ~/oakestra 2> /dev/null
 mkdir ~/oakestra 2> /dev/null
 
 cd ~/oakestra 2> /dev/null
 
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/cluster-orchestrator.yml > cluster-orchestrator.yml
+curl -sfL https://raw.githubusercontent.com/TheDarkPyotr/oakestra/$OAKESTRA_BRANCH/run-a-cluster/cluster-orchestrator.yml > cluster-orchestrator.yml
 
-mkdir prometheus 2> /dev/null
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/prometheus/prometheus.yml > prometheus/prometheus.yaml
-
-mkdir mosquitto 2> /dev/null
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/mosquitto/mosquitto.conf > mosquitto/mosquitto.conf
+curl -sfL https://raw.githubusercontent.com/TheDarkPyotr/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
 
 
+chmod +x downloadConfigFiles.sh
+./downloadConfigFiles.sh run-a-cluster cluster
+
+   if [ $? -ne 0 ]; then
+        echo "Error: Failed to retrieve your public IP address."
+        exit 1
+    fi
 #If additional override files provided, download them
 OAK_OVERRIDES=''
 
@@ -135,7 +140,7 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
     for element in $OVERRIDE_FILES
     do
         echo "Download override: $element"
-        wget -c https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/$element 2> /dev/null
+        wget -c https://raw.githubusercontent.com/TheDarkPyotr/oakestra/$OAKESTRA_BRANCH/run-a-cluster/$element 2> /dev/null
         OAK_OVERRIDES="${OAK_OVERRIDES}-f ${element} " 
     done
     IFS= 
