@@ -17,36 +17,36 @@ base_url="https://raw.githubusercontent.com/TheDarkPyotr/oakestra/$OAKESTRA_BRAN
 
 # Configuration files for 1DOC
 DOC_config_files=(
-  "mosquitto/mosquitto.conf:mosquitto.conf"
-  "prometheus/prometheus.yml:prometheus.yml"
-  "config/grafana-dashboards.yml:grafana-dashboards.yml"
-  "config/grafana-datasources.yml:grafana-datasources.yml"
-  "config/loki.yml:loki.yml"
-  "config/promtail.yml:promtail.yml"
-  "config/alerts/rules.yml:rules.yml"
-  "config/dashboards/dashboard.json:dashboard.json"
+  "mosquitto/mosquitto.conf:mosquitto/mosquitto.conf"
+  "prometheus/prometheus.yml:prometheus/prometheus.yml"
+  "config/grafana-dashboards.yml:config/grafana-dashboards.yml"
+  "config/grafana-datasources.yml:config/grafana-datasources.yml"
+  "config/loki.yml:config/loki.yml"
+  "config/promtail.yml:config/promtail.yml"
+  "config/alerts/rules.yml:config/alerts/rules.yml"
+  "config/dashboards/dashboard.json:config/dashboards/dashboard.json"
 )
 
 # Configuration files for root (excluding mosquitto.conf)
 root_config_files=(
-  "prometheus/prometheus.yml:prometheus.yml"
-  "config/grafana-dashboards.yml:grafana-dashboards.yml"
-  "config/grafana-datasources.yml:grafana-datasources.yml"
-  "config/loki.yml:loki.yml"
-  "config/promtail.yml:promtail.yml"
-  "config/alerts/rules.yml:rules.yml"
-  "config/dashboards/dashboard.json:dashboard.json"
+  "prometheus/prometheus.yml:prometheus/prometheus.yml"
+  "config/grafana-dashboards.yml:config/grafana-dashboards.yml"
+  "config/grafana-datasources.yml:config/grafana-datasources.yml"
+  "config/loki.yml:config/loki.yml"
+  "config/promtail.yml:config/promtail.yml"
+  "config/alerts/rules.yml:config/alerts/rules.yml"
+  "config/dashboards/dashboard.json:config/dashboards/dashboard.json"
 )
 
 cluster_config_files=(
-  "mosquitto/mosquitto.conf:mosquitto.conf"
-  "prometheus/prometheus.yml:prometheus.yml"
-  "config/grafana-dashboards.yml:grafana-dashboards.yml"
-  "config/grafana-datasources.yml:grafana-datasources.yml"
-  "config/loki.yml:loki.yml"
-  "config/promtail.yml:promtail.yml"
-  "config/alerts/rules.yml:rules.yml"
-  "config/dashboards/dashboard.json:dashboard.json"
+  "mosquitto/mosquitto.conf:mosquitto/mosquitto.conf"
+  "prometheus/prometheus.yml:prometheus/prometheus.yml"
+  "config/grafana-dashboards.yml:config/grafana-dashboards.yml"
+  "config/grafana-datasources.yml:config/grafana-datasources.yml"
+  "config/loki.yml:config/loki.yml"
+  "config/promtail.yml:config/promtail.yml"
+  "config/alerts/rules.yml:config/alerts/rules.yml"
+  "config/dashboards/dashboard.json:config/dashboards/dashboard.json"
 )
 
 # Create directories
