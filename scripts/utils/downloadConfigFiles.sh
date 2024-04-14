@@ -17,7 +17,7 @@ base_url="https://raw.githubusercontent.com/TheDarkPyotr/oakestra/$OAKESTRA_BRAN
 
 # Configuration files for 1DOC
 DOC_config_files=(
-  "mosquitto/mosquitto.conf:mosquitto/mosquitto.conf"
+  #"mosquitto/mosquitto.conf:mosquitto/mosquitto.conf"
   "prometheus/prometheus.yml:prometheus/prometheus.yml"
   "config/grafana-dashboards.yml:config/grafana-dashboards.yml"
   "config/grafana-datasources.yml:config/grafana-datasources.yml"
@@ -39,7 +39,7 @@ root_config_files=(
 )
 
 cluster_config_files=(
-  "mosquitto/mosquitto.conf:mosquitto/mosquitto.conf"
+  #"mosquitto/mosquitto.conf:mosquitto/mosquitto.conf"
   "prometheus/prometheus.yml:prometheus/prometheus.yml"
   "config/grafana-dashboards.yml:config/grafana-dashboards.yml"
   "config/grafana-datasources.yml:config/grafana-datasources.yml"
@@ -51,7 +51,9 @@ cluster_config_files=(
 
 # Create directories
 mk_dir "prometheus"
-mk_dir "mosquitto"
+#mk_dir "mosquitto"
+mkdir "mosquitto" 2> /dev/null
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/$repo_folder/mosquitto/mosquitto.conf > mosquitto/mosquitto.conf
 mk_dir "config/alerts"
 mk_dir "config/dashboards"
 
