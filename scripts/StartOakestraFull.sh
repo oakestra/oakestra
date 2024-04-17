@@ -46,7 +46,7 @@ if [ "$2" != "custom" ]; then
     echo 🔧 Using default configuration
     
     # get IP address of this machine
-    if [ $current_os = "Darwin" ]; then
+    if [ $current_os="Darwin" ]; then
         export SYSTEM_MANAGER_URL=$(ipconfig getifaddr en0)
     else
         export SYSTEM_MANAGER_URL=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
@@ -89,7 +89,7 @@ curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/s
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/1-DOC.yaml > 1-DOC.yaml
 
 chmod +x downloadConfigFiles.sh
-./downloadConfigFiles.sh run-a-cluster
+./downloadConfigFiles.sh run-a-cluster $OAKESTRA_BRANCH
 
 if [ $? -ne 0 ]; then
         echo "Error: Failed to retrieve config files"
@@ -114,6 +114,13 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
         exit 1
     fi
 fi
+
+if sudo docker ps -a | grep oakestra >/dev/null 2>&1; then
+  echo 🚨 Oakestra containers are already running. Please stop them before starting a new 1-DOC cluster.
+  echo 🪫 You can turn off the current cluster using: \$ docker compose -f ~/oakestra/1-DOC.yaml down
+  exit 1
+fi
+
 command_exec="sudo -E docker compose -f 1-DOC.yaml ${OAK_OVERRIDES}up -d"
 echo executing "$command_exec"
 
