@@ -46,7 +46,7 @@ if [ "$2" != "custom" ]; then
     echo 🔧 Using default configuration
     
     # get IP address of this machine
-    if [ $current_os="Darwin" ]; then
+    if [ $current_os = "Darwin" ]; then
         export SYSTEM_MANAGER_URL=$(ipconfig getifaddr en0)
     else
         export SYSTEM_MANAGER_URL=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')

@@ -32,7 +32,7 @@ if [ -z "$cluster_location" ]; then
     if [ ! -x "$(command -v jq)" ]; then
         echo "jq is not installed. Installing..."
         # Detect OS
-        if [ "$(uname)" == "Darwin" ]; then
+        if [ "$(uname)" = "Darwin" ]; then
             # Install jq on macOS using Homebrew
             if ! command -v brew &> /dev/null; then
             echo "Homebrew is not installed. Please install Homebrew and re-run the script."
