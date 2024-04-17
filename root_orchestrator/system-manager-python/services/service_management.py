@@ -18,7 +18,13 @@ from sla.versioned_sla_parser import parse_sla_json
 
 
 def create_services_of_app(username, sla, force=False):
-    data = parse_sla_json(sla)
+    data=None
+    try:
+        data = parse_sla_json(sla)
+    except Exception as e:
+        logging.log(logging.ERROR, e)
+        return {"message": e}, 400
+    
     logging.log(logging.INFO, sla)
     app_id = data.get("applications")[0]["applicationID"]
     last_service_id = ""
