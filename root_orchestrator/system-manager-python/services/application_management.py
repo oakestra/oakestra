@@ -10,7 +10,7 @@ from ext_requests.apps_db import (
     mongo_update_application,
 )
 from services.service_management import create_services_of_app, delete_service
-from sla.versioned_sla_parser import parse_sla_json, SLAFormatError
+from sla.versioned_sla_parser import SLAFormatError, parse_sla_json
 
 
 def register_app(applications, userid):

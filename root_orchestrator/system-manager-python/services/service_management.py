@@ -14,7 +14,7 @@ from ext_requests.apps_db import (
 )
 from ext_requests.net_plugin_requests import net_inform_service_deploy, net_inform_service_undeploy
 from services.instance_management import request_scale_down_instance
-from sla.versioned_sla_parser import parse_sla_json, SLAFormatError
+from sla.versioned_sla_parser import SLAFormatError, parse_sla_json
 
 
 def create_services_of_app(username, data, force=False):
