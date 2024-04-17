@@ -148,7 +148,7 @@ sla_schema = {
                         "exclusiveMinimum": 0,
                     },
                 },
-                "required": ["applicationID", "application_name","application_namespace","microservices"],
+                "required": ["applicationID", "application_name", "application_namespace", "microservices"],
             },
         },
         "args": {
