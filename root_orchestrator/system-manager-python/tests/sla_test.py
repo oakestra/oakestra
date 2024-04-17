@@ -33,6 +33,9 @@ class SLATestCase(unittest.TestCase):
     def test_correct_3(self):
         aux_test_correct_sla(self, 3)
 
+    def test_correct_4(self):
+        aux_test_correct_sla(self, 4)
+
     def test_flawed_1(self):
         aux_test_flawed_sla(self, 1, KeyError)
 
