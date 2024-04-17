@@ -109,9 +109,7 @@ def test_create_invalid_service_namespace():
     app_id = apps_db.mongo_add_application(db_app_mock["applications"][0])
     sla["applications"][0]["applicationID"] = app_id
 
-    sla["applications"][0]["microservices"][0][
-        "microservice_namespace"
-    ] = "THIS.NAMESPACE.has.dots"
+    sla["applications"][0]["microservices"][0]["microservice_namespace"] = "THIS.NAMESPACE.has.dots"
 
     # EXEC
     result, code = create_services_of_app("Admin", sla)

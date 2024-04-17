@@ -18,14 +18,13 @@ from sla.versioned_sla_parser import parse_sla_json, SLAFormatError
 
 
 def create_services_of_app(username, data, force=False):
-
     logging.log(logging.DEBUG, data)
     try:
         parse_sla_json(data)
     except SLAFormatError as e:
         logging.log(logging.ERROR, e)
         return {"message": e}, 422
-    
+
     app_id = data.get("applications")[0]["applicationID"]
     last_service_id = ""
     application = mongo_find_app_by_id(app_id, username)
@@ -124,4 +123,3 @@ def remove_service_from_app(app_id, service_id, userid):
     application = mongo_find_app_by_id(app_id, userid)
     application["microservices"].remove(service_id)
     mongo_update_application_microservices(app_id, application["microservices"])
-
