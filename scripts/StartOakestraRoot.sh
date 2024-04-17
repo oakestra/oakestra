@@ -2,7 +2,7 @@
 echo 🌳 Running Oakestra Root \n
 
 #Oakestra branch?
-if [-z "$OAKESTRA_BRANCH" ]; then
+if [ -z "$OAKESTRA_BRANCH" ]; then
     OAKESTRA_BRANCH='main'
 fi
 
@@ -23,7 +23,6 @@ if [ -z "$SYSTEM_MANAGER_URL" ]; then
     echo 🔧 Using default configuration
     
     # get IP address of this machine
-    # get IP address of this machine
     if [ $current_os = "Darwin" ]; then
         export SYSTEM_MANAGER_URL=$(ipconfig getifaddr en0)
     else
@@ -36,15 +35,15 @@ if [ -z "$SYSTEM_MANAGER_URL" ]; then
     echo Default node IP: $SYSTEM_MANAGER_URL
 fi
 
-rm -rf ~/oakestra 2> /dev/null
 mkdir ~/oakestra 2> /dev/null
 
 cd ~/oakestra 2> /dev/null
 
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/root-orchestrator.yml > root-orchestrator.yml
 
-mkdir prometheus 2> /dev/null
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/prometheus/prometheus.yml > prometheus/prometheus.yaml
+chmod +x downloadConfigFiles.sh
+./downloadConfigFiles.sh root_orchestrator $OAKESTRA_BRANCH
 
 #If additional override files provided, download them
 OAK_OVERRIDES=''
@@ -64,7 +63,22 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
         exit 1
     fi
 fi
-command_exec="sudo -E docker compose -f root-orchestrator.yml ${OAK_OVERRIDES}up"
+
+if sudo docker ps -a | grep oakestra/root >/dev/null 2>&1; then
+  echo 🚨 Oakestra root containers are already running. Please stop them before starting the root orchestrator.
+  echo 🪫 You can turn off the current root using: \$ docker compose -f ~/oakestra/root-orchestrator.yml down
+  exit 1
+fi
+
+command_exec="sudo -E docker compose -f root-orchestrator.yml ${OAK_OVERRIDES}up -d"
 echo executing "$command_exec"
 
 eval "$command_exec"
+
+echo 
+echo 🌳 Oakestra Root Orchestrator is now starting up...
+echo
+echo 🖥️ Oakestra dashboard available at http://$SYSTEM_MANAGER_URL
+echo 📊 Grafana dashboard available at http://$SYSTEM_MANAGER_URL:3000
+echo 📈 You can access the APIs at http://$SYSTEM_MANAGER_URL:10000/api/docs
+echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/oakestra/root-orchestrator.yml down

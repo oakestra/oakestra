@@ -244,23 +244,27 @@ def mongo_find_job_by_id(id):
 
 
 def mongo_update_jobs_status(TIME_INTERVAL):
-    "If there are no updates from a job in the last TIME_INTERVAL mark it as failed"
+    """Marks inactive jobs as failed.
+    If there are no updates from a job in the last TIME_INTERVAL mark it as failed,
+    unless the job is completed.
+    """
     jobs = mongo_find_all_jobs()
     for job in jobs:
         try:
             updated = False
-            status = "RUNNING"
             for instance in range(len(job["instance_list"])):
-                if job["instance_list"][instance].get(
+
+                last_time_job_was_modified = job["instance_list"][instance].get(
                     "last_modified_timestamp", datetime.now().timestamp()
-                ) < (datetime.now().timestamp() - TIME_INTERVAL) and job["instance_list"][
-                    instance
-                ].get(
-                    "status", 0
-                ) not in [
-                    "NODE_SCHEDULED",
-                    "CLUSTER_SCHEDULED",
-                ]:
+                )
+                job_is_inactive = last_time_job_was_modified < (
+                    datetime.now().timestamp() - TIME_INTERVAL
+                )
+                job_status = job["instance_list"][instance].get("status", 0)
+                job_is_not_completed = job_status != "COMPLETED"
+                job_is_not_scheduled = job_status not in ["NODE_SCHEDULED", "CLUSTER_SCHEDULED"]
+
+                if job_is_inactive and job_is_not_scheduled and job_is_not_completed:
                     print("Job is inactive: " + str(job.get("job_name")))
                     job["instance_list"][instance]["status"] = "FAILED"
                     status = "FAILED"

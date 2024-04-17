@@ -32,7 +32,7 @@ if [ -z "$cluster_location" ]; then
     if [ ! -x "$(command -v jq)" ]; then
         echo "jq is not installed. Installing..."
         # Detect OS
-        if [ "$(uname)" == "Darwin" ]; then
+        if [ "$(uname)" = "Darwin" ]; then
             # Install jq on macOS using Homebrew
             if ! command -v brew &> /dev/null; then
             echo "Homebrew is not installed. Please install Homebrew and re-run the script."
@@ -41,7 +41,7 @@ if [ -z "$cluster_location" ]; then
             brew install jq
         else
             # Install jq on Ubuntu/Debian based systems using apt
-            sudo apt update && sudo apt install jq
+            sudo apt update && sudo apt install -y jq
         fi
         echo "jq installation complete."
     else
@@ -117,14 +117,11 @@ mkdir ~/oakestra 2> /dev/null
 
 cd ~/oakestra 2> /dev/null
 
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/cluster-orchestrator.yml > cluster-orchestrator.yml
 
-mkdir prometheus 2> /dev/null
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/prometheus/prometheus.yml > prometheus/prometheus.yaml
-
-mkdir mosquitto 2> /dev/null
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/mosquitto/mosquitto.conf > mosquitto/mosquitto.conf
-
+chmod +x downloadConfigFiles.sh
+./downloadConfigFiles.sh cluster_orchestrator $OAKESTRA_BRANCH
 
 #If additional override files provided, download them
 OAK_OVERRIDES=''
@@ -144,7 +141,23 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
         exit 1
     fi
 fi
-command_exec="sudo -E docker compose -f cluster-orchestrator.yml ${OAK_OVERRIDES}up"
+
+if sudo docker ps -a | grep oakestra/cluster >/dev/null 2>&1; then
+  echo 🚨 Oakestra cluster containers are already running. Please stop them before starting another cluster on this machine.
+  echo 🪫 You can turn off the current cluster using: \$ docker compose -f ~/oakestra/cluster-orchestrator.yml down
+  exit 1
+fi
+
+command_exec="sudo -E docker compose -f cluster-orchestrator.yml ${OAK_OVERRIDES}up -d"
 echo executing "$command_exec"
 
 eval "$command_exec"
+
+echo 
+echo 🌳 Oakestra Cluster Orchestrator is now starting up...
+echo
+echo 🖥️ Oakestra dashboard available at http://$SYSTEM_MANAGER_URL
+echo 📊 Root Grafana dashboard available at http://$SYSTEM_MANAGER_URL:3000
+echo 📊 Cluster Grafana dashboard available at http://<CLUSTER_IP>:3001
+echo 📈 You can access the APIs at http://$SYSTEM_MANAGER_URL:10000/api/docs
+echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/oakestra/cluster-orchestrator.yml down
