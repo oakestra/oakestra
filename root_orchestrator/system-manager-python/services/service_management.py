@@ -17,15 +17,15 @@ from services.instance_management import request_scale_down_instance
 from sla.versioned_sla_parser import parse_sla_json, SLAFormatError
 
 
-def create_services_of_app(username, sla, force=False):
-    data=None
+def create_services_of_app(username, data, force=False):
+
+    logging.log(logging.DEBUG, data)
     try:
-        data = parse_sla_json(sla)
+        parse_sla_json(data)
     except SLAFormatError as e:
         logging.log(logging.ERROR, e)
         return {"message": e}, 422
     
-    logging.log(logging.INFO, sla)
     app_id = data.get("applications")[0]["applicationID"]
     last_service_id = ""
     application = mongo_find_app_by_id(app_id, username)

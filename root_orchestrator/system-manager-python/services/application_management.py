@@ -16,7 +16,7 @@ from sla.versioned_sla_parser import parse_sla_json, SLAFormatError
 def register_app(applications, userid):
     
     try:
-        parse_sla_json(sla)
+        parse_sla_json(applications)
     except SLAFormatError as e:
         return {"message": e}, 422
 
