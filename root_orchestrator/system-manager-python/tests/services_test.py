@@ -3,7 +3,6 @@ import importlib
 import sys
 import unittest
 from unittest.mock import ANY, MagicMock
-
 import mongomock as mongomock
 import pymongo
 from ext_requests import apps_db, mongodb_client
@@ -88,13 +87,13 @@ def test_create_invalid_service_name():
     app_id = apps_db.mongo_add_application(db_app_mock["applications"][0])
     sla["applications"][0]["applicationID"] = app_id
 
-    sla["applications"][0]["microservices"][0]["microservice_name"] = "TOOLONGNAME"
+    sla["applications"][0]["microservices"][0]["microservice_name"] = "badname!"
 
     # EXEC
     result, code = create_services_of_app("Admin", sla)
 
     # ASSERT
-    assert code == 403
+    assert code == 422
 
 
 @mongomock.patch(servers=(("localhost", 10007),))
@@ -112,13 +111,13 @@ def test_create_invalid_service_namespace():
 
     sla["applications"][0]["microservices"][0][
         "microservice_namespace"
-    ] = "THISNAMESPACEISTOOLONGTOBECCEPTED"
+    ] = "THIS.NAMESPACE.has.dots"
 
     # EXEC
     result, code = create_services_of_app("Admin", sla)
 
     # ASSERT
-    assert code == 403
+    assert code == 422
 
 
 @mongomock.patch(servers=(("localhost", 10007),))

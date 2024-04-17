@@ -10,9 +10,16 @@ from ext_requests.apps_db import (
     mongo_update_application,
 )
 from services.service_management import create_services_of_app, delete_service
+from sla.versioned_sla_parser import parse_sla_json, SLAFormatError
 
 
 def register_app(applications, userid):
+    
+    try:
+        parse_sla_json(sla)
+    except SLAFormatError as e:
+        return {"message": e}, 422
+
     for application in applications["applications"]:
         if mongo_find_app_by_name_and_namespace(
             application.get("application_name"),
@@ -21,8 +28,6 @@ def register_app(applications, userid):
             return {
                 "message": "An application with the same name and namespace exists already"
             }, 409
-        if not valid_app_requirements(application):
-            return {"message": "Application name or namespace are not in the valid format"}, 422
 
         if "action" in application:
             del application["action"]

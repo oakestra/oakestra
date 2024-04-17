@@ -44,3 +44,6 @@ class SLATestCase(unittest.TestCase):
 
     def test_flawed_4(self):
         aux_test_flawed_sla(self, 4, SLAFormatError)
+
+    def test_flawed_5(self):
+        aux_test_flawed_sla(self, 5, SLAFormatError)

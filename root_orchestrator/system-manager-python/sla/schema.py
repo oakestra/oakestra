@@ -131,7 +131,7 @@ sla_schema = {
                             },
                             "required": [
                                 "microservice_name",
-                                "microservice_namespace"
+                                "microservice_namespace",
                                 "virtualization",
                                 "code",
                             ],
