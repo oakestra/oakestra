@@ -31,6 +31,7 @@ sla_schema = {
                                 "code": {"type": "string"},
                                 "state": {"type": "string"},
                                 "port": {"type": "string"},
+                                "one_shot": {"type": "boolean", "default": False},
                                 "cmd": {
                                     "type": "array",
                                     "items": {
