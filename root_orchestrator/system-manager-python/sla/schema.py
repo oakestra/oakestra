@@ -152,8 +152,8 @@ sla_schema = {
                     "applicationID",
                     "application_name",
                     "application_namespace",
-                    "microservices"
-                    ],
+                    "microservices",
+                ],
             },
         },
         "args": {
