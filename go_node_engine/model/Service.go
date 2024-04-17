@@ -18,6 +18,7 @@ type Service struct {
 	UnikernelImages []string `json:"vm_images"`
 	Architectures   []string `json:"arch"`
 	Pid             int
+	OneShot		bool	 `json:"one_shot"`
 }
 
 type Resources struct {
@@ -34,6 +35,7 @@ const (
 	SERVICE_ACTIVE     = "ACTIVE"
 	SERVICE_CREATING   = "CREATING"
 	SERVICE_DEAD       = "DEAD"
+	SERVICE_COMPLETED  = "COMPLETED"
 	SERVICE_FAILED     = "FAILED"
 	SERVICE_UNDEPLOYED = "UNDEPLOYED"
 )
