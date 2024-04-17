@@ -1,0 +1,1043 @@
+{
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "datasource",
+            "uid": "grafana"
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "description": "Oakestra Orchestration Framework for Edge Computing. Root Orchestrator Monitoring Logs Infrastructure Dashboard. More info at https://oakestra.io/",
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "gnetId": 16966,
+    "graphTooltip": 0,
+    "id": 1,
+    "links": [],
+    "liveNow": false,
+    "panels": [
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "id": 53,
+        "panels": [],
+        "title": "General Logs stats",
+        "type": "row"
+      },
+      {
+        "datasource": {
+          "type": "loki",
+          "uid": "Loki"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "blue",
+                  "value": 100
+                },
+                {
+                  "color": "yellow",
+                  "value": 150
+                },
+                {
+                  "color": "orange",
+                  "value": 200
+                },
+                {
+                  "color": "red",
+                  "value": 250
+                }
+              ]
+            },
+            "unitScale": true
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 5,
+          "w": 12,
+          "x": 0,
+          "y": 1
+        },
+        "id": 66,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "showPercentChange": false,
+          "textMode": "auto",
+          "wideLayout": true
+        },
+        "pluginVersion": "10.3.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "Loki"
+            },
+            "editorMode": "code",
+            "expr": "sum(count_over_time(({container_name=~\"$service\"})[$__interval]))",
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "title": "Aggregated Log Counter",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "loki",
+          "uid": "P8E80F9AEF21F6940"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "mappings": [],
+            "noValue": "0",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 1
+                },
+                {
+                  "color": "orange",
+                  "value": 3
+                },
+                {
+                  "color": "red",
+                  "value": 6
+                },
+                {
+                  "color": "dark-red",
+                  "value": 10
+                }
+              ]
+            },
+            "unitScale": true
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 5,
+          "w": 12,
+          "x": 12,
+          "y": 1
+        },
+        "id": 67,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "showPercentChange": false,
+          "textMode": "value",
+          "wideLayout": true
+        },
+        "pluginVersion": "10.3.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "Loki"
+            },
+            "editorMode": "code",
+            "expr": "sum(count_over_time({container_name=~\"$service\"} |~ `(?i)$searchable_pattern` |= `Errno` [$__interval]))",
+            "queryType": "range",
+            "refId": "A"
+          },
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "P8E80F9AEF21F6940"
+            },
+            "editorMode": "code",
+            "expr": "sum(count_over_time({container_name=~\"$service\"} |~ `(?i)$searchable_pattern` |= `err` [$__interval]))",
+            "hide": false,
+            "queryType": "range",
+            "refId": "B"
+          },
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "P8E80F9AEF21F6940"
+            },
+            "editorMode": "code",
+            "expr": "sum(count_over_time({container_name=~\"$service\"} |~ `(?i)$searchable_pattern` |= `KeyError` [$__interval]))",
+            "hide": false,
+            "queryType": "range",
+            "refId": "C"
+          }
+        ],
+        "title": "Error Log Counter",
+        "type": "stat"
+      },
+      {
+        "aliasColors": {
+          "stderr": "#C4162A",
+          "stdout": "#37872D"
+        },
+        "breakPoint": "50%",
+        "combine": {
+          "label": "Others",
+          "threshold": 0
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "Loki"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              }
+            },
+            "mappings": [
+              {
+                "options": {
+                  "match": "null",
+                  "result": {
+                    "color": "#299c46",
+                    "text": "0"
+                  }
+                },
+                "type": "special"
+              }
+            ],
+            "unit": "none",
+            "unitScale": true
+          },
+          "overrides": []
+        },
+        "fontSize": "80%",
+        "format": "short",
+        "gridPos": {
+          "h": 7,
+          "w": 9,
+          "x": 0,
+          "y": 6
+        },
+        "id": 19,
+        "legend": {
+          "header": "Total Count",
+          "percentage": true,
+          "percentageDecimals": 2,
+          "show": true,
+          "sort": "total",
+          "sortDesc": true,
+          "values": true
+        },
+        "legendType": "right",
+        "links": [],
+        "maxDataPoints": 100,
+        "nullPointMode": "connected",
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "right",
+            "showLegend": true
+          },
+          "pieType": "pie",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "pieType": "pie",
+        "pluginVersion": "7.0.4",
+        "strokeWidth": "1.5",
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "Loki"
+            },
+            "editorMode": "code",
+            "expr": "sum by(logstream) (count_over_time({job=~\"$infrastructure\"} [$__interval]))",
+            "hide": false,
+            "legendFormat": "{{label.Name}}",
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "title": "Total count of stderr / stdout pie",
+        "type": "piechart",
+        "valueName": "total"
+      },
+      {
+        "datasource": {
+          "type": "loki",
+          "uid": "Loki"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "match": "null",
+                  "result": {
+                    "color": "green",
+                    "text": "0"
+                  }
+                },
+                "type": "special"
+              }
+            ],
+            "max": 100,
+            "min": 0,
+            "noValue": "0",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                }
+              ]
+            },
+            "unit": "percent",
+            "unitScale": true
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 7,
+          "w": 6,
+          "x": 9,
+          "y": 6
+        },
+        "id": 9,
+        "links": [],
+        "maxDataPoints": 100,
+        "options": {
+          "minVizHeight": 75,
+          "minVizWidth": 75,
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "mean"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "showThresholdLabels": false,
+          "showThresholdMarkers": false,
+          "sizing": "auto"
+        },
+        "pluginVersion": "10.3.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "Loki"
+            },
+            "editorMode": "code",
+            "expr": "sum(count_over_time(({container_name=~\"$service\"} |~ \"(?i)$searchable_pattern\")[$__interval])) * 100 / sum(count_over_time(({container_name=~\"$service\"})[$__interval]))",
+            "hide": false,
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "title": "\"$searchable_pattern\" Percentage for specified time",
+        "type": "gauge"
+      },
+      {
+        "aliasColors": {},
+        "breakPoint": "50%",
+        "combine": {
+          "label": "Others",
+          "threshold": 0
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "Loki"
+        },
+        "decimals": 0,
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              }
+            },
+            "mappings": [],
+            "noValue": "No match",
+            "unitScale": true
+          },
+          "overrides": []
+        },
+        "fontSize": "80%",
+        "format": "short",
+        "gridPos": {
+          "h": 7,
+          "w": 9,
+          "x": 15,
+          "y": 6
+        },
+        "id": 20,
+        "interval": "1m",
+        "legend": {
+          "header": "total count",
+          "percentage": true,
+          "show": true,
+          "sort": "total",
+          "sortDesc": true,
+          "values": true
+        },
+        "legendType": "right",
+        "links": [],
+        "maxDataPoints": "",
+        "nullPointMode": "connected",
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "right",
+            "showLegend": true
+          },
+          "pieType": "pie",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "pieType": "donut",
+        "pluginVersion": "6.4.3",
+        "strokeWidth": "0.4",
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "Loki"
+            },
+            "editorMode": "code",
+            "expr": "sum by(container_name) (count_over_time({job=~\"$infrastructure\"} |~ `(?i)$searchable_pattern` | container_name=~\"$service\" [$__interval]))",
+            "legendFormat": "{{label.Name}}",
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "title": "Matched word: \"$searchable_pattern\" donut",
+        "type": "piechart",
+        "valueName": "total"
+      },
+      {
+        "aliasColors": {},
+        "bars": true,
+        "dashLength": 10,
+        "dashes": false,
+        "datasource": {
+          "type": "loki",
+          "uid": "Loki"
+        },
+        "decimals": 0,
+        "fieldConfig": {
+          "defaults": {
+            "links": [],
+            "unitScale": true
+          },
+          "overrides": []
+        },
+        "fill": 1,
+        "fillGradient": 1,
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 13
+        },
+        "hiddenSeries": false,
+        "id": 18,
+        "interval": "1m",
+        "legend": {
+          "alignAsTable": true,
+          "avg": false,
+          "current": true,
+          "hideEmpty": false,
+          "hideZero": false,
+          "max": false,
+          "min": false,
+          "rightSide": false,
+          "show": true,
+          "sort": "current",
+          "sortDesc": true,
+          "total": false,
+          "values": true
+        },
+        "lines": false,
+        "linewidth": 3,
+        "links": [],
+        "maxDataPoints": "",
+        "nullPointMode": "null",
+        "options": {
+          "alertThreshold": true
+        },
+        "percentage": false,
+        "pluginVersion": "10.3.1",
+        "pointradius": 2,
+        "points": false,
+        "renderer": "flot",
+        "seriesOverrides": [],
+        "spaceLength": 10,
+        "stack": false,
+        "steppedLine": false,
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "Loki"
+            },
+            "editorMode": "code",
+            "expr": "sum(count_over_time(({container_name=~\"$service\"} |~ \"(?i)$searchable_pattern\")[$__interval])) by (logstream)",
+            "legendFormat": "{{label.Name}}",
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "thresholds": [],
+        "timeRegions": [],
+        "title": "Matched word: \"$searchable_pattern\" historical",
+        "tooltip": {
+          "shared": true,
+          "sort": 2,
+          "value_type": "individual"
+        },
+        "type": "graph",
+        "xaxis": {
+          "mode": "time",
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "$$hashKey": "object:425",
+            "decimals": 0,
+            "format": "short",
+            "label": "Count",
+            "logBase": 1,
+            "show": true
+          },
+          {
+            "$$hashKey": "object:426",
+            "format": "short",
+            "logBase": 1,
+            "show": false
+          }
+        ],
+        "yaxis": {
+          "align": false
+        }
+      },
+      {
+        "aliasColors": {},
+        "bars": false,
+        "dashLength": 10,
+        "dashes": false,
+        "datasource": {
+          "type": "loki",
+          "uid": "Loki"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "links": [],
+            "unitScale": true
+          },
+          "overrides": []
+        },
+        "fill": 1,
+        "fillGradient": 10,
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 12,
+          "y": 13
+        },
+        "hiddenSeries": false,
+        "id": 10,
+        "legend": {
+          "alignAsTable": true,
+          "avg": false,
+          "current": false,
+          "max": false,
+          "min": false,
+          "rightSide": false,
+          "show": true,
+          "total": false,
+          "values": false
+        },
+        "lines": true,
+        "linewidth": 1,
+        "links": [],
+        "maxDataPoints": 100,
+        "nullPointMode": "null",
+        "options": {
+          "alertThreshold": true
+        },
+        "percentage": false,
+        "pluginVersion": "10.3.1",
+        "pointradius": 0.5,
+        "points": false,
+        "renderer": "flot",
+        "seriesOverrides": [],
+        "spaceLength": 10,
+        "stack": false,
+        "steppedLine": false,
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "Loki"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(({container_name=~\"$service\"} |~ \"(?i)$searchable_pattern\")[30s])) by (logstream)",
+            "hide": false,
+            "legendFormat": "{{label.Name}}",
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "thresholds": [],
+        "timeRegions": [],
+        "title": "\"$searchable_pattern\" Rate per Service",
+        "tooltip": {
+          "shared": true,
+          "sort": 2,
+          "value_type": "individual"
+        },
+        "type": "graph",
+        "xaxis": {
+          "mode": "time",
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "$$hashKey": "object:2804",
+            "format": "short",
+            "logBase": 10,
+            "show": true
+          },
+          {
+            "$$hashKey": "object:2805",
+            "format": "short",
+            "logBase": 1,
+            "show": true
+          }
+        ],
+        "yaxis": {
+          "align": false
+        }
+      },
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 22
+        },
+        "id": 41,
+        "panels": [],
+        "title": "Alarming",
+        "type": "row"
+      },
+      {
+        "datasource": {
+          "type": "loki",
+          "uid": "Loki"
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 24,
+          "x": 0,
+          "y": 23
+        },
+        "id": 47,
+        "options": {
+          "alertInstanceLabelFilter": "",
+          "alertName": "",
+          "dashboardAlerts": false,
+          "datasource": "Loki",
+          "groupBy": [],
+          "groupMode": "default",
+          "maxItems": 20,
+          "sortOrder": 1,
+          "stateFilter": {
+            "error": true,
+            "firing": true,
+            "noData": false,
+            "normal": false,
+            "pending": true
+          },
+          "viewMode": "list"
+        },
+        "title": "Loki Rules - Active alarms",
+        "type": "alertlist"
+      },
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 29
+        },
+        "id": 62,
+        "panels": [],
+        "title": "Root Level Services Logs",
+        "type": "row"
+      },
+      {
+        "datasource": {
+          "type": "loki",
+          "uid": "P8E80F9AEF21F6940"
+        },
+        "description": "",
+        "gridPos": {
+          "h": 10,
+          "w": 12,
+          "x": 0,
+          "y": 30
+        },
+        "id": 61,
+        "options": {
+          "dedupStrategy": "none",
+          "enableLogDetails": true,
+          "prettifyLogMessage": false,
+          "showCommonLabels": false,
+          "showLabels": false,
+          "showTime": true,
+          "sortOrder": "Descending",
+          "wrapLogMessage": false
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "Loki"
+            },
+            "editorMode": "code",
+            "expr": "{job=\"containerlogs\", container_name=\"system_manager\"} |~ `(?i)$searchable_pattern`",
+            "hide": false,
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "title": "System Manager Logs: filtered by \"$searchable_pattern\"",
+        "type": "logs"
+      },
+      {
+        "datasource": {
+          "type": "loki",
+          "uid": "P8E80F9AEF21F6940"
+        },
+        "description": "",
+        "gridPos": {
+          "h": 10,
+          "w": 12,
+          "x": 12,
+          "y": 30
+        },
+        "id": 64,
+        "options": {
+          "dedupStrategy": "none",
+          "enableLogDetails": true,
+          "prettifyLogMessage": false,
+          "showCommonLabels": false,
+          "showLabels": false,
+          "showTime": true,
+          "sortOrder": "Descending",
+          "wrapLogMessage": false
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "Loki"
+            },
+            "editorMode": "code",
+            "expr": "{job=\"containerlogs\", container_name=\"root_service_manager\"} |~ `(?i)$searchable_pattern`",
+            "hide": false,
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "title": "Root Service Manager Logs: filtered by \"$searchable_pattern\"",
+        "type": "logs"
+      },
+      {
+        "datasource": {
+          "type": "loki",
+          "uid": "P8E80F9AEF21F6940"
+        },
+        "description": "",
+        "gridPos": {
+          "h": 10,
+          "w": 12,
+          "x": 0,
+          "y": 40
+        },
+        "id": 63,
+        "options": {
+          "dedupStrategy": "none",
+          "enableLogDetails": true,
+          "prettifyLogMessage": false,
+          "showCommonLabels": false,
+          "showLabels": false,
+          "showTime": true,
+          "sortOrder": "Descending",
+          "wrapLogMessage": false
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "Loki"
+            },
+            "editorMode": "code",
+            "expr": "{job=\"containerlogs\", container_name=\"resource_abstractor\"} |~ `(?i)$searchable_pattern`",
+            "hide": false,
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "title": "Resource Abstractor Logs: filtered by \"$searchable_pattern\"",
+        "type": "logs"
+      },
+      {
+        "datasource": {
+          "type": "loki",
+          "uid": "P8E80F9AEF21F6940"
+        },
+        "description": "",
+        "gridPos": {
+          "h": 10,
+          "w": 12,
+          "x": 12,
+          "y": 40
+        },
+        "id": 65,
+        "options": {
+          "dedupStrategy": "none",
+          "enableLogDetails": true,
+          "prettifyLogMessage": false,
+          "showCommonLabels": false,
+          "showLabels": false,
+          "showTime": true,
+          "sortOrder": "Descending",
+          "wrapLogMessage": false
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "Loki"
+            },
+            "editorMode": "code",
+            "expr": "{job=\"containerlogs\", container_name=\"cloud_scheduler\"} |~ `(?i)$searchable_pattern`",
+            "hide": false,
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "title": "Cloud Scheduler Logs: filtered by \"$searchable_pattern\"",
+        "type": "logs"
+      }
+    ],
+    "refresh": "5s",
+    "schemaVersion": 39,
+    "tags": [
+      "Loki",
+      "logging",
+      "oakestra-root-infra"
+    ],
+    "templating": {
+      "list": [
+        {
+          "current": {
+            "selected": false,
+            "text": "",
+            "value": ""
+          },
+          "hide": 0,
+          "label": "Search (case insensitive)",
+          "name": "searchable_pattern",
+          "options": [
+            {
+              "selected": true,
+              "text": "",
+              "value": ""
+            }
+          ],
+          "query": "",
+          "skipUrlSync": false,
+          "type": "textbox"
+        },
+        {
+          "current": {
+            "selected": true,
+            "text": [
+              "cloud_scheduler",
+              "resource_abstractor",
+              "root_service_manager",
+              "system_manager"
+            ],
+            "value": [
+              "cloud_scheduler",
+              "resource_abstractor",
+              "root_service_manager",
+              "system_manager"
+            ]
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "definition": "",
+          "hide": 0,
+          "includeAll": false,
+          "label": "service",
+          "multi": true,
+          "name": "service",
+          "options": [],
+          "query": {
+            "label": "container_name",
+            "refId": "LokiVariableQueryEditor-VariableQuery",
+            "stream": "",
+            "type": 1
+          },
+          "refresh": 1,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        },
+        {
+          "allValue": "",
+          "current": {
+            "selected": true,
+            "text": [
+              "containerlogs"
+            ],
+            "value": [
+              "containerlogs"
+            ]
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "definition": "",
+          "hide": 0,
+          "includeAll": false,
+          "label": "Infrastructure Level Logs",
+          "multi": true,
+          "name": "infrastructure",
+          "options": [],
+          "query": {
+            "label": "job",
+            "refId": "LokiVariableQueryEditor-VariableQuery",
+            "stream": "",
+            "type": 1
+          },
+          "refresh": 1,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        }
+      ]
+    },
+    "time": {
+      "from": "now-5m",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": [
+        "10s",
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "1d"
+      ]
+    },
+    "timezone": "",
+    "title": "[Oakestra] Root Orchestrator - Infrastructure Dashboard",
+    "uid": "fRIvzUZM8",
+    "version": 10,
+    "weekStart": ""
+  }

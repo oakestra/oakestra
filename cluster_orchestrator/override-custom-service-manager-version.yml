@@ -4,5 +4,5 @@ services:
 
   # Customize cluste service manager image
   cluster_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:alpha-v0.4.203
+    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:alpha-v0.4.301
 

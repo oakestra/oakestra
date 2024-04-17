@@ -1,0 +1,11 @@
+apiVersion: 1
+
+datasources:
+  - name: Loki_Cluster
+    type: loki
+    access: proxy
+    uid: Loki
+    url: http://cluster_loki:3101
+    version: 1
+    editable: true
+    isDefault: true
