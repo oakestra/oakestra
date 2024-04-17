@@ -30,7 +30,7 @@ if [ ! -x "$(command -v jq)" ]; then
     brew install jq
   else
     # Install jq on Ubuntu/Debian based systems using apt
-    sudo apt update && sudo apt install jq
+    sudo apt update && sudo apt install -y jq
   fi
   echo "jq installation complete."
 else
