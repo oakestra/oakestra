@@ -149,9 +149,9 @@ sla_schema = {
                     },
                 },
                 "required": [
-                    "applicationID", 
-                    "application_name", 
-                    "application_namespace", 
+                    "applicationID",
+                    "application_name",
+                    "application_namespace",
                     "microservices"
                     ],
             },
