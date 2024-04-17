@@ -21,4 +21,5 @@ def parse_sla_json(sla):
     if validation_result is None or validation_result is True:
         return json_data
     else:
+        logging.log(logging.ERROR, validation_result)
         raise SLAFormatError(validation_result)
