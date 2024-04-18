@@ -32,52 +32,50 @@ class AddonsMonitor:
         # TODO do we stop all containers belonging to that addon?
         # TODO how do we report partial failures, where only some containers in an addon failed?
         # TODO ----> add fail policy for a container fails in an addon.
-        self._retry_addons = {}
+        self._retry_containers = {}
 
     def _get_exit_code(self, container):
         return container.attrs["State"]["ExitCode"]
 
-    def _get_containers_with_label(self, label):
-        return self._client.containers.list(filters={"label": label})
-
-    def get_oak_addon_containers(self):
+    def get_oak_addon_containers(self, all=True):
         # filter by key-value. Get containers created by a particular addon engine instance.
-        return self._get_containers_with_label(f"{ADDON_MANAGER_LABEL}={ADDON_ENGINE_ID}")
+        label = f"{ADDON_MANAGER_LABEL}={ADDON_ENGINE_ID}"
+
+        return self._client.containers.list(filters={"label": label}, all=all)
 
     def _handle_failed_container(self, container, addon_id, exit_code):
         logging.warning(
-            f"Addon-{addon_id}: container-{container.name} exited" f"with code {exit_code}"
+            f"Addon-{addon_id}: container-{container.name} exited with code {exit_code}"
         )
 
-        curr_retries = self._retry_addons.get(container.name, 0)
-        if curr_retries > MAX_CONTAINER_RETRIES:
+        curr_retries = self._retry_containers.get(container.id, 0)
+        if curr_retries >= MAX_CONTAINER_RETRIES:
             logging.error(
                 (f"Addon-{addon_id}: container-{container.name} " f"exceeded max retries")
             )
-            self._retry_addons.get(addon_id, []).remove(container.id)
+            self._retry_containers = [c for c in self._retry_containers if c.id != container.id]
             addons_db.update_addon(addon_id, {"status": "failed"})
         else:
-            self._retry_addons[container.name] = curr_retries + 1
+            self._retry_containers[container.id] = curr_retries + 1
 
     # is run in a separate thread
     def start_monitoring(self):
         while True:
-            # get all containers created by the addon engine
-            for container in self.get_oak_addon_containers():
-                if container.status == "exited":
-                    exit_code = self._get_exit_code(container)
-                    if exit_code != 0:
-                        addon_id = container.labels.get(ADDON_ID_LABEL, None)
-                        if not addon_id:
-                            logging.error(
-                                f"Container {container.name} does not have an addon id label"
-                            )
-                            continue
-                        self._handle_failed_container(container, addon_id, exit_code)
+            # get all containers created by the addon engine, even exited ones.
+            oak_containers = self.get_oak_addon_containers(all=True)
+            for container in oak_containers:
+                exit_code = self._get_exit_code(container)
+                if exit_code != 0:
+                    addon_id = container.labels.get(ADDON_ID_LABEL, None)
+                    if not addon_id:
+                        logging.error(f"Container {container.name} does not have an addon id label")
+                        continue
+                    self._handle_failed_container(container, addon_id, exit_code)
 
             # restart all containers that failed
-            for addon_id, containers in self._retry_addons.items():
-                for container in containers:
+            for container_id, _ in self._retry_containers.items():
+                container = next((c for c in oak_containers if c.id == container_id), None)
+                if container:
                     container.restart()
 
             # poll every x seconds
@@ -326,8 +324,12 @@ def install_addon(addon):
         new_status = "enabled"
         if failed_services:
             logging.error(f"Failed to run services: {failed_services}")
-            new_status = "failed"
+            if len(failed_services) == len(services):
+                new_status = "failed"
+            else:
+                new_status = "partially_enabled"
 
+        # TODO: improve status message.
         addons_db.update_addon(
             str(created_addon["_id"]), {"status": new_status, "services": created_addon["services"]}
         )
