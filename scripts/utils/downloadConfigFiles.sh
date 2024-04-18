@@ -1,6 +1,6 @@
 #!/bin/bash
 
-config_files="prometheus/prometheus.yml mosquitto/mosquitto.conf config/grafana-dashboards.yml config/grafana-datasources.yml config/loki.yml config/promtail.yml config/alerts/rules.yml config/dashboards/dashboard.json"
+config_files="prometheus/prometheus.yaml mosquitto/mosquitto.conf config/grafana-dashboards.yml config/grafana-datasources.yml config/loki.yml config/promtail.yml config/alerts/rules.yml config/dashboards/dashboard.json"
 repo_folder=$1
 repo_branch=$2
 

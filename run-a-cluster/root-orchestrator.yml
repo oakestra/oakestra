@@ -7,9 +7,6 @@ services:
     image: ghcr.io/oakestra/oakestra/root-system-manager:latest
     hostname: system_manager
     container_name: system_manager
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
     expose:
       - "10000"
     ports:
@@ -57,9 +54,6 @@ services:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
     container_name: root_service_manager
     hostname: root_service_manager
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
     expose:
       - "10099"
     ports:
@@ -83,45 +77,13 @@ services:
       - "6379:6379"
     command: redis-server --requirepass cloudRedis
 
-# Observability Stack
+
   grafana:
     image: grafana/grafana
     hostname: grafana
     container_name: grafana
     ports:
       - 3000:3000
-    volumes:
-      - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml
-      - ./config/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml
-      - ./config/dashboards:/var/lib/grafana/dashboards
-    logging: *default-logging
-
-  loki:
-    container_name: loki
-    image: grafana/loki:2.9.2
-    ports:
-      - 3100:3100
-    volumes:
-      - ./config/loki.yml:/etc/loki/config.yml
-      - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
-
-    command: -config.file=/etc/loki/config.yml
-    #logging:
-    #  driver: none
-
-  promtail:
-    image:  grafana/promtail:2.9.2
-    container_name: promtail
-    volumes:
-      - ./config/promtail.yml:/etc/promtail/config.yml
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: 
-      - '--config.file=/etc/promtail/config.yml'
-      - '--server.enable-runtime-reload'
-    depends_on:
-      - loki
-    logging: *default-logging
 
   dashboard:
     image: ghcr.io/oakestra/dashboard:latest
@@ -136,9 +98,6 @@ services:
   cloud_scheduler:
     image: ghcr.io/oakestra/oakestra/cloud-scheduler:latest
     container_name: cloud_scheduler
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
     hostname: cloud_scheduler
     expose:
       - "10004"
@@ -161,9 +120,6 @@ services:
     image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.301
     container_name: resource_abstractor
     hostname: resource_abstractor
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
     expose:
       - "11011"
     ports:
