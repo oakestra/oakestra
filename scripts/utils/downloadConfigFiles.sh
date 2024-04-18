@@ -1,20 +1,8 @@
 #!/bin/bash
 
-
-
-# `$exec_mode` identify the folder of the config files to download based on the components we are running (1DOC, root or cluster)
-# Specifically:
-# - `1DOC` ($exec_mode=`run-a-cluster`)
-# - `root_orchestrator` ($exec_mode=`root_orchestrator`)
-# - `cluster_orchestrator` ($exec_mode=`cluster_orchestrator`)
-
-
-
-# Define base URL
-
-exec_mode=$1 #determine if deploy 1DOC, root or cluster component
-repo_folder=$2 #determine the folder, at moment static to `run-a-cluster`
-base_url="https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/$repo_folder"
+config_files="prometheus/prometheus.yml mosquitto/mosquitto.conf config/grafana-dashboards.yml config/grafana-datasources.yml config/loki.yml config/promtail.yml config/alerts/rules.yml config/dashboards/dashboard.json"
+repo_folder=$1
+repo_branch=$2
 
 mkdir -p config/alerts 2> /dev/null
 mkdir -p config/dashboards 2> /dev/null
@@ -68,20 +56,8 @@ case "$exec_mode" in
     config_files=("${config_cluster[@]}")
     mkdir mosquitto 2> /dev/null
 
-    ;;
-  *)
-    echo "Error: Invalid layer '$exec_mode'. Valid options are 'run-a-cluster','root_orchestrator' or 'cluster_orchestrator'."
-    exit 1
-    ;;
-esac
-
-# Download files with a loop
-
-
-for file in "${config_files[@]}"; do
-  echo "Downloading $base_url/$file into $file"
-  curl -sfL "$base_url/$file" > "$file"
+for config_file in ${config_files}; do
+    rm $config_file 2> /dev/null
+    touch $config_file 
+    curl -sL https://raw.githubusercontent.com/oakestra/oakestra/$repo_branch/$repo_folder/$config_file -o $config_file
 done
-
-# Success message
-echo "Downloaded files from branch $OAKESTRA_BRANCH repository folder '$exec_mode'."

@@ -30,7 +30,7 @@ if [ ! -x "$(command -v jq)" ]; then
     brew install jq
   else
     # Install jq on Ubuntu/Debian based systems using apt
-    sudo apt update && sudo apt install jq
+    sudo apt update && sudo apt install -y jq
   fi
   echo "jq installation complete."
 else
@@ -89,7 +89,7 @@ curl -sfL https://raw.githubusercontent.com/TheDarkPyotr/oakestra/$OAKESTRA_BRAN
 curl -sfL https://raw.githubusercontent.com/TheDarkPyotr/oakestra/$OAKESTRA_BRANCH/run-a-cluster/1-DOC.yaml > 1-DOC.yaml
 
 chmod +x downloadConfigFiles.sh
-./downloadConfigFiles.sh run-a-cluster 1DOC
+./downloadConfigFiles.sh run-a-cluster $OAKESTRA_BRANCH
 
 if [ $? -ne 0 ]; then
         echo "Error: Failed to retrieve config files"
@@ -114,6 +114,13 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
         exit 1
     fi
 fi
+
+if sudo docker ps -a | grep oakestra >/dev/null 2>&1; then
+  echo 🚨 Oakestra containers are already running. Please stop them before starting a new 1-DOC cluster.
+  echo 🪫 You can turn off the current cluster using: \$ docker compose -f ~/oakestra/1-DOC.yaml down
+  exit 1
+fi
+
 command_exec="sudo -E docker compose -f 1-DOC.yaml ${OAK_OVERRIDES}up -d"
 echo executing "$command_exec"
 
