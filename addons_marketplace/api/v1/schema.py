@@ -13,9 +13,9 @@ class ServiceSchema(Schema):
     image_uri = fields.String(required=True)
     command = fields.String()
     networks = fields.List(fields.String(), default=[])
-    ports = fields.Dict(keys=fields.String(), values=fields.String())
-    environment = fields.Dict(keys=fields.String(), values=fields.String())
-    labels = fields.Dict(keys=fields.String(), values=fields.String())
+    ports = fields.Dict(keys=fields.String(), values=fields.String(), default={})
+    environment = fields.Dict(keys=fields.String(), values=fields.String(), default={})
+    labels = fields.Dict(keys=fields.String(), values=fields.String(), default={})
 
 
 class MarketplaceAddonSchema(Schema):

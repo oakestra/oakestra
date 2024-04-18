@@ -1,4 +1,3 @@
-import copy
 import logging
 import os
 import threading
@@ -189,12 +188,34 @@ class DockerAddonRunner:
                 logging.warning(f"Container {service['service_name']} not found")
 
     def run_addon(self, addon, project_name=DEFAULT_PROJECT_NAME):
+        """Runs the services for a given addon. addon object is modified in place.
+
+        This function checks if the services for the addon are already running. If they are,
+        it does nothing.
+        If a similar service is running, it stops the existing container, and starts a new one
+        with the service configuration.
+
+        Args:
+            addon (dict): The addon configuration. It should contain a 'services' key, which is a
+            list of service configurations.
+            Each service configuration is a dictionary that includes at least 'service_name' and
+            'image_uri'.
+            project_name (str, optional): The name of the project.
+            Defaults to DEFAULT_PROJECT_NAME.
+
+        Returns:
+            dict: A dictionary with two keys:
+                - 'failed_services': A list of services that failed to start. Each element is a
+                service configuration dictionary.
+                - 'new_containers': A list of the new containers that were started. Each element is
+                a docker.models.containers.Container object.
+        """
         if not self._addons_monitor:
             logging.warning(
                 "Registry was not configured. Containers running will not be monitored."
             )
 
-        addon_services = copy.deepcopy(addon["services"])
+        addon_services = addon["services"]
         addon_id = str(addon.get("_id"))
 
         failed_services = []
@@ -307,7 +328,9 @@ def install_addon(addon):
             logging.error(f"Failed to run services: {failed_services}")
             new_status = "failed"
 
-        addons_db.update_addon(str(created_addon["_id"]), {"status": new_status})
+        addons_db.update_addon(
+            str(created_addon["_id"]), {"status": new_status, "services": created_addon["services"]}
+        )
 
     # TODO: is this the ideal way of doing it? Perhaps use websockets for real-time updates?
     threading.Thread(target=run_addon, args=(created_addon,)).start()
