@@ -1,0 +1,64 @@
+version: "3.3"
+
+services:
+  mqtt:
+    networks:
+      cluster_net:
+        ipv4_address: 192.168.129.6
+        ipv6_address: 2001:db8:b::6
+
+  mongo_cluster:
+    networks:
+      cluster_net:
+        ipv4_address: 192.168.129.5
+        ipv6_address: 2001:db8:b::5
+    command: mongod --port 10107 --ipv6
+
+  mongo_clusternet:
+    networks:
+      cluster_net:
+        ipv4_address: 192.168.129.4
+        ipv6_address: 2001:db8:b::4
+    command: mongod --port 10108 --ipv6
+
+  cluster_service_manager:
+    networks:
+      cluster_net:
+        ipv4_address: 192.168.129.3
+        ipv6_address: 2001:db8:b::3
+
+  cluster_manager:
+    networks:
+      cluster_net:
+        ipv4_address: 192.168.129.2
+        ipv6_address: 2001:db8:b::2
+
+  cluster_scheduler:
+    networks:
+      cluster_net:
+        ipv4_address: 192.168.129.7
+        ipv6_address: 2001:db8:b::7
+
+  cluster_redis:
+    networks:
+      cluster_net:
+        ipv4_address: 192.168.129.8
+        ipv6_address: 2001:db8:b::8
+
+  prometheus:
+    networks:
+      cluster_net:
+        ipv4_address: 192.168.129.9
+        ipv6_address: 2001:db8:b::9
+
+networks:
+  cluster_net:
+    name: cluster_net
+    enable_ipv6: true
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 2001:db8:b::/64
+          gateway: 2001:db8:b::1
+        - subnet: 192.168.129.0/24
+          gateway: 192.168.129.1

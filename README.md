@@ -1,4 +1,10 @@
+![workflow code style](https://github.com/oakestra/oakestra/actions/workflows/python_codestyle_check.yml/badge.svg)
+![example artifacts](https://github.com/oakestra/oakestra/actions/workflows/node_engine_artifacts.yml/badge.svg)
+![example artifacts](https://github.com/oakestra/oakestra/actions/workflows/root_system_manager_tests.yml/badge.svg)
+[![Stable](https://img.shields.io/badge/Latest%20Stable-%F0%9F%AA%97%20Accordion%20v0.4.301-green.svg)](https://github.com/oakestra/oakestra/tree/v0.4.301)
+[![Github All Releases](https://img.shields.io/github/downloads/oakestra/oakestra/total.svg)]()
 ![Oakestra](res/oakestra-white.png)
+
 
 **Oakestra** is an orchestration platform designed for Edge Computing.
 Popular orchestration platforms such as Kubernetes or K3s struggle at maintaining workloads across heterogeneous and constrained devices. 
@@ -17,10 +23,11 @@ Oakestra is build from the ground up to support computation in a flexible way at
   - [Your first worker node 🍃](#your-first-worker-node-🍃)
   - [Your first application 💻](#your-first-application-💻)
 - [🎯 Troubleshoot ](#🎯-troubleshoot)  
-- [🛠️ How to create a development cluster](#🛠️-how-to-create-a-development-cluster)  
+- [🛠️ How to create a multi cluster setup](#🛠️-how-to-create-a-development-cluster)  
 - [🎼 Deployment descriptor](#🎼-deployment-descriptor)  
 - [🩻 Use the APIs to deploy a new application and check clusters status](#🩻-use-the-apis-to-deploy-a-new-application-and-check-clusters-status)  
 - [🕸️ Networking ](#🕸️-networking)  
+- [📈 Monitoring ](#📈-monitoring)  
 ---
 
 # 🌳 Get Started
@@ -34,54 +41,24 @@ In this get-started guide, we place everything on the same machine. More complex
 <a name="requirements"></a>
 
 - Linux machine with iptables
-- Docker + Docker Compose 
+- Docker + Docker Compose v2
 
 ### Your first cluster 🪵
 <a name="your-first-cluster-🪵"></a>
-Let's start our Root, the dashboard, and a cluster orchestrator all together.
-
-**1)** Let's set the initial environment variables
+Let's start our Root, the dashboard, and a cluster orchestrator on your machine. We call this setup 1-DOC which stands for 1 Device One Cluster, meaning that all the components are deployed locally. 
 
 ```bash
-## Choose a unique name for your cluster
-export CLUSTER_NAME=My_Awesome_Cluster
-## Give a name or geo coordinates to the current location
-export CLUSTER_LOCATION=My_Awesome_Apartment
-## IP address where this root component can be reached to access the APIs
-export SYSTEM_MANAGER_URL=<IP address>
-# Note: Use a non-loopback interface IP (e.g. any of your real interfaces that have internet access).
-# "0.0.0.0" leads to server issues
+curl -sfL oakestra.io/getstarted.sh | sh - 
 ```
 
-A location can be in the following forms:
-- < STRING > representing a location name. E.g., `my_home`
-- LATITUDE,LONGITUDE,RADIUS representing the geographical area covered by this cluster. E.g., `48.1397,11.5451,1000`, which represents an area of 1km from Munich city center.  
-
-**2)** Clone and move inside the repo
-
-```bash
-# Feel free to use https or ssh for cloning
-git clone https://github.com/oakestra/oakestra.git && cd oakestra
-```
-
-**3)** Start the root and cluster orchestrator using the `1-DOC.yaml` compose file.
-
-```bash
-sudo -E docker-compose -f run-a-cluster/1-DOC.yaml up
-# If this should not work for you try "docker compose" instead
-```
-
-**1-DOC** stands for 1 Device One Cluster, meaning that all the components are deployed locally. 
+> You can turn off the cluster using `docker compose -f ~/oakestra/1-DOC.yaml down`
 
 ### Your first worker node 🍃
 <a name="your-first-worker-node-🍃"></a>
 
 Download and install the Node Engine and the Network Manager:
 ```
-wget -c https://github.com/oakestra/oakestra/releases/download/v0.4.203/NodeEngine_$(dpkg --print-architecture).tar.gz && tar -xzf NodeEngine_$(dpkg --print-architecture).tar.gz && chmod +x install.sh && mv NodeEngine NodeEngine_$(dpkg --print-architecture) && ./install.sh $(dpkg --print-architecture)
-```
-```
-wget -c https://github.com/oakestra/oakestra-net/releases/download/v0.4.203/NetManager_$(dpkg --print-architecture).tar.gz && tar -xzf NetManager_$(dpkg --print-architecture).tar.gz && chmod +x install.sh && ./install.sh $(dpkg --print-architecture)
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/InstallOakestraWorker.sh | sh -  
 ```
 
 Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follows:
@@ -108,6 +85,8 @@ If you see the NodeEngine reporting metrics to the Cluster...
 
 🏆 Success!
 
+#### ✨🆕✨ If the worker node machine has [KVM](https://phoenixnap.com/kb/ubuntu-install-kvm) installed and it supports nested virtualization, you can add the flag `-u=true` to the NodeEngine startup command to enable Oakestra Unikernel deployment support for this machine.
+
 ### Your first application 💻
 <a name="your-first-application-💻"></a>
 
@@ -123,24 +102,44 @@ Deactivate the Organization flag for now. *(Not like it is depicted in the refer
 
 
 Add a new application, and specify the app name, namespace, and description. 
-**N.b.: Max 8 characters for app name and namespace**
+**N.b.: Max 30 alphanumeric characters. No symbols.**
 ![](https://hackmd.io/_uploads/H1HGnqjnh.png)
 
-Add a new service to the application and set the service name, namespace, and image as follows
-![](fig/fig-service-deploy.png)
-- Service Name: `nginx`
-- Service namespace: `test`
-- Virtualization: `Container`
-- Code: `docker.io/library/nginx:latest`
-- Port: `80:80` we map port 80 to external port 80
+Then, create a new service using the <img src="https://hackmd.io/_uploads/BkaUb7utp.png" style="width:10em"/> button. 
 
-Now hit the Deploy All button to deploy all the configured services. 
-After a while, you should see the service up and running. Click it to get more info. 
-![](fig/fig-deployed.png)
+Fill the form using the following values: 
+**N.b.: Max 30 alphanumeric characters. No symbols.**
+![image](https://hackmd.io/_uploads/BysAV7uta.png)
 
-The Node IP field represents the address where you can reach your service. 
+```
+Service name: nginx
+Namespace: test
+Virtualization: Container
+Memory: 100MB
+Vcpus: 1
+Port: 80
+Code: docker.io/library/nginx:latest
+```
 
-You can try in your browser if you can see your nginx application at `http://NODE_IP/`
+Finally, deploy the application using the deploy button.
+
+<p>
+<img src="https://hackmd.io/_uploads/rkvdHQdt6.png" style="width:15em"/>
+</p>
+
+Check the application status, IP address, and logs.
+
+<p>
+<img src="https://hackmd.io/_uploads/r1YoSQdFT.png" style="width:15em"/>
+</p>
+
+![image](https://hackmd.io/_uploads/HyX6HmutT.png)
+
+![image](https://hackmd.io/_uploads/Bkh0QmOF6.png)
+
+The Node IP field represents the address where you can reach your service. Let's try to use our browser now to navigate to the IP 131.159.24.51 used by this application. 
+
+![image](https://hackmd.io/_uploads/HkPGUXOt6.png)
 
 # 🎯 Troubleshoot
 <a name="🎯-troubleshoot"></a>
@@ -162,18 +161,32 @@ You can try in your browser if you can see your nginx application at `http://NOD
 
 - #### Other stuff? Contact us on Discord!
 
-# 🛠️ How to create a development cluster
+# 🛠️ How to create a multi-cluster setup
 <a name="🛠️-how-to-create-a-development-cluster"></a>
 
 ### Root Orchestrator 
+Initialize a standalone root orchestrator. 
 
-On a Linux machine first, install Docker and Docker-compose. Then, run the following commands to set up the Root Orchestrator components.
+On a Linux machine first, install Docker and Docker compose v2. 
 
-```bash
-export SYSTEM_MANAGER_URL=<Address of current machine> #Used by the dashboard
-cd root_orchestrator/
-docker-compose up --build 
+First configure the address used by the dashboard to reach your APIs by running:
+
+`export SYSTEM_MANAGER_URL=<Address of current machine>`
+
+
+To run the Root orchestrator from the pre-compiled images:
+- (optional) setup a repository branch e.g., `export OAKESTRA_BRANCH=develop`, default branch is `main`.
+- (optional) setup comma-separated list of custom override files for docker compose e.g., `export OVERRIDE_FILES=override-alpha-versions.yaml`
+- Download setup and startup the root orchestrator simply running:
 ```
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/StartOakestraRoot.sh | sh - 
+```
+
+> If you wish to build the Root Orchestrator by yourself from source code, clone the repo and run:
+> ```bash
+> cd root_orchestrator/
+> docker-compose up --build 
+> ```
 
 The following ports are exposed:
 
@@ -183,33 +196,50 @@ The following ports are exposed:
 
 ### Cluster Orchestrator
 
-For each one of the cluster orchestrators that needs to be deployed 
+For each cluster, we need at least a machine running the clsuter orchestrator. 
 
 - Log into the target machine/vm you intend to use
-- Install Docker and Docker-compose.
+- Install Docker and Docker compose v2.
 - Export the required parameters:
 
-```
-export SYSTEM_MANAGER_URL=" < ip address of the root orchestrator > "
-export CLUSTER_NAME=" < name of the cluster > "
-export CLUSTER_LOCATION=" < location of the cluster > "
-```
-
-- Then, run the following commands to set up the Cluster Orchestrator components. 
-
 ```bash
-cd cluster_orchestrator/
-docker-compose up --build 
+## Choose a unique name for your cluster
+export CLUSTER_NAME=My_Awesome_Cluster
+
+## Optional: Give a name or geo coordinates to the current location. Default location set to coordinates of your IP
+#export CLUSTER_LOCATION=My_Awesome_Apartment
+
+## IP address where this root component can be reached to access the APIs
+export SYSTEM_MANAGER_URL=<IP address>
+# Note: Use a non-loopback interface IP (e.g. any of your real interfaces that have internet access).
+# "0.0.0.0" leads to server issues
 ```
+
+You can run the cluster orchestrator using the pre-compiled images:
+- (optional) setup a repository branch e.g., `export OAKESTRA_BRANCH=develop`, default branch is `main`.
+- (optional) setup comma-separated list of custom override files for docker compose e.g., `export OVERRIDE_FILES=override-alpha-versions.yaml`
+- (optional) setup a custom cluster location e.g., `export CLUSTER_LOCATION=<latitude>,<longitude>,<radius>`, default location is automatically inferred from the public IP address of the machine. 
+- Download and start the cluster orchestrator components:
+```
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/StartOakestraCluster.sh | sh - 
+```
+
+>If you wish yo build the cluster orchestrator yourself simply clone the repo and run:
+> ```bash
+> export CLUSTER_LOCATION=My_Awesome_Apartment #If building the code this is not optional anymore
+> cd cluster_orchestrator/
+> docker-compose up --build 
+> ```
 
 The following ports are exposed:
 
 - 10100 Cluster Manager (needs to be accessible by the Node Engine)
 
-### Worker nodes -  Node Engine
+### Worker nodes 
 
-You can either use the pre-compiled binaries or compile them on your own. 
+For each worker node you can either use the pre-compiled binaries (check [🌳 Get Started](#🌳-get-started) ) as usual or compile them on your own. 
 
+#### Build your node engine
 *Requirements*
 - Linux OS with the following packages installed (Ubuntu and many other distributions natively supports them)
   - iptable
@@ -225,6 +255,9 @@ cd go_node_engine/build
 
 Then configure the NetManager and perform the startup as usual. 
 
+N.b. each worker node can now be configured to work with a different cluster.  
+
+Alternatively you can install the latest stable binaeries
 
 # 🎼 Deployment descriptor
 <a name="🎼-deployment-descriptor"></a>
@@ -251,7 +284,7 @@ E.g.: `deploy_curl_application.yaml`
           "microservice_name": "curl",
           "microservice_namespace": "test",
           "virtualization": "container",
-          "cmd": ["sh", "-c", "tail -f /dev/null"],
+          "cmd": ["sh", "-c", "curl 10.30.55.55 ; sleep 5"],
           "memory": 100,
           "vcpus": 1,
           "vgpus": 0,
@@ -261,8 +294,9 @@ E.g.: `deploy_curl_application.yaml`
           "storage": 0,
           "code": "docker.io/curlimages/curl:7.82.0",
           "state": "",
-          "port": "9080",
-          "added_files": []
+          "port": "",
+          "added_files": [],
+          "constraints":[]
         },
         {
           "microserviceID": "",
@@ -279,9 +313,9 @@ E.g.: `deploy_curl_application.yaml`
           "storage": 0,
           "code": "docker.io/library/nginx:latest",
           "state": "",
-          "port": "6080:60/tcp",
+          "port": "80:80/tcp",
           "addresses": {
-            "rr_ip": "10.30.30.30"
+            "rr_ip": "10.30.55.55"
           },
           "added_files": []
         }
@@ -300,25 +334,27 @@ This is a detailed description of the deployment descriptor fields currently imp
 - customerID: id of the user, default is Admin
   - application list, in a single deployment descriptor is possible to define multiple applications, each containing:
     - Fully qualified app name: A fully qualified name in Oakestra is composed of 
-        - application_name: unique name representing the application (max 10 char, no symbols)
-        - application_namespace: namespace of the app, used to reference different deployment of the same application. Examples of namespace name can be `default` or `production` or `test` (max 10 char, no symbols)
+        - application_name: unique name representing the application **(max 30 alphanumeric characters)**
+        - application_namespace: namespace of the app, used to reference different deployment of the same application. Examples of namespace name can be `default` or `production` or `test` **(max 30 alphanumeric characters)**
         - applicationID: leave it empty for new deployments, this is needed only to edit an existing deployment.  
     - application_desc: Short description of the application
     - microservice list, a list of the microservices composing the application. For each microservice the user can specify:
       - microserviceID: leave it empty for new deployments, this is needed only to edit an existing deployment.
       - Fully qualified service name:
-        - microservice_name: name of the service (max 10 char, no symbols)
-        - microservice_namespace: namespace of the service, used to reference different deployment of the same service. Examples of namespace name can be `default` or `production` or `test` (max 10 char, no symbols)
-      - virtualization: currently the only unsupported virtualization is `container`
-      - cmd: list of the commands to be executed inside the container at startup
+        - microservice_name: name of the service **(max 30 alphanumeric characters)**
+        - microservice_namespace: namespace of the service, used to reference different deployment of the same service. Examples of namespace name can be `default` or `production` or `test` **(max 30 alphanumeric characters)**
+      - virtualization: currently the supported virtualization are `container` or (✨🆕✨) `unikernel`
+      - cmd: list of the commands to be executed inside the container at startup or the unikernel parameters
       - environment: list of the environment variables to be set, E.g.: ['VAR=fOO'].
       - vcpu,vgpu,memory: minimum cpu/gpu vcores and memory amount needed to run the container
       - vtpus: currently not implemented
+      - code: public link of OCI container image (e.g. `docker.io/library/nginx:latest`) or (✨🆕✨) link to unikernel image in `.tar.gz` format (e.g. `http://<hosting-url-and-port>/nginx_x86.tar.gz`).
       - storage: minimum storage size required (currently the scheduler does not take this value into account)
       - bandwidth_in/out: minimum required bandwidth on the worker node. (currently the scheduler does not take this value into account)
       - port: port mapping for the container in the syntax hostport_1:containerport_1\[/protocol];hostport_2:containerport_2\[/protocol] (default protocol is tcp)
       - addresses: allows to specify a custom ip address to be used to balance the traffic across all the service instances. 
         - rr\_ip: [optional field] This field allows you to setup a custom Round Robin network address to reference all the instances belonging to this service. This address is going to be permanently bounded to the service. The address MUST be in the form `10.30.x.y` and must not collide with any other Instance Address or Service IP in the system, otherwise an error will be returned. If you don't specify a RR_ip and you don't set this field, a new address will be generated by the system.
+      - ✨🆕✨ one-shot: using the keyword `"one_shot": true` in the SLA is possible to deploy a one shot service, a service that when terminating with exit status 0 is marked as completed and not re-deployed. 
       - constraints: array of constraints regarding the service. 
         - type: constraint type
           - `direct`: Send a deployment to a specific cluster and a specific list of eligible nodes. You can specify `"node":"node1;node2;...;noden"` a list of node's hostnames. These are the only eligible worker nodes.  `"cluster":"cluster_name"` The name of the cluster where this service must be scheduled. E.g.:
@@ -334,16 +370,36 @@ This is a detailed description of the deployment descriptor fields currently imp
     ```
     
 #### Dashboard SLA descriptor
-From the dashboard you can create the application graphically and set the services via SLA. In that case you need to submit a different SLA, contianing only the microservice list:
+From the dashboard you can create the application graphically and set the services via SLA. In that case you need to submit a different SLA, contianing only the microservice list, e.g.:
 
 ```json
 {
-  "microservices": [
-    {
-      ...
-    }
-  ]
+      "microservices" : [
+        {
+          "microserviceID": "",
+          "microservice_name": "nginx",
+          "microservice_namespace": "test",
+          "virtualization": "container",
+          "cmd": [],
+          "memory": 100,
+          "vcpus": 1,
+          "vgpus": 0,
+          "vtpus": 0,
+          "bandwidth_in": 0,
+          "bandwidth_out": 0,
+          "storage": 0,
+          "code": "docker.io/library/nginx:latest",
+          "state": "",
+          "port": "",
+          "addresses": {
+            "rr_ip": "10.30.55.55"
+          },
+          "added_files": [],
+          "constraints": []
+        }
+      ]
 }
+
 ```
  
 # 🩻  Use the APIs to deploy a new application and check clusters status
@@ -398,8 +454,64 @@ each call to this endpoint generates a new instance of the service
 ### Cluster Status
 - Use `GET /api/clusters/` to get all the registered clusters.
 - Use `GET /api/clusters/active` to get all the clusters currently active and their resources.
+## Unikernel
+It is also possible to use Unikernels by changing the virtulization in of the microservice
+```json
+{
+	"sla_version": "v2.0",
+	"customerID": "Admin",
+	"applications": [{
+		"applicationID": "",
+		"application_name": "nginx",
+		"application_namespace": "test",
+		"application_desc": "Simple demo of an Nginx server Unikernel",
+		"microservices": [{
+			"microserviceID": "",
+			"microservice_name": "nginx",
+			"microservice_namespace": "test",
+			"virtualization": "unikernel",
+			"cmd": [],
+			"memory": 100,
+			"vcpus": 1,
+			"vgpus": 0,
+			"vtpus": 0,
+			"bandwidth_in": 0,
+			"bandwidth_out": 0,
+			"storage": 0,
+			"code": "https://github.com/Sabanic-P/app-nginx/releases/download/v1.0/kernel.tar.gz",
+			"arch": ["amd64"],
+			"state": "",
+			"port": "80:80",
+			"addresses": {
+				"rr_ip": "10.30.30.26"
+			},
+			"added_files": []
+		}]
+	}]
+}
+```
+Differences to Container Deployment:
+- virtualization: set to unikernel
+- code: Specifies a the remote Unikernel accessible via http(s). There can be multiple
+        Unikernels in the same string seperated via ",".
+- arch: Specifies the architecture of the Unikernel given in code. The order of
+        architectures must match the order of Unikernles given via the code field
+
 
 # 🕸️ Networking
 <a name="🕸️-networking"></a>
 
 The network component is maintained in: [https://www.oakestra.io/docs/networking](https://www.oakestra.io/docs/networking)
+
+# 📈 Monitoring
+<a name="📈-monitoring"></a>
+The **infrastructure monitoring stack** provided is built on Grafana OSS toolset. It monitors both *root* and *cluster* services for comprehensive visibility. Default Grafana Dashboard credentials can be used:
+-  Username: `admin`
+-  Password: `admin`
+
+To access the provisioned dashboards at:
+- **Root Infrastructure**: `<root_orch_ip>:3000`
+- **Cluster Infrastructure**: `<cluster_orch_ip>:3001`
+
+More details about monitoring stack can be found in [config/README.md](./root_orchestrator/config/README.md).
+

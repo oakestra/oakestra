@@ -3,27 +3,30 @@ version: "3.3"
 services:
 
   dashboard:
-    image: ghcr.io/oakestra/dashboard:latest
+    image: ghcr.io/oakestra/dashboard:alpha-v0.4.205
 
   system_manager:
-    image: ghcr.io/oakestra/oakestra/root-system-manager:alpha-v0.4.203
+    image: ghcr.io/oakestra/oakestra/root-system-manager:alpha-v0.4.300
 
   # Cluster Manager
   root_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/root-service-manager:alpha-v0.4.203
+    image: ghcr.io/oakestra/oakestra-net/root-service-manager:v0.4.204
+
+  resource_abstractor:
+    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.301
 
   # Cloud Scheduler
   cloud_scheduler:
-    image: ghcr.io/oakestra/oakestra/cloud-scheduler:alpha-v0.4.203
+    image: ghcr.io/oakestra/oakestra/cloud-scheduler:alpha-v0.4.300
 
   # Cluster Manager
   cluster_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:alpha-v0.4.203
+    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:v0.4.204
 
   # Cluster Manager
   cluster_manager:
-    image: ghcr.io/oakestra/oakestra/cluster-manager:alpha-v0.4.203
+    image: ghcr.io/oakestra/oakestra/cluster-manager:alpha-v0.4.300
 
   # Cluster Scheduler
   cluster_scheduler:
-    image: ghcr.io/oakestra/oakestra/cluster-scheduler:alpha-v0.4.203
+    image: ghcr.io/oakestra/oakestra/cluster-scheduler:alpha-v0.4.300

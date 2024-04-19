@@ -22,6 +22,13 @@ type connectNetworkRequest struct {
 	PortMappings   string `json:"portMappings"`
 }
 
+type connectNetworkRequestUnikernel struct {
+	Pid            int    `json:"pid"`
+	Servicename    string `json:"serviceName"`
+	Instancenumber int    `json:"instanceNumber"`
+	PortMappings   string `json:"portMappings"`
+}
+
 var ongoingDeployment sync.Mutex
 
 var httpClient = &http.Client{
@@ -103,6 +110,61 @@ func RegisterSelfToNetworkComponent() error {
 	}
 	if response.StatusCode != 200 {
 		return errors.New(fmt.Sprintf("NetManager registration failed, status code: %d", response.StatusCode))
+	}
+	return nil
+}
+
+func CreateNetworkNamespaceForUnikernel(servicename string, instance int, portMappings string) error {
+
+	ongoingDeployment.Lock()
+	defer ongoingDeployment.Unlock()
+
+	request := connectNetworkRequestUnikernel{
+		Pid:            0,
+		Servicename:    servicename,
+		Instancenumber: instance,
+		PortMappings:   portMappings,
+	}
+	jsonReq, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
+
+	response, err := httpClient.Post(
+		fmt.Sprintf("http://localhost:%d/unikernel/deploy", model.GetNodeInfo().NetManagerPort),
+		"application/json",
+		bytes.NewBuffer(jsonReq),
+	)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode != 200 {
+		return errors.New(fmt.Sprintf("NetManager deploy failed, status code: %d", response.StatusCode))
+	}
+	return nil
+}
+
+func DeleteNamespaceForUnikernel(servicename string, instance int) error {
+	request := connectNetworkRequest{
+		Pid:            -1,
+		Servicename:    servicename,
+		Instancenumber: instance,
+	}
+	jsonReq, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
+
+	response, err := httpClient.Post(
+		fmt.Sprintf("http://localhost:%d/unikernel/undeploy", model.GetNodeInfo().NetManagerPort),
+		"application/json",
+		bytes.NewBuffer(jsonReq),
+	)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode != 200 {
+		return errors.New(fmt.Sprintf("NetManager undeploy failed, status code: %d", response.StatusCode))
 	}
 	return nil
 }

@@ -1,0 +1,33 @@
+name: Update version file when release is published
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.NEW_RELEASE_TOKEN }}
+          ref: develop
+
+      - name: Update version.txt
+        # https://github.com/marketplace/actions/readme-files-updater-for-release
+        uses: MathieuSoysal/file-updater-for-release@v1.0.3
+        with:
+          files: version.txt
+          with-checkout: false
+      
+      - name: Push changes
+        # https://github.com/EndBug/add-and-commit
+        uses: EndBug/add-and-commit@v9
+        with:
+          committer_name: GitHub Actions
+          committer_email: actions@github.com
+          add: .
+          message: 'Update version.txt to ${{ github.event.release.tag_name }}'

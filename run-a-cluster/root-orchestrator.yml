@@ -1,0 +1,183 @@
+version: "3.3"
+
+services:
+
+  # System Manager REST API of Root Orchestrator
+  system_manager:
+    image: ghcr.io/oakestra/oakestra/root-system-manager:latest
+    hostname: system_manager
+    container_name: system_manager
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    expose:
+      - "10000"
+    ports:
+      - "10000:10000"
+    depends_on:
+      - mongo_root
+      - cloud_scheduler
+      - root_service_manager
+    environment:
+      - CLOUD_MONGO_URL=mongo
+      - CLOUD_MONGO_PORT=10007
+      - CLOUD_SCHEDULER_URL=cloud_scheduler
+      - CLOUD_SCHEDULER_PORT=10004
+      - NET_PLUGIN_URL=root_service_manager
+      - NET_PLUGIN_PORT=10099
+
+
+  # MongoDB in Root Orchestrator
+  mongo_root:
+    image: mongo:3.6
+    container_name: mongo
+    hostname: mongo
+    ports:
+      - "10007:10007"
+    expose:
+      - "10007"
+    volumes:
+      - 'mongodb_data:/mongodb'
+    command: mongod --port 10007
+
+  # root-level mongoDB
+  mongo_rootnet:
+    image: mongo:3.6
+    container_name: mongo_net
+    hostname: mongo_net
+    ports:
+      - "10008:10008"
+    volumes:
+      - 'mongodb_net_data:/mongodb'
+    command: mongod --port 10008
+
+
+  # root service manager
+  root_service_manager:
+    image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
+    container_name: root_service_manager
+    hostname: root_service_manager
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    expose:
+      - "10099"
+    ports:
+      - "10099:10099"
+    environment:
+      - MY_PORT=10099
+      - SYSTEM_MANAGER_URL=system_manager
+      - SYSTEM_MANAGER_PORT=10000
+      - CLOUD_MONGO_URL=mongo_net
+      - CLOUD_MONGO_PORT=10008
+    depends_on:
+      - mongo_rootnet
+
+
+  # Redis for the Cloud Scheduler
+  redis:
+    image: redis
+    hostname: redis
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass cloudRedis
+
+# Observability Stack
+  grafana:
+    image: grafana/grafana
+    hostname: grafana
+    container_name: grafana
+    ports:
+      - 3000:3000
+    volumes:
+      - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./config/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+      - ./config/dashboards:/var/lib/grafana/dashboards
+    logging: *default-logging
+
+  loki:
+    container_name: loki
+    image: grafana/loki:2.9.2
+    ports:
+      - 3100:3100
+    volumes:
+      - ./config/loki.yml:/etc/loki/config.yml
+      - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
+
+    command: -config.file=/etc/loki/config.yml
+    #logging:
+    #  driver: none
+
+  promtail:
+    image:  grafana/promtail:2.9.2
+    container_name: promtail
+    volumes:
+      - ./config/promtail.yml:/etc/promtail/config.yml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: 
+      - '--config.file=/etc/promtail/config.yml'
+      - '--server.enable-runtime-reload'
+    depends_on:
+      - loki
+    logging: *default-logging
+
+  dashboard:
+    image: ghcr.io/oakestra/dashboard:latest
+    ports:
+      - '80:80'
+    restart: unless-stopped
+    container_name: oaekstra-frontend-container
+    environment:
+      - API_ADDRESS=${SYSTEM_MANAGER_URL}:10000
+
+  # Cloud Scheduler
+  cloud_scheduler:
+    image: ghcr.io/oakestra/oakestra/cloud-scheduler:latest
+    container_name: cloud_scheduler
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    hostname: cloud_scheduler
+    expose:
+      - "10004"
+    ports:
+      - "10004:10004"
+    environment:
+      - MY_PORT=10004
+      - SYSTEM_MANAGER_URL=system_manager
+      - SYSTEM_MANAGER_PORT=10000
+      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - RESOURCE_ABSTRACTOR_PORT=11011
+      - REDIS_ADDR=redis://:cloudRedis@redis:6379
+      - CLOUD_MONGO_URL=mongo # for compatibility with version 0.4.300
+      - CLOUD_MONGO_PORT=10007 # for compatibility with version 0.4.300
+    depends_on:
+      - redis
+      - resource_abstractor
+
+  resource_abstractor:
+    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.301
+    container_name: resource_abstractor
+    hostname: resource_abstractor
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    expose:
+      - "11011"
+    ports:
+      - "11011:11011"
+    environment:
+      - RESOURCE_ABSTRACTOR_PORT=11011
+      - CLOUD_MONGO_URL=mongo
+      - CLOUD_MONGO_PORT=10007
+    depends_on:
+      - mongo_root
+
+
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_net_data:
+    driver: local
