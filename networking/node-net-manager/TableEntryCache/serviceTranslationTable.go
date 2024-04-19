@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net"
+	"regexp"
 	"sync"
 )
 
@@ -160,19 +161,21 @@ func (t *TableManager) SearchByJobName(jobname string) []TableEntry {
 // Nsipv6 != nil
 // len(entry.ServiceIP)>0
 func (t *TableManager) isValid(entry TableEntry) bool {
-	if l := len(entry.Appname); l < 1 || l > 10 {
+	r, _ := regexp.Compile("^[a-zA-Z0-9]{1,30}$")
+
+	if !r.MatchString(entry.Appname) {
 		log.Println("TranslationTable: Invalid Entry, wrong appname:", entry.Appname)
 		return false
 	}
-	if l := len(entry.Appns); l < 1 || l > 10 {
+	if !r.MatchString(entry.Appns) {
 		log.Println("TranslationTable: Invalid Entry, wrong appns:", entry.Appns)
 		return false
 	}
-	if l := len(entry.Servicename); l < 1 || l > 10 {
+	if !r.MatchString(entry.Servicename) {
 		log.Println("TranslationTable: Invalid Entry, wrong servicename:", entry.Servicename)
 		return false
 	}
-	if l := len(entry.Servicenamespace); l < 1 || l > 10 {
+	if !r.MatchString(entry.Servicenamespace) {
 		log.Println("TranslationTable: Invalid Entry, wrong servicens:", entry.Servicenamespace)
 		return false
 	}
