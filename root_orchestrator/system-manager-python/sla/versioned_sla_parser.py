@@ -1,4 +1,5 @@
 import json
+import logging
 
 from sla.sla_versions import sla_validator_by_version
 
@@ -17,7 +18,9 @@ def parse_sla_json(sla):
         json_data = json.loads(sla)
     version = json_data["sla_version"]
     validator = sla_validator_by_version[version]
-    if validator(json_data):
+    validation_result = validator(json_data)
+    if validation_result is None or validation_result is True:
         return json_data
     else:
-        raise SLAFormatError
+        logging.log(logging.ERROR, validation_result)
+        raise SLAFormatError(validation_result)

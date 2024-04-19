@@ -92,7 +92,7 @@ class CreateApplicationController(Resource):
         current_user = get_jwt_identity()
         result, code = register_app(data, current_user)
         if code != 200:
-            abort(code, result)
+            abort(code, description=result)
         return json_util.dumps(result)
 
 
