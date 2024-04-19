@@ -2,16 +2,18 @@ package mqtt
 
 import (
 	"encoding/json"
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"log"
 	"net"
 	"time"
+
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-var subnetworkResponseChannel chan string
+var subnetworkResponseChannel chan mqttSubnetworkResponse
 
 type mqttSubnetworkResponse struct {
-	Address string `json:"address"`
+	Address    string `json:"address"`
+	Address_v6 string `json:"addressv6"`
 }
 type mqttSubnetworkRequest struct {
 	METHOD string `json:"METHOD"`
@@ -21,24 +23,25 @@ type mqttDeployNotification struct {
 	Status         string `json:"status"`
 	Instancenumber int    `json:"instance_number"`
 	Nsip           string `json:"nsip"`
+	Nsipv6         string `json:"nsipv6"`
 	Hostport       string `json:"host_port"`
 	Hostip         string `json:"host_ip"`
 }
 
-func subnetworkAssignmentMqttHandler(client mqtt.Client, msg mqtt.Message) {
+func subnetworkAssignmentMqttHandler(_ mqtt.Client, msg mqtt.Message) {
 	responseStruct := mqttSubnetworkResponse{}
 	err := json.Unmarshal(msg.Payload(), &responseStruct)
 	if err != nil {
 		log.Println("ERROR - Invalid subnetwork response")
-		subnetworkResponseChannel <- ""
+		subnetworkResponseChannel <- mqttSubnetworkResponse{}
 		return
 	}
-	subnetworkResponseChannel <- responseStruct.Address
+	subnetworkResponseChannel <- responseStruct
 }
 
 /*Request a subnetwork to the cluster using the mqtt broker*/
-func RequestSubnetworkMqttBlocking() (string, error) {
-	subnetworkResponseChannel = make(chan string, 1)
+func RequestSubnetworkMqttBlocking() (mqttSubnetworkResponse, error) {
+	subnetworkResponseChannel = make(chan mqttSubnetworkResponse, 1)
 
 	request := mqttSubnetworkRequest{METHOD: "GET"}
 	jsonreq, _ := json.Marshal(request)
@@ -46,25 +49,26 @@ func RequestSubnetworkMqttBlocking() (string, error) {
 		_ = GetNetMqttClient().PublishToBroker("subnet", string(jsonreq))
 	}()
 
-	//waiting for maximum 10 seconds the mqtt handler to receive a response. Otherwise fail the subnetwork request.
+	// waiting for maximum 10 seconds the mqtt handler to receive a response. Otherwise fail the subnetwork request.
 	select {
 	case result := <-subnetworkResponseChannel:
-		if result != "" {
+		if result.Address != "" || result.Address_v6 != "" {
 			return result, nil
 		}
 	case <-time.After(10 * time.Second):
 		log.Printf("TIMEOUT - Table query without response, quitting goroutine")
 	}
 
-	return "", net.UnknownNetworkError("Invalid Subnetwork received")
+	return mqttSubnetworkResponse{}, net.UnknownNetworkError("Invalid Subnetwork received")
 }
 
-func NotifyDeploymentStatus(appname string, status string, instance int, nsip string, hostip string, hostport string) error {
+func NotifyDeploymentStatus(appname string, status string, instance int, nsip string, nsipv6 string, hostip string, hostport string) error {
 	request := mqttDeployNotification{
 		Appname:        appname,
 		Status:         status,
 		Instancenumber: instance,
 		Nsip:           nsip,
+		Nsipv6:         nsipv6,
 		Hostip:         hostip,
 		Hostport:       hostport,
 	}

@@ -2,6 +2,7 @@ package playground
 
 import (
 	"NetManager/TableEntryCache"
+	"NetManager/env"
 	"fmt"
 	"net"
 	"strconv"
@@ -10,7 +11,8 @@ import (
 func attachNetwork(appname string, pid int, instance int, mappings string, iip string, sip string) (string, error) {
 
 	//attach network to the container
-	addr, err := ENV.AttachNetworkToContainer(pid, appname, 0, mappings)
+	// TODO IPv6 playground implementation: _ = addrv6
+	addr, _, err := env.GetContainerNetDeployment().DeployNetwork(pid, appname, 0, mappings)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return "", err

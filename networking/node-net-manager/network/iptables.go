@@ -1,8 +1,9 @@
 package network
 
 import (
-	"github.com/coreos/go-iptables/iptables"
 	"log"
+
+	"github.com/coreos/go-iptables/iptables"
 )
 
 type oakestraIpTable struct {
@@ -17,8 +18,8 @@ type IpTable interface {
 	AddChain(string, string) error
 }
 
-func NewOakestraIpTable() IpTable {
-	iptable, ipterr := iptables.New()
+func NewOakestraIPTable(protocol iptables.Protocol) IpTable {
+	iptable, ipterr := iptables.NewWithProtocol(protocol)
 	if ipterr != nil {
 		log.Fatalln(ipterr)
 	}

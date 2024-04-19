@@ -4,7 +4,6 @@ import (
 	"NetManager/env"
 	"NetManager/logger"
 	"NetManager/mqtt"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -17,6 +16,7 @@ type ContainerDeployTask struct {
 	ServiceName    string `json:"serviceName"`
 	Instancenumber int    `json:"instanceNumber"`
 	PortMappings   string `json:"portMappings"`
+	Runtime        string
 	PublicAddr     string
 	PublicPort     string
 	Env            *env.Environment
@@ -25,8 +25,9 @@ type ContainerDeployTask struct {
 }
 
 type TaskReady struct {
-	IP  net.IP
-	Err error
+	IP   net.IP
+	IPv6 net.IP
+	Err  error
 }
 
 type deployTaskQueue struct {
@@ -37,11 +38,12 @@ type DeployTaskQueue interface {
 	NewTask(request *ContainerDeployTask)
 }
 
-var once sync.Once
-var taskQueue deployTaskQueue
+var (
+	once      sync.Once
+	taskQueue deployTaskQueue
+)
 
 func NewDeployTaskQueue() DeployTaskQueue {
-
 	once.Do(func() {
 		taskQueue = deployTaskQueue{
 			newTask: make(chan *ContainerDeployTask, 50),
@@ -56,59 +58,62 @@ func (t *deployTaskQueue) NewTask(request *ContainerDeployTask) {
 }
 
 func (t *deployTaskQueue) taskExecutor() {
-	for true {
+	for {
 		select {
 		case task := <-t.newTask:
-			//deploy the network stack in the container
-			addr, err := deploymentHandler(task)
+			// deploy the network stack in the container
+			addr, addrv6, err := deploymentHandler(task)
 			if err != nil {
 				logger.ErrorLogger().Println("[ERROR]: ", err)
 			}
 			task.Finish <- TaskReady{
-				IP:  addr,
-				Err: err,
+				IP:   addr,
+				IPv6: addrv6,
+				Err:  err,
 			}
-			//asynchronously update proxy tables
+			// asynchronously update proxy tables
 			updateInternalProxyDataStructures(task)
 		}
 	}
 }
 
-func deploymentHandler(requestStruct *ContainerDeployTask) (net.IP, error) {
-
-	//get app full name
+func deploymentHandler(requestStruct *ContainerDeployTask) (net.IP, net.IP, error) {
+	// get app full name
 	appCompleteName := strings.Split(requestStruct.ServiceName, ".")
 	if len(appCompleteName) != 4 {
-		return nil, errors.New(fmt.Sprintf("Invalid app name: %s", appCompleteName))
+		return nil, nil, fmt.Errorf("invalid app name: %s", appCompleteName)
 	}
 
-	//attach network to the container
-	addr, err := requestStruct.Env.AttachNetworkToContainer(requestStruct.Pid, requestStruct.ServiceName, requestStruct.Instancenumber, requestStruct.PortMappings)
+	// attach network to the container
+	netHandler := env.GetNetDeployment(requestStruct.Runtime)
+	logger.DebugLogger().Printf("Got netHandler: %v", netHandler)
+	addr, addrv6, err := netHandler.DeployNetwork(requestStruct.Pid, requestStruct.ServiceName, requestStruct.Instancenumber, requestStruct.PortMappings)
 	if err != nil {
 		logger.ErrorLogger().Println("[ERROR]:", err)
-		return nil, err
+		return nil, nil, err
 	}
 
-	//notify to net-component
+	// notify to net-component
 	err = mqtt.NotifyDeploymentStatus(
 		requestStruct.ServiceName,
 		"DEPLOYED",
 		requestStruct.Instancenumber,
 		addr.String(),
+		addrv6.String(),
 		requestStruct.PublicAddr,
 		requestStruct.PublicPort,
 	)
 	if err != nil {
 		logger.ErrorLogger().Println("[ERROR]:", err)
-		return nil, err
+		return nil, nil, err
 	}
 
-	return addr, nil
+	return addr, addrv6, nil
 }
 
 func updateInternalProxyDataStructures(requestStruct *ContainerDeployTask) {
-	//Update internal table entry if an interest has not been set already.
-	//Otherwise, do nothing, the net will autonomously update.
+	// Update internal table entry if an interest has not been set already.
+	// Otherwise, do nothing, the net will autonomously update.
 	if !mqtt.MqttIsInterestRegistered(requestStruct.ServiceName) {
 		requestStruct.Env.RefreshServiceTable(requestStruct.ServiceName)
 		mqtt.MqttRegisterInterest(requestStruct.ServiceName, requestStruct.Env, requestStruct.Instancenumber)

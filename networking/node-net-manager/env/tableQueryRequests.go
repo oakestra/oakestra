@@ -12,12 +12,11 @@ import (
 /*
 Asks the MQTT client for a table query and parses the result
 */
-func tableQueryByIP(ip string, force_optional ...bool) ([]TableEntryCache.TableEntry, error) {
-
-	log.Println("[MQTT TABLE QUERY] sip:", ip)
+func tableQueryByIP(ip net.IP, force_optional ...bool) ([]TableEntryCache.TableEntry, error) {
+	log.Println("[MQTT TABLE QUERY] sip:", ip.String())
 	var mqttTablequery mqttifce.TablequeryMqttInterface = mqttifce.GetTableQueryRequestCacheInstance()
 
-	responseStruct, err := mqttTablequery.TableQueryByIpRequestBlocking(ip, force_optional...)
+	responseStruct, err := mqttTablequery.TableQueryByIpRequestBlocking(ip.String(), force_optional...)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +53,7 @@ func responseParser(responseStruct mqttifce.TableQueryResponse) ([]TableEntryCac
 		sipList := make([]TableEntryCache.ServiceIP, 0)
 
 		for _, ip := range instance.ServiceIp {
-			sipList = append(sipList, toServiceIP(ip.Type, ip.Address))
+			sipList = append(sipList, toServiceIP(ip.Type, ip.Address, ip.Address_v6))
 		}
 
 		entry := TableEntryCache.TableEntry{
@@ -68,6 +67,7 @@ func responseParser(responseStruct mqttifce.TableQueryResponse) ([]TableEntryCac
 			Nodeip:           net.ParseIP(instance.HostIp),
 			Nodeport:         instance.HostPort,
 			Nsip:             net.ParseIP(instance.NamespaceIp),
+			Nsipv6:           net.ParseIP(instance.NamespaceIpv6),
 			ServiceIP:        sipList,
 		}
 
@@ -77,10 +77,11 @@ func responseParser(responseStruct mqttifce.TableQueryResponse) ([]TableEntryCac
 	return result, nil
 }
 
-func toServiceIP(Type string, Addr string) TableEntryCache.ServiceIP {
+func toServiceIP(Type string, Addr string, Addr_v6 string) TableEntryCache.ServiceIP {
 	ip := TableEntryCache.ServiceIP{
-		IpType:  0,
-		Address: net.ParseIP(Addr),
+		IpType:     0,
+		Address:    net.ParseIP(Addr),
+		Address_v6: net.ParseIP(Addr_v6),
 	}
 
 	if Type == "RR" {

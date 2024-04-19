@@ -1,4 +1,5 @@
 import os
+import socket
 from flask import Flask, request
 from flask_socketio import SocketIO
 
@@ -75,4 +76,4 @@ def task_update():
 if __name__ == '__main__':
     import eventlet
 
-    eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(MY_PORT))), app, log=my_logger)
+    eventlet.wsgi.server(eventlet.listen(('::', int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger)

@@ -17,3 +17,7 @@
 
 #ignore binaries
 bin/
+
+.pytest_cache/
+__pycache__/
+.idea/
