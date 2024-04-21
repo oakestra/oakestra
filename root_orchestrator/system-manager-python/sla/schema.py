@@ -9,17 +9,26 @@ sla_schema = {
                 "type": "object",
                 "properties": {
                     "applicationID": {"type": "string"},  # was integer
-                    "application_name": {"type": "string"},
-                    "application_namespace": {"type": "string"},
+                    "application_name": {"type": "string", "pattern": "^[a-zA-Z0-9]{1,30}$"},
+                    "application_namespace": {"type": "string", "pattern": "^[a-zA-Z0-9]{1,30}$"},
                     "application_desc": {"type": "string"},
                     "microservices": {
                         "type": "array",
                         "items": {
                             "type": "object",
                             "properties": {
-                                "microserviceID": {"type": "string"},  # was integer
-                                "microservice_name": {"type": "string"},
-                                "microservice_namespace": {"type": "string"},
+                                "microserviceID": {
+                                    "type": "string",
+                                    "maxLength": 0,
+                                },  # disabling this for now
+                                "microservice_name": {
+                                    "type": "string",
+                                    "pattern": "^[a-zA-Z0-9]{1,30}$",
+                                },
+                                "microservice_namespace": {
+                                    "type": "string",
+                                    "pattern": "^[a-zA-Z0-9]{1,30}$",
+                                },
                                 "virtualization": {"type": "string"},
                                 "memory": {"type": "integer"},
                                 "vcpus": {"type": "integer"},
@@ -130,18 +139,20 @@ sla_schema = {
                                 },
                             },
                             "required": [
-                                "microserviceID",
                                 "microservice_name",
+                                "microservice_namespace",
                                 "virtualization",
-                                "memory",
-                                "storage",
                                 "code",
                             ],
                         },
                         "exclusiveMinimum": 0,
                     },
                 },
-                "required": ["applicationID", "application_name", "microservices"],
+                "required": [
+                    "application_name",
+                    "application_namespace",
+                    "microservices",
+                ],
             },
         },
         "args": {

@@ -4,7 +4,7 @@ repos:
     hooks:
     -   id: black
         stages: [pre-push]
-        args: [--check --line-length=100]
+        args: ['--check','--line-length=100']
 
 -   repo: https://github.com/PyCQA/flake8
     rev: 7.0.0
