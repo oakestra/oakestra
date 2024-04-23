@@ -60,6 +60,9 @@ func RegisterContainerdClient(additionalRuntimes ...string) *ContainerRuntime {
 		RegisterRuntime(model.CONTAINER_RUNTIME, &runtime)
 		// register additional supported runtimes
 		for _, runtimeName := range additionalRuntimes {
+			if runtimeName == "" {
+				continue
+			}
 			if strings.Contains(containerdConfFile, runtimeName) {
 				model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(runtimeName))
 				RegisterRuntime(model.RuntimeType(runtimeName), &runtime)
@@ -201,7 +204,8 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), nil))
 	}
 	// -- add custom snapshotter
-	containerOpts = append(containerOpts, containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image))
+	containerOpts = append(containerOpts, containerd.WithSnapshotter("devmapper")),
+	//containerOpts = append(containerOpts, containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image))
 	// -- add image
 	containerOpts = append(containerOpts, containerd.WithImage(image))
 
