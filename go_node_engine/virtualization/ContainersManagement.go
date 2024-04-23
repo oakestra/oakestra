@@ -201,10 +201,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	containerOpts := []containerd.NewContainerOpts{}
 	// -- if custom runtime selected, add it to the container
 	if service.Runtime != string(model.CONTAINER_RUNTIME) {
-		containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), nil))
+		containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), []string{}))
 	}
 	// -- add custom snapshotter
-	containerOpts = append(containerOpts, containerd.WithSnapshotter("devmapper"))
 	containerOpts = append(containerOpts, containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image))
 	// -- add image
 	containerOpts = append(containerOpts, containerd.WithImage(image))
