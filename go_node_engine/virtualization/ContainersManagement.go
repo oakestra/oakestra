@@ -205,7 +205,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 	// -- add custom snapshotter
 	containerOpts = append(containerOpts, containerd.WithSnapshotter("devmapper"))
-	//containerOpts = append(containerOpts, containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image))
+	containerOpts = append(containerOpts, containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image))
 	// -- add image
 	containerOpts = append(containerOpts, containerd.WithImage(image))
 
