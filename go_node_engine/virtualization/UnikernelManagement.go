@@ -45,7 +45,7 @@ var ukruntime = UnikernelRuntime{
 
 var ukSyncOnce sync.Once
 
-func GetUnikernelRuntime() *UnikernelRuntime {
+func RegisterUnikernelQemuRuntime() *UnikernelRuntime {
 	ukSyncOnce.Do(func() {
 		var command string
 		var err error
@@ -66,9 +66,10 @@ func GetUnikernelRuntime() *UnikernelRuntime {
 		logger.InfoLogger().Printf("Using qemu at %s\n", path)
 		ukruntime.killQueue = make(map[string]*chan bool)
 		ukruntime.qemuDomains = make(map[string]*qemuDomain)
-		err = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
-		err = os.MkdirAll("/tmp/node_engine/inst/", 0755)
+		_ = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
+		_ = os.MkdirAll("/tmp/node_engine/inst/", 0755)
 		model.GetNodeInfo().AddSupportedTechnology(model.UNIKERNEL_RUNTIME)
+		RegisterRuntime(model.UNIKERNEL_RUNTIME, &ukruntime)
 	})
 	return &ukruntime
 }

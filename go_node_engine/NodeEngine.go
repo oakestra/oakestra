@@ -10,6 +10,7 @@ import (
 	"go_node_engine/virtualization"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -17,7 +18,8 @@ import (
 var clusterAddress = flag.String("a", "localhost", "Address of the cluster orchestrator without port")
 var clusterPort = flag.String("p", "10000", "Port of the cluster orchestrator")
 var overlayNetwork = flag.Int("n", -1, "Port of the NetManager component, if any. This enables the overlay network across nodes")
-var UnikernelSupport = flag.Bool("u", false, "Set to enable Unikernel support")
+var UnikernelSupport = flag.Bool("u", false, "Set to enable native qemu Unikernel support")
+var ContainerRuntimes = flag.String("r", "", "Comma separated list of additional container runtimes installed on the node")
 var LogDirectory = flag.String("logs", "/tmp", "Directory for application's logs")
 
 const MONITORING_CYCLE = time.Second * 2
@@ -27,13 +29,13 @@ func main() {
 
 	//set log directory
 	model.GetNodeInfo().SetLogDirectory(*LogDirectory)
-
+	strings.Split(*ContainerRuntimes, ",")
 	//connect to container runtime
-	runtime := virtualization.GetContainerdClient()
+	runtime := virtualization.RegisterContainerdClient(strings.Split(*ContainerRuntimes, ",")...)
 	defer runtime.StopContainerdClient()
 
 	if *UnikernelSupport {
-		unikernelRuntime := virtualization.GetUnikernelRuntime()
+		unikernelRuntime := virtualization.RegisterUnikernelQemuRuntime()
 		defer unikernelRuntime.StopUnikernelRuntime()
 	}
 	//hadshake with the cluster orchestrator to get mqtt port and node id

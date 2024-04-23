@@ -7,7 +7,6 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strconv"
@@ -45,8 +44,9 @@ const NAMESPACE = "oakestra"
 const CGROUPV1_BASE_MEM = "/sys/fs/cgroup/memory/" + NAMESPACE
 const CGROUPV2_BASE_MEM = "/sys/fs/cgroup/" + NAMESPACE
 
-func GetContainerdClient() *ContainerRuntime {
+func RegisterContainerdClient(additionalRuntimes ...string) *ContainerRuntime {
 	containerdSingletonCLient.Do(func() {
+		containerdConfFile := getContainerdConfigFile()
 		client, err := containerd.New("/run/containerd/containerd.sock")
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Unable to start the container engine: %v\n", err)
@@ -55,9 +55,37 @@ func GetContainerdClient() *ContainerRuntime {
 		runtime.killQueue = make(map[string]*chan bool)
 		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
 		runtime.forceContainerCleanup()
+		// register default runtime name
 		model.GetNodeInfo().AddSupportedTechnology(model.CONTAINER_RUNTIME)
+		RegisterRuntime(model.CONTAINER_RUNTIME, &runtime)
+		// register additional supported runtimes
+		for _, runtimeName := range additionalRuntimes {
+			if strings.Contains(containerdConfFile, runtimeName) {
+				model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(runtimeName))
+				RegisterRuntime(model.RuntimeType(runtimeName), &runtime)
+			} else {
+				logger.ErrorLogger().Fatalf("Unable to find runtime %s in containerd configuration file", runtimeName)
+			}
+		}
 	})
 	return &runtime
+}
+
+func getContainerdConfigFile() string {
+	containerdconf, err := os.Open("/etc/containerd/config.toml")
+	if err != nil {
+		logger.ErrorLogger().Fatal(err)
+	}
+	buffer := make([]byte, 1024)
+	confFileContent := ""
+	for {
+		n, err := containerdconf.Read(buffer)
+		if err != nil {
+			break
+		}
+		confFileContent = fmt.Sprintf("%s%s", confFileContent, string(buffer[:n]))
+	}
+	return confFileContent
 }
 
 func (r *ContainerRuntime) StopContainerdClient() {
@@ -75,7 +103,6 @@ func (r *ContainerRuntime) StopContainerdClient() {
 }
 
 func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
-
 	var image containerd.Image
 	// pull the given image
 	sysimg, err := r.contaierClient.ImageService().Get(r.ctx, service.Image)
@@ -91,8 +118,8 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 	}
 
 	killChannel := make(chan bool, 1)
-	startupChannel := make(chan bool, 0)
-	errorChannel := make(chan error, 0)
+	startupChannel := make(chan bool)
+	errorChannel := make(chan error)
 
 	r.channelLock.RLock()
 	el, servicefound := r.killQueue[genTaskID(service.Sname, service.Instance)]
@@ -102,7 +129,7 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 		r.killQueue[genTaskID(service.Sname, service.Instance)] = &killChannel
 		r.channelLock.Unlock()
 	} else {
-		return errors.New("Service already deployed")
+		return errors.New("service already deployed")
 	}
 
 	// create startup routine which will accompany the container through its lifetime
@@ -117,7 +144,7 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 	)
 
 	// wait for updates regarding the container creation
-	if <-startupChannel != true {
+	if !<-startupChannel {
 		return <-errorChannel
 	}
 
@@ -134,7 +161,7 @@ func (r *ContainerRuntime) Undeploy(service string, instance int) error {
 		*r.killQueue[taskid] <- true
 		select {
 		case res := <-*r.killQueue[taskid]:
-			if res == false {
+			if !res {
 				logger.ErrorLogger().Printf("Unable to stop service %s", taskid)
 			}
 		case <-time.After(5 * time.Second):
@@ -167,46 +194,56 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		r.killQueue[taskid] = nil
 	}
 
-	//create container general oci specs
+	// Container options
+	containerOpts := []containerd.NewContainerOpts{}
+	// -- if custom runtime selected, add it to the container
+	if service.Runtime != string(model.CONTAINER_RUNTIME) {
+		containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), nil))
+	}
+	// -- add custom snapshotter
+	containerOpts = append(containerOpts, containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image))
+	// -- add image
+	containerOpts = append(containerOpts, containerd.WithImage(image))
+
+	// ---- Custom container general oci specs
 	specOpts := []oci.SpecOpts{
 		oci.WithImageConfig(image),
 		oci.WithHostHostsFile,
 		oci.WithHostname(hostname),
 		oci.WithEnv(append([]string{fmt.Sprintf("HOSTNAME=%s", hostname)}, service.Env...)),
 	}
-	//add user defined commands
+	// ---- add user defined commands
 	if len(service.Commands) > 0 {
 		specOpts = append(specOpts, oci.WithProcessArgs(service.Commands...))
 	}
-	//add GPU if needed
+	// ---- add GPU if needed
 	if service.Vgpus > 0 {
 		specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(0), nvidia.WithAllCapabilities))
 		logger.InfoLogger().Printf("NVIDIA - Adding GPU driver")
 	}
-	//add resolve file with default google dns
+	// ---- add resolve file with default google dns
 	resolvconfFile, err := getGoogleDNSResolveConf()
 	if err != nil {
 		revert(err)
 		return
 	}
-	defer resolvconfFile.Close()
-	_ = resolvconfFile.Chmod(444)
-	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile.Name()))
+	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile))
 
-	// create the container
+	// -- add oci SpecOpts to containerOpts
+	containerOpts = append(containerOpts, containerd.WithNewSpec(specOpts...))
+
+	// Create the container
 	container, err := r.contaierClient.NewContainer(
 		ctx,
 		taskid,
-		containerd.WithImage(image),
-		containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image),
-		containerd.WithNewSpec(specOpts...),
+		containerOpts...,
 	)
 	if err != nil {
 		revert(err)
 		return
 	}
 
-	//	start task with /tmp/hostname default log directory
+	//	start task with /tmp/taskid default log directory
 	file, err := os.OpenFile(fmt.Sprintf("%s/%s", model.GetNodeInfo().LogDirectory, taskid), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		revert(err)
@@ -319,7 +356,7 @@ func getTotalCpuUsageByPid(pid int32) (float64, error) {
 func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
 	//start container monitoring service
 	startContainerMonitoring.Do(func() {
-		for true {
+		for {
 			select {
 			case <-time.After(every):
 				deployedContainers, err := r.contaierClient.Containers(r.ctx)
@@ -357,11 +394,11 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
 						continue
 					}
-					currentsnapshotter := r.contaierClient.SnapshotService(containerd.DefaultSnapshotter)
+
+					currentsnapshotter := r.contaierClient.SnapshotService(containerMetadata.Snapshotter)
 					usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
 					if err != nil {
 						logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
-						continue
 					}
 
 					resourceList = append(resourceList, model.Resources{
@@ -439,18 +476,24 @@ func withCustomResolvConf(src string) func(context.Context, oci.Client, *contain
 	}
 }
 
-func getGoogleDNSResolveConf() (*os.File, error) {
-	file, err := ioutil.TempFile("/tmp", "edgeio-resolv-conf")
+func getGoogleDNSResolveConf() (string, error) {
+	file, err := os.CreateTemp("/tmp", "oakestra-resolv-conf")
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to create temp resolv file: %v", err)
-		return nil, err
+		return "", err
 	}
-	_, err = file.WriteString(fmt.Sprintf("nameserver 8.8.8.8\n"))
+	defer func() {
+		if err := file.Close(); err != nil {
+			logger.ErrorLogger().Printf("Unable to close temp resolv file: %v", err)
+		}
+	}()
+	_, err = file.WriteString("nameserver 8.8.8.8\n")
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to write temp resolv file: %v", err)
-		return nil, err
+		return "", err
 	}
-	return file, err
+	_ = file.Chmod(0444)
+	return file.Name(), err
 }
 
 func killTask(ctx context.Context, task containerd.Task, container containerd.Container) error {

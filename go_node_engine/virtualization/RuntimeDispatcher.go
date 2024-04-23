@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+var runtimeMap = map[model.RuntimeType]Runtime{}
+
 type RuntimeInterface interface {
 	Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error
 	Undeploy(sname string, instance int) error
@@ -14,24 +16,21 @@ type RuntimeMonitoring interface {
 	ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources))
 }
 
+type Runtime interface {
+	RuntimeInterface
+	RuntimeMonitoring
+}
+
 type RuntimeType string
 
 func GetRuntime(runtime model.RuntimeType) RuntimeInterface {
-	if runtime == model.CONTAINER_RUNTIME {
-		return GetContainerdClient()
-	}
-	if runtime == model.UNIKERNEL_RUNTIME {
-		return GetUnikernelRuntime()
-	}
-	return nil
+	return runtimeMap[runtime]
 }
 
 func GetRuntimeMonitoring(runtime model.RuntimeType) RuntimeMonitoring {
-	if runtime == model.CONTAINER_RUNTIME {
-		return GetContainerdClient()
-	}
-	if runtime == model.UNIKERNEL_RUNTIME {
-		return GetUnikernelRuntime()
-	}
-	return nil
+	return runtimeMap[runtime]
+}
+
+func RegisterRuntime(runtime model.RuntimeType, runtimeInterface Runtime) {
+	runtimeMap[runtime] = runtimeInterface
 }
