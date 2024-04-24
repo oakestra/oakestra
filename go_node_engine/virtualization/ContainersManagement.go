@@ -198,6 +198,8 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	killChannel *chan bool,
 	statusChangeNotificationHandler func(service model.Service),
 ) {
+	// runtime context
+	runtimectx := ctx
 
 	taskid := genTaskID(service.Sname, service.Instance)
 	hostname := fmt.Sprintf("instance-%d", service.Instance)
@@ -214,6 +216,8 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	containerOpts := []containerd.NewContainerOpts{}
 	// -- if custom runtime selected, add it to the container
 	if service.Runtime != string(model.CONTAINER_RUNTIME) {
+		runtimectx = context.Background()
+
 		if strings.Contains("io.containerd", service.Runtime) {
 			containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), &runcoptions.Options{}))
 
@@ -222,7 +226,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 			if err != nil {
 				logger.ErrorLogger().Printf("ERROR: unable to find rungime %s, %v", service.Runtime, err)
 			}
-			containerOpts = append(containerOpts, containerd.WithRuntime(path, &runcoptions.Options{}))
+			containerOpts = append(containerOpts, containerd.WithRuntime(path, nil))
 		}
 	}
 	// -- add custom snapshotter
@@ -259,7 +263,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 
 	// Create the container
 	container, err := r.contaierClient.NewContainer(
-		ctx,
+		runtimectx,
 		taskid,
 		containerOpts...,
 	)
