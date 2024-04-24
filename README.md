@@ -1,9 +1,10 @@
 ![workflow code style](https://github.com/oakestra/oakestra/actions/workflows/python_codestyle_check.yml/badge.svg)
 ![example artifacts](https://github.com/oakestra/oakestra/actions/workflows/node_engine_artifacts.yml/badge.svg)
 ![example artifacts](https://github.com/oakestra/oakestra/actions/workflows/root_system_manager_tests.yml/badge.svg)
-[![Stable](https://img.shields.io/badge/Latest%20Stable-v0.4.204-green.svg)](https://github.com/oakestra/oakestra/tree/v0.4.204)
+[![Stable](https://img.shields.io/badge/Latest%20Stable-%F0%9F%AA%97%20Accordion%20v0.4.301-green.svg)](https://github.com/oakestra/oakestra/tree/v0.4.301)
 [![Github All Releases](https://img.shields.io/github/downloads/oakestra/oakestra/total.svg)]()
 ![Oakestra](res/oakestra-white.png)
+
 
 **Oakestra** is an orchestration platform designed for Edge Computing.
 Popular orchestration platforms such as Kubernetes or K3s struggle at maintaining workloads across heterogeneous and constrained devices. 
@@ -101,13 +102,13 @@ Deactivate the Organization flag for now. *(Not like it is depicted in the refer
 
 
 Add a new application, and specify the app name, namespace, and description. 
-**N.b.: Max 8 characters for app name and namespace**
+**N.b.: Max 30 alphanumeric characters. No symbols.**
 ![](https://hackmd.io/_uploads/H1HGnqjnh.png)
 
 Then, create a new service using the <img src="https://hackmd.io/_uploads/BkaUb7utp.png" style="width:10em"/> button. 
 
 Fill the form using the following values: 
-**N.b.: Max 8 characters for service name and namespace**
+**N.b.: Max 30 alphanumeric characters. No symbols.**
 ![image](https://hackmd.io/_uploads/BysAV7uta.png)
 
 ```
@@ -116,10 +117,6 @@ Namespace: test
 Virtualization: Container
 Memory: 100MB
 Vcpus: 1
-Vgpus: 0
-Vtpus: 0
-Bandwidth in/out: 0
-Storage: 0
 Port: 80
 Code: docker.io/library/nginx:latest
 ```
@@ -337,15 +334,15 @@ This is a detailed description of the deployment descriptor fields currently imp
 - customerID: id of the user, default is Admin
   - application list, in a single deployment descriptor is possible to define multiple applications, each containing:
     - Fully qualified app name: A fully qualified name in Oakestra is composed of 
-        - application_name: unique name representing the application (max 10 char, no symbols)
-        - application_namespace: namespace of the app, used to reference different deployment of the same application. Examples of namespace name can be `default` or `production` or `test` (max 10 char, no symbols)
+        - application_name: unique name representing the application **(max 30 alphanumeric characters)**
+        - application_namespace: namespace of the app, used to reference different deployment of the same application. Examples of namespace name can be `default` or `production` or `test` **(max 30 alphanumeric characters)**
         - applicationID: leave it empty for new deployments, this is needed only to edit an existing deployment.  
     - application_desc: Short description of the application
     - microservice list, a list of the microservices composing the application. For each microservice the user can specify:
       - microserviceID: leave it empty for new deployments, this is needed only to edit an existing deployment.
       - Fully qualified service name:
-        - microservice_name: name of the service (max 10 char, no symbols)
-        - microservice_namespace: namespace of the service, used to reference different deployment of the same service. Examples of namespace name can be `default` or `production` or `test` (max 10 char, no symbols)
+        - microservice_name: name of the service **(max 30 alphanumeric characters)**
+        - microservice_namespace: namespace of the service, used to reference different deployment of the same service. Examples of namespace name can be `default` or `production` or `test` **(max 30 alphanumeric characters)**
       - virtualization: currently the supported virtualization are `container` or (✨🆕✨) `unikernel`
       - cmd: list of the commands to be executed inside the container at startup or the unikernel parameters
       - environment: list of the environment variables to be set, E.g.: ['VAR=fOO'].

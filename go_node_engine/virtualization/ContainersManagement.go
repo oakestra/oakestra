@@ -156,14 +156,15 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	statusChangeNotificationHandler func(service model.Service),
 ) {
 
-	hostname := genTaskID(service.Sname, service.Instance)
+	taskid := genTaskID(service.Sname, service.Instance)
+	hostname := fmt.Sprintf("instance-%d", service.Instance)
 
 	revert := func(err error) {
 		startup <- false
 		errorchan <- err
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
-		r.killQueue[hostname] = nil
+		r.killQueue[taskid] = nil
 	}
 
 	//create container general oci specs
@@ -195,9 +196,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// create the container
 	container, err := r.contaierClient.NewContainer(
 		ctx,
-		hostname,
+		taskid,
 		containerd.WithImage(image),
-		containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", hostname), image),
+		containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image),
 		containerd.WithNewSpec(specOpts...),
 	)
 	if err != nil {
@@ -206,12 +207,13 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 
 	//	start task with /tmp/hostname default log directory
-	file, err := os.OpenFile(fmt.Sprintf("%s/%s", model.GetNodeInfo().LogDirectory, hostname), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	file, err := os.OpenFile(fmt.Sprintf("%s/%s", model.GetNodeInfo().LogDirectory, taskid), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		revert(err)
 		return
 	}
 	defer file.Close()
+
 	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStreams(nil, file, file)))
 
 	if err != nil {
@@ -225,7 +227,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		//removing from killqueue
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
-		r.killQueue[hostname] = nil
+		r.killQueue[taskid] = nil
 		if err != nil {
 			*killChannel <- false
 		} else {
@@ -266,7 +268,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	select {
 	case exitStatus := <-exitStatusC:
 		if exitStatus.ExitCode() == 0 && service.OneShot {
-			service.Status = model.SERVICE_COMPLETED		
+			service.Status = model.SERVICE_COMPLETED
 		}
 		//TODO: container exited, do something, notify to cluster manager
 		if err != nil {

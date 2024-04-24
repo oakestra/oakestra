@@ -105,13 +105,13 @@ def test_create_invalid_service_name(resource_abstractor):
         app = app_operations.create_app("Admin", app_mock)
 
         sla_first_app["applicationID"] = app["applicationID"]
-        sla_first_app["microservices"][0]["microservice_name"] = "TOOLONGNAME"
+        sla_first_app["microservices"][0]["microservice_name"] = "badname!"
 
         # EXEC
         result, code = create_services_of_app("Admin", sla)
 
-        # ASSERT
-        assert code == 403
+    # ASSERT
+    assert code == 422
 
 
 def test_create_invalid_service_namespace(resource_abstractor):
@@ -129,15 +129,13 @@ def test_create_invalid_service_namespace(resource_abstractor):
         app = app_operations.create_app("Admin", app_mock)
         sla_first_app["applicationID"] = app["applicationID"]
 
-        sla_first_app["microservices"][0][
-            "microservice_namespace"
-        ] = "THISNAMESPACEISTOOLONGTOBECCEPTED"
+        sla_first_app["microservices"][0]["microservice_namespace"] = "THIS.NAMESPACE.has.dots"
 
         # EXEC
         result, code = create_services_of_app("Admin", sla)
 
-        # ASSERT
-        assert code == 403
+    # ASSERT
+    assert code == 422
 
 
 def test_delete_service(resource_abstractor):

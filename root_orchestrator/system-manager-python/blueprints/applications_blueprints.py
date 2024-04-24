@@ -96,7 +96,7 @@ class CreateApplicationController(Resource):
         current_user = get_jwt_identity()
         result, code = register_app(data, current_user)
         if code != 200:
-            abort(code, result)
+            abort(code, description=result)
 
         # TODO Frontend should be able to handle the _id being a string and not an object.
         return json_util.dumps({**result, "_id": {"$oid": str(result["_id"])}})

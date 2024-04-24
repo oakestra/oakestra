@@ -3,6 +3,7 @@ import traceback
 
 from resource_abstractor_client import app_operations
 from services.service_management import create_services_of_app, delete_service
+from sla.versioned_sla_parser import SLAFormatError, parse_sla_json
 
 
 def get_user_apps(userid):
@@ -13,6 +14,11 @@ def get_user_apps(userid):
 
 
 def register_app(applications, userid):
+    try:
+        parse_sla_json(applications)
+    except SLAFormatError as e:
+        return {"message": e}, 422
+
     for application in applications["applications"]:
         if app_operations.get_app_by_name_and_namespace(
             application.get("application_name"), application.get("application_namespace"), userid
@@ -20,8 +26,6 @@ def register_app(applications, userid):
             return {
                 "message": "An application with the same name and namespace exists already"
             }, 409
-        if not valid_app_requirements(application):
-            return {"message": "Application name or namespace are not in the valid format"}, 422
 
         application.pop("action", None)
         application.pop("_id", None)
