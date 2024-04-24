@@ -4,7 +4,7 @@ import os
 import socketio
 from services import monitor_service
 
-ADDON_MANAGER_ADDR = os.environ.get("ADDON_MANAGER_ADDR") or "http://localhost:11101"
+ADDONS_MANAGER_ADDR = os.environ.get("ADDONS_MANAGER_ADDR") or "http://localhost:11101"
 
 # Syncronous socketio client
 socketio = socketio.Client()
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     socketio.on("receive_manager_id", on_receive_manager_id)
 
     # will keep trying to connect for 30 seconds
-    socketio.connect(ADDON_MANAGER_ADDR, wait_timeout=30)
+    socketio.connect(ADDONS_MANAGER_ADDR, wait_timeout=30)
 
     # wait until addon_manager is initialized
     while not addon_manager:
