@@ -46,7 +46,12 @@ def init_addons_socket(socketio, addons_manager_id):
     def disable_addon(addon_id):
         logging.info(f"Disabling Addon-{addon_id}...")
 
-        addons_runner.stop_addon(addon_id)
+        addon = addons_db.find_addon_by_id(addon_id)
+        if not addon:
+            logging.error(f"Addon-{addon_id} not found")
+            return
+
+        addons_runner.stop_addon(addon)
         addons_db.update_addon(addon_id, {"status": "disabled"})
 
     @socketio.event()

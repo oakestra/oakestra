@@ -197,56 +197,42 @@ class DockerAddonRunner:
         }
 
 
-def _run_active_addons():
-    if addons_manager is None:
-        logging.error("Container manager is not initialized")
-        return
-
-    addons = addons_db.find_active_addons()
-    for addon in addons:
-        addons_manager.run_addon(addon)
-
-
 def init_addon_manager(manager_id):
     global addons_manager
 
     addons_manager = DockerAddonRunner(manager_id)
 
-    threading.Thread(target=_run_active_addons, daemon=True).start()
+    def run_active_addons():
+        if addons_manager is None:
+            logging.error("Container manager is not initialized")
+            return
+
+        addons = addons_db.find_active_addons()
+        for addon in addons:
+            addons_manager.run_addon(addon)
+
+    threading.Thread(target=run_active_addons, daemon=True).start()
 
     return addons_manager
 
 
-def _get_addon_in_marketplace(marketplace_id):
-    response = requests.get(f"{MARKETPLACE_API}/{marketplace_id}")
-    response.raise_for_status()
-
-    return response.json()
-
-
-def stop_all_addons():
+def stop_addons(addons):
     global addons_manager
 
     if not addons_manager:
         logging.error("Container manager not initialized")
         return
 
-    addons = addons_db.find_active_addons()
     for addon in addons:
         addons_manager.stop_addon(addon)
 
 
-def stop_addon(addon_id):
+def stop_addon(addon):
     """Stop addons only stops the containers for the addon, but doesn't change its status."""
     global addons_manager
 
     if not addons_manager:
         logging.error("Container manager not initialized")
-        return
-
-    addon = addons_db.find_addon_by_id(addon_id)
-    if not addon:
-        logging.error(f"Addon {addon_id} not found")
         return
 
     addons_manager.stop_addon(addon)
@@ -279,7 +265,13 @@ def install_addon(addon):
 
     marketplace_id = addon.get("marketplace_id")
 
-    marketplace_addon = _get_addon_in_marketplace(marketplace_id)
+    def get_addon_in_marketplace(marketplace_id):
+        response = requests.get(f"{MARKETPLACE_API}/{marketplace_id}")
+        response.raise_for_status()
+
+        return response.json()
+
+    marketplace_addon = get_addon_in_marketplace(marketplace_id)
     services = marketplace_addon.get("services", [])
 
     if not services:
