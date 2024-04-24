@@ -1,8 +1,6 @@
 import logging
 import os
 import threading
-import time
-import uuid
 
 import docker
 import requests
@@ -10,86 +8,20 @@ from db import addons_db
 
 addons_manager = None
 
-ADDON_ENGINE_ID = os.environ.get("ADDON_ENGINE_ID") or str(uuid.uuid4())
-
 ADDON_ID_LABEL = os.environ.get("ADDON_ID_LABEL") or "oak.addon.id"
 ADDON_MANAGER_LABEL = os.environ.get("ADDON_MANAGER_KEY") or "oak.plugin.manager.id"
 ADDON_SERVICE_NAME_LABEL = os.environ.get("ADDON_SERVICE_NAME_LABEL") or "oak.service.name"
 
-MAX_CONTAINER_RETRIES = os.environ.get("MAX_CONTAINER_RETRIES") or 3
-CONTAINER_POLL_INTERVAL = os.environ.get("CONTAINER_POLL_INTERVAL") or 30
 DEFAULT_PROJECT_NAME = os.environ.get("DEFAULT_PROJECT_NAME") or "root_orchestrator"
 
 DEFAULT_NETWORK_NAME = f"{DEFAULT_PROJECT_NAME}_default"
 MARKETPLACE_API = f"{os.environ.get('MARKETPLACE_ADDR')}/api/v1/marketplace"
 
 
-class AddonsMonitor:
-    def __init__(self):
-        self._client = docker.from_env()
-
-        # TODO if a container in an addons fails to start and exceeds,
-        # TODO do we stop all containers belonging to that addon?
-        # TODO how do we report partial failures, where only some containers in an addon failed?
-        # TODO ----> add fail policy for a container fails in an addon.
-        self._retry_containers = {}
-
-    def _get_exit_code(self, container):
-        return container.attrs["State"]["ExitCode"]
-
-    def get_oak_addon_containers(self, all=True):
-        # filter by key-value. Get containers created by a particular addon engine instance.
-        label = f"{ADDON_MANAGER_LABEL}={ADDON_ENGINE_ID}"
-
-        return self._client.containers.list(filters={"label": label}, all=all)
-
-    def _handle_failed_container(self, container, addon_id, exit_code):
-        logging.warning(
-            f"Addon-{addon_id}: container-{container.name} exited with code {exit_code}"
-        )
-
-        curr_retries = self._retry_containers.get(container.id, 0)
-        if curr_retries >= MAX_CONTAINER_RETRIES:
-            logging.error(
-                (f"Addon-{addon_id}: container-{container.name} " f"exceeded max retries")
-            )
-            self._retry_containers = [c for c in self._retry_containers if c.id != container.id]
-            addons_db.update_addon(addon_id, {"status": "failed"})
-        else:
-            self._retry_containers[container.id] = curr_retries + 1
-
-    # is run in a separate thread
-    def start_monitoring(self):
-        while True:
-            # get all containers created by the addon engine, even exited ones.
-            oak_containers = self.get_oak_addon_containers(all=True)
-            for container in oak_containers:
-                exit_code = self._get_exit_code(container)
-                if exit_code != 0:
-                    addon_id = container.labels.get(ADDON_ID_LABEL, None)
-                    if not addon_id:
-                        logging.error(f"Container {container.name} does not have an addon id label")
-                        continue
-                    self._handle_failed_container(container, addon_id, exit_code)
-
-            # restart all containers that failed
-            for container_id, _ in self._retry_containers.items():
-                container = next((c for c in oak_containers if c.id == container_id), None)
-                if container:
-                    container.restart()
-
-            # poll every x seconds
-            time.sleep(CONTAINER_POLL_INTERVAL)
-
-
 class DockerAddonRunner:
-    def __init__(self, monitor_containers=True):
+    def __init__(self, manager_id):
         self._client = docker.from_env()
-        self._addons_monitor = None
-
-        if monitor_containers:
-            self._addons_monitor = AddonsMonitor()
-            threading.Thread(target=self._addons_monitor.start_monitoring, daemon=True).start()
+        self._manager_id = manager_id
 
     def _get_networks(self):
         return [network.name for network in self._client.networks.list()]
@@ -149,7 +81,7 @@ class DockerAddonRunner:
 
         # Addon engine specific labels
         service["labels"][ADDON_ID_LABEL] = addon_id
-        service["labels"][ADDON_MANAGER_LABEL] = ADDON_ENGINE_ID
+        service["labels"][ADDON_MANAGER_LABEL] = self._manager_id
         service["labels"][ADDON_SERVICE_NAME_LABEL] = service["service_name"]
 
         service["networks"] = service.get("networks", [])
@@ -208,10 +140,6 @@ class DockerAddonRunner:
                 - 'new_containers': A list of the new containers that were started. Each element is
                 a docker.models.containers.Container object.
         """
-        if not self._addons_monitor:
-            logging.warning(
-                "Registry was not configured. Containers running will not be monitored."
-            )
 
         addon_services = addon["services"]
         addon_id = str(addon.get("_id"))
@@ -279,12 +207,12 @@ def _run_active_addons():
         addons_manager.run_addon(addon)
 
 
-def init_container_manager():
+def init_addon_manager(manager_id):
     global addons_manager
 
-    addons_manager = DockerAddonRunner()
+    addons_manager = DockerAddonRunner(manager_id)
 
-    # threading.Thread(target=_run_active_addons, daemon=True).start()
+    threading.Thread(target=_run_active_addons, daemon=True).start()
 
     return addons_manager
 
@@ -296,12 +224,58 @@ def _get_addon_in_marketplace(marketplace_id):
     return response.json()
 
 
-def install_addon(addon):
+def stop_all_addons():
     global addons_manager
 
     if not addons_manager:
         logging.error("Container manager not initialized")
         return
+
+    addons = addons_db.find_active_addons()
+    for addon in addons:
+        addons_manager.stop_addon(addon)
+
+
+def stop_addon(addon_id):
+    """Stop addons only stops the containers for the addon, but doesn't change its status."""
+    global addons_manager
+
+    if not addons_manager:
+        logging.error("Container manager not initialized")
+        return
+
+    addon = addons_db.find_addon_by_id(addon_id)
+    if not addon:
+        logging.error(f"Addon {addon_id} not found")
+        return
+
+    addons_manager.stop_addon(addon)
+
+
+def run_addon(created_addon):
+    result = addons_manager.run_addon(created_addon)
+    all_services = created_addon.get("services", [])
+    failed_services = result.get("failed_services", [])
+
+    new_status = "enabled"
+    if failed_services:
+        logging.error(f"Failed to run services: {failed_services}")
+        if len(failed_services) == len(all_services):
+            new_status = "failed"
+        else:
+            new_status = "partially_enabled"
+
+    # TODO: move db stuff outside by passing a success handler as an argument.
+    # TODO: improve status message.
+    addons_db.update_addon(str(created_addon["_id"]), {"status": new_status})
+
+
+def install_addon(addon):
+    global addons_manager
+
+    if not addons_manager:
+        logging.error("Container manager not initialized")
+        return None
 
     marketplace_id = addon.get("marketplace_id")
 
@@ -310,31 +284,12 @@ def install_addon(addon):
 
     if not services:
         logging.error(f"Addon {marketplace_id} has no services")
-        return
+        return None
 
     addon["services"] = services
     addon["status"] = "installing"
-
     created_addon = addons_db.create_addon(addon)
 
-    def run_addon(created_addon):
-        result = addons_manager.run_addon(created_addon)
-        failed_services = result.get("failed_services", [])
-
-        new_status = "enabled"
-        if failed_services:
-            logging.error(f"Failed to run services: {failed_services}")
-            if len(failed_services) == len(services):
-                new_status = "failed"
-            else:
-                new_status = "partially_enabled"
-
-        # TODO: improve status message.
-        addons_db.update_addon(
-            str(created_addon["_id"]), {"status": new_status, "services": created_addon["services"]}
-        )
-
-    # TODO: is this the ideal way of doing it? Perhaps use websockets for real-time updates?
     threading.Thread(target=run_addon, args=(created_addon,)).start()
 
     return created_addon

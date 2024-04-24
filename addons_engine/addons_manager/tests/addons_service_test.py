@@ -10,8 +10,8 @@ parent_dir = current_dir.parent
 sys.path.append(str(parent_dir))
 
 from services.addons_service import (  # noqa: E402
-    ADDON_ENGINE_ID,
     ADDON_ID_LABEL,
+    ADDON_MANAGER_ID,
     ADDON_MANAGER_LABEL,
     ADDON_SERVICE_NAME_LABEL,
     DEFAULT_NETWORK_NAME,
@@ -39,7 +39,7 @@ def test_run_addon_creates_container(docker_client):
 
     labels = created_container.labels
     assert labels[ADDON_ID_LABEL] == test_addon["_id"]
-    assert labels[ADDON_MANAGER_LABEL] == ADDON_ENGINE_ID
+    assert labels[ADDON_MANAGER_LABEL] == ADDON_MANAGER_ID
     assert labels[ADDON_SERVICE_NAME_LABEL] == test_addon["services"][0]["service_name"]
 
     oak_containers = docker_manager._addons_monitor.get_oak_addon_containers()
