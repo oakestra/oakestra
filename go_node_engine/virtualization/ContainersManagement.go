@@ -198,8 +198,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	killChannel *chan bool,
 	statusChangeNotificationHandler func(service model.Service),
 ) {
-	// runtime context
-	runtimectx := ctx
+	taskContext := ctx
 
 	taskid := genTaskID(service.Sname, service.Instance)
 	hostname := fmt.Sprintf("instance-%d", service.Instance)
@@ -216,8 +215,8 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	containerOpts := []containerd.NewContainerOpts{}
 	// -- if custom runtime selected, add it to the container
 	if service.Runtime != string(model.CONTAINER_RUNTIME) {
-		runtimectx = context.Background()
 
+		taskContext = context.Background()
 		if strings.Contains("io.containerd", service.Runtime) {
 			containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), &runcoptions.Options{}))
 
@@ -263,7 +262,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 
 	// Create the container
 	container, err := r.contaierClient.NewContainer(
-		runtimectx,
+		ctx,
 		taskid,
 		containerOpts...,
 	)
@@ -280,7 +279,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 	defer file.Close()
 
-	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStreams(nil, file, file)))
+	task, err := container.NewTask(taskContext, cio.NewCreator(cio.WithStreams(nil, file, file)))
 
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR: containerd task creation failure: %v", err)
