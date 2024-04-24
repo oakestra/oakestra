@@ -25,6 +25,9 @@ func ClusterHandshake(address string, port string) HandshakeAnswer {
 	if err != nil {
 		logger.ErrorLogger().Fatalf("Handshake failed, %v", err)
 	}
+	if resp.StatusCode == 403 {
+		logger.ErrorLogger().Fatalf("Handshake failed with error code %d, because node is already registered as a gateway", resp.StatusCode)
+	}
 	if resp.StatusCode != 200 {
 		logger.ErrorLogger().Fatalf("Handshake failed with error code %d", resp.StatusCode)
 	}

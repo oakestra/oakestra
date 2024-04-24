@@ -3,6 +3,7 @@ import os
 import socket
 import time
 
+import gateway_operations
 import service_operations
 import socketio
 from analyzing_workers import looking_for_dead_workers
@@ -11,6 +12,7 @@ from cluster_scheduler_requests import scheduler_request_status
 from cm_logging import configure_logging
 from flask import Flask, request
 from flask_socketio import SocketIO, emit
+from gateway_db import mongo_check_if_host_is_gateway
 from mongodb_client import (
     mongo_find_job_by_system_id,
     mongo_init,
@@ -119,6 +121,57 @@ def delete_service(system_job_id, instance_number):
     return "ok", 200
 
 
+@app.route("/api/gateway/deploy", methods=["POST"])
+def deploy_gateway():
+    app.logger.info("Incoming Request /api/gateway/deploy")
+    json_data = request.json
+    try:
+        gateway = gateway_operations.deploy_gateway(json_data)
+        return gateway, 200
+    except Exception:
+        return "", 500
+
+
+@app.route("/api/gateway/<gateway_id>", methods=["POST, PUT", "DELETE"])
+def handle_gateway(gateway_id):
+    app.logger.info("Incoming Request {} /api/gateway/{}".format(request.method, gateway_id))
+    json_data = request.json
+    try:
+        # TODO: implement me
+        if request.method == "POST":
+            return gateway_operations.handle_gateway_post(gateway_id, json_data)
+        # TODO: implement me
+        if request.method == "PUT":
+            return gateway_operations.handle_gateway_put(gateway_id, json_data)
+        # TODO: implement me
+        if request.method == "DELETE":
+            return gateway_operations.handle_gateway_delete(gateway_id)
+    except Exception:
+        return "", 500
+    return 200
+
+
+@app.route("/api/net/register", methods=["POST"])
+def register_netmanager():
+    app.logger.info("Incoming Request POST /api/net/register")
+    json_data = request.json
+    try:
+        id = gateway_operations.register_netmanager(json_data)
+    except Exception:
+        return "", 500
+    return id, 200
+
+
+@app.route("/api/net/<netmanager_id>", methods=["DELETE"])
+def delete_netmanager(netmanager_id):
+    app.logger.info("Incoming Request DELETE /api/net/{}".format(netmanager_id))
+    try:
+        gateway_operations.delete_netmanager(netmanager_id)
+    except Exception:
+        return "", 500
+    return "ok", 200
+
+
 # ................ Scheduler Test ......................#
 # ......................................................#
 
@@ -139,6 +192,11 @@ def http_node_registration():
     data = request.json  # get POST body
     data.get("token")  # registration_token
     # TODO: check and generate tokens
+
+    # check if node is registered as gateway
+    host_is_gateway = mongo_check_if_host_is_gateway(data.get("host"))
+    if host_is_gateway is not None:
+        return "", 403
     client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": data})
     response = {
         "id": str(client_id),
