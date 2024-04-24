@@ -20,6 +20,8 @@ import (
 	"github.com/containerd/containerd/contrib/nvidia"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
+	"github.com/containerd/containerd/platforms"
+	runcoptions "github.com/containerd/containerd/runtime/v2/runc/options"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/shirou/gopsutil/docker"
 	"github.com/shirou/gopsutil/process"
@@ -107,14 +109,24 @@ func (r *ContainerRuntime) StopContainerdClient() {
 
 func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
 	var image containerd.Image
+
 	// pull the given image
 	sysimg, err := r.contaierClient.ImageService().Get(r.ctx, service.Image)
 	if err == nil {
-		image = containerd.NewImage(r.contaierClient, sysimg)
+		if service.Platform != "" {
+			image = containerd.NewImageWithPlatform(r.contaierClient, sysimg, platforms.Only(platforms.MustParse(service.Platform)))
+		} else {
+			image = containerd.NewImage(r.contaierClient, sysimg)
+		}
 	} else {
 		logger.ErrorLogger().Printf("Error retrieving the image: %v \n Trying to pull the image online.", err)
 
-		image, err = r.contaierClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack)
+		remoteOpt := []containerd.RemoteOpt{containerd.WithPullUnpack}
+		if service.Platform != "" {
+			remoteOpt = append(remoteOpt, containerd.WithPlatform(service.Platform))
+		}
+		image, err = r.contaierClient.Pull(r.ctx, service.Image, remoteOpt...)
+
 		if err != nil {
 			return err
 		}
@@ -201,7 +213,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	containerOpts := []containerd.NewContainerOpts{}
 	// -- if custom runtime selected, add it to the container
 	if service.Runtime != string(model.CONTAINER_RUNTIME) {
-		containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), []string{}))
+		containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), &runcoptions.Options{}))
 	}
 	// -- add custom snapshotter
 	containerOpts = append(containerOpts, containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image))

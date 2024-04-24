@@ -10,6 +10,7 @@ type Service struct {
 	Ports           string   `json:"port"`
 	Status          string   `json:"status"`
 	Runtime         string   `json:"virtualization"`
+	Platform        string   `json:"platform"`
 	StatusDetail    string   `json:"status_detail"`
 	Vtpus           int      `json:"vtpus"`
 	Vgpus           int      `json:"vgpus"`
@@ -18,7 +19,7 @@ type Service struct {
 	UnikernelImages []string `json:"vm_images"`
 	Architectures   []string `json:"arch"`
 	Pid             int
-	OneShot		bool	 `json:"one_shot"`
+	OneShot         bool `json:"one_shot"`
 }
 
 type Resources struct {
