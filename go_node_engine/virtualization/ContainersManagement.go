@@ -8,6 +8,7 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/requests"
 	"os"
+	"os/exec"
 	"reflect"
 	"strconv"
 	"strings"
@@ -213,7 +214,16 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	containerOpts := []containerd.NewContainerOpts{}
 	// -- if custom runtime selected, add it to the container
 	if service.Runtime != string(model.CONTAINER_RUNTIME) {
-		containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), &runcoptions.Options{}))
+		if strings.Contains("io.containerd", service.Runtime) {
+			containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), &runcoptions.Options{}))
+
+		} else {
+			path, err := exec.LookPath(service.Runtime)
+			if err != nil {
+				logger.ErrorLogger().Printf("ERROR: unable to find rungime %s, %v", service.Runtime, err)
+			}
+			containerOpts = append(containerOpts, containerd.WithRuntime(path, &runcoptions.Options{}))
+		}
 	}
 	// -- add custom snapshotter
 	containerOpts = append(containerOpts, containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image))
