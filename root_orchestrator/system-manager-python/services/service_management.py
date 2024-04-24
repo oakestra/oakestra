@@ -127,7 +127,7 @@ def update_service(username, sla, serviceid):
     #         logging.log(logging.INFO, "job {} updated")
     #         return job, 200
 
-    return {"message": "service not found"}, 404
+    return {"message": "Not implemented"}, 501
 
 
 def user_services(appid, username):
