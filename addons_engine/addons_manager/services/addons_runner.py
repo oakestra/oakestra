@@ -8,13 +8,13 @@ from db import addons_db
 
 addons_manager = None
 
+DEFAULT_PROJECT_NAME = os.environ.get("DEFAULT_PROJECT_NAME") or "root_orchestrator"
+DEFAULT_NETWORK_NAME = f"{DEFAULT_PROJECT_NAME}_default"
+
 ADDON_ID_LABEL = os.environ.get("ADDON_ID_LABEL") or "oak.addon.id"
 ADDON_MANAGER_LABEL = os.environ.get("ADDON_MANAGER_KEY") or "oak.plugin.manager.id"
 ADDON_SERVICE_NAME_LABEL = os.environ.get("ADDON_SERVICE_NAME_LABEL") or "oak.service.name"
 
-DEFAULT_PROJECT_NAME = os.environ.get("DEFAULT_PROJECT_NAME") or "root_orchestrator"
-
-DEFAULT_NETWORK_NAME = f"{DEFAULT_PROJECT_NAME}_default"
 MARKETPLACE_API = f"{os.environ.get('MARKETPLACE_ADDR')}/api/v1/marketplace"
 
 
@@ -92,7 +92,6 @@ class DockerAddonRunner:
 
         # Handling multiple networks is currently not needed.
         one_network = service["networks"][0]
-
         image_uri = service.get("image_uri")
 
         return self._client.containers.run(
@@ -115,7 +114,7 @@ class DockerAddonRunner:
                 self._stop_container(container)
                 self._remove_container(container)
             else:
-                logging.warning(f"Container {service['service_name']} not found")
+                logging.warning(f"Container-{service['service_name']} not found")
 
     def run_addon(self, addon, project_name=DEFAULT_PROJECT_NAME):
         """Runs the services for a given addon. addon object is modified in place.
@@ -275,7 +274,7 @@ def install_addon(addon):
     services = marketplace_addon.get("services", [])
 
     if not services:
-        logging.error(f"Addon {marketplace_id} has no services")
+        logging.error(f"Addon-{marketplace_id} has no services")
         return None
 
     addon["services"] = services

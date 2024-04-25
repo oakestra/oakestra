@@ -20,6 +20,13 @@ class AllAddonsController(MethodView):
     @addonsblp.arguments(AddonSchema, location="json")
     @addonsblp.response(201, AddonSchema, content_type="application/json")
     def post(self, addon_data):
+        existing_addon = addons_db.find_addon_by_marketplace_id(addon_data["marketplace_id"])
+        if existing_addon:
+            abort(
+                400,
+                message=f"Addon with marketplace_id-{addon_data['marketplace_id']} already exists",
+            )
+
         result = addons_runner.install_addon(addon_data)
 
         if result is None:
