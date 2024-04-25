@@ -16,6 +16,7 @@ def find_active_addons():
 
 
 def create_addon(addon):
+    addon.pop("_id", None)
     inserted = db.mongo_addons.insert_one(addon)
 
     return db.mongo_addons.find_one({"_id": inserted.inserted_id})

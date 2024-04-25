@@ -226,8 +226,7 @@ def stop_addons(addons):
         addons_manager.stop_addon(addon)
 
 
-def stop_addon(addon):
-    """Stop addons only stops the containers for the addon, but doesn't change its status."""
+def stop_addon(addon, done=None):
     global addons_manager
 
     if not addons_manager:
@@ -236,8 +235,11 @@ def stop_addon(addon):
 
     addons_manager.stop_addon(addon)
 
+    if done:
+        done()
 
-def run_addon(created_addon):
+
+def run_addon(created_addon, done=None):
     result = addons_manager.run_addon(created_addon)
     all_services = created_addon.get("services", [])
     failed_services = result.get("failed_services", [])
@@ -250,9 +252,8 @@ def run_addon(created_addon):
         else:
             new_status = "partially_enabled"
 
-    # TODO: move db stuff outside by passing a success handler as an argument.
-    # TODO: improve status message.
-    addons_db.update_addon(str(created_addon["_id"]), {"status": new_status})
+    if done:
+        done(new_status)
 
 
 def install_addon(addon):
@@ -280,7 +281,11 @@ def install_addon(addon):
     addon["services"] = services
     addon["status"] = "installing"
     created_addon = addons_db.create_addon(addon)
+    addon_id = str(created_addon.get("_id"))
 
-    threading.Thread(target=run_addon, args=(created_addon,)).start()
+    def on_complete(new_status):
+        addons_db.update_addon(addon_id, {"status": new_status})
+
+    threading.Thread(target=run_addon, args=(created_addon,), kwargs={"done": on_complete}).start()
 
     return created_addon
