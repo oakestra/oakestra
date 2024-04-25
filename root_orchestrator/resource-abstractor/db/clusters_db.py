@@ -42,7 +42,7 @@ def find_cluster_by_name(cluster_name):
     return db.mongo_clusters.find_one({"cluster_name": cluster_name})
 
 
-def create_update_dict_from_mapping(data):
+def get_update_data(data):
     # Define a mapping from data keys to database keys
     datetime_now = datetime.now()
 
@@ -71,7 +71,7 @@ def create_update_dict_from_mapping(data):
 def update_cluster_information(cluster_id, data):
     """Save aggregated Cluster Information"""
 
-    update_dict = create_update_dict_from_mapping(data)
+    update_dict = get_update_data(data)
 
     cpu_update = {
         "value": data.get("cpu_percent"),
