@@ -4,6 +4,8 @@ import db.mongodb_client as db
 from bson.objectid import ObjectId
 from db.clusters_helper import get_freshness_threshold
 
+HISTORY_SLICE_SIZE = -100
+
 
 def create_cluster(data):
     inserted = db.mongo_clusters.insert_one(data)
@@ -40,49 +42,54 @@ def find_cluster_by_name(cluster_name):
     return db.mongo_clusters.find_one({"cluster_name": cluster_name})
 
 
+def create_update_dict_from_mapping(data):
+    # Define a mapping from data keys to database keys
+    datetime_now = datetime.now()
+
+    key_mapping = {
+        "cpu_percent": "aggregated_cpu_percent",
+        "cpu_cores": "total_cpu_cores",
+        "memory_percent": "aggregated_memory_percent",
+        "cumulative_memory_in_mb": "memory_in_mb",
+        "number_of_nodes": "active_nodes",
+        "gpu_cores": "total_gpu_cores",
+        "gpu_percent": "total_gpu_percent",
+        "virtualization": "virtualization",
+        "more": "more",
+        "worker_groups": "worker_groups",
+        "aggregation_per_architecture": "aggregation_per_architecture",
+    }
+
+    # Use the mapping to create the update dictionary
+    update_dict = {db_key: data.get(data_key) for data_key, db_key in key_mapping.items()}
+    update_dict["last_modified"] = datetime_now
+    update_dict["last_modified_timestamp"] = datetime.timestamp(datetime_now)
+
+    return update_dict
+
+
 def update_cluster_information(cluster_id, data):
     """Save aggregated Cluster Information"""
 
-    datetime_now = datetime.now()
-    datetime_now_timestamp = datetime.timestamp(datetime_now)
+    update_dict = create_update_dict_from_mapping(data)
 
-    cpu_percent = data.get("cpu_percent")
-    cpu_cores = data.get("cpu_cores")
-    memory_percent = data.get("memory_percent")
-    memory_in_mb = data.get("cumulative_memory_in_mb")
-    nodes = data.get("number_of_nodes")
-    gpu_cores = data.get("gpu_cores")
-    gpu_percent = data.get("gpu_percent")
-    virtualization = data.get("virtualization")
-    more = data.get("more")
-    worker_groups = data.get("worker_groups")
-    cpu_update = {"value": cpu_percent, "timestamp": datetime_now_timestamp}
-    memory_update = {"value": memory_percent, "timestamp": datetime_now_timestamp}
-
-    aggregation_per_architecture = data.get("aggregation_per_architecture", {})
+    cpu_update = {
+        "value": data.get("cpu_percent"),
+        "timestamp": update_dict["last_modified_timestamp"],
+    }
+    memory_update = {
+        "value": data.get("memory_percent"),
+        "timestamp": update_dict["last_modified_timestamp"],
+    }
 
     return db.mongo_clusters.find_one_and_update(
         {"_id": ObjectId(cluster_id)},
         {
             "$push": {
-                "cpu_history": {"$each": [cpu_update], "$slice": -100},
-                "memory_history": {"$each": [memory_update], "$slice": -100},
+                "cpu_history": {"$each": [cpu_update], "$slice": HISTORY_SLICE_SIZE},
+                "memory_history": {"$each": [memory_update], "$slice": HISTORY_SLICE_SIZE},
             },
-            "$set": {
-                "aggregated_cpu_percent": cpu_percent,
-                "total_cpu_cores": cpu_cores,
-                "total_gpu_cores": gpu_cores,
-                "total_gpu_percent": gpu_percent,
-                "aggregated_memory_percent": memory_percent,
-                "memory_in_mb": memory_in_mb,
-                "active_nodes": nodes,
-                "aggregation_per_architecture": aggregation_per_architecture,
-                "virtualization": virtualization,
-                "more": more,
-                "last_modified": datetime_now,
-                "last_modified_timestamp": datetime_now_timestamp,
-                "worker_groups": worker_groups,
-            },
+            "$set": update_dict,
         },
         return_document=True,
     )
