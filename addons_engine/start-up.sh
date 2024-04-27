@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # create virtualenv
-virtualenv --clear -p python3.8 .venv
+virtualenv --clear -p python3 .venv
 source .venv/bin/activate
 
 .venv/bin/pip install -r requirements.txt
@@ -14,10 +14,9 @@ PORT=11101
 export ADDONS_MANAGER_PORT=$PORT
 export ADDONS_ENGINE_MONGO_URL=localhost
 export ADDONS_ENGINE_MONGO_PORT=10007
-
+export ADDONS_MANAGER_ADDR=http://localhost:$PORT
 export MARKETPLACE_ADDR=http://localhost:11102
 
-export ADDONS_MANAGER_ADDR=http://localhost:$PORT
-
 .venv/bin/python addons-manager/addons_manager.py &
+sleep 10
 .venv/bin/python addons-monitor/addons_monitor.py &
