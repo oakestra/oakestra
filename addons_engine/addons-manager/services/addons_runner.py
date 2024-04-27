@@ -11,11 +11,11 @@ addons_manager = None
 DEFAULT_PROJECT_NAME = os.environ.get("DEFAULT_PROJECT_NAME") or "root_orchestrator"
 DEFAULT_NETWORK_NAME = f"{DEFAULT_PROJECT_NAME}_default"
 
-ADDON_ID_LABEL = os.environ.get("ADDON_ID_LABEL") or "oak.addon.id"
-ADDON_MANAGER_LABEL = os.environ.get("ADDON_MANAGER_KEY") or "oak.plugin.manager.id"
-ADDON_SERVICE_NAME_LABEL = os.environ.get("ADDON_SERVICE_NAME_LABEL") or "oak.service.name"
+ADDONS_MANAGER_LABEL = os.environ.get("ADDONS_MANAGER_KEY") or "oak.plugin.manager.id"
+ADDONS_ID_LABEL = os.environ.get("ADDONS_ID_LABEL") or "oak.addon.id"
+ADDONS_SERVICE_NAME_LABEL = os.environ.get("ADDONS_SERVICE_NAME_LABEL") or "oak.service.name"
 
-MARKETPLACE_API = f"{os.environ.get('MARKETPLACE_ADDR')}/api/v1/marketplace"
+MARKETPLACE_API = f"{os.environ.get('MARKETPLACE_ADDR')}/api/v1/marketplace/addons"
 
 
 class DockerAddonRunner:
@@ -80,9 +80,9 @@ class DockerAddonRunner:
         service["labels"]["com.docker.compose.service"] = service["service_name"]
 
         # Addon engine specific labels
-        service["labels"][ADDON_ID_LABEL] = addon_id
-        service["labels"][ADDON_MANAGER_LABEL] = self._manager_id
-        service["labels"][ADDON_SERVICE_NAME_LABEL] = service["service_name"]
+        service["labels"][ADDONS_ID_LABEL] = addon_id
+        service["labels"][ADDONS_MANAGER_LABEL] = self._manager_id
+        service["labels"][ADDONS_SERVICE_NAME_LABEL] = service["service_name"]
 
         service["networks"] = service.get("networks", [])
         if not service["networks"]:

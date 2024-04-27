@@ -1,4 +1,5 @@
 import sys
+import uuid
 from pathlib import Path
 
 import docker
@@ -9,11 +10,10 @@ current_dir = Path(__file__).parent
 parent_dir = current_dir.parent
 sys.path.append(str(parent_dir))
 
-from services.addons_service import (  # noqa: E402
-    ADDON_ID_LABEL,
-    ADDON_MANAGER_ID,
-    ADDON_MANAGER_LABEL,
-    ADDON_SERVICE_NAME_LABEL,
+from services.addons_runner import (  # noqa: E402
+    ADDONS_ID_LABEL,
+    ADDONS_MANAGER_LABEL,
+    ADDONS_SERVICE_NAME_LABEL,
     DEFAULT_NETWORK_NAME,
     DockerAddonRunner,
 )
@@ -25,7 +25,8 @@ def docker_client():
 
 
 def test_run_addon_creates_container(docker_client):
-    docker_manager = DockerAddonRunner()
+    addons_manager_id = str(uuid.uuid4())
+    docker_manager = DockerAddonRunner(addons_manager_id)
 
     test_addon = container_utils.get_dummy_addon()
     result = docker_manager.run_addon(test_addon)
@@ -38,12 +39,13 @@ def test_run_addon_creates_container(docker_client):
     assert DEFAULT_NETWORK_NAME in created_container.attrs["NetworkSettings"]["Networks"]
 
     labels = created_container.labels
-    assert labels[ADDON_ID_LABEL] == test_addon["_id"]
-    assert labels[ADDON_MANAGER_LABEL] == ADDON_MANAGER_ID
-    assert labels[ADDON_SERVICE_NAME_LABEL] == test_addon["services"][0]["service_name"]
+    assert labels[ADDONS_ID_LABEL] == test_addon["_id"]
+    assert labels[ADDONS_MANAGER_LABEL] == addons_manager_id
+    assert labels[ADDONS_SERVICE_NAME_LABEL] == test_addon["services"][0]["service_name"]
 
-    oak_containers = docker_manager._addons_monitor.get_oak_addon_containers()
-    assert len(oak_containers) == 1
+    label = f"{ADDONS_MANAGER_LABEL}={addons_manager_id}"
+    oak_containers = docker_client.containers.list(filters={"label": label}, all=all)
+    assert len(oak_containers) == len(test_addon["services"])
     assert oak_containers[0].id == created_container.id
 
     # Cleanup

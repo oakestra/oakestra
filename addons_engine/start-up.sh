@@ -19,5 +19,5 @@ export MARKETPLACE_ADDR=http://localhost:11102
 
 export ADDONS_MANAGER_ADDR=http://localhost:$PORT
 
-.venv/bin/python addons_manager/addons_manager.py &
-.venv/bin/python addons_monitor/addons_monitor.py &
+.venv/bin/python addons-manager/addons_manager.py &
+.venv/bin/python addons-monitor/addons_monitor.py &

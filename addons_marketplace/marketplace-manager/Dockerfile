@@ -13,4 +13,4 @@ ENV ADDON_MARKETPLACE_MONGO_PORT=10007
 
 EXPOSE 11102
 
-CMD ["python", "addons_marketplace.py"]
+CMD ["python", "marketplace_manager.py"]

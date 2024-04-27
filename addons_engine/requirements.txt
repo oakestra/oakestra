@@ -6,3 +6,5 @@ flask-smorest~=0.39.0
 flask-swagger-ui~=4.11.1
 marshmallow~=3.15.0
 werkzeug==2.0.3
+flask_socketio~=5.3.6
+eventlet==0.33.3

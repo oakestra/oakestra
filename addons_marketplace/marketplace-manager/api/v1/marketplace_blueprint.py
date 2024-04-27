@@ -5,7 +5,9 @@ from services import marketplace_service
 
 from .schema import MarketplaceAddonSchema, MarketplaceFilterSchema
 
-marketplaceblp = Blueprint("Marketplace Api", "marketplace_api", url_prefix="/api/v1/marketplace")
+marketplaceblp = Blueprint(
+    "Marketplace Api", "marketplace_api", url_prefix="/api/v1/marketplace/addons"
+)
 
 
 @marketplaceblp.route("/")
