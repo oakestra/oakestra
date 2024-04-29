@@ -85,8 +85,8 @@ mkdir ~/oakestra 2> /dev/null
 
 cd ~/oakestra 
 
-curl -sfL https://raw.githubusercontent.com/TheDarkPyotr/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
-curl -sfL https://raw.githubusercontent.com/TheDarkPyotr/oakestra/$OAKESTRA_BRANCH/run-a-cluster/1-DOC.yaml > 1-DOC.yaml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/1-DOC.yaml > 1-DOC.yaml
 
 chmod +x downloadConfigFiles.sh
 ./downloadConfigFiles.sh run-a-cluster $OAKESTRA_BRANCH
@@ -105,7 +105,7 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
     for element in $OVERRIDE_FILES
     do
         echo "Download override: $element"
-        curl -sfL https://raw.githubusercontent.com/TheDarkPyotr/oakestra/$OAKESTRA_BRANCH/run-a-cluster/$element > $element
+        curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/$element > $element
         OAK_OVERRIDES="${OAK_OVERRIDES}-f ${element} " 
     done
     IFS= 
@@ -124,7 +124,7 @@ fi
 command_exec="sudo -E docker compose -f 1-DOC.yaml ${OAK_OVERRIDES}up -d"
 echo executing "$command_exec"
 
-#eval "$command_exec"
+eval "$command_exec"
 
 echo 
 echo 🌳 Oakestra 1-DOC is now starting up...
