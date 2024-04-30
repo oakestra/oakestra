@@ -20,7 +20,7 @@ jobs:
           API_TOKEN_GITHUB: '${{ secrets.OAKESTRA_SITE_REPO_ACCESS_TOKEN }}'
         with:
           source_file: scripts/getstarted.sh
-          destination_repo: AmazingThingsLikeCI/oakestra.github.io
+          destination_repo: oakestra/oakestra.github.io
           user_email: $${{ github.event.pusher.email}}
           user_name: ${{ github.event.pusher.name}}
           commit_message: '${{ github.event.head_commit.message }}'
