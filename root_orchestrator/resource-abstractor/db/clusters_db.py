@@ -57,13 +57,13 @@ def get_update_data(data):
         "virtualization": "virtualization",
         "more": "more",
         "worker_groups": "worker_groups",
-        "aggregation_per_architecture": "aggregation_per_architecture",
     }
 
     # Use the mapping to create the update dictionary
     update_dict = {db_key: data.get(data_key) for data_key, db_key in key_mapping.items()}
     update_dict["last_modified"] = datetime_now
     update_dict["last_modified_timestamp"] = datetime.timestamp(datetime_now)
+    update_dict['"aggregation_per_architecture'] = data.get("aggregation_per_architecture", {})
 
     return update_dict
 
