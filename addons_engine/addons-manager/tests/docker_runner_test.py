@@ -10,12 +10,12 @@ current_dir = Path(__file__).parent
 parent_dir = current_dir.parent
 sys.path.append(str(parent_dir))
 
-from services.addons_runner import (  # noqa: E402
+from addons_runner.docker_runner import (  # noqa: E402
     ADDONS_ID_LABEL,
     ADDONS_MANAGER_LABEL,
     ADDONS_SERVICE_NAME_LABEL,
     DEFAULT_NETWORK_NAME,
-    DockerAddonRunner,
+    DockerRunner,
 )
 
 
@@ -26,7 +26,7 @@ def docker_client():
 
 def test_run_addon_creates_container(docker_client):
     addons_manager_id = str(uuid.uuid4())
-    docker_manager = DockerAddonRunner(addons_manager_id)
+    docker_manager = DockerRunner(addons_manager_id)
 
     test_addon = container_utils.get_dummy_addon()
     result = docker_manager.run_addon(test_addon)

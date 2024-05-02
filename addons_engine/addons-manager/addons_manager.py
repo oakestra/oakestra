@@ -11,8 +11,8 @@ from flask import Flask
 from flask_smorest import Api
 from flask_socketio import SocketIO
 from flask_swagger_ui import get_swaggerui_blueprint
-from services.addons_runner import init_addon_manager
-from services.cleanup_handler import handle_shutdown
+from services.addons_service import init_addon_manager
+from utils.cleanup_handler import handle_shutdown
 
 ADDONS_MANAGER_PORT = os.environ.get("ADDONS_MANAGER_PORT") or 11101
 ADDONS_MANAGER_ID = os.environ.get("ADDONS_MANAGER_ID") or str(uuid.uuid4())

@@ -95,7 +95,11 @@ def init_addons_monitor(addon_manager_id, socketio):
     global addons_monitor
 
     def failure_hander(*args, **kwargs):
-        socketio.emit("report_failure", *args, **kwargs)
+        try:
+            socketio.emit("report_failure", *args, **kwargs)
+        except Exception as e:
+            # TODO cache failure reports and retry later.
+            logging.error(f"An error occurred while reporting failure to addon manager: {e}")
 
     addons_monitor = AddonsMonitor(addon_manager_id, failure_handler=failure_hander)
 

@@ -11,6 +11,11 @@ def find_addon_by_id(addon_id):
     return addon[0] if addon else None
 
 
+def find_addon_by_marketplace_id(marketplace_id):
+    addon = list(find_addons({"marketplace_id": marketplace_id}))
+    return addon[0] if addon else None
+
+
 def find_active_addons():
     return find_addons({"status": "enabled"})
 

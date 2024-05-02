@@ -8,6 +8,7 @@ class StatusEnum(Enum):
     APPROVED = "approved"
 
 
+# TODO: support volumes
 class ServiceSchema(Schema):
     service_name = fields.String(required=True)
     image_uri = fields.String(required=True)
@@ -18,6 +19,7 @@ class ServiceSchema(Schema):
     labels = fields.Dict(keys=fields.String(), values=fields.String(), default={})
 
 
+# TODO: support networks + volumes.
 class MarketplaceAddonSchema(Schema):
     _id = fields.String()
     name = fields.String(required=True)

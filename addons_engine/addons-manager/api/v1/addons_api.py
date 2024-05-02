@@ -5,7 +5,7 @@ from db import addons_db
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from flask_socketio import emit
-from services import addons_runner
+from services import addons_service
 
 addonsblp = Blueprint("Addons Api", "addons_api", url_prefix="/api/v1/addons")
 
@@ -27,10 +27,12 @@ class AllAddonsController(MethodView):
                 message=f"Addon with marketplace_id-{addon_data['marketplace_id']} already exists",
             )
 
-        result = addons_runner.install_addon(addon_data)
+        result = addons_service.install_addon(addon_data)
 
         if result is None:
             abort(400, message="Failed to install addon")
+
+        return result
 
 
 @addonsblp.route("/<addon_id>")
@@ -61,7 +63,7 @@ def init_addons_socket(socketio, addons_manager_id):
         def on_complete():
             addons_db.update_addon(addon_id, {"status": "disabled"})
 
-        addons_runner.stop_addon(addon, done=on_complete)
+        addons_service.stop_addon(addon, done=on_complete)
 
     @socketio.event()
     def enable_addon(addon_id):
@@ -75,7 +77,7 @@ def init_addons_socket(socketio, addons_manager_id):
         def on_complete(new_status):
             addons_db.update_addon(addon_id, {"status": new_status})
 
-        addons_runner.run_addon(addon, done=on_complete)
+        addons_service.run_addon(addon, done=on_complete)
 
     # TODO: complete implementation
     @socketio.event()

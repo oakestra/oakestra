@@ -1,12 +1,7 @@
 import logging
 import os
-import threading
 
 import docker
-import requests
-from db import addons_db
-
-addons_manager = None
 
 DEFAULT_PROJECT_NAME = os.environ.get("DEFAULT_PROJECT_NAME") or "root_orchestrator"
 DEFAULT_NETWORK_NAME = f"{DEFAULT_PROJECT_NAME}_default"
@@ -15,10 +10,8 @@ ADDONS_MANAGER_LABEL = os.environ.get("ADDONS_MANAGER_KEY") or "oak.plugin.manag
 ADDONS_ID_LABEL = os.environ.get("ADDONS_ID_LABEL") or "oak.addon.id"
 ADDONS_SERVICE_NAME_LABEL = os.environ.get("ADDONS_SERVICE_NAME_LABEL") or "oak.service.name"
 
-MARKETPLACE_API = f"{os.environ.get('MARKETPLACE_ADDR')}/api/v1/marketplace/addons"
 
-
-class DockerAddonRunner:
+class DockerRunner:
     def __init__(self, manager_id):
         self._client = docker.from_env()
         self._manager_id = manager_id
@@ -88,6 +81,7 @@ class DockerAddonRunner:
         if not service["networks"]:
             service["networks"].append(DEFAULT_NETWORK_NAME)
 
+        # TODO: don't create networks. if a network is not found, raise an error.
         self.maybe_create_networks(service["networks"])
 
         # Handling multiple networks is currently not needed.
@@ -149,6 +143,7 @@ class DockerAddonRunner:
         containers_to_stop = []
         services_to_run = []
 
+        # TODO: before running the services, configure the networks and volumes.
         for service in addon_services:
             container_name = service.get("service_name")
             similar_container = self._get_container(container_name)
@@ -194,98 +189,3 @@ class DockerAddonRunner:
             "failed_services": failed_services,
             "new_containers": new_containers,
         }
-
-
-def init_addon_manager(manager_id):
-    global addons_manager
-
-    addons_manager = DockerAddonRunner(manager_id)
-
-    def run_active_addons():
-        if addons_manager is None:
-            logging.error("Container manager is not initialized")
-            return
-
-        addons = addons_db.find_active_addons()
-        for addon in addons:
-            addons_manager.run_addon(addon)
-
-    threading.Thread(target=run_active_addons, daemon=True).start()
-
-    return addons_manager
-
-
-def stop_addons(addons):
-    global addons_manager
-
-    if not addons_manager:
-        logging.error("Container manager not initialized")
-        return
-
-    for addon in addons:
-        addons_manager.stop_addon(addon)
-
-
-def stop_addon(addon, done=None):
-    global addons_manager
-
-    if not addons_manager:
-        logging.error("Container manager not initialized")
-        return
-
-    addons_manager.stop_addon(addon)
-
-    if done:
-        done()
-
-
-def run_addon(created_addon, done=None):
-    result = addons_manager.run_addon(created_addon)
-    all_services = created_addon.get("services", [])
-    failed_services = result.get("failed_services", [])
-
-    new_status = "enabled"
-    if failed_services:
-        logging.error(f"Failed to run services: {failed_services}")
-        if len(failed_services) == len(all_services):
-            new_status = "failed"
-        else:
-            new_status = "partially_enabled"
-
-    if done:
-        done(new_status)
-
-
-def install_addon(addon):
-    global addons_manager
-
-    if not addons_manager:
-        logging.error("Container manager not initialized")
-        return None
-
-    marketplace_id = addon.get("marketplace_id")
-
-    def get_addon_in_marketplace(marketplace_id):
-        response = requests.get(f"{MARKETPLACE_API}/{marketplace_id}")
-        response.raise_for_status()
-
-        return response.json()
-
-    marketplace_addon = get_addon_in_marketplace(marketplace_id)
-    services = marketplace_addon.get("services", [])
-
-    if not services:
-        logging.error(f"Addon-{marketplace_id} has no services")
-        return None
-
-    addon["services"] = services
-    addon["status"] = "installing"
-    created_addon = addons_db.create_addon(addon)
-    addon_id = str(created_addon.get("_id"))
-
-    def on_complete(new_status):
-        addons_db.update_addon(addon_id, {"status": new_status})
-
-    threading.Thread(target=run_addon, args=(created_addon,), kwargs={"done": on_complete}).start()
-
-    return created_addon
