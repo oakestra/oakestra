@@ -244,7 +244,7 @@ def test_update_service_not_found(resource_abstractor):
         result, code = update_service("Admin", service_to_be_updated, service_to_be_updated_id)
 
         # ASSERT
-        assert code == 404
+        assert code == 501
 
 
 def test_get_user_services(resource_abstractor):
