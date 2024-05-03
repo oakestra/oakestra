@@ -144,4 +144,7 @@ class MultipleServicesController(Resource):
     @jwt_auth_required()
     @require_role(Role.ADMIN)
     def get(self, *args, **kwargs):
-        return json_util.dumps(service_management.get_all_services())
+        result, code = service_management.get_all_services()
+        if code != 200:
+            abort(code, result)
+        return json_util.dumps(result)

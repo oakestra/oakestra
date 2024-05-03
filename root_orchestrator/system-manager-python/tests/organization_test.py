@@ -106,12 +106,8 @@ def test_delete_role_entrys():
 
 
 def mockdb():
-    mongodb_client.mongo_jobs = pymongo.MongoClient("mongodb://localhost:10007/jobs")
-    mongodb_client.mongo_clusters = pymongo.MongoClient("mongodb://localhost:10007/clusters")
     mongodb_client.mongo_users = pymongo.MongoClient("mongodb://localhost:10007/users").db["user"]
     mongodb_client.mongo_organization = pymongo.MongoClient("mongodb://localhost:10007/users").db[
         "organization"
     ]
-    mongodb_client.mongo_applications = mongodb_client.mongo_jobs.db["apps"]
-    mongodb_client.mongo_services = mongodb_client.mongo_jobs.db["jobs"]
     mongodb_client.app = MagicMock()

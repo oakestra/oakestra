@@ -1,7 +1,6 @@
 version: "3.3"
 
-x-logging:
-  &default-logging
+x-logging: &default-logging
   driver: "json-file"
   options:
     max-size: "1m"
@@ -32,11 +31,11 @@ services:
       - CLOUD_MONGO_PORT=10007
       - CLOUD_SCHEDULER_URL=cloud_scheduler
       - CLOUD_SCHEDULER_PORT=10004
+      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10099
     logging: *default-logging
-
-
 
   # MongoDB in Root Orchestrator
   mongo_root:
@@ -62,7 +61,6 @@ services:
       - 'mongodb_net_data:/mongodb'
     command: mongod --port 10008
 
-
   # Cluster Manager
   root_service_manager:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
@@ -83,8 +81,6 @@ services:
       - CLOUD_MONGO_PORT=10008
     depends_on:
       - mongo_rootnet
-    logging: *default-logging
-
 
   # Redis for the Cloud Scheduler
   redis:
@@ -122,13 +118,13 @@ services:
     #  driver: none
 
   promtail:
-    image:  grafana/promtail:2.9.2
+    image: grafana/promtail:2.9.2
     container_name: promtail
     volumes:
       - ./config/promtail.yml:/etc/promtail/config.yml
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock
-    command: 
+    command:
       - '--config.file=/etc/promtail/config.yml'
       - '--server.enable-runtime-reload'
     depends_on:
@@ -169,7 +165,6 @@ services:
       - resource_abstractor
     logging: *default-logging
 
-  
   resource_abstractor:
     image: resource_abstractor
     build: resource-abstractor/
@@ -188,8 +183,6 @@ services:
       - CLOUD_MONGO_PORT=10007
     depends_on:
       - mongo_root
-    logging: *default-logging
-
 
 volumes:
   mongodb_data:
