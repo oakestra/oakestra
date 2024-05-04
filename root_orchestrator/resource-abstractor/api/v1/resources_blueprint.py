@@ -5,9 +5,10 @@ from db.jobs_db import find_job_by_id
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import INCLUDE, Schema, fields
+from services.hook_service import before_after_hook, perform_create, perform_update
 from werkzeug import exceptions
 
-resourcesblp = Blueprint("Resources Info", "resources_info", url_prefix="/api/v1/resources")
+resourcesblp = Blueprint("Resources", "resources", url_prefix="/api/v1/resources")
 
 
 class ResourceSchema(Schema):
@@ -68,19 +69,19 @@ class AllResourcesController(MethodView):
 
         cluster = clusters_db.find_cluster_by_name(resource_name)
         if cluster:
-            return clusters_db.update_cluster(str(cluster["_id"]), data)
+            return perform_update("resource", clusters_db.update_cluster, str(cluster["_id"]), data)
 
-        return clusters_db.create_cluster(data)
+        return perform_create("resource", clusters_db.create_cluster, data)
 
 
-@resourcesblp.route("/<resourceId>")
+@resourcesblp.route("/<resource_id>")
 class ResourceController(MethodView):
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
-    def get(self, resourceId):
-        if ObjectId.is_valid(resourceId) is False:
+    def get(self, resource_id):
+        if ObjectId.is_valid(resource_id) is False:
             raise exceptions.BadRequest()
 
-        cluster = clusters_db.find_cluster_by_id(resourceId)
+        cluster = clusters_db.find_cluster_by_id(resource_id)
         if cluster is None:
             raise exceptions.NotFound()
 
@@ -88,8 +89,9 @@ class ResourceController(MethodView):
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
+    @before_after_hook("resources", with_param_id="resource_id")
     def patch(self, data, **kwargs):
-        resource_id = kwargs.get("resourceId")
+        resource_id = kwargs.get("resource_id")
 
         if ObjectId.is_valid(resource_id) is False:
             raise exceptions.BadRequest()
