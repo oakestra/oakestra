@@ -22,6 +22,7 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/containerd/plugin"
 	runcoptions "github.com/containerd/containerd/runtime/v2/runc/options"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/shirou/gopsutil/docker"
@@ -67,6 +68,7 @@ func RegisterContainerdClient(additionalRuntimes ...string) *ContainerRuntime {
 				continue
 			}
 			if strings.Contains(containerdConfFile, runtimeName) {
+				//set ctx calue <runtime>-options to empty
 				model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(runtimeName))
 				RegisterRuntime(model.RuntimeType(runtimeName), &runtime)
 			} else {
@@ -198,7 +200,6 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	killChannel *chan bool,
 	statusChangeNotificationHandler func(service model.Service),
 ) {
-	taskContext := ctx
 
 	taskid := genTaskID(service.Sname, service.Instance)
 	hostname := fmt.Sprintf("instance-%d", service.Instance)
@@ -216,16 +217,16 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// -- if custom runtime selected, add it to the container
 	if service.Runtime != string(model.CONTAINER_RUNTIME) {
 
-		taskContext = context.Background()
 		if strings.Contains("io.containerd", service.Runtime) {
 			containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), &runcoptions.Options{}))
 
 		} else {
 			path, err := exec.LookPath(service.Runtime)
+			logger.InfoLogger().Printf("Using custom runtime %s", path)
 			if err != nil {
 				logger.ErrorLogger().Printf("ERROR: unable to find rungime %s, %v", service.Runtime, err)
 			}
-			containerOpts = append(containerOpts, containerd.WithRuntime(path, nil))
+			containerOpts = append(containerOpts, containerd.WithRuntime(plugin.RuntimeRuncV2, &runcoptions.Options{BinaryName: path}))
 		}
 	}
 	// -- add custom snapshotter
@@ -279,7 +280,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 	defer file.Close()
 
-	task, err := container.NewTask(taskContext, cio.NewCreator(cio.WithStreams(nil, file, file)))
+	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStreams(nil, file, file)))
 
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR: containerd task creation failure: %v", err)
