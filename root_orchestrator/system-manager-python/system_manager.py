@@ -112,7 +112,7 @@ def handle_init_client(message):
         "cluster_name": message["cluster_name"],
     }
 
-    cluster = cluster_operations.upsert_cluster(cluster_data)
+    cluster = cluster_operations.create_cluster(cluster_data)
     if cluster is None:
         app.logger.error("Creating cluster failed")
         return
