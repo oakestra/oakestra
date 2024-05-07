@@ -16,12 +16,16 @@ import (
 	"os/exec"
 	"reflect"
 	rt "runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/digitalocean/go-qemu/qmp"
 	"github.com/struCoder/pidusage"
+	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netns"
+	"golang.org/x/sys/unix"
 )
 
 type qemuDomain struct {
@@ -351,7 +355,13 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	qemuConfig.KernelArgs = service.Commands
 
 	//Generate the command to start Qemu with
-	command, args := qemuConfig.GenerateArgs(r)
+	command, args, err := qemuConfig.GenerateArgs(r)
+	if err != nil {
+		logger.ErrorLogger().Printf("Failed to start qemu: %v", err)
+		revert(err, hostname)
+		return
+	}
+
 	qemuCmd = exec.Command(command, args...)
 
 	logger.InfoLogger().Printf("Unikernel starting command: %s", qemuCmd.String())
@@ -535,9 +545,10 @@ type QemuConfiguration struct {
 	NSname       *string
 }
 
-func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string) {
+func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string, error) {
 	args := make([]string, 0)
 	command := r.qemuPath
+
 	//Check if Qemu needs to run in different Namespace
 	if model.GetNodeInfo().Overlay {
 		command = "ip"
@@ -559,21 +570,40 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string)
 	memory := fmt.Sprintf("%d", q.Memory)
 	args = append(args, "-m", memory, "-smp", fmt.Sprintf("%d", q.CPU))
 
-	//Network
+	// Attatch network if overlay mode ativated
 	if model.GetNodeInfo().Overlay {
-		//Network backend fixed at tap0 and virbr0 created inside the namespace
-		args = append(args, "-netdev", "tap,id=tap0,ifname=tap0,script=no,downscript=no,br=virbr0,vhost=on")
-		//Network device
-		args = append(args, "-device", "virtio-net,netdev=tap0,mac=52:55:00:d1:55:01")
+
+		//Get the default route for the namespace
+		ip, gw, mask, err := deleteDefaultIpGwMask(*q.NSname)
+		if err != nil {
+			logger.InfoLogger().Printf("Unable to get default route for namespace %s: %v", *q.NSname, err)
+			return "", []string{}, err
+		}
+
+		//Get the tap file descriptor
+		fd, err := getTapFd(*q.NSname)
+		if err != nil {
+			logger.InfoLogger().Printf("Unable to get tap file descriptor for namespace %s: %v", *q.NSname, err)
+			return "", []string{}, err
+		}
+
+		//Network
+		if model.GetNodeInfo().Overlay {
+			//Network backend fixed at tap0 and virbr0 created inside the namespace "tap,id=n0,fd=" + strconv.Itoa(devFd),
+			args = append(args, "-netdev", "tap,id=tap0,fd="+strconv.Itoa(fd)+",vhost=on")
+			//Network device
+			args = append(args, "-device", "virtio-net,netdev=tap0,mac=52:55:00:d1:55:01")
+		}
+		//Kernel arguments including the network configuration
+		//The arguments after -- are given to the main function of the unikernel
+		args = append(args, "-append")
+		KernelArgsStr := " "
+		for _, kernelarg := range q.KernelArgs {
+			KernelArgsStr += kernelarg + " "
+		}
+		args = append(args, "netdev.ipv4_addr="+ip+" netdev.ipv4_gw_addr="+gw+" netdev.ipv4_subnet_mask="+mask+" --"+KernelArgsStr)
+
 	}
-	//Kernel arguments including the network configuration
-	//The arguments after -- are given to the main function of the unikernel
-	args = append(args, "-append")
-	KernelArgsStr := " "
-	for _, kernelarg := range q.KernelArgs {
-		KernelArgsStr += kernelarg + " "
-	}
-	args = append(args, "netdev.ipv4_addr=192.168.1.2 netdev.ipv4_gw_addr=192.168.1.1 netdev.ipv4_subnet_mask=255.255.255.252 --"+KernelArgsStr)
 
 	//Check if a folder is to be mounted
 	mountpath := fmt.Sprintf("%s/files/", q.Instancepath)
@@ -599,5 +629,91 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string)
 		args = append(args, "-machine", "virt")
 	}
 
-	return command, args
+	return command, args, nil
+}
+
+// delete and returns the defaultIp Gateway and Netmask of a given namespace
+func deleteDefaultIpGwMask(namespace string) (string, string, string, error) {
+	defaultRouteFilter := &netlink.Route{Dst: nil}
+	ip, gw, mask := "", "", ""
+
+	err := execInsideNsByName(namespace, func() error {
+
+		routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, defaultRouteFilter, netlink.RT_FILTER_DST)
+		if err != nil {
+			return err
+		}
+		if n := len(routes); n > 1 {
+			return err
+		}
+		if len(routes) == 0 {
+			return err
+		}
+		route := &routes[0]
+
+		routeIdx := route.LinkIndex
+		routelink, err := netlink.LinkByIndex(routeIdx)
+		if err != nil {
+			return err
+		}
+
+		addrs, err := netlink.AddrList(routelink, netlink.FAMILY_V4)
+		if err != nil {
+			return err
+		}
+		if len(addrs) == 0 {
+			return err
+		}
+
+		ip = addrs[0].IP.String()
+		gw = route.Gw.String()
+		mask = net.IP(addrs[0].Mask).String()
+
+		if err = netlink.AddrDel(routelink, &addrs[0]); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	return ip, gw, mask, err
+}
+
+// defaultRoute returns the default route for the current namespace.
+func getTapFd(namespace string) (int, error) {
+	var fd int
+	err := execInsideNsByName(namespace, func() error {
+		tapdev, err := netlink.LinkByName("tap0")
+		if err != nil {
+			return err
+		}
+		fd, err = unix.Open("/dev/tap"+strconv.Itoa(tapdev.Attrs().Index), unix.O_RDWR, 0)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return fd, err
+}
+
+// Execute function inside a namespace based on Ns name
+func execInsideNsByName(Nsname string, function func() error) error {
+	var containerNs netns.NsHandle
+
+	rt.LockOSThread()
+	defer rt.UnlockOSThread()
+
+	stdNetns, err := netns.Get()
+	if err == nil {
+		defer stdNetns.Close()
+		containerNs, err = netns.GetFromName(Nsname)
+		if err == nil {
+			defer netns.Set(stdNetns)
+			err = netns.Set(containerNs)
+			if err == nil {
+				err = function()
+			}
+		}
+	}
+	return err
 }

@@ -82,7 +82,8 @@ func RegisterContainerdClient(additionalRuntimes ...string) *ContainerRuntime {
 func getContainerdConfigFile() string {
 	containerdconf, err := os.Open("/etc/containerd/config.toml")
 	if err != nil {
-		logger.ErrorLogger().Fatal(err)
+		logger.ErrorLogger().Print(err)
+		return ""
 	}
 	buffer := make([]byte, 1024)
 	confFileContent := ""
