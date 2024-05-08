@@ -575,6 +575,7 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 
 		//Get the default route for the namespace
 		ip, gw, mask, err := deleteDefaultIpGwMask(*q.NSname)
+		logger.InfoLogger().Printf("IP: %s, GW: %s, Mask: %s", ip, gw, mask)
 		if err != nil {
 			logger.InfoLogger().Printf("Unable to get default route for namespace %s: %v", *q.NSname, err)
 			return "", []string{}, err
