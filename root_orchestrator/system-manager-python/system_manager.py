@@ -173,6 +173,7 @@ def start_grpc_server():
 
 if __name__ == "__main__":
     import eventlet
+
     flask_thread = threading.Thread(target=start_flask_server)
     grpc_thread = threading.Thread(target=start_grpc_server)
 
@@ -181,3 +182,4 @@ if __name__ == "__main__":
 
     flask_thread.join()
     grpc_thread.join()
+
