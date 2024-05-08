@@ -10,7 +10,6 @@ from secrets import token_hex
 import grpc
 from blueprints import blueprints
 from bson import json_util
-from ext_requests.cluster_db import mongo_upsert_cluster
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import net_register_cluster
 from ext_requests.user_db import create_admin
@@ -26,6 +25,7 @@ from proto.clusterRegistration_pb2_grpc import (
     add_register_clusterServicer_to_server,
     register_clusterServicer,
 )
+from resource_abstractor_client import cluster_operations
 from sm_logging import configure_logging
 from utils.network import sanitize
 from werkzeug.utils import redirect, secure_filename
@@ -91,6 +91,7 @@ app.register_blueprint(swaggerui_blueprint)
 
 
 class ClusterRegistrationServicer(register_clusterServicer):
+
     def handle_init_greeting(self, request, context):
         app.logger.info("gRPC - Cluster_Manager connected: {}".format(context.peer()))
         return SC1Message(hello_cluster_manager="please send your cluster info")
@@ -99,19 +100,24 @@ class ClusterRegistrationServicer(register_clusterServicer):
         app.logger.info(
             "gRPC - Received Cluster_Manager_to_System_Manager_1: {}".format(context.peer())
         )
-        app.logger.info(request)
-        message = MessageToDict(request, preserving_proto_field_name=True)
-        cluster_ip = context.peer().split(":")[1]
 
-        cid = mongo_upsert_cluster(cluster_ip=cluster_ip, message=message)
+        try:
+            app.logger.info(request)
+            message = MessageToDict(request, preserving_proto_field_name=True)
+            cluster_ip = context.peer().split(":")[1]
 
-        net_register_cluster(
-            cluster_id=str(cid),
-            cluster_address=cluster_ip,
-            cluster_port=request.network_component_port,
-        )
+            cid = mongo_upsert_cluster(cluster_ip=cluster_ip, message=message)
 
-        return SC2Message(id=str(cid))
+            net_register_cluster(
+                cluster_id=str(cid),
+                cluster_address=cluster_ip,
+                cluster_port=request.network_component_port,
+            )
+
+            return SC2Message(id=str(cid))
+        except (grpc.FutureTimeoutError, asyncio.CancelledError):
+            app.logger.warning(f"Cluster {context.peer()} disconnected abruptly: {context}")
+            return None
 
 
 def serve():

@@ -1,16 +1,16 @@
+import logging
 import traceback
 
-from ext_requests.apps_db import (
-    mongo_add_application,
-    mongo_delete_application,
-    mongo_find_app_by_id,
-    mongo_find_app_by_name_and_namespace,
-    mongo_get_all_applications,
-    mongo_get_applications_of_user,
-    mongo_update_application,
-)
+from resource_abstractor_client import app_operations
 from services.service_management import create_services_of_app, delete_service
 from sla.versioned_sla_parser import SLAFormatError, parse_sla_json
+
+
+def get_user_apps(userid):
+    user_apps = app_operations.get_user_apps(userid)
+    if user_apps is None:
+        return {"message": "error fetching user apps"}, 500
+    return user_apps, 200
 
 
 def register_app(applications, userid):
@@ -20,23 +20,25 @@ def register_app(applications, userid):
         return {"message": e}, 422
 
     for application in applications["applications"]:
-        if mongo_find_app_by_name_and_namespace(
-            application.get("application_name"),
-            application.get("application_namespace"),
+        if app_operations.get_app_by_name_and_namespace(
+            application.get("application_name"), application.get("application_namespace"), userid
         ):
             return {
                 "message": "An application with the same name and namespace exists already"
             }, 409
 
-        if "action" in application:
-            del application["action"]
-        if "_id" in application:
-            del application["_id"]
+        application.pop("action", None)
+        application.pop("_id", None)
+
         application["userId"] = userid
         microservices = application.get("microservices")
         application["microservices"] = []
-        app_id = mongo_add_application(application)
 
+        app = app_operations.create_app(userid, application)
+        if app is None:
+            return {"message": "error during the registration of the application"}, 500
+
+        app_id = app.get("_id")
         # register microservices as well if any
         if app_id:
             if len(microservices) > 0:
@@ -59,31 +61,37 @@ def register_app(applications, userid):
                     delete_app(app_id, userid)
                     return {"message": "error during the registration of the microservices"}, 500
 
-    return list(mongo_get_applications_of_user(userid)), 200
+    return get_user_apps(userid)
 
 
 def update_app(appid, userid, fields):
     # TODO: fields validation before update
-    return mongo_update_application(appid, userid, fields)
+    app_data = {
+        "application_name": fields.get("application_name"),
+        "application_namespace": fields.get("application_namespace"),
+        "application_desc": fields.get("application_desc", ""),
+        "microservices": fields.get("microservices"),
+    }
+    return app_operations.update_app(appid, userid, app_data)
 
 
 def delete_app(appid, userid):
-    application = get_user_app(userid, appid)
+    application = app_operations.get_app_by_id(appid, userid)
+    if application is None:
+        logging.warn(f"Application {appid} not found")
+        return None
+
     for service_id in application.get("microservices"):
         delete_service(userid, service_id)
-    return mongo_delete_application(appid, userid)
 
-
-def users_apps(userid):
-    return mongo_get_applications_of_user(userid)
-
-
-def all_apps():
-    return mongo_get_all_applications()
+    return app_operations.delete_app(appid)
 
 
 def get_user_app(userid, appid):
-    return mongo_find_app_by_id(appid, userid)
+    app = app_operations.get_app_by_id(appid, userid)
+    if app is None:
+        return {"message": "Application not found"}, 404
+    return app, 200
 
 
 def valid_app_requirements(app):
@@ -92,3 +100,10 @@ def valid_app_requirements(app):
     if len(app["application_namespace"]) > 10 or len(app["application_namespace"]) < 1:
         return False
     return True
+
+
+def get_all_applications():
+    apps = app_operations.get_apps()
+    if apps is None:
+        return {"message": "error fetching all apps"}, 500
+    return apps, 200

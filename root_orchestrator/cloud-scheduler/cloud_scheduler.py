@@ -5,7 +5,7 @@ from celery import Celery
 from cs_logging import configure_logging
 from flask import Flask, request
 from manager_requests import manager_request
-from resource_management import job_operations
+from resource_abstractor_client import job_operations
 
 CLUSTER_SCREENING_INTERVAL = 60
 

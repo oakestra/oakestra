@@ -20,3 +20,4 @@ flask_swagger_ui
 mongomock==4.1.2
 grpcio~=1.60.0
 protobuf~=4.25.2
+
