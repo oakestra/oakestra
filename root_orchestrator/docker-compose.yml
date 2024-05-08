@@ -138,7 +138,7 @@ services:
     logging: *default-logging
 
   dashboard:
-    image: ghcr.io/oakestra/dashboard:alpha-v0.4.205
+    image: ghcr.io/oakestra/dashboard:latest
     ports:
       - '80:80'
     restart: unless-stopped
