@@ -148,7 +148,7 @@ if sudo docker ps -a | grep oakestra/cluster >/dev/null 2>&1; then
   exit 1
 fi
 
-command_exec="sudo -E docker compose -f cluster-orchestrator.yml ${OAK_OVERRIDES}up -d"
+command_exec="sudo -E docker compose -f cluster-orchestrator.yml ${OAK_OVERRIDES}up --pull=always -d"
 echo executing "$command_exec"
 
 eval "$command_exec"

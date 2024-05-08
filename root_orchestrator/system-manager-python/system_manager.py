@@ -7,7 +7,6 @@ from secrets import token_hex
 
 from blueprints import blueprints
 from bson import json_util
-from ext_requests.cluster_db import mongo_upsert_cluster
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import net_register_cluster
 from ext_requests.user_db import create_admin
@@ -17,6 +16,7 @@ from flask_jwt_extended import JWTManager
 from flask_smorest import Api
 from flask_socketio import SocketIO, emit
 from flask_swagger_ui import get_swaggerui_blueprint
+from resource_abstractor_client import cluster_operations
 from sm_logging import configure_logging
 from utils.network import sanitize
 from werkzeug.utils import redirect, secure_filename
@@ -103,17 +103,29 @@ def handle_init_client(message):
     app.logger.info(message)
 
     cluster_address = sanitize(request.remote_addr)
+    message["cluster_ip"] = cluster_address
+    cluster_data = {
+        "ip": message["cluster_ip"],
+        "clusterinfo": message["cluster_info"],
+        "port": message["manager_port"],
+        "cluster_location": message["cluster_location"],
+        "cluster_name": message["cluster_name"],
+    }
 
-    cid = mongo_upsert_cluster(cluster_ip=cluster_address, message=message)
-    x = {"id": str(cid)}
+    cluster = cluster_operations.create_cluster(cluster_data)
+    if cluster is None:
+        app.logger.error("Creating cluster failed")
+        return
+
+    cid = str(cluster["_id"])
 
     net_register_cluster(
-        cluster_id=str(cid),
+        cluster_id=cid,
         cluster_address=cluster_address,
         cluster_port=message["network_component_port"],
     )
 
-    emit("sc2", json.dumps(x), namespace="/register")
+    emit("sc2", json.dumps({"id": cid}), namespace="/register")
 
 
 @socketio.event(namespace="/register")
