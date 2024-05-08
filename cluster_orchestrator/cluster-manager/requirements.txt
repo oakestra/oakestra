@@ -10,3 +10,5 @@ pyyaml
 APScheduler
 prometheus-client
 werkzeug==2.0.3
+grpcio~=1.60.0
+protobuf~=4.25.2

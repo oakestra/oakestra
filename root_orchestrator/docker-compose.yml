@@ -21,8 +21,10 @@ services:
       logging_jobname: "containerlogs"
     expose:
       - "10000"
+      - "50052"
     ports:
       - "10000:10000"
+      - "50052:50052"
     depends_on:
       - mongo_root
       - cloud_scheduler
@@ -136,7 +138,7 @@ services:
     logging: *default-logging
 
   dashboard:
-    image: ghcr.io/oakestra/dashboard:latest
+    image: ghcr.io/oakestra/dashboard:alpha-v0.4.205
     ports:
       - '80:80'
     restart: unless-stopped

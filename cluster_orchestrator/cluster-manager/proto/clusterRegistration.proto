@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package clusterRegistration;
+
+// Init Registration 
+service register_cluster{
+ rpc handle_init_greeting (CS1Message) returns (SC1Message) {}
+
+ rpc handle_init_final (CS2Message) returns (SC2Message) {}
+}
+
+
+message CS1Message {
+  string hello_service_manager = 1;
+}
+
+message SC1Message {
+  string hello_cluster_manager = 1;
+}
+
+message CS2Message {
+  int32 manager_port = 1;
+  int32 network_component_port = 2;
+  string cluster_name = 3;
+  repeated KeyValue cluster_info = 4;
+  string cluster_location = 5;
+}
+
+message KeyValue {
+  string key = 1;
+  string value = 2; // Ist das ein String, oder kann es auch etwas anderes sein?
+}
+
+// SC2Message represents a message in Protocol Buffers.
+message SC2Message {
+  string id = 1;
+}
+
+
+
+
+
+
+

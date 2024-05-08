@@ -18,3 +18,5 @@ werkzeug==2.0.3
 MarkupSafe~=2.1.1
 flask_swagger_ui
 mongomock==4.1.2
+grpcio~=1.60.0
+protobuf~=4.25.2

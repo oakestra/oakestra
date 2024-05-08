@@ -2,7 +2,17 @@ import json
 import os
 import socket
 import time
-
+import grpc
+from proto.clusterRegistration_pb2 import (
+    CS1Message,
+    SC1Message,
+    CS2Message,
+    KeyValue,
+    SC2Message
+)
+from proto.clusterRegistration_pb2_grpc import (
+    register_clusterStub,
+)
 import service_operations
 import socketio
 from analyzing_workers import looking_for_dead_workers
@@ -30,9 +40,11 @@ MY_CLUSTER_LOCATION = os.environ.get("CLUSTER_LOCATION")
 NETWORK_COMPONENT_PORT = os.environ.get("CLUSTER_SERVICE_MANAGER_PORT")
 MY_ASSIGNED_CLUSTER_ID = None
 
+
 SYSTEM_MANAGER_ADDR = (
-    "http://" + os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_PORT")
+    os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_GRPC_PORT")
 )
+GRPC_REQUEST_TIMEOUT = 10
 
 my_logger = configure_logging()
 
@@ -183,77 +195,8 @@ def handle_init_worker(message):
 def test_disconnect():
     app.logger.info("Websocket - Client disconnected")
 
-
-# ........... BEGIN register to System Manager .........#
-# ......................................................#
-
-
-@sio.on("sc1", namespace="/register")
-def handle_init_greeting(jsonarg):
-    app.logger.info("Websocket - received System_Manager_to_Cluster_Manager_1 : " + str(jsonarg))
-    data = {
-        "manager_port": MY_PORT,
-        "network_component_port": NETWORK_COMPONENT_PORT,
-        "cluster_name": MY_CHOSEN_CLUSTER_NAME,
-        "cluster_info": {},
-        "cluster_location": MY_CLUSTER_LOCATION,
-    }
-    time.sleep(1)  # Wait to Avoid Race Condition!
-
-    sio.emit("cs1", data, namespace="/register")
-    app.logger.info("Websocket - Cluster Info sent. (Cluster_Manager_to_System_Manager)")
-
-
-@sio.on("sc2", namespace="/register")
-def handle_init_final(jsonarg):
-    app.logger.info("Websocket - received System_Manager_to_Cluster_Manager_2:" + str(jsonarg))
-    data = json.loads(jsonarg)
-
-    app.logger.info("My received ID is: {}\n\n\n".format(data["id"]))
-
-    global MY_ASSIGNED_CLUSTER_ID
-    MY_ASSIGNED_CLUSTER_ID = data["id"]
-
-    sio.disconnect()
-    if MY_ASSIGNED_CLUSTER_ID is not None:
-        app.logger.info("Received ID. Go ahead with Background Jobs")
-        prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID, app.logger)
-        background_job_send_aggregated_information_to_sm()
-    else:
-        app.logger.info("No ID received.")
-
-
-@sio.event()
-def connect():
-    app.logger.info("Websocket - I'm connected to System_Manager!")
-
-
-@sio.event()
-def connect_error(m):
-    app.logger.info("Websocket connection failed with System_Manager!")
-
-
-@sio.event()
-def error(sid, data):
-    app.logger.info(">>>> Websocket error with System_Manager <<<<< ")
-
-
-@sio.event()
-def disconnect(m):
-    app.logger.info("Websocket disconnected with SM!")
-
-
-def init_cm_to_sm():
-    app.logger.info("Connecting to System_Manager...")
-    try:
-        sio.connect(SYSTEM_MANAGER_ADDR + "/register", namespaces=["/register"])
-    except Exception:
-        app.logger.error("SocketIO - Connection Establishment with System Manager failed!")
-    time.sleep(1)
-
-
-# ......... FINISH - register at System Manager ........#
-# ......................................................#
+# ...... Websocket END Handling with edge nodes .......#
+# .....................................................#
 
 
 def background_job_send_aggregated_information_to_sm():
@@ -282,6 +225,63 @@ def background_job_send_aggregated_information_to_sm():
     scheduler.start()
 
 
+# ........... BEGIN register to System Manager with gRPC........ .........#
+# ........................................................................#
+
+def register_with_system_manager():
+    """Registers this cluster manager with the system manager using gRPC."""
+
+    with grpc.insecure_channel(SYSTEM_MANAGER_ADDR) as channel:
+        stub = register_clusterStub(channel)
+
+        try:
+            # Send initial greeting (CS1Message)
+            message = CS1Message()
+            message.hello_service_manager = json.dumps(
+                {"cluster_name": MY_CHOSEN_CLUSTER_NAME, "location": MY_CLUSTER_LOCATION}
+            )
+            response: SC1Message = stub.handle_init_greeting(
+                message,
+                wait_for_ready=True,
+                timeout=time.time() + GRPC_REQUEST_TIMEOUT
+            )
+            app.logger.info("Received greeting message from System Manager: " +
+                            str(response.hello_cluster_manager))
+            
+            # Send cluster details (CS2Message)
+            message = CS2Message()
+            message.manager_port = int(MY_PORT)
+            message.network_component_port = int(NETWORK_COMPONENT_PORT)
+            message.cluster_name = MY_CHOSEN_CLUSTER_NAME
+            message.cluster_location = MY_CLUSTER_LOCATION
+
+            # Add additional key-value pairs to SC2Message
+            key_value_message = KeyValue()
+            message.cluster_info.append(key_value_message)
+
+            response: SC2Message = stub.handle_init_final(
+                message,
+                wait_for_ready=True,
+                timeout=time.time() + GRPC_REQUEST_TIMEOUT
+            )
+            app.logger.info("Cluster ID received: {response.id}")
+
+            global MY_ASSIGNED_CLUSTER_ID
+            MY_ASSIGNED_CLUSTER_ID = response.id
+            if MY_ASSIGNED_CLUSTER_ID is not None:
+
+                app.logger.info("Received ID. Go ahead with Background Jobs")
+                prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID, app.logger)
+                background_job_send_aggregated_information_to_sm()
+            else:
+                app.logger.info("No ID received.")
+        except grpc.RpcError as e:
+            app.logger.error(f"Error while registering with System Manager: {e}")
+
+# ........... FINISH - register to System Manager with gRPC.................#
+# ..........................................................................#
+
+
 if __name__ == "__main__":
     # socketioserver.run(app, debug=True, host='0.0.0.0', port=MY_PORT)
     # app.run(debug=True, host='0.0.0.0', port=MY_PORT)
@@ -290,7 +290,7 @@ if __name__ == "__main__":
 
     import eventlet
 
-    init_cm_to_sm()
+    register_with_system_manager()  # register with system manager using gRPC
     eventlet.wsgi.server(
         eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger
     )  # see README for logging notes
