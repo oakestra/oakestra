@@ -11,6 +11,8 @@ require (
 	github.com/opencontainers/runtime-spec v1.2.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/struCoder/pidusage v0.2.1
+	github.com/vishvananda/netlink v1.2.1-beta.2
+	github.com/vishvananda/netns v0.0.4
 	gotest.tools v2.2.0+incompatible
 )
 
@@ -68,7 +70,7 @@ require (
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.24.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
-	golang.org/x/sys v0.19.0 // indirect
+	golang.org/x/sys v0.19.0
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.20.0 // indirect
 	google.golang.org/genproto v0.0.0-20240415180920-8c6c420018be // indirect

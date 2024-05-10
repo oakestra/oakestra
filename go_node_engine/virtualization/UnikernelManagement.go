@@ -574,7 +574,7 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 	if model.GetNodeInfo().Overlay {
 
 		//Get the default route for the namespace
-		ip, gw, mask, err := deleteDefaultIpGwMask(*q.NSname)
+		ip, gw, mask, mac, err := deleteDefaultIpGwMask(*q.NSname)
 		if err != nil {
 			logger.InfoLogger().Printf("Unable to get default route for namespace %s: %v", *q.NSname, err)
 			return "", []string{}, err
@@ -590,10 +590,11 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 		//Network
 		if model.GetNodeInfo().Overlay {
 			//Network backend fixed at tap0 and virbr0 created inside the namespace "tap,id=n0,fd=" + strconv.Itoa(devFd),
-			args = append(args, "-netdev", "tap,id=tap0,fd="+strconv.Itoa(fd)+",vhost=on")
+			args = append(args, "-netdev", "tap,id=tap0,vhost=on,vhostforce=on,fd="+strconv.Itoa(fd))
 			//Network device
-			args = append(args, "-device", "virtio-net,netdev=tap0,mac=52:55:00:d1:55:01")
+			args = append(args, "-device", "virtio-net,netdev=tap0,mac="+mac)
 		}
+
 		//Kernel arguments including the network configuration
 		//The arguments after -- are given to the main function of the unikernel
 		args = append(args, "-append")
@@ -633,9 +634,9 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 }
 
 // delete and returns the defaultIp Gateway and Netmask of a given namespace
-func deleteDefaultIpGwMask(namespace string) (string, string, string, error) {
+func deleteDefaultIpGwMask(namespace string) (string, string, string, string, error) {
 	defaultRouteFilter := &netlink.Route{Dst: nil}
-	ip, gw, mask := "", "", ""
+	ip, gw, mask, mac := "", "", "", ""
 
 	err := execInsideNsByName(namespace, func() error {
 
@@ -657,6 +658,11 @@ func deleteDefaultIpGwMask(namespace string) (string, string, string, error) {
 			return err
 		}
 
+		macvtap, err := netlink.LinkByName("tap0")
+		if err != nil {
+			return err
+		}
+
 		addrs, err := netlink.AddrList(routelink, netlink.FAMILY_V4)
 		if err != nil {
 			return err
@@ -667,6 +673,7 @@ func deleteDefaultIpGwMask(namespace string) (string, string, string, error) {
 
 		ip = addrs[0].IP.String()
 		gw = route.Gw.String()
+		mac = macvtap.Attrs().HardwareAddr.String()
 		mask = net.IP(addrs[0].Mask).String()
 
 		if err = netlink.AddrDel(routelink, &addrs[0]); err != nil {
@@ -676,7 +683,7 @@ func deleteDefaultIpGwMask(namespace string) (string, string, string, error) {
 		return nil
 	})
 
-	return ip, gw, mask, err
+	return ip, gw, mask, mac, err
 }
 
 // defaultRoute returns the default route for the current namespace.
