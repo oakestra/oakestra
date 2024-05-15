@@ -10,20 +10,17 @@ from google.protobuf.internal import containers as _containers
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
-
 class CS1Message(_message.Message):
     __slots__ = ("hello_service_manager",)
     HELLO_SERVICE_MANAGER_FIELD_NUMBER: _ClassVar[int]
     hello_service_manager: str
     def __init__(self, hello_service_manager: _Optional[str] = ...) -> None: ...
 
-
 class SC1Message(_message.Message):
     __slots__ = ("hello_cluster_manager",)
     HELLO_CLUSTER_MANAGER_FIELD_NUMBER: _ClassVar[int]
     hello_cluster_manager: str
     def __init__(self, hello_cluster_manager: _Optional[str] = ...) -> None: ...
-
 
 class CS2Message(_message.Message):
     __slots__ = (
@@ -53,7 +50,6 @@ class CS2Message(_message.Message):
         cluster_location: _Optional[str] = ...,
     ) -> None: ...
 
-
 class KeyValue(_message.Message):
     __slots__ = ("key", "value")
     KEY_FIELD_NUMBER: _ClassVar[int]
@@ -61,7 +57,6 @@ class KeyValue(_message.Message):
     key: str
     value: str
     def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
-
 
 class SC2Message(_message.Message):
     __slots__ = ("id",)

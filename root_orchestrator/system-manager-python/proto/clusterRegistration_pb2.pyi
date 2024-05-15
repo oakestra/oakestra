@@ -40,6 +40,10 @@ class CS2Message(_message.Message):
     cluster_name: str
     cluster_info: _containers.RepeatedCompositeFieldContainer[KeyValue]
     cluster_location: str
+<<<<<<< HEAD
+=======
+
+>>>>>>> 316-migrate-to-grpc
     def __init__(
         self,
         manager_port: _Optional[int] = ...,
@@ -61,4 +65,8 @@ class SC2Message(_message.Message):
     __slots__ = ("id",)
     ID_FIELD_NUMBER: _ClassVar[int]
     id: str
+<<<<<<< HEAD
     def __init__(self, id: _Optional[str] = ...) -> None: ...
+=======
+    def __init__(self, id: _Optional[str] = ...) -> None: ...
+>>>>>>> 316-migrate-to-grpc

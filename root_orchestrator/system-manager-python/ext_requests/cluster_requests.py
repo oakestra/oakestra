@@ -8,7 +8,7 @@ from utils.network import sanitize
 
 def cluster_request_status(cluster_id):
     print("Status Request...")
-    cluster = mongo_find_cluster_by_id(cluster_id)
+    cluster = cluster_operations.get_resource_by_id(cluster_id)
     try:
         cluster_addr = "http://" + cluster.get("ip") + ":" + str(cluster.get("port")) + "/status"
         print(cluster_addr)

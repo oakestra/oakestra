@@ -3,13 +3,7 @@ import os
 import socket
 import time
 import grpc
-from proto.clusterRegistration_pb2 import (
-    CS1Message,
-    SC1Message,
-    CS2Message,
-    KeyValue,
-    SC2Message
-)
+from proto.clusterRegistration_pb2 import CS1Message, SC1Message, CS2Message, KeyValue, SC2Message
 from proto.clusterRegistration_pb2_grpc import (
     register_clusterStub,
 )
@@ -195,6 +189,7 @@ def handle_init_worker(message):
 def test_disconnect():
     app.logger.info("Websocket - Client disconnected")
 
+
 # ...... Websocket END Handling with edge nodes .......#
 # .....................................................#
 
@@ -228,6 +223,7 @@ def background_job_send_aggregated_information_to_sm():
 # ........... BEGIN register to System Manager with gRPC........ .........#
 # ........................................................................#
 
+
 def register_with_system_manager():
     """Registers this cluster manager with the system manager using gRPC."""
 
@@ -241,13 +237,17 @@ def register_with_system_manager():
                 {"cluster_name": MY_CHOSEN_CLUSTER_NAME, "location": MY_CLUSTER_LOCATION}
             )
             response: SC1Message = stub.handle_init_greeting(
-                message,
-                wait_for_ready=True,
-                timeout=time.time() + GRPC_REQUEST_TIMEOUT
+                message, wait_for_ready=True  # , timeout=GRPC_REQUEST_TIMEOUT
             )
-            app.logger.info("Received greeting message from System Manager: " +
-                            str(response.hello_cluster_manager))
-            
+            app.logger.info(
+                "Received greeting message from System Manager: "
+                + str(response.hello_cluster_manager)
+            )
+
+        except grpc.RpcError as e:
+            app.logger.error(f"Error sending CS1 to System Manager: {e}")
+
+        try:
             # Send cluster details (CS2Message)
             message = CS2Message()
             message.manager_port = int(MY_PORT)
@@ -260,23 +260,26 @@ def register_with_system_manager():
             message.cluster_info.append(key_value_message)
 
             response: SC2Message = stub.handle_init_final(
-                message,
-                wait_for_ready=True,
-                timeout=time.time() + GRPC_REQUEST_TIMEOUT
+                message, wait_for_ready=True  # , timeout=GRPC_REQUEST_TIMEOUT
             )
-            app.logger.info("Cluster ID received: {response.id}")
 
-            global MY_ASSIGNED_CLUSTER_ID
-            MY_ASSIGNED_CLUSTER_ID = response.id
-            if MY_ASSIGNED_CLUSTER_ID is not None:
+            app.logger.info(f"Cluster ID received: {response.id}")
 
-                app.logger.info("Received ID. Go ahead with Background Jobs")
-                prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID, app.logger)
-                background_job_send_aggregated_information_to_sm()
-            else:
-                app.logger.info("No ID received.")
         except grpc.RpcError as e:
-            app.logger.error(f"Error while registering with System Manager: {e}")
+            app.logger.error(f"Error sending CS2 to System Manager: {e}")
+
+        global MY_ASSIGNED_CLUSTER_ID
+        # MY_ASSIGNED_CLUSTER_ID = response.id
+        if response.id is not None:
+            MY_ASSIGNED_CLUSTER_ID = response.id
+            app.logger.info("Received ID. Go ahead with Background Jobs")
+            prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID, app.logger)
+            background_job_send_aggregated_information_to_sm()
+        else:
+            app.logger.info("No ID received.")
+    # except grpc.RpcError as e:
+    #    app.logger.error(f"Error while registering with System Manager: {e}")
+
 
 # ........... FINISH - register to System Manager with gRPC.................#
 # ..........................................................................#
