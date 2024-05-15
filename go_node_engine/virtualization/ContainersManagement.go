@@ -164,7 +164,7 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 func (r *ContainerRuntime) Undeploy(service string, instance int) error {
 	c, err := r.getContainerByTaskID(genTaskID(service, instance))
 	if err == nil {
-		r.removeContainer(c)
+		_ = r.removeContainer(c)
 	}
 	return err
 }
@@ -315,7 +315,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
 	}
 
-	r.removeContainer(container)
+	_ = r.removeContainer(container)
 	statusChangeNotificationHandler(service)
 }
 
@@ -414,26 +414,27 @@ func (r *ContainerRuntime) forceContainerCleanup() {
 		logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 	}
 	for _, container := range deployedContainers {
-		r.removeContainer(container)
+		_ = r.removeContainer(container)
 	}
 }
 
-func (r *ContainerRuntime) removeContainer(container containerd.Container) {
+func (r *ContainerRuntime) removeContainer(container containerd.Container) error {
 	logger.InfoLogger().Printf("Clenaning up container: %s", container.ID())
 	task, err := container.Task(r.ctx, nil)
 	if err != nil {
-		logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+		return fmt.Errorf("Unable to fetch container task: %v", err)
 	}
 	if err == nil {
 		err = killTask(r.ctx, task, container)
 		if err != nil {
-			logger.ErrorLogger().Printf("Unable to fetch kill task: %v", err)
+			return fmt.Errorf("Unable to fetch kill task: %v", err)
 		}
 	}
 	err = container.Delete(r.ctx)
 	if err != nil {
-		logger.ErrorLogger().Printf("Unable to delete container: %v", err)
+		return fmt.Errorf("Unable to delete container: %v", err)
 	}
+	return nil
 }
 
 func (r *ContainerRuntime) getContainerMemoryUsage(containerID string, pid int) (float64, error) {
