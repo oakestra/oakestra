@@ -2,7 +2,6 @@ package virtualization
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
@@ -136,19 +135,12 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 		}
 	}
 
-	killChannel := make(chan bool, 1)
 	startupChannel := make(chan bool)
 	errorChannel := make(chan error)
 
-	r.channelLock.RLock()
-	el, servicefound := r.killQueue[genTaskID(service.Sname, service.Instance)]
-	r.channelLock.RUnlock()
-	if !servicefound || el == nil {
-		r.channelLock.Lock()
-		r.killQueue[genTaskID(service.Sname, service.Instance)] = &killChannel
-		r.channelLock.Unlock()
-	} else {
-		return errors.New("service already deployed")
+	_, err = r.getContainerByTaskID(genTaskID(service.Sname, service.Instance))
+	if err == nil {
+		return fmt.Errorf("task already deployed")
 	}
 
 	// create startup routine which will accompany the container through its lifetime
@@ -158,7 +150,6 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 		service,
 		startupChannel,
 		errorChannel,
-		&killChannel,
 		statusChangeNotificationHandler,
 	)
 
@@ -171,25 +162,11 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 }
 
 func (r *ContainerRuntime) Undeploy(service string, instance int) error {
-	r.channelLock.Lock()
-	defer r.channelLock.Unlock()
-	taskid := genTaskID(service, instance)
-	el, found := r.killQueue[taskid]
-	if found && el != nil {
-		logger.InfoLogger().Printf("Sending kill signal to %s", taskid)
-		*r.killQueue[taskid] <- true
-		select {
-		case res := <-*r.killQueue[taskid]:
-			if !res {
-				logger.ErrorLogger().Printf("Unable to stop service %s", taskid)
-			}
-		case <-time.After(5 * time.Second):
-			logger.ErrorLogger().Printf("Unable to stop service %s", taskid)
-		}
-		delete(r.killQueue, taskid)
-		return nil
+	c, err := r.getContainerByTaskID(genTaskID(service, instance))
+	if err == nil {
+		r.removeContainer(c)
 	}
-	return errors.New("service not found")
+	return err
 }
 
 func (r *ContainerRuntime) containerCreationRoutine(
@@ -198,7 +175,6 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	service model.Service,
 	startup chan bool,
 	errorchan chan error,
-	killChannel *chan bool,
 	statusChangeNotificationHandler func(service model.Service),
 ) {
 
@@ -290,16 +266,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		return
 	}
 	defer func(ctx context.Context, task containerd.Task) {
-		err := killTask(ctx, task, container)
-		//removing from killqueue
-		r.channelLock.Lock()
-		defer r.channelLock.Unlock()
-		r.killQueue[taskid] = nil
-		if err != nil {
-			*killChannel <- false
-		} else {
-			*killChannel <- true
-		}
+		_ = killTask(ctx, task, container)
 	}(ctx, task)
 
 	// get wait channel
@@ -332,20 +299,12 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	startup <- true
 
 	// wait for manual task kill or task finish
-	select {
-	case exitStatus := <-exitStatusC:
-		if exitStatus.ExitCode() == 0 && service.OneShot {
-			service.Status = model.SERVICE_COMPLETED
-		}
-		//TODO: container exited, do something, notify to cluster manager
-		if err != nil {
-			return
-		}
-		logger.InfoLogger().Printf("WARNING: Container exited with status %d", exitStatus.ExitCode())
-		service.StatusDetail = fmt.Sprintf("Container exited with status: %d", exitStatus.ExitCode())
-	case <-*killChannel:
-		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
+	exitStatus := <-exitStatusC
+	if exitStatus.ExitCode() == 0 && service.OneShot {
+		service.Status = model.SERVICE_COMPLETED
 	}
+	logger.InfoLogger().Printf("WARNING: Container exited with status %d", exitStatus.ExitCode())
+	service.StatusDetail = fmt.Sprintf("Container exited with status: %d", exitStatus.ExitCode())
 
 	if service.Status != model.SERVICE_COMPLETED {
 		service.Status = model.SERVICE_DEAD
@@ -355,8 +314,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	if model.GetNodeInfo().Overlay {
 		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
 	}
-	statusChangeNotificationHandler(service)
+
 	r.removeContainer(container)
+	statusChangeNotificationHandler(service)
 }
 
 func getTotalCpuUsageByPid(pid int32) (float64, error) {
@@ -569,4 +529,17 @@ func extractInstanceNumberFromTaskID(taskid string) int {
 
 func genTaskID(sname string, instancenumber int) string {
 	return fmt.Sprintf("%s.instance.%d", sname, instancenumber)
+}
+
+func (r *ContainerRuntime) getContainerByTaskID(taskid string) (containerd.Container, error) {
+	containers, err := r.contaierClient.Containers(r.ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range containers {
+		if c.ID() == taskid {
+			return c, err
+		}
+	}
+	return nil, fmt.Errorf("container not found")
 }
