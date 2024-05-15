@@ -1,6 +1,9 @@
 import json
 import os
 import socket
+import threading
+import grpc
+from concurrent import futures
 from datetime import timedelta
 from pathlib import Path
 from secrets import token_hex
@@ -17,6 +20,12 @@ from flask_smorest import Api
 from flask_socketio import SocketIO, emit
 from flask_swagger_ui import get_swaggerui_blueprint
 from resource_abstractor_client import cluster_operations
+from google.protobuf.json_format import MessageToDict
+from proto.clusterRegistration_pb2 import SC1Message, SC2Message
+from proto.clusterRegistration_pb2_grpc import (
+    add_register_clusterServicer_to_server,
+    register_clusterServicer,
+)
 from sm_logging import configure_logging
 from utils.network import sanitize
 from werkzeug.utils import redirect, secure_filename
@@ -53,6 +62,7 @@ mongo_init(app)
 create_admin()
 
 MY_PORT = os.environ.get("MY_PORT") or 10000
+MY_PORT_GRPC = os.environ.get("MY_PORT_GRPC") or 50052
 
 cluster_gauges_for_prometheus = []
 
@@ -137,6 +147,62 @@ def disconnect():
 # ......................................................#
 
 
+# .............. Register clusters via gRPC ............#
+# ......................................................#
+
+
+class ClusterRegistrationServicer(register_clusterServicer):
+    def handle_init_greeting(self, request, context):
+        app.logger.info("gRPC - Cluster_Manager connected: {}".format(context.peer()))
+        return SC1Message(hello_cluster_manager="please send your cluster info")
+
+    def handle_init_final(self, request, context):
+        app.logger.info(
+            "gRPC - Received Cluster_Manager_to_System_Manager_1: {}".format(context.peer())
+        )
+        app.logger.info(request)
+        message = MessageToDict(request, preserving_proto_field_name=True)
+        app.logger.info("Message: {}, request {}".format(message, request))
+        cluster_ip = context.peer().split(":")[1]  # from ipv4:172.19.0.1:46138 extract ip
+
+        cluster_address = sanitize(cluster_ip)
+        app.logger.info("Cluster address: {}".format(cluster_address))
+        cluster_data = {
+            "ip": cluster_address,
+            "clusterinfo": message["cluster_info"][0],
+            "port": str(message["manager_port"]),
+            "cluster_location": message["cluster_location"],
+            "cluster_name": message["cluster_name"],
+        }
+        app.logger.info("Cluster data: {}".format(cluster_data))
+        cluster = cluster_operations.create_cluster(cluster_data)
+        if cluster is None:
+            app.logger.error("Creating cluster failed")
+            return
+
+        cid = str(cluster["_id"])
+
+        net_register_cluster(
+            cluster_id=cid,
+            cluster_address=cluster_address,
+            cluster_port=request.network_component_port,
+        )
+
+        return SC2Message(id=cid)
+
+
+def serve():
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    add_register_clusterServicer_to_server(ClusterRegistrationServicer(), server)
+    server.add_insecure_port("0.0.0.0:" + str(MY_PORT_GRPC))
+    server.start()
+    server.wait_for_termination()
+
+
+# ................. Finish gRPC handling ...............#
+# ......................................................#
+
+
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -165,9 +231,25 @@ def upload_file():
     """
 
 
-if __name__ == "__main__":
-    import eventlet
-
+def start_flask_server():
     eventlet.wsgi.server(
         eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger
     )
+
+
+def start_grpc_server():
+    my_logger.info("Start gRPC Server on port {}".format(MY_PORT_GRPC))
+    serve()
+
+
+if __name__ == "__main__":
+    import eventlet
+
+    flask_thread = threading.Thread(target=start_flask_server)
+    grpc_thread = threading.Thread(target=start_grpc_server)
+
+    flask_thread.start()
+    grpc_thread.start()
+
+    flask_thread.join()
+    grpc_thread.join()
