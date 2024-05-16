@@ -4,7 +4,8 @@
 virtualenv --clear -p python3 .venv
 source .venv/bin/activate
 
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r addons-manager/requirements.txt
+.venv/bin/pip install -r addons-monitor/requirements.txt
 
 export FLASK_ENV=development
 export FLASK_DEBUG=False # TRUE for logging
