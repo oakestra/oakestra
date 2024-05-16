@@ -12,7 +12,7 @@ from google.protobuf.internal import builder as _builder
 
 _sym_db = _symbol_database.Default()
 
-
+# This line exceeds flake8 line length limit but the file is not editable.
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
     b'\n\x19\x63lusterRegistration.proto\x12\x13\x63lusterRegistration"+\n\nCS1Message\x12\x1d\n\x15hello_service_manager\x18\x01 \x01(\t"+\n\nSC1Message\x12\x1d\n\x15hello_cluster_manager\x18\x01 \x01(\t"\xa7\x01\n\nCS2Message\x12\x14\n\x0cmanager_port\x18\x01 \x01(\x05\x12\x1e\n\x16network_component_port\x18\x02 \x01(\x05\x12\x14\n\x0c\x63luster_name\x18\x03 \x01(\t\x12\x33\n\x0c\x63luster_info\x18\x04 \x03(\x0b\x32\x1d.clusterRegistration.KeyValue\x12\x18\n\x10\x63luster_location\x18\x05 \x01(\t"&\n\x08KeyValue\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t"\x18\n\nSC2Message\x12\n\n\x02id\x18\x01 \x01(\t2\xc7\x01\n\x10register_cluster\x12Z\n\x14handle_init_greeting\x12\x1f.clusterRegistration.CS1Message\x1a\x1f.clusterRegistration.SC1Message"\x00\x12W\n\x11handle_init_final\x12\x1f.clusterRegistration.CS2Message\x1a\x1f.clusterRegistration.SC2Message"\x00\x62\x06proto3'
 )
