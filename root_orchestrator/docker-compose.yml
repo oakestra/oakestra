@@ -203,6 +203,7 @@ services:
       - 11101:11101
     depends_on:
       - mongo_root
+      - marketplace_manager
     logging: *default-logging
 
   addons_monitor:
