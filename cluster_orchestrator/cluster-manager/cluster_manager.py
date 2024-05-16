@@ -1,7 +1,6 @@
 import json
 import os
 import socket
-import time
 import grpc
 from proto.clusterRegistration_pb2 import CS1Message, SC1Message, CS2Message, KeyValue, SC2Message
 from proto.clusterRegistration_pb2_grpc import (

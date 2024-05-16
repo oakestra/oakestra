@@ -15,7 +15,7 @@ from flask import Flask, flash, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_smorest import Api
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO
 from flask_swagger_ui import get_swaggerui_blueprint
 from resource_abstractor_client import cluster_operations
 from google.protobuf.json_format import MessageToDict
