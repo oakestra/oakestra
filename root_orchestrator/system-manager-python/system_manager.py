@@ -7,8 +7,6 @@ from concurrent import futures
 from datetime import timedelta
 from pathlib import Path
 from secrets import token_hex
-
-import grpc
 from blueprints import blueprints
 from bson import json_util
 from ext_requests.mongodb_client import mongo_init
