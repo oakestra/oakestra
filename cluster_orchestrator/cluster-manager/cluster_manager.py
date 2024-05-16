@@ -38,7 +38,7 @@ MY_ASSIGNED_CLUSTER_ID = None
 SYSTEM_MANAGER_ADDR = (
     os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_GRPC_PORT")
 )
-GRPC_REQUEST_TIMEOUT = 10
+GRPC_REQUEST_TIMEOUT = 60
 
 my_logger = configure_logging()
 
@@ -237,7 +237,7 @@ def register_with_system_manager():
                 {"cluster_name": MY_CHOSEN_CLUSTER_NAME, "location": MY_CLUSTER_LOCATION}
             )
             response: SC1Message = stub.handle_init_greeting(
-                message, wait_for_ready=True  # , timeout=GRPC_REQUEST_TIMEOUT
+                message, wait_for_ready=True, timeout=GRPC_REQUEST_TIMEOUT
             )
             app.logger.info(
                 "Received greeting message from System Manager: "
@@ -260,7 +260,7 @@ def register_with_system_manager():
             message.cluster_info.append(key_value_message)
 
             response: SC2Message = stub.handle_init_final(
-                message, wait_for_ready=True  # , timeout=GRPC_REQUEST_TIMEOUT
+                message, wait_for_ready=True, timeout=GRPC_REQUEST_TIMEOUT
             )
 
             app.logger.info(f"Cluster ID received: {response.id}")
@@ -269,16 +269,16 @@ def register_with_system_manager():
             app.logger.error(f"Error sending CS2 to System Manager: {e}")
 
         global MY_ASSIGNED_CLUSTER_ID
-        # MY_ASSIGNED_CLUSTER_ID = response.id
-        if response.id is not None:
-            MY_ASSIGNED_CLUSTER_ID = response.id
-            app.logger.info("Received ID. Go ahead with Background Jobs")
-            prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID, app.logger)
-            background_job_send_aggregated_information_to_sm()
+        if response:
+            if response.id is not None:
+                MY_ASSIGNED_CLUSTER_ID = response.id
+                app.logger.info("Received ID. Go ahead with Background Jobs")
+                prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID, app.logger)
+                background_job_send_aggregated_information_to_sm()
+            else:
+                app.logger.error("No ID received.")
         else:
-            app.logger.info("No ID received.")
-    # except grpc.RpcError as e:
-    #    app.logger.error(f"Error while registering with System Manager: {e}")
+            app.logger.error("No response received from System Manager.")
 
 
 # ........... FINISH - register to System Manager with gRPC.................#
