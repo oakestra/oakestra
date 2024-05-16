@@ -1,4 +1,3 @@
-import json
 import os
 import socket
 import threading
@@ -25,12 +24,6 @@ from proto.clusterRegistration_pb2_grpc import (
     register_clusterServicer,
 )
 from resource_abstractor_client import cluster_operations
-from google.protobuf.json_format import MessageToDict
-from proto.clusterRegistration_pb2 import SC1Message, SC2Message
-from proto.clusterRegistration_pb2_grpc import (
-    add_register_clusterServicer_to_server,
-    register_clusterServicer,
-)
 from sm_logging import configure_logging
 from utils.network import sanitize
 from werkzeug.utils import redirect, secure_filename
@@ -89,52 +82,6 @@ swaggerui_blueprint = get_swaggerui_blueprint(
     config={"app_name": "Oakestra root orchestrator"},
 )
 app.register_blueprint(swaggerui_blueprint)
-
-
-# .............. Register clusters via gRPC ............#
-# ......................................................#
-
-
-class ClusterRegistrationServicer(register_clusterServicer):
-
-    def handle_init_greeting(self, request, context):
-        app.logger.info("gRPC - Cluster_Manager connected: {}".format(context.peer()))
-        return SC1Message(hello_cluster_manager="please send your cluster info")
-
-    def handle_init_final(self, request, context):
-        app.logger.info(
-            "gRPC - Received Cluster_Manager_to_System_Manager_1: {}".format(context.peer())
-        )
-
-        try:
-            app.logger.info(request)
-            message = MessageToDict(request, preserving_proto_field_name=True)
-            cluster_ip = context.peer().split(":")[1]
-
-            cid = mongo_upsert_cluster(cluster_ip=cluster_ip, message=message)
-
-            net_register_cluster(
-                cluster_id=str(cid),
-                cluster_address=cluster_ip,
-                cluster_port=request.network_component_port,
-            )
-
-            return SC2Message(id=str(cid))
-        except (grpc.FutureTimeoutError, asyncio.CancelledError):
-            app.logger.warning(f"Cluster {context.peer()} disconnected abruptly: {context}")
-            return None
-
-
-def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    add_register_clusterServicer_to_server(ClusterRegistrationServicer(), server)
-    server.add_insecure_port("0.0.0.0:" + str(MY_PORT_GRPC))
-    server.start()
-    server.wait_for_termination()
-
-
-# ............... Finish WebSocket handling ............#
-# ......................................................#
 
 
 # .............. Register clusters via gRPC ............#
