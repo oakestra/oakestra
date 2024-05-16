@@ -100,7 +100,7 @@ class ClusterRegistrationServicer(register_clusterServicer):
         app.logger.info(request)
         message = MessageToDict(request, preserving_proto_field_name=True)
         app.logger.info("Message: {}, request {}".format(message, request))
-        cluster_ip = context.peer().split(":")[1]  # from ipv4:172.19.0.1:46138 extract ip
+        cluster_ip = context.peer().split(":")[1]
 
         cluster_address = sanitize(cluster_ip)
         app.logger.info("Cluster address: {}".format(cluster_address))
