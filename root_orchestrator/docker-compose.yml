@@ -25,6 +25,7 @@ services:
     depends_on:
       - mongo_root
       - cloud_scheduler
+      - resource_abstractor
       - root_service_manager
     environment:
       - CLOUD_MONGO_URL=mongo
