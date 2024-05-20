@@ -229,6 +229,8 @@ services:
     labels:
       logging: "promtail"
       logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     expose:
       - "11102"
     ports:
