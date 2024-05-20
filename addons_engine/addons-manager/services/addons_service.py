@@ -88,7 +88,7 @@ def install_addon(addon):
     return created_addon
 
 
-def stop_all_addons(self):
+def stop_all_addons():
     addons = addons_db.find_active_addons()
     for addon in addons:
         stop_addon(addon)
