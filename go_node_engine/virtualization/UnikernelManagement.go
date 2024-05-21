@@ -242,6 +242,7 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 				}
 			case tar.TypeReg:
 				file, err := os.Create(kernel_location + header.Name)
+				file.Chmod(header.FileInfo().Mode())
 				if err != nil {
 					logger.InfoLogger().Printf("Unable to create file: %v", err)
 				}
@@ -284,6 +285,17 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 		}
 
 		err = exec.Command("mv", instance_path+"/files1", instance_path+"/files").Run()
+		if err != nil {
+			logger.InfoLogger().Printf("Unable to set files: %v", err)
+		}
+
+	}
+
+	_, err = os.Stat(kernel_location + "initramfs.cpio")
+	if !errors.Is(err, fs.ErrNotExist) {
+		logger.InfoLogger().Printf("Creating new ramdisk envioument %s -> %s", kernel_location+"initramfs.cpio", instance_path+"/initramfs.cpio")
+
+		err = exec.Command("cp", "-r", kernel_location+"initramfs.cpio", instance_path).Run()
 		if err != nil {
 			logger.InfoLogger().Printf("Unable to set files: %v", err)
 		}
@@ -630,6 +642,18 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 
 		//FS device
 		args = append(args, "-device", "virtio-9p-pci,fsdev=hvirtio0,mount_tag=fs0")
+		args = append(args, "-device", "virtio-9p-pci,fsdev=hvirtio1,mount_tag=fs1")
+	}
+	//Check if ramdisk provided
+	initramfs := fmt.Sprintf("%s/initramfs.cpio", q.Instancepath)
+	_, err = os.Stat(initramfs)
+	if err == nil {
+		logger.InfoLogger().Println("Mounting .cpio root fs")
+		//FS backend
+		fsdevarg2 := fmt.Sprintf("local,security_model=passthrough,id=hvirtio1,path=%s/initramfs.cpio", q.Instancepath)
+		args = append(args, "-fsdev", fsdevarg2)
+
+		//FS device
 		args = append(args, "-device", "virtio-9p-pci,fsdev=hvirtio1,mount_tag=fs1")
 	}
 
