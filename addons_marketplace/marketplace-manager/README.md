@@ -35,12 +35,12 @@ The following addon contains two dummy services/containers where one can run suc
   "services": [
     {
       "command": "sh -c 'while true; do echo \"Hello, World (testing!!) !\"; sleep 10; done'",
-      "image_uri": "alpine",
+      "image": "alpine",
       "service_name": "my-alpine"
     },
     {
       "command": "false",
-      "image_uri": "busybox",
+      "image": "busybox",
       "service_name": "my-busybox-fail"
     }
   ]

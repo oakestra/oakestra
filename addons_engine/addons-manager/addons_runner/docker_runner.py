@@ -63,8 +63,8 @@ class DockerRunner:
     def remove_addon_images(self, addon):
         services = addon.get("services", [])
         for service in services:
-            image_uri = service.get("image_uri")
-            self._remove_image(image_uri)
+            image = service.get("image")
+            self._remove_image(image)
 
     def run_service(self, service, addon_id, project_name):
         # labels for basic structuring of the containers
@@ -86,10 +86,10 @@ class DockerRunner:
 
         # Handling multiple networks is currently not needed.
         one_network = service["networks"][0]
-        image_uri = service.get("image_uri")
+        image = service.get("image")
 
         return self._client.containers.run(
-            image_uri,
+            image,
             name=service["service_name"],
             command=service.get("command", []),
             network=one_network,
@@ -121,8 +121,8 @@ class DockerRunner:
         Args:
             addon (dict): The addon configuration. It should contain a 'services' key, which is a
             list of service configurations.
-            Each service configuration is a dictionary that includes at least 'service_name' and
-            'image_uri'.
+            Each service configuration is a dictionary that
+                includes at least 'service_name' and 'image'.
             project_name (str, optional): The name of the project.
             Defaults to DEFAULT_PROJECT_NAME.
 
@@ -152,7 +152,7 @@ class DockerRunner:
             if (
                 similar_container
                 and similar_container.status == "running"
-                and service["image_uri"] in similar_container.image.tags
+                and service["image"] in similar_container.image.tags
             ):
                 continue
 

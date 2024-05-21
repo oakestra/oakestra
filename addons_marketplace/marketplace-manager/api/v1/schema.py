@@ -11,7 +11,7 @@ class StatusEnum(Enum):
 # TODO: support volumes
 class ServiceSchema(Schema):
     service_name = fields.String(required=True)
-    image_uri = fields.String(required=True)
+    image = fields.String(required=True)
     command = fields.String()
     networks = fields.List(fields.String(), default=[])
     ports = fields.Dict(keys=fields.String(), values=fields.String(), default={})

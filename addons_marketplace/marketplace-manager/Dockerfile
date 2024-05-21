@@ -1,11 +1,13 @@
 FROM python:3.8.5-slim-buster
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
-ADD requirements.txt /
+WORKDIR /code
+
+ADD requirements.txt /code
 
 RUN pip install -r requirements.txt
 
-ADD . /
+ADD . /code
 
 ENV ADDON_MARKETPLACE_PORT=11102
 ENV ADDON_MARKETPLACE_MONGO_URL=localhost

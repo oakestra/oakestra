@@ -40,7 +40,7 @@ def get_dummy_addon(lightweight=True):
         "services": [
             {
                 "service_name": service_name,
-                "image_uri": image_url,
+                "image": image_url,
                 "command": "sleep 3600",
                 "ports": {},
                 "environment": {},
@@ -58,7 +58,7 @@ def get_failing_addon():
         "services": [
             {
                 "service_name": service_name,
-                "image_uri": "busybox",
+                "image": "busybox",
                 "command": "false",
                 "ports": {},
                 "environment": {},

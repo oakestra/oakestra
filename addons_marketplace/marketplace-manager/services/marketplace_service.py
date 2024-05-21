@@ -9,18 +9,18 @@ def verify_addon(addon_id, addon):
     logging.info(f"verifying addon-{addon_id}...")
     client = docker.from_env()
     for service in addon["services"]:
-        image_uri = service.get("image_uri")
+        image = service.get("image")
         try:
             # TODO utilize opencontainers image spec to verify image instead of docker
-            logging.info(f"Pulling image: {image_uri}")
-            service = client.images.pull(image_uri)
-            logging.info(f"Image pulled: {image_uri}")
+            logging.info(f"Pulling image: {image}")
+            service = client.images.pull(image)
+            logging.info(f"Image pulled: {image}")
 
             client.images.remove(service.id)
         except docker.errors.ImageRemoveError as e:
-            logging.warning(f"Failed to remove image {image_uri}: {e}")
+            logging.warning(f"Failed to remove image {image}: {e}")
         except docker.errors.DockerException as e:
-            logging.warning(f"Failed to pull image {image_uri}: {e}")
+            logging.warning(f"Failed to pull image {image}: {e}")
             marketplace_db.update_addon(addon_id, {"status": "verification_failed"})
             return
 
