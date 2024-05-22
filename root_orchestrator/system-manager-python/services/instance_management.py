@@ -48,8 +48,24 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
             if len(instances) > 0:
                 for instance in instances:
                     if which_one == instance["instance_number"] or which_one == -1:
-                        net_inform_instance_undeploy(microserviceid, which_one)
-                        cluster_request_to_delete_job(microserviceid, instance["instance_number"])
+                        # request undeploy network
+                        threading.Thread(
+                            group=None,
+                            target=net_inform_instance_undeploy,
+                            args=(
+                                microserviceid,
+                                which_one,
+                            ),
+                        ).start()
+                        # request undeploy from cluster
+                        threading.Thread(
+                            group=None,
+                            target=cluster_request_to_delete_job,
+                            args=(
+                                microserviceid,
+                                instance["instance_number"],
+                            ),
+                        ).start()
                         instances.remove(instance)
                 mongo_update_job_status_and_instances(
                     microserviceid,
