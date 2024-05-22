@@ -181,7 +181,7 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 
 	os.Mkdir(instance_path, 0777)
 	var kimage *os.File
-	_, err := os.Stat(kernel_tar)
+	_, err = os.Stat(kernel_tar)
 	if err != nil {
 		logger.InfoLogger().Printf("Kernel not found locally")
 		kimage, err = os.Create(kernel_tar)
