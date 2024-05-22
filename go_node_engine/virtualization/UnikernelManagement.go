@@ -173,18 +173,12 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 	/*This is to make sure that in case of a redeployment
 	Makes sure that the directory does not already exists
 	and waits if it does*/
-	for true {
-		_, err := os.Stat(instance_path)
-		if errors.Is(err, fs.ErrNotExist) {
-			break
-		} else if err == nil {
-			time.Sleep(10 * time.Millisecond)
-			continue
-		} else {
-			logger.InfoLogger().Printf("Problem with instance data: %v", err)
-			return nil
-		}
+
+	_, err := os.Stat(instance_path)
+	if !errors.Is(err, fs.ErrNotExist) {
+		return nil
 	}
+
 	os.Mkdir(instance_path, 0777)
 	var kimage *os.File
 	_, err := os.Stat(kernel_tar)
