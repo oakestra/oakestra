@@ -173,21 +173,15 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 	/*This is to make sure that in case of a redeployment
 	Makes sure that the directory does not already exists
 	and waits if it does*/
-	for true {
-		_, err := os.Stat(instance_path)
-		if errors.Is(err, fs.ErrNotExist) {
-			break
-		} else if err == nil {
-			time.Sleep(10 * time.Millisecond)
-			continue
-		} else {
-			logger.InfoLogger().Printf("Problem with instance data: %v", err)
-			return nil
-		}
+
+	_, err := os.Stat(instance_path)
+	if !errors.Is(err, fs.ErrNotExist) {
+		return nil
 	}
+
 	os.Mkdir(instance_path, 0777)
 	var kimage *os.File
-	_, err := os.Stat(kernel_tar)
+	_, err = os.Stat(kernel_tar)
 	if err != nil {
 		logger.InfoLogger().Printf("Kernel not found locally")
 		kimage, err = os.Create(kernel_tar)
@@ -242,6 +236,7 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 				}
 			case tar.TypeReg:
 				file, err := os.Create(kernel_location + header.Name)
+				file.Chmod(header.FileInfo().Mode())
 				if err != nil {
 					logger.InfoLogger().Printf("Unable to create file: %v", err)
 				}
@@ -272,6 +267,33 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 		if err != nil {
 			logger.InfoLogger().Printf("Unable to set files: %v", err)
 		}
+	}
+
+	_, err = os.Stat(kernel_location + "files1")
+	if !errors.Is(err, fs.ErrNotExist) {
+		logger.InfoLogger().Printf("Creating new instance envioument %s -> %s", kernel_location+"files1", instance_path+"/files")
+
+		err = exec.Command("cp", "-r", kernel_location+"files1", instance_path).Run()
+		if err != nil {
+			logger.InfoLogger().Printf("Unable to set files: %v", err)
+		}
+
+		err = exec.Command("mv", instance_path+"/files1", instance_path+"/files").Run()
+		if err != nil {
+			logger.InfoLogger().Printf("Unable to set files: %v", err)
+		}
+
+	}
+
+	_, err = os.Stat(kernel_location + "initramfs.cpio")
+	if !errors.Is(err, fs.ErrNotExist) {
+		logger.InfoLogger().Printf("Creating new ramdisk envioument %s -> %s", kernel_location+"initramfs.cpio", instance_path+"/initramfs.cpio")
+
+		err = exec.Command("cp", "-r", kernel_location+"initramfs.cpio", instance_path).Run()
+		if err != nil {
+			logger.InfoLogger().Printf("Unable to set files: %v", err)
+		}
+
 	}
 
 	//Kernel image is expected at a fixed location within the archive ./kernel
@@ -574,25 +596,18 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 	if model.GetNodeInfo().Overlay {
 
 		//Get the default route for the namespace
-		ip, gw, mask, mac, err := deleteDefaultIpGwMask(*q.NSname)
+		ip, gw, mask, mac, fd, err := deleteDefaultIpGwMask(*q.NSname)
 		if err != nil {
 			logger.InfoLogger().Printf("Unable to get default route for namespace %s: %v", *q.NSname, err)
-			return "", []string{}, err
-		}
-
-		//Get the tap file descriptor
-		fd, err := getTapFd(*q.NSname)
-		if err != nil {
-			logger.InfoLogger().Printf("Unable to get tap file descriptor for namespace %s: %v", *q.NSname, err)
 			return "", []string{}, err
 		}
 
 		//Network
 		if model.GetNodeInfo().Overlay {
 			//Network backend fixed at tap0 and virbr0 created inside the namespace "tap,id=n0,fd=" + strconv.Itoa(devFd),
-			args = append(args, "-netdev", "tap,id=tap0,vhost=on,vhostforce=on,fd="+strconv.Itoa(fd))
+			args = append(args, "-netdev", "tap,id=tap0,vhost=on,fd="+strconv.Itoa(fd))
 			//Network device
-			args = append(args, "-device", "virtio-net,netdev=tap0,mac="+mac)
+			args = append(args, "-device", "virtio-net-pci,id=nic1,addr=0x0a,netdev=tap0,mac="+mac)
 		}
 
 		//Kernel arguments including the network configuration
@@ -616,9 +631,26 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 		fsdevarg := fmt.Sprintf("local,security_model=passthrough,id=hvirtio0,path=%s/files", q.Instancepath)
 		args = append(args, "-fsdev", fsdevarg)
 
+		fsdevarg2 := fmt.Sprintf("local,security_model=passthrough,id=hvirtio1,path=%s/files", q.Instancepath)
+		args = append(args, "-fsdev", fsdevarg2)
+
 		//FS device
 		args = append(args, "-device", "virtio-9p-pci,fsdev=hvirtio0,mount_tag=fs0")
+		args = append(args, "-device", "virtio-9p-pci,fsdev=hvirtio1,mount_tag=fs1")
 	}
+	//Check if ramdisk provided
+	initramfs := fmt.Sprintf("%s/initramfs.cpio", q.Instancepath)
+	_, err = os.Stat(initramfs)
+	if err == nil {
+		logger.InfoLogger().Println("Mounting .cpio root fs")
+		//FS backend
+		fsdevarg2 := fmt.Sprintf("local,security_model=passthrough,id=hvirtio1,path=%s/initramfs.cpio", q.Instancepath)
+		args = append(args, "-fsdev", fsdevarg2)
+
+		//FS device
+		args = append(args, "-device", "virtio-9p-pci,fsdev=hvirtio1,mount_tag=fs1")
+	}
+
 	//QMP
 	Qmp := fmt.Sprintf("unix:%s/%s,server,nowait", q.Instancepath, q.Name)
 	args = append(args, "-qmp", Qmp)
@@ -634,9 +666,10 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 }
 
 // delete and returns the defaultIp Gateway and Netmask of a given namespace
-func deleteDefaultIpGwMask(namespace string) (string, string, string, string, error) {
+func deleteDefaultIpGwMask(namespace string) (string, string, string, string, int, error) {
 	defaultRouteFilter := &netlink.Route{Dst: nil}
 	ip, gw, mask, mac := "", "", "", ""
+	fd := -1
 
 	err := execInsideNsByName(namespace, func() error {
 
@@ -671,6 +704,8 @@ func deleteDefaultIpGwMask(namespace string) (string, string, string, string, er
 			return err
 		}
 
+		fd, err = getTapFd(namespace)
+
 		ip = addrs[0].IP.String()
 		gw = route.Gw.String()
 		mac = macvtap.Attrs().HardwareAddr.String()
@@ -683,24 +718,23 @@ func deleteDefaultIpGwMask(namespace string) (string, string, string, string, er
 		return nil
 	})
 
-	return ip, gw, mask, mac, err
+	return ip, gw, mask, mac, fd, err
 }
 
 // defaultRoute returns the default route for the current namespace.
 func getTapFd(namespace string) (int, error) {
 	var fd int
-	err := execInsideNsByName(namespace, func() error {
-		tapdev, err := netlink.LinkByName("tap0")
-		if err != nil {
-			return err
-		}
-		fd, err = unix.Open("/dev/tap"+strconv.Itoa(tapdev.Attrs().Index), unix.O_RDWR, 0)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	return fd, err
+
+	tapdev, err := netlink.LinkByName("tap0")
+	if err != nil {
+		return -1, err
+	}
+	fd, err = unix.Open("/dev/tap"+strconv.Itoa(tapdev.Attrs().Index), unix.O_RDWR, 0)
+	if err != nil {
+		return -1, err
+	}
+
+	return fd, nil
 }
 
 // Execute function inside a namespace based on Ns name
