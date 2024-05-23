@@ -17,10 +17,8 @@ def verify_addon(addon_id, addon):
             logging.info(f"Image pulled: {image}")
 
             client.images.remove(service.id)
-        except docker.errors.ImageRemoveError as e:
-            logging.warning(f"Failed to remove image {image}: {e}")
         except docker.errors.DockerException as e:
-            logging.warning(f"Failed to pull image {image}: {e}")
+            logging.warning(f"Failed to pull/remove image {image}: {e}")
             marketplace_db.update_addon(addon_id, {"status": "verification_failed"})
             return
 

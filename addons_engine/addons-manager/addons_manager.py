@@ -65,5 +65,7 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, signal_handler)
 
     eventlet.wsgi.server(
-        eventlet.listen(("::", int(ADDONS_MANAGER_PORT)), family=socket.AF_INET6), app
+        eventlet.listen(("::", int(ADDONS_MANAGER_PORT)), family=socket.AF_INET6),
+        app,
+        log=logging.getLogger(),
     )
