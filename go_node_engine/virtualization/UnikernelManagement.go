@@ -335,6 +335,16 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 
 	var kernelImage string = ""
 
+	revert := func(err error, instance string) {
+		startup <- false
+		errorchan <- err
+		r.channelLock.Lock()
+		defer r.channelLock.Unlock()
+		r.killQueue[hostname] = nil
+		os.RemoveAll(inst_path + instance)
+		logger.InfoLogger().Printf("Removing Instance data -- ")
+	}
+
 	for i, a := range service.Architectures {
 		if a == rt.GOARCH {
 			kernelImage = getUnikernelURL(i, service.Image)
@@ -348,21 +358,13 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	kernelPath := GetKernelImage(kernelImage, hostname, service.Sname)
 	if kernelPath == nil {
 		logger.InfoLogger().Println("Failed to get Kernel image")
+		revert(fmt.Errorf("Unable to create kernel path"), hostname)
 		return
 	}
 	qemuConfig.Kernel = path + service.Sname + "/kernel"
 
 	qemuConfig.Instancepath = *kernelPath
 
-	revert := func(err error, instance string) {
-		startup <- false
-		errorchan <- err
-		r.channelLock.Lock()
-		defer r.channelLock.Unlock()
-		r.killQueue[hostname] = nil
-		os.RemoveAll(inst_path + instance)
-		logger.InfoLogger().Printf("Removing Instance data -- ")
-	}
 	var qemuCmd *exec.Cmd
 	var err error
 	if model.GetNodeInfo().Overlay {
@@ -370,6 +372,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		err := requests.CreateNetworkNamespaceForUnikernel(service.Sname, service.Instance, service.Ports)
 		if err != nil {
 			logger.InfoLogger().Printf("Network creation for Unikernel failed: %v\n", err)
+			revert(err, hostname)
 			return
 		}
 	}
