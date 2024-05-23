@@ -72,5 +72,7 @@ class JobInstanceController(MethodView):
             raise exceptions.BadRequest()
 
         result = jobs_db.update_job_instance(job_id, instance_id, data)
+        if result is None:
+            raise exceptions.NotFound()
 
         return json.dumps(result, default=str)
