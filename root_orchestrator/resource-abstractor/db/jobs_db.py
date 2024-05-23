@@ -34,7 +34,7 @@ def update_job_instance(job_id, instance_number, job_data):
     return db.mongo_jobs.update_one(
         {
             "_id": ObjectId(job_id),
-            "instance_list": {"$elemMatch": {"instance_number": instance_number}},
+            "instance_list": {"$elemMatch": {"instance_number": int(instance_number)}},
         },
         {
             "$push": {
