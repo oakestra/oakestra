@@ -31,7 +31,7 @@ def update_job_instance(job_id, instance_number, job_data):
     cpu_update = {"value": job_data.get("cpu"), "timestamp": current_time}
     memory_update = {"value": job_data.get("memory"), "timestamp": current_time}
 
-    return db.mongo_jobs.update_one(
+    return db.mongo_jobs.find_one_and_update(
         {
             "_id": ObjectId(job_id),
             "instance_list": {"$elemMatch": {"instance_number": int(instance_number)}},
