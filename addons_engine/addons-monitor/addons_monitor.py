@@ -7,6 +7,7 @@ from services import monitor_service
 
 ADDONS_MANAGER_ADDR = os.environ.get("ADDONS_MANAGER_ADDR") or "http://localhost:11101"
 WAIT_TIME = os.environ.get("WAIT_TIME") or 30  # seconds
+MAX_RETRY = os.environ.get("MAX_RETRY") or 3
 
 # Syncronous socketio client
 socketio = socketio.Client()
@@ -27,18 +28,28 @@ if __name__ == "__main__":
     socketio.on("connect", on_connect)
     socketio.on("receive_manager_id", on_receive_manager_id)
 
-    # will keep trying to connect for 30 seconds
-    try:
-        socketio.connect(ADDONS_MANAGER_ADDR, wait_timeout=WAIT_TIME)
-    except Exception as e:
-        logging.error(f"Connecting to addons_manager failed: {e}")
-        exit(1)
+    max_retry = int(MAX_RETRY)
+    while max_retry > 0:
+        try:
+            socketio.connect(ADDONS_MANAGER_ADDR)
+            break
+        except Exception as e:
+            time.sleep(int(WAIT_TIME))
+            max_retry -= 1
+
+            if max_retry < 0:
+                logging.error(f"Failed to connect to addons_manager: {e}")
+                exit(1)
 
     # wait until addon_manager is initialized
-    # TODO should we exit after some timeout?
+    max_retry = int(MAX_RETRY)
+    logging.info("Waiting for manager id...")
     while not addon_manager:
-        logging.info("Waiting for manager id...")
         time.sleep(int(WAIT_TIME))
+        max_retry -= 1
+        if max_retry < 0:
+            logging.error("Failed to get manager id")
+            exit(1)
 
     try:
         addon_manager.start_monitoring()  # This is a blocking call
