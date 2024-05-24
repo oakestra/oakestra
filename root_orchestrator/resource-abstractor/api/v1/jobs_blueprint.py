@@ -71,4 +71,8 @@ class JobInstanceController(MethodView):
         if ObjectId.is_valid(job_id) is False:
             raise exceptions.BadRequest()
 
-        return json.dumps(jobs_db.update_job_instance(job_id, instance_id, data), default=str)
+        result = jobs_db.update_job_instance(job_id, instance_id, data)
+        if result is None:
+            raise exceptions.NotFound()
+
+        return json.dumps(result, default=str)
