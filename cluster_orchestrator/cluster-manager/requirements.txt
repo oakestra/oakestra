@@ -1,12 +1,12 @@
 Flask~=2.1.1
 marshmallow~=3.15.0
 paho-mqtt==1.6.1
-bson
 Flask-PyMongo
 Flask-SocketIO==4.3.1
-eventlet==0.31.0
+eventlet==0.33.3
 requests
 pyyaml
 APScheduler
 prometheus-client
 werkzeug==2.0.3
+git+https://github.com/oakestra/oakestra.git@service-status-enhancement#subdirectory=libraries/oakestra_utils_library

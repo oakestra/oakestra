@@ -7,6 +7,11 @@ import service_operations
 from cluster_scheduler_requests import scheduler_request_deploy
 from mongodb_client import mongo_aggregate_node_information, mongo_get_services_with_failed_instanes
 from my_prometheus_client import prometheus_set_metrics
+from oakestra_utils.types.statuses import (
+    DeploymentStatus,
+    NegativeSchedulingStatus,
+    convert_to_status,
+)
 
 SYSTEM_MANAGER_ADDR = (
     "http://" + os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_PORT")
@@ -24,13 +29,17 @@ def send_aggregated_info_to_sm(my_id, time_interval):
 
 
 def re_deploy_dead_services_routine():
-    re_deploy_triggers = ["FAILED", "DEAD", "NO_WORKER_CAPACITY"]
+    re_deploy_triggers = [
+        DeploymentStatus.FAILED,
+        DeploymentStatus.DEAD,
+        NegativeSchedulingStatus.NO_WORKER_CAPACITY,
+    ]
     try:
         services = mongo_get_services_with_failed_instanes()
         if services is not None:
             for service in services:
                 for instance in service.get("instance_list", []):
-                    if instance.get("status", "") in re_deploy_triggers:
+                    if convert_to_status(instance.get("status")) in re_deploy_triggers:
                         print("FAILED INSTANCE, ATTEMPTING RE-DEPLOY")
                         threading.Thread(
                             group=None,
