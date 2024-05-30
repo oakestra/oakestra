@@ -1,0 +1,7 @@
+# Refer the docs at https://github.com/hadolint/hadolint?tab=readme-ov-file#configure
+ignored:
+  - DL3000
+  - SC1010
+
+trustedRegistries:
+  - "*.gcr.io"

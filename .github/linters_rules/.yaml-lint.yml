@@ -1,0 +1,21 @@
+extends: default
+
+rules:
+  # Enforce consistent indentation
+  indentation:
+    level: warning
+    indent-sequences: consistent
+
+  # Line length checks with some relaxation
+  line-length:
+    level: warning
+    max-length: 120 # Relax from default 80
+
+  # Allow apt-get usage in RUN instructions
+  apt: enable
+
+  # Allow environment variable assignments
+  env: enable
+
+disabled_rules: empty-lines
+
