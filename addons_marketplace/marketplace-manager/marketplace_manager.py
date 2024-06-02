@@ -1,3 +1,4 @@
+import logging
 import os
 
 from api.v1.marketplace_blueprint import marketplaceblp
@@ -18,6 +19,7 @@ app.config["OPENAPI_URL_PREFIX"] = "/docs"
 mongo_init(app)
 api = Api(app)
 
+logging.basicConfig(level=logging.INFO)
 
 # Register blueprints
 SWAGGER_URL = "/api/docs"

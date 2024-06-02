@@ -24,6 +24,11 @@ class MarketplaceAddonsController(MethodView):
     def post(self, data):
         return marketplace_service.register_addon(data)
 
+    # TODO: only used for testing purposes.
+    def delete(self):
+        result = marketplace_db.delete_all_addons()
+        return {"message": f"{result.deleted_count} addons deleted."}
+
 
 @marketplaceblp.route("/<marketplace_addon_id>")
 class MarketPlaceAddonController(MethodView):

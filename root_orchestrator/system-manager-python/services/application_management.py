@@ -40,26 +40,25 @@ def register_app(applications, userid):
 
         app_id = app.get("_id")
         # register microservices as well if any
-        if app_id:
-            if len(microservices) > 0:
-                try:
-                    application["microservices"] = microservices
-                    application["applicationID"] = app_id
-                    result, status = create_services_of_app(
-                        userid,
-                        {
-                            "sla_version": applications["sla_version"],
-                            "customerID": userid,
-                            "applications": [application],
-                        },
-                    )
-                    if status != 200:
-                        delete_app(app_id, userid)
-                        return result, status
-                except Exception:
-                    print(traceback.format_exc())
+        if len(microservices) > 0:
+            try:
+                application["microservices"] = microservices
+                application["applicationID"] = app_id
+                result, status = create_services_of_app(
+                    userid,
+                    {
+                        "sla_version": applications["sla_version"],
+                        "customerID": userid,
+                        "applications": [application],
+                    },
+                )
+                if status != 200:
                     delete_app(app_id, userid)
-                    return {"message": "error during the registration of the microservices"}, 500
+                    return result, status
+            except Exception:
+                print(traceback.format_exc())
+                delete_app(app_id, userid)
+                return {"message": "error during the registration of the microservices"}, 500
 
     return get_user_apps(userid)
 

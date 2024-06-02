@@ -71,7 +71,7 @@ def status():
 def deploy_task(system_job_id, instance_number):
     app.logger.info("Incoming Request /api/deploy")
     job = request.json  # contains job_id and job_description
-
+    print("receiving deploy task request", system_job_id, instance_number, job)
     try:
         service_operations.deploy_service(job, system_job_id, instance_number)
     except Exception:

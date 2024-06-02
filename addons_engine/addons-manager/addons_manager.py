@@ -33,6 +33,8 @@ init_addons_socket(socketio, ADDONS_MANAGER_ID)
 
 api = Api(app)
 
+logging.basicConfig(level=logging.INFO)
+
 # Register blueprints
 SWAGGER_URL = "/api/docs"
 API_URL = "/docs/openapi.json"

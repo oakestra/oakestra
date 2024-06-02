@@ -81,6 +81,7 @@ class ClusterController(MethodView):
         # TODO: fire an event to react to the cluster update, and move this logic somewhere else.
         jobs = data.get("jobs")
         for j in jobs:
+            print("updating job status", j.get("instance_list"))
             result = update_job_status(
                 job_id=j.get("system_job_id"),
                 status=j.get("status"),

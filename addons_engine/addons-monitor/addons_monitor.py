@@ -12,6 +12,9 @@ MAX_RETRY = os.environ.get("MAX_RETRY") or 3
 # Syncronous socketio client
 socketio = socketio.Client()
 
+
+logging.basicConfig(level=logging.INFO)
+
 if __name__ == "__main__":
     addon_manager = None
 
