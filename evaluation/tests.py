@@ -404,8 +404,9 @@ if __name__ == "__main__":
 
     if address:
         app.run(host="0.0.0.0", port=5001)
+    else:
+        ic("No address provided")
 
-    ic("No address provided")
     if app_thread.is_alive():
         app_thread.join()
 
