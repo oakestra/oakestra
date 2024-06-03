@@ -101,9 +101,16 @@ def get_fake_sla_app(services=None, namespace="test"):
     }
 
 
-def get_fake_sla_service(name, namespace="test", image="", virt="container", environment=[]):
+def get_fake_sla_service(
+    name,
+    namespace="test",
+    image="",
+    virt="container",
+    environment=[],
+    cmd=None,
+):
 
-    return {
+    result = {
         "microserviceID": "",
         "microservice_name": name,
         "microservice_namespace": namespace,
@@ -117,8 +124,14 @@ def get_fake_sla_service(name, namespace="test", image="", virt="container", env
         "storage": 0,
         "code": image,
         "port": "80",
+        "one_shot": True,
         "environment": environment,
     }
+
+    if cmd:
+        result["cmd"] = cmd
+
+    return result
 
 
 def get_full_random_sla_app(server_address=None):
@@ -134,6 +147,15 @@ def get_full_random_sla_app(server_address=None):
             image=image,
             virt="container",
             environment=[f"SERVER_ADDRESS={server_address}"] if server_address else [],
+            cmd=(
+                None
+                if server_address
+                else [
+                    "/bin/sh",
+                    "-c",
+                    "while true; do echo 'Hello, World (testing)'; sleep 10; done",
+                ]
+            ),
         )
         app["applications"][0]["microservices"].append(service)
 
@@ -193,6 +215,8 @@ def delete_all_apps():
 def deploy(service_id):
     global start
 
+    ic(f"Deploying service...{str(service_id)}")
+
     token = get_login()
     url = f"http://{SYSTEM_MANAGER_URL}/api/service/{service_id}/instance"
     start = time.time()
@@ -219,11 +243,10 @@ def stress_app_test(apps_count=10, server_address=None):
         )
 
         for serviceID in app["microservices"]:
-            ic(f"Deploying service...{str(serviceID)}")
             # wait until lock is released
-            while lock:
+            while server_address and lock:
                 ic("Waiting for lock...")
-                time.sleep(5)
+                time.sleep(30)
                 continue
 
             lock = True
@@ -324,8 +347,16 @@ def index():
     global start, stop, lock, last_service
 
     stop = time.time()
+    if not start:
+        ic("start was not initialized.")
+        start = stop
+
     ic("Serive deployed.")
     ic(f"Time taken for {last_service}: {stop - start}")
+
+    # reset static variables
+    start = None
+    stop = None
     lock = False
 
     return "", 200
@@ -346,36 +377,36 @@ if __name__ == "__main__":
     apps_count = args.apps
     addons_count = args.addons
 
-    # do another cleanup:
     cleanup()
 
-    app_thread = None
+    app_thread = app_thread = threading.Thread(
+        target=stress_app_test,
+        args=(
+            apps_count,
+            address,
+        ),
+        daemon=True,
+    )
+    addon_thread = addon_thread = threading.Thread(
+        target=stress_addons_test,
+        args=(addons_count,),
+        daemon=True,
+    )
+
     if apps_count:
         ic("Starting stress test for apps...")
-
-        app_thread = threading.Thread(
-            target=stress_app_test,
-            args=(
-                apps_count,
-                address,
-            ),
-            daemon=True,
-        )
         app_thread.start()
 
-    addon_thread = None
     if addons_count:
         ic("Starting stress test for addons...")
-        addon_thread = threading.Thread(
-            target=stress_addons_test, args=(addons_count,), daemon=True
-        )
         addon_thread.start()
 
-    if address is None:
-        ic("No address provided")
-        if app_thread is not None:
-            app_thread.join()
-        if addon_thread is not None:
-            addon_thread.join()
+    if address:
+        app.run(host="0.0.0.0", port=5001)
 
-    app.run(host="0.0.0.0", port=5001)
+    ic("No address provided")
+    if app_thread.is_alive():
+        app_thread.join()
+
+    if addon_thread.is_alive():
+        addon_thread.join()
