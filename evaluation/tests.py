@@ -135,12 +135,13 @@ def get_fake_sla_service(
 
 
 def get_full_random_sla_app(server_address=None):
-    app = get_fake_sla_app()
-    namespace = "test"  # get_random_string(4)
+    namespace = get_random_string(4)
+    app = get_fake_sla_app(namespace=namespace)
     name = get_random_string(4)
 
     for i in range(randint(1, 2)):
-        image = get_random_image() if server_address else get_gio_image()
+        image = get_gio_image() if server_address else get_random_image()
+        namespace = get_random_string(4)
         service = get_fake_sla_service(
             name + str(i),
             namespace=namespace,

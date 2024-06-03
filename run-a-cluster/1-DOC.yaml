@@ -34,6 +34,7 @@ services:
       - mongo_root
       - cloud_scheduler
       - root_service_manager
+      - resource_abstractor
     environment:
       - CLOUD_MONGO_URL=mongo
       - CLOUD_MONGO_PORT=10007
@@ -41,13 +42,16 @@ services:
       - CLOUD_SCHEDULER_PORT=10004
       - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10099
-
+      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - RESOURCE_ABSTRACTOR_PORT=11011
 
   # MongoDB in Root Orchestrator
   mongo_root:
     image: mongo:3.6
     container_name: mongo
     hostname: mongo
+    ports:
+      - "10007:10007"
     expose:
       - "10007"
     volumes:
@@ -67,7 +71,6 @@ services:
       - 'mongodb_net_data:/mongodb'
     command: mongod --port 10008
     logging: *default-logging
-
 
   # Cluster Manager
   root_service_manager:
@@ -90,7 +93,6 @@ services:
     depends_on:
       - mongo_rootnet
     logging: *default-logging
-
 
   # Redis for the Cloud Scheduler
   redis:
@@ -120,7 +122,6 @@ services:
       - mongo_root
     logging: *default-logging
 
-
   # Cloud Scheduler
   cloud_scheduler:
     image: ghcr.io/oakestra/oakestra/cloud-scheduler:latest
@@ -145,7 +146,6 @@ services:
       - resource_abstractor
     logging: *default-logging
 
-
   # MQTT
   mqtt:
     image: eclipse-mosquitto:1.6
@@ -164,7 +164,6 @@ services:
       interval: 10s
       timeout: 10s
       retries: 6
-
 
   # cluster-level mongoDB
   mongo_cluster:
@@ -187,7 +186,6 @@ services:
     volumes:
       - 'mongodb_cluster_net_data:/mongodb'
     command: mongod --port 10108
-
 
 # Cluster Manager
   cluster_service_manager:
@@ -253,7 +251,6 @@ services:
       - system_manager
     logging: *default-logging
 
-
   # Cluster Scheduler
   cluster_scheduler:
     image: ghcr.io/oakestra/oakestra/cluster-scheduler:latest
@@ -276,7 +273,6 @@ services:
       - mongo_cluster
     logging: *default-logging
 
-
   # Redis for the Cluster Scheduler as Job Queue
   cluster_redis:
     image: redis
@@ -285,7 +281,6 @@ services:
     expose:
       - "6479"
     command: redis-server --requirepass clusterRedis --port 6479
-
 
   prometheus:
     image: prom/prometheus
@@ -312,7 +307,6 @@ services:
       - ./config/dashboards:/var/lib/grafana/dashboards
     logging: *default-logging
 
-
   loki:
     container_name: loki
     image: grafana/loki:2.9.2
@@ -321,7 +315,6 @@ services:
     volumes:
       - ./config/loki.yml:/etc/loki/config.yml
       - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
-
     command: -config.file=/etc/loki/config.yml
 
 
