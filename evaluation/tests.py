@@ -139,12 +139,12 @@ def get_fake_sla_service(
     return result
 
 
-def get_full_random_sla_app(server_address=None):
+def get_full_random_sla_app(server_address=None, services_count=2):
     namespace = get_random_string(4)
     app = get_fake_sla_app(namespace=namespace)
     name = get_random_string(4)
 
-    for i in range(randint(1, 2)):
+    for i in range(randint(1, services_count)):
         image = get_gio_image()
         namespace = get_random_string(4)
         service = get_fake_sla_service(
@@ -233,12 +233,12 @@ def deploy(service_id):
         exit(1)
 
 
-def stress_app_test(apps_count=10, server_address=None):
+def stress_app_test(apps_count=10, services_count=2, server_address=None):
     global lock, last_service
 
     for i in range(apps_count):
         ic("Registering app..." + str(i))
-        sla = get_full_random_sla_app(server_address)
+        sla = get_full_random_sla_app(server_address, services_count)
         user_apps = register_app(sla)
         app = next(
             (
@@ -385,16 +385,37 @@ def index():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Stress test script.")
     parser.add_argument(
-        "--apps", type=int, help="Run stress test for apps (number of apps)", default=0
+        "--apps",
+        type=int,
+        help="Run stress test for apps (number of apps)",
+        default=0,
     )
     parser.add_argument(
-        "--addons", type=int, help="Run stress test for addons (number of addons)", default=0
+        "-s",
+        "--services",
+        type=int,
+        help="Run stress test for randomized number of services",
+        default=0,
     )
-    parser.add_argument("-a", "--address", type=str, help="Server address", default=None)
+    parser.add_argument(
+        "--addons",
+        type=int,
+        help="Run stress test for addons (number of addons)",
+        default=0,
+    )
+    parser.add_argument(
+        "-a",
+        "--address",
+        type=str,
+        help="Server address",
+        default=None,
+    )
 
     args = parser.parse_args()
+
     address = args.address
     apps_count = args.apps
+    services_count = args.services
     addons_count = args.addons
 
     cleanup()
@@ -403,6 +424,7 @@ if __name__ == "__main__":
         target=stress_app_test,
         args=(
             apps_count,
+            services_count,
             address,
         ),
         daemon=True,
