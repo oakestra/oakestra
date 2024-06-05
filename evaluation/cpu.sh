@@ -8,9 +8,11 @@ while [ $i -ne $max ]
 do
     i=$(($i+1))
     timestamp=$(date)
-    cpu=$(top -l 1 | awk '/CPU usage:/ {print $3}') # get CPU usage
-    mem=$(top -l 1 | awk '/PhysMem:/ {print $2}') # get used memory
-    output="$i,$timestamp,%CPU,$cpu,%MEM,$mem,$1"
+    cpu=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {print usage "%"}')
+    totalmem=$(free -m | awk '/^Mem:/ { print $2 }')
+    freemem=$(free -m | awk '/^Mem:/ { print $4 }')
+    usedmem=$((totalmem - freemem))
+    output="$i,$timestamp,%CPU,$cpu,%MEM,${usedmem}Mi,$1"
     echo $output >> cpumemoryusage.csv 2>&1
     echo $output
     sleep 2
