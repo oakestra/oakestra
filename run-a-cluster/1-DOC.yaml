@@ -44,6 +44,8 @@ services:
       - NET_PLUGIN_PORT=10099
       - RESOURCE_ABSTRACTOR_URL=resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
+    networks:
+      - ip6net
 
   # MongoDB in Root Orchestrator
   mongo_root:
@@ -57,6 +59,8 @@ services:
     volumes:
       - 'mongodb_data:/mongodb'
     command: mongod --port 10007
+    networks:
+      - ip6net
 
   # cluster-level mongoDB
   mongo_rootnet:
@@ -70,7 +74,9 @@ services:
     volumes:
       - 'mongodb_net_data:/mongodb'
     command: mongod --port 10008
-    logging: *default-logging
+    networks:
+      - ip6net   
+
 
   # Cluster Manager
   root_service_manager:
@@ -93,6 +99,8 @@ services:
     depends_on:
       - mongo_rootnet
     logging: *default-logging
+    networks:
+      - ip6net
 
   # Redis for the Cloud Scheduler
   redis:
@@ -102,6 +110,8 @@ services:
     expose:
       - "6379"
     command: redis-server --requirepass cloudRedis
+    networks:
+      - ip6net
 
   resource_abstractor:
     image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.301
@@ -121,6 +131,8 @@ services:
     depends_on:
       - mongo_root
     logging: *default-logging
+    networks:
+      - ip6net
 
   # Cloud Scheduler
   cloud_scheduler:
@@ -145,6 +157,8 @@ services:
       - redis
       - resource_abstractor
     logging: *default-logging
+    networks:
+      - ip6net
 
   # MQTT
   mqtt:
@@ -164,6 +178,8 @@ services:
       interval: 10s
       timeout: 10s
       retries: 6
+    networks:
+      - ip6net
 
   # cluster-level mongoDB
   mongo_cluster:
@@ -175,6 +191,8 @@ services:
     volumes:
       - 'mongodb_cluster_data:/mongodb'
     command: mongod --port 10107
+    networks:
+      - ip6net
 
 # cluster-level mongoDB
   mongo_clusternet:
@@ -186,6 +204,8 @@ services:
     volumes:
       - 'mongodb_cluster_net_data:/mongodb'
     command: mongod --port 10108
+    networks:
+      - ip6net
 
 # Cluster Manager
   cluster_service_manager:
@@ -213,6 +233,8 @@ services:
       - mongo_clusternet
       - mqtt
     logging: *default-logging
+    networks:
+      - ip6net
 
 # Cluster Manager
   cluster_manager:
@@ -250,6 +272,8 @@ services:
       - cluster_service_manager
       - system_manager
     logging: *default-logging
+    networks:
+      - ip6net
 
   # Cluster Scheduler
   cluster_scheduler:
@@ -272,6 +296,8 @@ services:
       - cluster_redis
       - mongo_cluster
     logging: *default-logging
+    networks:
+      - ip6net
 
   # Redis for the Cluster Scheduler as Job Queue
   cluster_redis:
@@ -281,6 +307,8 @@ services:
     expose:
       - "6479"
     command: redis-server --requirepass clusterRedis --port 6479
+    networks:
+      - ip6net    
 
   prometheus:
     image: prom/prometheus
@@ -292,7 +320,8 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
     depends_on:
       - cluster_manager
-  
+    networks:
+      - ip6net
 
   # Observability Stack (Promtail, Loki, Grafana)
   grafana:
@@ -306,6 +335,8 @@ services:
       - ./config/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml
       - ./config/dashboards:/var/lib/grafana/dashboards
     logging: *default-logging
+    networks:
+      - ip6net
 
   loki:
     container_name: loki
@@ -316,7 +347,8 @@ services:
       - ./config/loki.yml:/etc/loki/config.yml
       - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
     command: -config.file=/etc/loki/config.yml
-
+    networks:
+      - ip6net
 
   promtail:
     image:  grafana/promtail:2.9.2
@@ -331,6 +363,8 @@ services:
     depends_on:
       - loki
     logging: *default-logging
+    networks:
+      - ip6net
 
 volumes:
   mongodb_data:
@@ -346,3 +380,10 @@ volumes:
 networks:
   ip6net:
     enable_ipv6: true
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 2001:db8:a::/64
+          gateway: 2001:db8:a::1
+        - subnet: 192.168.128.0/24
+          gateway: 192.168.128.1

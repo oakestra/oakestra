@@ -255,7 +255,9 @@ def stress_app_test(apps_count=10, server_address=None):
 
             last_service = serviceID
 
-        time.sleep(20)
+        time.sleep(10)
+
+    ic("Finished app stress testing")
 
 
 def add_addon_marketplace(addon):
@@ -317,6 +319,8 @@ def stress_addons_test(addons_count=10):
 
         ic("sleep until addon is installed")
         time.sleep(10)
+
+    ic("Finished addons stress testing")
 
 
 def cleanup():
@@ -380,7 +384,7 @@ if __name__ == "__main__":
 
     cleanup()
 
-    app_thread = app_thread = threading.Thread(
+    app_thread = threading.Thread(
         target=stress_app_test,
         args=(
             apps_count,
@@ -388,7 +392,7 @@ if __name__ == "__main__":
         ),
         daemon=True,
     )
-    addon_thread = addon_thread = threading.Thread(
+    addon_thread = threading.Thread(
         target=stress_addons_test,
         args=(addons_count,),
         daemon=True,
@@ -402,10 +406,14 @@ if __name__ == "__main__":
         ic("Starting stress test for addons...")
         addon_thread.start()
 
+    address_thread = threading.Thread(
+        target=app.run,
+        kwargs={"host": "0.0.0.0", "port": 5001},
+        daemon=True,
+    )
+
     if address:
-        app.run(host="0.0.0.0", port=5001)
-    else:
-        ic("No address provided")
+        address_thread.start()
 
     if app_thread.is_alive():
         app_thread.join()
