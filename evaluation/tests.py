@@ -1,4 +1,5 @@
 import argparse
+import csv
 import json
 import os
 import random
@@ -19,6 +20,10 @@ start = None
 stop = None
 lock = False
 last_service = None
+service_count = 0
+
+results = []
+results.append(["test_n", "time"])
 
 
 def get_images_list():
@@ -68,7 +73,7 @@ def get_random_addon(lightweight=True):
             {
                 "service_name": service_name,
                 "image": image,
-                "command": "sh -c 'while true; do echo \"Hello, World (testing!!) !\"; sleep 10; done'",  # noqa
+                "command": "/bin/sh -c 'while true; do echo \"Hello, World (testing!!) !\"; sleep 10; done'",  # noqa
                 "ports": {},
                 "environment": {},
                 "networks": [],
@@ -140,7 +145,7 @@ def get_full_random_sla_app(server_address=None):
     name = get_random_string(4)
 
     for i in range(randint(1, 2)):
-        image = get_gio_image() if server_address else get_random_image()
+        image = get_gio_image()
         namespace = get_random_string(4)
         service = get_fake_sla_service(
             name + str(i),
@@ -247,15 +252,13 @@ def stress_app_test(apps_count=10, server_address=None):
             # wait until lock is released
             while server_address and lock:
                 ic("Waiting for lock...")
-                time.sleep(30)
+                time.sleep(10)
                 continue
 
             lock = True
             deploy(serviceID)
 
             last_service = serviceID
-
-        time.sleep(10)
 
     ic("Finished app stress testing")
 
@@ -347,9 +350,18 @@ def cleanup_addons():
     ic("Done deleting addons...")
 
 
+def print_csv():
+    global results
+
+    with open("deployment_time.csv", "w+") as my_csv:
+        csvWriter = csv.writer(my_csv, delimiter=",")
+        csvWriter.writerows(results)
+
+
 @app.route("/")
 def index():
     global start, stop, lock, last_service
+    global results, service_count
 
     stop = time.time()
     if not start:
@@ -357,7 +369,10 @@ def index():
         start = stop
 
     ic("Serive deployed.")
-    ic(f"Time taken for {last_service}: {stop - start}")
+    service_time = stop - start
+    service_count += 1
+    results.append([service_count, service_time])
+    ic(f"Time taken for {last_service}: {service_time}")
 
     # reset static variables
     start = None
@@ -420,3 +435,5 @@ if __name__ == "__main__":
 
     if addon_thread.is_alive():
         addon_thread.join()
+
+    print_csv()
