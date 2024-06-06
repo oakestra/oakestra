@@ -23,7 +23,7 @@ last_service = None
 service_count = 0
 
 results = []
-results.append(["test_n", "time"])
+results.append(["test_no", "deployment_time"])
 
 
 def get_images_list():

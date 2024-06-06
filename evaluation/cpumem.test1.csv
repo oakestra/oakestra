@@ -1,4 +1,4 @@
-%CPU,%MEM,%MaxCPUCore,%ContainerUsage
+time,%CPU,%MEM,%MaxCPUCore,%ContainerUsage
 12:21:29,0.238813%,7841,0.374479%,2.19%
 12:21:31,0.238846%,7839,0.374557%,4.54%
 12:21:33,0.238815%,7837,0.374635%,2.43%
