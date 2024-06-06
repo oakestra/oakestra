@@ -5,7 +5,6 @@ import os
 import random
 import threading
 import time
-from random import randint
 
 import requests
 from flask import Flask
@@ -144,7 +143,7 @@ def get_full_random_sla_app(server_address=None, services_count=2):
     app = get_fake_sla_app(namespace=namespace)
     name = get_random_string(4)
 
-    for i in range(randint(1, services_count)):
+    for i in range(services_count):
         image = get_gio_image()
         namespace = get_random_string(4)
         service = get_fake_sla_service(
