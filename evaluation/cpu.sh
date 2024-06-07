@@ -21,7 +21,7 @@ do
 
     timestamp=$(date)
     cpu=$(grep -P 'cpu\d+' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {print usage "%"}')
-    maxcpu=$(grep -P 'cpu\d+' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} {if (max < usage) {max = usage; maxcore = $1}} END {print maxcore, max "%"}')
+    maxcpu=$(grep -P 'cpu\d+' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} {if (max < usage) {max = usage; maxcore = $1}} END {print max "%"}')
     totalmem=$(free -m | awk '/^Mem:/ { print $2 }')
     freemem=$(free -m | awk '/^Mem:/ { print $4 }')
     usedmem=$((totalmem - freemem))
