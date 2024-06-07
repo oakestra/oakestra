@@ -1,9 +1,8 @@
 #!/bin/bash
 
-echo "" > cpumemoryusage.csv
 max=200
 
-echo "time,%CPU,%MEM,%MaxCPUCore,%ContainerUsage" >> cpumemoryusage.csv 2>&1
+echo "time,%CPU,%MEM,%MaxCPUCore,%ContainerUsage" > cpumemoryusage.csv
 
 # Get the IDs of all running Docker containers
 container_ids=$(docker ps -q)
@@ -19,7 +18,7 @@ do
     total_cpu_usage=0
     total_cpu_usage=$(echo "$container_ids" | xargs -I {} -P $(nproc) sh -c 'docker stats {} --no-stream --format "{{.CPUPerc}}" | tr -d "%" ' | paste -sd+ - | bc)
 
-    timestamp=$(date)
+    timestamp=$(date "+%T")
     cpu=$(grep -P 'cpu\d+' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {print usage "%"}')
     maxcpu=$(grep -P 'cpu\d+' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} {if (max < usage) {max = usage; maxcore = $1}} END {print max "%"}')
     totalmem=$(free -m | awk '/^Mem:/ { print $2 }')
