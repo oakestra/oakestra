@@ -2,8 +2,7 @@ version: "3.3"
 
 services:
   resource_abstractor:
-    image: resource_abstractor:test
-    build: ../../resource-abstractor
+    image: resource_abstractor:latest
     container_name: test-resource_abstractor
     hostname: test-resource_abstractor
     expose:
