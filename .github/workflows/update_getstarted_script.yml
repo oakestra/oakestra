@@ -1,0 +1,26 @@
+name: Update getstarted.sh on oakestra.github.io
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - scripts/StartOakestraFull.sh
+jobs:
+  update-getstarted-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Rename script (StartOakestraFull.sh -> getstarted.sh)
+        run: |
+          mv scripts/StartOakestraFull.sh scripts/getstarted.sh
+      - name: Push changes to oakestra.github.io
+        uses: dobbelina/multi_file_bandit@main
+        env:
+          API_TOKEN_GITHUB: '${{ secrets.OAKESTRA_SITE_REPO_ACCESS_TOKEN }}'
+        with:
+          source_file: scripts/getstarted.sh
+          destination_repo: oakestra/oakestra.github.io
+          user_email: $${{ github.event.pusher.email}}
+          user_name: ${{ github.event.pusher.name}}
+          commit_message: '${{ github.event.head_commit.message }}'

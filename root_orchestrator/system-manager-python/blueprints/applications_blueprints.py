@@ -99,7 +99,10 @@ class CreateApplicationController(Resource):
             abort(code, description=result)
 
         # TODO Frontend should be able to handle the _id being a string and not an object.
-        return json_util.dumps({**result, "_id": {"$oid": str(result["_id"])}})
+        for i in range(len(result)):
+            result[i]["_id"] = {"$oid": result[i]["_id"]}
+
+        return json_util.dumps(result)
 
 
 @applicationsblp.route("/<userid>")

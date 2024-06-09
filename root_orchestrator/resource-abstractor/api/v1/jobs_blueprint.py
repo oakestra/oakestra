@@ -73,12 +73,16 @@ class JobController(MethodView):
 
 @jobsblp.route("/<job_id>/instance/<instance_id>")
 class JobInstanceController(MethodView):
-
     @before_after_hook("jobs", with_param_id="job_id")
     def patch(self, data, *args, **kwargs):
+        data = request.json
         job_id = kwargs.get("job_id")
         instance_id = kwargs.get("instance_id")
+        if ObjectId.is_valid(job_id) is False:
+            raise exceptions.BadRequest()
 
         result = jobs_db.update_job_instance(job_id, instance_id, data)
+        if result is None:
+            raise exceptions.NotFound()
 
         return json.dumps(result, default=str)
