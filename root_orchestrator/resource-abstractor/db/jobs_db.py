@@ -17,7 +17,8 @@ def find_app_by_id(app_id, extra_filter={}):
 
 def delete_app(app_id):
     filter = {"_id": ObjectId(app_id)}
-    return db.mongo_apps.find_one_and_delete(filter, return_document=True)
+
+    return db.mongo_apps.find_one_and_delete(filter)
 
 
 def update_app(app_id, data):
