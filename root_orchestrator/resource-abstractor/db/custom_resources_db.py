@@ -22,7 +22,7 @@ def create_custom_resource(data):
     return db.mongo_meta_data.find_one({"_id": inserted.inserted_id})
 
 
-def check_resource_type_exists(resource_type):
+def check_custom_resource_exists(resource_type):
     custom_resource = find_custom_resource_by_type(resource_type)
 
     return custom_resource is not None
