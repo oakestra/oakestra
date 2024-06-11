@@ -19,7 +19,7 @@ api_crd_objects = client.CustomObjectsApi()
 results1 = []
 results2 = []
 results1.append(["i", "creation_time"])
-results2.append(["i", "creation_time", "deletion_time"])
+results2.append(["i", "creation_time", "retrieval_time", "deletion_time"])
 
 fields = {
     "name": "string",
@@ -180,9 +180,10 @@ def test_custom_resources(custom_resources, entries):
             ic(j, "object")
 
             entry_id = result["_id"]
+            _, retrieval_time = eval_operation(get_entry, resource_type, entry_id)
             _, deletion_time = eval_operation(delete_entry, resource_type, entry_id)
 
-            results2.append([i, creation_time, deletion_time])
+            results2.append([i, creation_time, retrieval_time, deletion_time])
 
 
 def test_custom_resources_k(custom_resources, entries):
@@ -198,7 +199,7 @@ def test_custom_resources_k(custom_resources, entries):
         assert result is not None
 
         results1.append([i, creation_time])
-        time.sleep(5)
+        time.sleep(1)
 
         for j in range(entries):
             ic(j, "object")
@@ -215,6 +216,16 @@ def test_custom_resources_k(custom_resources, entries):
             )
             assert created_obj is not None
 
+            retrieved_obj, retrieval_time = eval_operation(
+                api_crd_objects.get_namespaced_custom_object,
+                GROUP,
+                VERSION,
+                "default",
+                f"{resource_name}s",
+                created_obj["metadata"]["name"],
+            )
+            assert retrieved_obj is not None
+
             _, deletion_time = eval_operation(
                 api_crd_objects.delete_namespaced_custom_object,
                 GROUP,
@@ -223,7 +234,7 @@ def test_custom_resources_k(custom_resources, entries):
                 f"{resource_name}s",
                 created_obj["metadata"]["name"],
             )
-            results2.append([i, creation_time, deletion_time])
+            results2.append([i, creation_time, retrieval_time, deletion_time])
 
         api_crd.delete_custom_resource_definition(f"{resource_name}s.{GROUP}")
 
