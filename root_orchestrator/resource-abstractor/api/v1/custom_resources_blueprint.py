@@ -59,7 +59,7 @@ class ResourcesController(MethodView):
 
         result = custom_resources_db.create_resource(resource_type, data)
 
-        return json.dumps(result, default=str), 201
+        return json.dumps(result, default=str)
 
 
 @customblp.route("/<resource>/<resource_id>")
