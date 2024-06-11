@@ -66,7 +66,7 @@ func main() {
 }
 
 func clusterHandshake() requests.HandshakeAnswer {
-	logger.InfoLogger().Printf("INIT: Starting handshake with cluster orhcestrator %s:%s", *clusterAddress, *clusterPort)
+	logger.InfoLogger().Printf("INIT: Starting handshake with cluster orchestrator %s:%s", *clusterAddress, *clusterPort)
 	node := model.GetNodeInfo()
 	logger.InfoLogger().Printf("Node Statistics: \n__________________")
 	logger.InfoLogger().Printf("CPU Cores: %d", node.CpuCores)
