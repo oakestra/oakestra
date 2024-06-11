@@ -28,6 +28,18 @@ class CustomResourceController(MethodView):
     def post(self, data, *args, **kwargs):
         return custom_resources_db.create_custom_resource(data)
 
+    # TODO: this is only for testing purposes.
+    @customblp.response(204)
+    def delete(self):
+        custom_resources = custom_resources_db.find_custom_resources()
+        for custom_resource in custom_resources:
+            resources = custom_resources_db.find_resources(custom_resource.get("resource_type"))
+            for res in resources:
+                custom_resources_db.delete_resource(
+                    custom_resource.get("resource_type"), res.get("_id")
+                )
+            custom_resources_db.delete_custom_resource_by_type(custom_resource.get("resource_type"))
+
 
 @customblp.route("/<resource>")
 class ResourcesController(MethodView):
