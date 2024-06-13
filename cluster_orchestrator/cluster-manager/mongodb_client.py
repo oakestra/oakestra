@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 from datetime import datetime
 
 from bson.objectid import ObjectId
@@ -121,60 +122,61 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
 
     global mongo_nodes
 
-    cumulative_cpu = 0
-    cumulative_cpu_cores = 0
-    cumulative_memory = 0
-    gpu_tot_mem = 0
-    gpu_mem_used = 0
-    gpu_temp = 0
-    gpu_drivers = []
-    gpu_usage = 0
-    gpu_cores = 0
-    cumulative_memory_in_mb = 0
-    number_of_active_nodes = 0
-    technology = []
-    aggregation_per_architecture = {}
+    cumulative_values = {
+        "cpu_percent": 0,
+        "cpu_cores": 0,
+        "memory_percent": 0,
+        "gpu_tot_mem": 0,
+        "gpu_mem_used": 0,
+        "gpu_temp": 0,
+        "gpu_drivers": [],
+        "gpu_percent": 0,
+        "gpu_cores": 0,
+        "cumulative_memory_in_mb": 0,
+        "number_of_nodes": 0,
+    }
+
+    technology = set()
+    addons_supported = set()
+    aggregation_per_architecture = defaultdict(
+        lambda: {"cpu_percent": 0, "cpu_cores": 0, "memory": 0, "memory_in_mb": 0}
+    )
 
     nodes = find_all_nodes()
     for n in nodes:
-        # print(n)
-
-        # if it is not older than TIME_INTERVAL
         try:
-            if n.get("last_modified_timestamp") >= (datetime.now().timestamp() - TIME_INTERVAL):
-                cumulative_cpu += n.get("current_cpu_percent", 0)
-                cumulative_cpu_cores += n.get("current_cpu_cores_free", 0)
-                cumulative_memory += n.get("current_memory_percent", 0)
-                cumulative_memory_in_mb += n.get("current_free_memory_in_MB", 0)
-                gpu_drivers.append(n.get("gpu_driver", "-"))
-                gpu_usage += n.get("gpu_usage", 0)
-                gpu_cores += n.get("gpu_cores", 0)
-                gpu_temp += n.get("gpu_temp", 0)
-                gpu_tot_mem += n.get("gpu_tot_mem", 0)
-                gpu_mem_used += n.get("gpu_mem_used", 0)
-                number_of_active_nodes += 1
-                for t in n.get("node_info").get("technology"):
-                    technology.append(t) if t not in technology else technology
-
-                arch = n.get("node_info").get("architecture")
-                if arch is not None:
-                    aggregation = None
-                    if aggregation_per_architecture.get(arch, None) is None:
-                        aggregation_per_architecture[arch] = {}
-                        aggregation = aggregation_per_architecture[arch]
-                        aggregation["cpu_percent"] = 0
-                        aggregation["cpu_cores"] = 0
-                        aggregation["memory"] = 0
-                        aggregation["memory_in_mb"] = 0
-
-                    aggregation = aggregation_per_architecture[arch]
-                    aggregation["cpu_percent"] += n.get("current_cpu_percent", 0)
-                    aggregation["cpu_cores"] += n.get("current_cpu_cores_free", 0)
-                    aggregation["memory"] += n.get("current_memory_percent", 0)
-                    aggregation["memory_in_mb"] += n.get("current_free_memory_in_MB", 0)
-                    # GPU not aggregated for unikernel
-            else:
+            if n.get("last_modified_timestamp") < (datetime.now().timestamp() - TIME_INTERVAL):
                 print("Node {0} is inactive.".format(n.get("_id")))
+                continue
+
+            node_info = n.get("node_info")
+
+            # if it is not older than TIME_INTERVAL
+            cumulative_values["cpu_percent"] += n.get("current_cpu_percent", 0)
+            cumulative_values["cpu_cores"] += n.get("current_cpu_cores_free", 0)
+            cumulative_values["memory_percent"] += n.get("current_memory_percent", 0)
+            cumulative_values["gpu_tot_mem"] += n.get("gpu_tot_mem", 0)
+            cumulative_values["gpu_mem_used"] += n.get("gpu_mem_used", 0)
+            cumulative_values["gpu_temp"] += n.get("gpu_temp", 0)
+            cumulative_values["gpu_drivers"].append(n.get("gpu_driver", "-"))
+            cumulative_values["cumulative_memory_in_mb"] += n.get("current_free_memory_in_MB", 0)
+            cumulative_values["gpu_percent"] += n.get("gpu_usage", 0)
+            cumulative_values["gpu_cores"] += n.get("gpu_cores", 0)
+            cumulative_values["number_of_nodes"] += 1
+
+            technology.update(node_info.get("technology", []))
+            addons_supported.update(node_info.get("addons_supported", []))
+
+            arch = node_info.get("architecture")
+            aggregation = aggregation_per_architecture[arch]
+            aggregation["cpu_percent"] += n.get("current_cpu_percent", 0)
+            aggregation["cpu_cores"] += n.get("current_cpu_cores_free", 0)
+            aggregation["memory"] += n.get("current_memory_percent", 0)
+            aggregation["memory_in_mb"] += n.get("current_free_memory_in_MB", 0)
+
+            print("aggregation_per_architecture: ", dict(aggregation_per_architecture))
+            # GPU not aggregated for unikernel
+
         except Exception as e:
             print(
                 "Problem during the aggregation of the data, skipping the node: ",
@@ -186,22 +188,14 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     mongo_update_jobs_status(TIME_INTERVAL)
     jobs = mongo_find_all_jobs()
 
+    # TODO: what is "more"?
     return {
-        "cpu_percent": cumulative_cpu,
-        "memory_percent": cumulative_memory,
-        "cpu_cores": cumulative_cpu_cores,
-        "cumulative_memory_in_mb": cumulative_memory_in_mb,
-        "gpu_drivers": gpu_drivers,
-        "gpu_percent": gpu_usage,
-        "gpu_cores": gpu_cores,
-        "gpu_temp": gpu_temp,
-        "gpu_tot_mem": gpu_tot_mem,
-        "gpu_mem_used": gpu_mem_used,
-        "number_of_nodes": number_of_active_nodes,
+        **cumulative_values,
         "jobs": jobs,
-        "virtualization": technology,
-        "aggregation_per_architecture": aggregation_per_architecture,
+        "virtualization": list(technology),
+        "aggregation_per_architecture": dict(aggregation_per_architecture),
         "more": 0,
+        "addons_supported": list(addons_supported),
     }
 
 
