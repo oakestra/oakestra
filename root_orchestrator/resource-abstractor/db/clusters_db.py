@@ -93,3 +93,7 @@ def update_cluster_information(cluster_id, data):
         },
         return_document=True,
     )
+
+
+def delete_cluster(cluster_id):
+    return db.mongo_clusters.delete_one({"_id": ObjectId(cluster_id)})

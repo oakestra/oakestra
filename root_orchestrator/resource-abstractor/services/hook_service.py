@@ -14,6 +14,7 @@ CONNECT_TIMEOUT = os.environ.get("HOOK_CONNECT_TIMEOUT", 10)
 
 def call_webhook(url, data):
     try:
+        logging.info(f"Calling webhook with data: {data}")
         response = post(url, json=data, timeout=(CONNECT_TIMEOUT, RESPONSE_TIMEOUT))
         response.raise_for_status()
         data = response.json()
@@ -137,11 +138,16 @@ def before_after_hook(entity_name, with_param_id=None):
             result = fn(*tuple(args), **kwargs)
             result_id = result["_id"] if isinstance(result, dict) else None
 
-            if result_id is None:
+            # incase result was json encoded
+            if result and result_id is None:
                 try:
                     result_id = json.loads(result).get("_id")
                 except json.JSONDecodeError:
                     pass
+            else:
+                # fallback on passed id
+                # This happens with delete methods that don't return the deleted entity
+                result_id = entity_id
 
             after_fn(entity_name, result_id)
 

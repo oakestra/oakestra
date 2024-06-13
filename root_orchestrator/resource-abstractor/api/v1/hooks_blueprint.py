@@ -26,7 +26,7 @@ class AllHooksController(MethodView):
     @hooksblp.arguments(APIObjectHookSchema, location="json")
     @hooksblp.response(200, APIObjectHookSchema, content_type="application/json")
     def put(self, data, *args, **kwargs):
-        return hooks_db.create_hook(data)
+        return hooks_db.create_update_hook(data)
 
 
 @hooksblp.route("/<hookId>")
@@ -39,6 +39,6 @@ class SingleHookController(MethodView):
 
         return hook
 
-    @hooksblp.response(204, APIObjectHookSchema, content_type="application/json")
+    @hooksblp.response(204, content_type="application/json")
     def delete(self, hookId, *args, **kwargs):
-        return hooks_db.delete_hook(hookId)
+        hooks_db.delete_hook(hookId)

@@ -69,9 +69,11 @@ class AllResourcesController(MethodView):
 
         cluster = clusters_db.find_cluster_by_name(resource_name)
         if cluster:
-            return perform_update("resource", clusters_db.update_cluster, str(cluster["_id"]), data)
+            return perform_update(
+                "resources", clusters_db.update_cluster, str(cluster["_id"]), data
+            )
 
-        return perform_create("resource", clusters_db.create_cluster, data)
+        return perform_create("resources", clusters_db.create_cluster, data)
 
 
 @resourcesblp.route("/<resource_id>")
@@ -97,3 +99,10 @@ class ResourceController(MethodView):
             raise exceptions.BadRequest()
 
         return clusters_db.update_cluster_information(resource_id, data)
+
+    @resourcesblp.response(204, ResourceSchema, content_type="application/json")
+    @before_after_hook("resources", with_param_id="resource_id")
+    def delete(self, *args, **kwargs):
+        resource_id = kwargs.get("resource_id")
+
+        clusters_db.delete_cluster(resource_id)
