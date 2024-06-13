@@ -1,11 +1,12 @@
 import os
 import socket
 import threading
-import grpc
 from concurrent import futures
 from datetime import timedelta
 from pathlib import Path
 from secrets import token_hex
+
+import grpc
 from blueprints import blueprints
 from bson import json_util
 from ext_requests.mongodb_client import mongo_init
@@ -17,13 +18,13 @@ from flask_jwt_extended import JWTManager
 from flask_smorest import Api
 from flask_socketio import SocketIO
 from flask_swagger_ui import get_swaggerui_blueprint
-from resource_abstractor_client import cluster_operations
 from google.protobuf.json_format import MessageToDict
 from proto.clusterRegistration_pb2 import SC1Message, SC2Message
 from proto.clusterRegistration_pb2_grpc import (
     add_register_clusterServicer_to_server,
     register_clusterServicer,
 )
+from resource_abstractor_client import cluster_operations
 from sm_logging import configure_logging
 from utils.network import sanitize
 from werkzeug.utils import redirect, secure_filename
