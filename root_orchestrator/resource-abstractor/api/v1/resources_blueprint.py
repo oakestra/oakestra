@@ -75,6 +75,11 @@ class AllResourcesController(MethodView):
 
         return perform_create("resources", clusters_db.create_cluster, data)
 
+    # TODO used for testing purposes.
+    @resourcesblp.response(204, content_type="application/json")
+    def delete(self):
+        clusters_db.delete_all_clusters()
+
 
 @resourcesblp.route("/<resource_id>")
 class ResourceController(MethodView):

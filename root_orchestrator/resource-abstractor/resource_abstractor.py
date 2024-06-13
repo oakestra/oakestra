@@ -1,3 +1,4 @@
+import logging
 import os
 
 from api.v1 import blueprints
@@ -9,6 +10,8 @@ from flask_swagger_ui import get_swaggerui_blueprint
 RESOURCE_ABSTRACTOR_PORT = os.environ.get("RESOURCE_ABSTRACTOR_PORT")
 
 app = Flask(__name__)
+
+logging.basicConfig(level=logging.INFO)
 
 app.config["OPENAPI_VERSION"] = "3.0.2"
 app.config["API_TITLE"] = "Resource Abstractor Api"
