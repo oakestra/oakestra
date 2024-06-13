@@ -173,8 +173,6 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
             aggregation["cpu_cores"] += n.get("current_cpu_cores_free", 0)
             aggregation["memory"] += n.get("current_memory_percent", 0)
             aggregation["memory_in_mb"] += n.get("current_free_memory_in_MB", 0)
-
-            print("aggregation_per_architecture: ", dict(aggregation_per_architecture))
             # GPU not aggregated for unikernel
 
         except Exception as e:
