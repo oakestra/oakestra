@@ -38,6 +38,8 @@ def find_hook_by_id(hook_id):
 
 
 def update_hook(hook_id, data):
+    data.pop("_id", None)
+
     return db.mongo_hooks.find_one_and_update(
         {"_id": ObjectId(hook_id)}, {"$set": data}, return_document=True
     )
@@ -49,15 +51,5 @@ def create_hook(data):
     return db.mongo_hooks.find_one({"_id": res.inserted_id})
 
 
-def create_update_hook(hook_data):
-    hook_name = hook_data.get("hook_name")
-    hook = db.mongo_hooks.find_one({"hook_name": hook_name})
-
-    if hook:
-        return update_hook(str(hook.get("_id")), hook_data)
-
-    return create_hook(hook_data)
-
-
 def delete_hook(hook_id):
-    return db.mongo_hooks.delete_one({"_id": hook_id})
+    return db.mongo_hooks.delete_one({"_id": ObjectId(hook_id)})

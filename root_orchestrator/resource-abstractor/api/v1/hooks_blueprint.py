@@ -17,6 +17,16 @@ class APIObjectHookSchema(Schema):
     )
 
 
+class APIObjectHookPatchSchema(Schema):
+    hook_name = fields.String()
+    webhook_url = fields.String()
+    entity = fields.String()
+    events = fields.List(
+        fields.Str(validate=validate.OneOf([*hooks_db.ASYNC_EVENTS, *hooks_db.SYNC_EVENTS])),
+        default=[],
+    )
+
+
 @hooksblp.route("/")
 class AllHooksController(MethodView):
     @hooksblp.response(200, APIObjectHookSchema(many=True), content_type="application/json")
@@ -24,9 +34,9 @@ class AllHooksController(MethodView):
         return hooks_db.find_hooks()
 
     @hooksblp.arguments(APIObjectHookSchema, location="json")
-    @hooksblp.response(200, APIObjectHookSchema, content_type="application/json")
-    def put(self, data, *args, **kwargs):
-        return hooks_db.create_update_hook(data)
+    @hooksblp.response(201, APIObjectHookSchema, content_type="application/json")
+    def post(self, data, *args, **kwargs):
+        return hooks_db.create_hook(data)
 
 
 @hooksblp.route("/<hookId>")
@@ -42,3 +52,11 @@ class SingleHookController(MethodView):
     @hooksblp.response(204, content_type="application/json")
     def delete(self, hookId, *args, **kwargs):
         hooks_db.delete_hook(hookId)
+
+    @hooksblp.arguments(APIObjectHookPatchSchema, validate=False, location="json")
+    @hooksblp.response(200, APIObjectHookSchema, content_type="application/json")
+    def patch(self, data, *args, **kwargs):
+        hook_id = kwargs.get("hookId")
+        hook = hooks_db.update_hook(hook_id, data)
+
+        return hook
