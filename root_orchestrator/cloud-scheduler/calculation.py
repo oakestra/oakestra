@@ -12,11 +12,21 @@ def calculate(job_id, job):
 
 
 def constraint_based_scheduling(job, constraints):
+    filtered_active_clusters = []
     for constraint in constraints:
         constraint_type = constraint.get("type")
         if constraint_type == "direct":
             return direct_service_mapping(job, constraint.get("cluster"))
-    return greedy_load_balanced_algorithm(job=job)
+        if constraint_type == "addons":
+            for cluster in cluster_operations.get_resources(active=True) or []:
+                if (
+                    cluster.get("supported_addons")
+                    and constraint.get("needs")
+                    and set(constraint.get("needs")).issubset(set(cluster.get("supported_addons")))
+                ):
+                    filtered_active_clusters.append(cluster)
+
+    return greedy_load_balanced_algorithm(job=job, active_clusters=filtered_active_clusters)
 
 
 def direct_service_mapping(job, cluster_name):
