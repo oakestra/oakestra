@@ -21,7 +21,7 @@ docker_client = docker.from_env()
 
 containers = []
 results = []
-results.append(["i", "time_taken"])
+results.append(["i", "timestamp", "time_taken"])
 
 
 def get_random_string(length):
@@ -86,21 +86,21 @@ def start_stupid_server(servers, sync_operation=False):
 
 def cleanup():
     print("Cleaning up...")
-
+    print("\tDeleting resources...")
     requests.delete(CLUSTER_ADDR)
 
     response = requests.get(HOOKS_ADDR)
     response.raise_for_status()
     hooks = response.json()
     for hook in hooks:
-        print(f"Deleting hook: {hook['_id']}")
+        print(f"\tDeleting hook: {hook['_id']}")
         requests.delete(f"{HOOKS_ADDR}/{hook['_id']}")
 
     label = f"com.docker.compose.project={DEFAULT_PROJECT}"
 
     my_containers = docker_client.containers.list(filters={"label": label}, all=all)
     for container in my_containers:
-        print(f"Stopping container: {container.name}")
+        print(f"\tStopping container: {container.name}")
         container.stop()
         container.remove()
 
@@ -130,7 +130,9 @@ def stress_test_hooks(resources_n, sync_operation=False):
     for i in range(resources_n):
         result, time_taken = eval_operation(create_resource, get_random_resource())
         print(f"{i} - Time taken: {time_taken}")
-        results.append([i, time_taken])
+
+        current_time = time.strftime("%H:%M:%S")
+        results.append([i, current_time, time_taken])
 
         # we flush the results to csv every 100 iterations
         if i % 100 == 0:
