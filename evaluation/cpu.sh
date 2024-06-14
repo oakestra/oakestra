@@ -1,9 +1,10 @@
 #!/bin/bash
 
-max=200
+max=300
 
 echo "time,%CPU,%MEM,%MaxCPUCore,%ContainerUsage" > cpumemoryusage.csv
 
+container_ids=$(docker ps -q)
 
 # Initialize total CPU usage to 0
 total_cpu_usage=0
@@ -13,7 +14,9 @@ while [ $i -ne $max ]
 do
     i=$(($i+1))
 
-    container_ids=$(docker ps -q)
+    if (( i % 10 == 0 )); then
+        container_ids=$(docker ps -q)
+    fi
 
     total_cpu_usage=0
     total_cpu_usage=$(echo "$container_ids" | xargs -I {} -P $(nproc) sh -c 'docker stats {} --no-stream --format "{{.CPUPerc}}" | tr -d "%" ' | paste -sd+ - | bc)

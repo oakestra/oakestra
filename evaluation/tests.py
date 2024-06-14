@@ -8,7 +8,6 @@ import time
 
 import requests
 from flask import Flask
-from icecream import ic
 
 SYSTEM_MANAGER_URL = os.getenv("SYSTEM_MANAGER_URL", "0.0.0.0:10000")
 ADDONS_ENGINE_URL = os.getenv("ADDONS_ENGINE_URL", "0.0.0.0:11101")
@@ -180,18 +179,18 @@ def get_login():
 
 def register_app(sla):
     token = get_login()
-    ic(sla)
+    # print(sla)
 
     head = {"Authorization": "Bearer " + token}
     url = "http://" + SYSTEM_MANAGER_URL + "/api/application"
 
     resp = requests.post(url, headers=head, json=sla)
     if resp.status_code >= 400:
-        ic("Failed to register app.")
+        print("Failed to register app.")
         exit(1)
 
     result = json.loads(resp.json())
-    ic(result)
+    # print(result)
 
     return result
 
@@ -202,25 +201,25 @@ def delete_all_apps():
     response = requests.get(url, headers={"Authorization": "Bearer {}".format(token)})
 
     if response.status_code >= 400:
-        ic("Failed to get apps.")
+        print("Failed to get apps.")
         exit(1)
 
     apps = json.loads(response.json())
     for app in apps:
-        ic(f"deleting app...{app.get('applicationID', '')}")
+        print(f"deleting app...{app.get('applicationID', '')}")
 
         app_id = app.get("applicationID")
         url = f"http://{SYSTEM_MANAGER_URL}/api/application/{app_id}"
         response = requests.delete(url, headers={"Authorization": "Bearer {}".format(token)})
 
         if response.status_code >= 400:
-            ic("Failed to delete app.")
+            print("Failed to delete app.")
 
 
 def deploy(service_id):
     global start
 
-    ic(f"Deploying service...{str(service_id)}")
+    print(f"Deploying service...{str(service_id)}")
 
     token = get_login()
     url = f"http://{SYSTEM_MANAGER_URL}/api/service/{service_id}/instance"
@@ -228,7 +227,7 @@ def deploy(service_id):
 
     resp = requests.post(url, headers={"Authorization": "Bearer {}".format(token)})
     if resp.status_code >= 400:
-        ic("Deploy request failed!")
+        print("Deploy request failed!")
         exit(1)
 
 
@@ -236,7 +235,7 @@ def stress_app_test(apps_count=10, services_count=2, server_address=None):
     global lock, last_service
 
     for i in range(apps_count):
-        ic("Registering app..." + str(i))
+        print(f"{i} - Registering app...")
         sla = get_full_random_sla_app(server_address, services_count)
         user_apps = register_app(sla)
         app = next(
@@ -250,7 +249,7 @@ def stress_app_test(apps_count=10, services_count=2, server_address=None):
         for serviceID in app["microservices"]:
             # wait until lock is released
             while server_address and lock:
-                ic("Waiting for lock...")
+                print("Waiting for lock...")
                 time.sleep(10)
                 continue
 
@@ -259,53 +258,53 @@ def stress_app_test(apps_count=10, services_count=2, server_address=None):
 
             last_service = serviceID
 
-    ic("Finished app stress testing")
+    print("Finished app stress testing")
 
 
 def add_addon_marketplace(addon):
-    ic("Registering addon...")
+    print("Registering addon...")
     url = f"http://{ADDONS_MARKETPLACE_URL}/api/v1/marketplace/addons"
     resp = requests.post(url, json=addon)
     if resp.status_code >= 400:
-        ic("Addon registration failed")
-        ic(resp)
+        print("Addon registration failed")
+        print(resp)
         exit(1)
 
     resp = resp.json()
-    ic(resp)
+    # print(resp)
 
     return resp
 
 
 def install_addon(id):
-    ic("Installing addon...")
+    print("Installing addon...")
     url = f"http://{ADDONS_ENGINE_URL}/api/v1/addons"
     resp = requests.post(url, json={"marketplace_id": id})
     if resp.status_code >= 400:
-        ic("Addon installation failed")
-        ic(resp)
+        print("Addon installation failed")
+        print(resp)
         exit(1)
 
     resp = resp.json()
-    ic(resp)
+    # print(resp)
 
     return resp
 
 
 def delete_all_addons():
-    ic("Deleting all addons...")
+    print("Deleting all addons...")
     url = f"http://{ADDONS_ENGINE_URL}/api/v1/addons/"
     resp = requests.delete(url)
     if resp.status_code >= 400:
-        ic("Addon deletion failed")
-        ic(resp)
+        print("Addon deletion failed")
+        print(resp)
         exit(1)
 
     url = f"http://{ADDONS_MARKETPLACE_URL}/api/v1/marketplace/addons/"
     resp = requests.delete(url)
     if resp.status_code >= 400:
-        ic("Addon deletion failed")
-        ic(resp)
+        print("Addon deletion failed")
+        print(resp)
         exit(1)
 
 
@@ -313,40 +312,40 @@ def stress_addons_test(addons_count=10):
     for i in range(addons_count):
         addon = get_random_addon()
         registered_addon = add_addon_marketplace(addon)
-        ic("sleep until addon is verified")
+        print("sleep until addon is verified")
         time.sleep(20)
 
         id = registered_addon["_id"]
         install_addon(id)
 
-        ic("sleep until addon is installed")
+        print("sleep until addon is installed")
         time.sleep(10)
 
-    ic("Finished addons stress testing")
+    print("Finished addons stress testing")
 
 
 def cleanup():
     try:
         cleanup_apps()
     except Exception:
-        ic("Failed to cleanup apps")
+        print("Failed to cleanup apps")
 
     try:
         cleanup_addons()
     except Exception:
-        ic("Failed to cleanup addons")
+        print("Failed to cleanup addons")
 
 
 def cleanup_apps():
-    ic("Cleaning up...Deleting all apps...")
+    print("Cleaning up...Deleting all apps...")
     delete_all_apps()
-    ic("Done deleting apps...")
+    print("Done deleting apps...")
 
 
 def cleanup_addons():
-    ic("Cleaning up...Deleting all addons...")
+    print("Cleaning up...Deleting all addons...")
     delete_all_addons()
-    ic("Done deleting addons...")
+    print("Done deleting addons...")
 
 
 def print_csv():
@@ -364,14 +363,13 @@ def index():
 
     stop = time.time()
     if not start:
-        ic("start was not initialized.")
+        print("start was not initialized.")
         start = stop
 
-    ic("Serive deployed.")
     service_time = stop - start
     service_count += 1
     results.append([service_count, service_time])
-    ic(f"Time taken for {last_service}: {service_time}")
+    print(f"Time taken for {last_service}: {service_time}")
 
     # reset static variables
     start = None
@@ -435,11 +433,11 @@ if __name__ == "__main__":
     )
 
     if apps_count:
-        ic("Starting stress test for apps...")
+        print("Starting stress test for apps...")
         app_thread.start()
 
     if addons_count:
-        ic("Starting stress test for addons...")
+        print("Starting stress test for addons...")
         addon_thread.start()
 
     address_thread = threading.Thread(
