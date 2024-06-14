@@ -57,7 +57,7 @@ def get_update_data(data):
         "virtualization": "virtualization",
         "more": "more",
         "worker_groups": "worker_groups",
-        "addons_supported": "addons_supported",
+        "supported_addons": "supported_addons",
     }
 
     # Use the mapping to create the update dictionary

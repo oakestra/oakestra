@@ -137,7 +137,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     }
 
     technology = set()
-    addons_supported = set()
+    supported_addons = set()
     aggregation_per_architecture = defaultdict(
         lambda: {"cpu_percent": 0, "cpu_cores": 0, "memory": 0, "memory_in_mb": 0}
     )
@@ -165,7 +165,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
             cumulative_values["number_of_nodes"] += 1
 
             technology.update(node_info.get("technology", []))
-            addons_supported.update(node_info.get("addons_supported", []))
+            supported_addons.update(node_info.get("supported_addons", []))
 
             arch = node_info.get("architecture")
             aggregation = aggregation_per_architecture[arch]
@@ -193,7 +193,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
         "virtualization": list(technology),
         "aggregation_per_architecture": dict(aggregation_per_architecture),
         "more": 0,
-        "addons_supported": list(addons_supported),
+        "supported_addons": list(supported_addons),
     }
 
 
