@@ -343,7 +343,7 @@ services:
       - loki
     logging: *default-logging
 
-addons_manager:
+  addons_manager:
     image: addons_manager
     container_name: addons_manager
     build: ../addons_engine/addons-manager/
