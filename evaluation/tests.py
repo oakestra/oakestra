@@ -39,7 +39,7 @@ def eval_operation(fn, *args, **kwargs):
 
 
 def create_resource(resource):
-    return requests.put(CLUSTER_ADDR, json=resource)
+    return requests.post(CLUSTER_ADDR, json=resource)
 
 
 # def check_port(port):
@@ -105,12 +105,13 @@ def cleanup():
         container.remove()
 
 
-def print_csv(mode="a", sync_operation=False):
+def print_csv(mode="a", sync_operation=False, servers=0):
     global results
+    filename = f"results/creation_time_{int(sync_operation)}_{servers}.csv"
 
     print("Writing to csv...")
 
-    with open(f"results/creation_time_{int(sync_operation)}.csv", mode) as my_csv:
+    with open(filename, mode) as my_csv:
         csvWriter = csv.writer(my_csv, delimiter=",")
         csvWriter.writerows(results)
         results = []
@@ -126,17 +127,17 @@ def get_random_resource():
     }
 
 
-def stress_test_hooks(resources_n, sync_operation=False):
+def stress_test_hooks(resources_n, sync_operation=False, servers=0):
     for i in range(resources_n):
         result, time_taken = eval_operation(create_resource, get_random_resource())
         print(f"{i} - Time taken: {time_taken}")
 
-        current_time = time.strftime("%H:%M:%S")
+        current_time = int(time.time() * 1000)
         results.append([i, current_time, time_taken])
 
         # we flush the results to csv every 100 iterations
         if i % 100 == 0:
-            print_csv(sync_operation=sync_operation)
+            print_csv(sync_operation=sync_operation, servers=servers)
 
 
 if __name__ == "__main__":
@@ -169,14 +170,13 @@ if __name__ == "__main__":
 
     cleanup()
 
-    # reset csv file
-    print_csv(mode="w+", sync_operation=sync_operation)
+    print_csv(mode="w+", sync_operation=sync_operation, servers=servers)
 
     if servers:
         start_stupid_server(servers, sync_operation=sync_operation)
 
     if resources:
-        stress_test_hooks(resources, sync_operation=sync_operation)
+        stress_test_hooks(resources, sync_operation=sync_operation, servers=servers)
 
     if results:
-        print_csv(sync_operation=sync_operation)
+        print_csv(sync_operation=sync_operation, servers=servers)
