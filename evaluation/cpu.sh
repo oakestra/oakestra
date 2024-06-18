@@ -2,9 +2,8 @@
 
 max=300
 
-echo "time,%CPU,%MEM,%MaxCPUCore,%ContainerUsage" > cpumemoryusage.csv
+echo "timestamp,%CPU,MEM" > cpumemoryusage.csv
 
-container_ids=$(docker ps -q)
 
 # Initialize total CPU usage to 0
 total_cpu_usage=0
@@ -14,20 +13,17 @@ while [ $i -ne $max ]
 do
     i=$(($i+1))
 
-    if (( i % 10 == 0 )); then
-        container_ids=$(docker ps -q)
-    fi
+    timestamp=$(($(date +%s%N)/1000000))
+    cpu=$(awk '{u=$2+$4; t=$2+$4+$5; if (NR==1){u1=u; t1=t;} else print ($2+$4-u1) * 100 / (t-t1) "%"; }' <(grep 'cpu ' /proc/stat) <(sleep 1;grep 'cpu ' /proc/stat))
 
-    total_cpu_usage=0
-    total_cpu_usage=$(echo "$container_ids" | xargs -I {} -P $(nproc) sh -c 'docker stats {} --no-stream --format "{{.CPUPerc}}" | tr -d "%" ' | paste -sd+ - | bc)
-
-    timestamp=$(date "+%T")
-    cpu=$(grep -P 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {print usage "%"}')
-    maxcpu=$(grep -P 'cpu\d+' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} {if (max < usage) {max = usage; maxcore = $1}} END {print max "%"}')
     totalmem=$(free -m | awk '/^Mem:/ { print $2 }')
     freemem=$(free -m | awk '/^Mem:/ { print $4 }')
     usedmem=$((totalmem - freemem))
-    output="$timestamp,$cpu,$usedmem,$maxcpu,$total_cpu_usage%"
+
+    output="$timestamp,$cpu,$usedmem"
     echo $output >> cpumemoryusage.csv 2>&1
     echo -n "$i,"; echo "$output"
+    
+    sleep 1
+
 done

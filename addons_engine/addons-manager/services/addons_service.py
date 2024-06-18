@@ -22,12 +22,12 @@ def stop_addon(addon, done=None):
         done()
 
 
-def get_addon_in_marketplace(marketplace_id, verified=True):
+def get_addon_in_marketplace(marketplace_id, check_is_verified=True):
     response = requests.get(f"{MARKETPLACE_API}/{marketplace_id}")
     response.raise_for_status()
 
     marketplace_addon = response.json()
-    if verified and marketplace_addon.get("status") != "approved":
+    if check_is_verified and marketplace_addon.get("status") != "approved":
         return None
 
     return marketplace_addon
@@ -67,7 +67,7 @@ def run_active_addons():
 
 def install_addon(addon):
     marketplace_id = addon.get("marketplace_id")
-    marketplace_addon = get_addon_in_marketplace(marketplace_id)
+    marketplace_addon = get_addon_in_marketplace(marketplace_id, check_is_verified=False)
 
     if marketplace_addon is None:
         return None

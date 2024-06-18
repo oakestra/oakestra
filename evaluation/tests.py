@@ -21,7 +21,7 @@ last_service = None
 service_count = 0
 
 results = []
-results.append(["test_no", "deployment_time"])
+results.append(["test_no", "timestamp", "deployment_time"])
 
 
 def get_images_list():
@@ -179,7 +179,6 @@ def get_login():
 
 def register_app(sla):
     token = get_login()
-    # print(sla)
 
     head = {"Authorization": "Bearer " + token}
     url = "http://" + SYSTEM_MANAGER_URL + "/api/application"
@@ -190,7 +189,6 @@ def register_app(sla):
         exit(1)
 
     result = json.loads(resp.json())
-    # print(result)
 
     return result
 
@@ -219,8 +217,6 @@ def delete_all_apps():
 def deploy(service_id):
     global start
 
-    print(f"Deploying service...{str(service_id)}")
-
     token = get_login()
     url = f"http://{SYSTEM_MANAGER_URL}/api/service/{service_id}/instance"
     start = time.time()
@@ -246,7 +242,7 @@ def stress_app_test(apps_count=10, services_count=2, server_address=None):
             )
         )
 
-        for serviceID in app["microservices"]:
+        for j, serviceID in enumerate(app["microservices"]):
             # wait until lock is released
             while server_address and lock:
                 print("Waiting for lock...")
@@ -254,11 +250,13 @@ def stress_app_test(apps_count=10, services_count=2, server_address=None):
                 continue
 
             lock = True
-            deploy(serviceID)
+            print(f"\t{j} - Deploying service...{str(serviceID)}")
 
             last_service = serviceID
+            deploy(serviceID)
+            time.sleep(1)
 
-    print("Finished app stress testing")
+    print(f"Finished app stress testing: {time.time()}")
 
 
 def add_addon_marketplace(addon):
@@ -271,7 +269,6 @@ def add_addon_marketplace(addon):
         exit(1)
 
     resp = resp.json()
-    # print(resp)
 
     return resp
 
@@ -286,7 +283,6 @@ def install_addon(id):
         exit(1)
 
     resp = resp.json()
-    # print(resp)
 
     return resp
 
@@ -313,13 +309,10 @@ def stress_addons_test(addons_count=10):
         addon = get_random_addon()
         registered_addon = add_addon_marketplace(addon)
         print("sleep until addon is verified")
-        time.sleep(20)
+        time.sleep(5)
 
         id = registered_addon["_id"]
         install_addon(id)
-
-        print("sleep until addon is installed")
-        time.sleep(10)
 
     print("Finished addons stress testing")
 
@@ -368,7 +361,7 @@ def index():
 
     service_time = stop - start
     service_count += 1
-    results.append([service_count, service_time])
+    results.append([service_count, int(time.time() * 1000), service_time])
     print(f"Time taken for {last_service}: {service_time}")
 
     # reset static variables
