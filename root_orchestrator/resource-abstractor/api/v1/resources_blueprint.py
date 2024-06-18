@@ -63,6 +63,12 @@ class AllResourcesController(MethodView):
         return list(clusters_db.find_clusters(filter))
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
+    @resourcesblp.response(201, ResourceSchema, content_type="application/json")
+    @before_after_hook("resources")
+    def post(self, data, **kwargs):
+        return clusters_db.create_cluster(data)
+
+    @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
     def put(self, data, **kwargs):
         resource_name = data.get("cluster_name")

@@ -136,7 +136,7 @@ def before_after_hook(entity_name, with_param_id=None):
                 args.append(data)
 
             result = fn(*tuple(args), **kwargs)
-            result_id = result["_id"] if isinstance(result, dict) else None
+            result_id = str(result["_id"]) if isinstance(result, dict) else None
 
             # incase result was json encoded
             if result and result_id is None:
@@ -144,7 +144,7 @@ def before_after_hook(entity_name, with_param_id=None):
                     result_id = json.loads(result).get("_id")
                 except json.JSONDecodeError:
                     pass
-            else:
+            elif result_id is None:
                 # fallback on passed id
                 # This happens with delete methods that don't return the deleted entity
                 result_id = entity_id
