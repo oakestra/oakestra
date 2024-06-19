@@ -17,7 +17,6 @@ def calculate(app, job):
 
 def constraint_based_scheduling(job, constraints):
     filtered_active_nodes = []
-    mongo_find_all_active_nodes()
     for constraint in constraints:
         constraint_type = constraint.get("type")
         if constraint_type == "direct":

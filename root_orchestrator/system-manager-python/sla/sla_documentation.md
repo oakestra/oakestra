@@ -47,7 +47,7 @@ Example under *sla.json*
         - **rigidness** : Rigidness of constraint; If [**rigidness**] * [recent requests] > [successfull recent requests], the constraint is counted as failed: *Example*: rigidness of 1 implies the first failure to meet goals triggers an alarm. rigidness of 0.99 implies that 99% (or more) of recent requests must satisfy the constraint, otherwise an alarm gets triggered.
         - **convergence_time** : Time the orchestration framework has to find the optimal solution, before the [**rigidness**] of the constraint gets measured. In [s], default 300 (5 min)
         - ***For type "addons"***
-        - **needs** : ["addon_1", "addon_2"]
+        - **needs** : ["addon_1", "addon_2"] : Allows service placement only on worker nodes where both addons are installed.
     - **connectivity** : List of connections this microservice needs to make to other microservices of the application and constraints that have to be satisfied; for more information read ***On conectivity***
       - **target_microservice_id** : ID of the microservice this microservice needs to communicate with.
       - **con_constraints** : List of connectivity constraints
