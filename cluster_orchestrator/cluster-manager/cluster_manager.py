@@ -4,13 +4,11 @@ import socket
 
 import grpc
 import service_operations
-import socketio
 from analyzing_workers import looking_for_dead_workers
 from apscheduler.schedulers.background import BackgroundScheduler
 from cluster_scheduler_requests import scheduler_request_status
 from cm_logging import configure_logging
 from flask import Flask, request
-from flask_socketio import SocketIO, emit
 from mongodb_client import (
     mongo_find_job_by_system_id,
     mongo_init,
@@ -42,14 +40,9 @@ my_logger = configure_logging()
 
 app = Flask(__name__)
 
-# socketioserver = SocketIO(app, async_mode='eventlet', logger=, engineio_logger=logging)
-socketioserver = SocketIO(app, logger=True, engineio_logger=True)
-
 mongo_init(app)
 
 mqtt_init(app)
-
-sio = socketio.Client()
 
 BACKGROUND_JOB_INTERVAL = 5
 
@@ -151,47 +144,6 @@ def http_node_registration():
     return response, 200
 
 
-# ...... Websocket INIT Handling with edge nodes .......#
-# ......................................................#
-
-
-@socketioserver.on("connect", namespace="/init")
-def on_connect():
-    app.logger.info("Websocket - Client connected: {}".format(request.remote_addr))
-    emit("sc1", {"hello-edge": "please send your node info"}, namespace="/init")
-
-
-@socketioserver.on("cs1", namespace="/init")
-def handle_init_worker(message):
-    app.logger.info(
-        "Websocket - Received Edge_to_Cluster_Manager_1: {}".format(request.remote_addr)
-    )
-    app.logger.info(message)
-
-    client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": json.loads(message)})
-
-    init_packet = {
-        "id": str(client_id),
-        "MQTT_BROKER_PORT": os.environ.get("MQTT_BROKER_PORT"),
-    }
-
-    # create ID and send it along with MQTT_Broker info to the client. save id into database
-    emit("sc2", json.dumps(init_packet), namespace="/init")
-
-    # no report here because regularly reports are sent anyways over mqtt.
-    # report to system-manager about new edge node
-    # cloud_request_incr_node(MY_ASSIGNED_CLUSTER_ID)
-
-
-@socketioserver.on("disconnect", namespace="/init")
-def test_disconnect():
-    app.logger.info("Websocket - Client disconnected")
-
-
-# ...... Websocket END Handling with edge nodes .......#
-# .....................................................#
-
-
 def background_job_send_aggregated_information_to_sm():
     app.logger.info("Set up Background Jobs...")
     scheduler = BackgroundScheduler()
@@ -284,8 +236,6 @@ def register_with_system_manager():
 
 
 if __name__ == "__main__":
-    # socketioserver.run(app, debug=True, host='0.0.0.0', port=MY_PORT)
-    # app.run(debug=True, host='0.0.0.0', port=MY_PORT)
 
     start_http_server(10001)  # start prometheus server
 
