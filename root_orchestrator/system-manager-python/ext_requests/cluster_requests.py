@@ -6,6 +6,18 @@ from services.cluster_management import find_cluster_of_job
 from utils.network import sanitize
 
 
+def cluster_request_status(cluster_id):
+    print("Status Request...")
+    cluster = cluster_operations.get_resource_by_id(cluster_id)
+    try:
+        cluster_addr = "http://" + cluster.get("ip") + ":" + str(cluster.get("port")) + "/status"
+        print(cluster_addr)
+        resp = requests.get(cluster_addr)
+        print(resp)
+    except requests.exceptions.RequestException:
+        print("Calling Cluster Orchestrator /status not successful.")
+
+
 def cluster_request_to_deploy(cluster_id, job_id, instance_number):
     print("propagate to cluster...")
     cluster = cluster_operations.get_resource_by_id(cluster_id)

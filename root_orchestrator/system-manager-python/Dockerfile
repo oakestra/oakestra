@@ -23,5 +23,6 @@ ENV NET_PLUGIN_URL=localhost
 ENV NET_PLUGIN_PORT=10100
 
 EXPOSE 10000
+EXPOSE 50052
 
 CMD ["python", "system_manager.py"]
