@@ -5,7 +5,7 @@ def calculate(job_id, job):
     print("calculating...")
 
     constraints = job.get("constraints")
-    if constraints is not None:
+    if constraints is not None and len(constraints) > 0:
         return constraint_based_scheduling(job, constraints)
     else:
         return greedy_load_balanced_algorithm(job=job)
