@@ -5,6 +5,7 @@ import time
 from unittest.mock import MagicMock
 
 import calculation
+from oakestra_utils.types.statuses import NegativeSchedulingStatus
 
 myPath = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, myPath + "/../")
@@ -20,9 +21,13 @@ def db_gen(num):
     return cluster_list
 
 
-def test_banchemark_1():
-    current_setup = "1-45"
-    calculation.mongo_find_all_active_clusters = MagicMock(return_value=db_gen(1))
+def run_test(
+    current_setup_first_number: int,
+    current_setup_second_number: int,
+):
+    calculation.mongo_find_all_active_clusters = MagicMock(
+        return_value=db_gen(current_setup_first_number)
+    )
     job = {
         "requirements": {
             "cpu": 1,
@@ -32,130 +37,41 @@ def test_banchemark_1():
     }
     for i in range(100):
         start = time.time()
-        res, mes = calculation.calculate("1", job)
-        if res != "positive":
+        res = calculation.calculate(job)
+        if isinstance(res, NegativeSchedulingStatus):
             raise Exception()
         stop = time.time()
         overhead = stop - start
         overhead *= 1000
-        results.append([i, "root", overhead, current_setup])
+        results.append(
+            [i, "root", overhead, f"{current_setup_first_number}-{current_setup_second_number}"]
+        )
 
     print_csv()
+
+
+def test_banchemark_1():
+    run_test(1, 45)
 
 
 def test_banchemark_3():
-    current_setup = "3-15"
-    calculation.mongo_find_all_active_clusters = MagicMock(return_value=db_gen(3))
-    job = {
-        "requirements": {
-            "cpu": 1,
-            "memory": 100,
-        },
-        "id": 1,
-    }
-    for i in range(100):
-        start = time.time()
-        res, mes = calculation.calculate("1", job)
-        if res != "positive":
-            raise Exception()
-        stop = time.time()
-        overhead = stop - start
-        overhead *= 1000
-        results.append([i, "root", overhead, current_setup])
-
-    print_csv()
+    run_test(3, 15)
 
 
 def test_banchemark_5():
-    current_setup = "5-9"
-    calculation.mongo_find_all_active_clusters = MagicMock(return_value=db_gen(5))
-    job = {
-        "requirements": {
-            "cpu": 1,
-            "memory": 100,
-        },
-        "id": 1,
-    }
-    for i in range(100):
-        start = time.time()
-        res, mes = calculation.calculate("1", job)
-        if res != "positive":
-            raise Exception()
-        stop = time.time()
-        overhead = stop - start
-        overhead *= 1000
-        results.append([i, "root", overhead, current_setup])
-
-    print_csv()
+    run_test(5, 9)
 
 
 def test_banchemark_9():
-    current_setup = "9-5"
-    calculation.mongo_find_all_active_clusters = MagicMock(return_value=db_gen(9))
-    job = {
-        "requirements": {
-            "cpu": 1,
-            "memory": 100,
-        },
-        "id": 1,
-    }
-    for i in range(100):
-        start = time.time()
-        res, mes = calculation.calculate("1", job)
-        if res != "positive":
-            raise Exception()
-        stop = time.time()
-        overhead = stop - start
-        overhead *= 1000
-        results.append([i, "root", overhead, current_setup])
-
-    print_csv()
+    run_test(9, 5)
 
 
 def test_banchemark_15():
-    current_setup = "15-3"
-    calculation.mongo_find_all_active_clusters = MagicMock(return_value=db_gen(15))
-    job = {
-        "requirements": {
-            "cpu": 1,
-            "memory": 100,
-        },
-        "id": 1,
-    }
-    for i in range(100):
-        start = time.time()
-        res, mes = calculation.calculate("1", job)
-        if res != "positive":
-            raise Exception()
-        stop = time.time()
-        overhead = stop - start
-        overhead *= 1000
-        results.append([i, "root", overhead, current_setup])
-
-    print_csv()
+    run_test(15, 3)
 
 
 def test_banchemark_45():
-    current_setup = "45-1"
-    calculation.mongo_find_all_active_clusters = MagicMock(return_value=db_gen(45))
-    job = {
-        "requirements": {
-            "cpu": 1,
-            "memory": 100,
-        },
-        "id": 1,
-    }
-    for i in range(100):
-        start = time.time()
-        res, mes = calculation.calculate("1", job)
-        if res != "positive":
-            raise Exception()
-        stop = time.time()
-        overhead = stop - start
-        overhead *= 1000
-        results.append([i, "root", overhead, current_setup])
-
-    print_csv()
+    run_test(45, 1)
 
 
 def print_csv():
