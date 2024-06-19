@@ -22,6 +22,7 @@ cluster_info_schema = {
         "virtualization": {"type": "array", "items": {"type": "string"}},
         "more": {"type": "object"},
         "worker_groups": {"type": "string"},
+        "supported_addons": {"type": "array", "items": {"type": "string"}},
         "jobs": {
             "type": "array",
             "items": {
