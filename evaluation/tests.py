@@ -4,7 +4,6 @@ import random
 import time
 
 import requests
-from icecream import ic
 from kubernetes import client, config
 
 CUSTOM_RESOURCES_ADDR = "http://0.0.0.0:11011/api/v1/custom-resources"
@@ -159,9 +158,9 @@ def eval_operation(fn, *args):
 
 
 def test_custom_resources(custom_resources, entries):
-    global results2
+    global results2, results1
 
-    ic(f"Creating {custom_resources} resource types with {entries} entries each.")
+    print(f"Creating {custom_resources} resource types with {entries} entries each.")
     for i in range(custom_resources):
         resource_type = get_random_string(6)
         schema = generate_random_schema()
@@ -172,30 +171,33 @@ def test_custom_resources(custom_resources, entries):
 
         results1.append([i, creation_time])
 
-        ic(i, "custom")
+        print(f"\t{i} - created resource in {creation_time}")
 
         for j in range(entries):
             entry_data = generate_random_data_for_schema(schema)
             result, creation_time = eval_operation(add_entry, resource_type, entry_data)
             assert result is not None
 
-            ic(j, "object")
+            print(f"\t{j} - created object in {creation_time}")
 
             entry_id = result["_id"]
-            _, retrieval_time = eval_operation(get_entry, resource_type, entry_id)
-            _, deletion_time = eval_operation(delete_entry, resource_type, entry_id)
+            assert entry_id is not None
 
-            results2.append([i, creation_time, retrieval_time, deletion_time])
+            # _, retrieval_time = eval_operation(get_entry, resource_type, entry_id)
+            # _, deletion_time = eval_operation(delete_entry, resource_type, entry_id)
 
-            if results2.size % 100 == 0:
-                print_csv(results2, "entries")
+            results2.append([i, creation_time, 0, 0])
+
+            if len(results2) % 1000 == 0:
+                print_csv(results2, "entries_0")
                 results2 = []
 
 
 def test_custom_resources_k(custom_resources, entries):
-    ic(f"Kube - Creating {custom_resources} resource types with {entries} entries each.")
+    global results2, results1
+
+    print(f"Kube - Creating {custom_resources} resource types with {entries} entries each.")
     for i in range(custom_resources):
-        ic(i, "custom")
         resource_name = get_random_string(6)
         schema = generate_random_schema()
         crd = generate_crd(resource_name, schema)
@@ -204,11 +206,11 @@ def test_custom_resources_k(custom_resources, entries):
         result, creation_time = eval_operation(api_crd.create_custom_resource_definition, body)
         assert result is not None
 
+        print(f"{i} - created resource in {creation_time}")
         results1.append([i, creation_time])
         time.sleep(1)
 
         for j in range(entries):
-            ic(j, "object")
 
             data = generate_crd_data_structure(resource_name, schema)
 
@@ -222,31 +224,37 @@ def test_custom_resources_k(custom_resources, entries):
             )
             assert created_obj is not None
 
-            retrieved_obj, retrieval_time = eval_operation(
-                api_crd_objects.get_namespaced_custom_object,
-                GROUP,
-                VERSION,
-                "default",
-                f"{resource_name}s",
-                created_obj["metadata"]["name"],
-            )
-            assert retrieved_obj is not None
+            # retrieved_obj, retrieval_time = eval_operation(
+            #     api_crd_objects.get_namespaced_custom_object,
+            #     GROUP,
+            #     VERSION,
+            #     "default",
+            #     f"{resource_name}s",
+            #     created_obj["metadata"]["name"],
+            # )
+            # assert retrieved_obj is not None
 
-            _, deletion_time = eval_operation(
-                api_crd_objects.delete_namespaced_custom_object,
-                GROUP,
-                VERSION,
-                "default",
-                f"{resource_name}s",
-                created_obj["metadata"]["name"],
-            )
-            results2.append([i, creation_time, retrieval_time, deletion_time])
+            # _, deletion_time = eval_operation(
+            #     api_crd_objects.delete_namespaced_custom_object,
+            #     GROUP,
+            #     VERSION,
+            #     "default",
+            #     f"{resource_name}s",
+            #     created_obj["metadata"]["name"],
+            # )
+            results2.append([i, creation_time, 0, 0])
+
+            print(f"\t{j} - created object in {creation_time}")
+
+            if len(results2) % 1000 == 0:
+                print_csv(results2, "entries_1")
+                results2 = []
 
         api_crd.delete_custom_resource_definition(f"{resource_name}s.{GROUP}")
 
 
-def print_csv(results, filename="entries"):
-    with open(f"results/{filename}.csv", "w+") as my_csv:
+def print_csv(results, filename="entries", mode="a+"):
+    with open(f"results/{filename}.csv", mode) as my_csv:
         csvWriter = csv.writer(my_csv, delimiter=",")
         csvWriter.writerows(results)
 
@@ -283,7 +291,7 @@ def cleanup_kubernetes(group=GROUP):
 
 
 def cleanup():
-    ic("Cleaning up custom resources...")
+    print("Cleaning up custom resources...")
     cleanup_kubernetes()
 
     response = requests.delete(CUSTOM_RESOURCES_ADDR)
@@ -320,6 +328,11 @@ if __name__ == "__main__":
     kubernetes = args.kube
 
     cleanup()
+
+    print_csv(results1, f"resources_{int(kubernetes)}", mode="w+")
+    print_csv(results2, f"entries_{int(kubernetes)}", mode="w+")
+    results1 = []
+    results2 = []
 
     (
         test_custom_resources(resources, entries)
