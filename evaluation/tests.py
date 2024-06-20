@@ -159,6 +159,8 @@ def eval_operation(fn, *args):
 
 
 def test_custom_resources(custom_resources, entries):
+    global results2
+
     ic(f"Creating {custom_resources} resource types with {entries} entries each.")
     for i in range(custom_resources):
         resource_type = get_random_string(6)
@@ -184,6 +186,10 @@ def test_custom_resources(custom_resources, entries):
             _, deletion_time = eval_operation(delete_entry, resource_type, entry_id)
 
             results2.append([i, creation_time, retrieval_time, deletion_time])
+
+            if results2.size % 100 == 0:
+                print_csv(results2, "entries")
+                results2 = []
 
 
 def test_custom_resources_k(custom_resources, entries):
@@ -320,5 +326,6 @@ if __name__ == "__main__":
         if not kubernetes
         else test_custom_resources_k(resources, entries)
     )
+
     print_csv(results1, f"resources_{int(kubernetes)}")
     print_csv(results2, f"entries_{int(kubernetes)}")
