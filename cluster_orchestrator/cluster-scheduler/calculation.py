@@ -11,7 +11,12 @@ def calculate(app, job: dict) -> Union[dict, NegativeSchedulingStatus]:
 
     # check here if job has any user preferences, e.g. on a specific node, cpu architecture,
     constraints = job.get("constraints")
-    if constraints is not None and len(constraints) > 0:
+    if (
+        constraints is not None
+        and len(constraints) > 0
+        # The clusters constraint only plays a role in the cloud-scheduler.
+        and not (len(constraints) == 1 and constraints[0].get("type") == "clusters")
+    ):
         return constraint_based_scheduling(job, constraints)
     else:
         return greedy_load_balanced_algorithm(job=job)
