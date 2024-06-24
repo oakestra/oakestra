@@ -1,16 +1,15 @@
 import json
 
-from db import apps_db
-from flask import request
+from db import jobs_db as apps_db
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
+from services.hook_service import before_after_hook
 
 applicationsblp = Blueprint(
     "Applications operations",
     "applications",
     url_prefix="/api/v1/applications",
-    description="Operations on applications",
 )
 
 
@@ -26,21 +25,31 @@ class ApplicationsController(MethodView):
     def get(self, query={}):
         return json.dumps(list(apps_db.find_apps(query)), default=str)
 
-    def post(self, *args, **kwargs):
-        data = request.get_json()
-        return json.dumps(apps_db.create_app(data), default=str)
+    @before_after_hook("applications")
+    def post(self, data, *args, **kwargs):
+        result = apps_db.create_app(data)
+
+        return json.dumps(result, default=str)
 
 
-@applicationsblp.route("/<appId>")
+@applicationsblp.route("/<app_id>")
 class ApplicationController(MethodView):
     @applicationsblp.arguments(ApplicationFilterSchema, location="query")
-    def get(self, query, **kwargs):
-        app_id = kwargs.get("appId")
+    def get(self, query, *args, **kwargs):
+        app_id = kwargs.get("app_id")
+
         return json.dumps(apps_db.find_app_by_id(app_id, query), default=str)
 
-    def delete(self, appId, *args, **kwargs):
-        return json.dumps(apps_db.delete_app(appId), default=str)
+    @before_after_hook("applications", with_param_id="app_id")
+    def delete(self, *args, **kwargs):
+        app_id = kwargs.get("app_id")
+        result = apps_db.delete_app(app_id)
 
-    def patch(self, appId, *args, **kwargs):
-        data = request.get_json()
-        return json.dumps(apps_db.update_app(appId, data), default=str)
+        return json.dumps(result, default=str)
+
+    @before_after_hook("applications", with_param_id="app_id")
+    def patch(self, data, *args, **kwargs):
+        app_id = kwargs.get("app_id")
+        result = apps_db.update_app(app_id, data)
+
+        return json.dumps(result, default=str)

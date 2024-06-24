@@ -47,6 +47,8 @@ def test_create_service_with_app(resource_abstractor):
         app_mock["microservices"] = []
 
         created_app = app_operations.create_app("Admin", app_mock)
+        assert created_app is not None
+
         sla_first_app["applicationID"] = created_app["applicationID"]
 
         microservices = sla_first_app["microservices"]
@@ -103,6 +105,7 @@ def test_create_invalid_service_name(resource_abstractor):
         app_mock["microservices"] = []
 
         app = app_operations.create_app("Admin", app_mock)
+        assert app is not None
 
         sla_first_app["applicationID"] = app["applicationID"]
         sla_first_app["microservices"][0]["microservice_name"] = "badname!"
@@ -127,6 +130,8 @@ def test_create_invalid_service_namespace(resource_abstractor):
         app_mock["microservices"] = []
 
         app = app_operations.create_app("Admin", app_mock)
+        assert app is not None
+
         sla_first_app["applicationID"] = app["applicationID"]
 
         sla_first_app["microservices"][0]["microservice_namespace"] = "THIS.NAMESPACE.has.dots"
@@ -151,6 +156,8 @@ def test_delete_service(resource_abstractor):
         app_mock["microservices"] = []
 
         app = app_operations.create_app("Admin", app_mock)
+        assert app is not None
+
         sla_first_app["applicationID"] = app["applicationID"]
 
         result, code = create_services_of_app("Admin", sla)
@@ -227,6 +234,8 @@ def test_update_service_not_found(resource_abstractor):
         app_mock["microservices"] = []
 
         app = app_operations.create_app("Admin", app_mock)
+        assert app is not None
+
         sla_first_app["applicationID"] = app["applicationID"]
 
         result, code = create_services_of_app("Admin", sla)
@@ -259,6 +268,8 @@ def test_get_user_services(resource_abstractor):
         app_mock["userId"] = "Admin"
         app_mock["microservices"] = []
         app = app_operations.create_app("Admin", app_mock)
+        assert app is not None
+
         app_id = app["applicationID"]
         sla["applications"][0]["applicationID"] = app_id
 
@@ -293,6 +304,8 @@ def test_get_services(resource_abstractor):
         app_mock["microservices"] = []
 
         app = app_operations.create_app("Admin", app_mock)
+        assert app is not None
+
         sla_first_app["applicationID"] = app["applicationID"]
         result, code = create_services_of_app("Admin", sla)
 
