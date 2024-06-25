@@ -28,7 +28,7 @@ def get_addon_in_marketplace(marketplace_id, check_is_verified=True):
     response.raise_for_status()
 
     marketplace_addon = response.json()
-    if verified and marketplace_addon.get("status") != "approved":
+    if check_is_verified and marketplace_addon.get("status") != "approved":
         return None
 
     return marketplace_addon
