@@ -27,6 +27,7 @@ class ResourceSchema(Schema):
     available_memory = fields.Float()
     total_gpu_percent = fields.Integer()
     virtualization = fields.List(fields.String())
+    supported_addons = fields.List(fields.String())
     last_modified_timestamp = fields.Float()
 
 

@@ -3,6 +3,7 @@ from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
+from oakestra_utils.types.statuses import convert_to_status
 from resource_abstractor_client import cluster_operations
 from services.instance_management import update_job_status
 from utils.network import sanitize
@@ -22,6 +23,7 @@ cluster_info_schema = {
         "virtualization": {"type": "array", "items": {"type": "string"}},
         "more": {"type": "object"},
         "worker_groups": {"type": "string"},
+        "supported_addons": {"type": "array", "items": {"type": "string"}},
         "jobs": {
             "type": "array",
             "items": {
@@ -83,7 +85,7 @@ class ClusterController(MethodView):
         for j in jobs:
             result = update_job_status(
                 job_id=j.get("system_job_id"),
-                status=j.get("status"),
+                status=convert_to_status(j.get("status")),
                 status_detail=j.get("status_detail"),
                 instances=j.get("instance_list"),
             )

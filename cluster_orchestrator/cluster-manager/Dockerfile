@@ -1,10 +1,14 @@
-FROM python:3.8.5-slim-buster
+FROM python:3.10-slim-buster
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
-ADD requirements.txt /
+RUN apt-get update -y &&\
+    apt-get install -y \
+        curl \
+        python3-dev \
+        build-essential \
+        git
 
-RUN apt-get update && apt-get install -y curl
-RUN apt-get update -y && apt-get install apt-file -y && apt-file update && apt-get install -y python3-dev build-essential
+ADD requirements.txt /
 RUN pip install -r requirements.txt
 
 ADD . /
@@ -29,7 +33,7 @@ ENV CLUSTER_SCHEDULER_PORT=5555
 ENV MQTT_BROKER_URL=localhost
 ENV MQTT_BROKER_PORT=10003
 
-EXPOSE 10000
+EXPOSE $SYSTEM_MANAGER_PORT
 EXPOSE 10001
 
 CMD ["python", "cluster_manager.py"]
