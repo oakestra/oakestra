@@ -31,7 +31,6 @@ swaggerui_blueprint = get_swaggerui_blueprint(
     config={"app_name": "Addon Manager"},
 )
 app.register_blueprint(swaggerui_blueprint)
-
 api.register_blueprint(addonsblp)
 
 
