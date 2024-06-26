@@ -270,7 +270,7 @@ class AddonsMonitor:
                     )
 
             for addon in disable_addons:
-                self.stop_addon(addon)
+                self.stop_addon(addon, on_disable_complete)
 
             # Find all supposedly running addons
             running_addons = self.get_addons_from_manager(
