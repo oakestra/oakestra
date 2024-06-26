@@ -18,6 +18,9 @@ class DockerRunner:
     def get_exit_code(self, container):
         return container.attrs["State"]["ExitCode"]
 
+    def get_label(self, container, key):
+        return container.labels.get(key)
+
     def get_containers(self, filters={}):
         return self._client.containers.list(filters=filters, all=all)
 
