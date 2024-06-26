@@ -13,8 +13,10 @@ addons_service = None
 
 # TODO: reuse this enum in addons_monitor
 class AddonStatusEnum(Enum):
-    INSTALLING = "installing"
-    DISABLE = "disabling"
+    # Allowed statuses for user to specify.
+    INSTALL = "install"
+    DISABLE = "disable"
+
     DISABLED = "disabled"
     FAILED = "failed"
     ACTIVE = "active"
@@ -35,7 +37,7 @@ def get_addon_in_marketplace(marketplace_id, check_is_verified=True):
     return marketplace_addon
 
 
-def install_addon(self, addon):
+def install_addon(addon):
     marketplace_id = addon.get("marketplace_id")
     marketplace_addon = get_addon_in_marketplace(marketplace_id, check_is_verified=False)
 
@@ -49,7 +51,7 @@ def install_addon(self, addon):
         return None
 
     addon["services"] = services
-    addon["status"] = AddonStatusEnum.INSTALLING
+    addon["status"] = str(AddonStatusEnum.INSTALL)
     created_addon = addons_db.create_addon(addon)
 
     return created_addon

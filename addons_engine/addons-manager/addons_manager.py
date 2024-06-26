@@ -1,6 +1,5 @@
 import logging
 import os
-import socket
 
 from api.v1.addons_api import addonsblp
 from db.mongodb_client import mongo_init
@@ -19,6 +18,9 @@ app.config["OPENAPI_URL_PREFIX"] = "/docs"
 
 mongo_init(app)
 api = Api(app)
+
+# TODO remove this.
+logging.basicConfig(level=logging.INFO)
 
 # Register blueprints
 SWAGGER_URL = "/api/docs"
@@ -39,10 +41,4 @@ def health():
 
 
 if __name__ == "__main__":
-    import eventlet
-
-    eventlet.wsgi.server(
-        eventlet.listen(("::", int(ADDONS_MANAGER_PORT)), family=socket.AF_INET6),
-        app,
-        log=logging.getLogger(),
-    )
+    app.run(host="::", port=ADDONS_MANAGER_PORT, debug=False)

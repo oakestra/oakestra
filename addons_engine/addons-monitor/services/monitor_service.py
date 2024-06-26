@@ -7,9 +7,8 @@ from enum import Enum
 import requests
 from addons_runner.runner_types import RunnerTypes, get_runner
 
-ADDONS_MANAGER_ADDR = (
-    os.environ.get("ADDONS_MANAGER_ADDR") or "http://localhost:11101/api/v1/addons"
-)
+ADDONS_MANAGER_ADDR = os.environ.get("ADDONS_MANAGER_ADDR") or "http://localhost:11101"
+ADDONS_MANAGER_API = f"{ADDONS_MANAGER_ADDR}/api/v1/addons"
 
 MAX_CONTAINER_RETRIES = os.environ.get("MAX_CONTAINER_RETRIES") or 1
 CONTAINER_POLL_INTERVAL = os.environ.get("CONTAINER_POLL_INTERVAL") or 30
@@ -23,8 +22,10 @@ ADDONS_SERVICE_NAME_LABEL = os.environ.get("ADDONS_SERVICE_NAME_LABEL") or "oak.
 
 # TODO DUPLICATED CODE
 class AddonStatusEnum(Enum):
-    INSTALLING = "installing"
-    DISABLE = "disabling..."
+    # Allowed statuses for user to specify.
+    INSTALL = "install"
+    DISABLE = "disable"
+
     DISABLED = "disabled"
     FAILED = "failed"
     ACTIVE = "active"
@@ -45,7 +46,7 @@ class AddonsMonitor:
         self._failed_containers = {}
 
     def _get_addon_runner(self, addon):
-        runner_type = addon.get("runner", RunnerTypes.DOCKER)
+        runner_type = addon.get("runner", str(RunnerTypes.DOCKER))
 
         return get_runner(runner_type)
 
@@ -53,12 +54,12 @@ class AddonsMonitor:
         return container.attrs["State"]["ExitCode"]
 
     def get_addons_from_manager(self, filters={}):
-        response = requests.get(f"{ADDONS_MANAGER_ADDR}", params=filters)
+        response = requests.get(f"{ADDONS_MANAGER_API}", params=filters)
         response.raise_for_status()
 
         return response.json()
 
-    def maybe_create_networks(networks, runner_engine):
+    def maybe_create_networks(self, networks, runner_engine):
         available_networks = runner_engine.get_networks()
         unavailable_networks = list(set(networks) - set(available_networks))
 
@@ -79,14 +80,14 @@ class AddonsMonitor:
             runner_engine,
         )
 
-        new_status = AddonStatusEnum.ACTIVE
+        new_status = str(AddonStatusEnum.ACTIVE)
         status_details = {}
         if failed_services:
             logging.error(f"Failed to run services: {failed_services}")
             if len(failed_services) == len(all_services):
-                new_status = AddonStatusEnum.FAILED
+                new_status = str(AddonStatusEnum.FAILED)
             else:
-                new_status = AddonStatusEnum.PARTIALLY_ACTIVE
+                new_status = str(AddonStatusEnum.PARTIALLY_ACTIVE)
                 status_details = {
                     "failed_services": [service.get("service_name") for service in failed_services]
                 }
@@ -151,7 +152,7 @@ class AddonsMonitor:
 
                 services_to_stop.append(similar_container)
 
-            services_to_run(service)
+            services_to_run.append(service)
 
         for container in services_to_stop:
             runner_engine.stop_container(container)
@@ -167,7 +168,7 @@ class AddonsMonitor:
             # TODO: don't create networks. if a network is not found, raise an error.
             self.maybe_create_networks(service["networks"], runner_engine)
             try:
-                container = runner_engine.run_service(service, addon_id, DEFAULT_PROJECT_NAME)
+                container = runner_engine.run_service(service, DEFAULT_PROJECT_NAME)
                 running_services.append(container)
             except Exception as e:
                 logging.warning(f"Failed to run container: {e}")
@@ -192,7 +193,7 @@ class AddonsMonitor:
             done()
 
     def update_addon(self, addon_id, data):
-        response = requests.patch(f"{ADDONS_MANAGER_ADDR}/{addon_id}", json=data)
+        response = requests.patch(f"{ADDONS_MANAGER_API}/{addon_id}", json=data)
         response.raise_for_status()
 
         return response.json()
@@ -235,8 +236,10 @@ class AddonsMonitor:
         # TODO toggling of running state is currently not utilized.
         while self._running:
             installing_addons = self.get_addons_from_manager(
-                filters={"status": AddonStatusEnum.INSTALLING}
+                filters={"status": str(AddonStatusEnum.INSTALL)}
             )
+
+            logging.info(f"Found {len(installing_addons)} addons to be installed.")
 
             def on_installing_complete(status, details={}):
                 try:
@@ -253,22 +256,28 @@ class AddonsMonitor:
                 self.run_addon(addon, on_installing_complete)
 
             disable_addons = self.get_addons_from_manager(
-                filters={"status": AddonStatusEnum.DISABLE}
+                filters={"status": str(AddonStatusEnum.DISABLE)}
             )
+
+            logging.info(f"Found {len(disable_addons)} addons to be disabled.")
 
             def on_disable_complete():
                 try:
-                    self.update_addon(addon.get("_id"), {"status": AddonStatusEnum.DISABLED})
+                    self.update_addon(addon.get("_id"), {"status": str(AddonStatusEnum.DISABLED)})
                 except Exception as e:
-                    logging.error(f"Failed to update addon status {AddonStatusEnum.DISABLED}: {e}")
+                    logging.error(
+                        f"Failed to update addon status {str(AddonStatusEnum.DISABLED)}: {e}"
+                    )
 
             for addon in disable_addons:
                 self.stop_addon(addon)
 
             # Find all supposedly running addons
             running_addons = self.get_addons_from_manager(
-                filters={"status": AddonStatusEnum.ACTIVE}
+                filters={"status": str(AddonStatusEnum.ACTIVE)}
             )
+
+            logging.info(f"Found {len(running_addons)} running addons.")
 
             for addon in running_addons:
                 addon_id = addon.get("_id")
@@ -284,9 +293,9 @@ class AddonsMonitor:
                 if failed_containers:
                     logging.info(f"Reporting failure of addon-{addon_id}-{container.id}.")
                     status = (
-                        AddonStatusEnum.FAILED
+                        str(AddonStatusEnum.FAILED)
                         if len(failed_containers) == len(addon_containers)
-                        else AddonStatusEnum.PARTIALLY_ACTIVE
+                        else str(AddonStatusEnum.PARTIALLY_ACTIVE)
                     )
                     try:
                         self.update_addon(
