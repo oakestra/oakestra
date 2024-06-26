@@ -1,0 +1,13 @@
+[tool.poetry]
+name = "oakestra_utils"
+version = "0.1.0"
+description = "A library containing common utilities for Oakestra"
+authors = ["Alexander Malyuk <malyuk.alexander1999@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
