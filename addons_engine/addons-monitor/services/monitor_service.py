@@ -58,7 +58,7 @@ class AddonsMonitor:
             response = requests.get(f"{ADDONS_MANAGER_API}", params=filters)
             response.raise_for_status()
         except Exception as e:
-            logging.warning("failed to retrieve addons from addons_manager.", exec_info=e)
+            logging.warning("failed to retrieve addons from addons_manager.", exc_info=e)
             return []
 
         return response.json()
@@ -259,7 +259,7 @@ class AddonsMonitor:
                 )
             except Exception as e:
                 self.stop_addon(addon)
-                logging.error("Failed to update addon status", exec_info=e)
+                logging.error("Failed to update addon status", exc_info=e)
 
         for addon in installing_addons:
             self.run_addon(
@@ -339,7 +339,7 @@ class AddonsMonitor:
                 runner_engine.stop_container_by_id(container_id)
             self._failed_containers.pop(addon_id)
         except Exception as e:
-            logging.error(f"Failed to update addon status {status}", exec_info=e)
+            logging.error(f"Failed to update addon status {status}", exc_info=e)
 
     def process_retry_containers(self, addon_id, runner_engine):
         retry_containers = dict(self._retry_containers[addon_id])

@@ -214,6 +214,7 @@ services:
       logging_jobname: "containerlogs"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    command: bash -c 'sleep 10; python addons_monitor.py'
     environment:
       - ADDONS_MANAGER_ADDR=http://addons_manager:11101
     depends_on:

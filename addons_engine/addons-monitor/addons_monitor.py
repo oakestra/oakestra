@@ -25,4 +25,4 @@ if __name__ == "__main__":
     try:
         addons_monitor.start_monitoring()  # This is a blocking call
     except Exception as e:
-        logging.error("An error occurred while monitoring addons", exec_info=e)
+        logging.error("An error occurred while monitoring addons", exc_info=e)
