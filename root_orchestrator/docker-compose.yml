@@ -193,8 +193,6 @@ services:
     labels:
       logging: "promtail"
       logging_jobname: "containerlogs"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - ADDONS_MANAGER_PORT=11101
       - ADDONS_ENGINE_MONGO_URL=mongo

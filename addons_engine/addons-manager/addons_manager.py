@@ -17,10 +17,7 @@ app.config["API_TITLE"] = "Addon Manager Api"
 app.config["API_VERSION"] = "v1"
 app.config["OPENAPI_URL_PREFIX"] = "/docs"
 
-
 mongo_init(app)
-
-
 api = Api(app)
 
 # Register blueprints

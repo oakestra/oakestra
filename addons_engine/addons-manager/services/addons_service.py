@@ -5,7 +5,8 @@ from enum import Enum
 import requests
 from db import addons_db
 
-MARKETPLACE_API = f"{os.environ.get('MARKETPLACE_ADDR')}/api/v1/marketplace/addons"
+MARKETPLACE_ADDR = os.environ.get("MARKETPLACE_ADDR") or "http://localhost:11102"
+MARKETPLACE_API = f"{MARKETPLACE_ADDR}/api/v1/marketplace/addons"
 
 addons_service = None
 
