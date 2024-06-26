@@ -349,9 +349,6 @@ services:
     build: ../addons_engine/addons-manager/
     labels:
       logging: "promtail"
-      logging_jobname: "containerlogs"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - ADDONS_MANAGER_PORT=11101
       - ADDONS_ENGINE_MONGO_URL=mongo
@@ -373,8 +370,10 @@ services:
       logging_jobname: "containerlogs"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    command: bash -c 'sleep 10; python addons_monitor.py'
     environment:
       - ADDONS_MANAGER_ADDR=http://addons_manager:11101
+      - CONTAINER_POLL_INTERVAL=5
     depends_on:
       - addons_manager
     logging: *default-logging
