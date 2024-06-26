@@ -47,11 +47,6 @@ class AllAddonsController(MethodView):
 
         return json.dumps(result, default=str), 201
 
-    # TODO: only used for testing purposes.
-    def delete(self):
-        result = addons_db.delete_all_addons()
-        return {"message": f"{result.deleted_count} addons deleted."}
-
 
 @addonsblp.route("/<addon_id>")
 class AddonController(MethodView):
