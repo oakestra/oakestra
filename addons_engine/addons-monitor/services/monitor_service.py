@@ -208,7 +208,7 @@ class AddonsMonitor:
     def _handle_failed_container(self, container, addon_id, exit_code):
         curr_retries = self._retry_containers[addon_id].get(container.id, 0)
 
-        if curr_retries >= MAX_CONTAINER_RETRIES:
+        if curr_retries >= int(MAX_CONTAINER_RETRIES):
             logging.error(
                 (f"Addon-{addon_id}: container-{container.name} " f"exceeded max retries")
             )
@@ -337,7 +337,7 @@ class AddonsMonitor:
                     container.restart()
 
             # poll every x seconds
-            time.sleep(CONTAINER_POLL_INTERVAL)
+            time.sleep(int(CONTAINER_POLL_INTERVAL))
 
 
 addons_monitor = AddonsMonitor()
