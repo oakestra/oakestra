@@ -240,7 +240,8 @@ class AddonsMonitor:
         while self._running:
             self.monitor_install_addons()
             self.monitor_disable_addons()
-            self.monitor_running_addons()
+            self.monitor_active_addons()
+            self.monitor_deleted_addons()
 
             # poll every x seconds
             time.sleep(CONTAINER_POLL_INTERVAL)
@@ -284,11 +285,37 @@ class AddonsMonitor:
         for addon in disable_addons:
             self.stop_addon(addon, lambda: handle_disable_complete(addon))
 
-    def monitor_running_addons(self):
+    def monitor_deleted_addons(self):
+        """
+        In case addons were deleted from database but still running as containers,
+        this function will stop those containers.
+
+        This process ensures that addon containers not linked to any active addons are stopped,
+        maintaining a synced system.
+        """
+        active_addons = self.get_addons_from_manager(
+            filters={"status": str(AddonStatusEnum.ACTIVE)}
+        )
+
+        runners = [runner_type.value for runner_type in RunnerTypes]
+        addons_ids = [addon.get("_id") for addon in active_addons]
+
+        for runner in runners:
+            runner_engine = get_runner(runner)
+            containers = self.get_oak_addon_containers(runner_engine)
+            for container in containers:
+                addon_container_id = runner_engine.get_label(container, ADDONS_ID_LABEL)
+                if addon_container_id not in addons_ids:
+                    logging.info(
+                        f"Cleaning up container '{container.name}' not linked to any addon."
+                    )
+                    runner_engine.stop_container(container)
+
+    def monitor_active_addons(self):
         running_addons = self.get_addons_from_manager(
             filters={"status": str(AddonStatusEnum.ACTIVE)}
         )
-        logging.info(f"Found {len(running_addons)} running addons.")
+        logging.info(f"Found {len(running_addons)} active addons.")
 
         for addon in running_addons:
             addon_id = addon.get("_id")

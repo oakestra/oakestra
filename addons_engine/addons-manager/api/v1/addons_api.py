@@ -52,12 +52,6 @@ class AllAddonsController(MethodView):
         result = addons_db.delete_all_addons()
         return {"message": f"{result.deleted_count} addons deleted."}
 
-    # TODO: only used for testing purposes.
-    def delete(self):
-        addons_service.stop_all_addons()
-        result = addons_db.delete_all_addons()
-        return {"message": f"{result.deleted_count} addons deleted."}
-
 
 @addonsblp.route("/<addon_id>")
 class AddonController(MethodView):
