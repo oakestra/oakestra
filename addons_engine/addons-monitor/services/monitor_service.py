@@ -225,7 +225,7 @@ class AddonsMonitor:
             self._retry_containers[addon_id].pop(container.id, None)
         elif not self._failed_containers.get(addon_id, None):
             logging.info(
-                f"Addon-{addon_id}: container-{container.name} exited with code {exit_code}"
+                f"Addon-{addon_id}: container '{container.name}' exited with code {exit_code}"
             )
             self._retry_containers[addon_id][container.id] = curr_retries + 1
 
@@ -250,35 +250,39 @@ class AddonsMonitor:
             filters={"status": str(AddonStatusEnum.INSTALL)}
         )
         logging.info(f"Found {len(installing_addons)} addons to be installed.")
-        for addon in installing_addons:
-            self.run_addon(addon, self.handle_installing_complete)
 
-    def handle_installing_complete(self, addon, status, details={}):
-        try:
-            self.update_addon(
-                addon.get("_id"),
-                {"status": status, "status_details": details},
+        def handle_installing_complete(addon, status, details={}):
+            try:
+                self.update_addon(
+                    addon.get("_id"),
+                    {"status": status, "status_details": details},
+                )
+            except Exception as e:
+                self.stop_addon(addon)
+                logging.error("Failed to update addon status", exec_info=e)
+
+        for addon in installing_addons:
+            self.run_addon(
+                addon, lambda status, details: handle_installing_complete(addon, status, details)
             )
-        except Exception as e:
-            self.stop_addon(addon)
-            logging.error("Failed to update addon status", exec_info=e)
 
     def monitor_disable_addons(self):
         disable_addons = self.get_addons_from_manager(
             filters={"status": str(AddonStatusEnum.DISABLE)}
         )
         logging.info(f"Found {len(disable_addons)} addons to be disabled.")
-        for addon in disable_addons:
-            self.stop_addon(addon, lambda: self.handle_disable_complete(addon))
 
-    def handle_disable_complete(self, addon):
-        try:
-            self.update_addon(addon.get("_id"), {"status": str(AddonStatusEnum.DISABLED)})
-        except Exception as e:
-            logging.error(
-                f"Failed to update addon status {str(AddonStatusEnum.DISABLED)}",
-                exc_info=e,
-            )
+        def handle_disable_complete(addon):
+            try:
+                self.update_addon(addon.get("_id"), {"status": str(AddonStatusEnum.DISABLED)})
+            except Exception as e:
+                logging.error(
+                    f"Failed to update addon status {str(AddonStatusEnum.DISABLED)}",
+                    exc_info=e,
+                )
+
+        for addon in disable_addons:
+            self.stop_addon(addon, lambda: handle_disable_complete(addon))
 
     def monitor_running_addons(self):
         running_addons = self.get_addons_from_manager(
@@ -339,7 +343,7 @@ class AddonsMonitor:
 
     def process_retry_containers(self, addon_id, runner_engine):
         retry_containers = dict(self._retry_containers[addon_id])
-        for container_id, _ in retry_containers:
+        for container_id, retry_count in retry_containers.items():
             container = runner_engine.get_container(container_id)
             # Sanity check
             if not container:
@@ -349,7 +353,6 @@ class AddonsMonitor:
                 self._failed_containers[addon_id].add(container_id)
                 continue
 
-            retry_count = self._retry_containers.get(container.id, 0)
             logging.info(
                 f"Restarting container '{container.name}' " f"for the ({retry_count}) time..."
             )
