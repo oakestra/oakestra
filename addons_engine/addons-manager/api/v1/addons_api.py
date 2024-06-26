@@ -12,16 +12,15 @@ addonsblp = Blueprint("Addons Api", "addons_api", url_prefix="/api/v1/addons")
 # TODO add get schema
 class AddonPOSTSchema(Schema):
     marketplace_id = fields.String(required=True)
+
+
+class AddonPATCHSchema(Schema):
     status = fields.String(
         validate=validate.OneOf(
             [str(status) for status in addons_service.AddonStatusEnum],
         ),
         required=True,
     )
-
-
-class AddonPATCHSchema(Schema):
-    status = fields.String()
 
 
 class AddonFilterSchema(Schema):
@@ -36,12 +35,17 @@ class AllAddonsController(MethodView):
 
     @addonsblp.arguments(AddonPOSTSchema, location="json")
     def post(self, addon_data):
+        marketplace_id = addon_data.get("marketplace_id")
+        exisiting_addon = addons_db.find_addon_by_marketplace_id(marketplace_id)
+        if exisiting_addon:
+            abort(400, message=f"Addon with marketplace-id - {marketplace_id} already exists.")
+
         result = addons_service.install_addon(addon_data)
 
         if result is None:
             abort(400, message="Failed to install addon")
 
-        return json.dupms(result, default=str), 201
+        return json.dumps(result, default=str), 201
 
     # TODO: only used for testing purposes.
     def delete(self):
