@@ -1,15 +1,9 @@
 #!/bin/bash
 
-max=300
-
 echo "timestamp,%CPU,MEM" > cpumemoryusage.csv
 
-
-# Initialize total CPU usage to 0
-total_cpu_usage=0
-
 i=0
-while [ $i -ne $max ]
+while true
 do
     i=$(($i+1))
 
