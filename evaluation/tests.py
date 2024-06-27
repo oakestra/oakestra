@@ -246,7 +246,7 @@ def stress_app_test(apps_count=10, services_count=2, server_address=None):
             # wait until lock is released
             while server_address and lock:
                 print("Waiting for lock...")
-                time.sleep(10)
+                time.sleep(1)
                 continue
 
             lock = True
@@ -254,13 +254,14 @@ def stress_app_test(apps_count=10, services_count=2, server_address=None):
 
             last_service = serviceID
             deploy(serviceID)
-            time.sleep(1)
+            time.sleep(2)
+
+        time.sleep(1)
 
     print(f"Finished app stress testing: {time.time()}")
 
 
 def add_addon_marketplace(addon):
-    print("Registering addon...")
     url = f"http://{ADDONS_MARKETPLACE_URL}/api/v1/marketplace/addons"
     resp = requests.post(url, json=addon)
     if resp.status_code >= 400:
@@ -274,7 +275,6 @@ def add_addon_marketplace(addon):
 
 
 def install_addon(id):
-    print("Installing addon...")
     url = f"http://{ADDONS_ENGINE_URL}/api/v1/addons"
     resp = requests.post(url, json={"marketplace_id": id})
     if resp.status_code >= 400:
@@ -308,11 +308,12 @@ def stress_addons_test(addons_count=10):
     for i in range(addons_count):
         addon = get_random_addon()
         registered_addon = add_addon_marketplace(addon)
-        print("sleep until addon is verified")
+        print(f"{i} - Installing addon: {addon['name']}")
         time.sleep(5)
 
         id = registered_addon["_id"]
         install_addon(id)
+        time.sleep(2)
 
     print("Finished addons stress testing")
 
