@@ -45,7 +45,7 @@ class AddonsMonitor:
         self._retry_containers = defaultdict(lambda: {})
         self._failed_containers = {}
 
-    def _get_addon_runner(self, addon):
+    def get_addon_runner(self, addon):
         runner_type = addon.get("runner", str(RunnerTypes.DOCKER))
 
         return get_runner(runner_type)
@@ -74,7 +74,7 @@ class AddonsMonitor:
         return unavailable_networks
 
     def run_addon(self, addon, done=None, **kwargs):
-        runner_engine = self._get_addon_runner(addon)
+        runner_engine = self.get_addon_runner(addon)
 
         all_services = addon.get("services", [])
 
@@ -188,7 +188,7 @@ class AddonsMonitor:
                 runner_engine.stop_container(container)
 
     def stop_addon(self, addon, done=None):
-        runner_engine = self._get_addon_runner(addon)
+        runner_engine = self.get_addon_runner(addon)
 
         services = addon.get("services", [])
         self.stop_addon_services(services, runner_engine)
@@ -319,7 +319,7 @@ class AddonsMonitor:
 
         for addon in running_addons:
             addon_id = addon.get("_id")
-            runner_engine = self._get_addon_runner(addon)
+            runner_engine = self.get_addon_runner(addon)
 
             # all containers regardless failed or running
             addon_containers = self.get_addon_containers(addon_id, runner_engine)
