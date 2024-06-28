@@ -64,19 +64,43 @@ class AddonsMonitor:
         return response.json()
 
     def maybe_create_networks(self, networks, runner_engine):
-        available_networks = runner_engine.get_networks()
-        unavailable_networks = list(set(networks) - set(available_networks))
+        network_names = [network.name for network in networks]
+        available_networks_names = [network.name for network in runner_engine.get_networks()]
 
-        for network in unavailable_networks:
-            runner_engine.create_network(network)
+        unavailable_networks = list(set(network_names) - set(available_networks_names))
+
+        for network_name in unavailable_networks:
+            network_to_create = next((n for n in networks if n.get("name") == network_name), None)
+            network_to_create.pop("name")
+            runner_engine.create_network(network_name, **network_to_create)
 
         # return newly created networks
         return unavailable_networks
+
+    def maybe_create_volumes(self, volumes, runner_engine):
+        volume_names = [volume.name for volume in volumes]
+        available_volumes_names = [volume.name for volume in runner_engine.get_volumes()]
+
+        unavailable_volumes = list(set(volume_names) - set(available_volumes_names))
+
+        for volume_name in unavailable_volumes:
+            volume_to_create = next((v for v in volumes if v.get("name") == volume_name), None)
+            volume_to_create.pop("name")
+            runner_engine.create_volume(volume_name, **volume_to_create)
+
+        # return newly created volumes
+        return unavailable_volumes
 
     def run_addon(self, addon, done=None, **kwargs):
         runner_engine = self.get_addon_runner(addon)
 
         all_services = addon.get("services", [])
+
+        networks_to_create = addon.get("networks", [])
+        self.maybe_create_networks(networks_to_create, runner_engine)
+
+        volumes_to_create = addon.get("volumes", [])
+        self.maybe_create_volumes(volumes_to_create, runner_engine)
 
         running_services, failed_services = self.run_addon_services(
             str(addon.get("_id")),
@@ -169,8 +193,6 @@ class AddonsMonitor:
             if not service["networks"]:
                 service["networks"].append(DEFAULT_NETWORK)
 
-            # TODO: don't create networks. if a network is not found, raise an error.
-            self.maybe_create_networks(service["networks"], runner_engine)
             try:
                 container = runner_engine.run_service(service, DEFAULT_PROJECT_NAME)
                 running_services.append(container)

@@ -9,11 +9,22 @@ class DockerRunner:
     def __init__(self):
         self._client = docker.from_env()
 
-    def get_networks(self):
-        return [network.name for network in self._client.networks.list()]
+    def get_networks(self, **kwargs):
+        return self._client.networks.list(**kwargs)
+
+    def get_network_by_name(self, network_name):
+        networks = self.get_networks(names=[network_name])
+
+        return networks[0] if networks else None
+
+    def get_volumes(self):
+        return self._client.volumes.list()
 
     def create_network(self, network_name, **kwargs):
         self._client.networks.create(network_name, **kwargs)
+
+    def create_volume(self, volume_name, **kwargs):
+        self._client.volumes.create(volume_name, **kwargs)
 
     def get_exit_code(self, container):
         return container.attrs["State"]["ExitCode"]
@@ -61,11 +72,10 @@ class DockerRunner:
         service["labels"]["com.docker.compose.project"] = project_name
         service["labels"]["com.docker.compose.service"] = service["service_name"]
 
-        # Handling multiple networks is currently not needed.
         one_network = service["networks"][0]
         image = service.get("image")
 
-        return self._client.containers.run(
+        created_container = self._client.containers.run(
             image,
             name=service["service_name"],
             command=service.get("command", []),
@@ -73,8 +83,21 @@ class DockerRunner:
             ports=service.get("ports", {}),
             environment=service.get("environment", {}),
             labels=service.get("labels", {}),
+            volumes=service.get("volumes", []),
             detach=True,
         )
+
+        # we already connected the first network, lets connect the rest
+        for network_name in service["networks"][1:]:
+            network = self.get_network_by_name(network_name)
+            if not network:
+                logging.warning(
+                    f"Network {network_name} not found. Will not attach container to network..."
+                )
+                continue
+            network.connect(created_container)
+
+        return created_container
 
     def is_container_running(self, container):
         return container and container.status == "running"
