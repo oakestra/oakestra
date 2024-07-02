@@ -6,7 +6,7 @@ from flask import Flask
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
 
-ADDON_MARKETPLACE_PORT = os.environ.get("ADDON_MARKETPLACE_PORT") or 11102
+ADDON_MARKETPLACE_PORT = int(os.environ.get("ADDON_MARKETPLACE_PORT", 11102))
 
 app = Flask(__name__)
 

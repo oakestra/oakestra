@@ -31,6 +31,6 @@ class MarketPlaceAddonController(MethodView):
     def get(self, marketplace_addon_id):
         addon = marketplace_db.find_addon_by_id(marketplace_addon_id)
         if addon is None:
-            abort(404, {"message": "Addon not found"})
+            abort(404, message="Addon not found")
 
         return addon
