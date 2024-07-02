@@ -19,7 +19,9 @@ def verify_addon(addon_id, addon):
             logging.info(f"Image pulled: {image}")
         except docker.errors.DockerException as e:
             logging.warning(f"Failed to pull {image}: {e}")
-            marketplace_db.update_addon(addon_id, {"status": "verification_failed"})
+            marketplace_db.update_addon(
+                addon_id, {"status": marketplace_db.StatusEnum.VERIFICATION_FAILED.value}
+            )
             return
 
         try:
@@ -29,11 +31,13 @@ def verify_addon(addon_id, addon):
             logging.warning(f"Failed to remove image {image_id}: {e}")
 
     logging.info(f"Addon-{addon_id} verified")
-    marketplace_db.update_addon(addon_id, {"status": "approved"})
+    marketplace_db.update_addon(addon_id, {"status": marketplace_db.StatusEnum.APPROVED.value})
 
 
 def register_addon(addon):
-    addon = marketplace_db.create_addon({**addon, "status": "under_review"})
+    addon = marketplace_db.create_addon(
+        {**addon, "status": marketplace_db.StatusEnum.UNDER_REVIEW.value}
+    )
     addon_id = addon.get("_id")
 
     logging.info(f"Addon-{addon_id} registered.")

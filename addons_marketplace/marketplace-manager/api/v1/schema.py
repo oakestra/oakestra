@@ -1,11 +1,4 @@
-from enum import Enum
-
 from marshmallow import Schema, fields
-
-
-class StatusEnum(Enum):
-    UNDER_REVIEW = "under_review"
-    APPROVED = "approved"
 
 
 class VolumeSchema(Schema):

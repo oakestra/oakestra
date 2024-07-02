@@ -1,5 +1,13 @@
+from enum import Enum
+
 import db.mongodb_client as db
 from bson.objectid import ObjectId
+
+
+class StatusEnum(Enum):
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
+    VERIFICATION_FAILED = "verification_failed"
 
 
 def find_addons(filter={}):
