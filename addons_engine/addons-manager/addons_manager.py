@@ -7,7 +7,7 @@ from flask import Flask
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
 
-ADDONS_MANAGER_PORT = os.environ.get("ADDONS_MANAGER_PORT") or 11101
+ADDONS_MANAGER_PORT = int(os.environ.get("ADDONS_MANAGER_PORT", 11101))
 
 app = Flask(__name__)
 
