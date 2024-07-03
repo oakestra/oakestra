@@ -9,6 +9,7 @@ import (
 	"go_node_engine/virtualization"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,11 +25,12 @@ var (
 			return startNodeEngine()
 		},
 	}
-	clusterAddress   string
-	clusterPort      int
-	overlayNetwork   int
-	unikernelSupport bool
-	logDirectory     string
+	clusterAddress    string
+	clusterPort       int
+	overlayNetwork    int
+	unikernelSupport  bool
+	logDirectory      string
+	containerRuntimes string
 )
 
 const MONITORING_CYCLE = time.Second * 2
@@ -44,18 +46,20 @@ func init() {
 	rootCmd.Flags().IntVarP(&overlayNetwork, "netmanagerPort", "n", 6000, "Port of the NetManager component, if any. This enables the overlay network across nodes. Use -1 to disable Overlay Network Mode.")
 	rootCmd.Flags().BoolVarP(&unikernelSupport, "unikernel", "u", false, "Enable Unikernel support. [qemu/kvm required]")
 	rootCmd.Flags().StringVarP(&logDirectory, "logs", "l", "/tmp", "Directory for application's logs")
+	rootCmd.Flags().StringVarP(&containerRuntimes, "runtimes", "r", "", "Comma separated list of additional container runtimes installed on the node")
 }
 
 func startNodeEngine() error {
 	// set log directory
 	model.GetNodeInfo().SetLogDirectory(logDirectory)
 
-	// connect to container runtime
-	runtime := virtualization.GetContainerdClient()
+	//connect to container runtime(s)
+	runtime := virtualization.RegisterContainerdClient(strings.Split(containerRuntimes, ",")...)
 	defer runtime.StopContainerdClient()
 
+	//register unikernel runtime if necessary
 	if unikernelSupport {
-		unikernelRuntime := virtualization.GetUnikernelRuntime()
+		unikernelRuntime := virtualization.RegisterUnikernelQemuRuntime()
 		defer unikernelRuntime.StopUnikernelRuntime()
 	}
 	// hadshake with the cluster orchestrator to get mqtt port and node id
