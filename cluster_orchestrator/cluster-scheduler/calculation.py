@@ -119,7 +119,7 @@ def extract_specs(node):
         "available_memory": node.get("current_free_memory_in_MB", 0),
         "available_gpu": len(node.get("gpu_info", [])),
         "virtualization": node.get("node_info", {}).get("technology", []),
-        "arch": node.get("node_info").get("architecture"),
+        "arch": node.get("node_info", {}).get("architecture"),
     }
 
 

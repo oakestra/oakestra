@@ -2,13 +2,12 @@ package virtualization
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
-	"io/ioutil"
 	"os"
+	"os/exec"
 	"reflect"
 	"strconv"
 	"strings"
@@ -21,6 +20,9 @@ import (
 	"github.com/containerd/containerd/contrib/nvidia"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
+	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/containerd/plugin"
+	runcoptions "github.com/containerd/containerd/runtime/v2/runc/options"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/shirou/gopsutil/docker"
 	"github.com/shirou/gopsutil/process"
@@ -45,8 +47,9 @@ const NAMESPACE = "oakestra"
 const CGROUPV1_BASE_MEM = "/sys/fs/cgroup/memory/" + NAMESPACE
 const CGROUPV2_BASE_MEM = "/sys/fs/cgroup/" + NAMESPACE
 
-func GetContainerdClient() *ContainerRuntime {
+func RegisterContainerdClient(additionalRuntimes ...string) *ContainerRuntime {
 	containerdSingletonCLient.Do(func() {
+		containerdConfFile := getContainerdConfigFile()
 		client, err := containerd.New("/run/containerd/containerd.sock")
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Unable to start the container engine: %v\n", err)
@@ -55,9 +58,42 @@ func GetContainerdClient() *ContainerRuntime {
 		runtime.killQueue = make(map[string]*chan bool)
 		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
 		runtime.forceContainerCleanup()
+		// register default runtime name
 		model.GetNodeInfo().AddSupportedTechnology(model.CONTAINER_RUNTIME)
+		RegisterRuntime(model.CONTAINER_RUNTIME, &runtime)
+		// register additional supported runtimes
+		for _, runtimeName := range additionalRuntimes {
+			if runtimeName == "" {
+				continue
+			}
+			if strings.Contains(containerdConfFile, runtimeName) {
+				//set ctx calue <runtime>-options to empty
+				model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(runtimeName))
+				RegisterRuntime(model.RuntimeType(runtimeName), &runtime)
+			} else {
+				logger.ErrorLogger().Fatalf("Unable to find runtime %s in containerd configuration file", runtimeName)
+			}
+		}
 	})
 	return &runtime
+}
+
+func getContainerdConfigFile() string {
+	containerdconf, err := os.Open("/etc/containerd/config.toml")
+	if err != nil {
+		logger.ErrorLogger().Print(err)
+		return ""
+	}
+	buffer := make([]byte, 1024)
+	confFileContent := ""
+	for {
+		n, err := containerdconf.Read(buffer)
+		if err != nil {
+			break
+		}
+		confFileContent = fmt.Sprintf("%s%s", confFileContent, string(buffer[:n]))
+	}
+	return confFileContent
 }
 
 func (r *ContainerRuntime) StopContainerdClient() {
@@ -75,34 +111,36 @@ func (r *ContainerRuntime) StopContainerdClient() {
 }
 
 func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
-
 	var image containerd.Image
+
 	// pull the given image
 	sysimg, err := r.contaierClient.ImageService().Get(r.ctx, service.Image)
 	if err == nil {
-		image = containerd.NewImage(r.contaierClient, sysimg)
+		if service.Platform != "" {
+			image = containerd.NewImageWithPlatform(r.contaierClient, sysimg, platforms.Only(platforms.MustParse(service.Platform)))
+		} else {
+			image = containerd.NewImage(r.contaierClient, sysimg)
+		}
 	} else {
 		logger.ErrorLogger().Printf("Error retrieving the image: %v \n Trying to pull the image online.", err)
 
-		image, err = r.contaierClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack)
+		remoteOpt := []containerd.RemoteOpt{containerd.WithPullUnpack}
+		if service.Platform != "" {
+			remoteOpt = append(remoteOpt, containerd.WithPlatform(service.Platform))
+		}
+		image, err = r.contaierClient.Pull(r.ctx, service.Image, remoteOpt...)
+
 		if err != nil {
 			return err
 		}
 	}
 
-	killChannel := make(chan bool, 1)
-	startupChannel := make(chan bool, 0)
-	errorChannel := make(chan error, 0)
+	startupChannel := make(chan bool)
+	errorChannel := make(chan error)
 
-	r.channelLock.RLock()
-	el, servicefound := r.killQueue[genTaskID(service.Sname, service.Instance)]
-	r.channelLock.RUnlock()
-	if !servicefound || el == nil {
-		r.channelLock.Lock()
-		r.killQueue[genTaskID(service.Sname, service.Instance)] = &killChannel
-		r.channelLock.Unlock()
-	} else {
-		return errors.New("Service already deployed")
+	_, err = r.getContainerByTaskID(genTaskID(service.Sname, service.Instance))
+	if err == nil {
+		return fmt.Errorf("task already deployed")
 	}
 
 	// create startup routine which will accompany the container through its lifetime
@@ -112,12 +150,11 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 		service,
 		startupChannel,
 		errorChannel,
-		&killChannel,
 		statusChangeNotificationHandler,
 	)
 
 	// wait for updates regarding the container creation
-	if <-startupChannel != true {
+	if !<-startupChannel {
 		return <-errorChannel
 	}
 
@@ -125,25 +162,11 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 }
 
 func (r *ContainerRuntime) Undeploy(service string, instance int) error {
-	r.channelLock.Lock()
-	defer r.channelLock.Unlock()
-	taskid := genTaskID(service, instance)
-	el, found := r.killQueue[taskid]
-	if found && el != nil {
-		logger.InfoLogger().Printf("Sending kill signal to %s", taskid)
-		*r.killQueue[taskid] <- true
-		select {
-		case res := <-*r.killQueue[taskid]:
-			if res == false {
-				logger.ErrorLogger().Printf("Unable to stop service %s", taskid)
-			}
-		case <-time.After(5 * time.Second):
-			logger.ErrorLogger().Printf("Unable to stop service %s", taskid)
-		}
-		delete(r.killQueue, taskid)
-		return nil
+	c, err := r.getContainerByTaskID(genTaskID(service, instance))
+	if err == nil {
+		_ = r.removeContainer(c)
 	}
-	return errors.New("service not found")
+	return err
 }
 
 func (r *ContainerRuntime) containerCreationRoutine(
@@ -152,7 +175,6 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	service model.Service,
 	startup chan bool,
 	errorchan chan error,
-	killChannel *chan bool,
 	statusChangeNotificationHandler func(service model.Service),
 ) {
 
@@ -167,46 +189,67 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		r.killQueue[taskid] = nil
 	}
 
-	//create container general oci specs
+	// Container options
+	containerOpts := []containerd.NewContainerOpts{}
+	// -- if custom runtime selected, add it to the container
+	if service.Runtime != string(model.CONTAINER_RUNTIME) {
+
+		if strings.Contains("io.containerd", service.Runtime) {
+			containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), &runcoptions.Options{}))
+
+		} else {
+			path, err := exec.LookPath(service.Runtime)
+			logger.InfoLogger().Printf("Using custom runtime %s", path)
+			if err != nil {
+				logger.ErrorLogger().Printf("ERROR: unable to find rungime %s, %v", service.Runtime, err)
+			}
+			containerOpts = append(containerOpts, containerd.WithRuntime(plugin.RuntimeRuncV2, &runcoptions.Options{BinaryName: path}))
+		}
+	}
+	// -- add custom snapshotter
+	containerOpts = append(containerOpts, containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image))
+	// -- add image
+	containerOpts = append(containerOpts, containerd.WithImage(image))
+
+	// ---- Custom container general oci specs
 	specOpts := []oci.SpecOpts{
 		oci.WithImageConfig(image),
 		oci.WithHostHostsFile,
 		oci.WithHostname(hostname),
 		oci.WithEnv(append([]string{fmt.Sprintf("HOSTNAME=%s", hostname)}, service.Env...)),
 	}
-	//add user defined commands
+	// ---- add user defined commands
 	if len(service.Commands) > 0 {
 		specOpts = append(specOpts, oci.WithProcessArgs(service.Commands...))
 	}
-	//add GPU if needed
+	// ---- add GPU if needed
 	if service.Vgpus > 0 {
 		specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(0), nvidia.WithAllCapabilities))
 		logger.InfoLogger().Printf("NVIDIA - Adding GPU driver")
 	}
-	//add resolve file with default google dns
+	// ---- add resolve file with default google dns
 	resolvconfFile, err := getGoogleDNSResolveConf()
 	if err != nil {
 		revert(err)
 		return
 	}
-	defer resolvconfFile.Close()
-	_ = resolvconfFile.Chmod(444)
-	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile.Name()))
+	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile))
 
-	// create the container
+	// -- add oci SpecOpts to containerOpts
+	containerOpts = append(containerOpts, containerd.WithNewSpec(specOpts...))
+
+	// Create the container
 	container, err := r.contaierClient.NewContainer(
 		ctx,
 		taskid,
-		containerd.WithImage(image),
-		containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image),
-		containerd.WithNewSpec(specOpts...),
+		containerOpts...,
 	)
 	if err != nil {
 		revert(err)
 		return
 	}
 
-	//	start task with /tmp/hostname default log directory
+	//	start task with /tmp/taskid default log directory
 	file, err := os.OpenFile(fmt.Sprintf("%s/%s", model.GetNodeInfo().LogDirectory, taskid), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		revert(err)
@@ -223,16 +266,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		return
 	}
 	defer func(ctx context.Context, task containerd.Task) {
-		err := killTask(ctx, task, container)
-		//removing from killqueue
-		r.channelLock.Lock()
-		defer r.channelLock.Unlock()
-		r.killQueue[taskid] = nil
-		if err != nil {
-			*killChannel <- false
-		} else {
-			*killChannel <- true
-		}
+		_ = killTask(ctx, task, container)
 	}(ctx, task)
 
 	// get wait channel
@@ -265,20 +299,12 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	startup <- true
 
 	// wait for manual task kill or task finish
-	select {
-	case exitStatus := <-exitStatusC:
-		if exitStatus.ExitCode() == 0 && service.OneShot {
-			service.Status = model.SERVICE_COMPLETED
-		}
-		//TODO: container exited, do something, notify to cluster manager
-		if err != nil {
-			return
-		}
-		logger.InfoLogger().Printf("WARNING: Container exited with status %d", exitStatus.ExitCode())
-		service.StatusDetail = fmt.Sprintf("Container exited with status: %d", exitStatus.ExitCode())
-	case <-*killChannel:
-		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
+	exitStatus := <-exitStatusC
+	if exitStatus.ExitCode() == 0 && service.OneShot {
+		service.Status = model.SERVICE_COMPLETED
 	}
+	logger.InfoLogger().Printf("WARNING: Container exited with status %d", exitStatus.ExitCode())
+	service.StatusDetail = fmt.Sprintf("Container exited with status: %d", exitStatus.ExitCode())
 
 	if service.Status != model.SERVICE_COMPLETED {
 		service.Status = model.SERVICE_DEAD
@@ -288,8 +314,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	if model.GetNodeInfo().Overlay {
 		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
 	}
+
+	_ = r.removeContainer(container)
 	statusChangeNotificationHandler(service)
-	r.removeContainer(container)
 }
 
 func getTotalCpuUsageByPid(pid int32) (float64, error) {
@@ -319,7 +346,7 @@ func getTotalCpuUsageByPid(pid int32) (float64, error) {
 func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
 	//start container monitoring service
 	startContainerMonitoring.Do(func() {
-		for true {
+		for {
 			select {
 			case <-time.After(every):
 				deployedContainers, err := r.contaierClient.Containers(r.ctx)
@@ -357,11 +384,11 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
 						continue
 					}
-					currentsnapshotter := r.contaierClient.SnapshotService(containerd.DefaultSnapshotter)
+
+					currentsnapshotter := r.contaierClient.SnapshotService(containerMetadata.Snapshotter)
 					usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
 					if err != nil {
 						logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
-						continue
 					}
 
 					resourceList = append(resourceList, model.Resources{
@@ -387,26 +414,27 @@ func (r *ContainerRuntime) forceContainerCleanup() {
 		logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 	}
 	for _, container := range deployedContainers {
-		r.removeContainer(container)
+		_ = r.removeContainer(container)
 	}
 }
 
-func (r *ContainerRuntime) removeContainer(container containerd.Container) {
+func (r *ContainerRuntime) removeContainer(container containerd.Container) error {
 	logger.InfoLogger().Printf("Clenaning up container: %s", container.ID())
 	task, err := container.Task(r.ctx, nil)
 	if err != nil {
-		logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+		return fmt.Errorf("Unable to fetch container task: %v", err)
 	}
 	if err == nil {
 		err = killTask(r.ctx, task, container)
 		if err != nil {
-			logger.ErrorLogger().Printf("Unable to fetch kill task: %v", err)
+			return fmt.Errorf("Unable to fetch kill task: %v", err)
 		}
 	}
 	err = container.Delete(r.ctx)
 	if err != nil {
-		logger.ErrorLogger().Printf("Unable to delete container: %v", err)
+		return fmt.Errorf("Unable to delete container: %v", err)
 	}
+	return nil
 }
 
 func (r *ContainerRuntime) getContainerMemoryUsage(containerID string, pid int) (float64, error) {
@@ -439,18 +467,24 @@ func withCustomResolvConf(src string) func(context.Context, oci.Client, *contain
 	}
 }
 
-func getGoogleDNSResolveConf() (*os.File, error) {
-	file, err := ioutil.TempFile("/tmp", "edgeio-resolv-conf")
+func getGoogleDNSResolveConf() (string, error) {
+	file, err := os.CreateTemp("/tmp", "oakestra-resolv-conf")
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to create temp resolv file: %v", err)
-		return nil, err
+		return "", err
 	}
-	_, err = file.WriteString(fmt.Sprintf("nameserver 8.8.8.8\n"))
+	defer func() {
+		if err := file.Close(); err != nil {
+			logger.ErrorLogger().Printf("Unable to close temp resolv file: %v", err)
+		}
+	}()
+	_, err = file.WriteString("nameserver 8.8.8.8\n")
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to write temp resolv file: %v", err)
-		return nil, err
+		return "", err
 	}
-	return file, err
+	_ = file.Chmod(0444)
+	return file.Name(), err
 }
 
 func killTask(ctx context.Context, task containerd.Task, container containerd.Container) error {
@@ -496,4 +530,17 @@ func extractInstanceNumberFromTaskID(taskid string) int {
 
 func genTaskID(sname string, instancenumber int) string {
 	return fmt.Sprintf("%s.instance.%d", sname, instancenumber)
+}
+
+func (r *ContainerRuntime) getContainerByTaskID(taskid string) (containerd.Container, error) {
+	containers, err := r.contaierClient.Containers(r.ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range containers {
+		if c.ID() == taskid {
+			return c, err
+		}
+	}
+	return nil, fmt.Errorf("container not found")
 }

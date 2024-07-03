@@ -123,14 +123,16 @@ func deleteHandler(client mqtt.Client, msg mqtt.Message) {
 		logger.ErrorLogger().Printf("ERROR: unable to unmarshal cluster orch request: %v", err)
 		return
 	}
-	runtime := virtualization.GetRuntime(model.RuntimeType(service.Runtime))
-	err = runtime.Undeploy(service.Sname, service.Instance)
-	if err != nil {
-		logger.ErrorLogger().Printf("Unable to undeploy application: %s", err.Error())
-		return
-	}
-	service.Status = model.SERVICE_UNDEPLOYED
-	ReportServiceStatus(service)
+	go func() {
+		runtime := virtualization.GetRuntime(model.RuntimeType(service.Runtime))
+		err = runtime.Undeploy(service.Sname, service.Instance)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to undeploy application: %s", err.Error())
+			return
+		}
+		service.Status = model.SERVICE_UNDEPLOYED
+		ReportServiceStatus(service)
+	}()
 }
 
 func ReportServiceStatus(service model.Service) {

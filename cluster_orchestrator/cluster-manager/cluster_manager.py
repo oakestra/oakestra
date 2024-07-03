@@ -48,7 +48,7 @@ mqtt_init(app)
 
 sio = socketio.Client()
 
-BACKGROUND_JOB_INTERVAL = 5
+BACKGROUND_JOB_INTERVAL = 15
 
 
 # ................... REST API Endpoints ...............#
