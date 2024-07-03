@@ -256,7 +256,7 @@ cd go_node_engine/build
 Then configure the NetManager and perform the startup as usual. 
 
 N.b. each worker node can now be configured to work with a different cluster.  
-N.b. you can disable the Overlay Newtork (and therefore avoid using the NetManager using the `-n -1` flag at NodeEngine startup. 
+N.b. you can disable the Overlay Newtork (and therefore avoid using the NetManager) using the `-n -1` flag at NodeEngine startup. 
 
 
 # 🎼 Deployment descriptor
