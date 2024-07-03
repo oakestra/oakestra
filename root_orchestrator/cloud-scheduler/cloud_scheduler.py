@@ -5,7 +5,8 @@ from celery import Celery
 from cs_logging import configure_logging
 from flask import Flask, request
 from manager_requests import manager_request
-from resource_management import job_operations
+from oakestra_utils.types.statuses import NegativeSchedulingStatus
+from resource_abstractor_client import job_operations
 
 CLUSTER_SCREENING_INTERVAL = 60
 
@@ -63,24 +64,14 @@ def cluster_screening(arg):
 
 @celeryapp.task()
 def start_calc(job_id, job):
-    # i = celeryapp.control.inspect()
-    # print(i)
+    scheduling_result = calculate(job)
 
-    scheduling_status, scheduling_result = calculate(job_id, job)
     print(scheduling_result)
-    if scheduling_status == "negative":
-        job_operations.update_job_status(job_id, scheduling_result)
+    if isinstance(scheduling_result, NegativeSchedulingStatus):
+        job_operations.update_job_status(job_id=job_id, service_status=scheduling_result)
     else:
         scheduling_result.get("_id")
-        # mongo_update_job_status_and_cluster(job_id, 'CLUSTER_SCHEDULED', cluster_id)
-        manager_request(
-            scheduling_result, job_id, job, replicas=1
-        )  # scheduling_result is a target cluster
-
-
-# @celeryapp.task()
-# def test_celery():
-#     app.logger.info("Celery test method")
+        manager_request(scheduling_result, job_id, job, replicas=1)
 
 
 if __name__ == "__main__":

@@ -1,30 +1,44 @@
 import logging
+from typing import Union
 
 from mongodb_client import mongo_find_all_active_nodes
+from oakestra_utils.types.statuses import NegativeSchedulingStatus
 
 
-def calculate(app, job):
+def calculate(app, job: dict) -> Union[dict, NegativeSchedulingStatus]:
     print("calculating...")
     app.logger.info("calculating")
 
     # check here if job has any user preferences, e.g. on a specific node, cpu architecture,
     constraints = job.get("constraints")
-    if constraints is not None:
+    if constraints is not None and len(constraints) > 0:
         return constraint_based_scheduling(job, constraints)
     else:
         return greedy_load_balanced_algorithm(job=job)
 
 
-def constraint_based_scheduling(job, constraints):
-    mongo_find_all_active_nodes()
+def constraint_based_scheduling(job: dict, constraints) -> Union[dict, NegativeSchedulingStatus]:
+    filtered_active_nodes = []
     for constraint in constraints:
         constraint_type = constraint.get("type")
         if constraint_type == "direct":
             return deploy_on_best_among_desired_nodes(job, constraint.get("node"))
-    return greedy_load_balanced_algorithm(job=job)
+        if constraint_type == "addons":
+            for node in mongo_find_all_active_nodes():
+                node_info = node["node_info"]
+                if (
+                    node_info.get("supported_addons")
+                    and constraint.get("needs")
+                    and set(constraint.get("needs")).issubset(
+                        set(node_info.get("supported_addons"))
+                    )
+                ):
+                    filtered_active_nodes.append(node)
+
+    return greedy_load_balanced_algorithm(job=job, active_nodes=filtered_active_nodes)
 
 
-def first_fit_algorithm(job):
+def first_fit_algorithm(job: dict) -> Union[dict, NegativeSchedulingStatus]:
     """Which of the worker nodes fits the Qos of the deployment file as the first"""
     active_nodes = mongo_find_all_active_nodes()
 
@@ -42,15 +56,14 @@ def first_fit_algorithm(job):
                 and available_memory >= job_req.get("memory")
                 and job.get("image_runtime") in technology
             ):
-                return "positive", node
+                return node
         except Exception:
             logging.error("Something wrong with job requirements or node infos")
 
-    # no node found
-    return "negative", None
+    return NegativeSchedulingStatus.NO_NODE_FOUND
 
 
-def deploy_on_best_among_desired_nodes(job, nodes):
+def deploy_on_best_among_desired_nodes(job: dict, nodes) -> Union[dict, NegativeSchedulingStatus]:
     active_nodes = mongo_find_all_active_nodes()
     selected_nodes = []
     if nodes is None or nodes == "":
@@ -63,7 +76,9 @@ def deploy_on_best_among_desired_nodes(job, nodes):
     return greedy_load_balanced_algorithm(job, active_nodes=selected_nodes)
 
 
-def greedy_load_balanced_algorithm(job, active_nodes=None):
+def greedy_load_balanced_algorithm(
+    job: dict, active_nodes=None
+) -> Union[dict, NegativeSchedulingStatus]:
     """Which of the nodes within the cluster have the most capacity for a given job"""
     if active_nodes is None:
         active_nodes = mongo_find_all_active_nodes()
@@ -77,11 +92,10 @@ def greedy_load_balanced_algorithm(job, active_nodes=None):
     target_cpu = 0
     target_mem = 0
 
-    # return if no qualified worker found
     if len(qualified_nodes) < 1:
-        return "negative", None
+        return NegativeSchedulingStatus.NO_QUALIFIED_WORKER_FOUND
 
-    # return the cluster with the most cpu+ram
+    # Return the cluster with the most cpu+ram.
     for node in qualified_nodes:
         cpu = float(node.get("current_cpu_cores_free"))
         mem = float(node.get("current_free_memory_in_MB"))
@@ -90,7 +104,7 @@ def greedy_load_balanced_algorithm(job, active_nodes=None):
             target_mem = mem
             target_node = node
 
-    return "positive", target_node
+    return target_node
 
 
 def replicate(job):

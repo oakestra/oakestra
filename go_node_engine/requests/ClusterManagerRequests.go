@@ -15,13 +15,13 @@ type HandshakeAnswer struct {
 	NodeId   string `json:"id"`
 }
 
-func ClusterHandshake(address string, port string) HandshakeAnswer {
+func ClusterHandshake(address string, port int) HandshakeAnswer {
 	data, err := json.Marshal(model.GetNodeInfo())
 	if err != nil {
 		logger.ErrorLogger().Fatalf("Handshake failed, json encoding problem, %v", err)
 	}
 	jsonbody := bytes.NewBuffer(data)
-	resp, err := http.Post(fmt.Sprintf("http://%s:%s/api/node/register", address, port), "application/json", jsonbody)
+	resp, err := http.Post(fmt.Sprintf("http://%s:%d/api/node/register", address, port), "application/json", jsonbody)
 	if err != nil {
 		logger.ErrorLogger().Fatalf("Handshake failed, %v", err)
 	}

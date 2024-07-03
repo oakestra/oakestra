@@ -8,6 +8,7 @@ from mongodb_client import (
     mongo_update_job_deployed,
     mongo_update_service_resources,
 )
+from oakestra_utils.types.statuses import convert_to_status
 
 mqtt = None
 app = None
@@ -45,7 +46,7 @@ def handle_mqtt_message(client, userdata, message):
         mongo_find_node_by_id_and_update_cpu_mem(client_id, payload)
     if re_job_deployment_topic is not None:
         sname = payload.get("sname")
-        status = payload.get("status")
+        status = convert_to_status(payload.get("status"))
         instance = payload.get("instance")
         publicip = payload.get("publicip", "--")
         mongo_update_job_deployed(sname, instance, status, publicip, client_id)

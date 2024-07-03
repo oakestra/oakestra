@@ -1,10 +1,10 @@
-from bson.objectid import ObjectId
-from db.clusters_db import find_cluster_by_id, find_clusters
+from bson import ObjectId
+from db import clusters_db
 from db.clusters_helper import build_filter
 from db.jobs_db import find_job_by_id
 from flask.views import MethodView
 from flask_smorest import Blueprint
-from marshmallow import Schema, fields
+from marshmallow import INCLUDE, Schema, fields
 from werkzeug import exceptions
 
 resourcesblp = Blueprint("Resources Info", "resources_info", url_prefix="/api/v1/resources")
@@ -27,6 +27,7 @@ class ResourceSchema(Schema):
     available_memory = fields.Float()
     total_gpu_percent = fields.Integer()
     virtualization = fields.List(fields.String())
+    supported_addons = fields.List(fields.String())
     last_modified_timestamp = fields.Float()
 
 
@@ -34,6 +35,7 @@ class ResourceFilterSchema(Schema):
     active = fields.Boolean()
     job_id = fields.String()
     cluster_name = fields.String()
+    ip = fields.String()
 
 
 @resourcesblp.route("/")
@@ -58,18 +60,39 @@ class AllResourcesController(MethodView):
             filter["cluster_id"] = cluster_id
         filter = build_filter(query)
 
-        return list(find_clusters(filter))
+        return list(clusters_db.find_clusters(filter))
+
+    @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
+    @resourcesblp.response(200, ResourceSchema, content_type="application/json")
+    def put(self, data, **kwargs):
+        resource_name = data.get("cluster_name")
+
+        cluster = clusters_db.find_cluster_by_name(resource_name)
+        if cluster:
+            return clusters_db.update_cluster(str(cluster["_id"]), data)
+
+        return clusters_db.create_cluster(data)
 
 
 @resourcesblp.route("/<resourceId>")
 class ResourceController(MethodView):
-    @resourcesblp.response(200, ResourceSchema(), content_type="application/json")
+    @resourcesblp.response(200, ResourceSchema, content_type="application/json")
     def get(self, resourceId):
         if ObjectId.is_valid(resourceId) is False:
             raise exceptions.BadRequest()
 
-        cluster = find_cluster_by_id(resourceId)
+        cluster = clusters_db.find_cluster_by_id(resourceId)
         if cluster is None:
             raise exceptions.NotFound()
 
         return cluster
+
+    @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
+    @resourcesblp.response(200, ResourceSchema, content_type="application/json")
+    def patch(self, data, **kwargs):
+        resource_id = kwargs.get("resourceId")
+
+        if ObjectId.is_valid(resource_id) is False:
+            raise exceptions.BadRequest()
+
+        return clusters_db.update_cluster_information(resource_id, data)

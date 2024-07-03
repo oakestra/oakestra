@@ -106,7 +106,7 @@ func deployHandler(client mqtt.Client, msg mqtt.Message) {
 	go func() {
 		runtime := virtualization.GetRuntime(model.RuntimeType(service.Runtime))
 		err = runtime.Deploy(service, ReportServiceStatus)
-		service.Status = model.SERVICE_ACTIVE
+		service.Status = model.SERVICE_CREATED
 		if err != nil {
 			logger.ErrorLogger().Printf("ERROR during app deployment: %v", err)
 			service.StatusDetail = err.Error()

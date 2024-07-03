@@ -78,7 +78,7 @@ sudo NetManager -p 6000
 
 On a different shell, start the NodeEngine with the -6000 paramenter to connect to the NetManager. 
 ```
-sudo NodeEngine -n 6000 -p 10100 -a <Cluster Orchestrator IP Address>
+sudo NodeEngine -a <Cluster Orchestrator IP Address>
 ```
 
 If you see the NodeEngine reporting metrics to the Cluster...
@@ -256,8 +256,8 @@ cd go_node_engine/build
 Then configure the NetManager and perform the startup as usual. 
 
 N.b. each worker node can now be configured to work with a different cluster.  
+N.b. you can disable the Overlay Newtork (and therefore avoid using the NetManager using the `-n -1` flag at NodeEngine startup. 
 
-Alternatively you can install the latest stable binaeries
 
 # 🎼 Deployment descriptor
 <a name="🎼-deployment-descriptor"></a>

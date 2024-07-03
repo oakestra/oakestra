@@ -44,7 +44,10 @@ class ServiceController(MethodView):
         """
         username = get_jwt_auth_identity()
         job = service_management.get_service(serviceid, username)
+
         if job is not None:
+            # TODO Frontend should be able to handle the _id being a string and not an object.
+            job = {**job, "_id": {"$oid": str(job["_id"])}}
             return json_util.dumps(job)
         else:
             return abort(404, "not found")
@@ -131,6 +134,10 @@ class MultipleServicesControllerUser(Resource):
         result, status = service_management.user_services(appid, username)
         if status != 200:
             abort(status, result)
+
+        # TODO Frontend should be able to handle the _id being a string and not an object.
+        for i in range(len(result)):
+            result[i]["_id"] = {"$oid": result[i]["_id"]}
         return json_util.dumps(result)
 
 
@@ -144,4 +151,11 @@ class MultipleServicesController(Resource):
     @jwt_auth_required()
     @require_role(Role.ADMIN)
     def get(self, *args, **kwargs):
-        return json_util.dumps(service_management.get_all_services())
+        result, code = service_management.get_all_services()
+        if code != 200:
+            abort(code, result)
+
+        # TODO Frontend should be able to handle the _id being a string and not an object.
+        for i in range(len(result)):
+            result[i]["_id"] = {"$oid": result[i]["_id"]}
+        return json_util.dumps(result)

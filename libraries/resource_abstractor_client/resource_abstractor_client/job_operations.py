@@ -1,3 +1,6 @@
+from typing import Optional
+
+from oakestra_utils.types.statuses import Status
 from requests import delete, get, patch, put
 from resource_abstractor_client.client_helper import make_request
 
@@ -21,16 +24,19 @@ def create_job(data):
     return make_request(put, JOBS_API, json=data)
 
 
-def update_job(job_id, data):
+def update_job(job_id: str, data: dict) -> Optional[dict]:
     request_address = f"{JOBS_API}/{job_id}"
     return make_request(patch, request_address, json=data)
 
 
-def update_job_status(job_id, status, status_detail=None):
-    data = {"status": status}
+def update_job_status(
+    job_id: str,
+    status: Status,
+    status_detail: str = None,
+) -> Optional[dict]:
+    data = {"status": status.value}
     if status_detail:
         data["status_detail"] = status_detail
-
     return update_job(job_id, data)
 
 
