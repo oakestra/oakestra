@@ -25,7 +25,7 @@ jobs:
         goversion: "https://go.dev/dl/go1.19.1.linux-amd64.tar.gz"
         project_path: "./go_node_engine"
         binary_name: "NodeEngine"
-        ldflags: -X "go_node_engine/cmd.Version=${{ steps.meta.outputs.tags }}"
+        ldflags: -X "go_node_engine/cmd.Version=${{ github.ref_name }}"
         release_tag: ${{ steps.meta.outputs.tags }}
         asset_name: NodeEngine_${{ matrix.goarch }}
         extra_files: go_node_engine/build/install.sh go_node_engine/build/configure-gpu.sh
