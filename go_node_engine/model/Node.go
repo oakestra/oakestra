@@ -19,35 +19,41 @@ import (
 )
 
 type RuntimeType string
-
 const (
 	CONTAINER_RUNTIME RuntimeType = "docker"
 	UNIKERNEL_RUNTIME RuntimeType = "unikernel"
 )
 
+type AddonType string
+const (
+// Example Addon:
+// 	FLOPS AddonType = "FLOps"
+ )
+
 type Node struct {
-	Id             string            `json:"id"`
-	Host           string            `json:"host"`
-	Ip             string            `json:"ip"`
-	Port           string            `json:"port"`
-	SystemInfo     map[string]string `json:"system_info"`
-	CpuUsage       float64           `json:"cpu"`
-	CpuCores       int               `json:"free_cores"`
-	CpuArch        string            `json:"architecture"`
-	MemoryUsed     float64           `json:"memory"`
-	MemoryMB       int               `json:"memory_free_in_MB"`
-	DiskInfo       map[string]string `json:"disk_info"`
-	NetworkInfo    map[string]string `json:"network_info"`
-	GpuDriver      string            `json:"gpu_driver"`
-	GpuUsage       float64           `json:"gpu_usage"`
-	GpuCores       int               `json:"gpu_cores"`
-	GpuTemp        float64           `json:"gpu_temp"`
-	GpuMemUsage    float64           `json:"gpu_mem_used"`
-	GpuTotMem      float64           `json:"gpu_tot_mem"`
-	Technology     []RuntimeType     `json:"technology"`
-	Overlay        bool
-	LogDirectory   string
-	NetManagerPort int
+	Id              string            `json:"id"`
+	Host            string            `json:"host"`
+	Ip              string            `json:"ip"`
+	Port            string            `json:"port"`
+	SystemInfo      map[string]string `json:"system_info"`
+	CpuUsage        float64           `json:"cpu"`
+	CpuCores        int               `json:"free_cores"`
+	CpuArch         string            `json:"architecture"`
+	MemoryUsed      float64           `json:"memory"`
+	MemoryMB        int               `json:"memory_free_in_MB"`
+	DiskInfo        map[string]string `json:"disk_info"`
+	NetworkInfo     map[string]string `json:"network_info"`
+	GpuDriver       string            `json:"gpu_driver"`
+	GpuUsage        float64           `json:"gpu_usage"`
+	GpuCores        int               `json:"gpu_cores"`
+	GpuTemp         float64           `json:"gpu_temp"`
+	GpuMemUsage     float64           `json:"gpu_mem_used"`
+	GpuTotMem       float64           `json:"gpu_tot_mem"`
+	Technology      []RuntimeType     `json:"technology"`
+	SupportedAddons []AddonType       `json:"supported_addons"`
+	Overlay         bool
+	LogDirectory    string
+	NetManagerPort  int
 }
 
 var once sync.Once
@@ -62,6 +68,7 @@ func GetNodeInfo() *Node {
 			CpuArch:    runtime.GOARCH,
 			Port:       getPort(),
 			Technology: make([]RuntimeType, 0),
+			SupportedAddons: make([]AddonType, 0),
 			Overlay:    false,
 		}
 	})
@@ -234,6 +241,14 @@ func (n *Node) AddSupportedTechnology(tech RuntimeType) {
 
 func (n *Node) GetSupportedTechnologyList() []RuntimeType {
 	return n.Technology
+}
+
+func (n *Node) AddSupportedAddons(ext AddonType) {
+	n.SupportedAddons = append(n.SupportedAddons, ext)
+}
+
+func (n *Node) GetSupportedAddonsList() []AddonType {
+	return n.SupportedAddons
 }
 
 func getGpuDriver() string {

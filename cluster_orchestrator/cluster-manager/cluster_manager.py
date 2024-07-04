@@ -18,6 +18,7 @@ from mongodb_client import (
 from mqtt_client import mqtt_init, mqtt_publish_edge_deploy
 from my_prometheus_client import prometheus_init_gauge_metrics
 from network_plugin_requests import network_notify_deployment
+from oakestra_utils.types.statuses import NegativeSchedulingStatus, PositiveSchedulingStatus
 from prometheus_client import start_http_server
 from proto.clusterRegistration_pb2 import CS1Message, CS2Message, KeyValue, SC1Message, SC2Message
 from proto.clusterRegistration_pb2_grpc import register_clusterStub
@@ -78,7 +79,7 @@ def deploy_task(system_job_id, instance_number):
 
 
 @app.route("/api/result/<system_job_id>/<instance_number>", methods=["POST"])
-def get_scheduler_result_and_propagate_to_edge(system_job_id, instance_number):
+def get_scheduler_result_and_propagate_to_edge(system_job_id: str, instance_number: str) -> str:
     # print(request)
     app.logger.info("Incoming Request /api/result - received cluster_scheduler result")
     data = request.json  # get POST body
@@ -86,8 +87,12 @@ def get_scheduler_result_and_propagate_to_edge(system_job_id, instance_number):
 
     if data.get("found", False):
         resulting_node_id = data.get("node").get("_id")
-
-        mongo_update_job_status(system_job_id, instance_number, "NODE_SCHEDULED", data.get("node"))
+        mongo_update_job_status(
+            system_job_id=system_job_id,
+            instance_number=instance_number,
+            node=data.get("node"),
+            status=PositiveSchedulingStatus.NODE_SCHEDULED,
+        )
         job = mongo_find_job_by_system_id(system_job_id)
 
         # Inform network plugin about the deployment
@@ -96,7 +101,12 @@ def get_scheduler_result_and_propagate_to_edge(system_job_id, instance_number):
         # Publish job
         mqtt_publish_edge_deploy(resulting_node_id, job, instance_number)
     else:
-        mongo_update_job_status(system_job_id, instance_number, "NO_WORKER_CAPACITY", None)
+        mongo_update_job_status(
+            instance_number=instance_number,
+            system_job_id=system_job_id,
+            node=None,
+            status=NegativeSchedulingStatus.NO_WORKER_CAPACITY,
+        )
     return "ok"
 
 

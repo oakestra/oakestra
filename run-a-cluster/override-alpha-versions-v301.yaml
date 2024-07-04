@@ -3,7 +3,7 @@ version: "3.3"
 services:
 
   dashboard:
-    image: ghcr.io/oakestra/dashboard:alpha-v0.4.205
+    image: ghcr.io/oakestra/dashboard:alpha-v0.4.206
 
   system_manager:
     image: ghcr.io/oakestra/oakestra/root-system-manager:alpha-v0.4.301

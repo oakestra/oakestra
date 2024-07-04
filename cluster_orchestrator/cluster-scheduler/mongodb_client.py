@@ -3,6 +3,7 @@ from datetime import datetime
 
 from bson.objectid import ObjectId
 from flask_pymongo import PyMongo
+from oakestra_utils.types.statuses import PositiveSchedulingStatus
 
 MONGO_URL = os.environ.get("CLUSTER_MONGO_URL")
 MONGO_PORT = os.environ.get("CLUSTER_MONGO_PORT")
@@ -86,7 +87,7 @@ def mongo_set_job_as_scheduled(job_id, node_id):
         {"_id": ObjectId(job_id)},
         {
             "$set": {
-                "status": "NODE_SCHEDULED",
+                "status": PositiveSchedulingStatus.NODE_SCHEDULED.value,
                 "scheduled_node": node_id,
                 "replicas": 1,
             }

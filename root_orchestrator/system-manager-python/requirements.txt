@@ -19,5 +19,4 @@ MarkupSafe~=2.1.1
 flask_swagger_ui
 mongomock==4.1.2
 git+https://github.com/oakestra/oakestra.git@develop#subdirectory=libraries/resource_abstractor_client
-grpcio~=1.60.0
-protobuf~=4.25.2
+git+https://github.com/oakestra/oakestra.git@develop#subdirectory=libraries/oakestra_utils_library

@@ -19,7 +19,8 @@ if [[ "$CURRENT" != "$LATEST" ]]; then
     # The user wants to continue, so do nothing
     echo "Updating..."
     cp override-alpha-versions.yaml override-alpha-versions.old.$CURRENT.yaml
-    sed "s/$CURRENT/$LATEST/g" override-alpha-versions.yaml
+    sed "s/$CURRENT/$LATEST/g" override-alpha-versions.old.$CURRENT.yaml > override-alpha-versions.yaml
+    rm override-alpha-versions.old.$CURRENT.yaml
     echo "💎 DONE 💎"
   else
     # The user does not want to continue, so kill the child process

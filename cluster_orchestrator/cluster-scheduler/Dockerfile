@@ -1,5 +1,7 @@
-FROM python:3.8.5-slim-buster
+FROM python:3.10-slim-buster
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
+
+RUN apt-get update -y && apt-get install -y --no-install-recommends git 
 
 RUN mkdir /app
 ADD requirements.txt /app
