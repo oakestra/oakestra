@@ -10,7 +10,6 @@ CUSTOM_RESOURCES_ADDR = "http://0.0.0.0:11011/api/v1/custom-resources"
 GROUP = "edu.oak"
 VERSION = "v1"
 
-config.load_kube_config()
 api_crd = client.ApiextensionsV1Api()
 api_crd_objects = client.CustomObjectsApi()
 
@@ -334,6 +333,8 @@ if __name__ == "__main__":
     results1 = []
     results2 = []
 
+    if kubernetes:
+        config.load_kube_config()
     (
         test_custom_resources(resources, entries)
         if not kubernetes
