@@ -15,7 +15,6 @@ def calculate(job: dict) -> Union[dict, NegativeSchedulingStatus]:
 
 
 def constraint_based_scheduling(job: dict, constraints) -> Union[dict, NegativeSchedulingStatus]:
-    # NOTE: To avoid duplicates using a Set is preferred, but one cannot simply add a dict ot a set.
     filtered_active_clusters = []
     active_clusters = list(cluster_operations.get_resources(active=True))
     for cluster in active_clusters:
