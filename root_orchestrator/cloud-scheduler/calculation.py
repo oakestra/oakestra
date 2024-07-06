@@ -17,31 +17,37 @@ def calculate(job: dict) -> Union[dict, NegativeSchedulingStatus]:
 def constraint_based_scheduling(job: dict, constraints) -> Union[dict, NegativeSchedulingStatus]:
     # NOTE: To avoid duplicates using a Set is preferred, but one cannot simply add a dict ot a set.
     filtered_active_clusters = []
-
-    def append_cluster(cluster: dict) -> None:
-        if cluster not in filtered_active_clusters:
-            filtered_active_clusters.append(cluster)
-
     active_clusters = list(cluster_operations.get_resources(active=True))
+    for cluster in active_clusters:
+        satisfying = True
 
-    for constraint in constraints:
-        constraint_type = constraint.get("type")
-        # TODO: Turn the constraints into an enum - put them into the oak-utils library.
-        if constraint_type == "direct":
-            return direct_service_mapping(job, constraint.get("cluster"))
-        if constraint_type == "addons":
-            for cluster in active_clusters:
-                if (
-                    cluster.get("supported_addons")
-                    and constraint.get("needs")
-                    and set(constraint.get("needs")).issubset(set(cluster.get("supported_addons")))
-                ):
-                    filtered_active_clusters.append(cluster)
-        if constraint_type == "clusters":
-            for cluster in active_clusters:
-                cluster_name = cluster.get("cluster_name")
-                if cluster_name and cluster_name in constraint.get("allowed"):
-                    append_cluster(cluster)
+        for constraint in constraints:
+            constraint_type = constraint.get("type")
+            # TODO: Turn the constraints into an enum - put them into the oak-utils library.
+
+            if constraint_type == "direct":
+                return direct_service_mapping(job, constraint.get("cluster"))
+
+            if constraint_type == "addons":
+                for cluster in active_clusters:
+                    if not (
+                        cluster.get("supported_addons")
+                        and constraint.get("needs")
+                        and set(constraint.get("needs")).issubset(
+                            set(cluster.get("supported_addons"))
+                        )
+                    ):
+                        satisfying = False
+                        continue
+
+            if constraint_type == "clusters":
+                for cluster in active_clusters:
+                    cluster_name = cluster.get("cluster_name")
+                    if not (cluster_name and cluster_name in constraint.get("allowed")):
+                        satisfying = False
+
+        if satisfying:
+            filtered_active_clusters.append(cluster)
 
     return greedy_load_balanced_algorithm(job=job, active_clusters=filtered_active_clusters)
 
