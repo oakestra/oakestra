@@ -100,6 +100,7 @@ sla_schema = {
                                             "threshold": {"type": "number"},
                                             "rigidness": {"type": "number"},
                                             "convergence_time": {"type": "integer"},
+                                            "needs": {"type": "array", "items": {"type": "string"}},
                                         },
                                         "required": ["type"],
                                     },

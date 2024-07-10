@@ -1,5 +1,6 @@
 import logging
 import threading
+from typing import List, Optional
 
 from ext_requests.cluster_requests import cluster_request_to_delete_job, cluster_request_to_deploy
 from ext_requests.net_plugin_requests import (
@@ -7,10 +8,16 @@ from ext_requests.net_plugin_requests import (
     net_inform_instance_undeploy,
 )
 from ext_requests.scheduler_requests import scheduler_request_deploy
+from oakestra_utils.types.statuses import PositiveSchedulingStatus, Status, convert_to_status
 from resource_abstractor_client import app_operations, cluster_operations, job_operations
 
 
-def update_job_status(job_id, status, status_detail, instances=[]):
+def update_job_status(
+    job_id: str,
+    status: Status,
+    status_detail: str,
+    instances: List[dict] = [],
+) -> Optional[dict]:
     job = job_operations.get_job_by_id(job_id)
 
     if job is None:
@@ -23,22 +30,27 @@ def update_job_status(job_id, status, status_detail, instances=[]):
 
 
 def update_job_status_and_instances(
-    job_id, status, next_instance_progressive_number, instance_list
-):
-    logging.info("Updating Job Status and assigning a cluster for this job...")
+    job_id: str,
+    status: Status,
+    next_instance_progressive_number: int,
+    instance_list: List[dict],
+) -> None:
+    logging.info(
+        f"Updating Job '{job_id}'s status to '{status}' " "and assigning a cluster for this job..."
+    )
     updated_job = job_operations.update_job(
         job_id,
         {
-            "status": status,
+            "status": status.value,
             "next_instance_progressive_number": next_instance_progressive_number,
             "instance_list": instance_list,
         },
     )
     if updated_job is None:
-        logging.info(f"Updating job-{job_id} status failed")
+        logging.info(f"Updating job '{job_id}'s status to '{status}' failed")
 
 
-def request_scale_up_instance(microserviceid, username):
+def request_scale_up_instance(microserviceid: str, username: str) -> None:
     service = job_operations.get_job_by_id(microserviceid)
     if service is None:
         logging.warn(f"Service {microserviceid} not found")
@@ -50,8 +62,11 @@ def request_scale_up_instance(microserviceid, username):
         return
 
     if microserviceid in application["microservices"]:
-        # Job status to scheduling REQUESTED
-        update_job_status(microserviceid, "REQUESTED", "Waiting for scheduling decision")
+        update_job_status(
+            job_id=microserviceid,
+            status=PositiveSchedulingStatus.REQUESTED,
+            status_detail="Waiting for scheduling decision",
+        )
         # Request scheduling
         threading.Thread(
             group=None,
@@ -86,9 +101,10 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
                     net_inform_instance_undeploy(microserviceid, which_one)
                     cluster_request_to_delete_job(microserviceid, instance["instance_number"])
                     instances.remove(instance)
+
             update_job_status_and_instances(
                 microserviceid,
-                service["status"],
+                convert_to_status(service["status"]),
                 service["next_instance_progressive_number"],
                 instances,
             )
@@ -114,7 +130,7 @@ def instance_scale_up_scheduled_handler(job_id, cluster_id):
 
     update_job_status_and_instances(
         job_id=job_id,
-        status="CLUSTER_SCHEDULED",
+        status=PositiveSchedulingStatus.CLUSTER_SCHEDULED,
         next_instance_progressive_number=instance_number + 1,
         instance_list=instance_list,
     )
