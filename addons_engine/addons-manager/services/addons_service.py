@@ -13,9 +13,8 @@ addons_service = None
 
 # TODO: reuse this enum in addons_monitor
 class AddonStatusEnum(Enum):
-    # Allowed statuses for user to specify.
-    INSTALL = "install"
-    DISABLE = "disable"
+    INSTALLING = "installing"
+    DISABLING = "disabling"
 
     DISABLED = "disabled"
     FAILED = "failed"
@@ -51,7 +50,7 @@ def install_addon(addon):
         return None
 
     addon["services"] = services
-    addon["status"] = str(AddonStatusEnum.INSTALL)
+    addon["status"] = str(AddonStatusEnum.INSTALLING)
     created_addon = addons_db.create_addon(addon)
 
     return created_addon

@@ -22,9 +22,8 @@ ADDONS_SERVICE_NAME_LABEL = os.environ.get("ADDONS_SERVICE_NAME_LABEL") or "oak.
 
 # TODO DUPLICATED CODE
 class AddonStatusEnum(Enum):
-    # Allowed statuses for user to specify.
-    INSTALL = "install"
-    DISABLE = "disable"
+    INSTALLING = "installing"
+    DISABLING = "disabling"
 
     DISABLED = "disabled"
     FAILED = "failed"
@@ -270,7 +269,7 @@ class AddonsMonitor:
 
     def monitor_install_addons(self):
         installing_addons = self.get_addons_from_manager(
-            filters={"status": str(AddonStatusEnum.INSTALL)}
+            filters={"status": str(AddonStatusEnum.INSTALLING)}
         )
         logging.info(f"Found {len(installing_addons)} addons to be installed.")
 
@@ -291,7 +290,7 @@ class AddonsMonitor:
 
     def monitor_disable_addons(self):
         disable_addons = self.get_addons_from_manager(
-            filters={"status": str(AddonStatusEnum.DISABLE)}
+            filters={"status": str(AddonStatusEnum.DISABLING)}
         )
         logging.info(f"Found {len(disable_addons)} addons to be disabled.")
 

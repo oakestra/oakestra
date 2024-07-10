@@ -9,7 +9,6 @@ from services import addons_service
 addonsblp = Blueprint("Addons Api", "addons_api", url_prefix="/api/v1/addons")
 
 
-# TODO add get schema
 class AddonPOSTSchema(Schema):
     marketplace_id = fields.String(required=True)
 
@@ -64,5 +63,15 @@ class AddonController(MethodView):
 
         if result is None:
             abort(400, message="Failed to update addon")
+
+        return json.dumps(result, default=str), 200
+
+    def delete(self, addon_id, *args, **kwargs):
+        result = addons_db.update_addon(
+            addon_id, {"status": str(addons_service.AddonStatusEnum.DISABLING)}
+        )
+
+        if result is None:
+            abort(400, message="Failed to disable addon")
 
         return json.dumps(result, default=str), 200
