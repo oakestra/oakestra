@@ -3,13 +3,15 @@ package cmd
 import (
 	"NetManager/logger"
 	"NetManager/network"
-	"flag"
+	"fmt"
 	"log"
+	"os"
+	"os/exec"
+	"strings"
 	"time"
 
 	"NetManager/server"
 
-	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 	"github.com/tkanos/gonfig"
 )
@@ -25,27 +27,9 @@ var (
 	}
 	cfgFile    string
 	localPort  int
-	debug      bool
+	debugMode  bool
 	daemonMode bool
 )
-
-type serviceDaemon struct{}
-
-func (p *serviceDaemon) Start(s service.Service) error {
-	go p.run()
-	return nil
-}
-
-func (p *serviceDaemon) run() {
-	for {
-		time.Sleep(MONITORING_CYCLE)
-		logger.InfoLogger().Println("NetManager is running 🟢")
-	}
-}
-
-func (p *serviceDaemon) Stop(s service.Service) error {
-	return nil
-}
 
 const MONITORING_CYCLE = time.Second * 2
 
@@ -57,54 +41,59 @@ func Execute() error {
 func init() {
 	rootCmd.Flags().StringVarP(&cfgFile, "cfg", "c", "/etc/netmanager/netcfg.json", "Path of the netcfg.json configuration file")
 	rootCmd.Flags().IntVarP(&localPort, "port", "p", 6000, "Default local port of the NetManager")
-	rootCmd.Flags().BoolVarP(&debug, "debug", "D", false, "Enable debug logs")
-	rootCmd.Flags().BoolVarP(&daemonMode, "detatch", "d", false, "Enable deatched mode (daemon mode))")
+	rootCmd.Flags().BoolVarP(&debugMode, "debug", "D", false, "Enable debug logs")
 }
 
 func startNetManager() error {
-	cfgFile := flag.String("cfg", "/etc/netmanager/netcfg.json", "Set a cluster IP")
-	localPort := flag.Int("p", 6000, "Default local port of the NetManager")
-	debugMode := flag.Bool("D", false, "Debug mode, it enables debug-level logs")
-	flag.Parse()
 
-	err := gonfig.GetConf(*cfgFile, &server.Configuration)
+	if !isAlreadyRunning() {
+
+		err := gonfig.GetConf(cfgFile, &server.Configuration)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if debugMode {
+			logger.SetDebugMode()
+		}
+
+		log.Print(server.Configuration)
+
+		network.IptableFlushAll()
+
+		log.Println("NetManager started, but waiting for NodeEngine registration 🟠")
+		server.HandleRequests(localPort)
+
+		return nil
+	} else {
+		log.Println("NetManager already running, exiting")
+	}
+	return nil
+}
+
+func isAlreadyRunning() bool {
+	procPath := strings.Split(os.Args[0], "/")
+	currentProcName := procPath[len(procPath)-1]
+	fmt.Printf("Checking for process: %s\n", currentProcName)
+	cmd := exec.Command("pgrep", "-f", currentProcName)
+
+	// Execute the command and capture the output
+	out, err := cmd.Output()
+
 	if err != nil {
-		log.Fatal(err)
-	}
-
-	if *debugMode {
-		logger.SetDebugMode()
-	}
-
-	log.Print(server.Configuration)
-
-	network.IptableFlushAll()
-
-	log.Println("NetManager started 🟢")
-
-	if daemonMode {
-		svcConfig := &service.Config{
-			Name:        "OakestraNetManager",
-			DisplayName: "Oakestra NetManager Daemon",
-			Description: "Overlay network component of the Oakestra platform",
-		}
-
-		prg := &serviceDaemon{}
-		s, err := service.New(prg, svcConfig)
-		if err != nil {
-			log.Fatal(err)
-		}
-		logger, err := s.Logger(nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-		err = s.Run()
-		if err != nil {
-			logger.Error(err)
+		// Check for errors during command execution
+		if err.(*exec.ExitError).ExitCode() == 1 {
+			return false
+		} else {
+			fmt.Printf("Error checking for NetManager: %v\n", err)
 		}
 	} else {
-		server.HandleRequests(*localPort)
+		// Check output for processes with the same name (ignoring case)
+		processes := strings.Split(string(out), "\n")
+		// If more than 3 processes are found, it means that the current process is already running (3 bcause empty line+current process+pgrep process)
+		if len(processes) > 3 {
+			return true
+		}
 	}
-
-	return nil
+	return false
 }

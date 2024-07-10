@@ -3,6 +3,7 @@ package server
 import (
 	"NetManager/env"
 	"NetManager/handlers"
+	"NetManager/logger"
 	"NetManager/mqtt"
 	"NetManager/proxy"
 	"encoding/json"
@@ -63,7 +64,7 @@ Request Json:
 Response: 200 or Failure code
 */
 func register(writer http.ResponseWriter, request *http.Request) {
-	log.Println("Received HTTP request - /register ")
+	logger.InfoLogger().Println("Received registration request, registering the NetManager to the Cluster")
 
 	reqBody, _ := io.ReadAll(request.Body)
 	var requestStruct registerRequest
@@ -76,10 +77,10 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	// drop the request if the node is already initialized
 	if WorkerID != "" {
 		if WorkerID == requestStruct.ClientID {
-			log.Printf("Node already initialized")
+			logger.InfoLogger().Printf("Node already initialized")
 			writer.WriteHeader(http.StatusOK)
 		} else {
-			log.Printf("Attempting to re-initialize a node with a different worker ID")
+			logger.InfoLogger().Printf("Attempting to re-initialize a node with a different worker ID")
 			writer.WriteHeader(http.StatusBadRequest)
 		}
 		return
@@ -99,5 +100,6 @@ func register(writer http.ResponseWriter, request *http.Request) {
 
 	Proxy.SetEnvironment(&Env)
 
+	logger.InfoLogger().Printf("NetManager is now running 🟢")
 	writer.WriteHeader(http.StatusOK)
 }
