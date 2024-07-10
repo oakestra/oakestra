@@ -52,17 +52,13 @@ Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follow
 }
 ```
 
-Then start the NetManager using 
 
+Then start the NetManager
 ```
-sudo NetManager -d
+sudo NetManager
 ```
 
-Check the Netmanager status with:
 
-```
-NetManager status
-```
 
 
 
