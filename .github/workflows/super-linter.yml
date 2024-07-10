@@ -39,13 +39,13 @@
               VALIDATE_PYTHON_ISORT: true
               PYTHON_ISORT_CONFIG_FILE: .isort.cfg
               # Validate Go files and Go modules - https://github.com/golangci/golangci-lint
-              #VALIDATE_GO_MODULES: true
+              VALIDATE_GO_MODULES: true
               # Validate Dockerfiles with hadolint - https://github.com/hadolint/hadolint?tab=readme-ov-file#configure
-              #VALIDATE_DOCKERFILE_HADOLINT: true
-              #DOCKERFILE_HADOLINT_FILE_NAME: .docker-hadolint.yaml
+              VALIDATE_DOCKERFILE_HADOLINT: true
+              DOCKERFILE_HADOLINT_FILE_NAME: .docker-hadolint.yaml
               # yamlint linter - https://yamllint.readthedocs.io/en/stable/configuration.html
-              #VALIDATE_YAML: true
-              #YAML_CONFIG_FILE: .yaml-lint.yml
+              VALIDATE_YAML: true
+              YAML_CONFIG_FILE: .yaml-lint.yml
               # Bash linter & validator
               #VALIDATE_BASH: true
               #VALIDATE_BASH_EXEC: true
