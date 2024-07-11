@@ -15,26 +15,34 @@ The Network manager is divided in 4 main components:
 .
 ├── build/
 │			Description:
-│				Binary executable compiled files and build scripts
+│				Build and instalaltion scripts
 ├── config/
 │			Description:
-│				Configuration files used by the environment maanger and the proxyTunnel. These configuration files are used only 
-│               for testing purpose to create a local environment without the need of plugging the compennt to the local orchestrator. 
+│				Configuration files used by the environment maanger and the proxyTunnel. 
 ├── env/
 │			Description:
 │				The environment manager implementation resides here. 
 ├── proxy/
 │			Description:
 │				This is where the ProxyTunnel implmentation belongs
-├── testEnvironment/
-│			Description:
-│				Executable files that can be used to test the Netowrk Manager locally. 
 ├── mqtt/
 │			Description:
-│				Mqtt interface witht he cluster service manager
-├── install.sh
+│				Mqtt client implementation for cluster service manager routes resolution and subnetwork management.
+├── cmd/
 │			Description:
-│				installation script 
+│				CLI commands
+├── handlers/
+│			Description:
+│       dispatching methods for container or unikernel network management
+├── server/
+│			Description:
+│       http REST server for incoming requests from NodeEngine
+├── logger/
+│			Description:
+│       implementation of the NetManager logging framework
+├── utils/
+│			Description:
+│       Just utility code 
 └──  NetManager.go
 			Description:
 				Entry point to startup the NetworkManager
@@ -43,8 +51,9 @@ The Network manager is divided in 4 main components:
 
 # Installation
 
-- download the latest release from [here](https://github.com/edgeIO/edgeionet/releases)
-- run `./install.sh <architecture>` specifying amd64 or arm-7
+- Navigate the `build` directory and use `./build.sh`
+- Move the binary to current folder based on required architecture. E.g., `mv bin/amd64-NetManager NetManager` for amd64
+- Then install it using `./install.sh` 
 
 # Run NetManager
 
@@ -107,20 +116,3 @@ Address where all the containers of this node belong. Each new container will ha
 
 ###Prohibited port numbers
 Right now a deployed service can't use the same port as the proxy tunnel
-
-
-## Deployment
-Note, most of the following must still be implemented
-
-### With binary files
-
-Execute the binary files directly specifying the Cluster address. This will trigger the registration procedure. 
-`sudo ./bin/Networkmanager -cluster <ip-address>`
-
-### With go commandline
-
-* go 1.12+ required
-* run the setup.sh to install the dependencies on each machine
-
-Execute the Network manager with 
-`sudo go run NetManager.go -cluster <ip-address>`

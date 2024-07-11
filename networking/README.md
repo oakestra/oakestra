@@ -1,59 +1,64 @@
-# Oakestra Networking Component
+![net manager tests](https://github.com/oakestra/oakestra-net/actions/workflows/node_net_manager_tests.yml/badge.svg)
+![net manager artifacts](https://github.com/oakestra/oakestra-net/actions/workflows/node-net-manager-artifacts.yml/badge.svg)
+![root artifacts](https://github.com/oakestra/oakestra-net/actions/workflows/root_service_manager_image.yml/badge.svg)
+![cluster artifacts](https://github.com/oakestra/oakestra-net/actions/workflows/cluster_service_manager_image.yml/badge.svg)
 
-This is the networking component that enables interactions between the microservices deployed in Oakestra. 
-The networking component resembles the multi-layer architecture of Oakestra with the following components:
+[![Stable](https://img.shields.io/badge/Latest%20Stable-%F0%9F%AA%97%20Accordion%20v0.4.301-green.svg)](https://github.com/oakestra/oakestra-net/tree/v0.4.301)
+[![Github All Releases](https://img.shields.io/github/downloads/oakestra/oakestra-net/total.svg)]()
 
-- Root service manager: register the cluster service manager and generates the subnetwork for each worker and cluster belonging to the infrastructure.
-- Cluster service manager: this is the direct interface towards the nodes. This resolves the addresses required by each node. 
-- NetManager: It's deployed on each node. It's responsible for the maintenance of a dynamic overlay network connecting the nodes.
+# Oakestra Net 🕸️🌳🕸️
+This component enables the communication between services distributed across multiple [Oakestra](oakestra.io) nodes and clsuters.
 
-This networking component creates a semantic addressing space where the IP addresses not only represent the final destination for a packet
+This repository includes:
+
+- **Net Manager**: The network daemon that needs to be installed on each Worker Node. This captures the services traffic, and creates the semantic overlay abstraction. See [Semantic Addressing](https://www.oakestra.io/docs/networking/semantic-addressing) for details.
+
+- **Root/Cluster Service Managers**: Control plane components installed alongside Oakestra root and cluster orchestrators. They propagate and install the routes to the Net Manager components. 
+
+>This networking component creates a semantic addressing space where the IP addresses not only represent the final destination for a packet
 but also enforces a balancing policy.
 
-## Prerequisites
+## How to install the Net Manager daemon
 
-- Linux OS with
-  - iptable
-  - ip util
-- port 10010   
+### From official build
 
-## Installation
+Follow the offical Oakestra [Get Started](https://github.com/oakestra/oakestra?tab=readme-ov-file#your-first-worker-node-🍃) guide to install the stable NetManager alongside oakestra worker node. 
 
-Download the NetManager package, install it using `./install.sh <architecture>` and then execute it using `sudo NetManager`
+### Build it on your own
+Go inside the folder `node-net-manager/build` and run:
+```
+./build.sh
+```
 
-## Semantic addressing (ServiceIPs)
+Then move the binary corresponding to your architecture to the current folder:
+```
+cp bin/<architecture>-NetManager .
+```
+> <architecture> is either arm-7 or amd64
 
-A semantic address enforces a balancing policy towards all the instances of a service. 
+Finally, install it using 
+`./install.sh` 
 
-- RR_IP (Currently implemented): IP address pointing every time to a random instance of a service. 
-- Closest_IP (Under implementation): IP address pointing to the closest instance of a service.
+## Run the NetManager daemon
 
-Example: Given a service A with 2 instances A.a and A.b
-- A has 2 ServiceIPs, a RR_IP and a Closest_IP. 
-- A.a has an instance IP representing uniquely this instance.
-- A.b has another instance IP representing uniquely this instance.
-- If an instance of a service B uses the RR_IP of A, the traffic is balanced request after request toward A.a or A.b
+Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follows:
 
-The implementation happens at level 4, therefore as of now all the protocols absed on top of TCP and UDP are supported.
+```json
+{
+  "NodePublicAddress": "<IP ADDRESS OF THIS DEVICE>",
+  "NodePublicPort": "<PORT REACHABLE FROM OUTSIDE, use 50103 as default>",
+  "ClusterUrl": "<IP Address of cluster orchestrator or 0.0.0.0 if deployed on the same machine>",
+  "ClusterMqttPort": "10003"
+}
+```
 
-## Subnetworks
 
-An overlay that spans seamlessly across the platform is only possible if each node has an internal sub-network that can be used to allocate an address for each newly deployed service. When a new node is attached to Oakestra, a new subnetwork from the original addressing space is generated. All the services belonging to that node will have private namespace addresses belonging to that subnetwork.
-As of now the network 10.16.0.0/12 represents the entire Oakestra platform. From this base address each cluster contains subnetworks with a netmask of 26 bits that are assigned to the nodes. Each worker can then assign namespace ip addresses using the last 6 bits of the address. A namespace ip is yeat another address assigned to each instance only within the node boundaries. The address 10.30.0.0/16 is reserved to the ServiceIPs.
-This network cut enables up to ≈ 15.360 worker nodes. Each worker can instantiate ≈ 62 containers, considering the address reserved internally for the networking components. 
+Then start the NetManager
+```
+sudo NetManager
+```
 
-## Packet proxying
 
-The component that decides which is the recipient worker node for each packet is the ProxyTUN. This component is implemented as an L4 proxy which analyzes the incoming traffic, changes the source and destination address, and forwards it to the overlay network.
-A packet approaching the proxy has a namespace IP as the source address and an IP belonging to the subnetwork of the Service and Instance IPs as a destination. 
-The L4 packet also has a couple of source and destination ports used to maintain a connection and contact the correct application on both sides. The proxy’s job is to substitute the source and destination addresses according to the routing policy expressed by the destination address. 
-The proxy converts the namespace address of the packet, belonging to the local network of the node, with the InstanceIP of that service’s instance.
-This conversion enables the receiver to route the response back to the service instance deployed inside the sender’s node.
-If the original destination address is an InstanceIP, the conversion is straightforward using the information available in the proxy’s cache. When the original destination address is a ServiceIP, the following four steps are executed:
 
-- Fetch the routing policy
-- Fetch the service instances
-- Choose one instance  using the logic associated with the routing policy 
-- Replace the ServiceIP with the namespace address of the resulting instance.
 
-After the correct translation of source and destination addresses, the packet is encapsulated and sent to the tunnel only if the destination belongs to another node, or it is just sent back down to the bridge if the destination is in the same node.
+
