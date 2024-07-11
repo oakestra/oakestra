@@ -63,7 +63,7 @@ class AddonsMonitor:
         return response.json()
 
     def maybe_create_networks(self, networks, runner_engine):
-        network_names = [network.name for network in networks]
+        network_names = [network.get("name") for network in networks]
         available_networks_names = [network.name for network in runner_engine.get_networks()]
 
         unavailable_networks = list(set(network_names) - set(available_networks_names))
@@ -77,7 +77,7 @@ class AddonsMonitor:
         return unavailable_networks
 
     def maybe_create_volumes(self, volumes, runner_engine):
-        volume_names = [volume.name for volume in volumes]
+        volume_names = [volume.get("name") for volume in volumes]
         available_volumes_names = [volume.name for volume in runner_engine.get_volumes()]
 
         unavailable_volumes = list(set(volume_names) - set(available_volumes_names))
@@ -196,7 +196,7 @@ class AddonsMonitor:
                 container = runner_engine.run_service(service, DEFAULT_PROJECT_NAME)
                 running_services.append(container)
             except Exception as e:
-                logging.warning(f"Failed to run container: {e}")
+                logging.warning("Failed to run container.", exc_info=e)
                 failed_services.append(service)
 
         return running_services, failed_services

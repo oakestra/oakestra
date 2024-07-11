@@ -10,28 +10,19 @@ def verify_addon(addon_id, addon):
     client = docker.from_env()
     for service in addon["services"]:
         image = service.get("image")
-        image_id = None
         try:
-            # TODO utilize opencontainers image spec to verify image instead of docker
-            logging.info(f"Pulling image: {image}")
-            pulled_image = client.images.pull(image)
-            image_id = pulled_image.id
-            logging.info(f"Image pulled: {image}")
+            logging.info(f"Getting image info: {image}")
+            client.images.get_registry_data(image)
+
+            logging.info(f"Addon-{addon_id} verified")
+            marketplace_db.update_addon(
+                addon_id, {"status": marketplace_db.StatusEnum.APPROVED.value}
+            )
         except docker.errors.DockerException as e:
-            logging.warning(f"Failed to pull {image}: {e}")
+            logging.warning(f"Failed to get {image} data", exc_info=e)
             marketplace_db.update_addon(
                 addon_id, {"status": marketplace_db.StatusEnum.VERIFICATION_FAILED.value}
             )
-            return
-
-        try:
-            # This is not a failure, maybe the image is used by another service
-            client.images.remove(image_id)
-        except docker.errors.DockerException as e:
-            logging.warning(f"Failed to remove image {image_id}: {e}")
-
-    logging.info(f"Addon-{addon_id} verified")
-    marketplace_db.update_addon(addon_id, {"status": marketplace_db.StatusEnum.APPROVED.value})
 
 
 def register_addon(addon):

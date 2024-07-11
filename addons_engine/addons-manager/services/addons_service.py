@@ -50,7 +50,10 @@ def install_addon(addon):
         return None
 
     addon["services"] = services
+    addon["volumes"] = marketplace_addon.get("volumes", [])
+    addon["networks"] = marketplace_addon.get("networks", [])
     addon["status"] = str(AddonStatusEnum.INSTALLING)
+
     created_addon = addons_db.create_addon(addon)
 
     return created_addon
