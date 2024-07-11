@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -41,7 +42,16 @@ func HandleRequests(port int) {
 	netRouter.HandleFunc("/register", register).Methods("POST")
 
 	handlers.RegisterAllManagers(&Env, &WorkerID, Configuration.NodePublicAddress, Configuration.NodePublicPort, netRouter)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), netRouter))
+
+	if port <= 0 {
+		listener, err := net.Listen("unix", "/etc/netmanager/netmanager.sock")
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Fatal(http.Serve(listener, netRouter))
+	} else {
+		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), netRouter))
+	}
 }
 
 var (
