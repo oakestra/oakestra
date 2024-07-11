@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 def signal_handler(sig, frame):
-    logging.info("Shutting down Addon Manager...")
+    logging.info("Shutting down Addon Monitor...")
     handle_shutdown()
 
     sys.exit(0)
