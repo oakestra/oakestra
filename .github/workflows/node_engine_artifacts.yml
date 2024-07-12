@@ -24,12 +24,12 @@ jobs:
         run: |
           cd go_node_engine
           env GOOS=linux GOARCH=${{ matrix.architecture }}  go build -ldflags="-X 'go_node_engine/cmd.Version=$version'" -o ../NodeEngine NodeEngine.go
-          env GOOS=linux GOARCH=${{ matrix.architecture }}  go build -o ../nodeengined_${{ matrix.architecture }} pkg/nodeengined.go
+          env GOOS=linux GOARCH=${{ matrix.architecture }}  go build -o ../nodeengined pkg/nodeengined.go
 
       - name: Package Artifacts
         run: |
           mkdir -p NodeEngine_folder_${{ matrix.architecture }}
-          cp NodeEngine_${{ matrix.architecture }} nodeengined_${{ matrix.architecture }} go_node_engine/build/install.sh go_node_engine/build/configure-gpu.sh go_node_engine/nodeengine.service NodeEngine_folder_${{ matrix.architecture }}
+          cp NodeEngine nodeengined go_node_engine/build/install.sh go_node_engine/build/configure-gpu.sh go_node_engine/nodeengine.service NodeEngine_folder_${{ matrix.architecture }}
           tar -czvf NodeEngine_${{ matrix.architecture }}.tar.gz -C NodeEngine_folder_${{ matrix.architecture }} .
 
       - name: Release Artifacts
