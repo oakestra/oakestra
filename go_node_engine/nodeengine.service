@@ -1,0 +1,15 @@
+[Unit]
+Description=Oakestra NodeEngine Service
+After=network.target
+StartLimitIntervalSec=10
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+User=root
+ExecStart=nodeengined
+StandardOutput=append:/var/log/oakestra/nodeengine.log
+StandardError=append:/var/log/oakestra/nodeengine.log
+
+[Install]
+WantedBy=multi-user.target

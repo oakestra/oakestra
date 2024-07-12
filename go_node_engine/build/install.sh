@@ -30,7 +30,18 @@ else
 fi
 
 #install latest version
+sudo mkdir /var/log/oakestra >/dev/null 2>&1
 sudo cp NodeEngine_$1 /bin/NodeEngine
+sudo cp nodeengined_$1 /bin/nodeengined
+
+if [ -e nodeengine.service ]
+then
+    sudo cp nodeengine.service /etc/systemd/system/nodeengine.service
+else
+    sudo cp ../nodeengine.service /etc/systemd/system/nodeengine.service
+fi  
+
 sudo chmod 755 /bin/NodeEngine
+sudo chmod 755 /bin/nodeengined
 
 [ $? -eq 0 ] && echo "Done, installation successful" || echo "Installation failed, errors reported!"

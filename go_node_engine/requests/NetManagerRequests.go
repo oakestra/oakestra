@@ -2,10 +2,12 @@ package requests
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"go_node_engine/model"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -97,6 +99,18 @@ func RegisterSelfToNetworkComponent() error {
 	jsonReq, err := json.Marshal(request)
 	if err != nil {
 		return err
+	}
+
+	if model.GetNodeInfo().NetManagerPort == 0 {
+		// if not network port specified, attempt using local socket
+		httpClient = &http.Client{
+			Timeout: time.Second * 10,
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+					return net.Dial("unix", "/etc/netmanager/netmanager.sock")
+				},
+			},
+		}
 	}
 
 	response, err := httpClient.Post(
