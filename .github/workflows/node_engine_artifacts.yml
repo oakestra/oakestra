@@ -29,7 +29,7 @@ jobs:
       - name: Package Artifacts
         run: |
           mkdir -p NodeEngine_folder_${{ matrix.architecture }}
-          cp NodeEngine_${{ matrix.architecture }} nodeengined_${{ matrix.architecture }} go_node_engine/build/install.sh go_node_engine/build/configure-gpu.sh go_node_engine/nodeengine.service NodeEngine_${{ matrix.architecture }}
+          cp NodeEngine_${{ matrix.architecture }} nodeengined_${{ matrix.architecture }} go_node_engine/build/install.sh go_node_engine/build/configure-gpu.sh go_node_engine/nodeengine.service NodeEngine_folder_${{ matrix.architecture }}
           tar -czvf NodeEngine_${{ matrix.architecture }}.tar.gz NodeEngine_folder_${{ matrix.architecture }}
 
       - name: Release Artifacts
