@@ -31,6 +31,13 @@ fi
 
 #install latest version
 sudo mkdir /var/log/oakestra >/dev/null 2>&1
+
+#compatibility with old build script
+if [ -e NodeEngine ]
+then
+    mv NodeEngine NodeEngine_$1
+fi
+
 sudo cp NodeEngine_$1 /bin/NodeEngine
 sudo cp nodeengined_$1 /bin/nodeengined
 
