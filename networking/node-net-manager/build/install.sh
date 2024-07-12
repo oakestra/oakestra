@@ -1,6 +1,6 @@
 sudo cp ./NetManager /bin/NetManager
 sudo mkdir /etc/netmanager >/dev/null 2>&1
-sudo mkdir /var/log/netmanager >/dev/null 2>&1
+sudo mkdir /var/log/oakestra >/dev/null 2>&1
 
 if [ ! -e /etc/netmanager/netcfg.json ]
 then

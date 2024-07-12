@@ -55,7 +55,23 @@ Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follow
 
 Then start the NetManager
 ```
-sudo NetManager
+sudo systemctl start netmanager
+```
+
+Verify the daemon status with:
+```
+sudo systemctl status netmanager
+```
+![status](img/image.png)
+
+You can enable the daemon start at system startup with
+```
+sudo systemctl enable netmanager
+```
+
+The daemon logs are under
+```
+/var/log/oakestra/netmanager.log
 ```
 
 

@@ -44,6 +44,7 @@ func HandleRequests(port int) {
 	handlers.RegisterAllManagers(&Env, &WorkerID, Configuration.NodePublicAddress, Configuration.NodePublicPort, netRouter)
 
 	if port <= 0 {
+		logger.InfoLogger().Println("Starting NetManager on unix socket /etc/netmanager/netmanager.sock")
 		listener, err := net.Listen("unix", "/etc/netmanager/netmanager.sock")
 		if err != nil {
 			log.Fatal(err)
