@@ -40,6 +40,7 @@ jobs:
           fail_on_unmatched_files: true
           draft: true 
           generate_release_notes: true
+          append_body: true
           files: |
             NodeEngine_${{ matrix.architecture }}.tar.gz
 
