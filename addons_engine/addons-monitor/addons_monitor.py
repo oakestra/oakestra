@@ -5,9 +5,6 @@ import sys
 from services.monitor_service import addons_monitor
 from utils.cleanup_handler import handle_shutdown
 
-# TODO remove this
-logging.basicConfig(level=logging.INFO)
-
 
 def signal_handler(sig, frame):
     logging.info("Shutting down Addon Monitor...")

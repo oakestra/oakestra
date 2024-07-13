@@ -19,8 +19,6 @@ app.config["OPENAPI_URL_PREFIX"] = "/docs"
 mongo_init(app)
 api = Api(app)
 
-# TODO remove this.
-logging.basicConfig(level=logging.INFO)
 
 # Register blueprints
 SWAGGER_URL = "/api/docs"
