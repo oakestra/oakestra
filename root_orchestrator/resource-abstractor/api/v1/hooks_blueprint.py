@@ -5,8 +5,6 @@ from marshmallow import Schema, fields, validate
 
 hooksblp = Blueprint("Hooks", "hooks", url_prefix="/api/v1/hooks")
 
-available_entities = ["jobs", "resources", "applications"]
-
 
 class APIObjectPostHookSchema(Schema):
     hook_name = fields.String()
@@ -31,10 +29,6 @@ class AllHooksController(MethodView):
     @hooksblp.arguments(APIObjectPostHookSchema, location="json")
     @hooksblp.response(201, APIObjectHookSchema, content_type="application/json")
     def post(self, data, *args, **kwargs):
-        entity = data.get("entity")
-        if entity not in available_entities:
-            return (f"Entity {entity} is not supported.", 400)
-
         return hooks_db.create_hook(data)
 
 
