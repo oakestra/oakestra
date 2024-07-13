@@ -14,6 +14,8 @@ def create_cluster(data):
 
 
 def update_cluster(cluster_id, data):
+    data.pop("_id", None)
+
     return db.mongo_clusters.find_one_and_update(
         {"_id": ObjectId(cluster_id)},
         {"$set": data},
@@ -57,10 +59,13 @@ def get_update_data(data):
         "virtualization": "virtualization",
         "more": "more",
         "worker_groups": "worker_groups",
+        "supported_addons": "supported_addons",
     }
 
     # Use the mapping to create the update dictionary
-    update_dict = {db_key: data.get(data_key) for data_key, db_key in key_mapping.items()}
+    update_dict = {
+        db_key: data.get(data_key) for data_key, db_key in key_mapping.items() if data_key in data
+    }
     update_dict["last_modified"] = datetime_now
     update_dict["last_modified_timestamp"] = datetime.timestamp(datetime_now)
     update_dict["aggregation_per_architecture"] = data.get("aggregation_per_architecture", {})
@@ -93,3 +98,7 @@ def update_cluster_information(cluster_id, data):
         },
         return_document=True,
     )
+
+
+def delete_cluster(cluster_id):
+    return db.mongo_clusters.delete_one({"_id": ObjectId(cluster_id)})

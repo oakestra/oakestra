@@ -5,16 +5,21 @@ from marshmallow import Schema, fields, validate
 
 hooksblp = Blueprint("Hooks", "hooks", url_prefix="/api/v1/hooks")
 
+available_entities = ["jobs", "resources", "applications"]
 
-class APIObjectHookSchema(Schema):
-    _id = fields.String()
-    hook_name = fields.String(required=True)
-    webhook_url = fields.String(required=True)
-    entity = fields.String(required=True)
+
+class APIObjectPostHookSchema(Schema):
+    hook_name = fields.String()
+    webhook_url = fields.String()
+    entity = fields.String()
     events = fields.List(
         fields.Str(validate=validate.OneOf([*hooks_db.ASYNC_EVENTS, *hooks_db.SYNC_EVENTS])),
         default=[],
     )
+
+
+class APIObjectHookSchema(APIObjectPostHookSchema):
+    _id = fields.String()
 
 
 @hooksblp.route("/")
@@ -23,22 +28,34 @@ class AllHooksController(MethodView):
     def get(self, *args, **kwargs):
         return hooks_db.find_hooks()
 
-    @hooksblp.arguments(APIObjectHookSchema, location="json")
-    @hooksblp.response(200, APIObjectHookSchema, content_type="application/json")
-    def put(self, data, *args, **kwargs):
+    @hooksblp.arguments(APIObjectPostHookSchema, location="json")
+    @hooksblp.response(201, APIObjectHookSchema, content_type="application/json")
+    def post(self, data, *args, **kwargs):
+        entity = data.get("entity")
+        if entity not in available_entities:
+            return (f"Entity {entity} is not supported.", 400)
+
         return hooks_db.create_hook(data)
 
 
-@hooksblp.route("/<hookId>")
+@hooksblp.route("/<hook_id>")
 class SingleHookController(MethodView):
     @hooksblp.response(200, APIObjectHookSchema, content_type="application/json")
-    def get(self, hookId, *args, **kwargs):
-        hook = hooks_db.find_hook_by_id(hookId)
+    def get(self, hook_id, *args, **kwargs):
+        hook = hooks_db.find_hook_by_id(hook_id)
         if not hook:
             return "Hook not found", 404
 
         return hook
 
-    @hooksblp.response(204, APIObjectHookSchema, content_type="application/json")
-    def delete(self, hookId, *args, **kwargs):
-        return hooks_db.delete_hook(hookId)
+    @hooksblp.response(204, content_type="application/json")
+    def delete(self, hook_id, *args, **kwargs):
+        hooks_db.delete_hook(hook_id)
+
+    @hooksblp.arguments(APIObjectPostHookSchema, validate=False, location="json")
+    @hooksblp.response(200, APIObjectHookSchema, content_type="application/json")
+    def patch(self, data, *args, **kwargs):
+        hook_id = kwargs.get("hook_id")
+        hook = hooks_db.update_hook(hook_id, data)
+
+        return hook

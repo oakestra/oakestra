@@ -39,6 +39,8 @@ services:
       - CLOUD_MONGO_PORT=10007
       - CLOUD_SCHEDULER_URL=cloud_scheduler
       - CLOUD_SCHEDULER_PORT=10004
+      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10099
 
@@ -102,7 +104,7 @@ services:
     command: redis-server --requirepass cloudRedis
 
   resource_abstractor:
-    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.301
+    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:latest
     container_name: resource_abstractor
     hostname: resource_abstractor
     labels:

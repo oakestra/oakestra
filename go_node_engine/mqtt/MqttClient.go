@@ -3,12 +3,13 @@ package mqtt
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/eclipse/paho.mqtt.golang"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/virtualization"
 	"strings"
 	"time"
+
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 var TOPICS = make(map[string]mqtt.MessageHandler)
@@ -105,7 +106,7 @@ func deployHandler(client mqtt.Client, msg mqtt.Message) {
 	go func() {
 		runtime := virtualization.GetRuntime(model.RuntimeType(service.Runtime))
 		err = runtime.Deploy(service, ReportServiceStatus)
-		service.Status = model.SERVICE_ACTIVE
+		service.Status = model.SERVICE_CREATED
 		if err != nil {
 			logger.ErrorLogger().Printf("ERROR during app deployment: %v", err)
 			service.StatusDetail = err.Error()
