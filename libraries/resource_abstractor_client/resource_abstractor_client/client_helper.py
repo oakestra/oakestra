@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Optional
 
 from requests import exceptions
 
@@ -9,7 +10,7 @@ RESOURCE_ABSTRACTOR_ADDR = (
 )
 
 
-def make_request(method, api, **kwargs):
+def make_request(method, api: str, **kwargs) -> Optional[dict]:
     url = f"{RESOURCE_ABSTRACTOR_ADDR}{api}"
     try:
         response = method(url, **kwargs)
