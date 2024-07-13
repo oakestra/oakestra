@@ -5,14 +5,14 @@ from db import mongodb_client as db
 
 
 class HookEventsEnum(Enum):
-    AFTER_CREATE = "afterCreate"
-    BEFORE_CREATE = "beforeCreate"
+    AFTER_CREATE = "after_create"
+    BEFORE_CREATE = "before_create"
 
-    AFTER_UPDATE = "afterUpdate"
-    BEFORE_UPDATE = "beforeUpdate"
+    AFTER_UPDATE = "after_update"
+    BEFORE_UPDATE = "before_update"
 
-    AFTER_DELETE = "afterDelete"
-    BEFORE_DELETE = "beforeDelete"
+    AFTER_DELETE = "after_delete"
+    BEFORE_DELETE = "before_delete"
 
 
 ASYNC_EVENTS = [
@@ -46,6 +46,7 @@ def update_hook(hook_id, data):
 
 
 def create_hook(data):
+    data.pop("_id", None)
     res = db.mongo_hooks.insert_one(data)
 
     return db.mongo_hooks.find_one({"_id": res.inserted_id})
