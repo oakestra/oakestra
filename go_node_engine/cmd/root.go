@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
+	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -22,6 +25,7 @@ var (
 	clusterPort      int
 	overlayNetwork   int
 	unikernelSupport bool
+	detatched        bool
 	logDirectory     string
 )
 
@@ -41,6 +45,7 @@ func init() {
 	rootCmd.Flags().IntVarP(&overlayNetwork, "netmanagerPort", "n", 0, "Port of the NetManager component, if configured. Otherwise the netmanager will look for a local socket. If no local socket the overlay network is disabled by default.")
 	rootCmd.Flags().BoolVarP(&unikernelSupport, "unikernel", "u", false, "Enable Unikernel support. [qemu/kvm required]")
 	rootCmd.Flags().StringVarP(&logDirectory, "logs", "l", DEFAULT_LOG_DIR, "Directory for application's logs")
+	rootCmd.Flags().BoolVarP(&detatched, "detatch", "d", false, "Run the NodeEngine in the background (daemon mode)")
 }
 
 func nodeEngineDaemonManager() error {
@@ -79,6 +84,58 @@ func nodeEngineDaemonManager() error {
 		return err
 	}
 	fmt.Println("NodeEngine started  🟢")
+	if !detatched {
+		return attatch()
+	}
 
 	return nil
+}
+
+func attatch() error {
+	// Open the log file
+	logFile, err := os.Open("/var/log/oakestra/nodeengine.log")
+	if err != nil {
+		fmt.Println("Error opening log file, is the NodeEngine running? Use 'NodeEngine status' to check.")
+		return err
+	}
+	defer logFile.Close()
+
+	// Get the file size to start reading from the end
+	fileInfo, err := logFile.Stat()
+	if err != nil {
+		return err
+	}
+
+	// Track the current position in the file
+	offset := fileInfo.Size()
+
+	// Handle interrupt signal (Ctrl+C)
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		fmt.Println("\nExiting...")
+		stopNodeEngine()
+		os.Exit(0)
+	}()
+
+	// Continuously tail the log file
+	for {
+		// Seek to the end of the file
+		_, err = logFile.Seek(offset, io.SeekStart)
+		if err != nil {
+			return err
+		}
+
+		// Read new content from the file
+		data, err := io.ReadAll(logFile)
+		if err != nil && err != io.EOF {
+			return err
+		}
+
+		fmt.Print(string(data))
+
+		// Update the offset for the next read
+		offset += int64(len(data))
+	}
 }

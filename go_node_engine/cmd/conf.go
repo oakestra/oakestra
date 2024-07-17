@@ -305,7 +305,7 @@ func getConfFile() (*os.File, ConfFile, error) {
 
 	clusterConf := ConfFile{}
 
-	confFile, err := os.Open("/etc/oakestra/conf.json")
+	confFile, err := os.OpenFile("/etc/oakestra/conf.json", os.O_RDWR, 0644)
 	if err != nil {
 		//create dir /etc/oakestra if not present
 		err := os.MkdirAll("/etc/oakestra", 0755)

@@ -31,6 +31,8 @@ fi
 
 #install latest version
 sudo mkdir /var/log/oakestra >/dev/null 2>&1
+sudo systemctl stop nodeengine >/dev/null 2>&1
+sudo systemctl stop netmanager >/dev/null 2>&1
 
 #compatibility with build script
 if [ -e NodeEngine ]
@@ -51,6 +53,8 @@ then
 else
     sudo cp ../nodeengine.service /etc/systemd/system/nodeengine.service
 fi  
+
+sudo systemctl daemon-reload >/dev/null 2>&1
 
 sudo chmod 755 /bin/NodeEngine
 sudo chmod 755 /bin/nodeengined
