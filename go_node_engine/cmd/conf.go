@@ -129,6 +129,7 @@ func defaultConfig() error {
 	}
 
 	//write cluster configuration
+	confFile.Truncate(0)
 	confFile.Seek(0, 0)
 	_, err = confFile.Write(marshalled)
 	if err != nil {
@@ -158,6 +159,7 @@ func configCluster(address string) error {
 	}
 
 	//write cluster configuration
+	confFile.Truncate(0)
 	confFile.Seek(0, 0)
 	_, err = confFile.Write(marshalled)
 	if err != nil {
@@ -210,6 +212,7 @@ func configLogs(path string) error {
 	}
 
 	//write cluster configuration
+	confFile.Truncate(0)
 	confFile.Seek(0, 0)
 	_, err = confFile.Write(marshalled)
 	if err != nil {
@@ -237,6 +240,7 @@ func setUnikernel(status bool) error {
 	}
 
 	//write cluster configuration
+	confFile.Truncate(0)
 	confFile.Seek(0, 0)
 	_, err = confFile.Write(marshalled)
 	if err != nil {
@@ -264,6 +268,7 @@ func setNetwork(cniName string) error {
 	}
 
 	//write cluster configuration
+	confFile.Truncate(0)
 	confFile.Seek(0, 0)
 	_, err = confFile.Write(marshalled)
 	if err != nil {
@@ -291,6 +296,7 @@ func setNetworkPort(netPort int) error {
 	}
 
 	//write cluster configuration
+	confFile.Truncate(0)
 	confFile.Seek(0, 0)
 	_, err = confFile.Write(marshalled)
 	if err != nil {
@@ -330,6 +336,9 @@ func getConfFile() (*os.File, ConfFile, error) {
 		err = json.Unmarshal(buffer[:n], &clusterConf)
 		if err != nil {
 			fmt.Printf("Error reading configuration: %v\n, resetting the file", err)
+			confFile.Truncate(0)
+			return nil, ConfFile{}, err
+
 		}
 	}
 

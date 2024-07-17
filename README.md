@@ -56,12 +56,14 @@ curl -sfL oakestra.io/getstarted.sh | sh -
 ### Your first worker node 🍃
 <a name="your-first-worker-node-🍃"></a>
 
+## Download and configure the Node endine and the Net Manager (once for each node)
+
 Download and install the Node Engine and the Network Manager:
 ```
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/InstallOakestraWorker.sh | sh -  
 ```
 
-Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follows:
+Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follows (perform this step only once):
 ```json
 {
   "NodePublicAddress": "<IP ADDRESS OF THIS DEVICE>",
@@ -71,17 +73,18 @@ Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follow
 }
 ```
 
-Start the NetManager on port 6000
+Configure NodeEngine cluster :
 ```
-sudo NetManager -p 6000
-```
-
-On a different shell, start the NodeEngine with the -6000 paramenter to connect to the NetManager. 
-```
-sudo NodeEngine -a <Cluster Orchestrator IP Address>
+sudo NodeEngine config cluster <IP Address of cluster orchestrator>
 ```
 
-If you see the NodeEngine reporting metrics to the Cluster...
+## Startup your oakestra worker
+Just run:
+```
+sudo NodeEngine 
+```
+
+This command by default will start your NodeEngine in foreground and the NetManager in background. 
 
 🏆 Success!
 
