@@ -74,7 +74,7 @@ var (
 		Use:   "disable",
 		Short: "Disable unikernel support",
 		Run: func(cmd *cobra.Command, args []string) {
-			setUnikernel(true)
+			setUnikernel(false)
 		},
 	}
 	setCni = &cobra.Command{
