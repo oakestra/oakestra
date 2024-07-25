@@ -20,7 +20,7 @@ var (
 		Use:   "NodeEngine",
 		Short: "Start a NoderEngine",
 		Long:  `Start a New Oakestra Worker Node`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return startNodeEngine()
 		},
 	}

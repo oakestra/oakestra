@@ -5,5 +5,7 @@ import (
 )
 
 func main() {
-	cmd.Execute()
+	if err := cmd.RootCmd.Execute(); err != nil {
+		fmt.Println(os.Stderr, "NodeEngine error executing: %v\n", err)
+	}
 }
