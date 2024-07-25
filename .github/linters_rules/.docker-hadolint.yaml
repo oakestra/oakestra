@@ -1,7 +1,5 @@
 # Refer the docs at https://github.com/hadolint/hadolint?tab=readme-ov-file#configure
 ignored:
-#  - DL3000
-#  - SC1010
   - DL3008 # Pin versions in apt get install
   - DL3009 # Delete the apt-get lists after installing something
   - DL3015 # Avoid additional packages by specifying --no-install-recommends

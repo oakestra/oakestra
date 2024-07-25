@@ -47,6 +47,6 @@ rules:
 
   # Configuration for empty lines
   empty-lines:
-    max: 3                           # Maximum number of consecutive empty lines allowed (2)
+    max: 3                           # Maximum number of consecutive empty lines allowed (3)
     max-start: 1                      # Maximum number of empty lines allowed at the start of the document
     max-end: 1                        # Allow up to 1 empty line at the end of the document
