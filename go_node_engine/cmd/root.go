@@ -31,8 +31,10 @@ var (
 	logDirectory     string
 )
 
+// MONITORING_CYCLE defines the interval at which the system should perform monitoring tasks.
 const MONITORING_CYCLE = time.Second * 2
 
+// Execute is the entry point of the NodeEngine
 func Execute() error {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	return rootCmd.Execute()
@@ -80,7 +82,8 @@ func startNodeEngine() error {
 
 	// catch SIGETRM or SIGINTERRUPT
 	termination := make(chan os.Signal, 1)
-	signal.Notify(termination, syscall.SIGTERM, syscall.SIGINT, syscall.SIGKILL)
+	// SIGKILL cannot be trapped, using SIGTERM instead
+	signal.Notify(termination, syscall.SIGTERM, syscall.SIGINT)
 	select {
 	case ossignal := <-termination:
 		logger.InfoLogger().Printf("Terminating the NodeEngine, signal:%v", ossignal)

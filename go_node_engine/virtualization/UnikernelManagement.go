@@ -32,7 +32,7 @@ type qemuDomain struct {
 }
 
 type UnikernelRuntime struct {
-	qemuCommand string
+	qemuCommand string // nolint:unused // Ignore unused linter for this field
 	qemuPath    string
 	qemuDomains map[string]*qemuDomain
 	killQueue   map[string]*chan bool
@@ -67,7 +67,14 @@ func GetUnikernelRuntime() *UnikernelRuntime {
 		ukruntime.killQueue = make(map[string]*chan bool)
 		ukruntime.qemuDomains = make(map[string]*qemuDomain)
 		err = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to create kernel directory: %v", err)
+		}
+
 		err = os.MkdirAll("/tmp/node_engine/inst/", 0755)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to create instance directory: %v", err)
+		}
 		model.GetNodeInfo().AddSupportedTechnology(model.UNIKERNEL_RUNTIME)
 	})
 	return &ukruntime

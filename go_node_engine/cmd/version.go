@@ -10,12 +10,12 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 }
 
-var Version = "None"
+var version = "None"
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of NodeEngine",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(Version)
+		fmt.Println(version)
 	},
 }

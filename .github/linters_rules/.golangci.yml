@@ -13,14 +13,15 @@ output:
 linters:
   disable-all: true
 
+  # Full linter list: https://golangci-lint.run/usage/linters
   enable:
     - errcheck
     - goimports
-    - golint
+    - revive
     - govet
     - staticcheck
-    #- revive
-    #- govet
+    - unused
+    - testifylint
     #- gosec
     #- dupl
     #- goconst
@@ -33,11 +34,21 @@ issues:
   max-same-issues: 0
 
 linters-settings:
-  errcheck:
+  revive:
+    # Only these rules are enabled.
+    rules:
+      - name: exported
+        arguments:
+        - disableStutteringCheck
+
+  #staticcheck:
+  #  checks:
+  #    - "all"
+  #errcheck:
     # Report about not checking of errors in type assertions: `a := b.(MyStruct)`.
     # Such cases aren't reported by default.
     # Default: false
-    check-type-assertions: false
-  dupl:
+  #  check-type-assertions: false
+  #dupl:
     # Tokens count to trigger issue, Default: 150
-    threshold: 100
+  #  threshold: 100
