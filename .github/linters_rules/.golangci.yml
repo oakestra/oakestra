@@ -1,0 +1,40 @@
+run:
+  concurrency: 4
+  timeout: 5m
+  issues-exit-code: 2
+  tests: false
+
+output:
+  print-issued-lines: false
+  print-linter-name: true
+  uniq-by-line: false
+  path-prefix: ""
+  sort-results: true
+
+linters:
+  disable-all: true
+
+  enable:
+    # bugs/error
+    - staticcheck
+    - revive
+    - govet
+    - errcheck
+    - gosec
+    - dupl
+
+    # style, formatting
+    - stylecheck
+    - goconst
+    - gofmt
+    - tagliatelle
+
+linters-settings:
+  errcheck:
+    # Report about not checking of errors in type assertions: `a := b.(MyStruct)`.
+    # Such cases aren't reported by default.
+    # Default: false
+    check-type-assertions: false
+  dupl:
+    # Tokens count to trigger issue, Default: 150
+    threshold: 100
