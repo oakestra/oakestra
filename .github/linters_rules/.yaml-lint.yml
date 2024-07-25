@@ -1,20 +1,52 @@
-extends: default
+---
+ignore: |
+  .github/
+  .pre-commit-config.yaml
 
+# Configuration for how braces `{}` should be formatted
 rules:
-  # Enforce consistent indentation
-  indentation:
-    level: warning
-    indent-sequences: consistent
+  braces:
+    min-spaces-inside: 0             # Minimum number of spaces inside braces (none required)
+    max-spaces-inside: 0             # Maximum number of spaces inside braces (none allowed)
+    min-spaces-inside-empty: -1      # Minimum spaces inside empty braces (ignore this setting)
+    max-spaces-inside-empty: -1      # Maximum spaces inside empty braces (ignore this setting)
 
-  # Line length checks with some relaxation
-  line-length:
-    level: warning
-    max-length: 120 # Relax from default 80
+  # Configuration for how brackets `[]` should be formatted
+  brackets:
+    min-spaces-inside: 0             # Minimum number of spaces inside brackets (none required)
+    max-spaces-inside: 1             # Maximum number of spaces inside brackets (up to 1 space allowed)
+    min-spaces-inside-empty: -1      # Minimum spaces inside empty brackets (ignore this setting)
+    max-spaces-inside-empty: -1      # Maximum spaces inside empty brackets (ignore this setting)
 
-  # Allow apt-get usage in RUN instructions
-  apt: enable
+  # Configuration for colons `:` used in mappings
+  colons:
+    max-spaces-before: 1            # Maximum number of spaces before a colon (none allowed)
+    max-spaces-after: 1             # Maximum number of spaces after a colon (up to 1 space allowed)
 
-  # Allow environment variable assignments
-  env: enable
+  # Configuration for commas `,` used in lists and mappings
+  commas:
+    max-spaces-before: 1            # Maximum number of spaces before a comma (up to 1 space allowed)
+    min-spaces-after: 1             # Minimum number of spaces after a comma (at least 1 space required)
+    max-spaces-after: 1             # Maximum number of spaces after a comma (up to 1 space allowed)
 
-disabled_rules: empty-lines
+  # Configuration for comments
+  comments:
+    level: warning                    # Set the linter to issue warnings for comment-related issues
+    require-starting-space: false     # Comments don't need to start with a space
+    min-spaces-from-content: 1        # Minimum number of spaces between comments and adjacent content
+
+  # Configuration for comments indentation
+  comments-indentation:
+    level: warning                    # Set the linter to issue warnings for incorrect comment indentation
+
+  # Configuration for the end of the document
+  document-end: disable              # Disable checks for the presence of a newline at the end of the document
+
+  # Configuration for the start of the document
+  document-start: disable            # Disable checks for the presence of a newline at the start of the document
+
+  # Configuration for empty lines
+  empty-lines:
+    max: 3                           # Maximum number of consecutive empty lines allowed (2)
+    max-start: 1                      # Maximum number of empty lines allowed at the start of the document
+    max-end: 1                        # Allow up to 1 empty line at the end of the document
