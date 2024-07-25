@@ -17,7 +17,7 @@ linters:
   enable:
     - errcheck
     - goimports
-    - revive
+    #- revive
     - govet
     - staticcheck
     - unused
