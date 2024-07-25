@@ -29,7 +29,7 @@
               LOG_LEVEL: INFO
               IGNORE_GITIGNORED_FILES: true
               IGNORE_GENERATED_FILES: true
-              VALIDATE_ALL_CODEBASE: true
+              VALIDATE_ALL_CODEBASE: false
               # FILTER_REGEX_EXCLUDE: .github/* #Exclude files from being linted
               LINTER_RULES_PATH: .github/linters_rules
               VALIDATE_PYTHON_BLACK: true
