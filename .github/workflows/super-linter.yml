@@ -48,6 +48,8 @@
               YAML_CONFIG_FILE: .yaml-lint.yml
               # Bash linter & validator
               VALIDATE_BASH: true
+              BASH_FILE_NAME: .shellcheckrc
+              BASH_SEVERITY: error
               VALIDATE_BASH_EXEC: true
               # GitLeaks: discover secrets leaking - https://github.com/gitleaks/gitleaks?tab=readme-ov-file#configuration
               VALIDATE_GITLEAKS: true
