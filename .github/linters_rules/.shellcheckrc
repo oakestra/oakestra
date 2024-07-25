@@ -1,2 +1,1 @@
-disable = SC1091, SC2064, SC2206  # Disable individual error codes
-disable = SC1090 - SC1100  # Disable a range of error codes
+disable=SC1091,SC2064,SC2206
