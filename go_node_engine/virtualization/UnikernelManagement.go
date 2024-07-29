@@ -201,8 +201,8 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 			logger.InfoLogger().Printf("Unable to create Kernel: %v", err)
 			return nil
 		}
+		
 		//defer kimage.Close()
-
 		defer func() {
 			if err := kimage.Close(); err != nil {
 				logger.InfoLogger().Printf("Unable to close kernel image: %v", err)
