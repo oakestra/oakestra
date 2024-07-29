@@ -18,18 +18,25 @@ import (
 	psnet "github.com/shirou/gopsutil/net"
 )
 
+// RuntimeType is the type of runtime that the node executes
 type RuntimeType string
+
+// RuntimeType constants
 const (
 	CONTAINER_RUNTIME RuntimeType = "docker"
 	UNIKERNEL_RUNTIME RuntimeType = "unikernel"
 )
 
+// AddonType is the type of addon that the node supports
 type AddonType string
+
 const (
 // Example Addon:
-// 	FLOPS AddonType = "FLOps"
- )
+//
+//	FLOPS AddonType = "FLOps"
+)
 
+// Node is the struct that describes the node
 type Node struct {
 	Id              string            `json:"id"`
 	Host            string            `json:"host"`
@@ -59,27 +66,30 @@ type Node struct {
 var once sync.Once
 var node Node
 
+// GetNodeInfo returns the node information
 func GetNodeInfo() *Node {
 	once.Do(func() {
 		node = Node{
-			Host:       getHostname(),
-			SystemInfo: getSystemInfo(),
-			CpuCores:   getCpuCores(),
-			CpuArch:    runtime.GOARCH,
-			Port:       getPort(),
-			Technology: make([]RuntimeType, 0),
+			Host:            getHostname(),
+			SystemInfo:      getSystemInfo(),
+			CpuCores:        getCpuCores(),
+			CpuArch:         runtime.GOARCH,
+			Port:            getPort(),
+			Technology:      make([]RuntimeType, 0),
 			SupportedAddons: make([]AddonType, 0),
-			Overlay:    false,
+			Overlay:         false,
 		}
 	})
 	node.updateDynamicInfo()
 	return &node
 }
 
+// SetLogDirectory sets the directory where the logs will be stored
 func (n *Node) SetLogDirectory(dir string) {
 	n.LogDirectory = dir
 }
 
+// GetDynamicInfo returns the dynamic information of the node (CPU, Memory, GPU usage etc.)
 func GetDynamicInfo() Node {
 	node.updateDynamicInfo()
 	return Node{
@@ -95,6 +105,7 @@ func GetDynamicInfo() Node {
 	}
 }
 
+// EnableOverlay enables the overlay network, setting the port
 func EnableOverlay(port int) {
 	node.Overlay = true
 	node.NetManagerPort = port
@@ -119,6 +130,7 @@ func (n *Node) updateDynamicInfo() {
 
 }
 
+// SetNodeId sets the node id
 func SetNodeId(id string) {
 	GetNodeInfo()
 	node.Id = id
@@ -235,18 +247,22 @@ func getPort() string {
 	return port
 }
 
+// AddSupportedTechnology adds a supported technology to the node
 func (n *Node) AddSupportedTechnology(tech RuntimeType) {
 	n.Technology = append(n.Technology, tech)
 }
 
+// GetSupportedTechnologyList returns the list of supported technologies
 func (n *Node) GetSupportedTechnologyList() []RuntimeType {
 	return n.Technology
 }
 
+// AddSupportedAddons adds a supported addon to the node
 func (n *Node) AddSupportedAddons(ext AddonType) {
 	n.SupportedAddons = append(n.SupportedAddons, ext)
 }
 
+// GetSupportedAddonsList returns the list of supported addons
 func (n *Node) GetSupportedAddonsList() []AddonType {
 	return n.SupportedAddons
 }
@@ -257,14 +273,19 @@ func getGpuDriver() string {
 		return "-"
 	}
 
+	var queryResult string
 	for i := 0; i < n; i++ {
 		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "driver_version")
 		if err != nil {
-			return "-"
+			continue
 		}
-		return res
+		queryResult = res
 	}
-	return "-"
+
+	if queryResult != "" {
+		return "-"
+	}
+	return queryResult
 }
 
 func getGpuMemUsage() float64 {

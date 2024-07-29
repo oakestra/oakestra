@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # docker-compose --file ../docker-compose-amd64.yml up -d

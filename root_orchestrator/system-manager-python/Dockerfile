@@ -4,11 +4,11 @@ LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 # The greenlet pip package requires gcc & g++ to work properly.
 RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ git
 
-ADD requirements.txt /
+COPY requirements.txt /
 
 RUN pip install -r requirements.txt --no-cache-dir && rm /requirements.txt
 
-ADD . /
+COPY . /
 
 # TRUE for verbose logging
 ENV FLASK_DEBUG=TRUE
@@ -25,3 +25,4 @@ ENV NET_PLUGIN_PORT=10100
 EXPOSE 10000
 
 CMD ["python", "system_manager.py"]
+
