@@ -9,6 +9,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from cluster_scheduler_requests import scheduler_request_status
 from cm_logging import configure_logging
 from flask import Flask, request
+from flask_socketio import SocketIO
+
 from mongodb_client import (
     mongo_find_job_by_system_id,
     mongo_init,
@@ -35,11 +37,14 @@ MY_ASSIGNED_CLUSTER_ID = None
 SYSTEM_MANAGER_ADDR = (
     os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_GRPC_PORT")
 )
-GRPC_REQUEST_TIMEOUT = 60
+GRPC_REQUEST_TIMEOUT = 120
 
 my_logger = configure_logging()
 
 app = Flask(__name__)
+
+socketioserver = SocketIO(app, logger=True, engineio_logger=True)
+
 
 mongo_init(app)
 
@@ -187,6 +192,7 @@ def background_job_send_aggregated_information_to_sm():
 def register_with_system_manager():
     """Registers this cluster manager with the system manager using gRPC."""
 
+    response = None
     with grpc.insecure_channel(SYSTEM_MANAGER_ADDR) as channel:
         stub = register_clusterStub(channel)
 
@@ -248,7 +254,6 @@ def register_with_system_manager():
 if __name__ == "__main__":
 
     start_http_server(10001)  # start prometheus server
-
     import eventlet
 
     register_with_system_manager()  # register with system manager using gRPC

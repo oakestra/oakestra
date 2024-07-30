@@ -28,8 +28,10 @@ services:
       logging_jobname: "rootlogs"
     expose:
       - "10000"
+      - "50052"
     ports:
       - "10000:10000"
+      - "50052:50052"
     depends_on:
       - mongo_root
       - cloud_scheduler
