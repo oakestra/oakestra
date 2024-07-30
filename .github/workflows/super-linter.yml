@@ -2,13 +2,24 @@
 ---
     name: Super-Linter Codestyles Checks
     
-    on: [push, pull_request]
-        
+    on:
+      push:
+        branches: [develop]
+        # Remove the line above to run when pushing to master
+      pull_request:
+        branches: [develop]
+    
+    permissions: { }
+    
     jobs:
       build:
         name: Lint
         runs-on: ubuntu-latest
     
+        permissions:
+          contents: read
+          packages: read
+          statuses: write
     
         steps:
           - name: Checkout code
@@ -48,4 +59,4 @@
               # GitLeaks: discover secrets leaking - https://github.com/gitleaks/gitleaks?tab=readme-ov-file#configuration
               VALIDATE_GITLEAKS: true
               # GITLEAKS_CONFIG_FILE: .gitleaks.toml # https://github.com/gitleaks/gitleaks#configuration
-              #GITHUB_TOKEN: ${{ secrets.SUPER_LINTER_TOKEN }}
+              GITHUB_TOKEN: ${{ secrets.SUPER_LINTER_TOKEN }}
