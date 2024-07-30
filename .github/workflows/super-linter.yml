@@ -3,18 +3,12 @@
     name: Super-Linter Codestyles Checks
     
     on: [push, pull_request]
-    
-    permissions: { }
-    
+        
     jobs:
       build:
         name: Lint
         runs-on: ubuntu-latest
     
-        permissions:
-          contents: read
-          packages: read
-          statuses: read
     
         steps:
           - name: Checkout code
