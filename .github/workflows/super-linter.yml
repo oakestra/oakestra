@@ -5,21 +5,15 @@
     on:
       push:
         branches: [develop]
-        # Remove the line above to run when pushing to master
       pull_request:
         branches: [develop]
     
-    permissions: { }
+    permissions: read-all
     
     jobs:
       build:
         name: Lint
         runs-on: ubuntu-latest
-    
-        permissions:
-          contents: read
-          packages: read
-          statuses: write
     
         steps:
           - name: Checkout code
