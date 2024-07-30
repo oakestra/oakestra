@@ -49,4 +49,4 @@
               # GitLeaks: discover secrets leaking - https://github.com/gitleaks/gitleaks?tab=readme-ov-file#configuration
               VALIDATE_GITLEAKS: true
               # GITLEAKS_CONFIG_FILE: .gitleaks.toml # https://github.com/gitleaks/gitleaks#configuration
-              GITHUB_TOKEN: ${{ secrets.SUPER_LINTER_TOKEN }}
+              #GITHUB_TOKEN: ${{ secrets.SUPER_LINTER_TOKEN }}
