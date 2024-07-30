@@ -2,12 +2,8 @@
 ---
     name: Super-Linter Codestyles Checks
     
-    on:
-      push:
-        branches: [develop]
-      pull_request:
-        branches: [develop]
-    
+    on: [push, pull_request]
+
     permissions: read-all
     
     jobs:
