@@ -92,7 +92,7 @@ func readConf() cmd.ConfFile {
 	confFile, err := os.Open("/etc/oakestra/conf.json")
 	cfg := cmd.ConfFile{}
 	if err != nil {
-		logger.ErrorLogger().Fatalf("Error reading configuration: %v\n, resetting the file", err)
+		logger.ErrorLogger().Fatalf("Error reading configuration: %v\n", err)
 	}
 	defer confFile.Close()
 
