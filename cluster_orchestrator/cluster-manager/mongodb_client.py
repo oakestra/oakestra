@@ -273,7 +273,7 @@ def mongo_update_jobs_status(time_interval: int) -> None:
                 if (
                     job_is_inactive
                     and job_status not in PositiveSchedulingStatus
-                    and job_status != DeploymentStatus.COMPLETE
+                    and job_status != DeploymentStatus.COMPLETED
                 ):
                     print("Job is inactive: " + str(job.get("job_name")))
                     new_job_status = DeploymentStatus.FAILED
