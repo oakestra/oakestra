@@ -10,8 +10,9 @@ CUSTOM_RESOURCES_ADDR = "http://0.0.0.0:11011/api/v1/custom-resources"
 GROUP = "edu.oak"
 VERSION = "v1"
 
-api_crd = client.ApiextensionsV1Api()
-api_crd_objects = client.CustomObjectsApi()
+
+api_crd = None
+api_crd_objects = None
 
 
 results1 = []
@@ -172,24 +173,24 @@ def test_custom_resources(custom_resources, entries):
 
         print(f"\t{i} - created resource in {creation_time}")
 
-        for j in range(entries):
-            entry_data = generate_random_data_for_schema(schema)
-            result, creation_time = eval_operation(add_entry, resource_type, entry_data)
-            assert result is not None
+        # for j in range(entries):
+        #     entry_data = generate_random_data_for_schema(schema)
+        #     result, creation_time = eval_operation(add_entry, resource_type, entry_data)
+        #     assert result is not None
 
-            print(f"\t{j} - created object in {creation_time}")
+        #     print(f"\t{j} - created object in {creation_time}")
 
-            entry_id = result["_id"]
-            assert entry_id is not None
+        #     entry_id = result["_id"]
+        #     assert entry_id is not None
 
-            # _, retrieval_time = eval_operation(get_entry, resource_type, entry_id)
-            # _, deletion_time = eval_operation(delete_entry, resource_type, entry_id)
+        #     # _, retrieval_time = eval_operation(get_entry, resource_type, entry_id)
+        #     # _, deletion_time = eval_operation(delete_entry, resource_type, entry_id)
 
-            results2.append([i, creation_time, 0, 0])
+        #     results2.append([i, creation_time, 0, 0])
 
-            if len(results2) % 1000 == 0:
-                print_csv(results2, "entries_0")
-                results2 = []
+        #     if len(results2) % 1000 == 0:
+        #         print_csv(results2, "entries_0")
+        #         results2 = []
 
 
 def test_custom_resources_k(custom_resources, entries):
@@ -209,45 +210,45 @@ def test_custom_resources_k(custom_resources, entries):
         results1.append([i, creation_time])
         time.sleep(1)
 
-        for j in range(entries):
+        # for j in range(entries):
 
-            data = generate_crd_data_structure(resource_name, schema)
+        #     data = generate_crd_data_structure(resource_name, schema)
 
-            created_obj, creation_time = eval_operation(
-                api_crd_objects.create_namespaced_custom_object,
-                GROUP,
-                VERSION,
-                "default",
-                f"{resource_name}s",
-                data,
-            )
-            assert created_obj is not None
+        #     created_obj, creation_time = eval_operation(
+        #         api_crd_objects.create_namespaced_custom_object,
+        #         GROUP,
+        #         VERSION,
+        #         "default",
+        #         f"{resource_name}s",
+        #         data,
+        #     )
+        #     assert created_obj is not None
 
-            # retrieved_obj, retrieval_time = eval_operation(
-            #     api_crd_objects.get_namespaced_custom_object,
-            #     GROUP,
-            #     VERSION,
-            #     "default",
-            #     f"{resource_name}s",
-            #     created_obj["metadata"]["name"],
-            # )
-            # assert retrieved_obj is not None
+        # retrieved_obj, retrieval_time = eval_operation(
+        #     api_crd_objects.get_namespaced_custom_object,
+        #     GROUP,
+        #     VERSION,
+        #     "default",
+        #     f"{resource_name}s",
+        #     created_obj["metadata"]["name"],
+        # )
+        # assert retrieved_obj is not None
 
-            # _, deletion_time = eval_operation(
-            #     api_crd_objects.delete_namespaced_custom_object,
-            #     GROUP,
-            #     VERSION,
-            #     "default",
-            #     f"{resource_name}s",
-            #     created_obj["metadata"]["name"],
-            # )
-            results2.append([i, creation_time, 0, 0])
+        # _, deletion_time = eval_operation(
+        #     api_crd_objects.delete_namespaced_custom_object,
+        #     GROUP,
+        #     VERSION,
+        #     "default",
+        #     f"{resource_name}s",
+        #     created_obj["metadata"]["name"],
+        # )
+        # results2.append([i, creation_time, 0, 0])
 
-            print(f"\t{j} - created object in {creation_time}")
+        # print(f"\t{j} - created object in {creation_time}")
 
-            if len(results2) % 1000 == 0:
-                print_csv(results2, "entries_1")
-                results2 = []
+        # if len(results2) % 1000 == 0:
+        #     print_csv(results2, "entries_1")
+        #     results2 = []
 
         api_crd.delete_custom_resource_definition(f"{resource_name}s.{GROUP}")
 
@@ -259,7 +260,12 @@ def print_csv(results, filename="entries", mode="a+"):
 
 
 def cleanup_kubernetes(group=GROUP):
-    crds = api_crd.list_custom_resource_definition().items
+    try:
+        crds = api_crd.list_custom_resource_definition().items
+    except Exception as e:
+        print(f"Error listing CRDs: {e}")
+        return
+
     namespace = "default"
 
     for crd in crds:
@@ -289,9 +295,8 @@ def cleanup_kubernetes(group=GROUP):
             print(f"Error deleting CRD {crd.metadata.name}: {e}")
 
 
-def cleanup():
+def cleanup_custom_resources():
     print("Cleaning up custom resources...")
-    cleanup_kubernetes()
 
     response = requests.delete(CUSTOM_RESOURCES_ADDR)
     response.raise_for_status()
@@ -326,8 +331,6 @@ if __name__ == "__main__":
     entries = args.entries
     kubernetes = args.kube
 
-    cleanup()
-
     print_csv(results1, f"resources_{int(kubernetes)}", mode="w+")
     print_csv(results2, f"entries_{int(kubernetes)}", mode="w+")
     results1 = []
@@ -335,11 +338,14 @@ if __name__ == "__main__":
 
     if kubernetes:
         config.load_kube_config()
-    (
+        api_crd = client.ApiextensionsV1Api()
+        api_crd_objects = client.CustomObjectsApi()
+
+        cleanup_kubernetes()
+        test_custom_resources_k(resources, entries)
+    else:
+        cleanup_custom_resources()
         test_custom_resources(resources, entries)
-        if not kubernetes
-        else test_custom_resources_k(resources, entries)
-    )
 
     print_csv(results1, f"resources_{int(kubernetes)}")
     print_csv(results2, f"entries_{int(kubernetes)}")
