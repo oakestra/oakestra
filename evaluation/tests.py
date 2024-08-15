@@ -17,8 +17,8 @@ api_crd_objects = None
 
 results1 = []
 results2 = []
-results1.append(["i", "creation_time"])
-results2.append(["i", "creation_time", "retrieval_time", "deletion_time"])
+results1.append(["i", "time_taken"])
+results2.append(["i", "time_taken", "retrieval_time", "deletion_time"])
 
 fields = {
     "name": "string",
