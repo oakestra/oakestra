@@ -25,7 +25,7 @@
           - name: Super-linter
             uses: super-linter/super-linter/slim@v6.5.0 
             env:
-              MULTI_STATUS: true
+              MULTI_STATUS: false
               LOG_LEVEL: INFO
               IGNORE_GITIGNORED_FILES: true
               IGNORE_GENERATED_FILES: true
