@@ -6,7 +6,7 @@ from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from marshmallow import INCLUDE, Schema, fields
-from services.hook_service import before_after_hook
+from services.hook_service import pre_post_hook
 
 customblp = Blueprint("Custom Resources", "custom_resources", url_prefix="/api/v1/custom-resources")
 
@@ -44,7 +44,7 @@ class ResourcesController(MethodView):
         return json.dumps(result, default=str)
 
     @customblp.arguments(Schema(unknown=INCLUDE), location="json")
-    @before_after_hook()
+    @pre_post_hook()
     def post(self, data, *args, **kwargs):
         resource_type = kwargs.get("resource")
 
@@ -77,7 +77,7 @@ class ResourceController(MethodView):
         return json.dumps(result, default=str)
 
     @customblp.arguments(Schema(unknown=INCLUDE), location="json")
-    @before_after_hook(with_param_id="resource_id")
+    @pre_post_hook(with_param_id="resource_id")
     def patch(self, data, *args, **kwargs):
         resource_type = kwargs.get("resource")
         resource_id = kwargs.get("resource_id")
@@ -95,7 +95,7 @@ class ResourceController(MethodView):
 
         return json.dumps(result, default=str)
 
-    @before_after_hook(with_param_id="resource_id")
+    @pre_post_hook(with_param_id="resource_id")
     def delete(self, *args, **kwargs):
         resource_type = kwargs.get("resource")
         resource_id = kwargs.get("resource_id")
