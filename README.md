@@ -190,9 +190,9 @@ curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/St
 
 The following ports are exposed:
 
-- Port 80 - Dashboard 
-- Port 10000 - System Manager (It also needs to be accessible from the Cluster Orchestrator)
-
+- Port 80/TCP - Dashboard 
+- Port 10000/TCP - System Manager (It also needs to be accessible from the Cluster Orchestrator)
+- Port 10099/TCP - Service Manager (This port can be exposed only to the Clusters)
 
 ### Cluster Orchestrator
 
@@ -231,7 +231,7 @@ curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/St
 > docker-compose up --build 
 > ```
 
-The following ports are exposed:
+The following ports must be exposed:
 
 - 10100 Cluster Manager (needs to be accessible by the Node Engine)
 
@@ -244,7 +244,7 @@ For each worker node you can either use the pre-compiled binaries (check [🌳 G
 - Linux OS with the following packages installed (Ubuntu and many other distributions natively supports them)
   - iptable
   - ip utils
-- port 50103 available
+- port 50103 available to all worker nodes
 
 Compile and install the binary with:
 ```
