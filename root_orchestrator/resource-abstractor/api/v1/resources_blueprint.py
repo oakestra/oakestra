@@ -5,7 +5,7 @@ from db.jobs_db import find_job_by_id
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import INCLUDE, Schema, fields
-from services.hook_service import before_after_hook, perform_create, perform_update
+from services.hook_service import perform_create, perform_update, pre_post_hook
 from werkzeug import exceptions
 
 resourcesblp = Blueprint("Resources", "resources", url_prefix="/api/v1/resources")
@@ -65,7 +65,7 @@ class AllResourcesController(MethodView):
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(201, ResourceSchema, content_type="application/json")
-    @before_after_hook("resources")
+    @pre_post_hook("resources")
     def post(self, data, **kwargs):
         return clusters_db.create_cluster(data)
 
@@ -98,7 +98,7 @@ class ResourceController(MethodView):
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
-    @before_after_hook("resources", with_param_id="resource_id")
+    @pre_post_hook("resources", with_param_id="resource_id")
     def patch(self, data, **kwargs):
         resource_id = kwargs.get("resource_id")
 
@@ -108,7 +108,7 @@ class ResourceController(MethodView):
         return clusters_db.update_cluster_information(resource_id, data)
 
     @resourcesblp.response(204, ResourceSchema, content_type="application/json")
-    @before_after_hook("resources", with_param_id="resource_id")
+    @pre_post_hook("resources", with_param_id="resource_id")
     def delete(self, *args, **kwargs):
         resource_id = kwargs.get("resource_id")
 

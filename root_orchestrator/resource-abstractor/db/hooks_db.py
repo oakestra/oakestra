@@ -5,26 +5,26 @@ from db import mongodb_client as db
 
 
 class HookEventsEnum(Enum):
-    AFTER_CREATE = "after_create"
-    BEFORE_CREATE = "before_create"
+    POST_CREATE = "post_create"
+    PRE_CREATE = "pre_create"
 
-    AFTER_UPDATE = "after_update"
-    BEFORE_UPDATE = "before_update"
+    POST_UPDATE = "post_update"
+    PRE_UPDATE = "pre_update"
 
-    AFTER_DELETE = "after_delete"
-    BEFORE_DELETE = "before_delete"
+    POST_DELETE = "post_delete"
+    PRE_DELETE = "pre_delete"
 
 
 ASYNC_EVENTS = [
-    HookEventsEnum.AFTER_CREATE.value,
-    HookEventsEnum.AFTER_UPDATE.value,
-    HookEventsEnum.AFTER_DELETE.value,
+    HookEventsEnum.POST_CREATE.value,
+    HookEventsEnum.POST_UPDATE.value,
+    HookEventsEnum.POST_DELETE.value,
 ]
 
 SYNC_EVENTS = [
-    HookEventsEnum.BEFORE_CREATE.value,
-    HookEventsEnum.BEFORE_UPDATE.value,
-    HookEventsEnum.BEFORE_DELETE.value,
+    HookEventsEnum.PRE_CREATE.value,
+    HookEventsEnum.PRE_UPDATE.value,
+    HookEventsEnum.PRE_DELETE.value,
 ]
 
 
