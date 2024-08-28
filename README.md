@@ -358,16 +358,28 @@ This is a detailed description of the deployment descriptor fields currently imp
       - constraints: array of constraints regarding the service. 
         - type: constraint type
           - `direct`: Send a deployment to a specific cluster and a specific list of eligible nodes. You can specify `"node":"node1;node2;...;noden"` a list of node's hostnames. These are the only eligible worker nodes.  `"cluster":"cluster_name"` The name of the cluster where this service must be scheduled. E.g.:
-         
-    ```
-    "constraints":[
-                {
-                  "type":"direct",
-                  "node":"xavier1",
-                  "cluster":"gpu"
-                }
-              ]
-    ```
+		  ```
+		  "constraints":[
+		  	{
+		  		"type":"direct",
+		  		"node":"xavier1",
+		  		"cluster":"gpu"
+		  	}
+		  ]
+		   ```
+        
+          - `clusters`: Send a deployment to a list of allowed clusters. E.g.:
+		  ```
+		  "constraints":[
+		  	{
+		  		"type":"clusters",
+	          		"allowed": [
+	           			"cluster1",	
+	     	 			"cluster2"
+	          		]
+		  	}
+		  ]
+		  ```
     
 #### Dashboard SLA descriptor
 From the dashboard you can create the application graphically and set the services via SLA. In that case you need to submit a different SLA, contianing only the microservice list, e.g.:
