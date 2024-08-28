@@ -10,7 +10,6 @@ from cluster_scheduler_requests import scheduler_request_status
 from cm_logging import configure_logging
 from flask import Flask, request
 from flask_socketio import SocketIO
-
 from mongodb_client import (
     mongo_find_job_by_system_id,
     mongo_init,
