@@ -12,12 +12,13 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
+// TOPICS is a map of topics and their handlers
 var TOPICS = make(map[string]mqtt.MessageHandler)
 
 var clientID = ""
 var mainMqttClient mqtt.Client
-var BrokerUrl = ""
-var BrokerPort = ""
+var brokerUrl = ""
+var brokerPort = ""
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	logger.InfoLogger().Printf("DEBUG - Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
@@ -50,6 +51,7 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 	logger.InfoLogger().Printf("Connect lost: %v", err)
 }
 
+// InitMqtt initializes the mqtt client by connecting to the broker, setting the client ID and the topics
 func InitMqtt(clientid string, brokerurl string, brokerport string) {
 
 	if clientID != "" {
@@ -57,8 +59,8 @@ func InitMqtt(clientid string, brokerurl string, brokerport string) {
 		return
 	}
 
-	BrokerPort = brokerport
-	BrokerUrl = brokerurl
+	brokerPort = brokerport
+	brokerUrl = brokerurl
 
 	//platform's assigned client ID
 	clientID = clientid
@@ -67,7 +69,7 @@ func InitMqtt(clientid string, brokerurl string, brokerport string) {
 	TOPICS[fmt.Sprintf("nodes/%s/control/delete", clientID)] = deleteHandler
 
 	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("tcp://%s:%s", BrokerUrl, BrokerPort))
+	opts.AddBroker(fmt.Sprintf("tcp://%s:%s", brokerUrl, brokerPort))
 	opts.SetClientID(clientid + "-ne")
 	opts.SetUsername("")
 	opts.SetPassword("")
@@ -133,6 +135,7 @@ func deleteHandler(client mqtt.Client, msg mqtt.Message) {
 	ReportServiceStatus(service)
 }
 
+// ReportServiceStatus reports the status of the services
 func ReportServiceStatus(service model.Service) {
 	type ServiceStatus struct {
 		Sname    string `json:"sname"`
@@ -155,6 +158,7 @@ func ReportServiceStatus(service model.Service) {
 	publishToBroker("job", string(jsonmsg))
 }
 
+// ReportServiceResources reports the resources of the services
 func ReportServiceResources(services []model.Resources) {
 	type ServiceResources struct {
 		Services []model.Resources `json:"services"`
@@ -169,6 +173,7 @@ func ReportServiceResources(services []model.Resources) {
 	publishToBroker("jobs/resources", string(jsonmsg))
 }
 
+// ReportNodeInformation reports the information of the node in the broker
 func ReportNodeInformation(node model.Node) {
 	data, err := json.Marshal(node)
 	if err != nil {

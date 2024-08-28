@@ -71,3 +71,5 @@ ENV/
 
 # macOS system
 .DS_Store
+
+.env
