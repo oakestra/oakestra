@@ -1,4 +1,3 @@
-version: "3.3"
 x-logging:
   &default-logging
   driver: "json-file"
@@ -181,7 +180,7 @@ services:
       - 'mongodb_cluster_data:/mongodb'
     command: mongod --port 10107
 
-# cluster-level mongoDB
+  # cluster-level mongoDB
   mongo_clusternet:
     image: mongo:3.6
     container_name: cluster_mongo_net
@@ -193,7 +192,7 @@ services:
     command: mongod --port 10108
 
 
-# Cluster Manager
+  # Cluster Manager
   cluster_service_manager:
     image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
     container_name: cluster_service_manager
@@ -220,7 +219,7 @@ services:
       - mqtt
     logging: *default-logging
 
-# Cluster Manager
+  # Cluster Manager
   cluster_manager:
     image: ghcr.io/oakestra/oakestra/cluster-manager:latest
     container_name: cluster_manager
@@ -330,7 +329,7 @@ services:
 
 
   promtail:
-    image:  grafana/promtail:2.9.2
+    image: grafana/promtail:2.9.2
     container_name: promtail
     volumes:
       - ./config/promtail.yml:/etc/promtail/config.yml
