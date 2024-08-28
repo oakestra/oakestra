@@ -7,7 +7,6 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strconv"
@@ -27,6 +26,7 @@ import (
 	"github.com/struCoder/pidusage"
 )
 
+// ContainerRuntime is the struct that describes the container runtime
 type ContainerRuntime struct {
 	contaierClient *containerd.Client
 	killQueue      map[string]*chan bool
@@ -41,10 +41,16 @@ var runtime = ContainerRuntime{
 var containerdSingletonCLient sync.Once
 var startContainerMonitoring sync.Once
 
+// NAMESPACE is the namespace of the runtime
 const NAMESPACE = "oakestra"
+
+// CGROUPV1_BASE_MEM is the base memory path for cgroup v1
 const CGROUPV1_BASE_MEM = "/sys/fs/cgroup/memory/" + NAMESPACE
+
+// CGROUPV2_BASE_MEM is the base memory path for cgroup v2
 const CGROUPV2_BASE_MEM = "/sys/fs/cgroup/" + NAMESPACE
 
+// GetContainerdClient returns the container runtime client
 func GetContainerdClient() *ContainerRuntime {
 	containerdSingletonCLient.Do(func() {
 		client, err := containerd.New("/run/containerd/containerd.sock")
@@ -60,6 +66,7 @@ func GetContainerdClient() *ContainerRuntime {
 	return &runtime
 }
 
+// StopContainerdClient stops the container runtime client
 func (r *ContainerRuntime) StopContainerdClient() {
 	r.channelLock.Lock()
 	taskIDs := reflect.ValueOf(r.killQueue).MapKeys()
@@ -71,9 +78,13 @@ func (r *ContainerRuntime) StopContainerdClient() {
 			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", taskid.String(), err)
 		}
 	}
-	r.contaierClient.Close()
+	if err := r.contaierClient.Close(); err != nil {
+		logger.ErrorLogger().Printf("Unable to close containerd client: %v", err)
+	}
+
 }
 
+// Deploy deploys a service
 func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
 
 	var image containerd.Image
@@ -124,6 +135,7 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 	return nil
 }
 
+// Undeploy undeploys a service
 func (r *ContainerRuntime) Undeploy(service string, instance int) error {
 	r.channelLock.Lock()
 	defer r.channelLock.Unlock()
@@ -189,8 +201,15 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		revert(err)
 		return
 	}
-	defer resolvconfFile.Close()
-	_ = resolvconfFile.Chmod(444)
+	//defer resolvconfFile.Close()
+	defer func() {
+		if err := resolvconfFile.Close(); err != nil {
+			logger.ErrorLogger().Printf("Unable to close resolvconf file: %v", err)
+		}
+	}()
+
+	// SA9002: file mode 444 evaluates to 0674, which is not a valid file mode
+	_ = resolvconfFile.Chmod(0444)
 	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile.Name()))
 
 	// create the container
@@ -212,7 +231,12 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		revert(err)
 		return
 	}
-	defer file.Close()
+	//defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			logger.ErrorLogger().Printf("Unable to close log file: %v", err)
+		}
+	}()
 
 	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStreams(nil, file, file)))
 
@@ -440,7 +464,9 @@ func withCustomResolvConf(src string) func(context.Context, oci.Client, *contain
 }
 
 func getGoogleDNSResolveConf() (*os.File, error) {
-	file, err := ioutil.TempFile("/tmp", "edgeio-resolv-conf")
+	//file, err := ioutil.TempFile("/tmp", "edgeio-resolv-conf")
+	file, err := os.CreateTemp("/tmp", "edgeio-resolv-conf")
+
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to create temp resolv file: %v", err)
 		return nil, err

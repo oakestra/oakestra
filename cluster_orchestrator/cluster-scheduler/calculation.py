@@ -4,14 +4,18 @@ from typing import Union
 from mongodb_client import mongo_find_all_active_nodes
 from oakestra_utils.types.statuses import NegativeSchedulingStatus
 
+# TODO: Introduce proper constraint enums to oakestra-utils.
+SUPPORTED_CONSTRAINT_TYPES = ["latency", "geo", "addons"]
+
 
 def calculate(app, job: dict) -> Union[dict, NegativeSchedulingStatus]:
     print("calculating...")
     app.logger.info("calculating")
 
     # check here if job has any user preferences, e.g. on a specific node, cpu architecture,
-    constraints = job.get("constraints")
-    if constraints is not None and len(constraints) > 0:
+    constraints = job.get("constraints", [])
+    requested_constraint_types = [constraint["type"] for constraint in constraints]
+    if len(constraints) > 0 and set(requested_constraint_types) & set(SUPPORTED_CONSTRAINT_TYPES):
         return constraint_based_scheduling(job, constraints)
     else:
         return greedy_load_balanced_algorithm(job=job)
@@ -19,21 +23,29 @@ def calculate(app, job: dict) -> Union[dict, NegativeSchedulingStatus]:
 
 def constraint_based_scheduling(job: dict, constraints) -> Union[dict, NegativeSchedulingStatus]:
     filtered_active_nodes = []
-    for constraint in constraints:
-        constraint_type = constraint.get("type")
-        if constraint_type == "direct":
-            return deploy_on_best_among_desired_nodes(job, constraint.get("node"))
-        if constraint_type == "addons":
-            for node in mongo_find_all_active_nodes():
-                node_info = node["node_info"]
-                if (
-                    node_info.get("supported_addons")
-                    and constraint.get("needs")
-                    and set(constraint.get("needs")).issubset(
-                        set(node_info.get("supported_addons"))
-                    )
-                ):
-                    filtered_active_nodes.append(node)
+    for node in mongo_find_all_active_nodes():
+        satisfying = True
+
+        for constraint in constraints:
+            constraint_type = constraint.get("type")
+
+            if constraint_type == "direct":
+                return deploy_on_best_among_desired_nodes(job, constraint.get("node"))
+
+            if constraint_type == "addons":
+                for node in mongo_find_all_active_nodes():
+                    node_info = node["node_info"]
+                    if not (
+                        node_info.get("supported_addons")
+                        and constraint.get("needs")
+                        and set(constraint.get("needs")).issubset(
+                            set(node_info.get("supported_addons"))
+                        )
+                    ):
+                        satisfying = False
+
+        if satisfying:
+            filtered_active_nodes.append(node)
 
     return greedy_load_balanced_algorithm(job=job, active_nodes=filtered_active_nodes)
 

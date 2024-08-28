@@ -10,6 +10,7 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 }
 
+// nolint:unused
 var Version = "None"
 
 var versionCmd = &cobra.Command{
