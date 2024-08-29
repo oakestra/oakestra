@@ -85,6 +85,17 @@ def mqtt_init(flask_app):
     mqtt.on_message = handle_mqtt_message
     mqtt.reconnect_delay_set(min_delay=1, max_delay=120)
     mqtt.max_queued_messages_set(1000)
+    if "MQTT_CERT" in os.environ:
+        try:
+            mqtt.tls_set(ca_certs=os.environ.get("MQTT_CERT")+"/ca.crt"
+                     , certfile=os.environ.get("MQTT_CERT")+"/client.crt"
+                     , keyfile=os.environ.get("MQTT_CERT")+"/client.key"
+                     , keyfile_password=os.environ.get("CLUSTER_KEYFILE_PASSWORD"))
+            app.logger.info("MQTT - TLS configured")
+        except FileNotFoundError as e:
+            app.logger.error("MQTT - Unable to load certificate files")
+            app.logger.error(e)
+
     mqtt.connect(
         os.environ.get("MQTT_BROKER_URL").strip("[]"),
         int(os.environ.get("MQTT_BROKER_PORT")),
