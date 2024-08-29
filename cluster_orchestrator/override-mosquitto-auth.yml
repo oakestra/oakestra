@@ -1,0 +1,23 @@
+# Uses MQTT over TLS, requires certification files to be provided (see README.md)
+
+services:
+  mqtt:
+    hostname: mqtts
+    container_name: mqtts
+    volumes:
+      - ./certs:/certs
+
+  cluster_manager:
+    volumes:
+      - ./certs:/certs
+    environment:
+      - MQTT_CERT=/certs
+      - MQTT_BROKER_URL=mqtts
+      - CLUSTER_KEYFILE_PASSWORD=${CLUSTER_KEYFILE_PASSWORD}
+
+  cluster_service_manager:
+    volumes:
+      - ./certs:/certs
+    environment:
+      - MQTT_CERT=/certs
+      - MQTT_BROKER_URL=mqtts
