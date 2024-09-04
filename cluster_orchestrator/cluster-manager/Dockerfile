@@ -8,10 +8,10 @@ RUN apt-get update -y &&\
         build-essential \
         git
 
-ADD requirements.txt /
-RUN pip install -r requirements.txt
+COPY requirements.txt /
+RUN pip install --no-cache-dir -r requirements.txt 
 
-ADD . /
+COPY . /
 
 # ENV FLASK_APP=cloud_scheduler.py
 ENV FLASK_ENV=development

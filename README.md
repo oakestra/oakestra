@@ -1,4 +1,4 @@
-![workflow code style](https://github.com/oakestra/oakestra/actions/workflows/python_codestyle_check.yml/badge.svg)
+![workflow code style](https://github.com/oakestra/oakestra/actions/workflows/super-linter.yml/badge.svg)
 ![example artifacts](https://github.com/oakestra/oakestra/actions/workflows/node_engine_artifacts.yml/badge.svg)
 ![example artifacts](https://github.com/oakestra/oakestra/actions/workflows/root_system_manager_tests.yml/badge.svg)
 [![Stable](https://img.shields.io/badge/Latest%20Stable-%F0%9F%AA%97%20Accordion%20v0.4.301-green.svg)](https://github.com/oakestra/oakestra/tree/v0.4.301)
@@ -193,9 +193,9 @@ curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/St
 
 The following ports are exposed:
 
-- Port 80 - Dashboard 
-- Port 10000 - System Manager (It also needs to be accessible from the Cluster Orchestrator)
-
+- Port 80/TCP - Dashboard 
+- Port 10000/TCP - System Manager (It also needs to be accessible from the Cluster Orchestrator)
+- Port 10099/TCP - Service Manager (This port can be exposed only to the Clusters)
 
 ### Cluster Orchestrator
 
@@ -234,7 +234,7 @@ curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/St
 > docker-compose up --build 
 > ```
 
-The following ports are exposed:
+The following ports must be exposed:
 
 - 10100 Cluster Manager (needs to be accessible by the Node Engine)
 
@@ -247,7 +247,7 @@ For each worker node you can either use the pre-compiled binaries (check [🌳 G
 - Linux OS with the following packages installed (Ubuntu and many other distributions natively supports them)
   - iptable
   - ip utils
-- port 50103 available
+- port 50103 available to all worker nodes
 
 Compile and install the binary with:
 ```
@@ -361,16 +361,28 @@ This is a detailed description of the deployment descriptor fields currently imp
       - constraints: array of constraints regarding the service. 
         - type: constraint type
           - `direct`: Send a deployment to a specific cluster and a specific list of eligible nodes. You can specify `"node":"node1;node2;...;noden"` a list of node's hostnames. These are the only eligible worker nodes.  `"cluster":"cluster_name"` The name of the cluster where this service must be scheduled. E.g.:
-         
-    ```
-    "constraints":[
-                {
-                  "type":"direct",
-                  "node":"xavier1",
-                  "cluster":"gpu"
-                }
-              ]
-    ```
+		  ```
+		  "constraints":[
+		  	{
+		  		"type":"direct",
+		  		"node":"xavier1",
+		  		"cluster":"gpu"
+		  	}
+		  ]
+		   ```
+        
+          - `clusters`: Send a deployment to a list of allowed clusters. E.g.:
+		  ```
+		  "constraints":[
+		  	{
+		  		"type":"clusters",
+	          		"allowed": [
+	           			"cluster1",	
+	     	 			"cluster2"
+	          		]
+		  	}
+		  ]
+		  ```
     
 #### Dashboard SLA descriptor
 From the dashboard you can create the application graphically and set the services via SLA. In that case you need to submit a different SLA, contianing only the microservice list, e.g.:

@@ -44,16 +44,19 @@ fi
 #Default configuration?
 if [ "$2" != "custom" ]; then
     echo 🔧 Using default configuration
-    
-    # get IP address of this machine
-    if [ $current_os = "Darwin" ]; then
-        export SYSTEM_MANAGER_URL=$(ipconfig getifaddr en0)
-    else
-        export SYSTEM_MANAGER_URL=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
-    fi
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to retrieve interface IP."
-        exit 1
+
+    # if custom IP not set use default one
+    if [ -z "$SYSTEM_MANAGER_URL" ]; then
+      # get IP address of this machine
+      if [ $current_os = "Darwin" ]; then
+          export SYSTEM_MANAGER_URL=$(ipconfig getifaddr en0)
+      else
+          export SYSTEM_MANAGER_URL=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
+      fi
+      if [ $? -ne 0 ]; then
+          echo "Error: Failed to retrieve interface IP."
+          exit 1
+      fi
     fi
     echo Default node IP: $SYSTEM_MANAGER_URL
 

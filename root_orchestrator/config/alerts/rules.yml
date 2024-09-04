@@ -28,9 +28,3 @@ groups:
             description: "Service reported high load on stderr in the last 1 minute"
             impact: "impact"
             action: "action"
-            
-
-
-
-
-

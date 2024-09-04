@@ -1,5 +1,3 @@
-version: "3.3"
-
 x-logging: &default-logging
   driver: "json-file"
   options:
@@ -25,6 +23,7 @@ services:
     depends_on:
       - mongo_root
       - cloud_scheduler
+      - resource_abstractor
       - root_service_manager
     environment:
       - CLOUD_MONGO_URL=mongo
@@ -183,6 +182,7 @@ services:
       - CLOUD_MONGO_PORT=10007
     depends_on:
       - mongo_root
+    logging: *default-logging
 
 volumes:
   mongodb_data:
