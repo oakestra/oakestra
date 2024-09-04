@@ -1,0 +1,45 @@
+name: Execute Custom Testbed Workflow Pipeline
+
+on:  
+  workflow_dispatch:
+    inputs:
+      topology:
+        description: 'Testbed repository - topology descriptor /topologies folder'
+        required: true
+        default: '1doc.json'
+      branch:
+        description: 'Oakestra branch'
+        required: false
+        default: 'develop'
+      commit:
+          description: 'Oakestra commit'
+          required: false
+          type: string
+          default: 'HEAD'
+
+jobs:
+  testbed-trigger-request:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Response AWX Testbed API Endpoint
+        env:
+          TOWER_HOST: ${{ secrets.TOWER_HOST }}
+          TEMPLATE_ID: ${{ secrets.TEMPLATE_ID }}
+          TOWER_TOKEN: ${{ secrets.TOWER_TOKEN }}
+          BRANCH: ${{ github.event.inputs.branch }}
+          COMMIT: ${{ github.event.inputs.commit }}
+          FILENAME: ${{ github.event.inputs.topology }}
+          
+        run: |
+          extra_vars_data="{\"topology_descriptor\": \"$FILENAME\", \"branch\": \"$BRANCH\", \"commit\": \"$COMMIT\"}"
+          echo "$extra_vars_data"
+        
+          response=$(curl -s -X POST "https://$TOWER_HOST/api/v2/workflow_job_templates/$TEMPLATE_ID/launch/" \
+            -H "Authorization: Bearer $TOWER_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{ \"extra_vars\": $extra_vars_data }" \
+            --insecure)  
+          workflow_job_id=$(echo "$response" | jq -r ".id")
+
+          echo "Oakestra Testbed triggered. Visit  https://$TOWER_HOST/#/jobs/workflow/$workflow_job_id/output for detailed execution logs."
