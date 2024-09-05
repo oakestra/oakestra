@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       topology:
-        description: 'Testbed repository - topology descriptor /topologies folder'
+        description: 'Topology descriptor (/topologies folder)'
         required: true
         default: '1doc.json'
       branch:
