@@ -147,14 +147,15 @@ def pre_post_hook(entity_name, with_param_id=None):
             if result and result_id is None:
                 try:
                     result_id = json.loads(result).get("_id")
-                except json.JSONDecodeError:
+                except Exception:
                     pass
             elif result_id is None:
                 # fallback on passed id
                 # This happens with delete methods that don't return the deleted entity
                 result_id = entity_id
 
-            post_fn(entity_name, result_id)
+            if result_id:
+                post_fn(entity_name, result_id)
 
             return result
 
