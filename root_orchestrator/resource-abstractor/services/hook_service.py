@@ -21,12 +21,14 @@ def call_webhook(url, data):
             # in async mode we don't care about the response
             data = response.json()
         except json.JSONDecodeError:
-            pass   
+            pass
 
     except exceptions.ConnectTimeout as e:
         logging.warning(f"Request timed out while trying to connect to {url}", exc_info=e)
     except exceptions.ReadTimeout as e:
-        logging.warning(f"{url} failed to return response in the allotted amount of time", exc_info=e)
+        logging.warning(
+            f"{url} failed to return response in the allotted amount of time", exc_info=e
+        )
     except exceptions.RequestException as e:
         logging.warning(f"Hook failed to send request to {url}", exc_info=e)
 
