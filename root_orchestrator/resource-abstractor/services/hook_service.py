@@ -17,13 +17,18 @@ def call_webhook(url, data):
         logging.info(f"Calling webhook with data: {data}")
         response = post(url, json=data, timeout=(CONNECT_TIMEOUT, RESPONSE_TIMEOUT))
         response.raise_for_status()
-        data = response.json()
-    except exceptions.ConnectTimeout:
-        logging.warning(f"Request timed out while trying to connect to {url}")
-    except exceptions.ReadTimeout:
-        logging.warning(f"{url} failed to return response in the allotted amount of time")
-    except exceptions.RequestException:
-        logging.warning(f"Hook failed to send request to {url}")
+        try:
+            # in async mode we don't care about the response
+            data = response.json()
+        except json.JSONDecodeError:
+            pass   
+
+    except exceptions.ConnectTimeout as e:
+        logging.warning(f"Request timed out while trying to connect to {url}", exc_info=e)
+    except exceptions.ReadTimeout as e:
+        logging.warning(f"{url} failed to return response in the allotted amount of time", exc_info=e)
+    except exceptions.RequestException as e:
+        logging.warning(f"Hook failed to send request to {url}", exc_info=e)
 
     # if request fails the original data is returned
     return data
@@ -46,11 +51,11 @@ def process_post_create(entity_name, entity_id):
 
 
 def process_post_update(entity_name, entity_id):
-    process_async_hook(entity_id, entity_name, hooks_db.HookEventsEnum.POST_UPDATE.value)
+    process_async_hook(entity_name, hooks_db.HookEventsEnum.POST_UPDATE.value, entity_id)
 
 
 def process_post_delete(entity_name, entity_id):
-    process_async_hook(entity_id, entity_name, hooks_db.HookEventsEnum.POST_DELETE.value)
+    process_async_hook(entity_name, hooks_db.HookEventsEnum.POST_DELETE.value, entity_id)
 
 
 def process_sync_hook(entity_name, event, data):
@@ -145,14 +150,15 @@ def pre_post_hook(name=None, with_param_id=None):
             if result and result_id is None:
                 try:
                     result_id = json.loads(result).get("_id")
-                except json.JSONDecodeError:
+                except Exception:
                     pass
             elif result_id is None:
                 # fallback on passed id
                 # This happens with delete methods that don't return the deleted entity
                 result_id = entity_id
 
-            post_fn(entity_name, result_id)
+            if result_id:
+                post_fn(entity_name, result_id)
 
             return result
 

@@ -192,8 +192,8 @@ The following ports are exposed:
 
 - Port 80/TCP - Dashboard 
 - Port 10000/TCP - System Manager (It also needs to be accessible from the Cluster Orchestrator)
+- Port 50052/TCP - System Manager (Needs to be exposed to the Clusters for cluster registration.)
 - Port 10099/TCP - Service Manager (This port can be exposed only to the Clusters)
-
 ### Cluster Orchestrator
 
 For each cluster, we need at least a machine running the clsuter orchestrator. 
