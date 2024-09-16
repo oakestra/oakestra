@@ -1,6 +1,7 @@
 package mqtt
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"go_node_engine/logger"
@@ -52,7 +53,7 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 }
 
 // InitMqtt initializes the mqtt client by connecting to the broker, setting the client ID and the topics
-func InitMqtt(clientid string, brokerurl string, brokerport string) {
+func InitMqtt(clientid string, brokerurl string, brokerport string, certFile string, keyFile string) {
 
 	if clientID != "" {
 		logger.InfoLogger().Printf("Mqtt already initialized no need for any further initialization")
@@ -76,6 +77,18 @@ func InitMqtt(clientid string, brokerurl string, brokerport string) {
 	opts.SetDefaultPublishHandler(messagePubHandler)
 	opts.OnConnect = connectHandler
 	opts.OnConnectionLost = connectLostHandler
+
+	if certFile != "" {
+		logger.InfoLogger().Printf("MQTT - Configuring TLS")
+		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			logger.ErrorLogger().Printf("Error loading certificate: %v", err)
+		}
+		opts.SetTLSConfig(&tls.Config{
+			Certificates: []tls.Certificate{cert},
+		})
+		opts.AddBroker(fmt.Sprintf("tls://%s:%s", brokerUrl, brokerPort))
+	}
 
 	go runMqttClient(opts)
 }
