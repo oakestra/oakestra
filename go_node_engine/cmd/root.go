@@ -33,9 +33,11 @@ var (
 	unikernelSupport bool
 	detatched        bool
 	logDirectory     string
-
-	certFile string
-	keyFile  string
+	certFile         string
+	keyFile          string
+	// Addons
+	imageBuilder        bool
+	flopsLearnerSupport bool
 )
 
 var CONF_DIR = path.Join("/etc", "oakestra")
@@ -58,6 +60,9 @@ func init() {
 	rootCmd.Flags().BoolVarP(&detatched, "detatch", "d", false, "Run the NodeEngine in the background (daemon mode)")
 	rootCmd.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
 	rootCmd.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
+	// Addons
+	rootCmd.Flags().BoolVar(&imageBuilder, "image-builder", false, "Checks if the host has QEMU (apt's qemu-user-static) installed for building multi-platform images.")
+	rootCmd.Flags().BoolVar(&flopsLearnerSupport, "flops-learner", false, "Enables the ML-data-server sidecar for data collection for FLOps learners.")
 }
 
 func nodeEngineDaemonManager() error {

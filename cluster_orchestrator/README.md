@@ -116,16 +116,17 @@ In case the intra-cluster communication should use MQTT over TLS you can use the
 First you will have to edit the mosquitto config file and provide the required certificates:
 1. Modify the mosquitto/mosquitto.conf file by uncommenting the lines below `configure authentication:`
 2. Generate the certificates in the `./certs` directory\
+Be sure to give each component a unique Organizational Unit Name\
 **MQTTS (Server):**
-   1. Generate CA authority key:\
-      `openssl req -new -x509 -days <duration> -extensions v3_ca -keyout ca.key -out ca.crt`\
+   1. Generate CA authority key:
+      `openssl req -new -x509 -days <duration> -extensions v3_ca -keyout ca.key -out ca.crt`
    2. Generate a server key:\
       `openssl genrsa -out server.key 2048`
-   3. Generate a certificate signing request:\
-      `openssl req -out server.csr -key server.key -new`\
+   3. Generate a certificate signing request including the URL as a SAN:\
+      `openssl req -out server.csr -key server.key -new -addext "subjectAltName = IP:${SYSTEM_MANAGER_URL}, DNS:mqtts"`\
        When prompted for the CN, enter `mqtts`
    4. Send the CSR to the CA\
-       `openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days <duration>`
+       `openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days <duration> -copy_extensions copyall`
    5. Grant permissions to read the server keyfile:\
         `chmod 0644 server.key`\
 **Cluster Manager (Client):**
@@ -137,6 +138,21 @@ First you will have to edit the mosquitto config file and provide the required c
    8. Send the CSR to the CA:
         `openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt -days <duration>`
    9. Export the keyfile password as an environmental variable:\
-        `export CLUSTER_KEYFILE_PASSWORD=<keyfile password>`
+        `export CLUSTER_KEYFILE_PASSWORD=<keyfile password>`\
+**Node Engine (Client):**\
+You will have to copy the ca.crt and ca.key file to node machine
+   10. Generate a client key:\
+       `openssl genrsa -aes256 -out client.key 2048`
+   11. Generate a certificate signing request:\
+       `openssl req -out client.csr -key client.key -new`\
+       When prompted for the CN, enter the IP of the machine
+   12. Send the CSR to the CA:\
+       `openssl x509 -req -in client.csr -CA <path to ca file> -CAkey <path to ca key file> -CAcreateserial -out client.crt -days <duration>`
+   13. Decrypt the keyfile:\
+        `openssl rsa -in client.key -out unencrypt_client.key`
+   14. Tell your OS to trust the certificate authority by placing the ca.crt file in the `/etc/ssl/certs/` directory
+   15. Run the NodeEngine:\
+       `sudo ./go_node_engine -n 0 -p 10100 -a <SYSTEM_MANAGER_URL> -c <path to client.crt> -k <path to unencrypt_client.key>`
 
-Instructions from [Mosquitto-TLS man page](https://mosquitto.org/man/mosquitto-tls-7.html)
+Instructions from [Mosquitto-TLS man page](https://mosquitto.org/man/mosquitto-tls-7.html).\
+This is for self-signed certificates, can be adapted for trusted certificates.
