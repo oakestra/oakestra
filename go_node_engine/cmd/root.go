@@ -32,6 +32,8 @@ var (
 	overlayNetwork   int
 	unikernelSupport bool
 	logDirectory     string
+	certFile         string
+	keyFile          string
 	// Addons
 	imageBuilder        bool
 	flopsLearnerSupport bool
@@ -52,6 +54,8 @@ func init() {
 	rootCmd.Flags().IntVarP(&overlayNetwork, "netmanagerPort", "n", 6000, "Port of the NetManager component, if any. This enables the overlay network across nodes. Use -1 to disable Overlay Network Mode.")
 	rootCmd.Flags().BoolVarP(&unikernelSupport, "unikernel", "u", false, "Enable Unikernel support. [qemu/kvm required]")
 	rootCmd.Flags().StringVarP(&logDirectory, "logs", "l", "/tmp", "Directory for application's logs")
+	rootCmd.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
+	rootCmd.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
 	// Addons
 	rootCmd.Flags().BoolVar(&imageBuilder, "image-builder", false, "Checks if the host has QEMU (apt's qemu-user-static) installed for building multi-platform images.")
 	rootCmd.Flags().BoolVar(&flopsLearnerSupport, "flops-learner", false, "Enables the ML-data-server sidecar for data collection for FLOps learners.")
@@ -84,7 +88,7 @@ func startNodeEngine() error {
 		flops.HandleFLOpsDataManager()
 	}
 
-	// hadshake with the cluster orchestrator to get mqtt port and node id
+	// handshake with the cluster orchestrator to get mqtt port and node id
 	handshakeResult := clusterHandshake()
 
 	// enable overlay network if required
@@ -97,7 +101,7 @@ func startNodeEngine() error {
 	}
 
 	// binding the node MQTT client
-	mqtt.InitMqtt(handshakeResult.NodeId, clusterAddress, handshakeResult.MqttPort)
+	mqtt.InitMqtt(handshakeResult.NodeId, clusterAddress, handshakeResult.MqttPort, certFile, keyFile)
 
 	// starting node status background job.
 	jobs.NodeStatusUpdater(MONITORING_CYCLE, mqtt.ReportNodeInformation)
