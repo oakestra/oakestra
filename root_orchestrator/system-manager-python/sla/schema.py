@@ -101,6 +101,10 @@ sla_schema = {
                                             "rigidness": {"type": "number"},
                                             "convergence_time": {"type": "integer"},
                                             "needs": {"type": "array", "items": {"type": "string"}},
+                                            "allowed": {
+                                                "type": "array",
+                                                "items": {"type": "string"},
+                                            },
                                         },
                                         "required": ["type"],
                                     },

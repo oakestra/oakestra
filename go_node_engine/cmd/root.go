@@ -19,6 +19,7 @@ var (
 		Long:  `Start a New Oakestra Worker Node`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return nodeEngineDaemonManager()
+
 		},
 	}
 	clusterAddress   string
@@ -36,6 +37,8 @@ var DEFAULT_LOG_DIR = "/tmp"
 var DEFAULT_CNI = "NetManager"
 var DISABLE_NETWORK = "NoNetwork"
 
+
+// Execute is the entry point of the NodeEngine
 func Execute() error {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	return rootCmd.Execute()

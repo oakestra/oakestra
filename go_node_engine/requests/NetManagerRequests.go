@@ -38,6 +38,7 @@ var httpClient = &http.Client{
 	Timeout: time.Second * 10,
 }
 
+// AttachNetworkToTask attaches a network to a task
 func AttachNetworkToTask(pid int, servicename string, instance int, portMappings string) error {
 
 	ongoingDeployment.Lock()
@@ -68,6 +69,7 @@ func AttachNetworkToTask(pid int, servicename string, instance int, portMappings
 	return nil
 }
 
+// DetachNetworkFromTask detaches a network from a task
 func DetachNetworkFromTask(servicename string, instance int) error {
 	request := connectNetworkRequest{
 		Pid:            -1,
@@ -93,6 +95,7 @@ func DetachNetworkFromTask(servicename string, instance int) error {
 	return nil
 }
 
+// RegisterSelfToNetworkComponent registers the node to the network component
 func RegisterSelfToNetworkComponent() error {
 	request := registerRequest{
 		ClientId:       model.GetNodeInfo().Id,
@@ -130,6 +133,7 @@ func RegisterSelfToNetworkComponent() error {
 	return nil
 }
 
+// CreateNetworkNamespaceForUnikernel creates a network namespace for a unikernel
 func CreateNetworkNamespaceForUnikernel(servicename string, instance int, portMappings string) error {
 
 	ongoingDeployment.Lock()
@@ -160,6 +164,7 @@ func CreateNetworkNamespaceForUnikernel(servicename string, instance int, portMa
 	return nil
 }
 
+// DeleteNamespaceForUnikernel deletes a network namespace for a unikernel
 func DeleteNamespaceForUnikernel(servicename string, instance int) error {
 	request := connectNetworkRequest{
 		Pid:            -1,
