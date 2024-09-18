@@ -12,8 +12,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
+	"github.com/jackpal/gateway"
 )
 
 type undeployRequest struct {
@@ -22,7 +24,8 @@ type undeployRequest struct {
 }
 
 type registerRequest struct {
-	ClientID string `json:"client_id"`
+	ClientID       string `json:"client_id"`
+	ClusterAddress string `json:"cluster_address"`
 }
 
 type DeployResponse struct {
@@ -35,16 +38,27 @@ type netConfiguration struct {
 	NodePublicPort    string
 	ClusterUrl        string
 	ClusterMqttPort   string
+	Debug             bool
 }
 
 func HandleRequests(port int) {
 	netRouter := mux.NewRouter().StrictSlash(true)
 	netRouter.HandleFunc("/register", register).Methods("POST")
 
+	//If default route, fetch default gateway address and use that.
+	if Configuration.NodePublicAddress == "0.0.0.0" {
+		gateway, err := gateway.DiscoverGateway()
+		if err != nil {
+			log.Fatal(err)
+		}
+		Configuration.NodePublicAddress = gateway.String()
+	}
+
 	handlers.RegisterAllManagers(&Env, &WorkerID, Configuration.NodePublicAddress, Configuration.NodePublicPort, netRouter)
 
 	if port <= 0 {
 		logger.InfoLogger().Println("Starting NetManager on unix socket /etc/netmanager/netmanager.sock")
+		_ = os.Remove("/etc/netmanager/netmanager.sock")
 		listener, err := net.Listen("unix", "/etc/netmanager/netmanager.sock")
 		if err != nil {
 			log.Fatal(err)
@@ -98,6 +112,20 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	WorkerID = requestStruct.ClientID
+
+	//Use default cluster address given by NodeEngine version >= v0.4.302
+	if requestStruct.ClusterAddress != "" {
+		Configuration.ClusterUrl = requestStruct.ClusterAddress
+	}
+
+	//log registration startup
+	logger.InfoLogger().Printf(
+		"STARTUP_CONFIG: Node=%s:%s | Cluster=%s:%s",
+		Configuration.NodePublicAddress,
+		Configuration.NodePublicPort,
+		Configuration.ClusterUrl,
+		Configuration.ClusterMqttPort,
+	)
 
 	// initialize mqtt connection to the broker
 	mqtt.InitNetMqttClient(requestStruct.ClientID, Configuration.ClusterUrl, Configuration.ClusterMqttPort)

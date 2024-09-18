@@ -25,10 +25,8 @@ var (
 			return startNetManager()
 		},
 	}
-	cfgFile    string
-	localPort  int
-	debugMode  bool
-	daemonMode bool
+	cfgFile   string
+	localPort int
 )
 
 const MONITORING_CYCLE = time.Second * 2
@@ -41,7 +39,6 @@ func Execute() error {
 func init() {
 	rootCmd.Flags().StringVarP(&cfgFile, "cfg", "c", "/etc/netmanager/netcfg.json", "Path of the netcfg.json configuration file")
 	rootCmd.Flags().IntVarP(&localPort, "port", "p", 0, "Set a custom port to expose the NetManager API, default is 0 (unix socket /etc/netmanager/netmanager.sock)")
-	rootCmd.Flags().BoolVarP(&debugMode, "debug", "D", false, "Enable debug logs")
 }
 
 func startNetManager() error {
@@ -53,7 +50,7 @@ func startNetManager() error {
 			log.Fatal(err)
 		}
 
-		if debugMode {
+		if server.Configuration.Debug {
 			logger.SetDebugMode()
 		}
 
