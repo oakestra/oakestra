@@ -63,28 +63,19 @@ Download and install the Node Engine and the Network Manager:
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/InstallOakestraWorker.sh | sh -  
 ```
 
-Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follows (perform this step only once):
-```json
-{
-  "NodePublicAddress": "<IP ADDRESS OF THIS DEVICE>",
-  "NodePublicPort": "<PORT REACHABLE FROM OUTSIDE, use 50103 as default>",
-  "ClusterUrl": "<IP Address of cluster orchestrator or 0.0.0.0 if deployed on the same machine>",
-  "ClusterMqttPort": "10003"
-}
-```
-
-Configure NodeEngine cluster :
-```
-sudo NodeEngine config cluster <IP Address of cluster orchestrator>
-```
-
 ## Startup your oakestra worker
 Just run:
 ```
-sudo NodeEngine 
+sudo NodeEngine -a <cluster orchestrator address> -d 
 ```
 
-This command by default will start your NodeEngine in foreground and the NetManager in background. 
+This command by default will start your NodeEngine and Network Manager daemons.
+
+> You can omit the `-a <cluster orchestrator address>` flag if the cluster orchestrator runs on the same machine as your worker node
+
+> You can check Node Engine status using `sudo NodeEngine status`
+
+> Logs for the respective components are available under `/var/logs/oakestra/`
 
 🏆 Success!
 
@@ -152,9 +143,6 @@ The Node IP field represents the address where you can reach your service. Let's
 
 - #### NetManager bad network received 
   Something is off at the root level. Most likely, the cluster network component is not receiving a subnetwork from the root. Make sure all the root components are running. 
-
-- #### NetManager timeout
-  The cluster network components are not reachable. Either they are not running, or the config file `/etc/netmanager/netcfg.json` must be updated.
 
 - #### Deployment Failed: NoResourcesAvailable/NoTargetCluster
   There is no worker node with the specified capacity or no worker node deployed at all. Are you sure the worker node startup was successful?
@@ -258,8 +246,9 @@ cd go_node_engine/build
 
 Then configure the NetManager and perform the startup as usual. 
 
-N.b. each worker node can now be configured to work with a different cluster.  
-N.b. you can disable the Overlay Newtork (and therefore avoid using the NetManager) using the `-n -1` flag at NodeEngine startup. 
+> each worker node can now be configured to work with a different cluster.  
+
+> you can disable the Overlay Newtork (and therefore avoid using the NetManager) using the `-o=false` flag at NodeEngine startup. 
 
 
 # 🎼 Deployment descriptor
