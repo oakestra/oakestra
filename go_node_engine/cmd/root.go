@@ -23,7 +23,8 @@ var (
 	}
 	clusterAddress   string
 	clusterPort      int
-	overlayNetwork   int
+	netmanagerPort   int
+	overlayNetwork   bool
 	unikernelSupport bool
 	detatched        bool
 	logDirectory     string
@@ -33,6 +34,7 @@ var CONF_DIR = path.Join("/etc", "oakestra")
 var CONF_FILE = path.Join(CONF_DIR, "conf.json")
 var DEFAULT_LOG_DIR = "/tmp"
 var DEFAULT_CNI = "NetManager"
+var DISABLE_NETWORK = "NoNetwork"
 
 func Execute() error {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
@@ -42,7 +44,8 @@ func Execute() error {
 func init() {
 	rootCmd.Flags().StringVarP(&clusterAddress, "clusterAddr", "a", "localhost", "Address of the cluster orchestrator without port")
 	rootCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Port of the cluster orchestrator")
-	rootCmd.Flags().IntVarP(&overlayNetwork, "netmanagerPort", "n", 0, "Port of the NetManager component, if configured. Otherwise the netmanager will look for a local socket. If no local socket the overlay network is disabled by default.")
+	rootCmd.Flags().IntVarP(&netmanagerPort, "netmanagerPort", "n", 0, "Port of the NetManager component (deprecated).")
+	rootCmd.Flags().BoolVarP(&overlayNetwork, "overlayNetwork", "o", true, "Enable or Disable local overlay network")
 	rootCmd.Flags().BoolVarP(&unikernelSupport, "unikernel", "u", false, "Enable Unikernel support. [qemu/kvm required]")
 	rootCmd.Flags().StringVarP(&logDirectory, "logs", "l", DEFAULT_LOG_DIR, "Directory for application's logs")
 	rootCmd.Flags().BoolVarP(&detatched, "detatch", "d", false, "Run the NodeEngine in the background (daemon mode)")
@@ -70,8 +73,10 @@ func nodeEngineDaemonManager() error {
 		setUnikernel(true)
 	}
 
-	if overlayNetwork > 0 {
-		setNetworkPort(overlayNetwork)
+	if overlayNetwork {
+		setNetwork(DEFAULT_CNI)
+	} else {
+		setNetwork(DISABLE_NETWORK)
 	}
 
 	// try to start the netmanager service if present

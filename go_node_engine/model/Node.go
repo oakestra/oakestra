@@ -19,16 +19,19 @@ import (
 )
 
 type RuntimeType string
+
 const (
 	CONTAINER_RUNTIME RuntimeType = "docker"
 	UNIKERNEL_RUNTIME RuntimeType = "unikernel"
 )
 
 type AddonType string
+
 const (
 // Example Addon:
-// 	FLOPS AddonType = "FLOps"
- )
+//
+//	FLOPS AddonType = "FLOps"
+)
 
 type Node struct {
 	Id              string            `json:"id"`
@@ -54,6 +57,7 @@ type Node struct {
 	Overlay         bool
 	LogDirectory    string
 	NetManagerPort  int
+	ClusterAddress  string
 }
 
 var once sync.Once
@@ -62,14 +66,14 @@ var node Node
 func GetNodeInfo() *Node {
 	once.Do(func() {
 		node = Node{
-			Host:       getHostname(),
-			SystemInfo: getSystemInfo(),
-			CpuCores:   getCpuCores(),
-			CpuArch:    runtime.GOARCH,
-			Port:       getPort(),
-			Technology: make([]RuntimeType, 0),
+			Host:            getHostname(),
+			SystemInfo:      getSystemInfo(),
+			CpuCores:        getCpuCores(),
+			CpuArch:         runtime.GOARCH,
+			Port:            getPort(),
+			Technology:      make([]RuntimeType, 0),
 			SupportedAddons: make([]AddonType, 0),
-			Overlay:    false,
+			Overlay:         false,
 		}
 	})
 	node.updateDynamicInfo()
@@ -78,6 +82,10 @@ func GetNodeInfo() *Node {
 
 func (n *Node) SetLogDirectory(dir string) {
 	n.LogDirectory = dir
+}
+
+func (n *Node) SetClusterAddress(addr string) {
+	n.ClusterAddress = addr
 }
 
 func GetDynamicInfo() Node {

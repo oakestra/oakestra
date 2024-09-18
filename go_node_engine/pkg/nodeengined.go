@@ -26,6 +26,9 @@ func main() {
 	// set log directory
 	model.GetNodeInfo().SetLogDirectory(configs.AppLogs)
 
+	// set cluster address
+	model.GetNodeInfo().SetClusterAddress(configs.ClusterAddress)
+
 	// connect to container runtime
 	runtime := virtualization.GetContainerdClient()
 	defer runtime.StopContainerdClient()
@@ -38,21 +41,17 @@ func main() {
 	handshakeResult := clusterHandshake()
 
 	// enable overlay network if required
-	if configs.NetPort > 0 {
-		model.EnableOverlay(configs.NetPort)
-	} else {
-		if configs.OverlayNetwork == cmd.DEFAULT_CNI {
-			logger.InfoLogger().Printf("Looking for local NetManager socket.")
-			err := requests.RegisterSelfToNetworkComponent()
-			if err != nil {
-				//fatal error
-				logger.ErrorLogger().Fatalf("Error registering to NetManager: %v", err)
-			} else {
-				model.EnableOverlay(0)
-			}
+	if configs.OverlayNetwork == cmd.DEFAULT_CNI {
+		logger.InfoLogger().Printf("Looking for local NetManager socket.")
+		err := requests.RegisterSelfToNetworkComponent()
+		if err != nil {
+			//fatal error
+			logger.ErrorLogger().Fatalf("Error registering to NetManager: %v", err)
 		} else {
-			logger.InfoLogger().Printf("Overlay network disabled 🟠")
+			model.EnableOverlay(0)
 		}
+	} else {
+		logger.InfoLogger().Printf("Overlay network disabled 🟠")
 	}
 
 	// binding the node MQTT client

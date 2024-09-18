@@ -17,7 +17,7 @@ func init() {
 var (
 	logsCmd = &cobra.Command{
 		Use:   "logs",
-		Short: "check node engine logs",
+		Short: "tail check node engine logs",
 		Run: func(cmd *cobra.Command, args []string) {
 			logsNodeEngine()
 		},
@@ -47,7 +47,7 @@ func logsNodeEngine() error {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
-		fmt.Println("\nExiting...")
+		fmt.Println("\nDetatching...")
 		os.Exit(0)
 	}()
 
