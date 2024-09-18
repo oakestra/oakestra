@@ -37,8 +37,7 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&cfgFile, "cfg", "c", "/etc/netmanager/netcfg.json", "Path of the netcfg.json configuration file")
-	rootCmd.Flags().IntVarP(&localPort, "port", "p", 0, "Set a custom port to expose the NetManager API, default is 0 (unix socket /etc/netmanager/netmanager.sock)")
+	cfgFile = "/etc/netmanager/netcfg.json"
 }
 
 func startNetManager() error {
