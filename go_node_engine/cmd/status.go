@@ -23,8 +23,24 @@ var (
 )
 
 func statusNodeEngine() error {
+	_, confFile, err := getConfFile()
+	if err != nil {
+		return err
+	}
+
 	// Define the command and arguments
-	cmd := exec.Command("systemctl", "status", "nodeengine", "--no-pager")
+	execCommandWithOutput("systemctl", "status", "nodeengine", "--no-pager")
+
+	if confFile.OverlayNetwork == DEFAULT_CNI {
+		//show net status if default cni active
+		execCommandWithOutput("NetManager", "status")
+	}
+
+	return nil
+}
+
+func execCommandWithOutput(command string, args ...string) {
+	cmd := exec.Command(command, args...)
 
 	// Create pipes for capturing output streams
 	var stdout, stderr bytes.Buffer
@@ -37,6 +53,4 @@ func statusNodeEngine() error {
 		fmt.Println(stderr.String())
 	}
 	fmt.Println(stdout.String())
-
-	return nil
 }

@@ -14,7 +14,8 @@ import (
 )
 
 type registerRequest struct {
-	ClientId string `json:"client_id"`
+	ClientId       string `json:"client_id"`
+	ClusterAddress string `json:"cluster_address"`
 }
 
 type connectNetworkRequest struct {
@@ -94,7 +95,8 @@ func DetachNetworkFromTask(servicename string, instance int) error {
 
 func RegisterSelfToNetworkComponent() error {
 	request := registerRequest{
-		ClientId: model.GetNodeInfo().Id,
+		ClientId:       model.GetNodeInfo().Id,
+		ClusterAddress: model.GetNodeInfo().ClusterAddress,
 	}
 	jsonReq, err := json.Marshal(request)
 	if err != nil {
