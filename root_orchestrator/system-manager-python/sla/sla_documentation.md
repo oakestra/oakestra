@@ -24,6 +24,8 @@ Example under *sla.json*
     - **code** : File containing the code; given as URL
     - **state** : File containing the state; given as URL; default empty
     - **port** : Port for exposure of the microservice chosen by the developer
+    - **one_shot** : Bool that represents if a service should be restarted if it terminates or not.
+    - **privileged** : Bool that represents if a service should use additional NodeEngine (containerd) privileges and rights.
     - **addresses** : Optional - ***[Taken from Giovanni's and Mehdi's design; more details in On addressess]***
       - **rr_ip** : Optional - IP chosen for round-robin addressation
       - **closest_ip** : Optional - The orchestrator may choose the closest IP to the given one

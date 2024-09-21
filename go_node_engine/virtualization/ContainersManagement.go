@@ -20,6 +20,7 @@ import (
 	"github.com/containerd/containerd/contrib/nvidia"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
+	docker_remote "github.com/containerd/containerd/remotes/docker"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/shirou/gopsutil/docker"
 	"github.com/shirou/gopsutil/process"
@@ -28,10 +29,10 @@ import (
 
 // ContainerRuntime is the struct that describes the container runtime
 type ContainerRuntime struct {
-	contaierClient *containerd.Client
-	killQueue      map[string]*chan bool
-	channelLock    *sync.RWMutex
-	ctx            context.Context
+	containerClient *containerd.Client
+	killQueue       map[string]*chan bool
+	channelLock     *sync.RWMutex
+	ctx             context.Context
 }
 
 var runtime = ContainerRuntime{
@@ -57,7 +58,7 @@ func GetContainerdClient() *ContainerRuntime {
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Unable to start the container engine: %v\n", err)
 		}
-		runtime.contaierClient = client
+		runtime.containerClient = client
 		runtime.killQueue = make(map[string]*chan bool)
 		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
 		runtime.forceContainerCleanup()
@@ -78,7 +79,7 @@ func (r *ContainerRuntime) StopContainerdClient() {
 			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", taskid.String(), err)
 		}
 	}
-	if err := r.contaierClient.Close(); err != nil {
+	if err := r.containerClient.Close(); err != nil {
 		logger.ErrorLogger().Printf("Unable to close containerd client: %v", err)
 	}
 
@@ -89,15 +90,30 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 
 	var image containerd.Image
 	// pull the given image
-	sysimg, err := r.contaierClient.ImageService().Get(r.ctx, service.Image)
+	sysimg, err := r.containerClient.ImageService().Get(r.ctx, service.Image)
 	if err == nil {
-		image = containerd.NewImage(r.contaierClient, sysimg)
+		image = containerd.NewImage(r.containerClient, sysimg)
 	} else {
-		logger.ErrorLogger().Printf("Error retrieving the image: %v \n Trying to pull the image online.", err)
-
-		image, err = r.contaierClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack)
+		logger.InfoLogger().Printf("Error retrieving the image: %v \n Trying to pull the image online.", err)
+		image, err = r.containerClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack)
 		if err != nil {
-			return err
+			if strings.Contains(err.Error(), "http: server gave HTTP response to HTTPS client") {
+				alwaysPlainHTTP := func(string) (bool, error) {
+					return true, nil
+				}
+				ropts := []docker_remote.RegistryOpt{
+					docker_remote.WithPlainHTTP(alwaysPlainHTTP),
+				}
+				resolver := docker_remote.NewResolver(docker_remote.ResolverOptions{
+					Hosts: docker_remote.ConfigureDefaultRegistries(ropts...),
+				})
+				image, err = r.containerClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack, containerd.WithResolver(resolver))
+				if err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
 		}
 	}
 
@@ -186,6 +202,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		oci.WithHostname(hostname),
 		oci.WithEnv(append([]string{fmt.Sprintf("HOSTNAME=%s", hostname)}, service.Env...)),
 	}
+	if service.Privileged {
+		specOpts = append(specOpts, oci.WithDevices("/dev/fuse", "/dev/fuse", "rwm"))
+	}
 	//add user defined commands
 	if len(service.Commands) > 0 {
 		specOpts = append(specOpts, oci.WithProcessArgs(service.Commands...))
@@ -213,7 +232,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile.Name()))
 
 	// create the container
-	container, err := r.contaierClient.NewContainer(
+	container, err := r.containerClient.NewContainer(
 		ctx,
 		taskid,
 		containerd.WithImage(image),
@@ -298,7 +317,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		if err != nil {
 			return
 		}
-		logger.InfoLogger().Printf("WARNING: Container exited with status %d", exitStatus.ExitCode())
+		logger.InfoLogger().Printf("Container exited with status %d", exitStatus.ExitCode())
 		service.StatusDetail = fmt.Sprintf("Container exited with status: %d", exitStatus.ExitCode())
 	case <-*killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
@@ -346,7 +365,7 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 		for true {
 			select {
 			case <-time.After(every):
-				deployedContainers, err := r.contaierClient.Containers(r.ctx)
+				deployedContainers, err := r.containerClient.Containers(r.ctx)
 				if err != nil {
 					logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 				}
@@ -381,7 +400,7 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
 						continue
 					}
-					currentsnapshotter := r.contaierClient.SnapshotService(containerd.DefaultSnapshotter)
+					currentsnapshotter := r.containerClient.SnapshotService(containerd.DefaultSnapshotter)
 					usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
 					if err != nil {
 						logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
@@ -406,7 +425,7 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 }
 
 func (r *ContainerRuntime) forceContainerCleanup() {
-	deployedContainers, err := r.contaierClient.Containers(r.ctx)
+	deployedContainers, err := r.containerClient.Containers(r.ctx)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 	}
