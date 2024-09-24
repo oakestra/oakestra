@@ -2,7 +2,7 @@
 
 The service manager manages the networking aspects of each job and node. 
 
-Each Node belongs to a subnetwork and upn deployment each job contains belongs to the node's subnetwork. This service manages the discovery and deployment of both the jobs and the nodes. 
+Each Node belongs to a subnetwork and upon deployment each job contains belongs to the node's subnetwork. This service manages the discovery and deployment of both the jobs and the nodes. 
 
 ## Purpose of Service Manager
 

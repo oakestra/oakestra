@@ -2,9 +2,11 @@ package mqtt
 
 import (
 	"NetManager/logger"
+	"crypto/tls"
 	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
 	"log"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +20,7 @@ type NetMqttClient struct {
 	mainMqttClient         mqtt.Client
 	brokerUrl              string
 	brokerPort             string
+	mqttCert               string
 	mqttWriteMutex         *sync.Mutex
 	mqttTopicsMutex        *sync.RWMutex
 	tableQueryRequestCache *TableQueryRequestCache
@@ -25,7 +28,7 @@ type NetMqttClient struct {
 
 var netMqttClient NetMqttClient
 
-func InitNetMqttClient(clientid string, brokerurl string, brokerport string) *NetMqttClient {
+func InitNetMqttClient(clientid string, brokerurl string, brokerport string, mqttcert string) *NetMqttClient {
 	initMqttClient.Do(func() {
 		netMqttClient = NetMqttClient{
 			topics:                 make(map[string]mqtt.MessageHandler),
@@ -33,6 +36,7 @@ func InitNetMqttClient(clientid string, brokerurl string, brokerport string) *Ne
 			mainMqttClient:         nil,
 			brokerUrl:              brokerurl,
 			brokerPort:             brokerport,
+			mqttCert:               mqttcert,
 			mqttWriteMutex:         &sync.Mutex{},
 			mqttTopicsMutex:        &sync.RWMutex{},
 			tableQueryRequestCache: GetTableQueryRequestCacheInstance(),
@@ -88,6 +92,20 @@ func InitNetMqttClient(clientid string, brokerurl string, brokerport string) *Ne
 		opts.SetDefaultPublishHandler(messageDefaultHandler)
 		opts.OnConnect = connectHandler
 		opts.OnConnectionLost = connectLostHandler
+
+		if netMqttClient.mqttCert != "" {
+			logger.InfoLogger().Printf("MQTT - Configuring TLS")
+			certFile := filepath.Join(netMqttClient.mqttCert, "client.crt")
+			keyFile := filepath.Join(netMqttClient.mqttCert, "client.key")
+			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+			if err != nil {
+				logger.ErrorLogger().Printf("Error loading certificate: %v", err)
+			}
+			opts.SetTLSConfig(&tls.Config{
+				Certificates: []tls.Certificate{cert},
+			})
+			opts.AddBroker(fmt.Sprintf("tls://%s:%s", netMqttClient.brokerUrl, netMqttClient.brokerPort))
+		}
 
 		netMqttClient.runMqttClient(opts)
 	})
