@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
 	"log"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +20,7 @@ type NetMqttClient struct {
 	brokerUrl              string
 	brokerPort             string
 	mqttCert               string
+	mqttKey                string
 	mqttWriteMutex         *sync.Mutex
 	mqttTopicsMutex        *sync.RWMutex
 	tableQueryRequestCache *TableQueryRequestCache
@@ -28,7 +28,7 @@ type NetMqttClient struct {
 
 var netMqttClient NetMqttClient
 
-func InitNetMqttClient(clientid string, brokerurl string, brokerport string, mqttcert string) *NetMqttClient {
+func InitNetMqttClient(clientid string, brokerurl string, brokerport string, mqttcert string, mqttkey string) *NetMqttClient {
 	initMqttClient.Do(func() {
 		netMqttClient = NetMqttClient{
 			topics:                 make(map[string]mqtt.MessageHandler),
@@ -37,6 +37,7 @@ func InitNetMqttClient(clientid string, brokerurl string, brokerport string, mqt
 			brokerUrl:              brokerurl,
 			brokerPort:             brokerport,
 			mqttCert:               mqttcert,
+			mqttKey:                mqttkey,
 			mqttWriteMutex:         &sync.Mutex{},
 			mqttTopicsMutex:        &sync.RWMutex{},
 			tableQueryRequestCache: GetTableQueryRequestCacheInstance(),
@@ -95,9 +96,7 @@ func InitNetMqttClient(clientid string, brokerurl string, brokerport string, mqt
 
 		if netMqttClient.mqttCert != "" {
 			logger.InfoLogger().Printf("MQTT - Configuring TLS")
-			certFile := filepath.Join(netMqttClient.mqttCert, "client.crt")
-			keyFile := filepath.Join(netMqttClient.mqttCert, "client.key")
-			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+			cert, err := tls.LoadX509KeyPair(netMqttClient.mqttCert, netMqttClient.mqttKey)
 			if err != nil {
 				logger.ErrorLogger().Printf("Error loading certificate: %v", err)
 			}

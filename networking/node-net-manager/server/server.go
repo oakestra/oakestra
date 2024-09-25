@@ -35,6 +35,7 @@ type netConfiguration struct {
 	ClusterUrl        string
 	ClusterMqttPort   string
 	MqttCert          string
+	MqttKey           string
 }
 
 func HandleRequests(port int) {
@@ -90,7 +91,7 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	WorkerID = requestStruct.ClientID
 
 	// initialize mqtt connection to the broker
-	mqtt.InitNetMqttClient(requestStruct.ClientID, Configuration.ClusterUrl, Configuration.ClusterMqttPort, Configuration.MqttCert)
+	mqtt.InitNetMqttClient(requestStruct.ClientID, Configuration.ClusterUrl, Configuration.ClusterMqttPort, Configuration.MqttCert, Configuration.MqttKey)
 
 	// initialize the proxy tunnel
 	Proxy = proxy.New()
