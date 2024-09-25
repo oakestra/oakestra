@@ -3,10 +3,12 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -25,7 +27,7 @@ var (
 	clusterAddress   string
 	clusterPort      int
 	netmanagerPort   int
-	overlayNetwork   bool
+	overlayNetwork   string
 	unikernelSupport bool
 	detatched        bool
 	logDirectory     string
@@ -34,9 +36,8 @@ var (
 var CONF_DIR = path.Join("/etc", "oakestra")
 var CONF_FILE = path.Join(CONF_DIR, "conf.json")
 var DEFAULT_LOG_DIR = "/tmp"
-var DEFAULT_CNI = "NetManager"
-var DISABLE_NETWORK = "NoNetwork"
-
+var DEFAULT_CNI = "default"
+var DISABLE_NETWORK = "disabled"
 
 // Execute is the entry point of the NodeEngine
 func Execute() error {
@@ -48,7 +49,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&clusterAddress, "clusterAddr", "a", "localhost", "Address of the cluster orchestrator without port")
 	rootCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Port of the cluster orchestrator")
 	rootCmd.Flags().IntVarP(&netmanagerPort, "netmanagerPort", "n", 0, "Port of the NetManager component (deprecated).")
-	rootCmd.Flags().BoolVarP(&overlayNetwork, "overlayNetwork", "o", true, "Enable or Disable local overlay network")
+	rootCmd.Flags().StringVarP(&overlayNetwork, "overlayNetwork", "o", "default", "Options: default,disabled,custom:<path>. <path> points to the overlay component socket.")
 	rootCmd.Flags().BoolVarP(&unikernelSupport, "unikernel", "u", false, "Enable Unikernel support. [qemu/kvm required]")
 	rootCmd.Flags().StringVarP(&logDirectory, "logs", "l", DEFAULT_LOG_DIR, "Directory for application's logs")
 	rootCmd.Flags().BoolVarP(&detatched, "detatch", "d", false, "Run the NodeEngine in the background (daemon mode)")
@@ -76,21 +77,28 @@ func nodeEngineDaemonManager() error {
 		setUnikernel(true)
 	}
 
-	if overlayNetwork {
+	switch overlayNetwork {
+	case DEFAULT_CNI:
 		setNetwork(DEFAULT_CNI)
-	} else {
-		setNetwork(DISABLE_NETWORK)
+		// start the node engine daemon systemctl daemon
+		cmd := exec.Command("systemctl", "start", "nodeengine")
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	case DISABLE_NETWORK:
+		setNetwork(DEFAULT_CNI)
+	default:
+		if strings.Contains(overlayNetwork, "custom:") {
+			setNetwork(overlayNetwork)
+		} else {
+			log.Fatalf("Invalid overlay network: %s \n Use NodeEngine -h to check the available options. \n", overlayNetwork)
+		}
 	}
 
 	// try to start the netmanager service if present
 	cmd := exec.Command("systemctl", "start", "netmanager")
 	_ = cmd.Run()
 
-	// start the node engine daemon systemctl daemon
-	cmd = exec.Command("systemctl", "start", "nodeengine")
-	if err := cmd.Run(); err != nil {
-		return err
-	}
 	fmt.Println("NodeEngine started  🟢")
 	if !detatched {
 		return attatch()

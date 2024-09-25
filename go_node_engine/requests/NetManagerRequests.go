@@ -112,7 +112,7 @@ func RegisterSelfToNetworkComponent() error {
 			Timeout: time.Second * 10,
 			Transport: &http.Transport{
 				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-					return net.Dial("unix", "/etc/netmanager/netmanager.sock")
+					return net.Dial("unix", model.GetNodeInfo().OverlaySocket)
 				},
 			},
 		}

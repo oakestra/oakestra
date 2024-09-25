@@ -12,6 +12,7 @@ import (
 	"go_node_engine/virtualization"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -41,17 +42,28 @@ func main() {
 	handshakeResult := clusterHandshake()
 
 	// enable overlay network if required
-	if configs.OverlayNetwork == cmd.DEFAULT_CNI {
+	switch configs.OverlayNetwork {
+	case cmd.DEFAULT_CNI:
 		logger.InfoLogger().Printf("Looking for local NetManager socket.")
+		model.EnableOverlay()
+
+	case cmd.DISABLE_NETWORK:
+		logger.InfoLogger().Printf("Overlay network disabled 🟠")
+	default:
+		if strings.Contains(configs.OverlayNetwork, "custom:") {
+			netPath := strings.Split(configs.OverlayNetwork, ":")
+			model.GetNodeInfo().SetOverlaySocket(netPath[1])
+			model.EnableOverlay()
+		} else {
+			logger.InfoLogger().Printf("Invalid overlay network detected. Network disabled 🟠")
+		}
+	}
+	if model.GetNodeInfo().Overlay {
 		err := requests.RegisterSelfToNetworkComponent()
 		if err != nil {
 			//fatal error
 			logger.ErrorLogger().Fatalf("Error registering to NetManager: %v", err)
-		} else {
-			model.EnableOverlay(0)
 		}
-	} else {
-		logger.InfoLogger().Printf("Overlay network disabled 🟠")
 	}
 
 	// binding the node MQTT client

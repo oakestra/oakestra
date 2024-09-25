@@ -59,6 +59,7 @@ type Node struct {
 	Technology      []RuntimeType     `json:"technology"`
 	SupportedAddons []AddonType       `json:"supported_addons"`
 	Overlay         bool
+	OverlaySocket   string
 	LogDirectory    string
 	NetManagerPort  int
 	ClusterAddress  string
@@ -79,6 +80,7 @@ func GetNodeInfo() *Node {
 			Technology:      make([]RuntimeType, 0),
 			SupportedAddons: make([]AddonType, 0),
 			Overlay:         false,
+			OverlaySocket:   "/etc/netmanager/netmanager.sock",
 		}
 	})
 	node.updateDynamicInfo()
@@ -92,6 +94,10 @@ func (n *Node) SetLogDirectory(dir string) {
 
 func (n *Node) SetClusterAddress(addr string) {
 	n.ClusterAddress = addr
+}
+
+func (n *Node) SetOverlaySocket(socket string) {
+	n.OverlaySocket = socket
 }
 
 // GetDynamicInfo returns the dynamic information of the node (CPU, Memory, GPU usage etc.)
@@ -111,9 +117,8 @@ func GetDynamicInfo() Node {
 }
 
 // EnableOverlay enables the overlay network, setting the port
-func EnableOverlay(port int) {
+func EnableOverlay() {
 	node.Overlay = true
-	node.NetManagerPort = port
 }
 
 func (n *Node) updateDynamicInfo() {
