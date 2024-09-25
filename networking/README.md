@@ -39,64 +39,9 @@ cp bin/<architecture>-NetManager .
 Finally, install it using 
 `./install.sh` 
 
-## Run the NetManager daemon
+## Run the NetManager
 
-Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follows:
-
-```json
-{
-  "NodePublicAddress": "<IP ADDRESS OF THIS DEVICE>",
-  "NodePublicPort": "<PORT REACHABLE FROM OUTSIDE, use 50103 as default>",
-  "ClusterUrl": "<IP Address of cluster orchestrator or 0.0.0.0 if deployed on the same machine>",
-  "ClusterMqttPort": "10003"
-}
-```
-
-
-Then start the NetManager
-```
-sudo systemctl start netmanager
-```
-
-Verify the daemon status with:
-```
-sudo systemctl status netmanager
-```
-![status](img/image.png)
-
-You can enable the daemon start at system startup with
-```
-sudo systemctl enable netmanager
-```
-
-The daemon logs are under
-```
-/var/log/oakestra/netmanager.log
-```
-
-Check the netmanager version using:
-```
-NetManager version
-```
-
-## Run the NetManager manually
-If you don't want to use the NetManager as system deamon, run it in you terminal using 
-
-Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follows:
-
-```json
-{
-  "NodePublicAddress": "<IP ADDRESS OF THIS DEVICE>",
-  "NodePublicPort": "<PORT REACHABLE FROM OUTSIDE, use 50103 as default>",
-  "ClusterUrl": "<IP Address of cluster orchestrator or 0.0.0.0 if deployed on the same machine>",
-  "ClusterMqttPort": "10003"
-}
-```
-
-Then simply run
-```
-sudo NetManager
-```
+The Netmanager component is automatically managed by the NodeEngine. For a manual setup refer to: [node-net-manager/README.md](node-net-manager/README.md)
 
 
 

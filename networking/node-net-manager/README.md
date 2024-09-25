@@ -57,12 +57,11 @@ The Network manager is divided in 4 main components:
 
 # Run NetManager
 
-## 1) Prepare a config file
+## 1) (Optional) Prepare a config file
 
 You can edit the default one placed in `/etc/netmanager/netcfg.json`
-or you can create a custom one a pass the location at startup using the flag `--cfg="file location path"`
 
-The netcfg file must contain the following fields
+The netcfg file must contain the following fields.
 
 ```
 
@@ -70,30 +69,56 @@ The netcfg file must contain the following fields
   "NodePublicAddress": "address",
   "NodePublicPort": "port",
   "ClusterUrl": "url",
-  "ClusterMqttPort": "port"
+  "ClusterMqttPort": "port",
+  "Debug": false
 }
 
 ```
 
+The default configuration file will inherith the Node Public Adress from the default gateway and the Cluster url from the Node Engine. If special NAT setups must be take into account, they can be set in this file. 
+
 ## 2) Run the netmanager
 
-The net manager must have root privileges. The host machine must have the *ip* command line tool installed.
-
-Run the netmanager using:
+The net manager Daemon is automaitcally managed when starting up the NodeEngine. If you want to manually run the NetManager simply use
 
 `sudo NetManager`
 
-## 3) supported startup flags
-
-- `--cfg="file path"` allows you to set a custom location for a different net configuration file. 
-
+> N.b. If you manually run the NetManager you need to start the Node Engine with a custom network configuration profile for your externally managed NetManager, E.g., `NodeEngine -o custom:/etc/netmanager/netmanager.sock`
 
 ## Development setup
 The development setup can be used to test locally the tunneling mechanism without the use of the Cluster orchestrator. This setup requires 2 different machines namely Host1 and Host2.
 * go 1.12+ required 
 * run the install.sh to install the dependencies on each machine 
 
-### todo: start the netmanager in debug mode 
+### Start the netmanager in debug mode 
+
+Simply set `"Debug": true` in `/etc/netmanager/netcfg.json`
+
+### VSCode debug profile
+
+use the following `launch.json` profile  in VS Code to run the Netmanager in debug mode. 
+```
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Net Manager",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/node-net-manager/NetManager.go",
+            "console": "integratedTerminal",
+            "asRoot": true,
+            "args": [],
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin" 
+            }
+        }
+    ]
+}
+```
+> N.b. You then need to start the Node Engine with a custom network configuration profile for your externally managed NetManager, E.g., `NodeEngine -o custom:/etc/netmanager/netmanager.sock`
+
 
 ## Subnetworks
 With this default test configuration the Subnetwork hierarchy is:
@@ -115,4 +140,4 @@ translated to an actual container address and pass trough the proxy.
 Address where all the containers of this node belong. Each new container will have an address from this space.
 
 ###Prohibited port numbers
-Right now a deployed service can't use the same port as the proxy tunnel
+A deployed service can't expose the port 50103

@@ -3,11 +3,7 @@ package cmd
 import (
 	"NetManager/logger"
 	"NetManager/network"
-	"fmt"
 	"log"
-	"os"
-	"os/exec"
-	"strings"
 	"time"
 
 	"NetManager/server"
@@ -42,54 +38,22 @@ func init() {
 
 func startNetManager() error {
 
-	if !isAlreadyRunning() {
-
-		err := gonfig.GetConf(cfgFile, &server.Configuration)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if server.Configuration.Debug {
-			logger.SetDebugMode()
-		}
-
-		log.Print(server.Configuration)
-
-		network.IptableFlushAll()
-
-		log.Println("NetManager started, but waiting for NodeEngine registration 🟠")
-		server.HandleRequests(localPort)
-
-		return nil
-	} else {
-		log.Println("NetManager already running, exiting")
-	}
-	return nil
-}
-
-func isAlreadyRunning() bool {
-	procPath := strings.Split(os.Args[0], "/")
-	currentProcName := procPath[len(procPath)-1]
-	fmt.Printf("Checking for process: %s\n", currentProcName)
-	cmd := exec.Command("pgrep", "-f", currentProcName)
-
-	// Execute the command and capture the output
-	out, err := cmd.Output()
-
+	err := gonfig.GetConf(cfgFile, &server.Configuration)
 	if err != nil {
-		// Check for errors during command execution
-		if err.(*exec.ExitError).ExitCode() == 1 {
-			return false
-		} else {
-			fmt.Printf("Error checking for NetManager: %v\n", err)
-		}
-	} else {
-		// Check output for processes with the same name (ignoring case)
-		processes := strings.Split(string(out), "\n")
-		// If more than 3 processes are found, it means that the current process is already running (3 bcause empty line+current process+pgrep process)
-		if len(processes) > 3 {
-			return true
-		}
+		log.Fatal(err)
 	}
-	return false
+
+	if server.Configuration.Debug {
+		logger.SetDebugMode()
+	}
+
+	log.Print(server.Configuration)
+
+	network.IptableFlushAll()
+
+	log.Println("NetManager started, but waiting for NodeEngine registration 🟠")
+	server.HandleRequests(localPort)
+
+	return nil
+
 }
