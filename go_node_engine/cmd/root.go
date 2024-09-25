@@ -80,11 +80,9 @@ func nodeEngineDaemonManager() error {
 	switch overlayNetwork {
 	case DEFAULT_CNI:
 		setNetwork(DEFAULT_CNI)
-		// start the node engine daemon systemctl daemon
-		cmd := exec.Command("systemctl", "start", "nodeengine")
-		if err := cmd.Run(); err != nil {
-			return err
-		}
+		// try to start the netmanager service if present
+		cmd := exec.Command("systemctl", "start", "netmanager")
+		_ = cmd.Run()
 	case DISABLE_NETWORK:
 		setNetwork(DEFAULT_CNI)
 	default:
@@ -95,9 +93,11 @@ func nodeEngineDaemonManager() error {
 		}
 	}
 
-	// try to start the netmanager service if present
-	cmd := exec.Command("systemctl", "start", "netmanager")
-	_ = cmd.Run()
+	// start the node engine daemon systemctl daemon
+	cmd := exec.Command("systemctl", "start", "nodeengine")
+	if err := cmd.Run(); err != nil {
+		return err
+	}
 
 	fmt.Println("NodeEngine started  🟢")
 	if !detatched {
