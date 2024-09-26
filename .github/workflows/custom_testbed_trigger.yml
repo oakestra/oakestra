@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       topology:
-        description: 'Topology descriptor (/topologies folder)'
+        description: 'Testbed repository - topology descriptor /topologies folder'
         required: true
         default: '1doc.json'
       branch:
@@ -16,23 +16,36 @@ on:
           required: false
           type: string
           default: 'HEAD'
+      net_branch:
+          description: 'Oakestra-net branch'
+          required: false
+          type: string
+          default: 'develop'
+      net_commit:
+          description: 'Oakestra-net commit'
+          required: false
+          type: string
+          default: 'HEAD'
 
 jobs:
-  testbed-trigger-request:
+  
+  trigger-awx-job:
     runs-on: ubuntu-latest
 
-    steps:
+    steps: 
       - name: Response AWX Testbed API Endpoint
         env:
           TOWER_HOST: ${{ secrets.TOWER_HOST }}
           TEMPLATE_ID: ${{ secrets.TEMPLATE_ID }}
           TOWER_TOKEN: ${{ secrets.TOWER_TOKEN }}
-          BRANCH: ${{ github.event.inputs.branch }}
-          COMMIT: ${{ github.event.inputs.commit }}
+          OAK_BRANCH: ${{ github.event.inputs.branch }}
+          OAK_COMMIT: ${{ github.event.inputs.commit }}
           FILENAME: ${{ github.event.inputs.topology }}
+          OAK_NET_BRANCH: ${{ github.event.inputs.net_branch }}
+          OAK_NET_COMMIT: ${{ github.event.inputs.net_commit }}
           
         run: |
-          extra_vars_data="{\"topology_descriptor\": \"$FILENAME\", \"branch\": \"$BRANCH\", \"commit\": \"$COMMIT\"}"
+          extra_vars_data="{\"topology_descriptor\": \"$FILENAME\", \"oak_branch\": \"$OAK_BRANCH\", \"oak_commit\": \"$OAK_COMMIT\", \"oak_net_branch\": \"$OAK_NET_BRANCH\", \"oak_net_commit\": \"$OAK_NET_COMMIT\"}"
           echo "$extra_vars_data"
         
           response=$(curl -s -X POST "https://$TOWER_HOST/api/v2/workflow_job_templates/$TEMPLATE_ID/launch/" \
@@ -42,4 +55,4 @@ jobs:
             --insecure)  
           workflow_job_id=$(echo "$response" | jq -r ".id")
 
-          echo "Oakestra Testbed triggered. Visit  https://$TOWER_HOST/#/jobs/workflow/$workflow_job_id/output for detailed execution logs."
+          echo "Oakestra Testbed triggered. Visit  https://*******/#/jobs/workflow/$workflow_job_id/output for detailed execution logs."
