@@ -5,6 +5,7 @@ import (
 	"NetManager/handlers"
 	"NetManager/logger"
 	"NetManager/mqtt"
+	"NetManager/network"
 	"NetManager/proxy"
 	"encoding/json"
 	"fmt"
@@ -15,7 +16,6 @@ import (
 	"os"
 
 	"github.com/gorilla/mux"
-	"github.com/jackpal/gateway"
 )
 
 type undeployRequest struct {
@@ -47,11 +47,8 @@ func HandleRequests(port int) {
 
 	//If default route, fetch default gateway address and use that.
 	if Configuration.NodePublicAddress == "0.0.0.0" {
-		gateway, err := gateway.DiscoverGateway()
-		if err != nil {
-			log.Fatal(err)
-		}
-		Configuration.NodePublicAddress = gateway.String()
+		defaultLink := network.GetOutboundIP()
+		Configuration.NodePublicAddress = defaultLink.String()
 	}
 
 	handlers.RegisterAllManagers(&Env, &WorkerID, Configuration.NodePublicAddress, Configuration.NodePublicPort, netRouter)
