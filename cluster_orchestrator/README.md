@@ -116,6 +116,7 @@ In case the intra-cluster communication should use MQTT over TLS you can use the
 First you will have to edit the mosquitto config file and provide the required certificates:
 1. Modify the mosquitto/mosquitto.conf file by uncommenting the lines below `configure authentication:`
 2. Generate the certificates in the `./certs` directory\
+**This process can be automated with the [automation](https://github.com/oakestra/automation/tree/d286df625dc805c901968f119605f1c605a19d11/development_cluster_management/generate_mqtts_certificates) scripts**\
 Be sure to give each component a unique Organizational Unit Name\
 **MQTTS (Server):**
    1. Generate CA authority key:
