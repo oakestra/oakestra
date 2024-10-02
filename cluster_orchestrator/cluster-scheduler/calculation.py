@@ -97,8 +97,13 @@ def greedy_load_balanced_algorithm(
     qualified_nodes = []
 
     for node in active_nodes:
-        if does_node_respects_requirements(extract_specs(node), job):
-            qualified_nodes.append(node)
+        try:
+            if does_node_respects_requirements(extract_specs(node), job):
+                qualified_nodes.append(node)
+        except:
+            logging.error("[ERROR] Skipping a node. Something wrong while axtracting node info")
+
+
 
     target_node = None
     target_cpu = 0
