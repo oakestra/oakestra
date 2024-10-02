@@ -14,6 +14,8 @@ def create_cluster(data):
 
 
 def update_cluster(cluster_id, data):
+    data.pop("_id", None)
+
     return db.mongo_clusters.find_one_and_update(
         {"_id": ObjectId(cluster_id)},
         {"$set": data},
@@ -96,3 +98,7 @@ def update_cluster_information(cluster_id, data):
         },
         return_document=True,
     )
+
+
+def delete_cluster(cluster_id):
+    return db.mongo_clusters.delete_one({"_id": ObjectId(cluster_id)})
