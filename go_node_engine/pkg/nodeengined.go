@@ -46,7 +46,6 @@ func main() {
 	case cmd.DEFAULT_CNI:
 		logger.InfoLogger().Printf("Looking for local NetManager socket.")
 		model.EnableOverlay()
-
 	case cmd.DISABLE_NETWORK:
 		logger.InfoLogger().Printf("Overlay network disabled 🟠")
 	default:

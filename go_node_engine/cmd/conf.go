@@ -15,6 +15,8 @@ type ConfFile struct {
 	UnikernelSupport bool   `json:"unikernel_support"`
 	OverlayNetwork   string `json:"overlay_network"`
 	NetPort          int    `json:"overlay_network_port"`
+	CertFile         string `json:"mqtt_cert_file"`
+	KeyFile          string `json:"mqtt_key_file"`
 }
 
 func init() {
@@ -24,11 +26,14 @@ func init() {
 	configCmd.AddCommand(setUnikernelCmd)
 	configCmd.AddCommand(defaultConfigCmd)
 	configCmd.AddCommand(setCni)
+	configCmd.AddCommand(setAuth)
 	setUnikernelCmd.AddCommand(enableUnikernel)
 	setUnikernelCmd.AddCommand(disableUnikernel)
 	setCni.AddCommand(enableNetwork)
 	setCni.AddCommand(disableNetwork)
 	addClusterCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Custom port of the cluster orchestrator")
+	setAuth.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
+	setAuth.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
 }
 
 var (
@@ -90,6 +95,13 @@ var (
 	}
 	disableNetwork = &cobra.Command{
 		Use:   "disable",
+		Short: "Disable overlay network support",
+		Run: func(cmd *cobra.Command, args []string) {
+			setNetwork("")
+		},
+	}
+	setAuth = &cobra.Command{
+		Use:   "auth",
 		Short: "Disable overlay network support",
 		Run: func(cmd *cobra.Command, args []string) {
 			setNetwork("")
@@ -343,4 +355,38 @@ func getConfFile() (*os.File, ConfFile, error) {
 	}
 
 	return confFile, clusterConf, nil
+}
+
+func setMqttAuth() error {
+
+	confFile, clusterConf, err := getConfFile()
+	if err != nil {
+		return err
+	}
+	defer confFile.Close()
+
+	if certFile != "" {
+		clusterConf.CertFile = certFile
+	}
+	if keyFile != "" {
+		clusterConf.KeyFile = keyFile
+	}
+
+	marshalled, err := json.Marshal(clusterConf)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	//write cluster configuration
+	confFile.Truncate(0)
+	confFile.Seek(0, 0)
+	_, err = confFile.Write(marshalled)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	return nil
+
 }

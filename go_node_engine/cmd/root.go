@@ -31,6 +31,8 @@ var (
 	unikernelSupport bool
 	detatched        bool
 	logDirectory     string
+	certFile         string
+	keyFile          string
 )
 
 var CONF_DIR = path.Join("/etc", "oakestra")
@@ -53,6 +55,8 @@ func init() {
 	rootCmd.Flags().BoolVarP(&unikernelSupport, "unikernel", "u", false, "Enable Unikernel support. [qemu/kvm required]")
 	rootCmd.Flags().StringVarP(&logDirectory, "logs", "l", DEFAULT_LOG_DIR, "Directory for application's logs")
 	rootCmd.Flags().BoolVarP(&detatched, "detatch", "d", false, "Run the NodeEngine in the background (daemon mode)")
+	rootCmd.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
+	rootCmd.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
 }
 
 func nodeEngineDaemonManager() error {
@@ -75,6 +79,11 @@ func nodeEngineDaemonManager() error {
 	if unikernelSupport {
 		// read cluster configuration if not present or new value set
 		setUnikernel(true)
+	}
+
+	if certFile != "" || keyFile != "" {
+		// set Mqtt auth parameters
+		setMqttAuth()
 	}
 
 	switch overlayNetwork {
