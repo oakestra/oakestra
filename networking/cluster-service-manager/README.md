@@ -14,7 +14,7 @@ Each Node belongs to a subnetwork and upon deployment each job contains belongs 
 
 - GET /api/net/job/<job_name>/instances table query by job name
 - GET /api/net/job/ip/<service_ip>/instances table query by service ip
-- GET /api/net/subnet/<node_id> get subnet upn node deployment
+- GET /api/net/subnet/<node_id> get subnet upon node deployment
 - POST /api/net/service/net_deploy_status update service deployment status 
 
 ## Outgoing Endpoints to other components

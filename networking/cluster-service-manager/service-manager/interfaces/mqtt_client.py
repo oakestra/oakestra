@@ -13,7 +13,7 @@ app = None
 def handle_connect(client, userdata, flags, rc):
     global mqtt
     global app
-    logging.info("MQTT - Connected to MQTT Broker")
+    app.logger.info("MQTT - Connected to MQTT Broker")
     mqtt.subscribe(topic="nodes/+/net/#", qos=1)
 
 
@@ -67,14 +67,16 @@ def mqtt_init(flask_app):
     if "MQTT_CERT" in os.environ:
         try:
             mqtt.tls_set(
-                certfile=os.path.join(os.environ.get("MQTT_CERT"), "/client.crt"),
-                keyfile=os.path.join(os.environ.get("MQTT_CERT"), "/client.key"),
-                keyfile_password=os.environ.get("CLUSTER_KEYFILE_PASSWORD"),
+                ca_certs=os.environ.get("MQTT_CERT") + "/ca.crt",
+                certfile=os.environ.get("MQTT_CERT") + "/cluster_net.crt",
+                keyfile=os.environ.get("MQTT_CERT") + "/cluster_net.key",
+                keyfile_password=os.environ.get("CLUSTER_SERVICE_KEYFILE_PASSWORD"),
             )
             app.logger.info("MQTT - TLS configured")
         except FileNotFoundError as e:
             app.logger.error("MQTT - Unable to load certificate files")
             app.logger.error(e)
+
 
     mqtt.connect(
         os.environ.get("MQTT_BROKER_URL").strip("[]"),

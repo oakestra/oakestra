@@ -97,6 +97,7 @@ func InitNetMqttClient(clientid string, brokerurl string, brokerport string, mqt
 		if netMqttClient.mqttCert != "" {
 			logger.InfoLogger().Printf("MQTT - Configuring TLS")
 			cert, err := tls.LoadX509KeyPair(netMqttClient.mqttCert, netMqttClient.mqttKey)
+			logger.InfoLogger().Printf("Cert: %s, Key: %s", netMqttClient.mqttCert, netMqttClient.mqttKey)
 			if err != nil {
 				logger.ErrorLogger().Printf("Error loading certificate: %v", err)
 			}
