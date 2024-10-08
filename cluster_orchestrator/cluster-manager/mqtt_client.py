@@ -89,8 +89,8 @@ def mqtt_init(flask_app):
         try:
             mqtt.tls_set(
                 ca_certs=os.environ.get("MQTT_CERT") + "/ca.crt",
-                certfile=os.environ.get("MQTT_CERT") + "/client.crt",
-                keyfile=os.environ.get("MQTT_CERT") + "/client.key",
+                certfile=os.environ.get("MQTT_CERT") + "/cluster.crt",
+                keyfile=os.environ.get("MQTT_CERT") + "/cluster.key",
                 keyfile_password=os.environ.get("CLUSTER_KEYFILE_PASSWORD"),
             )
             app.logger.info("MQTT - TLS configured")
