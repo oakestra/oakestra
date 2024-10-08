@@ -7,6 +7,17 @@ services:
     volumes:
       - ./certs:/certs
 
+  cluster_service_manager:
+    image: cluster-service-manager
+    build: /home/matthew/work/oakestra-net/cluster-service-manager/service-manager
+    volumes:
+      - ./certs:/certs
+    environment:
+      - MQTT_CERT=/certs
+      - MQTT_BROKER_URL=mqtts
+      - CLUSTER_SERVICE_KEYFILE_PASSWORD=${CLUSTER_SERVICE_KEYFILE_PASSWORD}
+
+
   cluster_manager:
     volumes:
       - ./certs:/certs
@@ -14,10 +25,3 @@ services:
       - MQTT_CERT=/certs
       - MQTT_BROKER_URL=mqtts
       - CLUSTER_KEYFILE_PASSWORD=${CLUSTER_KEYFILE_PASSWORD}
-
-  cluster_service_manager:
-    volumes:
-      - ./certs:/certs
-    environment:
-      - MQTT_CERT=/certs
-      - MQTT_BROKER_URL=mqtts

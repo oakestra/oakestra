@@ -132,14 +132,24 @@ Be sure to give each component a unique Organizational Unit Name\
         `chmod 0644 server.key`\
 **Cluster Manager (Client):**
    6. Generate a client key:\
-        `openssl genrsa -aes256 -out client.key 2048`
+        `openssl genrsa -aes256 -out cluster.key 2048`
    7. Generate a certificate signing request:\
-        `openssl req -out client.csr -key client.key -new`\
+        `openssl req -out cluster.csr -key cluster.key -new`\
         When prompted for the CN, enter `cluster_manager`
    8. Send the CSR to the CA:
-        `openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt -days <duration>`
+        `openssl x509 -req -in cluster.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out cluster.crt -days <duration>`
    9. Export the keyfile password as an environmental variable:\
         `export CLUSTER_KEYFILE_PASSWORD=<keyfile password>`\
+**Cluster Service Manager (Client):**
+   6. Generate a client key:\
+      `openssl genrsa -aes256 -out cluster_net.key 2048`
+   7. Generate a certificate signing request:\
+      `openssl req -out cluster_net.csr -key cluster_net.key -new`\
+      When prompted for the CN, enter `cluster_service_manager`
+   8. Send the CSR to the CA:
+      `openssl x509 -req -in cluster_net.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out cluster_net.crt -days <duration>`
+   9. Export the keyfile password as an environmental variable:\
+      `export CLUSTER_SERVICE_KEYFILE_PASSWORD=<keyfile password>`\
 **Node Engine (Client):**\
 You will have to copy the ca.crt and ca.key file to node machine
    10. Generate a client key:\
