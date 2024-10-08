@@ -8,8 +8,6 @@ services:
       - ./certs:/certs
 
   cluster_service_manager:
-    image: cluster-service-manager
-    build: /home/matthew/work/oakestra-net/cluster-service-manager/service-manager
     volumes:
       - ./certs:/certs
     environment:
