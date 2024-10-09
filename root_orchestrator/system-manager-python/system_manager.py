@@ -4,7 +4,6 @@ import threading
 from concurrent import futures
 from datetime import timedelta
 from pathlib import Path
-from secrets import token_hex
 
 import grpc
 from blueprints import blueprints
