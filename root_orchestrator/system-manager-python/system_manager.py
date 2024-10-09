@@ -9,10 +9,10 @@ from secrets import token_hex
 import grpc
 from blueprints import blueprints
 from bson import json_util
+from ext_requests.jwt_generator_requests import get_public_key
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import net_register_cluster
 from ext_requests.user_db import create_admin
-from ext_requests.jwt_generator_requests import get_public_key
 from flask import Flask, flash, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager

@@ -1,8 +1,5 @@
-from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt, \
-    verify_jwt_in_request
-
-from ext_requests.user_db import mongo_get_user_by_name
 from ext_requests.jwt_generator_requests import create_access_token, create_refresh_token
+from ext_requests.user_db import mongo_get_user_by_name
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
