@@ -4,13 +4,13 @@
   "applications" : [
     {
       "applicationID" : "1000010001",
-      "application_name" : "Example Application",
+      "application_name" : "ExampleApplication33",
       "application_namespace" : "test",
       "application_desc" : "No description here",
       "microservices" : [
         {
           "microserviceID": "",
-          "microservice_name": "Micro A (4)",
+          "microservice_name": "MicroA4",
           "microservice_namespace": "test",
           "virtualization": "container",
           "cmd": ["ls","-al"],

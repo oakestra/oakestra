@@ -1,17 +1,32 @@
 from prometheus_client import Gauge
 
-gauge_cpu = None
-gauge_memory = None
+metrics = {}
+jobs = {}
+cluster_id = None
+logger = None
 
 
-def prometheus_init_gauge_metrics(my_id):
-    global gauge_cpu, gauge_memory
-    gauge_cpu = Gauge('_gauge_cpu_' + my_id, 'Total available CPU cores Gauge')
-    gauge_memory = Gauge('_gauge_memory_' + my_id, 'Total available Memory Gauge')
-    print('prometheus gauge metrics initialized.')
+def add_or_set_metric(name, value):
+    global metrics, logger
+    metrics_name = "_gauge_" + str(name) + "_" + str(cluster_id)
+    if type(value) is not list and type(value) is not dict and value is not None:
+        try:
+            if metrics_name in metrics:
+                metrics[metrics_name].set(value)
+            else:
+                metrics[metrics_name] = Gauge(metrics_name, "")
+        except Exception as e:
+            logger.error("Unable to set metric " + metrics_name + " to " + str(value))
+            logger.error(e)
 
 
-def prometheus_set_metrics(my_id, data):
-    gauge_cpu.set(data.get('cpu_cores'))
-    gauge_memory.set(data.get('cumulative_memory_in_mb'))
-    print('Metrics set.')
+def prometheus_init_gauge_metrics(my_id, app_logger):
+    global cluster_id, logger
+    logger = app_logger
+    cluster_id = my_id
+    print("prometheus gauge metrics initialized.")
+
+
+def prometheus_set_metrics(data):
+    for metric_name, metric_value in data.items():
+        add_or_set_metric(metric_name, metric_value)

@@ -1,26 +1,15 @@
-import logging
-import traceback
-import json
-
 from bson import json_util
-from flask.views import MethodView
+from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from flask import request
-from flask_smorest import Blueprint, Api, abort
+from flask.views import MethodView
+from flask_smorest import Blueprint, abort
+from oakestra_utils.types.statuses import convert_to_status
+from resource_abstractor_client import cluster_operations
+from services.instance_management import update_job_status
+from utils.network import sanitize
 
-from ext_requests.cluster_requests import cluster_request_to_delete_job, cluster_request_to_delete_job_by_ip
-from services.service_management import delete_service
-from ext_requests.apps_db import mongo_update_job_status
-from ext_requests.cluster_db import mongo_get_all_clusters, mongo_find_all_active_clusters, \
-    mongo_update_cluster_information, mongo_find_cluster_by_id
-from services.instance_management import instance_scale_up_scheduled_handler
-
-clustersbp = Blueprint(
-    'Clusters', 'cluster management', url_prefix='/api/clusters'
-)
-
-clusterinfo = Blueprint(
-    'Clusterinfo', 'cluster informations', url_prefix='/api/information'
-)
+clustersbp = Blueprint("Clusters", "cluster management", url_prefix="/api/clusters")
+clusterinfo = Blueprint("Clusterinfo", "cluster informations", url_prefix="/api/information")
 
 cluster_info_schema = {
     "type": "object",
@@ -34,6 +23,7 @@ cluster_info_schema = {
         "virtualization": {"type": "array", "items": {"type": "string"}},
         "more": {"type": "object"},
         "worker_groups": {"type": "string"},
+        "supported_addons": {"type": "array", "items": {"type": "string"}},
         "jobs": {
             "type": "array",
             "items": {
@@ -49,47 +39,59 @@ cluster_info_schema = {
                                 "instance_number": {"type": "string"},
                                 "status": {"type": "string"},
                                 "status_detail": {"type": "string"},
-                                "publicip": {"type": "string"}
-                            }
-                        }
+                                "publicip": {"type": "string"},
+                            },
+                        },
                     },
-                }
-            }
+                },
+            },
         },
-    }
+    },
 }
 
 
-@clustersbp.route('/')
+@clustersbp.route("/")
 class ClustersController(MethodView):
-
     def get(self, *args, **kwargs):
-        return json_util.dumps(mongo_get_all_clusters())
+        clusters = cluster_operations.get_resources()
+        if clusters is None:
+            return abort(500, "Getting clusters failed")
+        return json_util.dumps(clusters)
 
 
-@clustersbp.route('/active')
+@clustersbp.route("/active")
 class ActiveClustersController(MethodView):
-
     def get(self, *args, **kwargs):
-        return json_util.dumps(mongo_find_all_active_clusters())
+        clusters = cluster_operations.get_resources(active=True)
+        if clusters is None:
+            return abort(500, "Getting clusters failed")
+        return json_util.dumps(clusters)
 
 
-@clusterinfo.route('/<clusterid>')
+@clusterinfo.route("/<clusterid>")
 class ClusterController(MethodView):
-
-    @clusterinfo.arguments(schema=cluster_info_schema, location="json", validate=False, unknown=True)
+    @clusterinfo.arguments(
+        schema=cluster_info_schema, location="json", validate=False, unknown=True
+    )
     def post(self, *args, **kwargs):
         data = request.json
-        mongo_update_cluster_information(kwargs['clusterid'], data)
-        jobs = data.get('jobs')
+        cluster_id = kwargs["clusterid"]
+        updated_cluster = cluster_operations.update_cluster_information(cluster_id, data)
+        if updated_cluster is None:
+            return abort(400, "Updating cluster failed")
+
+        # TODO: fire an event to react to the cluster update, and move this logic somewhere else.
+        jobs = data.get("jobs")
         for j in jobs:
-            result = mongo_update_job_status(
-                job_id=j.get('system_job_id'),
-                status=j.get('status'),
-                status_detail=j.get('status_detail'),
-                instances=j.get('instance_list'))
+            result = update_job_status(
+                job_id=j.get("system_job_id"),
+                status=convert_to_status(j.get("status")),
+                status_detail=j.get("status_detail"),
+                instances=j.get("instance_list"),
+            )
             if result is None:
                 # cluster has outdated jobs, ask to undeploy
-                cluster_request_to_delete_job_by_ip(j.get('system_job_id'), -1, request.remote_addr)
+                addr = sanitize(request.remote_addr)
+                cluster_request_to_delete_job_by_ip(j.get("system_job_id"), -1, addr)
 
-        return 'ok'
+        return "ok"

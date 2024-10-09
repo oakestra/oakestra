@@ -1,4 +1,6 @@
-if [ "$1" == "" ]; then
+#!/usr/bin/env bash
+
+if [ -z "$1" ]; then
     echo "Architecture not set"
     echo "Usage ./install.sh <architecture>"
     echo "supported architectures: amd64, arm64"

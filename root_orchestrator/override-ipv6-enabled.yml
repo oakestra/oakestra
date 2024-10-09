@@ -1,0 +1,70 @@
+version: "3.3"
+
+services:
+  system_manager:
+    networks:
+      root_net:
+        ipv4_address: 192.168.128.2
+        ipv6_address: 2001:db8:a::2
+
+  mongo_root:
+    networks:
+      root_net:
+        ipv4_address: 192.168.128.5
+        ipv6_address: 2001:db8:a::5
+    command: mongod --port 10007 --ipv6
+
+  mongo_rootnet:
+    networks:
+      root_net:
+        ipv4_address: 192.168.128.4
+        ipv6_address: 2001:db8:a::4
+    command: mongod --port 10008 --ipv6
+
+  root_service_manager:
+    networks:
+      root_net:
+        ipv4_address: 192.168.128.3
+        ipv6_address: 2001:db8:a::3
+
+  redis:
+    networks:
+      root_net:
+        ipv4_address: 192.168.128.8
+        ipv6_address: 2001:db8:a::8
+
+  grafana:
+    networks:
+      root_net:
+        ipv4_address: 192.168.128.9
+        ipv6_address: 2001:db8:a::9
+
+  dashboard:
+    networks:
+      root_net:
+        ipv4_address: 192.168.128.6
+        ipv6_address: 2001:db8:a::6
+
+  cloud_scheduler:
+    networks:
+      root_net:
+        ipv4_address: 192.168.128.7
+        ipv6_address: 2001:db8:a::7
+
+  resource_abstractor:
+    networks:
+      root_net:
+        ipv4_address: 192.168.128.10
+        ipv6_address: 2001:db8:a::10
+
+networks:
+  root_net:
+    name: root_net
+    enable_ipv6: true
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 2001:db8:a::/64
+          gateway: 2001:db8:a::1
+        - subnet: 192.168.128.0/24
+          gateway: 192.168.128.1

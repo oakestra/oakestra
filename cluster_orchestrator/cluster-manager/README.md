@@ -28,11 +28,22 @@ The Cluster Manager is a component in the Cluster Orchestrator. Edge nodes regis
 
 ## Start the Cluster Manager
 
-Please start the Cluster Manager with `./start-up.sh`.
-A virtualenv will be started and cluster-manager will start up.
+Export the environment variables with the URL of the root orchestrator, as well as cluster name and location.
 
-Use the docker-compose file to start other necessary Cluster Orchestrator components (Mqtt Broker + MongoDB + Redis as Cluster Scheduler-Queue)
+- No special characters, no spaces.
+- CLUSTER_LOCATION can be a string or geo coordinates in the form of: LATITUDE,LONGITUDE,RADIUS (radius in KM)
 
+```
+export SYSTEM_MANAGER_URL=<IP ADDRESS OF THE NODE HOSTING THE ROOT ORCHESTRATOR>
+export CLUSTER_NAME=<choose a name for your cluster>
+export CLUSTER_LOCATION=<choose a name for the cluster's location>
+```
+
+Then use docker compose:
+
+```
+sudo -E docker-compose -f cluster_orchestrator/docker-compose.yml up
+```
 
 ## Built With
 

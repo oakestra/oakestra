@@ -1,35 +1,40 @@
 import logging
 
-from bson import json_util
-from flask import request, jsonify, Response
-from flask_restful import Resource
-from flask_smorest import Blueprint, Api, abort
-from flask.views import MethodView
-
-from blueprints.schema_wrapper import SchemaWrapper
-from roles.securityUtils import *
 import sla.schema
+from blueprints.schema_wrapper import SchemaWrapper
+from bson import json_util
+from flask import request
+from flask.views import MethodView
+from flask_restful import Resource
+from flask_smorest import Blueprint, abort
+from roles.securityUtils import Role, get_jwt_auth_identity, jwt_auth_required, require_role
 from services import service_management
 
 # ........ Functions for job management ...............#
 # ......................................................#
-from sla.versioned_sla_parser import SLAFormatError
 
 serviceblp = Blueprint(
-    'Service operations', 'service', url_prefix='/api/service',
-    description='Service management operations'
+    "Service operations",
+    "service",
+    url_prefix="/api/service",
+    description="Service management operations",
 )
 
 servicesblp = Blueprint(
-    'Multiple services operations', 'services', url_prefix='/api/services',
-    description='Operations on multiple services'
+    "Multiple services operations",
+    "services",
+    url_prefix="/api/services",
+    description="Operations on multiple services",
 )
 
 
-@serviceblp.route('/<serviceid>')
+@serviceblp.route("/<serviceid>")
 class ServiceController(MethodView):
-
-    @serviceblp.response(200, SchemaWrapper(sla.schema.sla_microservice_schema), content_type="application/json")
+    @serviceblp.response(
+        200,
+        SchemaWrapper(sla.schema.sla_microservice_schema),
+        content_type="application/json",
+    )
     @jwt_auth_required()
     def get(self, serviceid):
         """Get service for specific ID
@@ -39,7 +44,10 @@ class ServiceController(MethodView):
         """
         username = get_jwt_auth_identity()
         job = service_management.get_service(serviceid, username)
+
         if job is not None:
+            # TODO Frontend should be able to handle the _id being a string and not an object.
+            job = {**job, "_id": {"$oid": str(job["_id"])}}
             return json_util.dumps(job)
         else:
             return abort(404, "not found")
@@ -61,7 +69,9 @@ class ServiceController(MethodView):
         except ConnectionError as e:
             abort(500, e)
 
-    @serviceblp.arguments(schema=sla.schema.sla_schema, location="json", validate=False, unknown=True)
+    @serviceblp.arguments(
+        schema=sla.schema.sla_schema, location="json", validate=False, unknown=True
+    )
     @serviceblp.response(200, content_type="application/json")
     @jwt_auth_required()
     def put(self, *args, serviceid):
@@ -72,10 +82,10 @@ class ServiceController(MethodView):
         """
         try:
             username = get_jwt_auth_identity()
-            job = (request.get_json()['applications'][0])['microservices'][0]
+            job = (request.get_json()["applications"][0])["microservices"][0]
             if "_id" in job:
-                del job['_id']
-            result,status = service_management.update_service(username, job, serviceid)
+                del job["_id"]
+            result, status = service_management.update_service(username, job, serviceid)
             if status != 200:
                 abort(status, result)
             return {}
@@ -83,9 +93,11 @@ class ServiceController(MethodView):
             abort(404, {"message": e})
 
 
-@serviceblp.route('/')
+@serviceblp.route("/")
 class ServiceControllerPost(MethodView):
-    @serviceblp.arguments(schema=sla.schema.sla_schema, location="json", validate=False, unknown=True)
+    @serviceblp.arguments(
+        schema=sla.schema.sla_schema, location="json", validate=False, unknown=True
+    )
     @serviceblp.response(200, content_type="application/json")
     @jwt_auth_required()
     def post(self, *args, **kwargs):
@@ -109,24 +121,41 @@ class ServiceControllerPost(MethodView):
         abort(404, {"message": "/api/deploy request without a yaml file\n"})
 
 
-@servicesblp.route('/<appid>')
+@servicesblp.route("/<appid>")
 class MultipleServicesControllerUser(Resource):
-
-    @serviceblp.response(200, SchemaWrapper(sla.schema.sla_microservices_schema), content_type="application/json")
+    @serviceblp.response(
+        200,
+        SchemaWrapper(sla.schema.sla_microservices_schema),
+        content_type="application/json",
+    )
     @jwt_auth_required()
     def get(self, appid):
         username = get_jwt_auth_identity()
-        result,status = service_management.user_services(appid, username)
+        result, status = service_management.user_services(appid, username)
         if status != 200:
-            abort(status,result)
+            abort(status, result)
+
+        # TODO Frontend should be able to handle the _id being a string and not an object.
+        for i in range(len(result)):
+            result[i]["_id"] = {"$oid": result[i]["_id"]}
         return json_util.dumps(result)
 
 
-@servicesblp.route('/')
+@servicesblp.route("/")
 class MultipleServicesController(Resource):
-
-    @serviceblp.response(200, SchemaWrapper(sla.schema.sla_microservices_schema), content_type="application/json")
+    @serviceblp.response(
+        200,
+        SchemaWrapper(sla.schema.sla_microservices_schema),
+        content_type="application/json",
+    )
     @jwt_auth_required()
     @require_role(Role.ADMIN)
     def get(self, *args, **kwargs):
-        return json_util.dumps(service_management.get_all_services())
+        result, code = service_management.get_all_services()
+        if code != 200:
+            abort(code, result)
+
+        # TODO Frontend should be able to handle the _id being a string and not an object.
+        for i in range(len(result)):
+            result[i]["_id"] = {"$oid": result[i]["_id"]}
+        return json_util.dumps(result)

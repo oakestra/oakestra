@@ -2,86 +2,135 @@ package model
 
 import (
 	"fmt"
-	"github.com/jaypipes/ghw"
+	"go_node_engine/logger"
+	"go_node_engine/model/gpu"
+	"net"
+	"os"
+	"runtime"
+	"strconv"
+	"sync"
+
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	psnet "github.com/shirou/gopsutil/net"
-	"go_node_engine/logger"
-	"net"
-	"os"
-	"strconv"
-	"sync"
 )
+
+// RuntimeType is the type of runtime that the node executes
+type RuntimeType string
+
+// RuntimeType constants
+const (
+	CONTAINER_RUNTIME RuntimeType = "docker"
+	UNIKERNEL_RUNTIME RuntimeType = "unikernel"
+)
+
+// AddonType is the type of addon that the node supports
+type AddonType string
 
 const (
-	CONTAINER_RUNTIME = "docker"
-	UNIKERNEL_RUNTIME = "unikernel"
+// Example Addon:
+//
+//	FLOPS AddonType = "FLOps"
 )
 
+// Node is the struct that describes the node
 type Node struct {
-	Id             string            `json:"id"`
-	Host           string            `json:"host"`
-	Ip             string            `json:"ip"`
-	Port           string            `json:"port"`
-	SystemInfo     map[string]string `json:"system_info"`
-	CpuUsage       float64           `json:"cpu"`
-	CpuCores       int               `json:"free_cores"`
-	MemoryUsed     float64           `json:"memory"`
-	MemoryMB       int               `json:"memory_free_in_MB"`
-	DiskInfo       map[string]string `json:"disk_info"`
-	NetworkInfo    map[string]string `json:"network_info"`
-	GpuInfo        map[string]string `json:"gpu_info"`
-	Technology     []string          `json:"technology"`
-	Overlay        bool
-	NetManagerPort int
+	Id              string            `json:"id"`
+	Host            string            `json:"host"`
+	Ip              string            `json:"ip"`
+	Port            string            `json:"port"`
+	SystemInfo      map[string]string `json:"system_info"`
+	CpuUsage        float64           `json:"cpu"`
+	CpuCores        int               `json:"free_cores"`
+	CpuArch         string            `json:"architecture"`
+	MemoryUsed      float64           `json:"memory"`
+	MemoryMB        int               `json:"memory_free_in_MB"`
+	DiskInfo        map[string]string `json:"disk_info"`
+	NetworkInfo     map[string]string `json:"network_info"`
+	GpuDriver       string            `json:"gpu_driver"`
+	GpuUsage        float64           `json:"gpu_usage"`
+	GpuCores        int               `json:"gpu_cores"`
+	GpuTemp         float64           `json:"gpu_temp"`
+	GpuMemUsage     float64           `json:"gpu_mem_used"`
+	GpuTotMem       float64           `json:"gpu_tot_mem"`
+	Technology      []RuntimeType     `json:"technology"`
+	SupportedAddons []AddonType       `json:"supported_addons"`
+	Overlay         bool
+	LogDirectory    string
+	NetManagerPort  int
 }
 
 var once sync.Once
 var node Node
 
-func GetNodeInfo() Node {
+// GetNodeInfo returns the node information
+func GetNodeInfo() *Node {
 	once.Do(func() {
 		node = Node{
-			Host:       getHostname(),
-			SystemInfo: getSystemInfo(),
-			CpuCores:   getCpuCores(),
-			Port:       getPort(),
-			Technology: getSupportedTechnologyList(),
-			Overlay:    false,
+			Host:            getHostname(),
+			SystemInfo:      getSystemInfo(),
+			CpuCores:        getCpuCores(),
+			CpuArch:         runtime.GOARCH,
+			Port:            getPort(),
+			Technology:      make([]RuntimeType, 0),
+			SupportedAddons: make([]AddonType, 0),
+			Overlay:         false,
 		}
 	})
 	node.updateDynamicInfo()
-	return node
+	return &node
 }
 
+// SetLogDirectory sets the directory where the logs will be stored
+func (n *Node) SetLogDirectory(dir string) {
+	n.LogDirectory = dir
+}
+
+// GetDynamicInfo returns the dynamic information of the node (CPU, Memory, GPU usage etc.)
 func GetDynamicInfo() Node {
 	node.updateDynamicInfo()
 	return Node{
-		CpuUsage:   node.CpuUsage,
-		CpuCores:   node.CpuCores,
-		MemoryUsed: node.MemoryUsed,
-		MemoryMB:   node.MemoryMB,
+		CpuUsage:    node.CpuUsage,
+		CpuCores:    node.CpuCores,
+		MemoryUsed:  node.MemoryUsed,
+		MemoryMB:    node.MemoryMB,
+		GpuDriver:   node.GpuDriver,
+		GpuTemp:     node.GpuTemp,
+		GpuUsage:    node.GpuUsage,
+		GpuTotMem:   node.GpuTotMem,
+		GpuMemUsage: node.GpuMemUsage,
 	}
 }
 
+// EnableOverlay enables the overlay network, setting the port
 func EnableOverlay(port int) {
 	node.Overlay = true
 	node.NetManagerPort = port
 }
 
 func (n *Node) updateDynamicInfo() {
+	// System Info
 	n.CpuUsage = getAvgCpuUsage()
 	n.Ip = getIp()
 	n.MemoryMB = getMemoryMB()
 	n.MemoryUsed = getMemoryUsage()
 	n.DiskInfo = getDiskinfo()
 	n.NetworkInfo = getNetworkInfo()
-	n.GpuInfo = getGpuInfo()
+
+	// GPU Info
+	n.GpuDriver = getGpuDriver()
+	n.GpuTotMem = getTotGpuMemFreeMB()
+	n.GpuMemUsage = getGpuMemUsage()
+	n.GpuUsage = getGpuUsage()
+	n.GpuCores = getGpuCores()
+	n.GpuTemp = getGpuTemp()
+
 }
 
+// SetNodeId sets the node id
 func SetNodeId(id string) {
 	GetNodeInfo()
 	node.Id = id
@@ -150,7 +199,7 @@ func getMemoryMB() int {
 		logger.ErrorLogger().Printf("Error: %s", err.Error())
 		return 0
 	}
-	return int(mem.Free >> 20)
+	return int(mem.Available >> 20)
 }
 
 func getMemoryUsage() float64 {
@@ -179,19 +228,6 @@ func getDiskinfo() map[string]string {
 	return diskInfoMap
 }
 
-func getGpuInfo() map[string]string {
-	gpu, err := ghw.GPU()
-	gpuInfoMap := make(map[string]string)
-	if err != nil {
-		fmt.Printf("Error %v", err)
-		return gpuInfoMap
-	}
-	for i, card := range gpu.GraphicsCards {
-		gpuInfoMap[fmt.Sprintf("gpu_%d", i)] = card.String()
-	}
-	return gpuInfoMap
-}
-
 func getNetworkInfo() map[string]string {
 	netInfoMap := make(map[string]string)
 	interfaces, err := psnet.Interfaces()
@@ -211,6 +247,159 @@ func getPort() string {
 	return port
 }
 
-func getSupportedTechnologyList() []string {
-	return []string{CONTAINER_RUNTIME}
+// AddSupportedTechnology adds a supported technology to the node
+func (n *Node) AddSupportedTechnology(tech RuntimeType) {
+	n.Technology = append(n.Technology, tech)
+}
+
+// GetSupportedTechnologyList returns the list of supported technologies
+func (n *Node) GetSupportedTechnologyList() []RuntimeType {
+	return n.Technology
+}
+
+// AddSupportedAddons adds a supported addon to the node
+func (n *Node) AddSupportedAddons(ext AddonType) {
+	n.SupportedAddons = append(n.SupportedAddons, ext)
+}
+
+// GetSupportedAddonsList returns the list of supported addons
+func (n *Node) GetSupportedAddonsList() []AddonType {
+	return n.SupportedAddons
+}
+
+func getGpuDriver() string {
+	n, err := gpu.NvsmiDeviceCount()
+	if err != nil {
+		return "-"
+	}
+
+	var queryResult string
+	for i := 0; i < n; i++ {
+		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "driver_version")
+		if err != nil {
+			continue
+		}
+		queryResult = res
+	}
+
+	if queryResult != "" {
+		return "-"
+	}
+	return queryResult
+}
+
+func getGpuMemUsage() float64 {
+	n, err := gpu.NvsmiDeviceCount()
+	if err != nil || n == 0 {
+		return 0
+	}
+
+	totMem := 0.0
+	for i := 0; i < n; i++ {
+		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.used")
+		if err != nil {
+			return 0
+		}
+		totm := getTotGpuMem()
+		if totm >= 0 {
+			currmem, err := strconv.Atoi(res)
+			if err != nil {
+				return 0
+			}
+			totMem += float64(currmem) * 100 / getTotGpuMem()
+		}
+	}
+	return totMem / float64(n)
+}
+
+func getGpuCores() int {
+	n, err := gpu.NvsmiDeviceCount()
+	if err != nil || n == 0 {
+		return 0
+	}
+	return n
+}
+
+func getGpuUsage() float64 {
+	n, err := gpu.NvsmiDeviceCount()
+	if err != nil || n == 0 {
+		return 0
+	}
+
+	totUage := 0.0
+	for i := 0; i < n; i++ {
+		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "utilization.gpu")
+		if err != nil {
+			return 0
+		}
+		gpuusage, err := strconv.Atoi(res)
+		if err != nil {
+			return 0
+		}
+		totUage += float64(gpuusage)
+	}
+	return totUage / float64(n)
+}
+
+func getTotGpuMem() float64 {
+	n, err := gpu.NvsmiDeviceCount()
+	if err != nil || n == 0 {
+		return 0
+	}
+
+	totMem := 0.0
+	for i := 0; i < n; i++ {
+		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.total")
+		if err != nil {
+			return 0
+		}
+		gpuMem, err := strconv.Atoi(res)
+		if err != nil {
+			return 0
+		}
+		totMem += float64(gpuMem)
+	}
+	return totMem
+}
+
+func getTotGpuMemFreeMB() float64 {
+	n, err := gpu.NvsmiDeviceCount()
+	if err != nil || n == 0 {
+		return 0
+	}
+
+	totMem := 0.0
+	for i := 0; i < n; i++ {
+		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.free")
+		if err != nil {
+			return 0
+		}
+		gpuMem, err := strconv.Atoi(res)
+		if err != nil {
+			return 0
+		}
+		totMem += float64(gpuMem)
+	}
+	return totMem
+}
+
+func getGpuTemp() float64 {
+	n, err := gpu.NvsmiDeviceCount()
+	if err != nil || n == 0 {
+		return 0
+	}
+
+	totTemp := 0.0
+	for i := 0; i < n; i++ {
+		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "temperature.gpu")
+		if err != nil {
+			return 0
+		}
+		currTemp, err := strconv.Atoi(res)
+		if err != nil {
+			return 0
+		}
+		totTemp += float64(currTemp)
+	}
+	return totTemp / float64(n)
 }

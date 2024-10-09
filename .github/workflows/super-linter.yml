@@ -1,0 +1,57 @@
+
+---
+    name: Super-Linter Codestyles Checks
+    
+    on: [push, pull_request]
+    
+    permissions: { }
+    
+    jobs:
+      build:
+        name: Lint
+        runs-on: ubuntu-latest
+    
+        permissions:
+          contents: read
+          packages: read
+          statuses: write
+    
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 0
+    
+          - name: Super-linter
+            uses: super-linter/super-linter/slim@v6.5.0 
+            env:
+              MULTI_STATUS: false
+              LOG_LEVEL: INFO
+              IGNORE_GITIGNORED_FILES: true
+              IGNORE_GENERATED_FILES: true
+              VALIDATE_ALL_CODEBASE: false
+              # FILTER_REGEX_EXCLUDE: .github/* #Exclude files from being linted
+              LINTER_RULES_PATH: .github/linters_rules
+              VALIDATE_PYTHON_BLACK: true
+              PYTHON_BLACK_CONFIG_FILE: setup.cfg
+              VALIDATE_PYTHON_FLAKE8: true
+              PYTHON_FLAKE8_CONFIG_FILE: .flake8
+              VALIDATE_PYTHON_ISORT: true
+              PYTHON_ISORT_CONFIG_FILE: .isort.cfg
+              # Validate Go files and Go modules - https://github.com/golangci/golangci-lint
+              VALIDATE_GO_MODULES: true
+              # Validate Dockerfiles with hadolint - https://github.com/hadolint/hadolint?tab=readme-ov-file#configure
+              VALIDATE_DOCKERFILE_HADOLINT: true
+              DOCKERFILE_HADOLINT_FILE_NAME: .docker-hadolint.yaml
+              # yamlint linter - https://yamllint.readthedocs.io/en/stable/configuration.html
+              VALIDATE_YAML: true
+              YAML_CONFIG_FILE: .yaml-lint.yml
+              # Bash linter & validator
+              VALIDATE_BASH: true
+              BASH_FILE_NAME: .shellcheckrc
+              BASH_SEVERITY: error
+              VALIDATE_BASH_EXEC: true
+              # GitLeaks: discover secrets leaking - https://github.com/gitleaks/gitleaks?tab=readme-ov-file#configuration
+              VALIDATE_GITLEAKS: true
+              # GITLEAKS_CONFIG_FILE: .gitleaks.toml # https://github.com/gitleaks/gitleaks#configuration
+              GITHUB_TOKEN: ${{ secrets.SUPER_LINTER_TOKEN }}

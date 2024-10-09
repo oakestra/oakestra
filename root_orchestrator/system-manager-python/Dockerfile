@@ -1,11 +1,14 @@
-FROM python:3.10
+FROM python:3.10-slim-buster
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
-ADD requirements.txt /
+# The greenlet pip package requires gcc & g++ to work properly.
+RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ git
 
-RUN pip install -r requirements.txt
+COPY requirements.txt /
 
-ADD . /
+RUN pip install -r requirements.txt --no-cache-dir && rm /requirements.txt
+
+COPY . /
 
 # TRUE for verbose logging
 ENV FLASK_DEBUG=TRUE
@@ -20,5 +23,7 @@ ENV NET_PLUGIN_URL=localhost
 ENV NET_PLUGIN_PORT=10100
 
 EXPOSE 10000
+EXPOSE 50052
 
 CMD ["python", "system_manager.py"]
+
