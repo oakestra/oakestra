@@ -1,6 +1,6 @@
 module go_node_engine
 
-go 1.19
+go 1.22.0
 
 require (
 	github.com/containerd/containerd v1.7.6
@@ -8,6 +8,7 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/opencontainers/runtime-spec v1.1.0-rc.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
+	github.com/spf13/cobra v1.8.1
 	github.com/struCoder/pidusage v0.2.1
 	gotest.tools v2.2.0+incompatible
 )
@@ -45,7 +46,6 @@ require (
 	github.com/opencontainers/selinux v1.11.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
-	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/tklauser/go-sysconf v0.3.10 // indirect
 	github.com/tklauser/numcpus v0.4.0 // indirect
