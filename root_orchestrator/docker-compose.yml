@@ -190,7 +190,8 @@ services:
     logging: *default-logging
 
   jwt_generator:
-    image: michaelschlicker/simple-jwt-generator:0.1
+    image: jwt_generator
+    build: jwt-generator/
     container_name: jwt_generator
     hostname: jwt_generator
     expose:
@@ -199,7 +200,6 @@ services:
       - "10011:10011"
     environment:
       - JWT_GENERATOR_PORT=10011
-
 
 volumes:
   mongodb_data:
