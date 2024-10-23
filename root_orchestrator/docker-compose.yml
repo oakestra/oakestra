@@ -200,6 +200,7 @@ services:
       - "10011:10011"
     environment:
       - JWT_GENERATOR_PORT=10011
+    logging: *default-logging
 
 volumes:
   mongodb_data:

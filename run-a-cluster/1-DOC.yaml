@@ -34,7 +34,9 @@ services:
     depends_on:
       - mongo_root
       - cloud_scheduler
+      - resource_abstractor
       - root_service_manager
+      - jwt_generator
     environment:
       - CLOUD_MONGO_URL=mongo
       - CLOUD_MONGO_PORT=10007
@@ -44,6 +46,9 @@ services:
       - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10099
+      - JWT_GENERATOR_URL=jwt_generator
+      - JWT_GENERATOR_PORT=10011
+    logging: *default-logging
 
 
   # MongoDB in Root Orchestrator
@@ -121,6 +126,21 @@ services:
       - CLOUD_MONGO_PORT=10007
     depends_on:
       - mongo_root
+    logging: *default-logging
+
+  jwt_generator:
+    image: ghcr.io/oakestra/oakestra/jwt-generator:latest
+    container_name: jwt_generator
+    hostname: jwt_generator
+    labels:
+      logging: "promtail"
+      logging_jobname: "rootlogs"
+    expose:
+      - "10011"
+    ports:
+      - "10011:10011"
+    environment:
+      - JWT_GENERATOR_PORT=10011
     logging: *default-logging
 
 
