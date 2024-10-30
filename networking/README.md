@@ -30,14 +30,10 @@ Go inside the folder `node-net-manager/build` and run:
 ./build.sh
 ```
 
-Then move the binary corresponding to your architecture to the current folder:
-```
-cp bin/<architecture>-NetManager .
-```
-> <architecture> is either arm-7 or amd64
-
 Finally, install it using 
-`./install.sh` 
+`./install.sh <architecture>`
+
+supported architectures are `arm64` or `amd64`.
 
 ## Run the NetManager
 
