@@ -9,9 +9,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /
 
-ENV JWT_GENERATOR_HOST=0.0.0.0
-ENV JWT_GENERATOR_PORT=5000
+ENV JWT_GENERATOR_URL=0.0.0.0
+ENV JWT_GENERATOR_PORT=10011
 
-EXPOSE 5000
+EXPOSE 10011
 
 CMD ["python", "jwt_generator.py"]

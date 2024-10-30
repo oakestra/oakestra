@@ -9,7 +9,7 @@ from flask_jwt_extended.typing import ExpiresDelta, Fresh
 
 JWT_GENERATOR_ADDR = (
     "http://"
-    + os.environ.get("JWT_GENERATOR_HOST", "localhost")
+    + os.environ.get("JWT_GENERATOR_URL", "localhost")
     + ":"
     + str(os.environ.get("JWT_GENERATOR_PORT", "10011"))
 )
