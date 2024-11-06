@@ -71,7 +71,7 @@ class JobController(MethodView):
         return json.dumps(result, default=str)
 
 
-@jobsblp.route("/<job_id>/instance/<instance_id>")
+@jobsblp.route("/<job_id>/<instance_id>")
 class JobInstanceController(MethodView):
     @pre_post_hook("jobs", with_param_id="job_id")
     def patch(self, data, *args, **kwargs):
