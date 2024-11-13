@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"go_node_engine/addons/flops"
 	"go_node_engine/jobs"
 	"go_node_engine/logger"
 	"go_node_engine/model"
@@ -8,7 +9,9 @@ import (
 	"go_node_engine/requests"
 	"go_node_engine/virtualization"
 	"os"
+	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +32,9 @@ var (
 	overlayNetwork   int
 	unikernelSupport bool
 	logDirectory     string
+	// Addons
+	imageBuilder        bool
+	flopsLearnerSupport bool
 )
 
 // MONITORING_CYCLE defines the interval at which the system should perform monitoring tasks.
@@ -46,6 +52,9 @@ func init() {
 	rootCmd.Flags().IntVarP(&overlayNetwork, "netmanagerPort", "n", 6000, "Port of the NetManager component, if any. This enables the overlay network across nodes. Use -1 to disable Overlay Network Mode.")
 	rootCmd.Flags().BoolVarP(&unikernelSupport, "unikernel", "u", false, "Enable Unikernel support. [qemu/kvm required]")
 	rootCmd.Flags().StringVarP(&logDirectory, "logs", "l", "/tmp", "Directory for application's logs")
+	// Addons
+	rootCmd.Flags().BoolVar(&imageBuilder, "image-builder", false, "Checks if the host has QEMU (apt's qemu-user-static) installed for building multi-platform images.")
+	rootCmd.Flags().BoolVar(&flopsLearnerSupport, "flops-learner", false, "Enables the ML-data-server sidecar for data collection for FLOps learners.")
 }
 
 func startNodeEngine() error {
@@ -60,6 +69,21 @@ func startNodeEngine() error {
 		unikernelRuntime := virtualization.GetUnikernelRuntime()
 		defer unikernelRuntime.StopUnikernelRuntime()
 	}
+
+	if imageBuilder {
+		cmd := exec.Command("dpkg", "-s", "qemu-user-static")
+		output, err := cmd.Output()
+		if err != nil || !strings.Contains(string(output), "ok installed") {
+			logger.ErrorLogger().Fatalf("Unable to find qemu-user-static apt package for multi-platform image-builder: %v\n", err)
+		}
+		model.GetNodeInfo().AddSupportedAddons(model.IMAGE_BUILDER)
+	}
+
+	if flopsLearnerSupport {
+		model.GetNodeInfo().AddSupportedAddons(model.FLOPS_LEARNER)
+		flops.HandleFLOpsDataManager()
+	}
+
 	// hadshake with the cluster orchestrator to get mqtt port and node id
 	handshakeResult := clusterHandshake()
 
