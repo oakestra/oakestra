@@ -114,7 +114,7 @@ api_hooks_map = {
 
 # doesn't work well with @arguments decorator
 # this decorator has to be the closest to the method
-def pre_post_hook(entity_name, with_param_id=None):
+def pre_post_hook(name=None, with_param_id=None):
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
@@ -129,6 +129,9 @@ def pre_post_hook(entity_name, with_param_id=None):
             post_fn = api_hooks_map[method_name][1]
 
             entity_id = kwargs.get(with_param_id) if with_param_id else None
+            entity_name = name if name else kwargs.get("resource")  # for custom resources
+            if not entity_name:
+                raise ValueError("Couldn't determine entity name.")
 
             if pre_fn:
                 if entity_id:
