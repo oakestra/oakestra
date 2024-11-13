@@ -250,7 +250,6 @@ def register_with_system_manager():
 
 
 if __name__ == "__main__":
-
     start_http_server(10001)  # start prometheus server
     import eventlet
 
