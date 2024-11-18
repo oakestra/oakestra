@@ -3,11 +3,11 @@ LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
 WORKDIR /code
 
-ADD requirements.txt /code
+COPY requirements.txt /code
 
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-ADD . /code
+COPY . /code
 
 ENV ADDON_MARKETPLACE_PORT=11102
 ENV ADDON_MARKETPLACE_MONGO_URL=localhost

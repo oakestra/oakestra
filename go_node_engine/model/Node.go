@@ -31,9 +31,8 @@ const (
 type AddonType string
 
 const (
-// Example Addon:
-//
-//	FLOPS AddonType = "FLOps"
+	IMAGE_BUILDER AddonType = "image-builder"
+	FLOPS_LEARNER AddonType = "FLOps-learner"
 )
 
 // Node is the struct that describes the node

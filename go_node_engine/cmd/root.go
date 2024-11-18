@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"go_node_engine/config"
 	"io"
 	"log"
 	"os"
@@ -31,14 +32,13 @@ var (
 	unikernelSupport bool
 	detatched        bool
 	logDirectory     string
-	certFile         string
-	keyFile          string
+
+	certFile string
+	keyFile  string
 )
 
 var CONF_DIR = path.Join("/etc", "oakestra")
 var CONF_FILE = path.Join(CONF_DIR, "conf.json")
-var DEFAULT_LOG_DIR = "/tmp"
-var DEFAULT_CNI = "default"
 var DISABLE_NETWORK = "disabled"
 
 // Execute is the entry point of the NodeEngine
@@ -53,7 +53,7 @@ func init() {
 	rootCmd.Flags().IntVarP(&netmanagerPort, "netmanagerPort", "n", 0, "Port of the NetManager component (deprecated).")
 	rootCmd.Flags().StringVarP(&overlayNetwork, "overlayNetwork", "o", "default", "Options: default,disabled,custom:<path>. <path> points to the overlay component socket.")
 	rootCmd.Flags().BoolVarP(&unikernelSupport, "unikernel", "u", false, "Enable Unikernel support. [qemu/kvm required]")
-	rootCmd.Flags().StringVarP(&logDirectory, "logs", "l", DEFAULT_LOG_DIR, "Directory for application's logs")
+	rootCmd.Flags().StringVarP(&logDirectory, "logs", "l", config.DEFAULT_LOG_DIR, "Directory for application's logs")
 	rootCmd.Flags().BoolVarP(&detatched, "detatch", "d", false, "Run the NodeEngine in the background (daemon mode)")
 	rootCmd.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
 	rootCmd.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
@@ -71,14 +71,9 @@ func nodeEngineDaemonManager() error {
 		configCluster(clusterAddress)
 	}
 
-	if logDirectory != DEFAULT_LOG_DIR {
+	if logDirectory != config.DEFAULT_LOG_DIR {
 		// read cluster configuration if not present or new value set
 		configLogs(logDirectory)
-	}
-
-	if unikernelSupport {
-		// read cluster configuration if not present or new value set
-		setUnikernel(true)
 	}
 
 	if certFile != "" || keyFile != "" {
@@ -87,13 +82,13 @@ func nodeEngineDaemonManager() error {
 	}
 
 	switch overlayNetwork {
-	case DEFAULT_CNI:
-		setNetwork(DEFAULT_CNI)
+	case config.DEFAULT_CNI:
+		setNetwork(config.DEFAULT_CNI)
 		// try to start the netmanager service if present
 		cmd := exec.Command("systemctl", "start", "netmanager")
 		_ = cmd.Run()
 	case DISABLE_NETWORK:
-		setNetwork(DEFAULT_CNI)
+		setNetwork(config.DEFAULT_CNI)
 	default:
 		if strings.Contains(overlayNetwork, "custom:") {
 			setNetwork(overlayNetwork)
