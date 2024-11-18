@@ -93,7 +93,7 @@ func (c *ConfFile) Get() (ConfFile, error) {
 		return *c, err
 	}
 	defer func() {
-		confFile.Close()
+		err := confFile.Close()
 		if err != nil {
 			logger.ErrorLogger().Printf("%v\n", err)
 		}

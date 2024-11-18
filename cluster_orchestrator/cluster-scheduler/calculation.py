@@ -100,7 +100,7 @@ def greedy_load_balanced_algorithm(
         try:
             if does_node_respects_requirements(extract_specs(node), job):
                 qualified_nodes.append(node)
-        except:
+        except Exception as e :
             logging.error("[ERROR] Skipping a node. Something wrong while axtracting node info")
 
 
