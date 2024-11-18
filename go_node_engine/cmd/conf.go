@@ -337,18 +337,6 @@ func setNetwork(cniName string) error {
 	return configManager.Write(clusterConf)
 }
 
-func setNetworkPort(netPort int) error {
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
-	if err != nil {
-		return err
-	}
-
-	clusterConf.NetPort = netPort
-
-	return configManager.Write(clusterConf)
-}
-
 func setMqttAuth() error {
 
 	configManager := config.GetConfFileManager()

@@ -17,8 +17,8 @@ var (
 	statusCmd = &cobra.Command{
 		Use:   "status",
 		Short: "check status of node engine",
-		Run: func(cmd *cobra.Command, args []string) {
-			statusNodeEngine()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return statusNodeEngine()
 		},
 	}
 )

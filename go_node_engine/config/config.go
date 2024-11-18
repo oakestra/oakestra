@@ -74,7 +74,10 @@ func getConfFile() (*os.File, ConfFile, error) {
 		err = json.Unmarshal(buffer[:n], &clusterConf)
 		if err != nil {
 			fmt.Printf("Error reading configuration: %v\n, resetting the file", err)
-			confFile.Truncate(0)
+			err := confFile.Truncate(0)
+			if err != nil {
+				return nil, ConfFile{}, err
+			}
 			return nil, ConfFile{}, err
 
 		}
@@ -107,8 +110,14 @@ func (c *ConfFile) Write(new ConfFile) error {
 	}
 	defer confFile.Close()
 
-	confFile.Truncate(0)
-	confFile.Seek(0, 0)
+	err = confFile.Truncate(0)
+	if err != nil {
+		return err
+	}
+	_, err = confFile.Seek(0, 0)
+	if err != nil {
+		return err
+	}
 	_, err = confFile.Write(marshalled)
 	if err != nil {
 		fmt.Println(err)

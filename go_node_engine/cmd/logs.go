@@ -18,8 +18,8 @@ var (
 	logsCmd = &cobra.Command{
 		Use:   "logs",
 		Short: "tail check node engine logs",
-		Run: func(cmd *cobra.Command, args []string) {
-			logsNodeEngine()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return logsNodeEngine()
 		},
 	}
 )
