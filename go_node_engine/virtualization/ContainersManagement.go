@@ -68,7 +68,7 @@ func GetContainerdClient() *ContainerRuntime {
 }
 
 // StopContainerdClient stops the container runtime client
-func (r *ContainerRuntime) StopContainerdClient() {
+func (r *ContainerRuntime) Stop() {
 	r.channelLock.Lock()
 	taskIDs := reflect.ValueOf(r.killQueue).MapKeys()
 	r.channelLock.Unlock()

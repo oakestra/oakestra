@@ -1,34 +1,25 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
+	"go_node_engine/config"
+	"go_node_engine/logger"
+	"go_node_engine/model"
+	"os/exec"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
-
-type ConfFile struct {
-	ClusterAddress   string `json:"cluster_address"`
-	ClusterPort      int    `json:"cluster_port"`
-	AppLogs          string `json:"app_logs"`
-	UnikernelSupport bool   `json:"unikernel_support"`
-	OverlayNetwork   string `json:"overlay_network"`
-	NetPort          int    `json:"overlay_network_port"`
-	CertFile         string `json:"mqtt_cert_file"`
-	KeyFile          string `json:"mqtt_key_file"`
-}
 
 func init() {
 	rootCmd.AddCommand(configCmd)
 	configCmd.AddCommand(addClusterCmd)
 	configCmd.AddCommand(logsConfCommand)
-	configCmd.AddCommand(setUnikernelCmd)
+	configCmd.AddCommand(setVirtualizationCmd)
 	configCmd.AddCommand(defaultConfigCmd)
 	configCmd.AddCommand(setCni)
 	configCmd.AddCommand(setAuth)
-	setUnikernelCmd.AddCommand(enableUnikernel)
-	setUnikernelCmd.AddCommand(disableUnikernel)
+	setVirtualizationCmd.AddCommand(enableUnikernel)
 	setCni.AddCommand(enableNetwork)
 	setCni.AddCommand(disableNetwork)
 	addClusterCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Custom port of the cluster orchestrator")
@@ -64,306 +55,274 @@ var (
 			configLogs(args[0])
 		},
 	}
-	setUnikernelCmd = &cobra.Command{
-		Use:   "unikernel",
-		Short: "Enable/Disable unikernel support",
+
+	// --- VIRTUALIZATION SUPPORT
+	setVirtualizationCmd = &cobra.Command{
+		Use:   "virtualization",
+		Short: "Enable/Disable a virtualization runtime support",
+		Run: func(cmd *cobra.Command, args []string) {
+			showVirtualization()
+		},
 	}
 	enableUnikernel = &cobra.Command{
-		Use:   "enable",
-		Short: "Enable unikernel support",
+		Use:   "unikernel [on/off]",
+		Short: "Enable/Disable unikernel support",
 		Run: func(cmd *cobra.Command, args []string) {
-			setUnikernel(true)
+			setUnikernel(args[0])
 		},
 	}
-	disableUnikernel = &cobra.Command{
-		Use:   "disable",
-		Short: "Disable unikernel support",
+
+	// --- ADDONS
+	setAddonCmd = &cobra.Command{
+		Use:   "addon",
+		Short: "Enable/Disable addons",
 		Run: func(cmd *cobra.Command, args []string) {
-			setUnikernel(false)
+			showAddons()
 		},
 	}
+	enableBuilder = &cobra.Command{
+		Use:   "imageBuilder [on/off]",
+		Short: "Enable/Disable imageBuilder support",
+		Long:  "Checks if the host has QEMU (apt's qemu-user-static) installed for building multi-platform images.",
+		Run: func(cmd *cobra.Command, args []string) {
+			setBuilder(args[0])
+		},
+	}
+	enableFlops = &cobra.Command{
+		Use:   "FLOps [on/off]",
+		Short: "Enable/Disable FLOps support",
+		Long:  "Enables the ML-data-server sidecar for data collection for FLOps learners.",
+		Run: func(cmd *cobra.Command, args []string) {
+			setFLOps(args[0])
+		},
+	}
+
+	// --- NETOWORKING
 	setCni = &cobra.Command{
-		Use:   "network",
+		Use:   "network [on/off]",
 		Short: "Enable/Disable networking support",
 	}
 	enableNetwork = &cobra.Command{
-		Use:   "enable",
+		Use:   "on",
 		Short: "Enable overlay network support (Requires NetManager daemon running)",
 		Run: func(cmd *cobra.Command, args []string) {
-			setNetwork(DEFAULT_CNI)
+			setNetwork(config.DEFAULT_CNI)
 		},
 	}
 	disableNetwork = &cobra.Command{
-		Use:   "disable",
+		Use:   "off",
 		Short: "Disable overlay network support",
 		Run: func(cmd *cobra.Command, args []string) {
 			setNetwork("")
 		},
 	}
+
+	// ---MQTT AUTH
 	setAuth = &cobra.Command{
 		Use:   "auth",
-		Short: "Disable overlay network support",
+		Short: "Set Mqtt Authentication",
 		Run: func(cmd *cobra.Command, args []string) {
-			setNetwork("")
+			setMqttAuth()
 		},
 	}
 )
 
 func defaultConfig() error {
-
-	//create dir /etc/oakestra if not present
-	err := os.MkdirAll("/etc/oakestra", 0755)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	//create file /etc/oakestra/cluster.cfg with the cluster address and port
-	confFile, err := os.Create("/etc/oakestra/conf.json")
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	clusterConf := ConfFile{
-		ClusterAddress:   "localhost",
-		ClusterPort:      10100,
-		AppLogs:          DEFAULT_LOG_DIR,
-		UnikernelSupport: false,
-		OverlayNetwork:   DEFAULT_CNI,
-		NetPort:          0,
-	}
-
-	marshalled, err := json.Marshal(clusterConf)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	//write cluster configuration
-	confFile.Truncate(0)
-	confFile.Seek(0, 0)
-	_, err = confFile.Write(marshalled)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	return nil
-
+	configManager := config.GetConfFileManager()
+	clusterConf := config.GenDefaultConfig()
+	return configManager.Write(clusterConf)
 }
 
 func configCluster(address string) error {
-
-	confFile, clusterConf, err := getConfFile()
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
 	if err != nil {
 		return err
 	}
-	defer confFile.Close()
 
 	clusterConf.ClusterAddress = address
 	clusterConf.ClusterPort = clusterPort
 
-	marshalled, err := json.Marshal(clusterConf)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	//write cluster configuration
-	confFile.Truncate(0)
-	confFile.Seek(0, 0)
-	_, err = confFile.Write(marshalled)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	return nil
+	return configManager.Write(clusterConf)
 }
 
 func configLogs(path string) error {
-
-	clusterConf := ConfFile{}
-
-	confFile, err := os.Open("/etc/oakestra/conf.json")
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
 	if err != nil {
-		//create dir /etc/oakestra if not present
-		err := os.MkdirAll("/etc/oakestra", 0755)
-		if err != nil {
-			fmt.Println(err)
-			return err
-		}
-
-		//create file /etc/oakestra/cluster.cfg with the cluster address and port
-		confFile, err = os.Create("/etc/oakestra/conf.json")
-		if err != nil {
-			fmt.Println(err)
-			return err
-		}
-	} else {
-		//read cluster configuration
-		buffer := make([]byte, 2048)
-		n, err := confFile.Read(buffer)
-		if err != nil {
-			return err
-		}
-		err = json.Unmarshal(buffer[:n], &clusterConf)
-		if err != nil {
-			fmt.Printf("Error reading configuration: %v\n, resetting the file", err)
-		}
+		return err
 	}
-	defer confFile.Close()
 
 	clusterConf.AppLogs = path
 
-	marshalled, err := json.Marshal(clusterConf)
+	return configManager.Write(clusterConf)
+}
+
+func showVirtualization() error {
+
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
-	//write cluster configuration
-	confFile.Truncate(0)
-	confFile.Seek(0, 0)
-	_, err = confFile.Write(marshalled)
-	if err != nil {
-		fmt.Println(err)
-		return err
+	virts := []string{}
+
+	for _, virt := range clusterConf.Virtualizations {
+		status := "❌ Disabled"
+		if virt.Active {
+			status = "🟢 Active"
+		}
+		virts = append(virts, fmt.Sprintf("%s: %s", virt.Name, status))
+	}
+
+	fmt.Printf("Virtualization Runtimes:")
+	for _, v := range virts {
+		fmt.Println(v)
+	}
+	if len(virts) == 0 {
+		fmt.Println("No Virtualization Runtime Configured.")
 	}
 
 	return nil
 }
 
-func setUnikernel(status bool) error {
+func setUnikernel(trigger string) error {
+	active := false
+	if trigger == "on" || trigger == "enable" || trigger == "true" {
+		active = true
+	}
 
-	confFile, clusterConf, err := getConfFile()
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
 	if err != nil {
 		return err
 	}
-	defer confFile.Close()
 
-	clusterConf.UnikernelSupport = status
+	UnikernelVirt := config.Virtualization{
+		Name:    "unikraft",
+		Runtime: string(model.UNIKERNEL_RUNTIME),
+		Active:  active,
+		Config:  []string{},
+	}
 
-	marshalled, err := json.Marshal(clusterConf)
+	clusterConf.Virtualizations = append(clusterConf.Virtualizations, UnikernelVirt)
+
+	return configManager.Write(clusterConf)
+}
+
+func showAddons() error {
+
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
-	//write cluster configuration
-	confFile.Truncate(0)
-	confFile.Seek(0, 0)
-	_, err = confFile.Write(marshalled)
-	if err != nil {
-		fmt.Println(err)
-		return err
+	addons := []string{}
+
+	for _, add := range clusterConf.Addons {
+		status := "❌ Disabled"
+		if add.Active {
+			status = "🟢 Active"
+		}
+		addons = append(addons, fmt.Sprintf("%s: %s", add.Name, status))
+	}
+
+	fmt.Printf("Configured Addons:")
+	for _, v := range addons {
+		fmt.Println(v)
+	}
+	if len(addons) == 0 {
+		fmt.Println("No Addons Configured.")
 	}
 
 	return nil
+}
+
+func setBuilder(trigger string) error {
+	cmd := exec.Command("dpkg", "-s", "qemu-user-static")
+	output, err := cmd.Output()
+	if err != nil || !strings.Contains(string(output), "ok installed") {
+		logger.ErrorLogger().Fatalf("Unable to find qemu-user-static apt package for multi-platform image-builder: %v\n", err)
+	}
+
+	active := false
+	if trigger == "on" || trigger == "enable" || trigger == "true" {
+		active = true
+	}
+
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+
+	BuilderAddon := config.Addon{
+		Name:   string(model.IMAGE_BUILDER),
+		Active: active,
+		Config: []string{},
+	}
+
+	clusterConf.Addons = append(clusterConf.Addons, BuilderAddon)
+
+	return configManager.Write(clusterConf)
+}
+
+func setFLOps(trigger string) error {
+	active := false
+	if trigger == "on" || trigger == "enable" || trigger == "true" {
+		active = true
+	}
+
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+
+	BuilderAddon := config.Addon{
+		Name:   string(model.FLOPS_LEARNER),
+		Active: active,
+		Config: []string{},
+	}
+
+	clusterConf.Addons = append(clusterConf.Addons, BuilderAddon)
+
+	return configManager.Write(clusterConf)
 }
 
 func setNetwork(cniName string) error {
-
-	confFile, clusterConf, err := getConfFile()
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
 	if err != nil {
 		return err
 	}
-	defer confFile.Close()
 
 	clusterConf.OverlayNetwork = cniName
 
-	marshalled, err := json.Marshal(clusterConf)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	//write cluster configuration
-	confFile.Truncate(0)
-	confFile.Seek(0, 0)
-	_, err = confFile.Write(marshalled)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	return nil
+	return configManager.Write(clusterConf)
 }
 
 func setNetworkPort(netPort int) error {
-
-	confFile, clusterConf, err := getConfFile()
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
 	if err != nil {
 		return err
 	}
-	defer confFile.Close()
 
 	clusterConf.NetPort = netPort
 
-	marshalled, err := json.Marshal(clusterConf)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	//write cluster configuration
-	confFile.Truncate(0)
-	confFile.Seek(0, 0)
-	_, err = confFile.Write(marshalled)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	return nil
-}
-
-func getConfFile() (*os.File, ConfFile, error) {
-
-	clusterConf := ConfFile{}
-
-	confFile, err := os.OpenFile("/etc/oakestra/conf.json", os.O_RDWR, 0644)
-	if err != nil {
-		//create dir /etc/oakestra if not present
-		err := os.MkdirAll("/etc/oakestra", 0755)
-		if err != nil {
-			fmt.Println(err)
-			return nil, ConfFile{}, err
-		}
-
-		//create file /etc/oakestra/cluster.cfg with the cluster address and port
-		confFile, err = os.Create("/etc/oakestra/conf.json")
-		if err != nil {
-			fmt.Println(err)
-			return nil, ConfFile{}, err
-		}
-	} else {
-		//read cluster configuration
-		buffer := make([]byte, 2048)
-		n, err := confFile.Read(buffer)
-		if err != nil {
-			return nil, ConfFile{}, err
-		}
-		err = json.Unmarshal(buffer[:n], &clusterConf)
-		if err != nil {
-			fmt.Printf("Error reading configuration: %v\n, resetting the file", err)
-			confFile.Truncate(0)
-			return nil, ConfFile{}, err
-
-		}
-	}
-
-	return confFile, clusterConf, nil
+	return configManager.Write(clusterConf)
 }
 
 func setMqttAuth() error {
 
-	confFile, clusterConf, err := getConfFile()
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
 	if err != nil {
 		return err
 	}
-	defer confFile.Close()
 
 	if certFile != "" {
 		clusterConf.CertFile = certFile
@@ -372,21 +331,5 @@ func setMqttAuth() error {
 		clusterConf.KeyFile = keyFile
 	}
 
-	marshalled, err := json.Marshal(clusterConf)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	//write cluster configuration
-	confFile.Truncate(0)
-	confFile.Seek(0, 0)
-	_, err = confFile.Write(marshalled)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	return nil
-
+	return configManager.Write(clusterConf)
 }

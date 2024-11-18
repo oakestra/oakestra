@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"go_node_engine/config"
 	"os/exec"
 
 	"github.com/spf13/cobra"
@@ -23,7 +24,8 @@ var (
 )
 
 func statusNodeEngine() error {
-	_, confFile, err := getConfFile()
+	configManager := config.GetConfFileManager()
+	confFile, err := configManager.Get()
 	if err != nil {
 		return err
 	}
@@ -31,7 +33,7 @@ func statusNodeEngine() error {
 	// Define the command and arguments
 	execCommandWithOutput("systemctl", "status", "nodeengine", "--no-pager")
 
-	if confFile.OverlayNetwork == DEFAULT_CNI {
+	if confFile.OverlayNetwork == config.DEFAULT_CNI {
 		//show net status if default cni active
 		execCommandWithOutput("NetManager", "status")
 	}

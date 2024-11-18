@@ -1,9 +1,9 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
+	"go_node_engine/addons"
 	"go_node_engine/cmd"
+	"go_node_engine/config"
 	"go_node_engine/jobs"
 	"go_node_engine/logger"
 	"go_node_engine/model"
@@ -19,10 +19,14 @@ import (
 
 const MONITORING_CYCLE = time.Second * 2
 
-var configs cmd.ConfFile
+var configs config.ConfFile
 
 func main() {
-	configs = readConf()
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		logger.ErrorLogger().Fatal(err)
+	}
 
 	// set log directory
 	model.GetNodeInfo().SetLogDirectory(configs.AppLogs)
@@ -30,20 +34,27 @@ func main() {
 	// set cluster address
 	model.GetNodeInfo().SetClusterAddress(configs.ClusterAddress)
 
-	// connect to container runtime
-	runtime := virtualization.GetContainerdClient()
-	defer runtime.StopContainerdClient()
-
-	if configs.UnikernelSupport {
-		unikernelRuntime := virtualization.GetUnikernelRuntime()
-		defer unikernelRuntime.StopUnikernelRuntime()
+	//Set Virtualization Runtimes
+	for _, virt := range clusterConf.Virtualizations {
+		if virt.Active {
+			rt := virtualization.GetRuntime(model.RuntimeType(virt.Runtime))
+			defer rt.Stop()
+		}
 	}
+
+	//Startup Addons
+	for _, addon := range clusterConf.Addons {
+		if addon.Active {
+			addons.StartupAddon(model.AddonType(addon.Name), addon.Config)
+		}
+	}
+
 	// hadshake with the cluster orchestrator to get mqtt port and node id
 	handshakeResult := clusterHandshake()
 
 	// enable overlay network if required
 	switch configs.OverlayNetwork {
-	case cmd.DEFAULT_CNI:
+	case config.DEFAULT_CNI:
 		logger.InfoLogger().Printf("Looking for local NetManager socket.")
 		model.EnableOverlay()
 	case cmd.DISABLE_NETWORK:
@@ -96,25 +107,4 @@ func clusterHandshake() requests.HandshakeAnswer {
 
 	model.SetNodeId(clusterReponse.NodeId)
 	return clusterReponse
-}
-
-func readConf() cmd.ConfFile {
-	confFile, err := os.Open("/etc/oakestra/conf.json")
-	cfg := cmd.ConfFile{}
-	if err != nil {
-		logger.ErrorLogger().Fatalf("Error reading configuration: %v\n", err)
-	}
-	defer confFile.Close()
-
-	//read cluster configuration
-	buffer := make([]byte, 2048)
-	n, err := confFile.Read(buffer)
-	if err != nil {
-		logger.ErrorLogger().Fatalf("Error reading configuration: %v\n, resetting the file", err)
-	}
-	err = json.Unmarshal(buffer[:n], &cfg)
-	if err != nil {
-		fmt.Printf("Error reading configuration: %v\n, resetting the file", err)
-	}
-	return cfg
 }

@@ -80,7 +80,7 @@ func GetUnikernelRuntime() *UnikernelRuntime {
 	return &ukruntime
 }
 
-func (r *UnikernelRuntime) StopUnikernelRuntime() {
+func (r *UnikernelRuntime) Stop() {
 	r.channelLock.Lock()
 	IDs := reflect.ValueOf(r.killQueue).MapKeys()
 	r.channelLock.Unlock()
