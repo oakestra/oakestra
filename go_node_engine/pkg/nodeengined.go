@@ -23,7 +23,7 @@ var configs config.ConfFile
 
 func main() {
 	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	configs, err := configManager.Get()
 	if err != nil {
 		logger.ErrorLogger().Fatal(err)
 	}
@@ -35,7 +35,7 @@ func main() {
 	model.GetNodeInfo().SetClusterAddress(configs.ClusterAddress)
 
 	//Set Virtualization Runtimes
-	for _, virt := range clusterConf.Virtualizations {
+	for _, virt := range configs.Virtualizations {
 		if virt.Active {
 			rt := virtualization.GetRuntime(model.RuntimeType(virt.Runtime))
 			defer rt.Stop()
@@ -43,7 +43,7 @@ func main() {
 	}
 
 	//Startup Addons
-	for _, addon := range clusterConf.Addons {
+	for _, addon := range configs.Addons {
 		if addon.Active {
 			addons.StartupAddon(model.AddonType(addon.Name), addon.Config)
 		}

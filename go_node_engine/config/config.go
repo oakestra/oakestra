@@ -141,7 +141,7 @@ func (c *ConfFile) Write(new ConfFile) error {
 func GenDefaultConfig() ConfFile {
 	return ConfFile{
 		ConfVersion:    "1.0",
-		ClusterAddress: "localhost",
+		ClusterAddress: "0.0.0.0",
 		ClusterPort:    10100,
 		AppLogs:        DEFAULT_LOG_DIR,
 		OverlayNetwork: DEFAULT_CNI,
