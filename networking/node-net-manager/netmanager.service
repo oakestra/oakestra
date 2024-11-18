@@ -7,7 +7,7 @@ Type=simple
 Restart=always
 RestartSec=5
 User=root
-ExecStart=NetManager
+ExecStart=/bin/NetManager
 StandardOutput=append:/var/log/oakestra/netmanager.log
 StandardError=append:/var/log/oakestra/netmanager.log
 
