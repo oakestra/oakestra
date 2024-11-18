@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"go_node_engine/logger"
 	"os/exec"
 
 	"github.com/spf13/cobra"
@@ -22,7 +23,7 @@ var (
 	}
 )
 
-func stopNodeEngine() error {
+func stopNodeEngine() {
 	// Stop the NodeEngine service
 	cmd := exec.Command("systemctl", "stop", "nodeengine", "--no-pager")
 
@@ -31,7 +32,10 @@ func stopNodeEngine() error {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	_ = cmd.Run()
+	err := cmd.Run()
+	if err != nil {
+		logger.ErrorLogger().Printf("%v", err)
+	}
 
 	if stderr.Len() > 0 {
 		fmt.Println(stderr.String())
@@ -40,7 +44,8 @@ func stopNodeEngine() error {
 
 	// Stop the NetManager service
 	cmd = exec.Command("systemctl", "stop", "netmanager", "--no-pager")
-	_ = cmd.Run()
-
-	return nil
+	err = cmd.Run()
+	if err != nil {
+		logger.ErrorLogger().Printf("%v", err)
+	}
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"go_node_engine/logger"
 	"io"
 	"os"
 	"os/signal"
@@ -31,7 +32,12 @@ func logsNodeEngine() error {
 		fmt.Println("Error opening log file, is the NodeEngine running? Use 'NodeEngine status' to check.")
 		return err
 	}
-	defer logFile.Close()
+	defer func() {
+		err := logFile.Close()
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to close logfile")
+		}
+	}()
 
 	// Get the file size to start reading from the end
 	fileInfo, err := logFile.Stat()

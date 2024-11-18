@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"go_node_engine/logger"
 	"go_node_engine/model"
 	"os"
 )
@@ -91,7 +92,12 @@ func (c *ConfFile) Get() (ConfFile, error) {
 	if err != nil {
 		return *c, err
 	}
-	defer confFile.Close()
+	defer func() {
+		confFile.Close()
+		if err != nil {
+			logger.ErrorLogger().Printf("%v\n", err)
+		}
+	}()
 	return configF, nil
 }
 
@@ -108,7 +114,12 @@ func (c *ConfFile) Write(new ConfFile) error {
 	if err != nil {
 		return err
 	}
-	defer confFile.Close()
+	defer func() {
+		err := confFile.Close()
+		if err != nil {
+			logger.ErrorLogger().Printf("%v\n", err)
+		}
+	}()
 
 	err = confFile.Truncate(0)
 	if err != nil {
