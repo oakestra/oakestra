@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"go_node_engine/config"
+	"go_node_engine/logger"
 	"io"
 	"log"
 	"os"
@@ -63,35 +64,56 @@ func nodeEngineDaemonManager() error {
 
 	if _, err := os.Stat(CONF_FILE); err != nil {
 		// read cluster configuration if not present or new value set
-		defaultConfig()
+		err := defaultConfig()
+		if err != nil {
+			return err
+		}
 	}
 
 	if clusterAddress != "localhost" {
 		// read cluster configuration if not present or new value set
-		configCluster(clusterAddress)
+		err := configCluster(clusterAddress)
+		if err != nil {
+			return err
+		}
 	}
 
 	if logDirectory != config.DEFAULT_LOG_DIR {
 		// read cluster configuration if not present or new value set
-		configLogs(logDirectory)
+		err := configLogs(logDirectory)
+		if err != nil {
+			return err
+		}
 	}
 
 	if certFile != "" || keyFile != "" {
 		// set Mqtt auth parameters
-		setMqttAuth()
+		err := setMqttAuth()
+		if err != nil {
+			return err
+		}
 	}
 
 	switch overlayNetwork {
 	case config.DEFAULT_CNI:
-		setNetwork(config.DEFAULT_CNI)
+		err := setNetwork(config.DEFAULT_CNI)
+		if err != nil {
+			return err
+		}
 		// try to start the netmanager service if present
 		cmd := exec.Command("systemctl", "start", "netmanager")
 		_ = cmd.Run()
 	case DISABLE_NETWORK:
-		setNetwork(config.DEFAULT_CNI)
+		err := setNetwork(config.DEFAULT_CNI)
+		if err != nil {
+			return err
+		}
 	default:
 		if strings.Contains(overlayNetwork, "custom:") {
-			setNetwork(overlayNetwork)
+			err := setNetwork(overlayNetwork)
+			if err != nil {
+				return err
+			}
 		} else {
 			log.Fatalf("Invalid overlay network: %s \n Use NodeEngine -h to check the available options. \n", overlayNetwork)
 		}
@@ -118,7 +140,12 @@ func attatch() error {
 		fmt.Println("Error opening log file, is the NodeEngine running? Use 'NodeEngine status' to check.")
 		return err
 	}
-	defer logFile.Close()
+	defer func() {
+		err := logFile.Close()
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to close logfile")
+		}
+	}()
 
 	// Get the file size to start reading from the end
 	fileInfo, err := logFile.Stat()

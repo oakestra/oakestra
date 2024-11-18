@@ -8,7 +8,7 @@ import (
 
 type FlopsAddon struct{}
 
-func (a FlopsAddon) StartUp(configFile []string) {
+func (a FlopsAddon) Startup(configFile []string) {
 	HandleFLOpsDataManager()
 }
 

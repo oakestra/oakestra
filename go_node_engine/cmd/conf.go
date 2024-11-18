@@ -19,12 +19,15 @@ func init() {
 	configCmd.AddCommand(defaultConfigCmd)
 	configCmd.AddCommand(setCni)
 	configCmd.AddCommand(setAuth)
+	setAuth.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
+	setAuth.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
 	setVirtualizationCmd.AddCommand(enableUnikernel)
 	setCni.AddCommand(enableNetwork)
 	setCni.AddCommand(disableNetwork)
 	addClusterCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Custom port of the cluster orchestrator")
-	setAuth.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
-	setAuth.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
+	configCmd.AddCommand(setAddonCmd)
+	setAddonCmd.AddCommand(enableBuilder)
+	setAddonCmd.AddCommand(enableFlops)
 }
 
 var (
@@ -35,24 +38,24 @@ var (
 	defaultConfigCmd = &cobra.Command{
 		Use:   "default",
 		Short: "generates the default configuration file",
-		Run: func(cmd *cobra.Command, args []string) {
-			defaultConfig()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return defaultConfig()
 		},
 	}
 	addClusterCmd = &cobra.Command{
 		Use:   "cluster [url]",
 		Short: "set the cluster address (and port)",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			configCluster(args[0])
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return configCluster(args[0])
 		},
 	}
 	logsConfCommand = &cobra.Command{
 		Use:   "applogs [path]",
 		Short: "Configure the log directory for the applications",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			configLogs(args[0])
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return configLogs(args[0])
 		},
 	}
 
@@ -60,15 +63,15 @@ var (
 	setVirtualizationCmd = &cobra.Command{
 		Use:   "virtualization",
 		Short: "Enable/Disable a virtualization runtime support",
-		Run: func(cmd *cobra.Command, args []string) {
-			showVirtualization()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return showVirtualization()
 		},
 	}
 	enableUnikernel = &cobra.Command{
 		Use:   "unikernel [on/off]",
-		Short: "Enable/Disable unikernel support",
-		Run: func(cmd *cobra.Command, args []string) {
-			setUnikernel(args[0])
+		Short: "[on/off] Enable/Disable unikernel support",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setUnikernel(args[0])
 		},
 	}
 
@@ -76,24 +79,24 @@ var (
 	setAddonCmd = &cobra.Command{
 		Use:   "addon",
 		Short: "Enable/Disable addons",
-		Run: func(cmd *cobra.Command, args []string) {
-			showAddons()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return showAddons()
 		},
 	}
 	enableBuilder = &cobra.Command{
 		Use:   "imageBuilder [on/off]",
-		Short: "Enable/Disable imageBuilder support",
+		Short: "[on/off] Enable/Disable imageBuilder support",
 		Long:  "Checks if the host has QEMU (apt's qemu-user-static) installed for building multi-platform images.",
-		Run: func(cmd *cobra.Command, args []string) {
-			setBuilder(args[0])
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setBuilder(args[0])
 		},
 	}
 	enableFlops = &cobra.Command{
 		Use:   "FLOps [on/off]",
-		Short: "Enable/Disable FLOps support",
+		Short: "[on/off] Enable/Disable FLOps support",
 		Long:  "Enables the ML-data-server sidecar for data collection for FLOps learners.",
-		Run: func(cmd *cobra.Command, args []string) {
-			setFLOps(args[0])
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setFLOps(args[0])
 		},
 	}
 
@@ -105,15 +108,15 @@ var (
 	enableNetwork = &cobra.Command{
 		Use:   "on",
 		Short: "Enable overlay network support (Requires NetManager daemon running)",
-		Run: func(cmd *cobra.Command, args []string) {
-			setNetwork(config.DEFAULT_CNI)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setNetwork(config.DEFAULT_CNI)
 		},
 	}
 	disableNetwork = &cobra.Command{
 		Use:   "off",
 		Short: "Disable overlay network support",
-		Run: func(cmd *cobra.Command, args []string) {
-			setNetwork("")
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setNetwork("")
 		},
 	}
 
@@ -121,8 +124,8 @@ var (
 	setAuth = &cobra.Command{
 		Use:   "auth",
 		Short: "Set Mqtt Authentication",
-		Run: func(cmd *cobra.Command, args []string) {
-			setMqttAuth()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setMqttAuth()
 		},
 	}
 )
@@ -173,10 +176,10 @@ func showVirtualization() error {
 		if virt.Active {
 			status = "🟢 Active"
 		}
-		virts = append(virts, fmt.Sprintf("%s: %s", virt.Name, status))
+		virts = append(virts, fmt.Sprintf("\t - %s: %s", virt.Name, status))
 	}
 
-	fmt.Printf("Virtualization Runtimes:")
+	fmt.Printf("Virtualization Runtimes:\n")
 	for _, v := range virts {
 		fmt.Println(v)
 	}
@@ -199,14 +202,24 @@ func setUnikernel(trigger string) error {
 		return err
 	}
 
-	UnikernelVirt := config.Virtualization{
-		Name:    "unikraft",
-		Runtime: string(model.UNIKERNEL_RUNTIME),
-		Active:  active,
-		Config:  []string{},
+	updated := false
+	for i, add := range clusterConf.Virtualizations {
+		if add.Runtime == string(model.UNIKERNEL_RUNTIME) {
+			updated = true
+			add.Active = active
+			clusterConf.Virtualizations[i] = add
+		}
 	}
 
-	clusterConf.Virtualizations = append(clusterConf.Virtualizations, UnikernelVirt)
+	if !updated {
+		UnikernelVirt := config.Virtualization{
+			Name:    "unikraft",
+			Runtime: string(model.UNIKERNEL_RUNTIME),
+			Active:  active,
+			Config:  []string{},
+		}
+		clusterConf.Virtualizations = append(clusterConf.Virtualizations, UnikernelVirt)
+	}
 
 	return configManager.Write(clusterConf)
 }
@@ -226,10 +239,10 @@ func showAddons() error {
 		if add.Active {
 			status = "🟢 Active"
 		}
-		addons = append(addons, fmt.Sprintf("%s: %s", add.Name, status))
+		addons = append(addons, fmt.Sprintf("\t - %s: %s", add.Name, status))
 	}
 
-	fmt.Printf("Configured Addons:")
+	fmt.Printf("Configured Addons:\n")
 	for _, v := range addons {
 		fmt.Println(v)
 	}
@@ -258,13 +271,23 @@ func setBuilder(trigger string) error {
 		return err
 	}
 
-	BuilderAddon := config.Addon{
-		Name:   string(model.IMAGE_BUILDER),
-		Active: active,
-		Config: []string{},
+	updated := false
+	for i, add := range clusterConf.Addons {
+		if add.Name == string(model.IMAGE_BUILDER) {
+			updated = true
+			add.Active = active
+			clusterConf.Addons[i] = add
+		}
 	}
 
-	clusterConf.Addons = append(clusterConf.Addons, BuilderAddon)
+	if !updated {
+		BuilderAddon := config.Addon{
+			Name:   string(model.IMAGE_BUILDER),
+			Active: active,
+			Config: []string{},
+		}
+		clusterConf.Addons = append(clusterConf.Addons, BuilderAddon)
+	}
 
 	return configManager.Write(clusterConf)
 }
@@ -281,13 +304,23 @@ func setFLOps(trigger string) error {
 		return err
 	}
 
-	BuilderAddon := config.Addon{
-		Name:   string(model.FLOPS_LEARNER),
-		Active: active,
-		Config: []string{},
+	updated := false
+	for i, add := range clusterConf.Addons {
+		if add.Name == string(model.FLOPS_LEARNER) {
+			updated = true
+			add.Active = active
+			clusterConf.Addons[i] = add
+		}
 	}
 
-	clusterConf.Addons = append(clusterConf.Addons, BuilderAddon)
+	if !updated {
+		BuilderAddon := config.Addon{
+			Name:   string(model.FLOPS_LEARNER),
+			Active: active,
+			Config: []string{},
+		}
+		clusterConf.Addons = append(clusterConf.Addons, BuilderAddon)
+	}
 
 	return configManager.Write(clusterConf)
 }

@@ -11,6 +11,7 @@ var DEFAULT_LOG_DIR = "/tmp"
 var DEFAULT_CNI = "default"
 
 type ConfFile struct {
+	ConfVersion     string           `json:"conf_version"`
 	ClusterAddress  string           `json:"cluster_address"`
 	ClusterPort     int              `json:"cluster_port"`
 	AppLogs         string           `json:"app_logs"`
@@ -119,6 +120,7 @@ func (c *ConfFile) Write(new ConfFile) error {
 
 func GenDefaultConfig() ConfFile {
 	return ConfFile{
+		ConfVersion:    "1.0",
 		ClusterAddress: "localhost",
 		ClusterPort:    10100,
 		AppLogs:        DEFAULT_LOG_DIR,
@@ -128,6 +130,7 @@ func GenDefaultConfig() ConfFile {
 			{
 				Name:    "containerd",
 				Runtime: string(model.CONTAINER_RUNTIME),
+				Active:  true,
 				Config:  []string{},
 			},
 		},
