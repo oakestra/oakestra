@@ -23,7 +23,8 @@ var configs config.ConfFile
 
 func main() {
 	configManager := config.GetConfFileManager()
-	configs, err := configManager.Get()
+	var err error
+	configs, err = configManager.Get()
 	if err != nil {
 		logger.ErrorLogger().Fatal(err)
 	}
