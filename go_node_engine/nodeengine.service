@@ -7,7 +7,7 @@ Type=simple
 Restart=always
 RestartSec=5
 User=root
-ExecStart=nodeengined
+ExecStart=/bin/nodeengined
 StandardOutput=append:/var/log/oakestra/nodeengine.log
 StandardError=append:/var/log/oakestra/nodeengine.log
 
