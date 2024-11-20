@@ -120,7 +120,7 @@ var (
 		},
 	}
 
-	// ---MQTT AUTH
+	// --- MQTT AUTH
 	setAuth = &cobra.Command{
 		Use:   "auth",
 		Short: "Set Mqtt Authentication",
