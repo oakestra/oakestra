@@ -319,7 +319,7 @@ func setFLOps(trigger string) error {
 			Active: active,
 			Config: []string{},
 		}
-		clusterConf.Addons = append(clusterConf.Addons, BuilderAddon)
+		clusterConf.Addons = append(clusterConf.Addons, FlopsLearnerAddon)
 	}
 
 	return configManager.Write(clusterConf)
