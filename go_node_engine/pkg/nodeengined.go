@@ -46,6 +46,7 @@ func main() {
 	//Startup Addons
 	for _, addon := range configs.Addons {
 		if addon.Active {
+			logger.InfoLogger().Printf("Startup addon: %s", addon.Name)
 			addons.StartupAddon(model.AddonType(addon.Name), addon.Config)
 		}
 	}

@@ -19,7 +19,8 @@ func StartupAddon(addon model.AddonType, config []string) {
 }
 
 func init() {
-	registeredAddons := make(map[model.AddonType]AddonRuntime)
+	registeredAddons = make(map[model.AddonType]AddonRuntime)
+
 	// Register your addons HERE
 	registeredAddons[model.FLOPS_LEARNER] = flops.FlopsAddon{}
 }

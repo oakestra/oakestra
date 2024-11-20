@@ -9,6 +9,7 @@ import (
 type FlopsAddon struct{}
 
 func (a FlopsAddon) Startup(configFile []string) {
+	logger.InfoLogger().Printf("Starting FLOps Data Manager")
 	HandleFLOpsDataManager()
 }
 
