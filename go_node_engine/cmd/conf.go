@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"go_node_engine/config"
 	"go_node_engine/logger"
@@ -47,6 +48,9 @@ var (
 		Short: "set the cluster address (and port)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return errors.New("cluster command needs exactly one parameter: [url]")
+			}
 			return configCluster(args[0])
 		},
 	}
@@ -55,6 +59,9 @@ var (
 		Short: "Configure the log directory for the applications",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return errors.New("applogs command needs exactly one parameter: [path]")
+			}
 			return configLogs(args[0])
 		},
 	}
@@ -71,6 +78,9 @@ var (
 		Use:   "unikernel [on/off]",
 		Short: "[on/off] Enable/Disable unikernel support",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return errors.New("unikernel command needs exactly one parameter: [on/off]")
+			}
 			return setUnikernel(args[0])
 		},
 	}
@@ -88,6 +98,9 @@ var (
 		Short: "[on/off] Enable/Disable imageBuilder support",
 		Long:  "Checks if the host has QEMU (apt's qemu-user-static) installed for building multi-platform images.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return errors.New("imageBuilder needs exactly one parameter: [on/off]")
+			}
 			return setBuilder(args[0])
 		},
 	}
@@ -96,6 +109,9 @@ var (
 		Short: "[on/off] Enable/Disable FLOps support",
 		Long:  "Enables the ML-data-server sidecar for data collection for FLOps learners.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return errors.New("FLOps needs exactly one parameter: [on/off]")
+			}
 			return setFLOps(args[0])
 		},
 	}
