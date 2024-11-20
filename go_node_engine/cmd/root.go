@@ -125,13 +125,13 @@ func nodeEngineDaemonManager() error {
 
 	fmt.Println("NodeEngine started  🟢")
 	if !detatched {
-		return attatch()
+		return attach()
 	}
 
 	return nil
 }
 
-func attatch() error {
+func attach() error {
 	logFile, err := os.Open("/var/log/oakestra/nodeengine.log")
 	if err != nil {
 		fmt.Println("Error opening log file, is the NodeEngine running? Use 'NodeEngine status' to check.")
