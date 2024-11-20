@@ -100,7 +100,7 @@ var (
 		},
 	}
 
-	// --- NETOWORKING
+	// --- NETWORKING
 	setCni = &cobra.Command{
 		Use:   "network [on/off]",
 		Short: "Enable/Disable networking support",
