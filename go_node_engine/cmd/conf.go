@@ -314,7 +314,7 @@ func setFLOps(trigger string) error {
 	}
 
 	if !updated {
-		BuilderAddon := config.Addon{
+		FlopsLearnerAddon := config.Addon{
 			Name:   string(model.FLOPS_LEARNER),
 			Active: active,
 			Config: []string{},
