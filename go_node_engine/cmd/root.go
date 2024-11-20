@@ -63,7 +63,6 @@ func init() {
 func nodeEngineDaemonManager() error {
 
 	if _, err := os.Stat(CONF_FILE); err != nil {
-		// read cluster configuration if not present or new value set
 		err := defaultConfig()
 		if err != nil {
 			return err
@@ -79,7 +78,6 @@ func nodeEngineDaemonManager() error {
 	}
 
 	if logDirectory != config.DEFAULT_LOG_DIR {
-		// read cluster configuration if not present or new value set
 		err := configLogs(logDirectory)
 		if err != nil {
 			return err
@@ -134,7 +132,6 @@ func nodeEngineDaemonManager() error {
 }
 
 func attatch() error {
-	// Open the log file
 	logFile, err := os.Open("/var/log/oakestra/nodeengine.log")
 	if err != nil {
 		fmt.Println("Error opening log file, is the NodeEngine running? Use 'NodeEngine status' to check.")

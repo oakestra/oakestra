@@ -24,7 +24,6 @@ var (
 )
 
 func stopNodeEngine() {
-	// Stop the NodeEngine service
 	cmd := exec.Command("systemctl", "stop", "nodeengine", "--no-pager")
 
 	// Create pipes for capturing output streams

@@ -72,7 +72,6 @@ func main() {
 	if model.GetNodeInfo().Overlay {
 		err := requests.RegisterSelfToNetworkComponent()
 		if err != nil {
-			//fatal error
 			logger.ErrorLogger().Fatalf("Error registering to NetManager: %v", err)
 		}
 	}
