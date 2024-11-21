@@ -112,13 +112,13 @@ if [ -z "$SYSTEM_MANAGER_URL" ]; then
     exit 1
 fi
 
-rm -rf ~/oakestra 2> /dev/null
-mkdir ~/oakestra 2> /dev/null
+rm -rf cluster_orchestrator 2> /dev/null
+mkdir cluster_orchestrator 2> /dev/null
 
-cd ~/oakestra 2> /dev/null
+cd cluster_orchestrator 2> /dev/null
 
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/cluster-orchestrator.yml > cluster-orchestrator.yml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/cluster_orchestrator/docker-compose.yml > cluster-orchestrator.yml
 
 chmod +x downloadConfigFiles.sh
 ./downloadConfigFiles.sh cluster_orchestrator $OAKESTRA_BRANCH
@@ -160,4 +160,4 @@ echo 🖥️ Oakestra dashboard available at http://$SYSTEM_MANAGER_URL
 echo 📊 Root Grafana dashboard available at http://$SYSTEM_MANAGER_URL:3000
 echo 📊 Cluster Grafana dashboard available at http://<CLUSTER_IP>:3001
 echo 📈 You can access the APIs at http://$SYSTEM_MANAGER_URL:10000/api/docs
-echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/oakestra/cluster-orchestrator.yml down
+echo 🪫 You can turn off the cluster using: \$ docker compose -f cluster_orchestrator/cluster-orchestrator.yml down
