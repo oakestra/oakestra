@@ -5,7 +5,7 @@ StartLimitIntervalSec=10
 [Service]
 Type=simple
 Restart=always
-RestartSec=5
+RestartSec=30
 User=root
 ExecStart=/bin/nodeengined
 StandardOutput=append:/var/log/oakestra/nodeengine.log
