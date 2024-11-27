@@ -35,9 +35,8 @@ if [ -z "$SYSTEM_MANAGER_URL" ]; then
     echo Default node IP: $SYSTEM_MANAGER_URL
 fi
 
-mkdir root_orchestrator 2> /dev/null
-
-cd root_orchestrator 2> /dev/null
+mkdir -p ~/oakestra/root_orchestrator 2> /dev/null
+cd ~/oakestra/root_orchestrator 2> /dev/null
 
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/root_orchestrator/docker-compose.yml > root-orchestrator.yml
@@ -66,7 +65,7 @@ fi
 
 if sudo docker ps -a | grep oakestra/root >/dev/null 2>&1; then
   echo 🚨 Oakestra root containers are already running. Please stop them before starting the root orchestrator.
-  echo 🪫 You can turn off the current root using: \$ docker compose -f root_orchestrator/root-orchestrator.yml down
+  echo 🪫 You can turn off the current root using: \$ docker compose -f ~/oakestra/root_orchestrator/root-orchestrator.yml down
   exit 1
 fi
 
@@ -81,4 +80,4 @@ echo
 echo 🖥️ Oakestra dashboard available at http://$SYSTEM_MANAGER_URL
 echo 📊 Grafana dashboard available at http://$SYSTEM_MANAGER_URL:3000
 echo 📈 You can access the APIs at http://$SYSTEM_MANAGER_URL:10000/api/docs
-echo 🪫 You can turn off the cluster using: \$ docker compose -f root_orchestrator/root-orchestrator.yml down
+echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/oakestra/root_orchestrator/root-orchestrator.yml down
