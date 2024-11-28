@@ -40,6 +40,7 @@ cd ~/oakestra/root_orchestrator 2> /dev/null
 
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/root_orchestrator/docker-compose.yml > root-orchestrator.yml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/root_orchestrator/override-images-only.yml > override-root-images-only.yml
 
 chmod +x downloadConfigFiles.sh
 ./downloadConfigFiles.sh run-a-cluster $OAKESTRA_BRANCH
@@ -69,7 +70,7 @@ if sudo docker ps -a | grep oakestra/root >/dev/null 2>&1; then
   exit 1
 fi
 
-command_exec="sudo -E docker compose -f root-orchestrator.yml ${OAK_OVERRIDES}up --pull=always -d"
+command_exec="sudo -E docker compose -f root-orchestrator.yml -f override-root-images-only.yml ${OAK_OVERRIDES}up --pull=always -d"
 echo executing "$command_exec"
 
 eval "$command_exec"

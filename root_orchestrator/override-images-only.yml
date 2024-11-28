@@ -1,0 +1,31 @@
+services:
+  system_manager:
+    image: ghcr.io/oakestra/oakestra/root-system-manager:latest
+
+  mongo_root:
+    image: mongo:3.6
+
+  mongo_rootnet:
+    image: mongo:3.6
+
+  root_service_manager:
+    image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
+
+  redis:
+    image: redis
+
+  grafana:
+    image: grafana/grafana
+
+  loki:
+    image: grafana/loki:2.9.2
+
+  promtail:
+    image: grafana/promtail:2.9.2
+    
+  cloud_scheduler:
+    image: ghcr.io/oakestra/oakestra/cloud-scheduler:latest
+    
+  resource_abstractor:
+    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:latest
+    

@@ -1,0 +1,27 @@
+services:
+  mqtt:
+    image: eclipse-mosquitto:2.0
+
+  mongo_cluster:
+    image: mongo:3.6
+
+  cluster_service_manager:
+    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
+
+  cluster_manager:
+    image: ghcr.io/oakestra/oakestra-net/cluster-manager:latest
+
+  cluster_scheduler:
+    image: ghcr.io/oakestra/oakestra-net/cluster-scheduler:latest
+
+  cluster_redis:
+    image: redis
+
+  prometheus:
+    image: prom/prometheus
+
+  cluster_grafana:
+    image: grafana/grafana
+
+  cluster_loki:
+    image: grafana/loki:2.9.2
