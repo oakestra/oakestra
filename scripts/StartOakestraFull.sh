@@ -16,7 +16,6 @@ echo Checking docker compose version
 sudo docker compose version
 if [ $? -ne 0 ]; then
     current_os=$(uname)
-    # get IP address of this machine
     if [ "$current_os" = "Darwin" ]; then
         echo "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
         exit 1
