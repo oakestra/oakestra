@@ -112,13 +112,14 @@ if [ -z "$SYSTEM_MANAGER_URL" ]; then
     exit 1
 fi
 
-rm -rf ~/oakestra 2> /dev/null
-mkdir ~/oakestra 2> /dev/null
+rm -rf ~/oakestra/cluster_orchestrator 2> /dev/null
+mkdir -p ~/oakestra/cluster_orchestrator 2> /dev/null
 
-cd ~/oakestra 2> /dev/null
+cd ~/oakestra/cluster_orchestrator 2> /dev/null
 
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/cluster-orchestrator.yml > cluster-orchestrator.yml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/cluster_orchestrator/docker-compose.yml > cluster-orchestrator.yml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/cluster_orchestrator/override-images-only.yml> override-cluster-images-only.yml
 
 chmod +x downloadConfigFiles.sh
 ./downloadConfigFiles.sh cluster_orchestrator $OAKESTRA_BRANCH
@@ -144,11 +145,11 @@ fi
 
 if sudo docker ps -a | grep oakestra/cluster >/dev/null 2>&1; then
   echo 🚨 Oakestra cluster containers are already running. Please stop them before starting another cluster on this machine.
-  echo 🪫 You can turn off the current cluster using: \$ docker compose -f ~/oakestra/cluster-orchestrator.yml down
+  echo 🪫 You can turn off the current cluster using: \$ docker compose -f ~/oakestra/cluster_orchestrator/cluster-orchestrator.yml down
   exit 1
 fi
 
-command_exec="sudo -E docker compose -f cluster-orchestrator.yml ${OAK_OVERRIDES}up --pull=always -d"
+command_exec="sudo -E docker compose -f cluster-orchestrator.yml -f override-cluster-images-only.yml ${OAK_OVERRIDES}up --pull=always -d"
 echo executing "$command_exec"
 
 eval "$command_exec"
@@ -160,4 +161,4 @@ echo 🖥️ Oakestra dashboard available at http://$SYSTEM_MANAGER_URL
 echo 📊 Root Grafana dashboard available at http://$SYSTEM_MANAGER_URL:3000
 echo 📊 Cluster Grafana dashboard available at http://<CLUSTER_IP>:3001
 echo 📈 You can access the APIs at http://$SYSTEM_MANAGER_URL:10000/api/docs
-echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/oakestra/cluster-orchestrator.yml down
+echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/oakestra/cluster_orchestrator/cluster-orchestrator.yml down
