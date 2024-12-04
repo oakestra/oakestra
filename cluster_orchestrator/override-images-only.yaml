@@ -1,27 +1,36 @@
 services:
   mqtt:
     image: eclipse-mosquitto:2.0
+    pull_policy: always
 
   mongo_cluster:
     image: mongo:3.6
+    pull_policy: always
 
   cluster_service_manager:
     image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
+    pull_policy: always
 
   cluster_manager:
     image: ghcr.io/oakestra/oakestra-net/cluster-manager:latest
+    pull_policy: always
 
   cluster_scheduler:
     image: ghcr.io/oakestra/oakestra-net/cluster-scheduler:latest
+    pull_policy: always
 
   cluster_redis:
     image: redis
+    pull_policy: always
 
   prometheus:
     image: prom/prometheus
+    pull_policy: always
 
   cluster_grafana:
     image: grafana/grafana
+    pull_policy: always
 
   cluster_loki:
     image: grafana/loki:2.9.2
+    pull_policy: always
