@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Net Manager",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/node-net-manager/NetManager.go",
+            "console": "integratedTerminal",
+            "asRoot": true,
+            "args": [],
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin" 
+            }
+        }
+    ]
+}
