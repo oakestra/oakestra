@@ -193,6 +193,7 @@ services:
   # cluster-level mongoDB
   mongo_clusternet:
     image: mongo:3.6
+    pull_policy: always
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
     expose:
@@ -320,6 +321,7 @@ services:
   # Observability Stack (Promtail, Loki, Grafana)
   grafana:
     image: grafana/grafana
+    pull_policy: always
     hostname: grafana
     container_name: grafana
     ports:
