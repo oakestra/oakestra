@@ -25,8 +25,9 @@ jobs:
         goversion: "https://go.dev/dl/go1.22.1.linux-amd64.tar.gz"
         project_path: "./node-net-manager"
         binary_name: "NetManager"
+        ldflags: -X "NetManager/cmd.Version=${{ github.ref_name }}"
         release_tag: ${{ steps.meta.outputs.tags }}
         asset_name: NetManager_${{ matrix.goarch }}
-        extra_files: node-net-manager/build/install.sh  node-net-manager/config/tuncfg.json node-net-manager/config/netcfg.json
+        extra_files: node-net-manager/build/install.sh  node-net-manager/config/tuncfg.json node-net-manager/config/netcfg.json node-net-manager/netmanager.service
         overwrite: TRUE
 

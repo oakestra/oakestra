@@ -30,33 +30,16 @@ Go inside the folder `node-net-manager/build` and run:
 ./build.sh
 ```
 
-Then move the binary corresponding to your architecture to the current folder:
-```
-cp bin/<architecture>-NetManager .
-```
-> <architecture> is either arm-7 or amd64
-
 Finally, install it using 
-`./install.sh` 
+`./install.sh <architecture>`
 
-## Run the NetManager daemon
+supported architectures are `arm64` or `amd64`.
 
-Configure the Network Manager by editing `/etc/netmanager/netcfg.json` as follows:
+## Run the NetManager
 
-```json
-{
-  "NodePublicAddress": "<IP ADDRESS OF THIS DEVICE>",
-  "NodePublicPort": "<PORT REACHABLE FROM OUTSIDE, use 50103 as default>",
-  "ClusterUrl": "<IP Address of cluster orchestrator or 0.0.0.0 if deployed on the same machine>",
-  "ClusterMqttPort": "10003"
-}
-```
+The Netmanager component is automatically managed by the NodeEngine. For a manual setup refer to: [node-net-manager/README.md](node-net-manager/README.md)
 
 
-Then start the NetManager
-```
-sudo NetManager
-```
 
 
 

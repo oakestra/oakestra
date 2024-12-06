@@ -5,12 +5,15 @@ import (
 	"NetManager/handlers"
 	"NetManager/logger"
 	"NetManager/mqtt"
+	"NetManager/network"
 	"NetManager/proxy"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
 )
@@ -21,7 +24,8 @@ type undeployRequest struct {
 }
 
 type registerRequest struct {
-	ClientID string `json:"client_id"`
+	ClientID       string `json:"client_id"`
+	ClusterAddress string `json:"cluster_address"`
 }
 
 type DeployResponse struct {
@@ -34,6 +38,7 @@ type netConfiguration struct {
 	NodePublicPort    string
 	ClusterUrl        string
 	ClusterMqttPort   string
+	Debug             bool
 	MqttCert          string
 	MqttKey           string
 }
@@ -42,8 +47,25 @@ func HandleRequests(port int) {
 	netRouter := mux.NewRouter().StrictSlash(true)
 	netRouter.HandleFunc("/register", register).Methods("POST")
 
+	//If default route, fetch default gateway address and use that.
+	if Configuration.NodePublicAddress == "0.0.0.0" {
+		defaultLink := network.GetOutboundIP()
+		Configuration.NodePublicAddress = defaultLink.String()
+	}
+
 	handlers.RegisterAllManagers(&Env, &WorkerID, Configuration.NodePublicAddress, Configuration.NodePublicPort, netRouter)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), netRouter))
+
+	if port <= 0 {
+		logger.InfoLogger().Println("Starting NetManager on unix socket /etc/netmanager/netmanager.sock")
+		_ = os.Remove("/etc/netmanager/netmanager.sock")
+		listener, err := net.Listen("unix", "/etc/netmanager/netmanager.sock")
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Fatal(http.Serve(listener, netRouter))
+	} else {
+		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), netRouter))
+	}
 }
 
 var (
@@ -89,6 +111,20 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	WorkerID = requestStruct.ClientID
+
+	//Use default cluster address given by NodeEngine version >= v0.4.302
+	if requestStruct.ClusterAddress != "" {
+		Configuration.ClusterUrl = requestStruct.ClusterAddress
+	}
+
+	//log registration startup
+	logger.InfoLogger().Printf(
+		"STARTUP_CONFIG: Node=%s:%s | Cluster=%s:%s",
+		Configuration.NodePublicAddress,
+		Configuration.NodePublicPort,
+		Configuration.ClusterUrl,
+		Configuration.ClusterMqttPort,
+	)
 
 	// initialize mqtt connection to the broker
 	mqtt.InitNetMqttClient(requestStruct.ClientID, Configuration.ClusterUrl, Configuration.ClusterMqttPort, Configuration.MqttCert, Configuration.MqttKey)
