@@ -6,6 +6,13 @@ import (
 	"strings"
 )
 
+type FlopsAddon struct{}
+
+func (a FlopsAddon) Startup(configFile []string) {
+	logger.InfoLogger().Printf("Starting FLOps Data Manager")
+	HandleFLOpsDataManager()
+}
+
 func HandleFLOpsDataManager() {
 	ml_data_server_image := "ghcr.io/oakestra/addon-flops/ml-data-server:latest"
 	container_name := "ml_data_server"
