@@ -31,6 +31,7 @@ var (
 	netmanagerPort   int
 	overlayNetwork   string
 	unikernelSupport bool
+	wasmSupport      bool
 	detatched        bool
 	logDirectory     string
 
@@ -54,6 +55,7 @@ func init() {
 	rootCmd.Flags().IntVarP(&netmanagerPort, "netmanagerPort", "n", 0, "Port of the NetManager component (deprecated).")
 	rootCmd.Flags().StringVarP(&overlayNetwork, "overlayNetwork", "o", "default", "Options: default,disabled,custom:<path>. <path> points to the overlay component socket.")
 	rootCmd.Flags().BoolVarP(&unikernelSupport, "unikernel", "u", false, "Enable Unikernel support. [qemu/kvm required]")
+	rootCmd.Flags().BoolVarP(&wasmSupport, "wasm", "w", false, "Enable Wasm support. [amd64 required]")
 	rootCmd.Flags().StringVarP(&logDirectory, "logs", "l", config.DEFAULT_LOG_DIR, "Directory for application's logs")
 	rootCmd.Flags().BoolVarP(&detatched, "detatch", "d", false, "Run the NodeEngine in the background (daemon mode)")
 	rootCmd.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
