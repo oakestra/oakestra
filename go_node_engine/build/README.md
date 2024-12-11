@@ -61,3 +61,42 @@ Run the following command to compile the NodeEngine:
 cd $path_to_oakestra
 ./build.sh
 ```
+
+# Example of WASM application deployment
+```yaml
+{
+  "sla_version": "v2.0",
+  "customerID": "6712177c9a65fd5275b1527e",
+  "applications": [
+    {
+      "applicationID": "671220246855d2b9a5efeaae",
+      "application_name": "WasmBenchmark",
+      "application_namespace": "test",
+      "microservices": [
+        {
+          "microserviceID": "",
+          "microservice_name": "WasmBenchmark",
+          "microservice_namespace": "ngnix",
+          "virtualization": "wasm",
+          "description": "Benchmark service run on Wasmtime without Docker",
+          "memory": 250,
+          "vcpus": 1,
+          "vgpus": 0,
+          "vtpus": 0,
+          "bandwidth_in": 0,
+          "bandwidth_out": 0,
+          "storage": 0,
+          "port": "80:90",
+          "code": "https://artifactregistry.googleapis.com/download/v1/projects/wasmthesis/locations/europe-west3/repositories/wasmtestrepo/files/mypackage:1.0.0:GoBenchmarks.wasm:download?alt=media",
+          "state": "",
+          "added_files": [],
+          "args": [],
+          "environment": [],
+          "constraints": [],
+          "connectivity": []
+        }
+      ]
+    }
+  ]
+}
+```
