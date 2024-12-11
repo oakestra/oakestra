@@ -1,0 +1,2 @@
+cargo:rerun-if-changed=build.rs
+cargo:rustc-env=DEBUG_OUTPUT_DIR=/home/lucam/wasmtime/target/release/build/wiggle-macro-9b010a64595d2f60/out

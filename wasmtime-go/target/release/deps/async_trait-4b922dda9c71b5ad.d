@@ -1,0 +1,12 @@
+/home/lucam/wasmtime/target/release/deps/libasync_trait-4b922dda9c71b5ad.so: /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/lib.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/args.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/bound.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/expand.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/lifetime.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/parse.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/receiver.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/verbatim.rs
+
+/home/lucam/wasmtime/target/release/deps/async_trait-4b922dda9c71b5ad.d: /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/lib.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/args.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/bound.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/expand.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/lifetime.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/parse.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/receiver.rs /home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/verbatim.rs
+
+/home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/lib.rs:
+/home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/args.rs:
+/home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/bound.rs:
+/home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/expand.rs:
+/home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/lifetime.rs:
+/home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/parse.rs:
+/home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/receiver.rs:
+/home/lucam/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-trait-0.1.71/src/verbatim.rs:

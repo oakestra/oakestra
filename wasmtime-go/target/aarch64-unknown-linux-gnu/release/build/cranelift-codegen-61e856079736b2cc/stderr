@@ -1,0 +1,17 @@
+Writing generated file: /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/settings.rs
+Writing generated file: /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/types.rs
+Writing generated file: /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/opcodes.rs
+Writing generated file: /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/inst_builder.rs
+Writing generated file: /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/settings-arm64.rs
+Writing generated file: /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/clif_opt.isle
+Writing generated file: /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/clif_lower.isle
+Rebuilding /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/isle_opt.rs
+Writing ISLE-generated Rust code to /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/isle_opt.rs
+Rebuilding /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/isle_x64.rs
+Writing ISLE-generated Rust code to /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/isle_x64.rs
+Rebuilding /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/isle_aarch64.rs
+Writing ISLE-generated Rust code to /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/isle_aarch64.rs
+Rebuilding /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/isle_s390x.rs
+Writing ISLE-generated Rust code to /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/isle_s390x.rs
+Rebuilding /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/isle_riscv64.rs
+Writing ISLE-generated Rust code to /home/lucam/wasmtime/target/aarch64-unknown-linux-gnu/release/build/cranelift-codegen-61e856079736b2cc/out/isle_riscv64.rs

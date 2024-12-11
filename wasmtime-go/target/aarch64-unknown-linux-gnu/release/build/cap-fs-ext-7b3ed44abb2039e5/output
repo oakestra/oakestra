@@ -1,0 +1,2 @@
+cargo:rustc-check-cfg=cfg(windows_by_handle)
+cargo:rerun-if-changed=build.rs
