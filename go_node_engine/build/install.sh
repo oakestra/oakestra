@@ -18,6 +18,19 @@ fi
 
 arch="$1"
 
+# If arch is amd64, run ldconfig ../../wasmtime-go/target/x86_64-unknown-linux-gnu/release,
+# else if arch is arm64, run ldconfig ../../wasmtime-go/target/aarch64-unknown-linux-gnu/release
+
+if [ "$arch" == "amd64" ]; then
+  sudo ldconfig ../../wasmtime-go/target/x86_64-unknown-linux-gnu/release
+elif [ "$arch" == "arm64" ]; then
+  sudo ldconfig ../../wasmtime-go/target/aarch64-unknown-linux-gnu/release
+else
+  echo "Invalid architecture"
+  exit 1
+fi
+
+
 #check containerd installation
 if sudo systemctl | grep -Fq 'containerd'; then
   sudo systemctl daemon-reload
