@@ -18,6 +18,8 @@ import (
 	"google.golang.org/api/option"
 )
 
+const downloadLocation = "/tmp"
+
 // Given the wasm module URL, download the module and return the file path
 func downloadWasmModule(artifactUrl string) (string, error) {
 	logger.InfoLogger().Printf("Downloading artifact from %s\n", artifactUrl)
@@ -117,13 +119,9 @@ func downloadGCloudGenericArtifact(artifactUrl string) (string, error) {
 	logger.InfoLogger().Printf("SHA256 hash: %s\n", sha256Hash)
 
 	filename := fmt.Sprintf("%s%s", sha256Hash, ext)
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("os.Getwd: %v", err)
-	}
 
 	// Get the absolute path of the output file
-	outputFile := pt.Join(cwd, filename)
+	outputFile := pt.Join(downloadLocation, filename)
 
 	// If the file already exists, return the path
 	if _, err := os.Stat(outputFile); err == nil {
