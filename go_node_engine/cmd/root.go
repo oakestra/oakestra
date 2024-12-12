@@ -66,7 +66,6 @@ func init() {
 }
 
 func nodeEngineDaemonManager() error {
-
 	if _, err := os.Stat(CONF_FILE); err != nil {
 		err := defaultConfig()
 		if err != nil {
