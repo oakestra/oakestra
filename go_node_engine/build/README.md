@@ -1,6 +1,8 @@
-# How to compile the NodeEngine ensuring compatibility with Wasmtime
+# How to compile the NodeEngine ensuring compatibility with Wasmtime both for AMD64 and ARM64
 
-## Step A: Skip this step if you don't need to compile Wasmtime to use newer versions or custom features
+## Step A: Compile Wasmtime
+
+**Note**: The repository comes with precompiled versions of Wasmtime. Skip to Step B if you don't need to recompile Wasmtime. Wasmtime compilation is necessary if you want to implement changes to the Wasmtime runtime or to upgrade the Wasmtime version.
 
 1. Ensure you have Rust installed:
 ```bash
@@ -8,7 +10,7 @@ rustc --version
 cargo --version
 ```
 
-2. Ensure you have the necessary dependencies to compile Wasmtime:
+1. Ensure you have the necessary dependencies to compile Wasmtime:
 ```bash
  sudo apt-get install gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu cmake
 ```
@@ -58,9 +60,18 @@ cp -rf $path_to_wasmtime/target/x86_64-unknown-linux-gnu $path_to_oakestra/wasmt
 
 Run the following command to compile the NodeEngine:
 ```bash
-cd $path_to_oakestra
-./build.sh
+./build.sh amd64 # for AMD64 or ./build.sh arm64 for ARM64
 ```
+
+Troubleshooting:
+```
+cgo: C compiler "aarch64-linux-gnu-gcc" not found: exec: "aarch64-linux-gnu-gcc": executable file not found in $PATH
+```
+Solution:
+```bash
+sudo apt-get install gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu cmake
+```
+or the equivalent for your distribution and architecture.
 
 # Example of WASM application deployment
 ```yaml

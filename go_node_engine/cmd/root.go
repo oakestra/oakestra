@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"go_node_engine/config"
 	"go_node_engine/logger"
@@ -91,6 +92,18 @@ func nodeEngineDaemonManager() error {
 		if err != nil {
 			return err
 		}
+	}
+
+	// Check wether the architecture is arm64 or amd64
+	arch := os.Getenv("ARCH")
+	if arch == "arm64" {
+		// Dynamically link wasmtime-go library
+		// Run ldconfig /usr/local/lib/wasmtime-go/target/<arch>-unknown-linux-gnu/release
+		exec.Command("ldconfig", "/usr/local/lib/wasmtime-go/target/aarch64-unknown-linux-gnu/release").Run()
+	} else if arch == "amd64" {
+		exec.Command("ldconfig", "/usr/local/lib/wasmtime-go/target/x86_64-unknown-linux-gnu/release").Run()
+	} else {
+		return errors.New("Cannot dynamically link wasmtime-go library")
 	}
 
 	switch overlayNetwork {
