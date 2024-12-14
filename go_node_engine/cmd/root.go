@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -95,14 +96,14 @@ func nodeEngineDaemonManager() error {
 	}
 
 	// Check wether the architecture is arm64 or amd64
-	arch := os.Getenv("ARCH")
-	if arch == "arm64" {
+	switch runtime.GOARCH {
+	case "arm64":
 		// Dynamically link wasmtime-go library
 		// Run ldconfig /usr/local/lib/wasmtime-go/target/<arch>-unknown-linux-gnu/release
 		exec.Command("ldconfig", "/usr/local/lib/wasmtime-go/target/aarch64-unknown-linux-gnu/release").Run()
-	} else if arch == "amd64" {
+	case "amd64":
 		exec.Command("ldconfig", "/usr/local/lib/wasmtime-go/target/x86_64-unknown-linux-gnu/release").Run()
-	} else {
+	default:
 		return errors.New("Cannot dynamically link wasmtime-go library")
 	}
 
