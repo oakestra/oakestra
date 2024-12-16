@@ -18,8 +18,15 @@ fi
 
 arch="$1"
 
-# Copy wasmtime-go library to /usr/local/lib for dynamic linking
-sudo cp -rf ./wasmtime-go /usr/local/lib
+# Copy wasmtime-go library to /usr/local/lib/wasmtime-go for dynamic linking (depending on the architecture)
+if [ "$arch" == "amd64" ]; then
+  cp -rf ./wasmtime-go/target/x86_64-unknown-linux-gnu/release /usr/local/lib/wasmtime-go
+elif [ "$arch" == "arm64" ]; then
+  cp -rf ./wasmtime-go/target/aarch64-unknown-linux-gnu/release /usr/local/lib/wasmtime-go
+else
+  echo "Architecture not supported"
+  exit 1
+fi
 
 #check containerd installation
 if sudo systemctl | grep -Fq 'containerd'; then
