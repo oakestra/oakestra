@@ -49,12 +49,8 @@ unset CC_aarch64_unknown_linux_gnu CXX_aarch64_unknown_linux_gnu AR_aarch64_unkn
 
 ```
 
-6. Copy the Wasmtime C API and Realease to the NodeEngine:
-```bash
-cp -rf $path_to_wasmtime/crates/c-api/include $path_to_oakestra/wasmtime-go/c-api
-cp -rf $path_to_wasmtime/target/aarch64-unknown-linux-gnu $path_to_oakestra/wasmtime-go/target
-cp -rf $path_to_wasmtime/target/x86_64-unknown-linux-gnu $path_to_oakestra/wasmtime-go/target
-```
+6. Copy the Wasmtime C API and Realease to the NodeEngine as it is in the installer script
+7. Create a local copy of wasmtime-go and edit it to include the new changes to the Wasmtime C API to make it work a s a wrapper.
 
 ## Step B: Compile the NodeEngine
 
