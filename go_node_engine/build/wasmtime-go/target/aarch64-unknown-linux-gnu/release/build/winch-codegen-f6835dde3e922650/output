@@ -1,2 +1,0 @@
-cargo:rustc-cfg=feature="arm64"
-cargo:rerun-if-changed=build.rs

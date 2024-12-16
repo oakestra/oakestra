@@ -1,2 +1,0 @@
-cargo:rerun-if-changed=build.rs
-cargo:rustc-env=DEBUG_OUTPUT_DIR=/home/lucam/wasmtime/target/release/build/wasmtime-component-macro-1de1d358a2902954/out

@@ -1,5 +1,12 @@
 package virtualization
 
+//#cgo CFLAGS: -I/usr/local/lib/wasmtime-go/include
+//#cgo LDFLAGS: -L/usr/local/lib/wasmtime-go/ -lwasmtime-go
+//#cgo LDFLAGS: -L/usr/local/lib -lwasmtime
+// #include <wasi.h>
+// #include <wasmtime.h>
+// #include <wasm.h>
+// #include <doc-wasm.h>
 import (
 	"errors"
 	"fmt"
@@ -10,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	wasmtime "github.com/bytecodealliance/wasmtime-go/v25"
+	C "github.com/bytecodealliance/wasmtime-go/v25"
 	"github.com/struCoder/pidusage"
 )
 
@@ -138,9 +145,9 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 
 	deploymentChronoStart := time.Now() // START TIME MEASUREMENT
 
-	engcfg := wasmtime.NewConfig()
+	engcfg := C.NewConfig()
 	engcfg.SetEpochInterruption(true)
-	engine := wasmtime.NewEngineWithConfig(engcfg)
+	engine := C.NewEngineWithConfig(engcfg)
 	defer engine.Close()
 
 	code, err := os.ReadFile(codePath)
@@ -161,17 +168,17 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 		}
 	}()
 
-	store := wasmtime.NewStore(engine)
+	store := C.NewStore(engine)
 	defer store.Close()
 	store.SetEpochDeadline(1)
 
-	wasiConfig := wasmtime.NewWasiConfig()
+	wasiConfig := C.NewWasiConfig()
 	wasiConfig.SetStdoutFile(logPath)
 	store.SetWasi(wasiConfig)
 
 	deploymentConfigEnd := time.Since(deploymentChronoStart).Microseconds()
 
-	module, err := wasmtime.NewModule(engine, code)
+	module, err := C.NewModule(engine, code)
 	if err != nil {
 		revert(fmt.Errorf("error compiling module: %v", err))
 		return
@@ -180,7 +187,7 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 	logger.InfoLogger().Print("Compiled module")
 	deploymentCompilationEnd := time.Since(deploymentChronoStart).Microseconds()
 
-	linker := wasmtime.NewLinker(engine)
+	linker := C.NewLinker(engine)
 	err = linker.DefineWasi()
 	if err != nil {
 		revert(fmt.Errorf("error defining WASI: %v", err))
@@ -223,7 +230,7 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 	select {
 	case err := <-runResult:
 		if err != nil {
-			if exitErr, ok := err.(*wasmtime.Error); ok {
+			if exitErr, ok := err.(*C.Error); ok {
 				exitCode, _ := exitErr.ExitStatus()
 				if exitCode == 0 {
 					logger.InfoLogger().Print("Program exited successfully with code 0")
@@ -258,9 +265,9 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 		engine.IncrementEpoch()
 		err := <-runResult
 		if err != nil {
-			if exitErr, ok := err.(*wasmtime.Trap); ok {
+			if exitErr, ok := err.(*C.Trap); ok {
 				logger.InfoLogger().Print(exitErr.Message())
-				if exitErr.Code() != nil && *exitErr.Code() == wasmtime.Interrupt {
+				if exitErr.Code() != nil && *exitErr.Code() == C.Interrupt {
 					logger.InfoLogger().Print("Module interrupted successfully")
 				}
 			} else {

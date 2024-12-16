@@ -95,6 +95,7 @@ func nodeEngineDaemonManager() error {
 
 	// Dynamically link wasmtime-go library
 	exec.Command("ldconfig", "/usr/local/lib/wasmtime-go").Run()
+	exec.Command("ldconfig", "/usr/local/lib/wasmtime-go/lib").Run()
 
 	switch overlayNetwork {
 	case config.DEFAULT_CNI:

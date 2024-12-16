@@ -1,1 +1,0 @@
-{"rustc":11594289678289209806,"features":"","declared_features":"","target":0,"profile":0,"path":0,"deps":[[13950355366300096795,"build_script_build",false,9484143711634126308]],"local":[{"Precalculated":"0.13.0"}],"rustflags":["-C","linker=aarch64-linux-gnu-gcc","-C","link-arg=-lgcc_s"],"metadata":0,"config":0,"compile_kind":0}
