@@ -3,7 +3,7 @@
 ![root artifacts](https://github.com/oakestra/oakestra-net/actions/workflows/root_service_manager_image.yml/badge.svg)
 ![cluster artifacts](https://github.com/oakestra/oakestra-net/actions/workflows/cluster_service_manager_image.yml/badge.svg)
 
-[![Stable](https://img.shields.io/badge/Latest%20Stable-%F0%9F%AA%97%20Accordion%20v0.4.301-green.svg)](https://github.com/oakestra/oakestra-net/tree/v0.4.400)
+[![Stable](https://img.shields.io/badge/Latest%20Stable-🎸Bass%20v0.4.400-green.svg)](https://github.com/oakestra/oakestra-net/tree/v0.4.400)
 [![Github All Releases](https://img.shields.io/github/downloads/oakestra/oakestra-net/total.svg)]()
 
 # Oakestra Net 🕸️🌳🕸️
