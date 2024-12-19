@@ -61,4 +61,4 @@ sudo systemctl daemon-reload >/dev/null 2>&1
 sudo chmod 755 /bin/NodeEngine
 sudo chmod 755 /bin/nodeengined
 
-[ $? -eq 0 ] && echo "Done, installation successful" || echo "Installation failed, errors reported!" && exit 1
+[ $? -eq 0 ] && echo "Done, installation successful" || (echo "Installation failed, errors reported!" && exit 1)
