@@ -3,7 +3,7 @@
 ![root artifacts](https://github.com/oakestra/oakestra-net/actions/workflows/root_service_manager_image.yml/badge.svg)
 ![cluster artifacts](https://github.com/oakestra/oakestra-net/actions/workflows/cluster_service_manager_image.yml/badge.svg)
 
-[![Stable](https://img.shields.io/badge/Latest%20Stable-%F0%9F%AA%97%20Accordion%20v0.4.301-green.svg)](https://github.com/oakestra/oakestra-net/tree/v0.4.301)
+[![Stable](https://img.shields.io/badge/Latest%20Stable-🎸Bass%20v0.4.400-green.svg)](https://github.com/oakestra/oakestra-net/tree/v0.4.400)
 [![Github All Releases](https://img.shields.io/github/downloads/oakestra/oakestra-net/total.svg)]()
 
 # Oakestra Net 🕸️🌳🕸️
@@ -39,6 +39,22 @@ supported architectures are `arm64` or `amd64`.
 
 The Netmanager component is automatically managed by the NodeEngine. For a manual setup refer to: [node-net-manager/README.md](node-net-manager/README.md)
 
+
+## How run the cluster service manager and root service manage components locally
+
+You can:
+
+1 - Navigate inside the corresponding cluster(root)-service-manager/service-manager folder
+
+2 - Build the docker containers of the respective components using `docker build -t local_cluster_service_manager .` for the cluster service manager and `docker build -t local_root_service_manager .` for the root service manager. 
+
+3 - Run your **standalone** oakestra root and cluster orchestrator as usual, but use the `override-local-service-manager.yml` to replace the official release images of these components with the new images you just built. 
+
+E.g.: 
+```
+export OVERRIDE_FILES=override-local-service-manager.yml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/StartOakestraRoot.sh | sh - 
+```
 
 
 
