@@ -1,7 +1,7 @@
 ![workflow code style](https://github.com/oakestra/oakestra/actions/workflows/super-linter.yml/badge.svg)
 ![node artifacts](https://github.com/oakestra/oakestra/actions/workflows/node_engine_artifacts.yml/badge.svg)
 ![system artifacts](https://github.com/oakestra/oakestra/actions/workflows/root_system_manager_tests.yml/badge.svg)
-[![Stable](https://img.shields.io/badge/Latest%20Stable-%F0%9F%AA%97%20Accordion%20v0.4.301-green.svg)](https://github.com/oakestra/oakestra/tree/v0.4.400)
+[![Stable](https://img.shields.io/badge/Latest%20Stable-%F0%9F%AA%97%20🎸Bass%20v0.4.400-green.svg)](https://github.com/oakestra/oakestra/tree/v0.4.400)
 [![Github Downloads](https://img.shields.io/github/downloads/oakestra/oakestra/total.svg)]()
 ![Oakestra](res/oakestra-white.png)
 
