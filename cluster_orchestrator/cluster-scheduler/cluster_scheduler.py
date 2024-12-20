@@ -6,6 +6,7 @@ from cs_logging import configure_logging
 from flask import Flask, request
 from manager_requests import manager_request
 from mongodb_client import mongo_init
+from oakestra_utils.types.statuses import NegativeSchedulingStatus
 
 WORKER_SCREENING_INTERVAL = 30
 
@@ -62,15 +63,12 @@ def replicate_task():
 @celeryapp.task()
 def start_calc_deploy(job, job_id, instance_num):
     # i = celeryapp.control.inspect()
-    # print(i)
     app.logger.info("App.logger.info Received Task")
     print("print Received Task")
 
-    scheduling_status, scheduling_result = calculate(
-        app, job
-    )  # scheduling_result can be a node object
+    scheduling_result = calculate(app, job)  # scheduling_result can be a node object
 
-    if scheduling_status == "negative":
+    if isinstance(scheduling_result, NegativeSchedulingStatus):
         app.logger.info("No active node found to schedule this job.")
         manager_request(app, None, job, job_id, instance_num)
     else:

@@ -1,12 +1,14 @@
-FROM python:3.8.5-slim-buster
+FROM python:3.10-slim-buster
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
+# Installing git to be able to install oakestra libraries. 
+RUN apt-get update && apt-get install -y --no-install-recommends git
 RUN mkdir /app
-ADD requirements.txt /app
+COPY requirements.txt /app
 WORKDIR /app
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-ADD . /app
+COPY . /app
 
 ENV FLASK_ENV=development
 # TRUE for verbose logging

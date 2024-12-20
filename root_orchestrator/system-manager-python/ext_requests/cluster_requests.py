@@ -1,15 +1,35 @@
 import logging
 
 import requests
-from ext_requests.apps_db import mongo_find_cluster_of_job, mongo_find_job_by_id
-from ext_requests.cluster_db import mongo_find_cluster_by_id, mongo_find_cluster_by_ip
+from resource_abstractor_client import cluster_operations, job_operations
+from services.cluster_management import find_cluster_of_job
 from utils.network import sanitize
+
+
+def cluster_request_status(cluster_id):
+    print("Status Request...")
+    cluster = cluster_operations.get_resource_by_id(cluster_id)
+    try:
+        cluster_addr = "http://" + cluster.get("ip") + ":" + str(cluster.get("port")) + "/status"
+        print(cluster_addr)
+        resp = requests.get(cluster_addr)
+        print(resp)
+    except requests.exceptions.RequestException:
+        print("Calling Cluster Orchestrator /status not successful.")
 
 
 def cluster_request_to_deploy(cluster_id, job_id, instance_number):
     print("propagate to cluster...")
-    cluster = mongo_find_cluster_by_id(cluster_id)
-    job = mongo_find_job_by_id(job_id)
+    cluster = cluster_operations.get_resource_by_id(cluster_id)
+    if cluster is None:
+        logging.error(f"Cluster with {cluster_id} not found.")
+        return
+
+    job = job_operations.get_job_by_id(job_id)
+    if job is None:
+        logging.error(f"Job with {job_id} not found.")
+        return
+
     try:
         cluster_addr = (
             "http://"
@@ -29,7 +49,11 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
 
 
 def cluster_request_to_delete_job(job_id, instance_number):
-    cluster = mongo_find_cluster_of_job(job_id, int(instance_number))
+    cluster = find_cluster_of_job(job_id, int(instance_number))
+    if cluster is None:
+        logging.error(f"Cluster for job {job_id} not found.")
+        return
+
     try:
         cluster_addr = (
             "http://"
@@ -52,7 +76,11 @@ def cluster_request_to_delete_job(job_id, instance_number):
 
 def cluster_request_to_delete_job_by_ip(job_id, instance_number, ip):
     try:
-        cluster = mongo_find_cluster_by_ip(ip)
+        cluster = cluster_operations.get_resource_by_ip(ip)
+        if cluster is None:
+            logging.error(f"Cluster with {ip} not found")
+            return
+
         cluster_addr = (
             "http://"
             + sanitize(cluster.get("ip"), request=True)

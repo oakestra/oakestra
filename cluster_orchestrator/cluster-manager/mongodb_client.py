@@ -1,8 +1,20 @@
 import os
+from collections import defaultdict
 from datetime import datetime
+from typing import Optional
 
+import pymongo
+import pymongo.response
 from bson.objectid import ObjectId
 from flask_pymongo import PyMongo
+from oakestra_utils.types.statuses import (
+    DeploymentStatus,
+    LegacyStatus,
+    NegativeSchedulingStatus,
+    PositiveSchedulingStatus,
+    Status,
+    convert_to_status,
+)
 
 MONGO_URL = os.environ.get("CLUSTER_MONGO_URL")
 MONGO_PORT = os.environ.get("CLUSTER_MONGO_PORT")
@@ -121,60 +133,59 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
 
     global mongo_nodes
 
-    cumulative_cpu = 0
-    cumulative_cpu_cores = 0
-    cumulative_memory = 0
-    gpu_tot_mem = 0
-    gpu_mem_used = 0
-    gpu_temp = 0
-    gpu_drivers = []
-    gpu_usage = 0
-    gpu_cores = 0
-    cumulative_memory_in_mb = 0
-    number_of_active_nodes = 0
-    technology = []
-    aggregation_per_architecture = {}
+    cumulative_values = {
+        "cpu_percent": 0,
+        "cpu_cores": 0,
+        "memory_percent": 0,
+        "gpu_tot_mem": 0,
+        "gpu_mem_used": 0,
+        "gpu_temp": 0,
+        "gpu_drivers": [],
+        "gpu_percent": 0,
+        "gpu_cores": 0,
+        "cumulative_memory_in_mb": 0,
+        "number_of_nodes": 0,
+    }
+
+    technology = set()
+    supported_addons = set()
+    aggregation_per_architecture = defaultdict(
+        lambda: {"cpu_percent": 0, "cpu_cores": 0, "memory": 0, "memory_in_mb": 0}
+    )
 
     nodes = find_all_nodes()
     for n in nodes:
-        # print(n)
-
-        # if it is not older than TIME_INTERVAL
         try:
-            if n.get("last_modified_timestamp") >= (datetime.now().timestamp() - TIME_INTERVAL):
-                cumulative_cpu += n.get("current_cpu_percent", 0)
-                cumulative_cpu_cores += n.get("current_cpu_cores_free", 0)
-                cumulative_memory += n.get("current_memory_percent", 0)
-                cumulative_memory_in_mb += n.get("current_free_memory_in_MB", 0)
-                gpu_drivers.append(n.get("gpu_driver", "-"))
-                gpu_usage += n.get("gpu_usage", 0)
-                gpu_cores += n.get("gpu_cores", 0)
-                gpu_temp += n.get("gpu_temp", 0)
-                gpu_tot_mem += n.get("gpu_tot_mem", 0)
-                gpu_mem_used += n.get("gpu_mem_used", 0)
-                number_of_active_nodes += 1
-                for t in n.get("node_info").get("technology"):
-                    technology.append(t) if t not in technology else technology
-
-                arch = n.get("node_info").get("architecture")
-                if arch is not None:
-                    aggregation = None
-                    if aggregation_per_architecture.get(arch, None) is None:
-                        aggregation_per_architecture[arch] = {}
-                        aggregation = aggregation_per_architecture[arch]
-                        aggregation["cpu_percent"] = 0
-                        aggregation["cpu_cores"] = 0
-                        aggregation["memory"] = 0
-                        aggregation["memory_in_mb"] = 0
-
-                    aggregation = aggregation_per_architecture[arch]
-                    aggregation["cpu_percent"] += n.get("current_cpu_percent", 0)
-                    aggregation["cpu_cores"] += n.get("current_cpu_cores_free", 0)
-                    aggregation["memory"] += n.get("current_memory_percent", 0)
-                    aggregation["memory_in_mb"] += n.get("current_free_memory_in_MB", 0)
-                    # GPU not aggregated for unikernel
-            else:
+            if n.get("last_modified_timestamp") < (datetime.now().timestamp() - TIME_INTERVAL):
                 print("Node {0} is inactive.".format(n.get("_id")))
+                continue
+
+            node_info = n.get("node_info")
+
+            # if it is not older than TIME_INTERVAL
+            cumulative_values["cpu_percent"] += n.get("current_cpu_percent", 0)
+            cumulative_values["cpu_cores"] += n.get("current_cpu_cores_free", 0)
+            cumulative_values["memory_percent"] += n.get("current_memory_percent", 0)
+            cumulative_values["gpu_tot_mem"] += n.get("gpu_tot_mem", 0)
+            cumulative_values["gpu_mem_used"] += n.get("gpu_mem_used", 0)
+            cumulative_values["gpu_temp"] += n.get("gpu_temp", 0)
+            cumulative_values["gpu_drivers"].append(n.get("gpu_driver", "-"))
+            cumulative_values["cumulative_memory_in_mb"] += n.get("current_free_memory_in_MB", 0)
+            cumulative_values["gpu_percent"] += n.get("gpu_usage", 0)
+            cumulative_values["gpu_cores"] += n.get("gpu_cores", 0)
+            cumulative_values["number_of_nodes"] += 1
+
+            technology.update(node_info.get("technology", []))
+            supported_addons.update(node_info.get("supported_addons", []))
+
+            arch = node_info.get("architecture")
+            aggregation = aggregation_per_architecture[arch]
+            aggregation["cpu_percent"] += n.get("current_cpu_percent", 0)
+            aggregation["cpu_cores"] += n.get("current_cpu_cores_free", 0)
+            aggregation["memory"] += n.get("current_memory_percent", 0)
+            aggregation["memory_in_mb"] += n.get("current_free_memory_in_MB", 0)
+            # GPU not aggregated for unikernel
+
         except Exception as e:
             print(
                 "Problem during the aggregation of the data, skipping the node: ",
@@ -186,22 +197,14 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     mongo_update_jobs_status(TIME_INTERVAL)
     jobs = mongo_find_all_jobs()
 
+    # TODO: what is "more"?
     return {
-        "cpu_percent": cumulative_cpu,
-        "memory_percent": cumulative_memory,
-        "cpu_cores": cumulative_cpu_cores,
-        "cumulative_memory_in_mb": cumulative_memory_in_mb,
-        "gpu_drivers": gpu_drivers,
-        "gpu_percent": gpu_usage,
-        "gpu_cores": gpu_cores,
-        "gpu_temp": gpu_temp,
-        "gpu_tot_mem": gpu_tot_mem,
-        "gpu_mem_used": gpu_mem_used,
-        "number_of_nodes": number_of_active_nodes,
+        **cumulative_values,
         "jobs": jobs,
-        "virtualization": technology,
-        "aggregation_per_architecture": aggregation_per_architecture,
+        "virtualization": list(technology),
+        "aggregation_per_architecture": dict(aggregation_per_architecture),
         "more": 0,
+        "supported_addons": list(supported_addons),
     }
 
 
@@ -209,7 +212,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
 ###########################################################
 
 
-def mongo_create_new_job_instance(job, system_job_id, instance_number):
+def mongo_create_new_job_instance(job: dict, system_job_id: str, instance_number: int) -> dict:
     print("insert/upsert requested job")
     job["system_job_id"] = system_job_id
     del job["_id"]
@@ -224,7 +227,10 @@ def mongo_create_new_job_instance(job, system_job_id, instance_number):
     if result.get("instance_list") is None:
         result["instance_list"] = []
     result["instance_list"].append(
-        {"instance_number": instance_number, "status": "CLUSTER_SCHEDULED"}
+        {
+            "instance_number": instance_number,
+            "status": PositiveSchedulingStatus.CLUSTER_SCHEDULED.value,
+        }
     )
     mongo_jobs.db.jobs.find_one_and_update(
         {"system_job_id": str(job["system_job_id"])},
@@ -243,8 +249,9 @@ def mongo_find_job_by_id(id):
     return mongo_jobs.db.jobs.find_one({"_id": ObjectId(id)})
 
 
-def mongo_update_jobs_status(TIME_INTERVAL):
+def mongo_update_jobs_status(time_interval: int) -> None:
     """Marks inactive jobs as failed.
+
     If there are no updates from a job in the last TIME_INTERVAL mark it as failed,
     unless the job is completed.
     """
@@ -253,26 +260,34 @@ def mongo_update_jobs_status(TIME_INTERVAL):
         try:
             updated = False
             for instance in range(len(job["instance_list"])):
-
                 last_time_job_was_modified = job["instance_list"][instance].get(
                     "last_modified_timestamp", datetime.now().timestamp()
                 )
                 job_is_inactive = last_time_job_was_modified < (
-                    datetime.now().timestamp() - TIME_INTERVAL
+                    datetime.now().timestamp() - time_interval
                 )
-                job_status = job["instance_list"][instance].get("status", 0)
-                job_is_not_completed = job_status != "COMPLETED"
-                job_is_not_scheduled = job_status not in ["NODE_SCHEDULED", "CLUSTER_SCHEDULED"]
-
-                if job_is_inactive and job_is_not_scheduled and job_is_not_completed:
+                job_status = (
+                    convert_to_status(job["instance_list"][instance].get("status"))
+                    or LegacyStatus.LEGACY_0
+                )
+                if (
+                    job_is_inactive
+                    and job_status not in PositiveSchedulingStatus
+                    and job_status != DeploymentStatus.COMPLETED
+                ):
                     print("Job is inactive: " + str(job.get("job_name")))
-                    job["instance_list"][instance]["status"] = "FAILED"
-                    status = "FAILED"
+                    new_job_status = DeploymentStatus.FAILED
+                    job["instance_list"][instance]["status"] = new_job_status.value
                     updated = True
             if updated:
                 mongo_jobs.db.jobs.update_one(
                     {"system_job_id": str(job["system_job_id"])},
-                    {"$set": {"instance_list": job["instance_list"], "status": status}},
+                    {
+                        "$set": {
+                            "instance_list": job["instance_list"],
+                            "status": new_job_status.value,
+                        }
+                    },
                 )
         except Exception as e:
             print(e)
@@ -288,7 +303,7 @@ def mongo_find_all_jobs():
                 "_id": 0,
                 "system_job_id": 1,
                 "job_name": 1,
-                "status": 1,
+                "status": int(LegacyStatus.LEGACY_1.value),
                 "instance_list": 1,
             },
         )
@@ -310,13 +325,18 @@ def mongo_find_job_by_ip(ip):
     return job
 
 
-def mongo_update_job_status(system_job_id, instancenum, status, node):
+def mongo_update_job_status(
+    system_job_id: str,
+    instance_number: str,
+    status: Status,
+    node: dict,
+) -> pymongo.results.UpdateResult:
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({"system_job_id": str(system_job_id)})
     instance_list = job["instance_list"]
     for instance in instance_list:
-        if int(instance.get("instance_number")) == int(instancenum):
-            instance["status"] = status
+        if int(instance.get("instance_number")) == int(instance_number):
+            instance["status"] = status.value
             if node is not None:
                 instance["host_ip"] = node["node_address"]
                 port = node["node_info"].get("node_port")
@@ -327,7 +347,7 @@ def mongo_update_job_status(system_job_id, instancenum, status, node):
             break
     return mongo_jobs.db.jobs.update_one(
         {"system_job_id": str(system_job_id)},
-        {"$set": {"status": status, "instance_list": instance_list}},
+        {"$set": {"status": status.value, "instance_list": instance_list}},
     )
 
 
@@ -335,15 +355,21 @@ def mongo_get_services_with_failed_instanes():
     return mongo_jobs.db.jobs.find(
         {
             "$or": [
-                {"instance_list.status": "FAILED"},
-                {"instance_list.status": "DEAD"},
-                {"instance_list.status": "NO_WORKER_CAPACITY"},
+                {"instance_list.status": DeploymentStatus.FAILED.value},
+                {"instance_list.status": DeploymentStatus.DEAD.value},
+                {"instance_list.status": NegativeSchedulingStatus.NO_WORKER_CAPACITY.value},
             ]
         }
     )
 
 
-def mongo_update_job_deployed(sname, instance_num, status, publicip, workerid):
+def mongo_update_job_deployed(
+    sname: str,
+    instance_num: int,
+    status: Status,
+    publicip: str,
+    workerid: str,
+) -> Optional[pymongo.results.UpdateResult]:
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({"job_name": sname})
     if job:
@@ -353,7 +379,7 @@ def mongo_update_job_deployed(sname, instance_num, status, publicip, workerid):
             if int(instance_list[instance]["instance_number"]) == int(instance_num):
                 if instance_list[instance].get("worker_id") != workerid:
                     return None  # cannot update another worker's resources
-                instance_list[instance]["status"] = status
+                instance_list[instance]["status"] = status.value
                 instance_list[instance]["publicip"] = publicip
                 updated = True
         if updated:
@@ -363,7 +389,12 @@ def mongo_update_job_deployed(sname, instance_num, status, publicip, workerid):
     return None
 
 
-def mongo_update_service_resources(sname, service, workerid, instance_num=0):
+def mongo_update_service_resources(
+    sname: str,
+    service: dict,
+    workerid: str,
+    instance_num: int = 0,
+) -> Optional[pymongo.results.UpdateResult]:
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({"job_name": sname})
     if job:
@@ -372,7 +403,7 @@ def mongo_update_service_resources(sname, service, workerid, instance_num=0):
             if int(instance_list[instance]["instance_number"]) == int(instance_num):
                 if instance_list[instance].get("worker_id") != workerid:
                     return None  # cannot update another worker's resources
-                instance_list[instance]["status"] = "RUNNING"
+                instance_list[instance]["status"] = DeploymentStatus.RUNNING.value
                 instance_list[instance]["status_detail"] = service.get("status_detail")
                 instance_list[instance]["last_modified_timestamp"] = datetime.timestamp(
                     datetime.now()

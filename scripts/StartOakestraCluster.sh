@@ -22,8 +22,21 @@ fi
 echo Checking docker compose version
 sudo docker compose version
 if [ $? -ne 0 ]; then
-    echo "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
-    exit 1
+    current_os=$(uname)
+    if [ "$current_os" = "Darwin" ]; then
+        echo "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
+        exit 1
+    else
+        echo "Installing Docker Compose plugin"
+        if [ ! -x "$(command -v apt-get)" ]; then
+            sudo apt-get update
+            sudo apt-get install docker-compose-plugin
+        fi
+        if [ ! -x "$(command -v yum)" ]; then
+            sudo yum update
+            sudo yum install docker-compose-plugin
+        fi
+    fi
 fi
 
 if [ -z "$cluster_location" ]; then
@@ -112,13 +125,14 @@ if [ -z "$SYSTEM_MANAGER_URL" ]; then
     exit 1
 fi
 
-rm -rf ~/oakestra 2> /dev/null
-mkdir ~/oakestra 2> /dev/null
+rm -rf ~/oakestra/cluster_orchestrator 2> /dev/null
+mkdir -p ~/oakestra/cluster_orchestrator 2> /dev/null
 
-cd ~/oakestra 2> /dev/null
+cd ~/oakestra/cluster_orchestrator 2> /dev/null
 
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/cluster-orchestrator.yml > cluster-orchestrator.yml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/cluster_orchestrator/docker-compose.yml > cluster-orchestrator.yml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/cluster_orchestrator/override-images-only.yml> override-cluster-images-only.yml
 
 chmod +x downloadConfigFiles.sh
 ./downloadConfigFiles.sh cluster_orchestrator $OAKESTRA_BRANCH
@@ -132,7 +146,7 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
     for element in $OVERRIDE_FILES
     do
         echo "Download override: $element"
-        wget -c https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/$element 2> /dev/null
+        wget -c https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/cluster_orchestrator/$element 2> /dev/null
         OAK_OVERRIDES="${OAK_OVERRIDES}-f ${element} " 
     done
     IFS= 
@@ -144,11 +158,11 @@ fi
 
 if sudo docker ps -a | grep oakestra/cluster >/dev/null 2>&1; then
   echo 🚨 Oakestra cluster containers are already running. Please stop them before starting another cluster on this machine.
-  echo 🪫 You can turn off the current cluster using: \$ docker compose -f ~/oakestra/cluster-orchestrator.yml down
+  echo 🪫 You can turn off the current cluster using: \$ docker compose -f ~/oakestra/cluster_orchestrator/cluster-orchestrator.yml down
   exit 1
 fi
 
-command_exec="sudo -E docker compose -f cluster-orchestrator.yml ${OAK_OVERRIDES}up -d"
+command_exec="sudo -E docker compose -f cluster-orchestrator.yml -f override-cluster-images-only.yml ${OAK_OVERRIDES}up -d"
 echo executing "$command_exec"
 
 eval "$command_exec"
@@ -160,4 +174,4 @@ echo 🖥️ Oakestra dashboard available at http://$SYSTEM_MANAGER_URL
 echo 📊 Root Grafana dashboard available at http://$SYSTEM_MANAGER_URL:3000
 echo 📊 Cluster Grafana dashboard available at http://<CLUSTER_IP>:3001
 echo 📈 You can access the APIs at http://$SYSTEM_MANAGER_URL:10000/api/docs
-echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/oakestra/cluster-orchestrator.yml down
+echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/oakestra/cluster_orchestrator/cluster-orchestrator.yml down

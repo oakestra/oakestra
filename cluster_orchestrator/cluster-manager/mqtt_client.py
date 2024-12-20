@@ -8,6 +8,7 @@ from mongodb_client import (
     mongo_update_job_deployed,
     mongo_update_service_resources,
 )
+from oakestra_utils.types.statuses import convert_to_status
 
 mqtt = None
 app = None
@@ -45,7 +46,7 @@ def handle_mqtt_message(client, userdata, message):
         mongo_find_node_by_id_and_update_cpu_mem(client_id, payload)
     if re_job_deployment_topic is not None:
         sname = payload.get("sname")
-        status = payload.get("status")
+        status = convert_to_status(payload.get("status"))
         instance = payload.get("instance")
         publicip = payload.get("publicip", "--")
         mongo_update_job_deployed(sname, instance, status, publicip, client_id)
@@ -84,6 +85,19 @@ def mqtt_init(flask_app):
     mqtt.on_message = handle_mqtt_message
     mqtt.reconnect_delay_set(min_delay=1, max_delay=120)
     mqtt.max_queued_messages_set(1000)
+    if "MQTT_CERT" in os.environ:
+        try:
+            mqtt.tls_set(
+                ca_certs=os.environ.get("MQTT_CERT") + "/ca.crt",
+                certfile=os.environ.get("MQTT_CERT") + "/cluster.crt",
+                keyfile=os.environ.get("MQTT_CERT") + "/cluster.key",
+                keyfile_password=os.environ.get("CLUSTER_KEYFILE_PASSWORD"),
+            )
+            app.logger.info("MQTT - TLS configured")
+        except FileNotFoundError as e:
+            app.logger.error("MQTT - Unable to load certificate files")
+            app.logger.error(e)
+
     mqtt.connect(
         os.environ.get("MQTT_BROKER_URL").strip("[]"),
         int(os.environ.get("MQTT_BROKER_PORT")),

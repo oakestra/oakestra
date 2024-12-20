@@ -1,5 +1,6 @@
 package model
 
+// Service is the struct that describes the service
 type Service struct {
 	JobID           string   `json:"_id"`
 	Sname           string   `json:"job_name"`
@@ -18,9 +19,11 @@ type Service struct {
 	UnikernelImages []string `json:"vm_images"`
 	Architectures   []string `json:"arch"`
 	Pid             int
-	OneShot		bool	 `json:"one_shot"`
+	OneShot         bool `json:"one_shot"`
+	Privileged      bool `json:"privileged"`
 }
 
+// Resources is the struct that describes the resources
 type Resources struct {
 	Cpu      string `json:"cpu"`
 	Memory   string `json:"memory"`
@@ -31,11 +34,12 @@ type Resources struct {
 	Instance int    `json:"instance"`
 }
 
+// ServiceStatus is the struct that describes the service status
 const (
-	SERVICE_ACTIVE     = "ACTIVE"
 	SERVICE_CREATING   = "CREATING"
+	SERVICE_CREATED    = "CREATED"
+	SERVICE_FAILED     = "FAILED"
 	SERVICE_DEAD       = "DEAD"
 	SERVICE_COMPLETED  = "COMPLETED"
-	SERVICE_FAILED     = "FAILED"
 	SERVICE_UNDEPLOYED = "UNDEPLOYED"
 )

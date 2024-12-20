@@ -1,4 +1,9 @@
-version: "3.3"
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "1m"
+    max-file: "1"
+    tag: "{{.Name}}"
 
 services:
 
@@ -83,7 +88,7 @@ services:
       - "6379:6379"
     command: redis-server --requirepass cloudRedis
 
-# Observability Stack
+  # Observability Stack
   grafana:
     image: grafana/grafana
     hostname: grafana
@@ -110,7 +115,7 @@ services:
     #  driver: none
 
   promtail:
-    image:  grafana/promtail:2.9.2
+    image: grafana/promtail:2.9.2
     container_name: promtail
     volumes:
       - ./config/promtail.yml:/etc/promtail/config.yml

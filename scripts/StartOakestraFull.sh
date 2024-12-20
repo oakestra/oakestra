@@ -15,8 +15,21 @@ fi
 echo Checking docker compose version
 sudo docker compose version
 if [ $? -ne 0 ]; then
-    echo "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
-    exit 1
+    current_os=$(uname)
+    if [ "$current_os" = "Darwin" ]; then
+        echo "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
+        exit 1
+    else
+        echo "Installing Docker Compose plugin"
+        if [ ! -x "$(command -v apt-get)" ]; then
+            sudo apt-get update
+            sudo apt-get install docker-compose-plugin
+        fi
+        if [ ! -x "$(command -v yum)" ]; then
+            sudo yum update
+            sudo yum install docker-compose-plugin
+        fi
+    fi
 fi
 
 # Detect OS
@@ -44,16 +57,19 @@ fi
 #Default configuration?
 if [ "$2" != "custom" ]; then
     echo 🔧 Using default configuration
-    
-    # get IP address of this machine
-    if [ $current_os = "Darwin" ]; then
-        export SYSTEM_MANAGER_URL=$(ipconfig getifaddr en0)
-    else
-        export SYSTEM_MANAGER_URL=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
-    fi
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to retrieve interface IP."
-        exit 1
+
+    # if custom IP not set use default one
+    if [ -z "$SYSTEM_MANAGER_URL" ]; then
+      # get IP address of this machine
+      if [ $current_os = "Darwin" ]; then
+          export SYSTEM_MANAGER_URL=$(ipconfig getifaddr en0)
+      else
+          export SYSTEM_MANAGER_URL=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
+      fi
+      if [ $? -ne 0 ]; then
+          echo "Error: Failed to retrieve interface IP."
+          exit 1
+      fi
     fi
     echo Default node IP: $SYSTEM_MANAGER_URL
 

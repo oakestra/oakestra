@@ -7,26 +7,41 @@ on:
       - 'alpha-v*.*.*'
 
 jobs:
-  releases-matrix:
-    name: Release Go Binary
+  build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # build and publish in parallel: linux/386, linux/amd64, linux/arm64, windows/386, windows/amd64, darwin/amd64, darwin/arm64
-        goos: [linux]
-        goarch: [amd64, arm64]
+        architecture: [amd64, arm64]
     steps:
-    - uses: actions/checkout@v3
-    - uses: wangyoucao577/go-release-action@v1.31
-      with:
-        github_token: ${{ secrets.PACKAGES_TOKEN }}
-        goos: ${{ matrix.goos }}
-        goarch: ${{ matrix.goarch }}
-        goversion: "https://go.dev/dl/go1.19.1.linux-amd64.tar.gz"
-        project_path: "./go_node_engine"
-        binary_name: "NodeEngine"
-        release_tag: ${{ steps.meta.outputs.tags }}
-        asset_name: NodeEngine_${{ matrix.goarch }}
-        extra_files: go_node_engine/build/install.sh go_node_engine/build/configure-gpu.sh
-        overwrite: TRUE
+      - uses: actions/checkout@v4
+
+      - name: Use Go 1.22.0
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.22.0
+
+      - name: Build NodeEngine ({{ matrix.architecture }})
+        run: |
+          cd go_node_engine
+          env GOOS=linux GOARCH=${{ matrix.architecture }}  go build -ldflags="-X 'go_node_engine/cmd.Version=${{ github.ref_name }}'" -o ../NodeEngine NodeEngine.go
+          env GOOS=linux GOARCH=${{ matrix.architecture }}  go build -o ../nodeengined pkg/nodeengined.go
+
+      - name: Package Artifacts
+        run: |
+          mkdir -p NodeEngine_folder_${{ matrix.architecture }}
+          cp NodeEngine nodeengined go_node_engine/build/install.sh go_node_engine/build/configure-gpu.sh go_node_engine/nodeengine.service NodeEngine_folder_${{ matrix.architecture }}
+          tar -czvf NodeEngine_${{ matrix.architecture }}.tar.gz -C NodeEngine_folder_${{ matrix.architecture }} .
+
+      - name: Release Artifacts
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          token: ${{ secrets.PACKAGES_TOKEN }}
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          append_body: true
+          prerelease: true
+          files: |
+            NodeEngine_${{ matrix.architecture }}.tar.gz
+
 

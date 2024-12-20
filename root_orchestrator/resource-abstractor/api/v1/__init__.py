@@ -1,4 +1,15 @@
-from .jobs_blueprint import jobsblp
-from .resources_blueprint import resourcesblp
+from api.v1 import (
+    apps_blueprint,
+    custom_resources_blueprint,
+    hooks_blueprint,
+    jobs_blueprint,
+    resources_blueprint,
+)
 
-blueprints = [resourcesblp, jobsblp]
+blueprints = [
+    resources_blueprint.resourcesblp,
+    apps_blueprint.applicationsblp,
+    jobs_blueprint.jobsblp,
+    hooks_blueprint.hooksblp,
+    custom_resources_blueprint.customblp,
+]

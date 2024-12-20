@@ -5,3 +5,5 @@ click~=8.1.7
 redis~=5.0.1
 requests~=2.27.1
 werkzeug==2.0.3
+git+https://github.com/oakestra/oakestra.git@develop#subdirectory=libraries/resource_abstractor_client
+git+https://github.com/oakestra/oakestra.git@develop#subdirectory=libraries/oakestra_utils_library

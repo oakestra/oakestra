@@ -1,73 +1,98 @@
-from resource_management import cluster_operations
+from typing import Union
+
+from oakestra_utils.types.statuses import NegativeSchedulingStatus
+from resource_abstractor_client import cluster_operations
 
 
-def calculate(job_id, job):
+def calculate(job: dict) -> Union[dict, NegativeSchedulingStatus]:
     print("calculating...")
 
     constraints = job.get("constraints")
-    if constraints is not None:
+    if constraints is not None and len(constraints) > 0:
         return constraint_based_scheduling(job, constraints)
     else:
         return greedy_load_balanced_algorithm(job=job)
 
 
-def constraint_based_scheduling(job, constraints):
-    for constraint in constraints:
-        constraint_type = constraint.get("type")
-        if constraint_type == "direct":
-            return direct_service_mapping(job, constraint.get("cluster"))
-    return greedy_load_balanced_algorithm(job=job)
+def constraint_based_scheduling(job: dict, constraints) -> Union[dict, NegativeSchedulingStatus]:
+    filtered_active_clusters = []
+    active_clusters = list(cluster_operations.get_resources(active=True))
+    for cluster in active_clusters:
+        satisfying = True
+
+        for constraint in constraints:
+            constraint_type = constraint.get("type")
+            # TODO: Turn the constraints into an enum - put them into the oak-utils library.
+
+            if constraint_type == "direct":
+                return direct_service_mapping(job, constraint.get("cluster"))
+
+            if constraint_type == "addons":
+                for cluster in active_clusters:
+                    if not (
+                        cluster.get("supported_addons")
+                        and constraint.get("needs")
+                        and set(constraint.get("needs")).issubset(
+                            set(cluster.get("supported_addons"))
+                        )
+                    ):
+                        satisfying = False
+                        continue
+
+            if constraint_type == "clusters":
+                for cluster in active_clusters:
+                    cluster_name = cluster.get("cluster_name")
+                    if not (cluster_name and cluster_name in constraint.get("allowed")):
+                        satisfying = False
+
+        if satisfying:
+            filtered_active_clusters.append(cluster)
+
+    return greedy_load_balanced_algorithm(job=job, active_clusters=filtered_active_clusters)
 
 
-def direct_service_mapping(job, cluster_name):
-    cluster = cluster_operations.get_resource_by_name(cluster_name)  # can return None
+def direct_service_mapping(
+    job: dict,
+    cluster_name: str,
+) -> Union[dict, NegativeSchedulingStatus]:
+    cluster = cluster_operations.get_resource_by_name(cluster_name)
 
-    if cluster is not None:  # cluster found by location exists
-        if cluster["active"]:
-            print("Cluster is active")
-            if does_cluster_respects_requirements(cluster, job):
-                return "positive", cluster
-            else:
-                return "negative", "TargetClusterNoCapacity"
-        else:
-            return "negative", "TargetClusterNotActive"
-    else:
-        return "negative", "TargetClusterNotFound"  # no cluster Found
+    if cluster is None:
+        return NegativeSchedulingStatus.TARGET_CLUSTER_NOT_FOUND
+
+    if not cluster["active"]:
+        return NegativeSchedulingStatus.TARGET_CLUSTER_NOT_ACTIVE
+
+    print("Cluster is active")
+    if not does_cluster_respects_requirements(cluster, job):
+        return NegativeSchedulingStatus.TARGET_CLUSTER_NO_CAPACITY
+
+    return cluster
 
 
-def first_fit_algorithm(job):
+def first_fit_algorithm(job: dict) -> Union[dict, NegativeSchedulingStatus]:
     """Which of the clusters fits the Qos of the deployment file as the first"""
-    active_clusters = cluster_operations.get_resources(active=True)
+    active_clusters = cluster_operations.get_resources(active=True) or []
 
     print("active_clusters: ")
     for cluster in active_clusters:
         print(cluster)
 
         if does_cluster_respects_requirements(cluster, job):
-            return "positive", cluster
+            return cluster
 
-    # no cluster found
-    return "negative", "NoActiveClusterWithCapacity"
+    return NegativeSchedulingStatus.NO_ACTIVE_CLUSTER_WITH_CAPACITY
 
 
-def greedy_load_balanced_algorithm(job, active_clusters=None):
+def greedy_load_balanced_algorithm(
+    job: dict,
+    active_clusters=None,
+) -> Union[dict, NegativeSchedulingStatus]:
     """Which of the clusters have the most capacity for a given job"""
 
     if active_clusters is None:
-        active_clusters = cluster_operations.get_resources(active=True)
+        active_clusters = cluster_operations.get_resources(active=True) or []
     qualified_clusters = []
-
-    # memory = 0
-    # if job.get("memory"):
-    #     memory = job.get("memory")
-
-    # vcpu = 0
-    # if job.get("vcpu"):
-    #     vcpu = job.get("vcpu")
-
-    # vgpu = 0
-    # if job.get("vgpu"):
-    #     vgpu = job.get("vgpu")
 
     for cluster in active_clusters:
         if does_cluster_respects_requirements(cluster, job):
@@ -77,11 +102,10 @@ def greedy_load_balanced_algorithm(job, active_clusters=None):
     target_cpu = 0
     target_mem = 0
 
-    # return if no qualified clusters found
     if not qualified_clusters:
-        return "negative", "NoActiveClusterWithCapacity"
+        return NegativeSchedulingStatus.NO_ACTIVE_CLUSTER_WITH_CAPACITY
 
-    # return the cluster with the most cpu+ram
+    # Return the cluster with the most cpu+ram.
     if job.get("virtualization") == "unikernel":
         arch = job.get("arch")
         for cluster in qualified_clusters:
@@ -96,7 +120,7 @@ def greedy_load_balanced_algorithm(job, active_clusters=None):
                     target_cpu = cpu
                     target_mem = mem
                     target_cluster = cluster
-        return "positive", target_cluster
+        return target_cluster
 
     for cluster in qualified_clusters:
         cpu = float(cluster.get("total_cpu_cores"))
@@ -107,7 +131,7 @@ def greedy_load_balanced_algorithm(job, active_clusters=None):
             target_mem = mem
             target_cluster = cluster
 
-    return "positive", target_cluster
+    return target_cluster
 
 
 def same_cluster_replication(job_obj, cluster_obj, replicas):

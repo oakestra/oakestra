@@ -18,61 +18,88 @@ import (
 	psnet "github.com/shirou/gopsutil/net"
 )
 
+// RuntimeType is the type of runtime that the node executes
 type RuntimeType string
 
+// RuntimeType constants
 const (
 	CONTAINER_RUNTIME RuntimeType = "docker"
 	UNIKERNEL_RUNTIME RuntimeType = "unikernel"
 )
 
+// AddonType is the type of addon that the node supports
+type AddonType string
+
+const (
+	IMAGE_BUILDER AddonType = "image-builder"
+	FLOPS_LEARNER AddonType = "FLOps-learner"
+)
+
+// Node is the struct that describes the node
 type Node struct {
-	Id             string            `json:"id"`
-	Host           string            `json:"host"`
-	Ip             string            `json:"ip"`
-	Port           string            `json:"port"`
-	SystemInfo     map[string]string `json:"system_info"`
-	CpuUsage       float64           `json:"cpu"`
-	CpuCores       int               `json:"free_cores"`
-	CpuArch        string            `json:"architecture"`
-	MemoryUsed     float64           `json:"memory"`
-	MemoryMB       int               `json:"memory_free_in_MB"`
-	DiskInfo       map[string]string `json:"disk_info"`
-	NetworkInfo    map[string]string `json:"network_info"`
-	GpuDriver      string            `json:"gpu_driver"`
-	GpuUsage       float64           `json:"gpu_usage"`
-	GpuCores       int               `json:"gpu_cores"`
-	GpuTemp        float64           `json:"gpu_temp"`
-	GpuMemUsage    float64           `json:"gpu_mem_used"`
-	GpuTotMem      float64           `json:"gpu_tot_mem"`
-	Technology     []RuntimeType     `json:"technology"`
-	Overlay        bool
-	LogDirectory   string
-	NetManagerPort int
+	Id              string            `json:"id"`
+	Host            string            `json:"host"`
+	Ip              string            `json:"ip"`
+	Port            string            `json:"port"`
+	SystemInfo      map[string]string `json:"system_info"`
+	CpuUsage        float64           `json:"cpu"`
+	CpuCores        int               `json:"free_cores"`
+	CpuArch         string            `json:"architecture"`
+	MemoryUsed      float64           `json:"memory"`
+	MemoryMB        int               `json:"memory_free_in_MB"`
+	DiskInfo        map[string]string `json:"disk_info"`
+	NetworkInfo     map[string]string `json:"network_info"`
+	GpuDriver       string            `json:"gpu_driver"`
+	GpuUsage        float64           `json:"gpu_usage"`
+	GpuCores        int               `json:"gpu_cores"`
+	GpuTemp         float64           `json:"gpu_temp"`
+	GpuMemUsage     float64           `json:"gpu_mem_used"`
+	GpuTotMem       float64           `json:"gpu_tot_mem"`
+	Technology      []RuntimeType     `json:"technology"`
+	SupportedAddons []AddonType       `json:"supported_addons"`
+	Overlay         bool
+	OverlaySocket   string
+	LogDirectory    string
+	NetManagerPort  int
+	ClusterAddress  string
 }
 
 var once sync.Once
 var node Node
 
+// GetNodeInfo returns the node information
 func GetNodeInfo() *Node {
 	once.Do(func() {
 		node = Node{
-			Host:       getHostname(),
-			SystemInfo: getSystemInfo(),
-			CpuCores:   getCpuCores(),
-			CpuArch:    runtime.GOARCH,
-			Port:       getPort(),
-			Technology: make([]RuntimeType, 0),
-			Overlay:    false,
+			Host:            getHostname(),
+			SystemInfo:      getSystemInfo(),
+			CpuCores:        getCpuCores(),
+			CpuArch:         runtime.GOARCH,
+			Port:            getPort(),
+			Technology:      make([]RuntimeType, 0),
+			SupportedAddons: make([]AddonType, 0),
+			Overlay:         false,
+			OverlaySocket:   "/etc/netmanager/netmanager.sock",
 		}
 	})
 	node.updateDynamicInfo()
 	return &node
 }
 
+// SetLogDirectory sets the directory where the logs will be stored
 func (n *Node) SetLogDirectory(dir string) {
 	n.LogDirectory = dir
 }
 
+func (n *Node) SetClusterAddress(addr string) {
+	n.ClusterAddress = addr
+}
+
+func (n *Node) SetOverlaySocket(socket string) {
+	n.OverlaySocket = socket
+}
+
+// GetDynamicInfo returns the dynamic information of the node (CPU, Memory, GPU usage etc.)
 func GetDynamicInfo() Node {
 	node.updateDynamicInfo()
 	return Node{
@@ -88,9 +115,9 @@ func GetDynamicInfo() Node {
 	}
 }
 
-func EnableOverlay(port int) {
+// EnableOverlay enables the overlay network, setting the port
+func EnableOverlay() {
 	node.Overlay = true
-	node.NetManagerPort = port
 }
 
 func (n *Node) updateDynamicInfo() {
@@ -112,6 +139,7 @@ func (n *Node) updateDynamicInfo() {
 
 }
 
+// SetNodeId sets the node id
 func SetNodeId(id string) {
 	GetNodeInfo()
 	node.Id = id
@@ -228,12 +256,24 @@ func getPort() string {
 	return port
 }
 
+// AddSupportedTechnology adds a supported technology to the node
 func (n *Node) AddSupportedTechnology(tech RuntimeType) {
 	n.Technology = append(n.Technology, tech)
 }
 
+// GetSupportedTechnologyList returns the list of supported technologies
 func (n *Node) GetSupportedTechnologyList() []RuntimeType {
 	return n.Technology
+}
+
+// AddSupportedAddons adds a supported addon to the node
+func (n *Node) AddSupportedAddons(ext AddonType) {
+	n.SupportedAddons = append(n.SupportedAddons, ext)
+}
+
+// GetSupportedAddonsList returns the list of supported addons
+func (n *Node) GetSupportedAddonsList() []AddonType {
+	return n.SupportedAddons
 }
 
 func getGpuDriver() string {
@@ -242,14 +282,19 @@ func getGpuDriver() string {
 		return "-"
 	}
 
+	var queryResult string
 	for i := 0; i < n; i++ {
 		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "driver_version")
 		if err != nil {
-			return "-"
+			continue
 		}
-		return res
+		queryResult = res
 	}
-	return "-"
+
+	if queryResult != "" {
+		return "-"
+	}
+	return queryResult
 }
 
 func getGpuMemUsage() float64 {

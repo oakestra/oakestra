@@ -1,0 +1,6 @@
+# Refer the docs at https://github.com/hadolint/hadolint?tab=readme-ov-file#configure
+ignored:
+  - DL3008 # Pin versions in apt get install
+  - DL3009 # Delete the apt-get lists after installing something
+  - DL3015 # Avoid additional packages by specifying --no-install-recommends
+  - DL3025 # Use arguments JSON notation for CMD and ENTRYPOINT arguments

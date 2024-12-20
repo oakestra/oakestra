@@ -1,12 +1,14 @@
-FROM python:3.8.5-slim-buster
+FROM python:3.10-slim-buster
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
-RUN mkdir /app
-ADD requirements.txt /app
-WORKDIR /app
-RUN pip install -r requirements.txt
+RUN apt-get update -y && apt-get install -y --no-install-recommends git 
 
-ADD . /app
+RUN mkdir /app
+COPY requirements.txt /app
+WORKDIR /app
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . /app
 
 ENV FLASK_ENV=development
 # TRUE for verbose logging
