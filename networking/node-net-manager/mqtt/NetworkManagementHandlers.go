@@ -49,7 +49,7 @@ func RequestSubnetworkMqttBlocking() (mqttSubnetworkResponse, error) {
 		_ = GetNetMqttClient().PublishToBroker("subnet", string(jsonreq))
 	}()
 
-	// waiting for maximum 10 seconds the mqtt handler to receive a response. Otherwise fail the subnetwork request.
+	// waiting for maximum 10 seconds the mqtt handler to receive a response. Otherwise, fail the subnetwork request.
 	select {
 	case result := <-subnetworkResponseChannel:
 		if result.Address != "" || result.Address_v6 != "" {
