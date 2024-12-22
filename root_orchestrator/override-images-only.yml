@@ -1,0 +1,41 @@
+services:
+  system_manager:
+    image: ghcr.io/oakestra/oakestra/root-system-manager:latest
+    pull_policy: always
+
+  mongo_root:
+    image: mongo:3.6
+    pull_policy: always
+
+  mongo_rootnet:
+    image: mongo:3.6
+    pull_policy: always
+
+  root_service_manager:
+    image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
+    pull_policy: always
+
+  redis:
+    image: redis
+    pull_policy: always
+
+  grafana:
+    image: grafana/grafana
+    pull_policy: always
+
+  loki:
+    image: grafana/loki:2.9.2
+    pull_policy: always
+
+  promtail:
+    image: grafana/promtail:2.9.2
+    pull_policy: always
+    
+  cloud_scheduler:
+    image: ghcr.io/oakestra/oakestra/cloud-scheduler:latest
+    pull_policy: always
+    
+  resource_abstractor:
+    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:latest
+    pull_policy: always
+    

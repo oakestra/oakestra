@@ -80,7 +80,7 @@ func GetUnikernelRuntime() *UnikernelRuntime {
 	return &ukruntime
 }
 
-func (r *UnikernelRuntime) StopUnikernelRuntime() {
+func (r *UnikernelRuntime) Stop() {
 	r.channelLock.Lock()
 	IDs := reflect.ValueOf(r.killQueue).MapKeys()
 	r.channelLock.Unlock()
@@ -201,7 +201,7 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 			logger.InfoLogger().Printf("Unable to create Kernel: %v", err)
 			return nil
 		}
-		
+
 		//defer kimage.Close()
 		defer func() {
 			if err := kimage.Close(); err != nil {

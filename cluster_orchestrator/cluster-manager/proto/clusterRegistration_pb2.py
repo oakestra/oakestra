@@ -19,7 +19,6 @@ DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "clusterRegistration_pb2", globals())
 if _descriptor._USE_C_DESCRIPTORS == False:  # noqa: E712
-
     DESCRIPTOR._options = None
     _CS1MESSAGE._serialized_start = 50  # noqa: F821
     _CS1MESSAGE._serialized_end = 93  # noqa: F821

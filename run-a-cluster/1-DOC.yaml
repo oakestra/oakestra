@@ -10,6 +10,7 @@ services:
 
   dashboard:
     image: ghcr.io/oakestra/dashboard:latest
+    pull_policy: always
     ports:
       - '80:80'
     restart: unless-stopped
@@ -20,6 +21,7 @@ services:
   # System Manager REST API of Root Orchestrator
   system_manager:
     image: ghcr.io/oakestra/oakestra/root-system-manager:latest
+    pull_policy: always
     hostname: system_manager
     container_name: system_manager
     labels:
@@ -54,6 +56,7 @@ services:
   # MongoDB in Root Orchestrator
   mongo_root:
     image: mongo:3.6
+    pull_policy: always
     container_name: mongo
     hostname: mongo
     expose:
@@ -65,6 +68,7 @@ services:
   # cluster-level mongoDB
   mongo_rootnet:
     image: mongo:3.6
+    pull_policy: always
     container_name: mongo_net
     hostname: mongo_net
     labels:
@@ -80,6 +84,7 @@ services:
   # Cluster Manager
   root_service_manager:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
+    pull_policy: always
     container_name: root_service_manager
     hostname: root_service_manager
     labels:
@@ -103,6 +108,7 @@ services:
   # Redis for the Cloud Scheduler
   redis:
     image: redis
+    pull_policy: always
     hostname: redis
     container_name: redis
     expose:
@@ -111,6 +117,7 @@ services:
 
   resource_abstractor:
     image: ghcr.io/oakestra/oakestra/root-resource-abstractor:latest
+    pull_policy: always
     container_name: resource_abstractor
     hostname: resource_abstractor
     labels:
@@ -147,6 +154,7 @@ services:
   # Cloud Scheduler
   cloud_scheduler:
     image: ghcr.io/oakestra/oakestra/cloud-scheduler:latest
+    pull_policy: always
     container_name: cloud_scheduler
     hostname: cloud_scheduler
     labels:
@@ -172,6 +180,7 @@ services:
   # MQTT
   mqtt:
     image: eclipse-mosquitto:1.6
+    pull_policy: always
     hostname: mqtt
     container_name: mqtt
     expose:
@@ -192,6 +201,7 @@ services:
   # cluster-level mongoDB
   mongo_cluster:
     image: mongo:3.6
+    pull_policy: always
     container_name: cluster_mongo
     hostname: cluster_mongo
     expose:
@@ -203,6 +213,7 @@ services:
   # cluster-level mongoDB
   mongo_clusternet:
     image: mongo:3.6
+    pull_policy: always
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
     expose:
@@ -215,6 +226,7 @@ services:
   # Cluster Manager
   cluster_service_manager:
     image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
+    pull_policy: always
     container_name: cluster_service_manager
     hostname: cluster_service_manager
     labels:
@@ -242,6 +254,7 @@ services:
   # Cluster Manager
   cluster_manager:
     image: ghcr.io/oakestra/oakestra/cluster-manager:latest
+    pull_policy: always
     container_name: cluster_manager
     hostname: cluster_manager
     expose:
@@ -280,6 +293,7 @@ services:
   # Cluster Scheduler
   cluster_scheduler:
     image: ghcr.io/oakestra/oakestra/cluster-scheduler:latest
+    pull_policy: always
     container_name: cluster_scheduler
     hostname: cluster_scheduler
     labels:
@@ -303,6 +317,7 @@ services:
   # Redis for the Cluster Scheduler as Job Queue
   cluster_redis:
     image: redis
+    pull_policy: always
     hostname: cluster_redis
     container_name: cluster_redis
     expose:
@@ -312,6 +327,7 @@ services:
 
   prometheus:
     image: prom/prometheus
+    pull_policy: always
     container_name: prometheus
     hostname: prometheus
     volumes:
@@ -325,6 +341,7 @@ services:
   # Observability Stack (Promtail, Loki, Grafana)
   grafana:
     image: grafana/grafana
+    pull_policy: always
     hostname: grafana
     container_name: grafana
     ports:
@@ -338,6 +355,7 @@ services:
 
   loki:
     container_name: loki
+    pull_policy: always
     image: grafana/loki:2.9.2
     ports:
       - 3100:3100
@@ -350,6 +368,7 @@ services:
 
   promtail:
     image: grafana/promtail:2.9.2
+    pull_policy: always
     container_name: promtail
     volumes:
       - ./config/promtail.yml:/etc/promtail/config.yml

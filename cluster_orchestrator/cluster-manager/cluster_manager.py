@@ -84,7 +84,6 @@ def deploy_task(system_job_id, instance_number):
 
 @app.route("/api/result/<system_job_id>/<instance_number>", methods=["POST"])
 def get_scheduler_result_and_propagate_to_edge(system_job_id: str, instance_number: str) -> str:
-    # print(request)
     app.logger.info("Incoming Request /api/result - received cluster_scheduler result")
     data = request.json  # get POST body
     app.logger.info(data)
@@ -251,7 +250,6 @@ def register_with_system_manager():
 
 
 if __name__ == "__main__":
-
     start_http_server(10001)  # start prometheus server
     import eventlet
 
