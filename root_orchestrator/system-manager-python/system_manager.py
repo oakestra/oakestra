@@ -4,11 +4,11 @@ import threading
 from concurrent import futures
 from datetime import timedelta
 from pathlib import Path
-from secrets import token_hex
 
 import grpc
 from blueprints import blueprints
 from bson import json_util
+from ext_requests.jwt_generator_requests import get_public_key
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import net_register_cluster
 from ext_requests.user_db import create_admin
@@ -41,7 +41,8 @@ app.config["API_TITLE"] = "Oakestra root api"
 app.config["API_VERSION"] = "v1"
 app.config["OPENAPI_URL_PREFIX"] = "/docs"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-app.config["JWT_SECRET_KEY"] = token_hex(32)
+app.config["JWT_ALGORITHM"] = "RS256"
+app.config["JWT_PUBLIC_KEY"] = get_public_key()
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=10)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
 app.config["RESET_TOKEN_EXPIRES"] = timedelta(hours=3)  # for password reset
