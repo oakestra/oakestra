@@ -58,14 +58,7 @@ install: check-arch check-systemd
 		sudo cp build/nodeengine.service /etc/systemd/system/nodeengine.service; \
 	fi
 	sudo systemctl daemon-reload
-	sudo chmoiner-toolkit-keyring.gpg
-	curl -s -L https://nvidia.github.io/libnvidia-container/$(DISTRIBUTION)/libnvidia-container.list | \
-		sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-		sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-	sudo apt-get update
-	sudo apt install -y libnvidia-container1 libnvidia-container-tools
-	sudo apt-get install -y nvidia-docker2
-	@echo "NVIDIA GPU support configured successfully" d 755 /bin/$(NODE_ENGINE)
+	sudo chmod 755 /bin/$(NODE_ENGINE)
 	sudo chmod 755 /bin/$(NODE_ENGINED)
 	@echo "Done, installation successful" 
 
