@@ -1,14 +1,16 @@
 FROM python:3.10-slim-buster
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
-# The greenlet pip package requires gcc & g++ to work properly.
-RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ git
+WORKDIR /app
 
-COPY requirements.txt /
+# The greenlet pip package requires gcc & g++ to work properly. Cryptography requires libffi.
+RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ git libffi-dev
 
-RUN pip install -r requirements.txt --no-cache-dir && rm /requirements.txt
+COPY requirements.txt .
 
-COPY . /
+RUN pip install -r requirements.txt --no-cache-dir && rm requirements.txt
+
+COPY . .
 
 # TRUE for verbose logging
 ENV FLASK_DEBUG=TRUE
