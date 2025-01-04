@@ -24,6 +24,7 @@ from prometheus_client import start_http_server
 from proto.clusterRegistration_pb2 import CS1Message, CS2Message, KeyValue, SC1Message, SC2Message
 from proto.clusterRegistration_pb2_grpc import register_clusterStub
 from system_manager_requests import re_deploy_dead_services_routine, send_aggregated_info_to_sm
+from monitoring.requests import monitoring_manager_notify_deployment
 
 MY_PORT = os.environ.get("MY_PORT")
 
@@ -100,6 +101,9 @@ def get_scheduler_result_and_propagate_to_edge(system_job_id: str, instance_numb
 
         # Inform network plugin about the deployment
         network_notify_deployment(str(job["system_job_id"]), job)
+
+        # Inform the monitoring manager about the deployment
+        monitoring_manager_notify_deployment(job, instance_number)
 
         # Publish job
         mqtt_publish_edge_deploy(resulting_node_id, job, instance_number)
@@ -250,10 +254,27 @@ def register_with_system_manager():
 
 
 if __name__ == "__main__":
-    start_http_server(10001)  # start prometheus server
     import eventlet
-
-    register_with_system_manager()  # register with system manager using gRPC
-    eventlet.wsgi.server(
-        eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger
-    )  # see README for logging notes
+    
+    if not os.environ.get('WERKZEUG_RUN_MAIN'):
+        # Only start these once, not in the reloader process
+        start_http_server(10001)  # start prometheus server
+        register_with_system_manager()  # register with system manager using gRPC
+    
+    if os.environ.get('FLASK_DEBUG', '0') == '1':
+        # Development mode with hot reloading
+        socketioserver.run(
+            app,
+            host="::",
+            port=int(MY_PORT),
+            debug=True,
+            use_reloader=True,
+            log=my_logger
+        )
+    else:
+        # Production mode using eventlet
+        eventlet.wsgi.server(
+            eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6),
+            app,
+            log=my_logger
+        )
