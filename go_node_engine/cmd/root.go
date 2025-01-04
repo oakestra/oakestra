@@ -69,7 +69,7 @@ func nodeEngineDaemonManager() error {
 	if _, err := os.Stat(CONF_FILE); err != nil {
 		err := defaultConfig()
 		if err != nil {
-			return err
+			return fmt.Errorf("error creating default config file: %v", err)
 		}
 	}
 
@@ -77,14 +77,14 @@ func nodeEngineDaemonManager() error {
 		// read cluster configuration if not present or new value set
 		err := configCluster(clusterAddress)
 		if err != nil {
-			return err
+			return fmt.Errorf("error configuring cluster: %v", err)
 		}
 	}
 
 	if logDirectory != config.DEFAULT_LOG_DIR {
 		err := configLogs(logDirectory)
 		if err != nil {
-			return err
+			return fmt.Errorf("error configuring logs: %v", err)
 		}
 	}
 
@@ -92,7 +92,7 @@ func nodeEngineDaemonManager() error {
 		// set Mqtt auth parameters
 		err := setMqttAuth()
 		if err != nil {
-			return err
+			return fmt.Errorf("error setting Mqtt auth parameters: %v", err)
 		}
 	}
 
@@ -100,7 +100,7 @@ func nodeEngineDaemonManager() error {
 	case config.DEFAULT_CNI:
 		err := setNetwork(config.DEFAULT_CNI)
 		if err != nil {
-			return err
+			return fmt.Errorf("error setting network: %v", err)
 		}
 		// try to start the netmanager service if present
 		cmd := exec.Command("systemctl", "start", "netmanager")
@@ -108,13 +108,13 @@ func nodeEngineDaemonManager() error {
 	case DISABLE_NETWORK:
 		err := setNetwork(config.DEFAULT_CNI)
 		if err != nil {
-			return err
+			return fmt.Errorf("error setting network: %v", err)
 		}
 	default:
 		if strings.Contains(overlayNetwork, "custom:") {
 			err := setNetwork(overlayNetwork)
 			if err != nil {
-				return err
+				return fmt.Errorf("error setting network: %v", err)
 			}
 		} else {
 			log.Fatalf("Invalid overlay network: %s \n Use NodeEngine -h to check the available options. \n", overlayNetwork)
@@ -124,7 +124,7 @@ func nodeEngineDaemonManager() error {
 	// start the node engine daemon systemctl daemon
 	cmd := exec.Command("systemctl", "start", "nodeengine")
 	if err := cmd.Run(); err != nil {
-		return err
+		return fmt.Errorf("error starting node engine daemon: %v", err)
 	}
 
 	fmt.Println("NodeEngine started  🟢")
@@ -138,8 +138,7 @@ func nodeEngineDaemonManager() error {
 func attach() error {
 	logFile, err := os.Open("/var/log/oakestra/nodeengine.log")
 	if err != nil {
-		fmt.Println("Error opening log file, is the NodeEngine running? Use 'NodeEngine status' to check.")
-		return err
+		return fmt.Errorf("failed to open node engine log file: %v. Is the NodeEngine running? Use 'NodeEngine status' to check", err)
 	}
 	defer func() {
 		err := logFile.Close()
@@ -151,7 +150,7 @@ func attach() error {
 	// Get the file size to start reading from the end
 	fileInfo, err := logFile.Stat()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get log file information: %v", err)
 	}
 
 	// Track the current position in the file
@@ -172,13 +171,13 @@ func attach() error {
 		// Seek to the end of the file
 		_, err = logFile.Seek(offset, io.SeekStart)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to seek in log file at offset %d: %v", offset, err)
 		}
 
 		// Read new content from the file
 		data, err := io.ReadAll(logFile)
 		if err != nil && err != io.EOF {
-			return err
+			return fmt.Errorf("failed to read log file content: %v", err)
 		}
 
 		fmt.Print(string(data))
