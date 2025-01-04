@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package monitoring;
+
+// Service definition
+service MonitoringService {
+  rpc NotifyDeployment (MonitoringRequest) returns (MonitoringResponse) {}
+}
+
+message MonitoringRequest {
+  string job_name = 1;
+  string job_hash = 2;
+  int32 instance_number = 3;
+  ResourceInfo resource = 4;
+}
+
+message ResourceInfo {
+  string cpu = 1;
+  string memory = 2;
+  string gpu = 3;
+  string disk = 4;
+  NetworkInfo network = 5;
+}
+
+message NetworkInfo {
+  string bandwidth_in = 1;
+  string bandwidth_out = 2;
+}
+
+message MonitoringResponse {
+  bool acknowledged = 1;
+  string message = 2;
+} 

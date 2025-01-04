@@ -5,9 +5,12 @@ from mongodb_client import (
     mongo_remove_job_instance,
 )
 from mqtt_client import mqtt_publish_edge_delete
+import hashlib
+import time
 
 
 def deploy_service(job, system_job_id, instance_number):
+    job["job_hash"] = generate_unique_sha1_hash(job["job_name"])
     job_obj = mongo_create_new_job_instance(job, system_job_id, int(instance_number))
     scheduler_request_deploy(job_obj, system_job_id, instance_number)
     return "ok"
@@ -35,3 +38,29 @@ def delete_service(system_job_id, instance_number, erase=True):
                 break
 
     return "ok"
+
+
+def generate_unique_sha1_hash(input_string):
+    """
+    Generate a SHA1 hash from a timestamp and input string.
+    
+    Args:
+        input_string (str): String to be included in the hash
+        
+    Returns:
+        str: Hexadecimal representation of the SHA1 hash
+    """
+    timestamp = int(time.time())
+    # Combine timestamp and string
+    combined = f"{timestamp}{input_string}"
+    
+    # Create SHA1 hash object
+    sha1 = hashlib.sha1()
+    
+    # Encode and hash the combined string
+    sha1.update(combined.encode('utf-8'))
+    
+    # Return hexadecimal representation of the hash
+    return sha1.hexdigest()
+
+
