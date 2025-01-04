@@ -3,12 +3,11 @@ LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends git 
 
-RUN mkdir /app
-COPY requirements.txt /app
 WORKDIR /app
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . /app
+COPY . .
 
 ENV FLASK_ENV=development
 # TRUE for verbose logging
