@@ -156,7 +156,7 @@ func configCluster(address string) error {
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get cluster configuration: %v", err)
 	}
 
 	clusterConf.ClusterAddress = address
@@ -169,7 +169,7 @@ func configLogs(path string) error {
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get logs configuration: %v", err)
 	}
 
 	clusterConf.AppLogs = path
@@ -182,7 +182,7 @@ func showVirtualization() error {
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get virtualization configuration: %v", err)
 	}
 
 	virts := []string{}
@@ -215,7 +215,7 @@ func setUnikernel(trigger string) error {
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get virtualization configuration: %v", err)
 	}
 
 	updated := false
@@ -245,7 +245,7 @@ func showAddons() error {
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get addons configuration: %v", err)
 	}
 
 	addons := []string{}
@@ -345,7 +345,7 @@ func setNetwork(cniName string) error {
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get cluster configuration: %v", err)
 	}
 
 	clusterConf.OverlayNetwork = cniName
@@ -358,7 +358,7 @@ func setMqttAuth() error {
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get cluster configuration: %v", err)
 	}
 
 	if certFile != "" {

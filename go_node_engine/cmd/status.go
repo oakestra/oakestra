@@ -27,7 +27,7 @@ func statusNodeEngine() error {
 	configManager := config.GetConfFileManager()
 	confFile, err := configManager.Get()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get node engine configuration: %v", err)
 	}
 
 	// Define the command and arguments
