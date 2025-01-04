@@ -21,6 +21,7 @@ type registerRequest struct {
 type connectNetworkRequest struct {
 	Pid            int    `json:"pid"`
 	Servicename    string `json:"serviceName"`
+	JobHash        string `json:"jobHash"`
 	Instancenumber int    `json:"instanceNumber"`
 	PortMappings   string `json:"portMappings"`
 }
@@ -28,6 +29,7 @@ type connectNetworkRequest struct {
 type connectNetworkRequestUnikernel struct {
 	Pid            int    `json:"pid"`
 	Servicename    string `json:"serviceName"`
+	JobHash        string `json:"jobHash"`
 	Instancenumber int    `json:"instanceNumber"`
 	PortMappings   string `json:"portMappings"`
 }
@@ -39,7 +41,7 @@ var httpClient = &http.Client{
 }
 
 // AttachNetworkToTask attaches a network to a task
-func AttachNetworkToTask(pid int, servicename string, instance int, portMappings string) error {
+func AttachNetworkToTask(pid int, servicename string, jobHash string, instance int, portMappings string) error {
 
 	ongoingDeployment.Lock()
 	defer ongoingDeployment.Unlock()
@@ -47,6 +49,7 @@ func AttachNetworkToTask(pid int, servicename string, instance int, portMappings
 	request := connectNetworkRequest{
 		Pid:            pid,
 		Servicename:    servicename,
+		JobHash:        jobHash,
 		Instancenumber: instance,
 		PortMappings:   portMappings,
 	}
@@ -64,7 +67,7 @@ func AttachNetworkToTask(pid int, servicename string, instance int, portMappings
 		return err
 	}
 	if response.StatusCode != 200 {
-		return errors.New(fmt.Sprintf("NetManager deploy failed, status code: %d", response.StatusCode))
+		return fmt.Errorf("NetManager deploy failed, status code: %d", response.StatusCode)
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ package model
 type Service struct {
 	JobID           string   `json:"_id"`
 	Sname           string   `json:"job_name"`
+	JobHash         string   `json:"job_hash"`
 	Instance        int      `json:"instance_number"`
 	Image           string   `json:"image"`
 	Commands        []string `json:"cmd"`

@@ -289,7 +289,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// if Overlay mode is active then attach network to the task
 	if model.GetNodeInfo().Overlay {
 		taskpid := int(task.Pid())
-		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports)
+		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.JobHash, service.Instance, service.Ports)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
 			revert(err)
