@@ -13,7 +13,7 @@ flask_cors
 PyPi
 flask_jwt_extended
 flask_restful
-pymongo~=4.1.1
+pymongo~=4.10.1
 werkzeug==2.0.3
 MarkupSafe~=2.1.1
 flask_swagger_ui
