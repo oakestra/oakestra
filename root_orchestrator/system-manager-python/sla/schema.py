@@ -143,6 +143,27 @@ sla_schema = {
                                         ],
                                     },
                                 },
+                                "monitoring": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "output_metric_name": {"type": "string"},
+                                            "formula": {"type": "string"},
+                                            "description": {"type": "string"},
+                                            "states": {"type": "array", "items": {"type": "string"}},
+                                            "goal": {"type": "string"},
+                                            "unit": {"type": "string"},
+                                        },
+                                        "required": [
+                                            "output_metric_name",
+                                            "formula",
+                                            "description",
+                                            "goal",
+                                            "unit",
+                                        ],
+                                    },
+                                },
                             },
                             "required": [
                                 "microservice_name",
