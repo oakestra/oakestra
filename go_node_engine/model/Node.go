@@ -43,10 +43,12 @@ type Node struct {
 	Port            string            `json:"port"`
 	SystemInfo      map[string]string `json:"system_info"`
 	CpuUsage        float64           `json:"cpu"`
+	CpuMaxFrequency float64           `json:"cpu_max_frequency"`
 	CpuCores        int               `json:"free_cores"`
 	CpuArch         string            `json:"architecture"`
 	MemoryUsed      float64           `json:"memory"`
 	MemoryMB        int               `json:"memory_free_in_MB"`
+	MemoryTotalMB   int               `json:"memory_total_in_MB"`
 	DiskInfo        map[string]string `json:"disk_info"`
 	NetworkInfo     map[string]string `json:"network_info"`
 	GpuDriver       string            `json:"gpu_driver"`
@@ -74,7 +76,9 @@ func GetNodeInfo() *Node {
 			Host:            getHostname(),
 			SystemInfo:      getSystemInfo(),
 			CpuCores:        getCpuCores(),
+			CpuMaxFrequency: getMaximumCpuFrequency(),
 			CpuArch:         runtime.GOARCH,
+			MemoryTotalMB:   getMemoryTotal(),
 			Port:            getPort(),
 			Technology:      make([]RuntimeType, 0),
 			SupportedAddons: make([]AddonType, 0),
@@ -185,6 +189,14 @@ func getSystemInfo() map[string]string {
 	return sysInfo
 }
 
+func getMaximumCpuFrequency() float64 {
+	cpu, err := cpu.Info()
+	if err != nil {
+		return 0
+	}
+	return cpu[0].Mhz
+}
+
 func getCpuCores() int {
 	cpu, err := cpu.Counts(true)
 	if err != nil {
@@ -218,6 +230,15 @@ func getMemoryUsage() float64 {
 		return 100
 	}
 	return mem.UsedPercent
+}
+
+func getMemoryTotal() int {
+	mem, err := mem.VirtualMemory()
+	if err != nil {
+		logger.ErrorLogger().Printf("Error: %s", err.Error())
+		return 0
+	}
+	return int(mem.Total >> 20)
 }
 
 func getDiskinfo() map[string]string {
