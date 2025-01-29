@@ -1,0 +1,26 @@
+name: "AWX Deployment Trigger"
+description: "Triggers a deployment on Ansible AWX and waits for the result"
+
+inputs:
+  AWX_URL:
+    description: "The URL for the Ansible AWX instance"
+    required: true
+  AWX_TOKEN:
+    description: "The API token for authenticating with AWX"
+    required: true
+  AWX_TEMPLATE_ID:
+    description: "The Job Template ID to trigger in AWX"
+    required: true
+  PR_USER:
+    description: "The user who opened the PR that triggered the deployment"
+    required: true
+  PR_BRANCH:
+    description: "The branch of PR that triggered the deployment"
+    required: true
+  PR_COMMIT:
+    description: "The commit SHA of the PR that triggered the deployment"
+    required: true
+
+runs:
+  using: "node16"
+  main: "index.js"

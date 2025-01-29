@@ -12,7 +12,7 @@ Oakestra is build from the ground up to support computation in a flexible way at
 
 🌐 Read more about the project at: [oakestra.io](http://oakestra.io)
 
-📚 Check out the project wiki at: [oakestra.io/docs](http://oakestra.io/docs)
+📚 Check out the project wiki at: [oakestra.io/docs](https://www.oakestra.io/docs/getting-started/welcome-to-oakestra-docs/)
 
 ---
 
@@ -49,7 +49,7 @@ Worker:
 
 Before being able to deploy your first application, we must create a fully functional Oakestra Root 👑, to that we attach the clusters 🪵, and to each cluster we attach at least one worker node 🍃.
 
-Check out the [GetStarted Guide](http://oakestra.io/docs/getstarted/get-started-cluster/).
+Check out the [GetStarted Guide](https://www.oakestra.io/docs/getting-started/oak-environment/create-your-first-oakestra-orchestrator/).
 
 
 # ⚒️ Build Instructions
