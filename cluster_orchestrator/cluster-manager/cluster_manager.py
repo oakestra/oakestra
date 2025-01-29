@@ -103,7 +103,7 @@ def get_scheduler_result_and_propagate_to_edge(system_job_id: str, instance_numb
         network_notify_deployment(str(job["system_job_id"]), job)
 
         # Inform the monitoring manager about the deployment
-        monitoring_manager_notify_deployment(job, instance_number)
+        monitoring_manager_notify_deployment(job, instance_number, data.get("node"))
 
         # Publish job
         mqtt_publish_edge_deploy(resulting_node_id, job, instance_number)

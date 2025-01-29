@@ -5,6 +5,7 @@ from mongodb_client import (
     mongo_remove_job_instance,
 )
 from mqtt_client import mqtt_publish_edge_delete
+from monitoring.requests import monitoring_manager_notify_deletion
 import hashlib
 import time
 
@@ -32,6 +33,7 @@ def delete_service(system_job_id, instance_number, erase=True):
                     instance["instance_number"],
                     job.get("virtualization", "docker"),
                 )
+                monitoring_manager_notify_deletion(job, instance["instance_number"])
             if erase:
                 mongo_remove_job_instance(system_job_id, instance["instance_number"])
             if int(instance_number) != -1:
