@@ -31,7 +31,7 @@ services:
       
   # cluster-level mongoDB
   mongo_cluster:
-    image: mongo:3.6
+    image: mongo:8.0
     container_name: cluster_mongo
     hostname: cluster_mongo
     ports:
@@ -42,7 +42,7 @@ services:
 
   # cluster-level mongoDB
   mongo_clusternet:
-    image: mongo:3.6
+    image: mongo:8.0
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
     ports:

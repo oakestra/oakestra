@@ -50,10 +50,12 @@ services:
 
   # MongoDB in Root Orchestrator
   mongo_root:
-    image: mongo:3.6
+    image: mongo:8.0
     pull_policy: always
     container_name: mongo
     hostname: mongo
+    ports:
+      - "10007:10007"
     expose:
       - "10007"
     volumes:
@@ -62,12 +64,14 @@ services:
 
   # cluster-level mongoDB
   mongo_rootnet:
-    image: mongo:3.6
+    image: mongo:8.0
     pull_policy: always
     container_name: mongo_net
     hostname: mongo_net
     labels:
       logging: "promtail"
+    ports:
+      - "10008:10008"
     expose:
       - "10008"
     volumes:
@@ -180,10 +184,12 @@ services:
 
   # cluster-level mongoDB
   mongo_cluster:
-    image: mongo:3.6
+    image: mongo:8.0
     pull_policy: always
     container_name: cluster_mongo
     hostname: cluster_mongo
+    ports:
+      - "10107:10107"
     expose:
       - "10107"
     volumes:
@@ -192,10 +198,12 @@ services:
 
   # cluster-level mongoDB
   mongo_clusternet:
-    image: mongo:3.6
+    image: mongo:8.0
     pull_policy: always
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
+    ports:
+      - "10108:10108"
     expose:
       - "10108"
     volumes:

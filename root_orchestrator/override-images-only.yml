@@ -4,11 +4,11 @@ services:
     pull_policy: always
 
   mongo_root:
-    image: mongo:3.6
+    image: mongo:8.0
     pull_policy: always
 
   mongo_rootnet:
-    image: mongo:3.6
+    image: mongo:8.0
     pull_policy: always
 
   root_service_manager:

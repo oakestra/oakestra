@@ -34,7 +34,7 @@ services:
 
   # MongoDB in Root Orchestrator
   mongo_root:
-    image: mongo:3.6
+    image: mongo:8.0
     container_name: mongo
     hostname: mongo
     ports:
@@ -47,7 +47,7 @@ services:
 
   # root-level mongoDB
   mongo_rootnet:
-    image: mongo:3.6
+    image: mongo:8.0
     container_name: mongo_net
     hostname: mongo_net
     ports:
