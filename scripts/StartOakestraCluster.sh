@@ -146,7 +146,7 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
     for element in $OVERRIDE_FILES
     do
         echo "Download override: $element"
-        wget -c https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/$element 2> /dev/null
+        wget -c https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/cluster_orchestrator/$element 2> /dev/null
         OAK_OVERRIDES="${OAK_OVERRIDES}-f ${element} " 
     done
     IFS= 
