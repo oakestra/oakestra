@@ -2,10 +2,11 @@ FROM python:3.10-slim-buster
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
 COPY requirements.txt /
+COPY constraints.txt /
 
 RUN apt-get update && apt-get install -y curl
 RUN apt-get update -y && apt-get install apt-file -y && apt-file update && apt-get install -y python3-dev build-essential
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 
 COPY . /
 

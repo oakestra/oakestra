@@ -5,8 +5,9 @@ LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ git
 
 COPY requirements.txt /
+COPY constraints.txt /
 
-RUN pip install -r requirements.txt --no-cache-dir && rm /requirements.txt
+RUN pip install -r requirements.txt -c constraints.txt --no-cache-dir && rm /requirements.txt
 
 COPY . /
 
