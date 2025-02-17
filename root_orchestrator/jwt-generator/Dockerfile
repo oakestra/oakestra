@@ -1,4 +1,4 @@
-FROM python:3.10-slim-buster
+FROM python:3.11-slim-buster
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
 # Cryptography requires libffi
