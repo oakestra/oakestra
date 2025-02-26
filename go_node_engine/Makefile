@@ -6,9 +6,11 @@ ENGINE_SRC := NodeEngine.go
 ENGINED_SRC := pkg/nodeengined.go
 ARCH ?= amd64
 
-.PHONY: all arm64 amd64 clean install check-arch check-systemd run start stop configure-gpu
+.PHONY: all build arm64 amd64 clean install check-arch check-systemd run start stop configure-gpu
 
-all: amd64
+all: build
+
+build: arm64 amd64
 
 arm64:
 	GOOS=linux GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o $(NODE_ENGINE)_arm64 $(ENGINE_SRC)

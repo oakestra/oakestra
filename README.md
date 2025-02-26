@@ -118,9 +118,9 @@ The following ports must be exposed:
 
 Compile and install the binary with:
 ```
-cd go_node_engine/build
-./build.sh
-./install.sh $(dpkg --print-architecture)
+cd go_node_engine/
+make build
+make install
 ```
 
 Then configure and install the [NetManager](github.com/oakestra/oakestra-net) and perform the startup as usual. 
