@@ -27,6 +27,7 @@ services:
       - cloud_scheduler
       - resource_abstractor
       - root_service_manager
+      - jwt_generator
     environment:
       - CLOUD_MONGO_URL=mongo
       - CLOUD_MONGO_PORT=10007
@@ -36,11 +37,13 @@ services:
       - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10099
+      - JWT_GENERATOR_URL=jwt_generator
+      - JWT_GENERATOR_PORT=10011
     logging: *default-logging
 
   # MongoDB in Root Orchestrator
   mongo_root:
-    image: mongo:3.6
+    image: mongo:8.0
     container_name: mongo
     hostname: mongo
     ports:
@@ -53,7 +56,7 @@ services:
 
   # cluster-level mongoDB
   mongo_rootnet:
-    image: mongo:3.6
+    image: mongo:8.0
     container_name: mongo_net
     hostname: mongo_net
     ports:
@@ -186,8 +189,25 @@ services:
       - mongo_root
     logging: *default-logging
 
+  jwt_generator:
+    image: jwt_generator
+    build: jwt-generator/
+    container_name: jwt_generator
+    hostname: jwt_generator
+    expose:
+      - "10011"
+    ports:
+      - "10011:10011"
+    environment:
+      - JWT_GENERATOR_PORT=10011
+    logging: *default-logging
+
 volumes:
   mongodb_data:
     driver: local
   mongodb_net_data:
     driver: local
+
+networks:
+  default:
+    name: oakestra

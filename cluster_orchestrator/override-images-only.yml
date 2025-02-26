@@ -4,7 +4,7 @@ services:
     pull_policy: always
 
   mongo_cluster:
-    image: mongo:3.6
+    image: mongo:8.0
     pull_policy: always
 
   cluster_service_manager:

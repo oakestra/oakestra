@@ -132,7 +132,7 @@ cd ~/oakestra/cluster_orchestrator 2> /dev/null
 
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/cluster_orchestrator/docker-compose.yml > cluster-orchestrator.yml
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/cluster_orchestrator/override-images-only.yml> override-cluster-images-only.yml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/cluster_orchestrator/override-images-only.yml > override-cluster-images-only.yml
 
 chmod +x downloadConfigFiles.sh
 ./downloadConfigFiles.sh cluster_orchestrator $OAKESTRA_BRANCH
