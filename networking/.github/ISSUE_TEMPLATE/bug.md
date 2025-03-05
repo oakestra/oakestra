@@ -10,7 +10,7 @@ assignees: ''
 ## Short
  Short description of the bug you noticed.
 ## Proposal 
-Deeper description of the bug.
+Deeper description of the bug. The PR resolving this issue MUST tag the issue with a [keyword](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/using-keywords-in-issues-and-pull-requests). E.g., `fixes #<issue number>`
 ## Solution 
 Eventually, propose a solution.
 
