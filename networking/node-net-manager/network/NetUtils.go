@@ -105,8 +105,8 @@ func defaultRouteNames() ([]string, error) {
 		routeNames = append(routeNames, defNetlink.Attrs().Name)
 	}
 
-	if len(routes) == 0 {
-		return nil, fmt.Errorf("error getting default netlink")
+	if len(routeNames) == 0 {
+		return nil, fmt.Errorf("error getting default netlinks")
 	}
 
 	return routeNames, nil
