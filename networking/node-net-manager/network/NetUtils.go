@@ -83,7 +83,7 @@ func NextIPv6(ip net.IP, inc uint) net.IP {
 	return ret
 }
 
-// get the default route for the current namespace.
+// get the default route names for the current namespace
 func defaultRouteNames() ([]string, error) {
 	defaultRouteFilter := &netlink.Route{Dst: nil}
 	routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, defaultRouteFilter, netlink.RT_FILTER_DST)
