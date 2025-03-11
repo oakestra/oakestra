@@ -31,10 +31,10 @@ type Addon struct {
 }
 
 type Virtualization struct {
-	Name    string   `json:"virutalizaiton_name"`
-	Runtime string   `json:"virutalizaiton_runtime"`
-	Active  bool     `json:"virutalizaiton_active"`
-	Config  []string `json:"virutalizaiton_config"`
+	Name    string   `json:"virtualization_name"`
+	Runtime string   `json:"virtualization_runtime"`
+	Active  bool     `json:"virtualization_active"`
+	Config  []string `json:"virtualization_config"`
 }
 
 type ConfFileManager interface {
