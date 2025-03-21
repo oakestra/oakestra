@@ -7,7 +7,6 @@ import (
 	"log"
 	"math/big"
 	"net"
-	"slices"
 	"time"
 
 	"github.com/vishvananda/netlink"
@@ -20,7 +19,7 @@ func GetLocalIPandIface() (string, string) {
 		log.Printf("not net Interfaces found")
 		panic(err)
 	}
-	defaultIfceNames, err := defaultRouteNames()
+	defaultIfce, err := defaultRoute()
 	if err != nil {
 		log.Printf("not default Interfaces found")
 		panic(err)
@@ -33,7 +32,7 @@ func GetLocalIPandIface() (string, string) {
 		}
 		for _, address := range addrs {
 			// check the address type and if it is not a loopback the display it
-			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && slices.Contains(defaultIfceNames, iface.Name) {
+			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && iface.Name == (*defaultIfce).Attrs().Name {
 				// TODO DISCUSS: Should we first check for IPv6 on the interface first and fallback to v4?
 				if ipnet.IP.To4() != nil {
 					log.Println("Local Interface in use: ", iface.Name, " with addr ", ipnet.IP.String())
@@ -83,33 +82,28 @@ func NextIPv6(ip net.IP, inc uint) net.IP {
 	return ret
 }
 
-// get the default route names for the current namespace
-func defaultRouteNames() ([]string, error) {
+// get the default route for the current namespace.
+func defaultRoute() (*netlink.Link, error) {
 	defaultRouteFilter := &netlink.Route{Dst: nil}
 	routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, defaultRouteFilter, netlink.RT_FILTER_DST)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving default route %w", err)
+	}
+	if n := len(routes); n > 1 {
+		return nil, fmt.Errorf("found more than one default net routes (%d)", n)
 	}
 
 	if len(routes) == 0 {
 		return nil, nil
 	}
 
-	var routeNames []string
-	for _, r := range routes {
-		defNetlinkIdx := r.LinkIndex
-		defNetlink, err := netlink.LinkByIndex(defNetlinkIdx)
-		if err != nil {
-			continue
-		}
-		routeNames = append(routeNames, defNetlink.Attrs().Name)
+	defNetlinkIdx := routes[0].LinkIndex
+	defNetlink, err := netlink.LinkByIndex(defNetlinkIdx)
+	if err != nil {
+		return nil, fmt.Errorf("getting default netlink with index %d: %w", defNetlinkIdx, err)
 	}
 
-	if len(routeNames) == 0 {
-		return nil, fmt.Errorf("error getting default netlinks")
-	}
-
-	return routeNames, nil
+	return &defNetlink, nil
 }
 
 // Get preferred outbound ip of this machine
