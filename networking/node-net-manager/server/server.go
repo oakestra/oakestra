@@ -38,6 +38,7 @@ type netConfiguration struct {
 	NodePublicPort    string
 	ClusterUrl        string
 	ClusterMqttPort   string
+	DefaultInterface  string
 	Debug             bool
 	MqttCert          string
 	MqttKey           string
