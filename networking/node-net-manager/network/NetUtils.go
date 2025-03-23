@@ -1,7 +1,7 @@
 package network
 
 import (
-	"NetManager/server"
+	"NetManager/model"
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
@@ -96,7 +96,7 @@ func defaultRoute() (*netlink.Link, error) {
 	}
 
 	if n := len(routes); n > 1 {
-		if server.Configuration.DefaultInterface == "" {
+		if model.NetConfig.DefaultInterface == "" {
 			return nil, fmt.Errorf("found more than one default net routes (%d). Specify the required default interface on startup with the -i flag", n)
 		}
 		for _, r := range routes {
@@ -105,11 +105,11 @@ func defaultRoute() (*netlink.Link, error) {
 			if err != nil {
 				continue
 			}
-			if defNetlink.Attrs().Name == server.Configuration.DefaultInterface {
+			if defNetlink.Attrs().Name == model.NetConfig.DefaultInterface {
 				return &defNetlink, nil
 			}
 		}
-		return nil, fmt.Errorf("getting default interface with name %s", server.Configuration.DefaultInterface)
+		return nil, fmt.Errorf("getting default interface with name %s", model.NetConfig.DefaultInterface)
 	}
 
 	defNetlinkIdx := routes[0].LinkIndex

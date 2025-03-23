@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"NetManager/logger"
+	"NetManager/model"
 	"NetManager/network"
 	"log"
 	"time"
@@ -40,18 +41,18 @@ func init() {
 
 func startNetManager() error {
 
-	err := gonfig.GetConf(cfgFile, &server.Configuration)
+	err := gonfig.GetConf(cfgFile, &model.NetConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if server.Configuration.Debug {
+	if model.NetConfig.Debug {
 		logger.SetDebugMode()
 	}
 
-	server.Configuration.DefaultInterface = defaultIface
+	model.NetConfig.DefaultInterface = defaultIface
 
-	log.Print(server.Configuration)
+	log.Print(model.NetConfig)
 
 	network.IptableFlushAll()
 
