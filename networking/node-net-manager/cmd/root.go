@@ -50,7 +50,10 @@ func startNetManager() error {
 		logger.SetDebugMode()
 	}
 
-	model.NetConfig.DefaultInterface = defaultIface
+	// use cli argument if available
+	if defaultIface != "" {
+		model.NetConfig.DefaultInterface = defaultIface
+	}
 
 	log.Print(model.NetConfig)
 
