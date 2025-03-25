@@ -22,7 +22,7 @@ func GetLocalIPandIface() (string, string) {
 	}
 	defaultIfce, err := defaultRoute()
 	if err != nil {
-		log.Printf("no default Interfaces found")
+		log.Printf("could not configure default interface")
 		panic(err)
 	}
 
