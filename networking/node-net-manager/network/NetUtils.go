@@ -118,6 +118,10 @@ func defaultRoute() (*netlink.Link, error) {
 		return nil, fmt.Errorf("getting default netlink with index %d: %w", defNetlinkIdx, err)
 	}
 
+	if model.NetConfig.DefaultInterface != "" && defNetlink.Attrs().Name != model.NetConfig.DefaultInterface {
+		return nil, fmt.Errorf("default interface manually configured to %s, but only %s found", model.NetConfig.DefaultInterface, defNetlink.Attrs().Name)
+	}
+
 	return &defNetlink, nil
 }
 
