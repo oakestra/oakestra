@@ -24,6 +24,7 @@ type RuntimeType string
 const (
 	CONTAINER_RUNTIME RuntimeType = "docker"
 	UNIKERNEL_RUNTIME RuntimeType = "unikernel"
+	CROSVM_RUNTIME    RuntimeType = "crosvm"
 )
 
 // AddonType is the type of addon that the node supports

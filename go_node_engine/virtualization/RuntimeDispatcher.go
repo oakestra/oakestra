@@ -28,6 +28,7 @@ var runtimeMap = map[model.RuntimeType]RuntimeGetter{}
 func init() {
 	runtimeMap[model.CONTAINER_RUNTIME] = RuntimeGetter(GetContainerdRuntime)
 	runtimeMap[model.UNIKERNEL_RUNTIME] = RuntimeGetter(GetUnikernelQemuRuntime)
+	runtimeMap[model.CROSVM_RUNTIME] = RuntimeGetter(GetCrosvmRuntime)
 }
 
 func GetRuntime(runtime model.RuntimeType) RuntimeInterface {
