@@ -15,9 +15,9 @@ services:
     hostname: mqtt
     container_name: mqtt
     expose:
-      - "10003"
+      - "${MQTT_BROKER_PORT}"
     ports:
-      - "10003:10003"
+      - "${MQTT_BROKER_PORT}:${MQTT_BROKER_PORT}"
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
       - /mosquitto/data
@@ -35,10 +35,10 @@ services:
     container_name: cluster_mongo
     hostname: cluster_mongo
     ports:
-      - "10107:10107"
+      - "${MONGODB_PORT}:${MONGODB_PORT}"
     volumes:
       - 'mongodb_cluster_data:/mongodb'
-    command: mongod --port 10107
+    command: mongod --port ${MONGODB_PORT}
 
   # cluster-level mongoDB
   mongo_clusternet:
@@ -46,10 +46,10 @@ services:
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
     ports:
-      - "10108:10108"
+      - "${MONGODB_NET_PORT}:${MONGODB_NET_PORT}"
     volumes:
       - 'mongodb_cluster_net_data:/mongodb'
-    command: mongod --port 10108
+    command: mongod --port ${MONGODB_NET_PORT}
 
 
   # Cluster Manager
@@ -61,19 +61,21 @@ services:
       logging_jobname: "containerlogs"
     hostname: cluster_service_manager
     expose:
-      - "10110"
+      - "${SERVICE_MANAGER_PORT}"
     ports:
-      - "10110:10110"
+      - "${SERVICE_MANAGER_PORT}:${SERVICE_MANAGER_PORT}"
     environment:
-      - MY_PORT=10110
-      - MQTT_BROKER_PORT=10003
+      - MY_PORT=${SERVICE_MANAGER_PORT}
+      - MQTT_BROKER_PORT=${MQTT_BROKER_PORT}
       - MQTT_BROKER_URL=mqtt
-      - ROOT_SERVICE_MANAGER_URL=${SYSTEM_MANAGER_URL}
-      - ROOT_SERVICE_MANAGER_PORT=10099
-      - SYSTEM_MANAGER_URL=cluster_manager
-      - SYSTEM_MANAGER_PORT=10000
+      - ROOT_SERVICE_MANAGER_URL=${ROOT_SERVICE_MANAGER_URL}
+      - ROOT_SERVICE_MANAGER_PORT=${ROOT_SERVICE_MANAGER_PORT}
+      - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
+      - SYSTEM_MANAGER_PORT=${SYSTEM_MANAGER_PORT}
       - CLUSTER_MONGO_URL=cluster_mongo_net
-      - CLUSTER_MONGO_PORT=10108
+      - CLUSTER_MONGO_PORT=${MONGODB_NET_PORT}
+      - ROUTING_MANAGER_URL=${ROUTING_MANAGER_HOST}
+      - ROUTING_MANAGER_PORT=${ROUTING_MANAGER_HTTP_SERVER_PORT}
     depends_on:
       - mongo_clusternet
       - mqtt
@@ -89,23 +91,23 @@ services:
       logging_jobname: "containerlogs"
     hostname: cluster_manager
     expose:
-      - "10100"
+      - "${CLUSTER_MANAGER_PORT}"
       - "10101"
     ports:
-      - "10100:10100"
+      - "${CLUSTER_MANAGER_PORT}:${CLUSTER_MANAGER_PORT}"
       - "10101:10101"
     environment:
-      - MY_PORT=10100
+      - MY_PORT=${CLUSTER_MANAGER_PORT}
       - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
-      - SYSTEM_MANAGER_PORT=10000
+      - SYSTEM_MANAGER_PORT=${SYSTEM_MANAGER_PORT}
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
-      - CLUSTER_SERVICE_MANAGER_PORT=10110
+      - CLUSTER_SERVICE_MANAGER_PORT=${SERVICE_MANAGER_PORT}
       - CLUSTER_MONGO_URL=cluster_mongo
-      - CLUSTER_MONGO_PORT=10107
+      - CLUSTER_MONGO_PORT=${MONGODB_PORT}
       - CLUSTER_SCHEDULER_URL=cluster_scheduler
-      - CLUSTER_SCHEDULER_PORT=10105
+      - CLUSTER_SCHEDULER_PORT=${SCHEDULER_PORT}
       - MQTT_BROKER_URL=mqtt
-      - MQTT_BROKER_PORT=10003
+      - MQTT_BROKER_PORT=${MQTT_BROKER_PORT}
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
     depends_on:
@@ -127,16 +129,16 @@ services:
       logging_jobname: "containerlogs"
     hostname: cluster_scheduler
     expose:
-      - "10105"
+      - "${SCHEDULER_PORT}"
     ports:
-      - "10105:10105"
+      - "${SCHEDULER_PORT}:${SCHEDULER_PORT}"
     environment:
-      - MY_PORT=10105
+      - MY_PORT=${SCHEDULER_PORT}
       - CLUSTER_MANAGER_URL=cluster_manager
-      - CLUSTER_MANAGER_PORT=10100
+      - CLUSTER_MANAGER_PORT=${CLUSTER_MANAGER_PORT}
       - CLUSTER_MONGO_URL=cluster_mongo
-      - CLUSTER_MONGO_PORT=10107
-      - REDIS_ADDR=redis://:clusterRedis@cluster_redis:6479
+      - CLUSTER_MONGO_PORT=${MONGODB_PORT}
+      - REDIS_ADDR=redis://:${REDIS_PASSWORD}@cluster_redis:${REDIS_PORT}
     depends_on:
       - cluster_redis
       - mongo_cluster
@@ -149,8 +151,8 @@ services:
     hostname: cluster_redis
     container_name: cluster_redis
     ports:
-      - "6479:6479"
-    command: redis-server --requirepass clusterRedis --port 6479
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    command: redis-server --requirepass ${REDIS_PASSWORD} --port ${REDIS_PORT}
 
 
   prometheus:
@@ -191,6 +193,7 @@ services:
 
     command: -config.file=/etc/loki/config.yml
     logging: *default-logging
+    
   cluster_promtail:
     image: grafana/promtail:2.9.2
     container_name: cluster_promtail

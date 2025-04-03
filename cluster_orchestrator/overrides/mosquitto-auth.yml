@@ -1,5 +1,4 @@
 # Uses MQTT over TLS, requires certification files to be provided (see README.md)
-
 services:
   mqtt:
     hostname: mqtts
