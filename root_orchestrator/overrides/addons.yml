@@ -7,7 +7,6 @@ x-logging:
     tag: "{{.Name}}"
     
 services:
-
   addons_manager:
     image: addons_manager
     container_name: addons_manager
@@ -16,12 +15,12 @@ services:
       logging: "promtail"
       logging_jobname: "containerlogs"
     environment:
-      - ADDONS_MANAGER_PORT=11101
+      - ADDONS_MANAGER_PORT=${ADDONS_MANAGER_PORT}
       - ADDONS_ENGINE_MONGO_URL=mongo
-      - ADDONS_ENGINE_MONGO_PORT=10007
-      - MARKETPLACE_ADDR=http://marketplace_manager:11102
+      - ADDONS_ENGINE_MONGO_PORT=${CLOUD_MONGO_PORT}
+      - MARKETPLACE_ADDR=http://marketplace_manager:${ADDONS_MARKETPLACE_PORT}
     ports:
-      - 11101:11101
+      - ${ADDONS_MANAGER_PORT}:${ADDONS_MANAGER_PORT}
     depends_on:
       - mongo_root
       - marketplace_manager
@@ -37,7 +36,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - ADDONS_MANAGER_ADDR=http://addons_manager:11101
+      - ADDONS_MANAGER_ADDR=http://addons_manager:${ADDONS_MANAGER_PORT}
     depends_on:
       - addons_manager
     logging: *default-logging
@@ -52,13 +51,13 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     expose:
-      - "11102"
+      - ${ADDONS_MARKETPLACE_PORT}
     ports:
-      - "11102:11102"
+      - ${ADDONS_MARKETPLACE_PORT}:${ADDONS_MARKETPLACE_PORT}
     environment:
-      - ADDON_MARKETPLACE_PORT=11102
+      - ADDON_MARKETPLACE_PORT=${ADDONS_MARKETPLACE_PORT}
       - ADDON_MARKETPLACE_MONGO_URL=mongo
-      - ADDON_MARKETPLACE_MONGO_PORT=10007
+      - ADDON_MARKETPLACE_MONGO_PORT=${CLOUD_MONGO_PORT}
     depends_on:
       - mongo_root
     logging: *default-logging

@@ -30,6 +30,7 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
         logging.error(f"Job with {job_id} not found.")
         return
 
+    print(job)
     try:
         cluster_addr = (
             "http://"

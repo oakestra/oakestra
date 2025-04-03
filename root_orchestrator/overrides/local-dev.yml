@@ -1,0 +1,12 @@
+services:
+  system_manager:
+    volumes:
+      - ./system-manager-python:/app
+
+  cloud_scheduler:
+    volumes:
+      - ./cloud-scheduler:/app
+
+  resource_abstractor:
+    volumes:
+      - ./resource-abstractor:/app 
