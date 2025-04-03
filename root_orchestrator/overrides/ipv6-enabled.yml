@@ -1,5 +1,3 @@
-version: "3.3"
-
 services:
   system_manager:
     networks:
@@ -12,14 +10,14 @@ services:
       root_net:
         ipv4_address: 192.168.128.5
         ipv6_address: 2001:db8:a::5
-    command: mongod --port 10007 --ipv6
+    command: mongod --port ${CLOUD_MONGO_PORT} --ipv6
 
   mongo_rootnet:
     networks:
       root_net:
         ipv4_address: 192.168.128.4
         ipv6_address: 2001:db8:a::4
-    command: mongod --port 10008 --ipv6
+    command: mongod --port ${CLOUD_NET_MONGO_PORT} --ipv6
 
   root_service_manager:
     networks:

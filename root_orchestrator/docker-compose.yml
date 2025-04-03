@@ -17,10 +17,10 @@ services:
       logging: "promtail"
       logging_jobname: "containerlogs"
     expose:
-      - "10000"
+      - "${SYSTEM_MANAGER_PORT}"
       - "50052"
     ports:
-      - "10000:10000"
+      - "${SYSTEM_MANAGER_PORT}:${SYSTEM_MANAGER_PORT}"
       - "50052:50052"
     depends_on:
       - mongo_root
@@ -30,13 +30,13 @@ services:
       - jwt_generator
     environment:
       - CLOUD_MONGO_URL=mongo
-      - CLOUD_MONGO_PORT=10007
+      - CLOUD_MONGO_PORT=${CLOUD_MONGO_PORT}
       - CLOUD_SCHEDULER_URL=cloud_scheduler
-      - CLOUD_SCHEDULER_PORT=10004
+      - CLOUD_SCHEDULER_PORT=${CLOUD_SCHEDULER_PORT}
       - RESOURCE_ABSTRACTOR_URL=resource_abstractor
-      - RESOURCE_ABSTRACTOR_PORT=11011
+      - RESOURCE_ABSTRACTOR_PORT=${RESOURCE_ABSTRACTOR_PORT}
       - NET_PLUGIN_URL=root_service_manager
-      - NET_PLUGIN_PORT=10099
+      - NET_PLUGIN_PORT=${NET_PLUGIN_PORT}
       - JWT_GENERATOR_URL=jwt_generator
       - JWT_GENERATOR_PORT=10011
     logging: *default-logging
@@ -47,12 +47,12 @@ services:
     container_name: mongo
     hostname: mongo
     ports:
-      - "10007:10007"
+      - "${CLOUD_MONGO_PORT}:${CLOUD_MONGO_PORT}"
     expose:
-      - "10007"
+      - "${CLOUD_MONGO_PORT}"
     volumes:
       - 'mongodb_data:/mongodb'
-    command: mongod --port 10007
+    command: mongod --port ${CLOUD_MONGO_PORT}
 
   # cluster-level mongoDB
   mongo_rootnet:
@@ -60,10 +60,10 @@ services:
     container_name: mongo_net
     hostname: mongo_net
     ports:
-      - "10008:10008"
+      - "${CLOUD_NET_MONGO_PORT}:${CLOUD_NET_MONGO_PORT}"
     volumes:
       - 'mongodb_net_data:/mongodb'
-    command: mongod --port 10008
+    command: mongod --port ${CLOUD_NET_MONGO_PORT}
 
   # Cluster Manager
   root_service_manager:
@@ -74,15 +74,15 @@ services:
       logging_jobname: "containerlogs"
     hostname: root_service_manager
     expose:
-      - "10099"
+      - "${NET_PLUGIN_PORT}"
     ports:
-      - "10099:10099"
+      - "${NET_PLUGIN_PORT}:${NET_PLUGIN_PORT}"
     environment:
-      - MY_PORT=10099
+      - MY_PORT=${NET_PLUGIN_PORT}
       - SYSTEM_MANAGER_URL=system_manager
-      - SYSTEM_MANAGER_PORT=10000
+      - SYSTEM_MANAGER_PORT=${SYSTEM_MANAGER_PORT}
       - CLOUD_MONGO_URL=mongo_net
-      - CLOUD_MONGO_PORT=10008
+      - CLOUD_MONGO_PORT=${CLOUD_NET_MONGO_PORT}
     depends_on:
       - mongo_rootnet
 
@@ -92,8 +92,8 @@ services:
     hostname: redis
     container_name: redis
     ports:
-      - "6379:6379"
-    command: redis-server --requirepass cloudRedis
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    command: redis-server --requirepass ${REDIS_PASSWORD}
 
   # Observability Stack
   grafana:
@@ -154,16 +154,16 @@ services:
       logging_jobname: "containerlogs"
     hostname: cloud_scheduler
     expose:
-      - "10004"
+      - "${CLOUD_SCHEDULER_PORT}"
     ports:
-      - "10004:10004"
+      - "${CLOUD_SCHEDULER_PORT}:${CLOUD_SCHEDULER_PORT}"
     environment:
-      - MY_PORT=10004
+      - MY_PORT=${CLOUD_SCHEDULER_PORT}
       - SYSTEM_MANAGER_URL=system_manager
-      - SYSTEM_MANAGER_PORT=10000
+      - SYSTEM_MANAGER_PORT=${SYSTEM_MANAGER_PORT}
       - RESOURCE_ABSTRACTOR_URL=resource_abstractor
-      - RESOURCE_ABSTRACTOR_PORT=11011
-      - REDIS_ADDR=redis://:cloudRedis@redis:6379
+      - RESOURCE_ABSTRACTOR_PORT=${RESOURCE_ABSTRACTOR_PORT}
+      - REDIS_ADDR=redis://:${REDIS_PASSWORD}@redis:${REDIS_PORT}
     depends_on:
       - redis
       - resource_abstractor
@@ -178,13 +178,13 @@ services:
       logging_jobname: "containerlogs"
     hostname: resource_abstractor
     expose:
-      - "11011"
+      - "${RESOURCE_ABSTRACTOR_PORT}"
     ports:
-      - "11011:11011"
+      - "${RESOURCE_ABSTRACTOR_PORT}:${RESOURCE_ABSTRACTOR_PORT}"
     environment:
-      - RESOURCE_ABSTRACTOR_PORT=11011
+      - RESOURCE_ABSTRACTOR_PORT=${RESOURCE_ABSTRACTOR_PORT}
       - CLOUD_MONGO_URL=mongo
-      - CLOUD_MONGO_PORT=10007
+      - CLOUD_MONGO_PORT=${CLOUD_MONGO_PORT}
     depends_on:
       - mongo_root
     logging: *default-logging
