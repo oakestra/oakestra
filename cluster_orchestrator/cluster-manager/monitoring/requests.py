@@ -34,7 +34,7 @@ def monitoring_manager_notify_deployment(job: dict, instance_number: int, node: 
 
     # set calculation requests
     calculation_requests = []
-    for metric in job['monitoring']:
+    for metric in job.get('monitoring', []):
         calculation_requests.append(deploy_pb2.CalculationRequest(
             metric_name=metric['output_metric_name'],
             formula=metric['formula'],
