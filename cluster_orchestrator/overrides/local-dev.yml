@@ -1,0 +1,9 @@
+# Development override for mounting local codebase
+services:
+  cluster_manager:
+    volumes:
+      - ./cluster-manager:/app
+    
+  cluster_scheduler:
+    volumes:
+      - ./cluster-scheduler:/app

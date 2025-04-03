@@ -1,7 +1,4 @@
-version: "3.3"
-
 services:
-
   # Remove observability services for cluster components
   cluster_promtail:
     deploy:

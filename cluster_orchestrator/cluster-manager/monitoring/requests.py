@@ -32,6 +32,7 @@ def monitoring_manager_notify_deployment(job: dict, instance_number: int, node: 
         disk=str(job['storage'])
     )
 
+    print(job)
     # set calculation requests
     calculation_requests = []
     for metric in job.get('monitoring', []):

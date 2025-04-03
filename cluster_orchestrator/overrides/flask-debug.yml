@@ -1,0 +1,16 @@
+# Debug mode override for Flask applications
+services:
+  cluster_manager:
+    environment:
+      - FLASK_DEBUG=1
+      - FLASK_ENV=development
+    
+  cluster_scheduler:
+    environment:
+      - FLASK_DEBUG=1
+      - FLASK_ENV=development
+
+  cluster_service_manager:
+    environment:
+      - FLASK_DEBUG=1
+      - FLASK_ENV=development 
