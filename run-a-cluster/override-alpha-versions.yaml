@@ -27,4 +27,4 @@ services:
     image: ghcr.io/oakestra/dashboard:alpha-v0.4.205
 
   jwt_generator:
-    image: ghcr.io/oakestra/oakestra/jwt-generator:v0.4.403
+    image: ghcr.io/oakestra/oakestra/jwt-generator:alpha-v0.4.403
