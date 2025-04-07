@@ -140,7 +140,7 @@ services:
     ports:
       - '80:80'
     restart: unless-stopped
-    container_name: oaekstra-frontend-container
+    container_name: oakestra-frontend-container
     environment:
       - API_ADDRESS=${SYSTEM_MANAGER_URL}:10000
 
