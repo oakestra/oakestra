@@ -8,6 +8,7 @@ COPY requirements.txt /
 
 RUN apt-get update -y && apt-get install apt-file -y && apt-file update && apt-get install -y python3-dev build-essential
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir gunicorn
 
 COPY . /
 
@@ -16,4 +17,4 @@ ENV JWT_GENERATOR_PORT=10011
 
 EXPOSE 10011
 
-CMD ["python", "jwt_generator.py"]
+CMD ["gunicorn" , "--bind", "0.0.0.0:10011", "jwt_generator:app"]
