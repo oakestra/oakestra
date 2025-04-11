@@ -106,4 +106,4 @@ def parse_timedelta(encoded_object, defaultValue):
 if __name__ == "__main__":
     host = os.getenv("JWT_GENERATOR_HOST", "0.0.0.0")
     port = int(os.getenv("JWT_GENERATOR_PORT", 5000))
-    app.run(debug=True, port=port, host=host)
+    app.run(debug=False, port=port, host=host)
