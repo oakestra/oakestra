@@ -1,26 +1,19 @@
 package crosvm
 
-// Missing:
-// - android_display_service
-// - pci
-// - pci_hotplug_slots
-// - pmem
-// - serial
-// - simple_media_device
-// - smbios
-// - socket
-// - v4l2_proxy
-// - vfio
-// - vhost_scmi
-// - vsock
-
-// Experimental
-// - gdb
-// - pmem_ext2
-// - scsi_block
-// - video_decoder
-// - video_encoder
-
+// InstanceConfig represents the parameters of the "crosvm run" command and are passed to it as a JSON file via the "--cfg" argument.
+//
+// Many parameters of the "crosvm run" command are only accepted as direct CLI arguments and not supported by the "--cfg" method.
+// These parameters are not included in the fields of this struct.
+// However, some of these missing parameters are useful for Oakestra and therefore implemented via the InstanceConfigExt struct,
+// which is manually turned into direct CLI arguments for "crosvm run".
+//
+// Additionally, some options that *are* supported by the "--cfg" method are still excluded in this struct:
+// - gdb: experimental
+// - pmem_ext2: experimental
+// - scsi_block: experimental
+// - video_decoder: experimental
+// - video_encoder: experimental
+// - android_display_service: android only
 type InstanceConfig struct {
 	AcAdapter             *bool                             `json:"ac-adapter,omitempty"`
 	Battery               *InstanceConfigBattery            `json:"battery,omitempty"`
@@ -41,7 +34,18 @@ type InstanceConfig struct {
 	Name                  *string                           `json:"name,omitempty"`
 	Net                   []InstanceConfigNet               `json:"net,omitempty"`
 	Params                []string                          `json:"params,omitempty"`
+	Pci                   *InstanceConfigPci                `json:"pci,omitempty"`
+	PciHotplugSlots       *uint8                            `json:"pci-hotplug-slots,omitempty"`
+	Pmem                  []InstanceConfigPmem              `json:"pmem,omitempty"`
+	Serial                []InstanceConfigSerial            `json:"serial,omitempty"`
+	SimpleMediaDevice     *bool                             `json:"simple-media-device,omitempty"`
+	Smbios                *InstanceConfigSmbios             `json:"smbios,omitempty"`
+	Socket                *string                           `json:"socket,omitempty"`
+	V4l2Proxy             []string                          `json:"v4l2-proxy,omitempty"`
+	Vfio                  []InstanceConfigVfio              `json:"vfio,omitempty"`
+	VhostScmi             *bool                             `json:"vhost-scmi,omitempty"`
 	VhostUser             []InstanceConfigVhostUser         `json:"vhost-user,omitempty"`
+	Vsock                 *InstanceConfigVsock              `json:"vsock,omitempty"`
 }
 
 type InstanceConfigBattery struct {
@@ -50,7 +54,7 @@ type InstanceConfigBattery struct {
 
 type InstanceConfigBlock struct {
 	Path          string  `json:"path"`
-	ReadOnly      *bool   `json:"ro,omitempty"`
+	Ro            *bool   `json:"ro,omitempty"`
 	Root          *bool   `json:"root,omitempty"`
 	Sparse        *bool   `json:"sparse,omitempty"`
 	Direct        *bool   `json:"direct,omitempty"`
@@ -59,22 +63,22 @@ type InstanceConfigBlock struct {
 	ID            *string `json:"id,omitempty"`
 	AsyncExecutor *string `json:"async-executor,omitempty"`
 	PackedQueue   *bool   `json:"packed-queue,omitempty"`
-	Bootindex     *int    `json:"bootindex,omitempty"`
+	Bootindex     *uint   `json:"bootindex,omitempty"`
 	PciAddress    *string `json:"pci-address,omitempty"`
 }
 
 type InstanceConfigCpus struct {
-	NumCores    *int                       `json:"num-cores,omitempty"`
-	Clusters    []int                      `json:"clusters,omitempty"`
+	NumCores    *uint                      `json:"num-cores,omitempty"`
+	Clusters    []uint                     `json:"clusters,omitempty"`
 	CoreTypes   *InstanceConfigCpuCoreType `json:"core-types,omitempty"`
-	BootCPU     *int                       `json:"boot-cpu,omitempty"`
-	FreqDomains []int                      `json:"freq-domains,omitempty"`
+	BootCPU     *uint                      `json:"boot-cpu,omitempty"`
+	FreqDomains []uint                     `json:"freq-domains,omitempty"`
 	Sve         *InstanceConfigSveConfig   `json:"sve,omitempty"`
 }
 
 type InstanceConfigCpuCoreType struct {
-	Atom []int `json:"atom"`
-	Core []int `json:"core"`
+	Atom []uint `json:"atom"`
+	Core []uint `json:"core"`
 }
 
 type InstanceConfigSveConfig struct {
@@ -83,8 +87,8 @@ type InstanceConfigSveConfig struct {
 }
 
 type InstanceConfigDeviceTreeOverlay struct {
-	Path       string `json:"path"`
-	FilterDevs *bool  `json:"filter,omitempty"`
+	Path   string `json:"path"`
+	Filter *bool  `json:"filter,omitempty"`
 }
 
 type InstanceConfigHypervisor struct {
@@ -178,7 +182,7 @@ type InstanceConfigMediaDecoder struct {
 }
 
 type InstanceConfigMem struct {
-	Size int `json:"size"`
+	Size *uint64 `json:"size,omitempty"`
 }
 
 type InstanceConfigNet struct {
@@ -211,9 +215,66 @@ type InstanceConfigVhostNet struct {
 	Device *string `json:"device,omitempty"`
 }
 
+type InstanceConfigPci struct {
+	Cam  *InstanceConfigPciMemoryRegion `json:"cam,omitempty"`
+	Ecam *InstanceConfigPciMemoryRegion `json:"ecam,omitempty"`
+	Mem  *InstanceConfigPciMemoryRegion `json:"mem,omitempty"`
+}
+
+type InstanceConfigPciMemoryRegion struct {
+	Start uint64  `json:"start"`
+	Size  *uint64 `json:"size,omitempty"`
+}
+
+type InstanceConfigPmem struct {
+	Path           string  `json:"path"`
+	Ro             *bool   `json:"ro,omitempty"`
+	Root           *bool   `json:"root,omitempty"`
+	VmaSize        *uint64 `json:"vma-size,omitempty"`
+	SwapIntervalMs *uint64 `json:"swap-interval-ms,omitempty"`
+}
+
+type InstanceConfigSerial struct {
+	Type            string  `json:"type"`
+	Hardware        *string `json:"hardware,omitempty"`
+	Name            *string `json:"name,omitempty"`
+	Path            *string `json:"path,omitempty"`
+	Input           *string `json:"input,omitempty"`
+	InputUnixStream *bool   `json:"input-unix-stream,omitempty"`
+	Num             *uint8  `json:"num,omitempty"`
+	Console         *bool   `json:"console,omitempty"`
+	Earlycon        *bool   `json:"earlycon,omitempty"`
+	Stdin           *bool   `json:"stdin,omitempty"`
+	OutTimestamp    *bool   `json:"out-timestamp,omitempty"`
+	DebugconPort    *uint16 `json:"debugcon-port,omitempty"`
+	PciAddress      *string `json:"pci-address,omitempty"`
+}
+
+type InstanceConfigSmbios struct {
+	BiosVendor   *string  `json:"bios-vendor,omitempty"`
+	BiosVersion  *string  `json:"bios-version,omitempty"`
+	Manufacturer *string  `json:"manufacturer,omitempty"`
+	ProductName  *string  `json:"product-name,omitempty"`
+	SerialNumber *string  `json:"serial-number,omitempty"`
+	Uuid         *string  `json:"uuid,omitempty"`
+	OemStrings   []string `json:"oem-strings,omitempty"`
+}
+
+type InstanceConfigVfio struct {
+	Path         string  `json:"path"`
+	Iommu        *string `json:"iommu,omitempty"`
+	GuestAddress *string `json:"guest-address,omitempty"`
+	DtSymbol     *string `json:"dt-symbol,omitempty"`
+}
+
 type InstanceConfigVhostUser struct {
 	Type         string  `json:"type"`
 	Socket       string  `json:"socket"`
 	MaxQueueSize *uint16 `json:"max-queue-size,omitempty"`
 	PciAddress   *string `json:"pci-address,omitempty"`
+}
+
+type InstanceConfigVsock struct {
+	Cid    uint64  `json:"cid"`
+	Device *string `json:"device,omitempty"`
 }
