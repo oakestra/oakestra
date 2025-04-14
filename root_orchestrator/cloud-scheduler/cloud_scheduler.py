@@ -68,7 +68,7 @@ def start_calc(job_id, job):
 
     print(scheduling_result)
     if isinstance(scheduling_result, NegativeSchedulingStatus):
-        job_operations.update_job_status(job_id=job_id, service_status=scheduling_result)
+        job_operations.update_job_status(job_id, scheduling_result)
     else:
         scheduling_result.get("_id")
         manager_request(scheduling_result, job_id, job, replicas=1)

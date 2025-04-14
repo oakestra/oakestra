@@ -1,5 +1,6 @@
 package model
 
+// Service is the struct that describes the service
 type Service struct {
 	JobID           string   `json:"_id"`
 	Sname           string   `json:"job_name"`
@@ -20,8 +21,10 @@ type Service struct {
 	Architectures   []string `json:"arch"`
 	Pid             int
 	OneShot         bool `json:"one_shot"`
+	Privileged      bool `json:"privileged"`
 }
 
+// Resources is the struct that describes the resources
 type Resources struct {
 	Cpu      string `json:"cpu"`
 	Memory   string `json:"memory"`
@@ -32,6 +35,7 @@ type Resources struct {
 	Instance int    `json:"instance"`
 }
 
+// ServiceStatus is the struct that describes the service status
 const (
 	SERVICE_CREATING   = "CREATING"
 	SERVICE_CREATED    = "CREATED"

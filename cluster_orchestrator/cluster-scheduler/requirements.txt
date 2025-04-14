@@ -1,8 +1,8 @@
 flask
-flask_pymongo
+flask_pymongo==2.3.0
 celery==4.4.2
 click
 redis
 requests
-pymongo
+pymongo==4.10.1
 git+https://github.com/oakestra/oakestra.git@develop#subdirectory=libraries/oakestra_utils_library

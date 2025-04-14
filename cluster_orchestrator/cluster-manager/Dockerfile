@@ -8,10 +8,10 @@ RUN apt-get update -y &&\
         build-essential \
         git
 
-ADD requirements.txt /
-RUN pip install -r requirements.txt
+COPY requirements.txt /
+RUN pip install --no-cache-dir -r requirements.txt 
 
-ADD . /
+COPY . /
 
 # ENV FLASK_APP=cloud_scheduler.py
 ENV FLASK_ENV=development
@@ -20,6 +20,7 @@ ENV FLASK_DEBUG=FALSE
 
 ENV SYSTEM_MANAGER_URL=3.120.37.66
 ENV SYSTEM_MANAGER_PORT=10000
+ENV SYSTEM_MANAGER_GRPC_PORT=50052
 
 ENV CLUSTER_SERVICE_MANAGER_URL=localhost
 ENV CLUSTER_SERVICE_MANAGER_PORT=10010

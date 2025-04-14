@@ -41,6 +41,7 @@ sla_schema = {
                                 "state": {"type": "string"},
                                 "port": {"type": "string"},
                                 "one_shot": {"type": "boolean", "default": False},
+                                "privileged": {"type": "boolean", "default": False},
                                 "cmd": {
                                     "type": "array",
                                     "items": {
@@ -101,6 +102,10 @@ sla_schema = {
                                             "rigidness": {"type": "number"},
                                             "convergence_time": {"type": "integer"},
                                             "needs": {"type": "array", "items": {"type": "string"}},
+                                            "allowed": {
+                                                "type": "array",
+                                                "items": {"type": "string"},
+                                            },
                                         },
                                         "required": ["type"],
                                     },

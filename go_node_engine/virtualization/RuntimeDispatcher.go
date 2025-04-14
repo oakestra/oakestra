@@ -10,6 +10,7 @@ var runtimeMap = map[model.RuntimeType]Runtime{}
 type RuntimeInterface interface {
 	Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error
 	Undeploy(sname string, instance int) error
+	Stop()
 }
 
 type RuntimeMonitoring interface {

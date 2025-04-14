@@ -14,16 +14,31 @@ fi
 echo Checking docker compose version
 sudo docker compose version
 if [ $? -ne 0 ]; then
-    echo "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
-    exit 1
+    current_os=$(uname)
+    if [ "$current_os" = "Darwin" ]; then
+        echo "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
+        exit 1
+    else
+        echo "Installing Docker Compose plugin"
+        if [ ! -x "$(command -v apt-get)" ]; then
+            sudo apt-get update
+            sudo apt-get install docker-compose-plugin
+        fi
+        if [ ! -x "$(command -v yum)" ]; then
+            sudo yum update
+            sudo yum install docker-compose-plugin
+        fi
+    fi
 fi
 
 #Default configuration?
 if [ -z "$SYSTEM_MANAGER_URL" ]; then
     echo 🔧 Using default configuration
+
+    current_os=$(uname)
     
     # get IP address of this machine
-    if [ $current_os = "Darwin" ]; then
+    if [ "$current_os" = "Darwin" ]; then
         export SYSTEM_MANAGER_URL=$(ipconfig getifaddr en0)
     else
         export SYSTEM_MANAGER_URL=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
@@ -35,15 +50,15 @@ if [ -z "$SYSTEM_MANAGER_URL" ]; then
     echo Default node IP: $SYSTEM_MANAGER_URL
 fi
 
-mkdir ~/oakestra 2> /dev/null
-
-cd ~/oakestra 2> /dev/null
+mkdir -p ~/oakestra/root_orchestrator 2> /dev/null
+cd ~/oakestra/root_orchestrator 2> /dev/null
 
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/root-orchestrator.yml > root-orchestrator.yml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/root_orchestrator/docker-compose.yml > root-orchestrator.yml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/root_orchestrator/override-images-only.yml > override-root-images-only.yml
 
 chmod +x downloadConfigFiles.sh
-./downloadConfigFiles.sh root_orchestrator $OAKESTRA_BRANCH
+./downloadConfigFiles.sh run-a-cluster $OAKESTRA_BRANCH
 
 #If additional override files provided, download them
 OAK_OVERRIDES=''
@@ -54,7 +69,7 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
     for element in $OVERRIDE_FILES
     do
         echo "Download override: $element"
-        wget -c https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/$element 2> /dev/null
+        wget -c https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/root_orchestrator/$element 2> /dev/null
         OAK_OVERRIDES="${OAK_OVERRIDES}-f ${element} " 
     done
     IFS= 
@@ -66,11 +81,11 @@ fi
 
 if sudo docker ps -a | grep oakestra/root >/dev/null 2>&1; then
   echo 🚨 Oakestra root containers are already running. Please stop them before starting the root orchestrator.
-  echo 🪫 You can turn off the current root using: \$ docker compose -f ~/oakestra/root-orchestrator.yml down
+  echo 🪫 You can turn off the current root using: \$ docker compose -f ~/oakestra/root_orchestrator/root-orchestrator.yml down
   exit 1
 fi
 
-command_exec="sudo -E docker compose -f root-orchestrator.yml ${OAK_OVERRIDES}up --pull=always -d"
+command_exec="sudo -E docker compose -f root-orchestrator.yml -f override-root-images-only.yml ${OAK_OVERRIDES}up -d"
 echo executing "$command_exec"
 
 eval "$command_exec"
@@ -81,4 +96,4 @@ echo
 echo 🖥️ Oakestra dashboard available at http://$SYSTEM_MANAGER_URL
 echo 📊 Grafana dashboard available at http://$SYSTEM_MANAGER_URL:3000
 echo 📈 You can access the APIs at http://$SYSTEM_MANAGER_URL:10000/api/docs
-echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/oakestra/root-orchestrator.yml down
+echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/oakestra/root_orchestrator/root-orchestrator.yml down

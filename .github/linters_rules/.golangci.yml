@@ -1,0 +1,49 @@
+run:
+  concurrency: 4
+  timeout: 5m
+  issues-exit-code: 2
+  tests: true
+
+output:
+  print-issued-lines: false
+  print-linter-name: true
+  uniq-by-line: false
+  sort-results: true
+
+linters:
+  disable-all: true
+
+  # Full linter list: https://golangci-lint.run/usage/linters
+  enable:
+    - errcheck
+    - goimports
+    - govet
+    - staticcheck
+    - unused
+    - tagalign
+    - unconvert
+    - unparam
+    #- revive
+    #- whitespace 
+    #- wsl
+    #- stylecheck
+    #- ineffassign
+    #- gosimple
+    #- gosec
+    #- dupl
+    #- goconst
+    #- gofmt
+    #- tagliatelle
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters-settings:
+  revive:
+    # Only these rules are enabled.
+    rules:
+      - name: exported
+        arguments:
+        - disableStutteringCheck

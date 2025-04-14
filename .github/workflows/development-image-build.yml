@@ -1,0 +1,114 @@
+name: Docker Build images during PR development
+
+on:
+  pull_request:
+    branches:
+      - develop  
+    paths:
+        - 'root_orchestrator/**/Dockerfile'
+        - 'root_orchestrator/**/requirements.txt'
+        - 'cluster_orchestrator/**/Dockerfile'
+        - 'cluster_orchestrator/**/requirements.txt'
+
+jobs:
+  gather-modified-files:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.folders.outputs.value }}
+    steps:
+      - name: Run
+        uses: actions/checkout@v3
+
+      - name: Get all matching changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          since_last_remote_commit: true 
+          files: |
+            ./**/**/Dockerfile
+            ./**/**/requirements.txt
+      - name: Run step if matching changed files are detected
+        id: folders
+        if: steps.changed-files.outputs.any_changed == 'true'  
+        env:
+                DETECTED_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+                # Extract parent directory of each changed file
+                echo "Changed file detected: $DETECTED_CHANGED_FILES"
+                # Split the string delimited by a space into an array
+                readarray -d ' ' -t context_array <<< "$DETECTED_CHANGED_FILES"
+                
+                # Declare an empty array to store the results
+                value=()
+                
+                # Loop through each element in the context_array
+                for element in "${context_array[@]}"; do
+                # Apply dirname function to each element and store the result in the value array
+                value+=("$(dirname "$element")")
+                done
+                
+                # Format the output string
+                output="value=["
+                for item in "${value[@]}"; do
+                output+="\"$item\", "
+                done
+                
+                # Remove the trailing comma and add closing bracket and quotes
+                output="${output%, }]"
+                
+                # Print the formatted output string
+                echo "$output" >> $GITHUB_OUTPUT
+                  
+### Dynamic matrix for spawning multiple build jobs
+  build:
+    needs: [ gather-modified-files ]
+    runs-on: ubuntu-latest
+    env:
+        # Use docker.io for Docker Hub if empty
+        REGISTRY: ghcr.io
+        # github.repository as <account>/<repo>
+        IMAGE_NAME: ${{ github.repository }}/${{ matrix.value }}
+    permissions:
+        contents: read
+        packages: write
+        id-token: write
+    strategy:
+      matrix:
+        value: ${{fromJSON(needs.gather-modified-files.outputs.matrix)}}
+    steps:      
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@79abd3f86f79a9d68a23c75a09a9a85889262adf
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=${{!startsWith(github.ref, 'refs/tags/alpha')}}
+  
+      - name: Set up QEMU
+        id: qemu
+        uses: docker/setup-qemu-action@v1
+        with:
+            image: tonistiigi/binfmt:latest
+            platforms: all
+    
+    # Build Docker image with Buildx (matching file push on same PR)
+      - name: Build Docker image (push disabled)
+        env:
+            DOCKERFILE_CONTEXT: ${{ matrix.value }}
+        id: build-and-push
+        uses: docker/build-push-action@v3
+        with:
+            context: |
+                ${{format('./{0}/', matrix.value)}}
+            # To build on all supported arch, add to following line: ,linux/armhf,linux/arm64
+            platforms: linux/amd64
+            push: false
+            tags: ${{ steps.meta.outputs.tags }}
+            labels: ${{ steps.meta.outputs.labels }}
+            

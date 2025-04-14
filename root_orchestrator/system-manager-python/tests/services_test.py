@@ -3,9 +3,7 @@ import os
 import sys
 from unittest.mock import ANY, MagicMock, Mock, patch
 
-import pytest
 from resource_abstractor_client import app_operations, job_operations
-from testcontainers.compose import DockerCompose
 from tests.utils import get_first_app, get_full_random_sla_app
 
 sys.modules["ext_requests.net_plugin_requests"] = Mock()
@@ -25,16 +23,10 @@ from services.service_management import (  # noqa: E402
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-
-@pytest.fixture(scope="session")
-def resource_abstractor():
-    with DockerCompose(current_dir) as compose:
-        service_uri = "http://localhost:21011"
-        compose.wait_for(service_uri)
-        yield service_uri
+resource_abstractor = "http://localhost:11011"
 
 
-def test_create_service_with_app(resource_abstractor):
+def test_create_service_with_app():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
         new=str(resource_abstractor),
@@ -47,6 +39,8 @@ def test_create_service_with_app(resource_abstractor):
         app_mock["microservices"] = []
 
         created_app = app_operations.create_app("Admin", app_mock)
+        assert created_app is not None
+
         sla_first_app["applicationID"] = created_app["applicationID"]
 
         microservices = sla_first_app["microservices"]
@@ -67,7 +61,7 @@ def test_create_service_with_app(resource_abstractor):
         assert len(result["microservices"]) == len(sla_first_app["microservices"])
 
 
-def test_create_service_without_app(resource_abstractor):
+def test_create_service_without_app():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
         new=str(resource_abstractor),
@@ -90,7 +84,7 @@ def test_create_service_without_app(resource_abstractor):
         assert app_result is None
 
 
-def test_create_invalid_service_name(resource_abstractor):
+def test_create_invalid_service_name():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
         new=str(resource_abstractor),
@@ -103,6 +97,7 @@ def test_create_invalid_service_name(resource_abstractor):
         app_mock["microservices"] = []
 
         app = app_operations.create_app("Admin", app_mock)
+        assert app is not None
 
         sla_first_app["applicationID"] = app["applicationID"]
         sla_first_app["microservices"][0]["microservice_name"] = "badname!"
@@ -114,7 +109,7 @@ def test_create_invalid_service_name(resource_abstractor):
     assert code == 422
 
 
-def test_create_invalid_service_namespace(resource_abstractor):
+def test_create_invalid_service_namespace():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
         new=str(resource_abstractor),
@@ -127,6 +122,8 @@ def test_create_invalid_service_namespace(resource_abstractor):
         app_mock["microservices"] = []
 
         app = app_operations.create_app("Admin", app_mock)
+        assert app is not None
+
         sla_first_app["applicationID"] = app["applicationID"]
 
         sla_first_app["microservices"][0]["microservice_namespace"] = "THIS.NAMESPACE.has.dots"
@@ -138,7 +135,7 @@ def test_create_invalid_service_namespace(resource_abstractor):
     assert code == 422
 
 
-def test_delete_service(resource_abstractor):
+def test_delete_service():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
         new=str(resource_abstractor),
@@ -151,6 +148,8 @@ def test_delete_service(resource_abstractor):
         app_mock["microservices"] = []
 
         app = app_operations.create_app("Admin", app_mock)
+        assert app is not None
+
         sla_first_app["applicationID"] = app["applicationID"]
 
         result, code = create_services_of_app("Admin", sla)
@@ -214,7 +213,7 @@ def test_delete_service(resource_abstractor):
 #         assert app_after_update["new_field"] == "new"
 
 
-def test_update_service_not_found(resource_abstractor):
+def test_update_service_not_found():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
         new=str(resource_abstractor),
@@ -227,6 +226,8 @@ def test_update_service_not_found(resource_abstractor):
         app_mock["microservices"] = []
 
         app = app_operations.create_app("Admin", app_mock)
+        assert app is not None
+
         sla_first_app["applicationID"] = app["applicationID"]
 
         result, code = create_services_of_app("Admin", sla)
@@ -247,7 +248,7 @@ def test_update_service_not_found(resource_abstractor):
         assert code == 501
 
 
-def test_get_user_services(resource_abstractor):
+def test_get_user_services():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
         new=str(resource_abstractor),
@@ -259,6 +260,8 @@ def test_get_user_services(resource_abstractor):
         app_mock["userId"] = "Admin"
         app_mock["microservices"] = []
         app = app_operations.create_app("Admin", app_mock)
+        assert app is not None
+
         app_id = app["applicationID"]
         sla["applications"][0]["applicationID"] = app_id
 
@@ -280,7 +283,7 @@ def test_get_user_services(resource_abstractor):
         assert resultNone == {"message": "app not found"}
 
 
-def test_get_services(resource_abstractor):
+def test_get_services():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
         new=str(resource_abstractor),
@@ -293,6 +296,8 @@ def test_get_services(resource_abstractor):
         app_mock["microservices"] = []
 
         app = app_operations.create_app("Admin", app_mock)
+        assert app is not None
+
         sla_first_app["applicationID"] = app["applicationID"]
         result, code = create_services_of_app("Admin", sla)
 

@@ -36,7 +36,7 @@ type qemuDomain struct {
 }
 
 type UnikernelRuntime struct {
-	qemuCommand string
+	qemuCommand string // nolint:unused // Ignore unused linter for this field
 	qemuPath    string
 	qemuDomains map[string]*qemuDomain
 	killQueue   map[string]*chan bool
@@ -70,15 +70,22 @@ func RegisterUnikernelQemuRuntime() *UnikernelRuntime {
 		logger.InfoLogger().Printf("Using qemu at %s\n", path)
 		ukruntime.killQueue = make(map[string]*chan bool)
 		ukruntime.qemuDomains = make(map[string]*qemuDomain)
-		_ = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
-		_ = os.MkdirAll("/tmp/node_engine/inst/", 0755)
+		err = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to create kernel directory: %v", err)
+		}
+
+		err = os.MkdirAll("/tmp/node_engine/inst/", 0755)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to create instance directory: %v", err)
+		}
 		model.GetNodeInfo().AddSupportedTechnology(model.UNIKERNEL_RUNTIME)
 		RegisterRuntime(model.UNIKERNEL_RUNTIME, &ukruntime)
 	})
 	return &ukruntime
 }
 
-func (r *UnikernelRuntime) StopUnikernelRuntime() {
+func (r *UnikernelRuntime) Stop() {
 	r.channelLock.Lock()
 	IDs := reflect.ValueOf(r.killQueue).MapKeys()
 	r.channelLock.Unlock()
@@ -178,8 +185,10 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 	if !errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
+	if err := os.Mkdir(instance_path, 0777); err != nil {
+		logger.InfoLogger().Printf("Unable to create instance directory: %v", err)
+	}
 
-	os.Mkdir(instance_path, 0777)
 	var kimage *os.File
 	_, err = os.Stat(kernel_tar)
 	if err != nil {
@@ -190,31 +199,58 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 			logger.InfoLogger().Printf("Unable to create Kernel: %v", err)
 			return nil
 		}
-		defer kimage.Close()
 
+		//defer kimage.Close()
+		defer func() {
+			if err := kimage.Close(); err != nil {
+				logger.InfoLogger().Printf("Unable to close kernel image: %v", err)
+			}
+		}()
 		d, err := http.Get(kernel)
 		if err != nil {
 			logger.InfoLogger().Printf("Unable to locate kernel image (%s): %v", kernel, err)
-			os.Remove(kernel_tar)
+			err := os.Remove(kernel_tar)
+			if err != nil {
+				logger.InfoLogger().Printf("Unable to remove kernel image: %v", err)
+			}
 			return nil
 		}
 		size, err := io.Copy(kimage, d.Body)
 		if err != nil {
 			logger.InfoLogger().Printf("Kernel download failed: %v", err)
-			os.Remove(kernel_tar)
+			err := os.Remove(kernel_tar)
+			if err != nil {
+				logger.InfoLogger().Printf("Unable to remove kernel image: %v", err)
+			}
 			return nil
 		}
-		d.Body.Close()
-		logger.InfoLogger().Printf("Written %d B", size)
-		kimage.Close()
+		if err := d.Body.Close(); err != nil {
+			logger.InfoLogger().Printf("Unable to close kernel image: %v", err)
+		}
 
-		os.Mkdir(kernel_location, 0777)
+		logger.InfoLogger().Printf("Written %d B", size)
+
+		if err := kimage.Close(); err != nil {
+			logger.InfoLogger().Printf("Unable to close kernel image: %v", err)
+		}
+
+		if err := os.Mkdir(kernel_location, 0777); err != nil {
+			logger.InfoLogger().Printf("Unable to create kernel directory: %v", err)
+		}
 		/*unpack Kernel and additional data*/
 		kimage, _ = os.Open(kernel_tar)
-		defer kimage.Close()
+		//defer kimage.Close()
+
+		defer func() {
+			if err := kimage.Close(); err != nil {
+				logger.InfoLogger().Printf("Unable to close kernel image: %v", err)
+			}
+		}()
 
 		exdata, err := gzip.NewReader(kimage)
-
+		if err != nil {
+			logger.InfoLogger().Printf("Unable to open kernel archive: %v", err)
+		}
 		tardata := tar.NewReader(exdata)
 
 		for true {
@@ -365,6 +401,17 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 
 	qemuConfig.Instancepath = *kernelPath
 
+	revert := func(err error, instance string) {
+		startup <- false
+		errorchan <- err
+		r.channelLock.Lock()
+		defer r.channelLock.Unlock()
+		r.killQueue[hostname] = nil
+		if err := os.RemoveAll(inst_path + instance); err != nil {
+			logger.InfoLogger().Printf("Unable to remove instance data: %v", err)
+		}
+		logger.InfoLogger().Printf("Removing Instance data -- ")
+	}
 	var qemuCmd *exec.Cmd
 	var err error
 	if model.GetNodeInfo().Overlay {
@@ -442,14 +489,14 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 					}
 				}
 				if qemuCmd.Process != nil {
-					qemuCmd.Process.Kill()
+					qemuCmd.Process.Kill() //nolint:errcheck // Ignore error check for kill
 				}
 				return
 			}
 			//logger.InfoLogger().Printf("Waiting: %v", err)
 
 		} else {
-			conn.Close()
+			conn.Close() //nolint:errcheck // Ignore error check for close
 			break
 		}
 
@@ -468,7 +515,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		}
 		//Kill the qemu process because of no qmp connectivity
 		if qemuCmd.Process != nil {
-			qemuCmd.Process.Kill()
+			qemuCmd.Process.Kill() //nolint:errcheck // Ignore error check for kill
 		}
 		return
 	}
@@ -509,7 +556,9 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 			}
 		}
 		//Delete instance folder
-		os.RemoveAll(inst_path + hostname)
+		if err := os.RemoveAll(inst_path + hostname); err != nil {
+			logger.InfoLogger().Printf("Unable to remove instance data: %v", err)
+		}
 		logger.InfoLogger().Printf("Removing Instance data %s", inst_path+hostname)
 
 		if err != nil {

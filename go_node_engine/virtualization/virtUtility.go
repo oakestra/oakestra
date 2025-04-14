@@ -17,7 +17,12 @@ func getLogs(serviceID string) string {
 		logger.ErrorLogger().Printf("%v", err)
 		return ""
 	}
-	defer file.Close()
+	//defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			logger.ErrorLogger().Printf("%v", err)
+		}
+	}()
 
 	buf := make([]byte, LOG_SIZE)
 	stat, err := file.Stat()

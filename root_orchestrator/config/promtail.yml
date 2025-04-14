@@ -46,9 +46,3 @@ scrape_configs:
       level: level
       service: service
       file: line
-
-
-
-        
-
-

@@ -20,20 +20,19 @@ import (
 	"github.com/containerd/containerd/contrib/nvidia"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
-	"github.com/containerd/containerd/platforms"
-	"github.com/containerd/containerd/plugin"
-	runcoptions "github.com/containerd/containerd/runtime/v2/runc/options"
+	docker_remote "github.com/containerd/containerd/remotes/docker"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/shirou/gopsutil/docker"
 	"github.com/shirou/gopsutil/process"
 	"github.com/struCoder/pidusage"
 )
 
+// ContainerRuntime is the struct that describes the container runtime
 type ContainerRuntime struct {
-	contaierClient *containerd.Client
-	killQueue      map[string]*chan bool
-	channelLock    *sync.RWMutex
-	ctx            context.Context
+	containerClient *containerd.Client
+	killQueue       map[string]*chan bool
+	channelLock     *sync.RWMutex
+	ctx             context.Context
 }
 
 var runtime = ContainerRuntime{
@@ -43,18 +42,24 @@ var runtime = ContainerRuntime{
 var containerdSingletonCLient sync.Once
 var startContainerMonitoring sync.Once
 
+// NAMESPACE is the namespace of the runtime
 const NAMESPACE = "oakestra"
+
+// CGROUPV1_BASE_MEM is the base memory path for cgroup v1
 const CGROUPV1_BASE_MEM = "/sys/fs/cgroup/memory/" + NAMESPACE
+
+// CGROUPV2_BASE_MEM is the base memory path for cgroup v2
 const CGROUPV2_BASE_MEM = "/sys/fs/cgroup/" + NAMESPACE
 
-func RegisterContainerdClient(additionalRuntimes ...string) *ContainerRuntime {
+// GetContainerdClient returns the container runtime client
+func GetContainerdClient() *ContainerRuntime {
 	containerdSingletonCLient.Do(func() {
 		containerdConfFile := getContainerdConfigFile()
 		client, err := containerd.New("/run/containerd/containerd.sock")
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Unable to start the container engine: %v\n", err)
 		}
-		runtime.contaierClient = client
+		runtime.containerClient = client
 		runtime.killQueue = make(map[string]*chan bool)
 		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
 		runtime.forceContainerCleanup()
@@ -96,7 +101,27 @@ func getContainerdConfigFile() string {
 	return confFileContent
 }
 
-func (r *ContainerRuntime) StopContainerdClient() {
+// StopContainerdClient stops the container runtime client
+func getContainerdConfigFile() string {
+	containerdconf, err := os.Open("/etc/containerd/config.toml")
+	if err != nil {
+		logger.ErrorLogger().Print(err)
+		return ""
+	}
+	buffer := make([]byte, 1024)
+	confFileContent := ""
+	for {
+		n, err := containerdconf.Read(buffer)
+		if err != nil {
+			break
+		}
+		confFileContent = fmt.Sprintf("%s%s", confFileContent, string(buffer[:n]))
+	}
+	return confFileContent
+}
+
+// StopContainerdClient stops the container runtime client
+func (r *ContainerRuntime) Stop() {
 	r.channelLock.Lock()
 	taskIDs := reflect.ValueOf(r.killQueue).MapKeys()
 	r.channelLock.Unlock()
@@ -107,14 +132,18 @@ func (r *ContainerRuntime) StopContainerdClient() {
 			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", taskid.String(), err)
 		}
 	}
-	r.contaierClient.Close()
+	if err := r.containerClient.Close(); err != nil {
+		logger.ErrorLogger().Printf("Unable to close containerd client: %v", err)
+	}
+
 }
 
+// Deploy deploys a service
 func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
 	var image containerd.Image
 
 	// pull the given image
-	sysimg, err := r.contaierClient.ImageService().Get(r.ctx, service.Image)
+	sysimg, err := r.containerClient.ImageService().Get(r.ctx, service.Image)
 	if err == nil {
 		if service.Platform != "" {
 			image = containerd.NewImageWithPlatform(r.contaierClient, sysimg, platforms.Only(platforms.MustParse(service.Platform)))
@@ -131,10 +160,27 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 		image, err = r.contaierClient.Pull(r.ctx, service.Image, remoteOpt...)
 
 		if err != nil {
-			return err
+			if strings.Contains(err.Error(), "http: server gave HTTP response to HTTPS client") {
+				alwaysPlainHTTP := func(string) (bool, error) {
+					return true, nil
+				}
+				ropts := []docker_remote.RegistryOpt{
+					docker_remote.WithPlainHTTP(alwaysPlainHTTP),
+				}
+				resolver := docker_remote.NewResolver(docker_remote.ResolverOptions{
+					Hosts: docker_remote.ConfigureDefaultRegistries(ropts...),
+				})
+				image, err = r.containerClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack, containerd.WithResolver(resolver))
+				if err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
 		}
 	}
 
+	killChannel := make(chan bool, 1)
 	startupChannel := make(chan bool)
 	errorChannel := make(chan error)
 
@@ -161,6 +207,7 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 	return nil
 }
 
+// Undeploy undeploys a service
 func (r *ContainerRuntime) Undeploy(service string, instance int) error {
 	c, err := r.getContainerByTaskID(genTaskID(service, instance))
 	if err == nil {
@@ -218,7 +265,10 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		oci.WithHostname(hostname),
 		oci.WithEnv(append([]string{fmt.Sprintf("HOSTNAME=%s", hostname)}, service.Env...)),
 	}
-	// ---- add user defined commands
+	if service.Privileged {
+		specOpts = append(specOpts, oci.WithDevices("/dev/fuse", "/dev/fuse", "rwm"))
+	}
+	//add user defined commands
 	if len(service.Commands) > 0 {
 		specOpts = append(specOpts, oci.WithProcessArgs(service.Commands...))
 	}
@@ -233,6 +283,16 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		revert(err)
 		return
 	}
+	//defer resolvconfFile.Close()
+	defer func() {
+		if err := resolvconfFile.Close(); err != nil {
+			logger.ErrorLogger().Printf("Unable to close resolvconf file: %v", err)
+		}
+	}()
+
+	// SA9002: file mode 444 evaluates to 0674, which is not a valid file mode
+	_ = resolvconfFile.Chmod(0444)
+	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile.Name()))
 	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile))
 
 	// -- add oci SpecOpts to containerOpts
@@ -255,7 +315,12 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		revert(err)
 		return
 	}
-	defer file.Close()
+	//defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			logger.ErrorLogger().Printf("Unable to close log file: %v", err)
+		}
+	}()
 
 	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStreams(nil, file, file)))
 
@@ -299,12 +364,20 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	startup <- true
 
 	// wait for manual task kill or task finish
-	exitStatus := <-exitStatusC
-	if exitStatus.ExitCode() == 0 && service.OneShot {
-		service.Status = model.SERVICE_COMPLETED
+	select {
+	case exitStatus := <-exitStatusC:
+		if exitStatus.ExitCode() == 0 && service.OneShot {
+			service.Status = model.SERVICE_COMPLETED
+		}
+		//TODO: container exited, do something, notify to cluster manager
+		if err != nil {
+			return
+		}
+		logger.InfoLogger().Printf("Container exited with status %d", exitStatus.ExitCode())
+		service.StatusDetail = fmt.Sprintf("Container exited with status: %d", exitStatus.ExitCode())
+	case <-*killChannel:
+		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
 	}
-	logger.InfoLogger().Printf("WARNING: Container exited with status %d", exitStatus.ExitCode())
-	service.StatusDetail = fmt.Sprintf("Container exited with status: %d", exitStatus.ExitCode())
 
 	if service.Status != model.SERVICE_COMPLETED {
 		service.Status = model.SERVICE_DEAD
@@ -349,7 +422,7 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 		for {
 			select {
 			case <-time.After(every):
-				deployedContainers, err := r.contaierClient.Containers(r.ctx)
+				deployedContainers, err := r.containerClient.Containers(r.ctx)
 				if err != nil {
 					logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 				}
@@ -385,7 +458,7 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						continue
 					}
 
-					currentsnapshotter := r.contaierClient.SnapshotService(containerMetadata.Snapshotter)
+					currentsnapshotter := r.containerClient.SnapshotService(containerMetadata.Snapshotter)
 					usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
 					if err != nil {
 						logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
@@ -409,7 +482,7 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 }
 
 func (r *ContainerRuntime) forceContainerCleanup() {
-	deployedContainers, err := r.contaierClient.Containers(r.ctx)
+	deployedContainers, err := r.containerClient.Containers(r.ctx)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 	}

@@ -24,6 +24,8 @@ Example under *sla.json*
     - **code** : File containing the code; given as URL
     - **state** : File containing the state; given as URL; default empty
     - **port** : Port for exposure of the microservice chosen by the developer
+    - **one_shot** : Bool that represents if a service should be restarted if it terminates or not.
+    - **privileged** : Bool that represents if a service should use additional NodeEngine (containerd) privileges and rights.
     - **addresses** : Optional - ***[Taken from Giovanni's and Mehdi's design; more details in On addressess]***
       - **rr_ip** : Optional - IP chosen for round-robin addressation
       - **closest_ip** : Optional - The orchestrator may choose the closest IP to the given one
@@ -35,7 +37,7 @@ Example under *sla.json*
       - **url** : URL of a file, that the developer needs to have added to the microservice
     - **args** : *see "On expandability"*
     - **constraints** : List of constraints that need to be applied
-      - **type** : Type of constraint; one of ["latency", "geo", "addons"]
+      - **type** : Type of constraint; one of ["latency", "geo", "addons", "clusters"]
         - ***For type "latency"***
         - **area** : Specifies the area in which the constraint is in effect; must be chosen from a list of predefined areas (Mainly urban areas)
         - **threshold** : Maximum latency in [ms],
@@ -48,6 +50,8 @@ Example under *sla.json*
         - **convergence_time** : Time the orchestration framework has to find the optimal solution, before the [**rigidness**] of the constraint gets measured. In [s], default 300 (5 min)
         - ***For type "addons"***
         - **needs** : ["addon_1", "addon_2"] : Allows service placement only on worker nodes where both addons are installed.
+        - ***For type "clusters"***
+        - **allowed** : ["cluster_name_1", "cluster_name_2"] : Allows service placement only on clusters mentioned in the allowed list.
     - **connectivity** : List of connections this microservice needs to make to other microservices of the application and constraints that have to be satisfied; for more information read ***On conectivity***
       - **target_microservice_id** : ID of the microservice this microservice needs to communicate with.
       - **con_constraints** : List of connectivity constraints

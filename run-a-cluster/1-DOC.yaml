@@ -1,4 +1,3 @@
-version: "3.3"
 x-logging:
   &default-logging
   driver: "json-file"
@@ -11,6 +10,7 @@ services:
 
   dashboard:
     image: ghcr.io/oakestra/dashboard:latest
+    pull_policy: always
     ports:
       - '80:80'
     restart: unless-stopped
@@ -21,6 +21,7 @@ services:
   # System Manager REST API of Root Orchestrator
   system_manager:
     image: ghcr.io/oakestra/oakestra/root-system-manager:latest
+    pull_policy: always
     hostname: system_manager
     container_name: system_manager
     labels:
@@ -28,12 +29,16 @@ services:
       logging_jobname: "rootlogs"
     expose:
       - "10000"
+      - "50052"
     ports:
       - "10000:10000"
+      - "50052:50052"
     depends_on:
       - mongo_root
       - cloud_scheduler
+      - resource_abstractor
       - root_service_manager
+      - jwt_generator
     environment:
       - CLOUD_MONGO_URL=mongo
       - CLOUD_MONGO_PORT=10007
@@ -43,13 +48,19 @@ services:
       - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10099
+      - JWT_GENERATOR_URL=jwt_generator
+      - JWT_GENERATOR_PORT=10011
+    logging: *default-logging
 
 
   # MongoDB in Root Orchestrator
   mongo_root:
-    image: mongo:3.6
+    image: mongo:8.0
+    pull_policy: always
     container_name: mongo
     hostname: mongo
+    ports:
+      - "10007:10007"
     expose:
       - "10007"
     volumes:
@@ -58,11 +69,14 @@ services:
 
   # cluster-level mongoDB
   mongo_rootnet:
-    image: mongo:3.6
+    image: mongo:8.0
+    pull_policy: always
     container_name: mongo_net
     hostname: mongo_net
     labels:
       logging: "promtail"
+    ports:
+      - "10008:10008"
     expose:
       - "10008"
     volumes:
@@ -74,6 +88,7 @@ services:
   # Cluster Manager
   root_service_manager:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
+    pull_policy: always
     container_name: root_service_manager
     hostname: root_service_manager
     labels:
@@ -97,6 +112,7 @@ services:
   # Redis for the Cloud Scheduler
   redis:
     image: redis
+    pull_policy: always
     hostname: redis
     container_name: redis
     expose:
@@ -105,6 +121,7 @@ services:
 
   resource_abstractor:
     image: ghcr.io/oakestra/oakestra/root-resource-abstractor:latest
+    pull_policy: always
     container_name: resource_abstractor
     hostname: resource_abstractor
     labels:
@@ -122,10 +139,26 @@ services:
       - mongo_root
     logging: *default-logging
 
+  jwt_generator:
+    image: ghcr.io/oakestra/oakestra/jwt-generator:latest
+    container_name: jwt_generator
+    hostname: jwt_generator
+    labels:
+      logging: "promtail"
+      logging_jobname: "rootlogs"
+    expose:
+      - "10011"
+    ports:
+      - "10011:10011"
+    environment:
+      - JWT_GENERATOR_PORT=10011
+    logging: *default-logging
+
 
   # Cloud Scheduler
   cloud_scheduler:
     image: ghcr.io/oakestra/oakestra/cloud-scheduler:latest
+    pull_policy: always
     container_name: cloud_scheduler
     hostname: cloud_scheduler
     labels:
@@ -151,6 +184,7 @@ services:
   # MQTT
   mqtt:
     image: eclipse-mosquitto:1.6
+    pull_policy: always
     hostname: mqtt
     container_name: mqtt
     expose:
@@ -170,20 +204,26 @@ services:
 
   # cluster-level mongoDB
   mongo_cluster:
-    image: mongo:3.6
+    image: mongo:8.0
+    pull_policy: always
     container_name: cluster_mongo
     hostname: cluster_mongo
+    ports:
+      - "10107:10107"
     expose:
       - "10107"
     volumes:
       - 'mongodb_cluster_data:/mongodb'
     command: mongod --port 10107
 
-# cluster-level mongoDB
+  # cluster-level mongoDB
   mongo_clusternet:
-    image: mongo:3.6
+    image: mongo:8.0
+    pull_policy: always
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
+    ports:
+      - "10108:10108"
     expose:
       - "10108"
     volumes:
@@ -191,9 +231,10 @@ services:
     command: mongod --port 10108
 
 
-# Cluster Manager
+  # Cluster Manager
   cluster_service_manager:
     image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
+    pull_policy: always
     container_name: cluster_service_manager
     hostname: cluster_service_manager
     labels:
@@ -218,9 +259,10 @@ services:
       - mqtt
     logging: *default-logging
 
-# Cluster Manager
+  # Cluster Manager
   cluster_manager:
     image: ghcr.io/oakestra/oakestra/cluster-manager:latest
+    pull_policy: always
     container_name: cluster_manager
     hostname: cluster_manager
     expose:
@@ -259,6 +301,7 @@ services:
   # Cluster Scheduler
   cluster_scheduler:
     image: ghcr.io/oakestra/oakestra/cluster-scheduler:latest
+    pull_policy: always
     container_name: cluster_scheduler
     hostname: cluster_scheduler
     labels:
@@ -282,6 +325,7 @@ services:
   # Redis for the Cluster Scheduler as Job Queue
   cluster_redis:
     image: redis
+    pull_policy: always
     hostname: cluster_redis
     container_name: cluster_redis
     expose:
@@ -291,6 +335,7 @@ services:
 
   prometheus:
     image: prom/prometheus
+    pull_policy: always
     container_name: prometheus
     hostname: prometheus
     volumes:
@@ -304,6 +349,7 @@ services:
   # Observability Stack (Promtail, Loki, Grafana)
   grafana:
     image: grafana/grafana
+    pull_policy: always
     hostname: grafana
     container_name: grafana
     ports:
@@ -317,6 +363,7 @@ services:
 
   loki:
     container_name: loki
+    pull_policy: always
     image: grafana/loki:2.9.2
     ports:
       - 3100:3100
@@ -328,7 +375,8 @@ services:
 
 
   promtail:
-    image:  grafana/promtail:2.9.2
+    image: grafana/promtail:2.9.2
+    pull_policy: always
     container_name: promtail
     volumes:
       - ./config/promtail.yml:/etc/promtail/config.yml
@@ -353,5 +401,7 @@ volumes:
   
 
 networks:
+  default:
+    name: oakestra
   ip6net:
     enable_ipv6: true

@@ -1,8 +1,9 @@
 package virtualization
 
 import (
-	"gotest.tools/assert"
 	"testing"
+
+	"gotest.tools/assert"
 )
 
 func TestSnameExtractionFromTaskid(t *testing.T) {
