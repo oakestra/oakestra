@@ -20,7 +20,10 @@ import (
 	"github.com/containerd/containerd/contrib/nvidia"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
+	"github.com/containerd/containerd/plugin"
 	docker_remote "github.com/containerd/containerd/remotes/docker"
+	runcoptions "github.com/containerd/containerd/runtime/v2/runc/options"
+	containerdcfg "github.com/containerd/containerd/v2/cmd/containerd/server/config"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/shirou/gopsutil/docker"
 	"github.com/shirou/gopsutil/process"
@@ -36,11 +39,15 @@ type ContainerRuntime struct {
 }
 
 var runtime = ContainerRuntime{
+	// Lock specific for the container runtime interactions.
+	// Only one interaction at a time as we have no guarantee the runtime will handle more.
 	channelLock: &sync.RWMutex{},
 }
 
 var containerdSingletonCLient sync.Once
 var startContainerMonitoring sync.Once
+
+var containerdConfig containerdcfg.Config
 
 // NAMESPACE is the namespace of the runtime
 const NAMESPACE = "oakestra"
@@ -51,10 +58,12 @@ const CGROUPV1_BASE_MEM = "/sys/fs/cgroup/memory/" + NAMESPACE
 // CGROUPV2_BASE_MEM is the base memory path for cgroup v2
 const CGROUPV2_BASE_MEM = "/sys/fs/cgroup/" + NAMESPACE
 
-// GetContainerdClient returns the container runtime client
-func GetContainerdClient() *ContainerRuntime {
+// Containerd config path
+const CONTAINERD_CONFIG_PATH = "/etc/containerd/config.toml"
+
+// GetContainerdRuntime returns the container runtime client
+func GetContainerdRuntime() *ContainerRuntime {
 	containerdSingletonCLient.Do(func() {
-		containerdConfFile := getContainerdConfigFile()
 		client, err := containerd.New("/run/containerd/containerd.sock")
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Unable to start the container engine: %v\n", err)
@@ -65,40 +74,25 @@ func GetContainerdClient() *ContainerRuntime {
 		runtime.forceContainerCleanup()
 		// register default runtime name
 		model.GetNodeInfo().AddSupportedTechnology(model.CONTAINER_RUNTIME)
-		RegisterRuntime(model.CONTAINER_RUNTIME, &runtime)
-		// register additional supported runtimes
-		for _, runtimeName := range additionalRuntimes {
-			if runtimeName == "" {
-				continue
-			}
-			if strings.Contains(containerdConfFile, runtimeName) {
-				//set ctx calue <runtime>-options to empty
-				model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(runtimeName))
-				RegisterRuntime(model.RuntimeType(runtimeName), &runtime)
-			} else {
-				logger.ErrorLogger().Fatalf("Unable to find runtime %s in containerd configuration file", runtimeName)
+
+		//fetch containerd runtime configuration
+		containerdcfg.LoadConfig(context.Background(), CONTAINERD_CONFIG_PATH, &containerdConfig)
+
+		//check if affitional runtimes are configured in containerd config file
+		criPlugin := containerdConfig.Plugins["io.containerd.grpc.v1.cri"].(map[string]interface{})
+		ctd, ok := criPlugin["containerd"].(map[string]interface{})
+		if ok {
+			runtimes, ok := ctd["runtimes"].(map[string]interface{})
+			if ok {
+				for k, _ := range runtimes {
+					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", k, CONTAINERD_CONFIG_PATH)
+					model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(k))
+				}
 			}
 		}
+
 	})
 	return &runtime
-}
-
-func getContainerdConfigFile() string {
-	containerdconf, err := os.Open("/etc/containerd/config.toml")
-	if err != nil {
-		logger.ErrorLogger().Print(err)
-		return ""
-	}
-	buffer := make([]byte, 1024)
-	confFileContent := ""
-	for {
-		n, err := containerdconf.Read(buffer)
-		if err != nil {
-			break
-		}
-		confFileContent = fmt.Sprintf("%s%s", confFileContent, string(buffer[:n]))
-	}
-	return confFileContent
 }
 
 // StopContainerdClient stops the container runtime client
@@ -145,11 +139,7 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 	// pull the given image
 	sysimg, err := r.containerClient.ImageService().Get(r.ctx, service.Image)
 	if err == nil {
-		if service.Platform != "" {
-			image = containerd.NewImageWithPlatform(r.contaierClient, sysimg, platforms.Only(platforms.MustParse(service.Platform)))
-		} else {
-			image = containerd.NewImage(r.contaierClient, sysimg)
-		}
+		image = containerd.NewImage(r.containerClient, sysimg)
 	} else {
 		logger.ErrorLogger().Printf("Error retrieving the image: %v \n Trying to pull the image online.", err)
 
@@ -157,7 +147,7 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 		if service.Platform != "" {
 			remoteOpt = append(remoteOpt, containerd.WithPlatform(service.Platform))
 		}
-		image, err = r.contaierClient.Pull(r.ctx, service.Image, remoteOpt...)
+		image, err = r.containerClient.Pull(r.ctx, service.Image, remoteOpt...)
 
 		if err != nil {
 			if strings.Contains(err.Error(), "http: server gave HTTP response to HTTPS client") {
@@ -180,7 +170,6 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 		}
 	}
 
-	killChannel := make(chan bool, 1)
 	startupChannel := make(chan bool)
 	errorChannel := make(chan error)
 
@@ -268,7 +257,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	if service.Privileged {
 		specOpts = append(specOpts, oci.WithDevices("/dev/fuse", "/dev/fuse", "rwm"))
 	}
-	//add user defined commands
+	// ---- add user defined commands
 	if len(service.Commands) > 0 {
 		specOpts = append(specOpts, oci.WithProcessArgs(service.Commands...))
 	}
@@ -283,23 +272,13 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		revert(err)
 		return
 	}
-	//defer resolvconfFile.Close()
-	defer func() {
-		if err := resolvconfFile.Close(); err != nil {
-			logger.ErrorLogger().Printf("Unable to close resolvconf file: %v", err)
-		}
-	}()
-
-	// SA9002: file mode 444 evaluates to 0674, which is not a valid file mode
-	_ = resolvconfFile.Chmod(0444)
-	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile.Name()))
 	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile))
 
 	// -- add oci SpecOpts to containerOpts
 	containerOpts = append(containerOpts, containerd.WithNewSpec(specOpts...))
 
 	// Create the container
-	container, err := r.contaierClient.NewContainer(
+	container, err := r.containerClient.NewContainer(
 		ctx,
 		taskid,
 		containerOpts...,
@@ -364,22 +343,11 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	startup <- true
 
 	// wait for manual task kill or task finish
-	select {
-	case exitStatus := <-exitStatusC:
-		if exitStatus.ExitCode() == 0 && service.OneShot {
-			service.Status = model.SERVICE_COMPLETED
-		}
-		//TODO: container exited, do something, notify to cluster manager
-		if err != nil {
-			return
-		}
-		logger.InfoLogger().Printf("Container exited with status %d", exitStatus.ExitCode())
-		service.StatusDetail = fmt.Sprintf("Container exited with status: %d", exitStatus.ExitCode())
-	case <-*killChannel:
-		logger.InfoLogger().Printf("Kill channel message received for task %s", task.ID())
-	}
+	exitStatus := <-exitStatusC
 
-	if service.Status != model.SERVICE_COMPLETED {
+	if exitStatus.ExitCode() == 0 && service.OneShot {
+		service.Status = model.SERVICE_COMPLETED
+	} else {
 		service.Status = model.SERVICE_DEAD
 	}
 
@@ -606,7 +574,7 @@ func genTaskID(sname string, instancenumber int) string {
 }
 
 func (r *ContainerRuntime) getContainerByTaskID(taskid string) (containerd.Container, error) {
-	containers, err := r.contaierClient.Containers(r.ctx)
+	containers, err := r.containerClient.Containers(r.ctx)
 	if err != nil {
 		return nil, err
 	}

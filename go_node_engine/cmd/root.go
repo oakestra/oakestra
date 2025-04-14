@@ -52,7 +52,7 @@ func Execute() error {
 func init() {
 	rootCmd.Flags().StringVarP(&clusterAddress, "clusterAddr", "a", "localhost", "Address of the cluster orchestrator without port")
 	rootCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Port of the cluster orchestrator")
-	rootCmd.Flags().IntVarP(&netmanagerPort, "netmanagerPort", "n", 0, "Port of the NetManager component (deprecated).")
+	rootCmd.Flags().StringVarP(&overlayNetwork, "overlayNetwork", "o", "default", "Options: default,disabled,custom:<path>. <path> points to the overlay component socket.")
 	rootCmd.Flags().StringVarP(&logDirectory, "logs", "l", config.DEFAULT_LOG_DIR, "Directory for application's logs")
 	rootCmd.Flags().BoolVarP(&detatched, "detatch", "d", false, "Run the NodeEngine in the background (daemon mode)")
 	rootCmd.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")

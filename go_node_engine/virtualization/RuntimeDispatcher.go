@@ -25,13 +25,15 @@ type Runtime interface {
 type RuntimeType string
 
 func GetRuntime(runtime model.RuntimeType) RuntimeInterface {
-	return runtimeMap[runtime]
+	if runtime == model.CONTAINER_RUNTIME {
+		return GetContainerdRuntime()
+	}
+	if runtime == model.UNIKERNEL_RUNTIME {
+		return GetUnikernelQemuRuntime()
+	}
+	return nil
 }
 
 func GetRuntimeMonitoring(runtime model.RuntimeType) RuntimeMonitoring {
 	return runtimeMap[runtime]
-}
-
-func RegisterRuntime(runtime model.RuntimeType, runtimeInterface Runtime) {
-	runtimeMap[runtime] = runtimeInterface
 }

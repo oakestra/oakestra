@@ -49,7 +49,7 @@ var ukruntime = UnikernelRuntime{
 
 var ukSyncOnce sync.Once
 
-func RegisterUnikernelQemuRuntime() *UnikernelRuntime {
+func GetUnikernelQemuRuntime() *UnikernelRuntime {
 	ukSyncOnce.Do(func() {
 		var command string
 		var err error
@@ -80,7 +80,6 @@ func RegisterUnikernelQemuRuntime() *UnikernelRuntime {
 			logger.ErrorLogger().Printf("Unable to create instance directory: %v", err)
 		}
 		model.GetNodeInfo().AddSupportedTechnology(model.UNIKERNEL_RUNTIME)
-		RegisterRuntime(model.UNIKERNEL_RUNTIME, &ukruntime)
 	})
 	return &ukruntime
 }
@@ -377,7 +376,9 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
 		r.killQueue[hostname] = nil
-		os.RemoveAll(inst_path + instance)
+		if err := os.RemoveAll(inst_path + instance); err != nil {
+			logger.InfoLogger().Printf("Unable to remove instance data: %v", err)
+		}
 		logger.InfoLogger().Printf("Removing Instance data -- ")
 	}
 
@@ -401,17 +402,6 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 
 	qemuConfig.Instancepath = *kernelPath
 
-	revert := func(err error, instance string) {
-		startup <- false
-		errorchan <- err
-		r.channelLock.Lock()
-		defer r.channelLock.Unlock()
-		r.killQueue[hostname] = nil
-		if err := os.RemoveAll(inst_path + instance); err != nil {
-			logger.InfoLogger().Printf("Unable to remove instance data: %v", err)
-		}
-		logger.InfoLogger().Printf("Removing Instance data -- ")
-	}
 	var qemuCmd *exec.Cmd
 	var err error
 	if model.GetNodeInfo().Overlay {
