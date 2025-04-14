@@ -189,3 +189,59 @@ func DeleteNamespaceForUnikernel(servicename string, instance int) error {
 	}
 	return nil
 }
+
+// CreateNetworkForWasm creates a network for a Wasm module
+func CreateNetworkForWasm(servicename string, instance int, portMappings string) error {
+	ongoingDeployment.Lock()
+	defer ongoingDeployment.Unlock()
+
+	request := connectNetworkRequest{
+		Pid:            0,
+		Servicename:    servicename,
+		Instancenumber: instance,
+		PortMappings:   portMappings,
+	}
+	jsonReq, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
+
+	response, err := httpClient.Post(
+		fmt.Sprintf("http://localhost:%d/wasm/deploy", model.GetNodeInfo().NetManagerPort),
+		"application/json",
+		bytes.NewBuffer(jsonReq),
+	)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode != 200 {
+		return errors.New(fmt.Sprintf("NetManager deploy failed for Wasm, status code: %d", response.StatusCode))
+	}
+	return nil
+}
+
+// DeleteNetworkForWasm deletes a network for a Wasm module
+func DeleteNetworkForWasm(servicename string, instance int) error {
+	request := connectNetworkRequest{
+		Pid:            -1,
+		Servicename:    servicename,
+		Instancenumber: instance,
+	}
+	jsonReq, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
+
+	response, err := httpClient.Post(
+		fmt.Sprintf("http://localhost:%d/wasm/undeploy", model.GetNodeInfo().NetManagerPort),
+		"application/json",
+		bytes.NewBuffer(jsonReq),
+	)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode != 200 {
+		return errors.New(fmt.Sprintf("NetManager undeploy failed for Wasm, status code: %d", response.StatusCode))
+	}
+	return nil
+}

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
+	"go_node_engine/requests"
 	"os"
 	"reflect"
 	"sync"
@@ -135,10 +136,28 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 		r.channelLock.Unlock()
 	}
 
+	// Setup networking if overlay network is enabled
+	if model.GetNodeInfo().Overlay {
+		err := requests.CreateNetworkForWasm(service.Sname, service.Instance, service.Ports)
+		if err != nil {
+			logger.InfoLogger().Printf("Network creation for Wasm failed: %v\n", err)
+			revert(fmt.Errorf("network creation failed: %v", err))
+			return
+		}
+		logger.InfoLogger().Print("Network created for Wasm module")
+	}
+
 	codePath, err := downloadWasmModule(service.Image)
 	entry := "_start"
 
 	if err != nil {
+		// Clean up network if it was created
+		if model.GetNodeInfo().Overlay {
+			cleanupErr := requests.DeleteNetworkForWasm(service.Sname, service.Instance)
+			if cleanupErr != nil {
+				logger.ErrorLogger().Printf("Failed to clean up network after download error: %v", cleanupErr)
+			}
+		}
 		revert(fmt.Errorf("error downloading module: %v", err))
 		return
 	}
@@ -152,6 +171,13 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 
 	code, err := os.ReadFile(codePath)
 	if err != nil {
+		// Clean up network if it was created
+		if model.GetNodeInfo().Overlay {
+			cleanupErr := requests.DeleteNetworkForWasm(service.Sname, service.Instance)
+			if cleanupErr != nil {
+				logger.ErrorLogger().Printf("Failed to clean up network after file read error: %v", cleanupErr)
+			}
+		}
 		revert(fmt.Errorf("error reading file %s: %v", codePath, err))
 		return
 	}
@@ -159,6 +185,13 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 	logPath := fmt.Sprintf("%s/%s", model.GetNodeInfo().LogDirectory, taskID)
 	file, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
+		// Clean up network if it was created
+		if model.GetNodeInfo().Overlay {
+			cleanupErr := requests.DeleteNetworkForWasm(service.Sname, service.Instance)
+			if cleanupErr != nil {
+				logger.ErrorLogger().Printf("Failed to clean up network after log file error: %v", cleanupErr)
+			}
+		}
 		revert(err)
 		return
 	}
@@ -180,6 +213,13 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 
 	module, err := C.NewModule(engine, code)
 	if err != nil {
+		// Clean up network if it was created
+		if model.GetNodeInfo().Overlay {
+			cleanupErr := requests.DeleteNetworkForWasm(service.Sname, service.Instance)
+			if cleanupErr != nil {
+				logger.ErrorLogger().Printf("Failed to clean up network after module error: %v", cleanupErr)
+			}
+		}
 		revert(fmt.Errorf("error compiling module: %v", err))
 		return
 	}
@@ -190,6 +230,13 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 	linker := C.NewLinker(engine)
 	err = linker.DefineWasi()
 	if err != nil {
+		// Clean up network if it was created
+		if model.GetNodeInfo().Overlay {
+			cleanupErr := requests.DeleteNetworkForWasm(service.Sname, service.Instance)
+			if cleanupErr != nil {
+				logger.ErrorLogger().Printf("Failed to clean up network after linker error: %v", cleanupErr)
+			}
+		}
 		revert(fmt.Errorf("error defining WASI: %v", err))
 		return
 	}
@@ -198,6 +245,13 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 
 	instance, err := linker.Instantiate(store, module)
 	if err != nil {
+		// Clean up network if it was created
+		if model.GetNodeInfo().Overlay {
+			cleanupErr := requests.DeleteNetworkForWasm(service.Sname, service.Instance)
+			if cleanupErr != nil {
+				logger.ErrorLogger().Printf("Failed to clean up network after instantiation error: %v", cleanupErr)
+			}
+		}
 		revert(fmt.Errorf("error instantiating module: %v", err))
 		return
 	}
@@ -206,6 +260,13 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 
 	run := instance.GetFunc(store, entry)
 	if run == nil {
+		// Clean up network if it was created
+		if model.GetNodeInfo().Overlay {
+			cleanupErr := requests.DeleteNetworkForWasm(service.Sname, service.Instance)
+			if cleanupErr != nil {
+				logger.ErrorLogger().Printf("Failed to clean up network after function lookup error: %v", cleanupErr)
+			}
+		}
 		revert(fmt.Errorf("function %s not found in the module", entry))
 		return
 	}
@@ -277,6 +338,16 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 
 		service.Status = model.SERVICE_DEAD
 		statusChangeNotificationHandler(service)
+	}
+
+	// Clean up network if it was created
+	if model.GetNodeInfo().Overlay {
+		err := requests.DeleteNetworkForWasm(service.Sname, service.Instance)
+		if err != nil {
+			logger.ErrorLogger().Printf("Failed to clean up network for Wasm module: %v", err)
+		} else {
+			logger.InfoLogger().Print("Network for Wasm module cleaned up successfully")
+		}
 	}
 
 	doneChannel <- true
