@@ -83,7 +83,7 @@ or the equivalent for your distribution and architecture.
         {
           "microserviceID": "",
           "microservice_name": "WasmBenchmark",
-          "microservice_namespace": "ngnix",
+          "microservice_namespace": "nginx",
           "virtualization": "wasm",
           "description": "Benchmark service run on Wasmtime without Docker",
           "memory": 250,
