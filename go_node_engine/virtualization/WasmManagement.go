@@ -216,7 +216,7 @@ func (r *WasmRuntime) WasmRuntimeCreationRoutine(
 	runResult := make(chan error, 1)
 	// Benchmarking strating times
 	logger.InfoLogger().Printf("Printing starting times for %s", taskID)
-	logger.InfoLogger().Printf("From deployment to coniguration end: %d us", deploymentConfigEnd)
+	logger.InfoLogger().Printf("From deployment to configuration end: %d us", deploymentConfigEnd)
 	logger.InfoLogger().Printf("From deployment to compilation: %d us", deploymentCompilationEnd)
 	logger.InfoLogger().Printf("From deployment to WASI linking: %d us", deploymentWasiLinkerEnd)
 	logger.InfoLogger().Printf("From deployment to instantiation: %d us", deploymentInstantiationEnd)
