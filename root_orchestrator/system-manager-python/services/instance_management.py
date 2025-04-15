@@ -97,7 +97,6 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
         instances = service.get("instance_list")
 
         if len(instances) > 0:
-            
             for instance in instances:
                 if which_one == instance["instance_number"] or which_one == -1:
                     net_inform_instance_undeploy(microserviceid, which_one)
@@ -105,11 +104,11 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
                     instances.remove(instance)
 
             update_job_status_and_instances(
-                 microserviceid,
-                 convert_to_status(service["status"]),
-                 service["next_instance_progressive_number"],
-                 instances,
-             )
+                microserviceid,
+                convert_to_status(service["status"]),
+                service["next_instance_progressive_number"],
+                instances,
+            )
 
 
 def instance_scale_up_scheduled_handler(job_id, cluster_id):
