@@ -49,7 +49,7 @@ var ukruntime = UnikernelRuntime{
 
 var ukSyncOnce sync.Once
 
-func GetUnikernelQemuRuntime() *UnikernelRuntime {
+func GetUnikernelQemuRuntime() Runtime {
 	ukSyncOnce.Do(func() {
 		var command string
 		var err error

@@ -62,7 +62,7 @@ const CGROUPV2_BASE_MEM = "/sys/fs/cgroup/" + NAMESPACE
 const CONTAINERD_CONFIG_PATH = "/etc/containerd/config.toml"
 
 // GetContainerdRuntime returns the container runtime client
-func GetContainerdRuntime() *ContainerRuntime {
+func GetContainerdRuntime() Runtime {
 	containerdSingletonCLient.Do(func() {
 		client, err := containerd.New("/run/containerd/containerd.sock")
 		if err != nil {
@@ -76,42 +76,28 @@ func GetContainerdRuntime() *ContainerRuntime {
 		model.GetNodeInfo().AddSupportedTechnology(model.CONTAINER_RUNTIME)
 
 		//fetch containerd runtime configuration
-		containerdcfg.LoadConfig(context.Background(), CONTAINERD_CONFIG_PATH, &containerdConfig)
-
-		//check if affitional runtimes are configured in containerd config file
-		criPlugin := containerdConfig.Plugins["io.containerd.grpc.v1.cri"].(map[string]interface{})
-		ctd, ok := criPlugin["containerd"].(map[string]interface{})
-		if ok {
-			runtimes, ok := ctd["runtimes"].(map[string]interface{})
-			if ok {
-				for k, _ := range runtimes {
-					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", k, CONTAINERD_CONFIG_PATH)
-					model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(k))
-				}
-			}
-		}
+		checkAdditionalRuntimePlugins()
 
 	})
 	return &runtime
 }
 
-// StopContainerdClient stops the container runtime client
-func getContainerdConfigFile() string {
-	containerdconf, err := os.Open("/etc/containerd/config.toml")
-	if err != nil {
-		logger.ErrorLogger().Print(err)
-		return ""
-	}
-	buffer := make([]byte, 1024)
-	confFileContent := ""
-	for {
-		n, err := containerdconf.Read(buffer)
-		if err != nil {
-			break
+// checks the containerd config file for additional runtimes and registers them
+func checkAdditionalRuntimePlugins() {
+	containerdcfg.LoadConfig(context.Background(), CONTAINERD_CONFIG_PATH, &containerdConfig)
+	for _, ctd := range containerdConfig.Plugins {
+		ctd, ok := ctd.(map[string]interface{})["containerd"].(map[string]interface{})
+		if ok {
+			runtimes, ok := ctd["runtimes"].(map[string]interface{})
+			if ok {
+				for runtimeName, _ := range runtimes {
+					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", runtimeName, CONTAINERD_CONFIG_PATH)
+					model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(runtimeName))
+					registerRuntimeLink(runtimeName, GetContainerdRuntime)
+				}
+			}
 		}
-		confFileContent = fmt.Sprintf("%s%s", confFileContent, string(buffer[:n]))
 	}
-	return confFileContent
 }
 
 // StopContainerdClient stops the container runtime client
@@ -150,6 +136,7 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 		image, err = r.containerClient.Pull(r.ctx, service.Image, remoteOpt...)
 
 		if err != nil {
+			// avoid crashing for HTTP based registires in local infrastructures
 			if strings.Contains(err.Error(), "http: server gave HTTP response to HTTPS client") {
 				alwaysPlainHTTP := func(string) (bool, error) {
 					return true, nil
@@ -229,15 +216,13 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	containerOpts := []containerd.NewContainerOpts{}
 	// -- if custom runtime selected, add it to the container
 	if service.Runtime != string(model.CONTAINER_RUNTIME) {
-
 		if strings.Contains("io.containerd", service.Runtime) {
 			containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), &runcoptions.Options{}))
-
 		} else {
 			path, err := exec.LookPath(service.Runtime)
 			logger.InfoLogger().Printf("Using custom runtime %s", path)
 			if err != nil {
-				logger.ErrorLogger().Printf("ERROR: unable to find rungime %s, %v", service.Runtime, err)
+				logger.ErrorLogger().Printf("ERROR: unable to find runtime %s, %v", service.Runtime, err)
 			}
 			containerOpts = append(containerOpts, containerd.WithRuntime(plugin.RuntimeRuncV2, &runcoptions.Options{BinaryName: path}))
 		}

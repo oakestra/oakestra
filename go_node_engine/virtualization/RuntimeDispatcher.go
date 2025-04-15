@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-var runtimeMap = map[model.RuntimeType]Runtime{}
-
 type RuntimeInterface interface {
 	Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error
 	Undeploy(sname string, instance int) error
@@ -23,17 +21,25 @@ type Runtime interface {
 }
 
 type RuntimeType string
+type RuntimeGetter func() Runtime
+
+var runtimeMap = map[model.RuntimeType]RuntimeGetter{}
+
+func init() {
+	runtimeMap[model.CONTAINER_RUNTIME] = RuntimeGetter(GetContainerdRuntime)
+	runtimeMap[model.UNIKERNEL_RUNTIME] = RuntimeGetter(GetUnikernelQemuRuntime)
+}
 
 func GetRuntime(runtime model.RuntimeType) RuntimeInterface {
-	if runtime == model.CONTAINER_RUNTIME {
-		return GetContainerdRuntime()
-	}
-	if runtime == model.UNIKERNEL_RUNTIME {
-		return GetUnikernelQemuRuntime()
-	}
-	return nil
+	return runtimeMap[runtime]()
 }
 
 func GetRuntimeMonitoring(runtime model.RuntimeType) RuntimeMonitoring {
-	return runtimeMap[runtime]
+	return runtimeMap[runtime]()
+}
+
+// can be used by registered runtimes to register additional sub-runtimes.
+// E.g. containerd can register runc as well as urunc
+func registerRuntimeLink(name string, getter RuntimeGetter) {
+	runtimeMap[model.RuntimeType(name)] = getter
 }
