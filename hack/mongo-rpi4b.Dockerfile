@@ -30,7 +30,11 @@ RUN python3 -m venv python3-venv --prompt mongo \
   && source python3-venv/bin/activate \
   && poetry install --no-root --sync
 
- # compile mongo server components
+# compile mongo server components:
+# - the truncate command is to disable a custom toolchain path that mongo tries to use by default
+# - this is what makes these binaries work on the RPI-4b:
+#   - 'CCFLAGS="-march=armv8-a+crc -moutline-atomics -mtune=cortex-a72"': compilation flags for the RPI-4b CPU
+#   - '--allocator=system': the default allocator of mongo (tcmalloc) does not work on the RPI-4b (https://github.com/google/tcmalloc/issues/82)
 RUN source python3-venv/bin/activate \
   && truncate -s 0 etc/scons/mongodbtoolchain_stable_gcc.vars \
   && python buildscripts/scons.py AR=/usr/bin/aarch64-linux-gnu-ar CC=/usr/bin/aarch64-linux-gnu-gcc CXX=/usr/bin/aarch64-linux-gnu-g++ CCFLAGS="-march=armv8-a+crc -moutline-atomics -mtune=cortex-a72" --build-profile=release --variables-files=etc/scons/developer_versions.vars --allocator=system --disable-warnings-as-errors install-servers \
@@ -44,3 +48,5 @@ FROM --platform=linux/arm64/v8 mongo:$MONGO_VERSION
 # replace mongo executables with the custom built ones
 COPY --from=builder /mongodb/build/install/bin/mongod /usr/bin/mongod
 COPY --from=builder /mongodb/build/install/bin/mongos /usr/bin/mongos
+
+LABEL org.opencontainers.image.source="https://github.com/oakestra/oakestra"
