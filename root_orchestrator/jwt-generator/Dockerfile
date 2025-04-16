@@ -1,4 +1,4 @@
-FROM python:3.10-slim-buster
+FROM python:3.13-slim-bookworm
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
 # Cryptography requires libffi
@@ -16,4 +16,4 @@ ENV JWT_GENERATOR_PORT=10011
 
 EXPOSE 10011
 
-CMD ["python", "jwt_generator.py"]
+CMD ["gunicorn" , "--bind", "0.0.0.0:10011", "jwt_generator:app"]
