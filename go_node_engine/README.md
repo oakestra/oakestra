@@ -4,7 +4,7 @@ The node engine is the core of the Oakestra worker node.
 
 ## Build the NodeEngine 
 
-move to the build direcotry and run `./build.sh` and then `./install.sh $(dpkg --print-architecture)`.
+Move to the build directory and run `./build.sh` and then `./install.sh $(dpkg --print-architecture)`.
 
 ## Use the NodeEngine 
 
