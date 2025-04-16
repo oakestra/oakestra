@@ -9,7 +9,7 @@ import (
 )
 
 var DEFAULT_LOG_DIR = "/tmp"
-var DEFAULT_CNI = "default"
+var AUTO_OAK_NETWORK = "default"
 
 type ConfFile struct {
 	ConfVersion     string           `json:"conf_version"`
@@ -144,7 +144,7 @@ func GenDefaultConfig() ConfFile {
 		ClusterAddress: "0.0.0.0",
 		ClusterPort:    10100,
 		AppLogs:        DEFAULT_LOG_DIR,
-		OverlayNetwork: DEFAULT_CNI,
+		OverlayNetwork: AUTO_OAK_NETWORK,
 		NetPort:        0,
 		Virtualizations: []Virtualization{
 			{

@@ -25,6 +25,7 @@ func init() {
 	setVirtualizationCmd.AddCommand(enableUnikernel)
 	setCni.AddCommand(enableNetwork)
 	setCni.AddCommand(disableNetwork)
+	setCni.AddCommand(enableManualNetwork)
 	addClusterCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Custom port of the cluster orchestrator")
 	configCmd.AddCommand(setAddonCmd)
 	setAddonCmd.AddCommand(enableBuilder)
@@ -118,14 +119,25 @@ var (
 
 	// --- NETWORKING
 	setCni = &cobra.Command{
-		Use:   "network [on/off]",
+		Use:   "network [auto/custom/off]",
 		Short: "Enable/Disable networking support",
 	}
 	enableNetwork = &cobra.Command{
-		Use:   "on",
-		Short: "Enable overlay network support (Requires NetManager daemon running)",
+		Use:   "auto",
+		Short: "Enable auto overlay network startup",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return setNetwork(config.DEFAULT_CNI)
+			return setNetwork(config.AUTO_OAK_NETWORK)
+		},
+	}
+	enableManualNetwork = &cobra.Command{
+		Use:   "manual [socket path]",
+		Short: "Manually pre-configured overlay network client. Default socket: /etc/netmanager/netmanager.sock (usefull for debug and testing of custom overlay networks)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			socketPath := "custom:/etc/netmanager/netmanager.sock"
+			if len(args) == 1 {
+				socketPath = "custom:" + string(args[0])
+			}
+			return setNetwork(socketPath)
 		},
 	}
 	disableNetwork = &cobra.Command{
@@ -137,7 +149,9 @@ var (
 	}
 
 	// --- MQTT AUTH
-	setAuth = &cobra.Command{
+	certFile string
+	keyFile  string
+	setAuth  = &cobra.Command{
 		Use:   "auth",
 		Short: "Set Mqtt Authentication",
 		RunE: func(cmd *cobra.Command, args []string) error {
