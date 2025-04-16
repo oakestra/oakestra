@@ -46,7 +46,7 @@ Use "NodeEngine [command] --help" for more information about a command.
 
 ## How to configure additional OCI runtimes
 
-Containerd (the default NodeEngine container runtime) allows any OCI compliant runtime to be used as plugin. This means that you can use any OCI compliant runtime with Oakestra, including:
+Containerd (the default NodeEngine container runtime) allows any OCI-compliant runtime to be used as a plugin. This means that you can use any OCI-compliant runtime with Oakestra, including:
 - runc
 - runsc 
 - runu 
