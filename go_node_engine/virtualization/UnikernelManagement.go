@@ -306,7 +306,7 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 
 	_, err = os.Stat(kernel_location + "files1")
 	if !errors.Is(err, fs.ErrNotExist) {
-		logger.InfoLogger().Printf("Creating new instance envioument %s -> %s", kernel_location+"files1", instance_path+"/files")
+		logger.InfoLogger().Printf("Creating new instance environment %s -> %s", kernel_location+"files1", instance_path+"/files")
 
 		err = exec.Command("cp", "-r", kernel_location+"files1", instance_path).Run()
 		if err != nil {
