@@ -179,6 +179,26 @@ func configCluster(address string) error {
 	return configManager.Write(clusterConf)
 }
 
+func configAddress(address string) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+	clusterConf.ClusterAddress = address
+	return configManager.Write(clusterConf)
+}
+
+func configPort(port int) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+	clusterConf.ClusterPort = clusterPort
+	return configManager.Write(clusterConf)
+}
+
 func configLogs(path string) error {
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()

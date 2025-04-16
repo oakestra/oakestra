@@ -42,7 +42,7 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&clusterAddress, "clusterAddr", "a", "localhost", "Address of the cluster orchestrator without port")
+	rootCmd.Flags().StringVarP(&clusterAddress, "clusterAddr", "a", "", "Custom address of the cluster orchestrator without port")
 	rootCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Port of the cluster orchestrator")
 	rootCmd.Flags().BoolVarP(&detatched, "detatch", "d", false, "Run the NodeEngine in the background (daemon mode)")
 	// Addons
@@ -58,9 +58,17 @@ func nodeEngineDaemonManager() error {
 		}
 	}
 
-	if clusterAddress != "localhost" {
-		// read cluster configuration if not present or new value set
-		err := configCluster(clusterAddress)
+	if clusterAddress != "" {
+		// set new cluster address if users selected a custom one
+		err := configAddress(clusterAddress)
+		if err != nil {
+			return err
+		}
+	}
+
+	if clusterPort != 10100 {
+		// set new cluster port if users selected a custom one
+		err := configPort(clusterPort)
 		if err != nil {
 			return err
 		}
