@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/containerd/containerd"
+	runcoptions "github.com/containerd/containerd/api/types/runc/options"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/contrib/nvidia"
@@ -22,7 +23,6 @@ import (
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/containerd/plugin"
 	docker_remote "github.com/containerd/containerd/remotes/docker"
-	runcoptions "github.com/containerd/containerd/runtime/v2/runc/options"
 	containerdcfg "github.com/containerd/containerd/v2/cmd/containerd/server/config"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/shirou/gopsutil/docker"
@@ -84,7 +84,11 @@ func GetContainerdRuntime() Runtime {
 
 // checks the containerd config file for additional runtimes and registers them
 func checkAdditionalRuntimePlugins() {
-	containerdcfg.LoadConfig(context.Background(), CONTAINERD_CONFIG_PATH, &containerdConfig)
+	err := containerdcfg.LoadConfig(context.Background(), CONTAINERD_CONFIG_PATH, &containerdConfig)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to load containerd config file: %v", err)
+		return
+	}
 	for _, ctd := range containerdConfig.Plugins {
 		ctd, ok := ctd.(map[string]interface{})["containerd"].(map[string]interface{})
 		if ok {
@@ -217,7 +221,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// -- if custom runtime selected, add it to the container
 	if service.Runtime != string(model.CONTAINER_RUNTIME) {
 		if strings.Contains("io.containerd", service.Runtime) {
-			containerOpts = append(containerOpts, containerd.WithRuntime(string(service.Runtime), &runcoptions.Options{}))
+			containerOpts = append(containerOpts, containerd.WithRuntime(service.Runtime, &runcoptions.Options{}))
 		} else {
 			path, err := exec.LookPath(service.Runtime)
 			logger.InfoLogger().Printf("Using custom runtime %s", path)

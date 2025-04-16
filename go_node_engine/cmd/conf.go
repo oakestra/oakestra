@@ -135,7 +135,7 @@ var (
 		RunE: func(cmd *cobra.Command, args []string) error {
 			socketPath := "custom:/etc/netmanager/netmanager.sock"
 			if len(args) == 1 {
-				socketPath = "custom:" + string(args[0])
+				socketPath = "custom:" + args[0]
 			}
 			return setNetwork(socketPath)
 		},
@@ -195,7 +195,7 @@ func configPort(port int) error {
 	if err != nil {
 		return err
 	}
-	clusterConf.ClusterPort = clusterPort
+	clusterConf.ClusterPort = port
 	return configManager.Write(clusterConf)
 }
 

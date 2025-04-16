@@ -271,9 +271,12 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 				}
 			case tar.TypeReg:
 				file, err := os.Create(kernel_location + header.Name)
-				file.Chmod(header.FileInfo().Mode())
 				if err != nil {
 					logger.InfoLogger().Printf("Unable to create file: %v", err)
+				}
+				err = file.Chmod(header.FileInfo().Mode())
+				if err != nil {
+					logger.InfoLogger().Printf("Unable to chmod file: %v", err)
 				}
 				_, err = io.Copy(file, tardata)
 				if err != nil {
@@ -743,10 +746,13 @@ func deleteDefaultIpGwMask(namespace string) (string, string, string, string, in
 			return err
 		}
 		if len(addrs) == 0 {
-			return err
+			return errors.New("No IP address found")
 		}
 
-		fd, err = getTapFd(namespace)
+		fd, err = getTapFd()
+		if err != nil {
+			return err
+		}
 
 		ip = addrs[0].IP.String()
 		gw = route.Gw.String()
@@ -764,7 +770,7 @@ func deleteDefaultIpGwMask(namespace string) (string, string, string, string, in
 }
 
 // defaultRoute returns the default route for the current namespace.
-func getTapFd(namespace string) (int, error) {
+func getTapFd() (int, error) {
 	var fd int
 
 	tapdev, err := netlink.LinkByName("tap0")
@@ -788,10 +794,14 @@ func execInsideNsByName(Nsname string, function func() error) error {
 
 	stdNetns, err := netns.Get()
 	if err == nil {
-		defer stdNetns.Close()
+		defer func() {
+			_ = stdNetns.Close()
+		}()
 		containerNs, err = netns.GetFromName(Nsname)
 		if err == nil {
-			defer netns.Set(stdNetns)
+			defer func() {
+				_ = netns.Set(stdNetns)
+			}()
 			err = netns.Set(containerNs)
 			if err == nil {
 				err = function()
