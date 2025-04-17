@@ -20,7 +20,11 @@ class JobFilterSchema(Schema):
 @jobsblp.route("/")
 class AllJobsController(MethodView):
     def get(self):
-        return json.dumps(list(jobs_db.find_jobs()), default=str)
+        appID = request.args.get("applicationID")
+        filter = {}
+        if appID:
+            filter["applicationID"] = appID
+        return json.dumps(list(jobs_db.find_jobs(filter)), default=str)
 
     @pre_post_hook("jobs")
     def post(self, data, *args, **kwargs):
