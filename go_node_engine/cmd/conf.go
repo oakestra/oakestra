@@ -23,6 +23,7 @@ func init() {
 	setAuth.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
 	setAuth.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
 	setVirtualizationCmd.AddCommand(enableUnikernel)
+	setVirtualizationCmd.AddCommand(enableWasm)
 	setCni.AddCommand(enableNetwork)
 	setCni.AddCommand(disableNetwork)
 	addClusterCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Custom port of the cluster orchestrator")
@@ -82,6 +83,16 @@ var (
 				return errors.New("unikernel command needs exactly one parameter: [on/off]")
 			}
 			return setUnikernel(args[0])
+		},
+	}
+	enableWasm = &cobra.Command{
+		Use:   "wasm [on/off]",
+		Short: "[on/off] Enable/Disable WASM runtime support",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return errors.New("wasm command needs exactly one parameter: [on/off]")
+			}
+			return setWasm(args[0])
 		},
 	}
 
@@ -204,6 +215,40 @@ func showVirtualization() error {
 	}
 
 	return nil
+}
+
+func setWasm(trigger string) error {
+	active := false
+	if trigger == "on" || trigger == "enable" || trigger == "true" {
+		active = true
+	}
+
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+
+	updated := false
+	for i, add := range clusterConf.Virtualizations {
+		if add.Runtime == string(model.WASM_RUNTIME) {
+			updated = true
+			add.Active = active
+			clusterConf.Virtualizations[i] = add
+		}
+	}
+
+	if !updated {
+		WasmVirt := config.Virtualization{
+			Name:    "wasm",
+			Runtime: string(model.WASM_RUNTIME),
+			Active:  active,
+			Config:  []string{},
+		}
+		clusterConf.Virtualizations = append(clusterConf.Virtualizations, WasmVirt)
+	}
+
+	return configManager.Write(clusterConf)
 }
 
 func setUnikernel(trigger string) error {

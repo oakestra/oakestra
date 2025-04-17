@@ -31,6 +31,7 @@ var (
 	netmanagerPort   int
 	overlayNetwork   string
 	unikernelSupport bool
+	wasmSupport      bool
 	detatched        bool
 	logDirectory     string
 	certFile         string
@@ -95,6 +96,10 @@ func nodeEngineDaemonManager() error {
 			return err
 		}
 	}
+
+	// Dynamically link wasmtime-go library
+	exec.Command("ldconfig", "/usr/local/lib/wasmtime-go").Run()
+	exec.Command("ldconfig", "/usr/local/lib/wasmtime-go/lib").Run()
 
 	switch overlayNetwork {
 	case config.DEFAULT_CNI:
