@@ -1,0 +1,5 @@
+services:
+  cluster_service_manager:
+    build:
+      context: ./service-manager
+      dockerfile: Dockerfile
