@@ -4,6 +4,7 @@ import (
 	"go_node_engine/addons"
 	"go_node_engine/cmd"
 	"go_node_engine/config"
+	"go_node_engine/http"
 	"go_node_engine/jobs"
 	"go_node_engine/logger"
 	"go_node_engine/model"
@@ -34,6 +35,10 @@ func main() {
 
 	// set cluster address
 	model.GetNodeInfo().SetClusterAddress(configs.ClusterAddress)
+
+	//Start HTTP Server
+	http.StartServerNonBlocking("50100")
+	defer http.StopServer()
 
 	//Set Virtualization Runtimes
 	for _, virt := range configs.Virtualizations {
