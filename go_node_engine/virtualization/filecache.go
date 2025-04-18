@@ -5,46 +5,48 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"go_node_engine/logger"
+
+	"github.com/spf13/afero"
 )
 
 const (
 	cacheFileExtension = ".oakcache"
 )
 
-// FileCache retrieves and caches files on disk by a caller specified key; safe for concurrent use.
+// ReaderProvider returns a reader for a given key (e.g. HTTP GET, S3 fetch, ...)
+type ReaderProvider func(key string) (io.Reader, error)
+
+// FileCache retrieves and caches files by a caller-specified key.
+// It is safe and intended for concurrent use.
 type FileCache struct {
+	fs        afero.Fs
 	dirPath   string
 	mutex     sync.RWMutex
 	fileSizes map[string]int64 // map-key: hex(SHA256(key)), map-value: size
 	totalSize int64
 }
 
-type ReaderProvider func(key string) (io.Reader, error)
-
-// NewFileCache ensures dirPath exists, scans it for existing files,
-// indexes them, and honors removeOnClose on Close().
-func NewFileCache(dirPath string) (*FileCache, error) {
-	if err := os.MkdirAll(dirPath, 0o750); err != nil {
-		logger.ErrorLogger().Printf(
-			"FileCache: failed to create cache dirPath %q: %v", dirPath, err,
-		)
+// NewFileCache ensures dirPath exists, scans it for existing “*.oakcache” files, and indexes them.
+func NewFileCache(fs afero.Fs, dirPath string) (*FileCache, error) {
+	if err := fs.MkdirAll(dirPath, 0o750); err != nil {
+		logger.ErrorLogger().Printf("FileCache: failed to create cache directory %q: %v", dirPath, err)
 		return nil, err
 	}
 
-	existingEntries, err := os.ReadDir(dirPath)
+	existingEntries, err := afero.ReadDir(fs, dirPath)
 	if err != nil {
-		logger.ErrorLogger().Printf("FileCache: failed to read cache dirPath %q: %v", dirPath, err)
+		logger.ErrorLogger().Printf("FileCache: failed to read cache directory %q: %v", dirPath, err)
 		return nil, err
 	}
 
 	p := &FileCache{
+		fs:        fs,
 		dirPath:   dirPath,
 		mutex:     sync.RWMutex{},
 		fileSizes: make(map[string]int64),
@@ -56,31 +58,28 @@ func NewFileCache(dirPath string) (*FileCache, error) {
 		entryName := existingEntry.Name()
 		entryPath := filepath.Join(dirPath, entryName)
 
-		info, err := os.Stat(entryPath)
-		if err != nil {
-			logger.WarnLogger().Printf("FileCache: cannot stat %q, ignoring: %v", entryPath, err)
+		fileInfo, isCacheFile := p.statEntry(entryPath)
+		if !isCacheFile {
+			logger.WarnLogger().Printf("FileCache: while initializing cache, found non-cache file %q, ignoring", entryPath)
 			continue
 		}
 
-		if !info.Mode().IsRegular() {
-			logger.WarnLogger().Printf("FileCache: non-file entry %q, ignoring", entryPath)
-			continue
-		}
-
-		if !strings.HasSuffix(entryName, cacheFileExtension) {
-			logger.WarnLogger().Printf("FileCache: unknown entry %q, ignoring", entryPath)
-			continue
-		}
-
-		p.fileSizes[entryName] = info.Size()
-		p.totalSize += info.Size()
+		hashedKey := strings.TrimSuffix(entryName, cacheFileExtension)
+		p.fileSizes[hashedKey] = fileInfo.Size()
+		p.totalSize += fileInfo.Size()
 	}
-
 	logger.InfoLogger().Printf("FileCache: loaded %d files, total %d bytes", len(p.fileSizes), p.totalSize)
+
 	return p, nil
 }
 
-// Store ensures the contents provided by srcProvider are cached under the specified key, then copies them to dst.
+// Store ensures the contents provided by srcProvider(key) are cached
+// under that key, then copies the cached file to dst. It never buffers
+// the entire file in memory, and multiple distinct keys may fetch in parallel.
+//
+// When Store is concurrently called multiple times for the same, uncached key,
+// the FileCache might try to retrieve the corresponding src multiple times,
+// in which case all of them but the first one to complete is thrown away.
 func (p *FileCache) Store(key string, srcProvider ReaderProvider, dst string) error {
 	// compute hash and final path
 	keySum := sha256.Sum256([]byte(key))
@@ -111,8 +110,8 @@ func (p *FileCache) copyFromCacheToDst(key string, keyHash string, fullPath stri
 
 	// if we'd just call copyFile here and propagate its error to the caller,
 	// the cache could never recover from an underlying file going missing
-	_, err := os.Stat(fullPath)
-	if errors.Is(err, os.ErrNotExist) {
+	_, err := p.fs.Stat(fullPath)
+	if errors.Is(err, afero.ErrFileNotFound) {
 		logger.WarnLogger().Printf("FileCache: missing underlying file for cached entry %q, restoring", fullPath)
 		// because of us returning "not found in cache" in the first return value here,
 		// the calling function will try to retrieve the underlying file again
@@ -131,10 +130,10 @@ func (p *FileCache) copyFromCacheToDst(key string, keyHash string, fullPath stri
 // moveIntoCacheAndCopyToDst moves a temporary file with the contents for the specified key into the cache and then copies it to dst
 func (p *FileCache) moveIntoCacheAndCopyToDst(key string, keyHash string, fullPath string, dst string, tmpPath string) error {
 	// get the size of the retrieved file
-	info, err := os.Stat(tmpPath)
+	info, err := p.fs.Stat(tmpPath)
 	if err != nil {
 		logger.ErrorLogger().Printf("FileCache: failed to stat temporary file %q for %q: %v", tmpPath, key, err)
-		if err := os.Remove(tmpPath); err != nil {
+		if err := p.fs.Remove(tmpPath); err != nil {
 			logger.WarnLogger().Printf("FileCache: failed to remove temporary file %q: %v", tmpPath, err)
 		}
 		return err
@@ -150,12 +149,12 @@ func (p *FileCache) moveIntoCacheAndCopyToDst(key string, keyHash string, fullPa
 		// - the key was present in the map, but the underlying file was missing, so we are currently re-retrieving it
 
 		// the condition below is true if the key was present in the map, but the underlying file was missing
-		if _, err := os.Stat(fullPath); errors.Is(err, fs.ErrNotExist) {
+		if _, err := p.fs.Stat(fullPath); errors.Is(err, afero.ErrFileNotFound) {
 			// after moving the temporary file to its destination in the cache, we don't need to change the map,
 			// since the entry is already present
-			if err := os.Rename(tmpPath, fullPath); err != nil {
+			if err := p.fs.Rename(tmpPath, fullPath); err != nil {
 				logger.ErrorLogger().Printf("FileCache: for %q, moving temporary file %q to destination %q failed: %v", key, tmpPath, fullPath, err)
-				if err := os.Remove(tmpPath); err != nil {
+				if err := p.fs.Remove(tmpPath); err != nil {
 					logger.WarnLogger().Printf("FileCache: failed to remove temporary file %q: %v", tmpPath, err)
 				}
 				return err
@@ -166,7 +165,7 @@ func (p *FileCache) moveIntoCacheAndCopyToDst(key string, keyHash string, fullPa
 		}
 
 		// if we got to here, another call of this function retrieved the file concurrently
-		if err := os.Remove(tmpPath); err != nil {
+		if err := p.fs.Remove(tmpPath); err != nil {
 			logger.WarnLogger().Printf("FileCache: failed to remove temporary file %q: %v", tmpPath, err)
 		}
 		logger.InfoLogger().Printf("FileCache: using cache after retrieval race for %q -> %q", key, fullPath)
@@ -174,9 +173,9 @@ func (p *FileCache) moveIntoCacheAndCopyToDst(key string, keyHash string, fullPa
 		return p.copyFile(fullPath, dst)
 	}
 
-	if err := os.Rename(tmpPath, fullPath); err != nil {
+	if err := p.fs.Rename(tmpPath, fullPath); err != nil {
 		logger.ErrorLogger().Printf("FileCache: for %q, moving temporary file %q to destination %q failed: %v", key, tmpPath, fullPath, err)
-		if err := os.Remove(tmpPath); err != nil {
+		if err := p.fs.Remove(tmpPath); err != nil {
 			logger.WarnLogger().Printf("FileCache: failed to remove temporary file %q: %v", tmpPath, err)
 		}
 		return err
@@ -190,7 +189,7 @@ func (p *FileCache) moveIntoCacheAndCopyToDst(key string, keyHash string, fullPa
 // retrieveIntoTmpFile is used after a cache miss and retrieves the contents from srcProvider into a temporary file with a random name
 func (p *FileCache) retrieveIntoTmpFile(key string, srcProvider ReaderProvider) (string, error) {
 	// after cache miss: create temporary file with random name for retrieval
-	tmpFile, err := os.CreateTemp("", "oakestra-filecache-*.tmp")
+	tmpFile, err := afero.TempFile(p.fs, "", "oakestra-filecache-*.tmp")
 	if err != nil {
 		logger.ErrorLogger().Printf("FileCache: failed to create temporary file for %q: %v", key, err)
 		return "", err
@@ -205,7 +204,7 @@ func (p *FileCache) retrieveIntoTmpFile(key string, srcProvider ReaderProvider) 
 		if err := tmpFile.Close(); err != nil {
 			logger.WarnLogger().Printf("FileCache: failed to close temporary file %q: %v", tmpPath, err)
 		}
-		if err := os.Remove(tmpPath); err != nil {
+		if err := p.fs.Remove(tmpPath); err != nil {
 			logger.WarnLogger().Printf("FileCache: failed to remove temporary file %q: %v", tmpPath, err)
 		}
 		return "", err
@@ -215,7 +214,7 @@ func (p *FileCache) retrieveIntoTmpFile(key string, srcProvider ReaderProvider) 
 		if err := tmpFile.Close(); err != nil {
 			logger.WarnLogger().Printf("FileCache: failed to close temporary file %q: %v", tmpPath, err)
 		}
-		if err := os.Remove(tmpPath); err != nil {
+		if err := p.fs.Remove(tmpPath); err != nil {
 			logger.WarnLogger().Printf("FileCache: failed to remove temporary file %q: %v", tmpPath, err)
 		}
 		return "", err
@@ -229,7 +228,7 @@ func (p *FileCache) retrieveIntoTmpFile(key string, srcProvider ReaderProvider) 
 
 // copyFile copies from src into dst, creating or truncating the latter. It must be called with the cache’s RWLock held
 func (p *FileCache) copyFile(src, dst string) error {
-	in, err := os.Open(src)
+	in, err := p.fs.Open(src)
 	if err != nil {
 		logger.ErrorLogger().Printf("FileCache: failed to open src file %q: %v", src, err)
 		return err
@@ -240,7 +239,7 @@ func (p *FileCache) copyFile(src, dst string) error {
 		}
 	}()
 
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o640)
+	out, err := p.fs.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o640)
 	if err != nil {
 		logger.ErrorLogger().Printf("FileCache: failed to create dst file %q: %v", dst, err)
 		return err
@@ -265,7 +264,7 @@ func (p *FileCache) copyFile(src, dst string) error {
 func (p *FileCache) Remove() error {
 	logger.InfoLogger().Printf("FileCache: removing cache at %q", p.dirPath)
 
-	entries, err := os.ReadDir(p.dirPath)
+	entries, err := afero.ReadDir(p.fs, p.dirPath)
 	if err != nil {
 		logger.ErrorLogger().Printf("FileCache: failed to read directory %q: %v", p.dirPath, err)
 		return err
@@ -276,36 +275,40 @@ func (p *FileCache) Remove() error {
 		entryName := existingEntry.Name()
 		entryPath := filepath.Join(p.dirPath, entryName)
 
-		info, err := os.Stat(entryPath)
-		if err != nil {
-			logger.WarnLogger().Printf("FileCache: while removing cache, cannot stat %q, ignoring: %v", entryPath, err)
+		if _, isCacheFile := p.statEntry(entryPath); !isCacheFile {
+			logger.WarnLogger().Printf("FileCache: while removing cache, found non-cache file %q, ignoring", entryPath)
 			skippedFile = true
 			continue
 		}
 
-		if !info.Mode().IsRegular() {
-			logger.WarnLogger().Printf("FileCache: while removing cache, non-file entry %q, ignoring", entryPath)
-			skippedFile = true
-			continue
-		}
-
-		if !strings.HasSuffix(entryName, cacheFileExtension) {
-			logger.WarnLogger().Printf("FileCache: while removing cache, unknown entry %q, ignoring", entryPath)
-			skippedFile = true
-			continue
-		}
-
-		if err := os.Remove(entryPath); err != nil {
+		if err := p.fs.Remove(entryPath); err != nil {
 			logger.WarnLogger().Printf("FileCache: while removing cache, failed to remove file %q: %v", entryPath, err)
 		}
 	}
 
 	if !skippedFile {
-		if err := os.Remove(p.dirPath); err != nil {
+		if err := p.fs.Remove(p.dirPath); err != nil {
 			logger.ErrorLogger().Printf("FileCache: failed to remove cache directory %q: %v", p.dirPath, err)
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (p *FileCache) statEntry(path string) (fileInfo os.FileInfo, isCacheFile bool) {
+	info, err := p.fs.Stat(path)
+	if err != nil {
+		return info, false
+	}
+
+	if !info.Mode().IsRegular() {
+		return info, false
+	}
+
+	if !strings.HasSuffix(path, cacheFileExtension) {
+		return info, false
+	}
+
+	return info, true
 }
