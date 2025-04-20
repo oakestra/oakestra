@@ -73,14 +73,14 @@ func NewFileCache(fs afero.Fs, dirPath string) (*FileCache, error) {
 	return p, nil
 }
 
-// Store ensures the contents provided by srcProvider(key) are cached
+// Save ensures the contents provided by srcProvider(key) are cached
 // under that key, then copies the cached file to dst. It never buffers
 // the entire file in memory, and multiple distinct keys may fetch in parallel.
 //
-// When Store is concurrently called multiple times for the same, uncached key,
+// When Save is concurrently called multiple times for the same, uncached key,
 // the FileCache might try to retrieve the corresponding src multiple times,
 // in which case all of them but the first one to complete is thrown away.
-func (p *FileCache) Store(key string, srcProvider ReaderProvider, dst string) error {
+func (p *FileCache) Save(key string, srcProvider ReaderProvider, dst string) error {
 	// compute hash and final path
 	keySum := sha256.Sum256([]byte(key))
 	keyHash := hex.EncodeToString(keySum[:])
