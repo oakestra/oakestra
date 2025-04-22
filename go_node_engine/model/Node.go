@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
@@ -195,8 +194,11 @@ func getCpuCores() int {
 }
 
 func getAvgCpuUsage() float64 {
-	avg, err := cpu.Percent(time.Second*60, false)
+	avg, err := cpu.Percent(0, false)
 	if err != nil {
+		return 100
+	}
+	if len(avg) == 0 {
 		return 100
 	}
 	return avg[0]
