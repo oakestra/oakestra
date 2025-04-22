@@ -1,0 +1,66 @@
+{
+    // Runs local 
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Node Engine Locally with Unikraft Support",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/NodeEngine.go",
+            "console": "integratedTerminal",
+            "asRoot": true,
+            "args": ["-n", "6000", "-p", "10100", "-u"],
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin" 
+            }
+        },
+        {
+            "name": "Debug Node Engine Locally Container Only",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/NodeEngine.go",
+            "console": "integratedTerminal",
+            "asRoot": true,
+            "args": ["-n", "6000", "-p", "10100"],
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin" 
+            }
+        },
+        {
+            "name": "Debug Node Engine Remote Cluster Container Only",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/NodeEngine.go",
+            "console": "integratedTerminal",
+            "asRoot": true,
+            "args": ["-n", "6000", "-p", "10100", "-a","${input:enterClusterIp}"],
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin" 
+            }
+        },
+        {
+            "name": "Debug Node Engine Remote Cluster Unikernel support",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/NodeEngine.go",
+            "console": "integratedTerminal",
+            "asRoot": true,
+            "args": ["-n", "6000", "-p", "10100", "-a","${input:enterClusterIp}","-u"],
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin" 
+            }
+        }
+    ],
+    "inputs": [
+        {
+          "id": "enterClusterIp",
+          "type": "promptString",
+          "description": "Cluster Orchestrator IP",
+          "default": "0.0.0.0"
+        }
+      ]
+}

@@ -11,6 +11,7 @@ type Service struct {
 	Ports           string   `json:"port"`
 	Status          string   `json:"status"`
 	Runtime         string   `json:"virtualization"`
+	Platform        string   `json:"platform"`
 	StatusDetail    string   `json:"status_detail"`
 	Vtpus           int      `json:"vtpus"`
 	Vgpus           int      `json:"vgpus"`

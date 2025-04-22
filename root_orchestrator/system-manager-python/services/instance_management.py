@@ -95,6 +95,7 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
 
     if microserviceid in application["microservices"]:
         instances = service.get("instance_list")
+
         if len(instances) > 0:
             for instance in instances:
                 if which_one == instance["instance_number"] or which_one == -1:

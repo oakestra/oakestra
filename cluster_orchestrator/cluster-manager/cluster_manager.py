@@ -49,8 +49,7 @@ mongo_init(app)
 
 mqtt_init(app)
 
-BACKGROUND_JOB_INTERVAL = 5
-
+BACKGROUND_JOB_INTERVAL = 15
 
 # ................... REST API Endpoints ...............#
 # ......................................................#

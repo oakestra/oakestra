@@ -11,6 +11,7 @@ import (
 	"go_node_engine/requests"
 	"go_node_engine/virtualization"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -56,8 +57,10 @@ func main() {
 
 	// enable overlay network if required
 	switch configs.OverlayNetwork {
-	case config.DEFAULT_CNI:
+	case config.AUTO_OAK_NETWORK:
 		logger.InfoLogger().Printf("Looking for local NetManager socket.")
+		cmd := exec.Command("systemctl", "start", "netmanager")
+		_ = cmd.Run()
 		model.EnableOverlay()
 	case cmd.DISABLE_NETWORK:
 		logger.InfoLogger().Printf("Overlay network disabled 🟠")
