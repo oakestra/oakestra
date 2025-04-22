@@ -66,7 +66,7 @@ def register_app(applications, userid):
 
 
 def update_app(appid, userid, fields):
-    # TODO: fields validation before update
+    # TODO(GB): fields validation before update
     app_data = {
         "application_name": fields.get("application_name"),
         "application_namespace": fields.get("application_namespace"),

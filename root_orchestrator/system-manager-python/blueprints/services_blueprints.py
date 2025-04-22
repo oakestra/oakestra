@@ -47,7 +47,7 @@ class ServiceController(MethodView):
         job = service_management.get_service(serviceid, username)
 
         if job is not None:
-            # TODO Frontend should be able to handle the _id being a string and not an object.
+            # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
             job = {**job, "_id": {"$oid": str(job["_id"])}}
             return json_util.dumps(job)
         else:
@@ -136,7 +136,7 @@ class MultipleServicesControllerUser(Resource):
         if status != 200:
             abort(status, result)
 
-        # TODO Frontend should be able to handle the _id being a string and not an object.
+        # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
         for i in range(len(result)):
             result[i]["_id"] = {"$oid": result[i]["_id"]}
         return json_util.dumps(result)
@@ -156,7 +156,7 @@ class MultipleServicesController(Resource):
         if code != 200:
             abort(code, result)
 
-        # TODO Frontend should be able to handle the _id being a string and not an object.
+        # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
         for i in range(len(result)):
             result[i]["_id"] = {"$oid": result[i]["_id"]}
         return json_util.dumps(result)

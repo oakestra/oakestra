@@ -57,7 +57,7 @@ class ApplicationController(MethodView):
             result, code = get_user_app(current_user, appid)
             if code != 200:
                 abort(code, result)
-                # TODO Frontend should be able to handle the _id being a string and not an object.
+                # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
                 return {**result, "_id": {"$oid": str(result["_id"])}}
         except Exception as e:
             return abort(404, {"message": e})
@@ -99,7 +99,7 @@ class CreateApplicationController(Resource):
         if code != 200:
             abort(code, description=result)
 
-        # TODO Frontend should be able to handle the _id being a string and not an object.
+        # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
         for i in range(len(result)):
             result[i]["_id"] = {"$oid": result[i]["_id"]}
 
@@ -122,7 +122,7 @@ class MultipleApplicationControllerUser(Resource):
         if code != 200:
             abort(code, result)
 
-        # TODO Frontend should be able to handle the _id being a string and not an object.
+        # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
         for i in range(len(result)):
             result[i]["_id"] = {"$oid": result[i]["_id"]}
 
@@ -142,7 +142,7 @@ class MultipleApplicationController(Resource):
         if code != 200:
             abort(code, result)
 
-        # TODO Frontend should be able to handle the _id being a string and not an object.
+        # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
         for i in range(len(result)):
             result[i]["_id"] = {"$oid": result[i]["_id"]}
 

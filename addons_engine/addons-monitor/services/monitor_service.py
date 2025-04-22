@@ -20,7 +20,7 @@ ADDONS_ID_LABEL = os.environ.get("ADDONS_ID_LABEL") or "oak.addon.id"
 ADDONS_SERVICE_NAME_LABEL = os.environ.get("ADDONS_SERVICE_NAME_LABEL") or "oak.service.name"
 
 
-# TODO DUPLICATED CODE
+# TODO(ME): DUPLICATED CODE
 class AddonStatusEnum(Enum):
     INSTALLING = "installing"
     DISABLING = "disabling"
@@ -38,9 +38,9 @@ class AddonsMonitor:
     def __init__(self):
         self._running = True
 
-        # TODO ----> add fail policy for a container failures in an addon, e.g. max retries
+        # TODO(ME): ----> add fail policy for a container failures in an addon, e.g. max retries
         # OR if to stop the addon completely if a single container fails.
-        # TODO structure it by runner_type
+        # TODO(ME): structure it by runner_type
         self._retry_containers = defaultdict(lambda: {})
         self._failed_containers = {}
 

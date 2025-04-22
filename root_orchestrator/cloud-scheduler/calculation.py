@@ -22,7 +22,7 @@ def constraint_based_scheduling(job: dict, constraints) -> Union[dict, NegativeS
 
         for constraint in constraints:
             constraint_type = constraint.get("type")
-            # TODO: Turn the constraints into an enum - put them into the oak-utils library.
+            # TODO(AM): Turn the constraints into an enum - put them into the oak-utils library.
 
             if constraint_type == "direct":
                 return direct_service_mapping(job, constraint.get("cluster"))
