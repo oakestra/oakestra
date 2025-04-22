@@ -7,11 +7,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Run Ruff formating check
+      - name: Run ruff formating check
         uses: astral-sh/ruff-action@v3
         with:
           args: format --check
-      - name: Run Ruff linting check
+      - name: Run ruff linting check
         uses: astral-sh/ruff-action@v3
         with:
           args: check
