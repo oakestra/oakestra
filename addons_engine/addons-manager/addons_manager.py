@@ -18,8 +18,6 @@ app.config["OPENAPI_URL_PREFIX"] = "/docs"
 mongo_init(app)
 api = Api(app)
 
-lelel
-
 
 # Register blueprints
 SWAGGER_URL = "/api/docs"
