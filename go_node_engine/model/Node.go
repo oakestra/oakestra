@@ -9,11 +9,11 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	psnet "github.com/shirou/gopsutil/net"
 )
@@ -195,11 +195,11 @@ func getCpuCores() int {
 }
 
 func getAvgCpuUsage() float64 {
-	avg, err := load.Avg()
+	avg, err := cpu.Percent(time.Second*60, false)
 	if err != nil {
 		return 100
 	}
-	return avg.Load5
+	return avg[0]
 }
 
 func getMemoryMB() int {
