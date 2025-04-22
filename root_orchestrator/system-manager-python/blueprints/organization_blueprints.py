@@ -1,6 +1,5 @@
 # ........ Functions for organization management ...............#
 # ......................................................#
-from blueprints.schema_wrapper import SchemaWrapper
 from bson import json_util
 from flask import request
 from flask.views import MethodView
@@ -13,6 +12,8 @@ from organizations.organization_management import (
     update_organization,
 )
 from roles.securityUtils import Role, require_role
+
+from blueprints.schema_wrapper import SchemaWrapper
 
 organizationblp = Blueprint(
     "Organization operations",

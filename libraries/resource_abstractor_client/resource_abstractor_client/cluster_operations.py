@@ -1,6 +1,7 @@
 # TODO rename file to resource_operations.py
 
 from requests import get, patch, put
+
 from resource_abstractor_client.client_helper import make_request
 
 RESOURCES_API = "/api/v1/resources"

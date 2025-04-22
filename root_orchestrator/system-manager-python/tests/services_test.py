@@ -4,6 +4,7 @@ import sys
 from unittest.mock import ANY, MagicMock, Mock, patch
 
 from resource_abstractor_client import app_operations, job_operations
+
 from tests.utils import get_first_app, get_full_random_sla_app
 
 sys.modules["ext_requests.net_plugin_requests"] = Mock()

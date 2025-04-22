@@ -2,8 +2,9 @@ import logging
 import traceback
 
 from resource_abstractor_client import app_operations
-from services.service_management import create_services_of_app, delete_service
 from sla.versioned_sla_parser import SLAFormatError, parse_sla_json
+
+from services.service_management import create_services_of_app, delete_service
 
 
 def get_user_apps(userid):

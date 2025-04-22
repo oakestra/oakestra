@@ -2,6 +2,7 @@ from typing import Optional
 
 from oakestra_utils.types.statuses import Status
 from requests import delete, get, patch, put
+
 from resource_abstractor_client.client_helper import make_request
 
 JOBS_API = "/api/v1/jobs"

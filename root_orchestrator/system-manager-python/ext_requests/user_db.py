@@ -2,8 +2,10 @@
 #############################################
 from datetime import datetime
 
-import ext_requests.mongodb_client as db
 from bson import ObjectId
+from werkzeug.security import generate_password_hash
+
+import ext_requests.mongodb_client as db
 from ext_requests.organization_db import (
     mongo_add_organization,
     mongo_add_user_role_to_organization,
@@ -11,7 +13,6 @@ from ext_requests.organization_db import (
     mongo_get_organization_by_name,
     mongo_get_roles_of_user_in_organization,
 )
-from werkzeug.security import generate_password_hash
 
 
 def create_admin():

@@ -1,7 +1,8 @@
 from datetime import datetime
 
-import db.mongodb_client as db
 from bson.objectid import ObjectId
+
+import db.mongodb_client as db
 from db.clusters_helper import get_freshness_threshold
 
 HISTORY_SLICE_SIZE = -100

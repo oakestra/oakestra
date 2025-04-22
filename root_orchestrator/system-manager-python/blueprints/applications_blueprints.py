@@ -1,4 +1,3 @@
-from blueprints.schema_wrapper import SchemaWrapper
 from bson import json_util
 from ext_requests.user_db import mongo_get_user_by_name
 from flask import request
@@ -19,6 +18,8 @@ from services.application_management import (
     update_app,
 )
 from sla.schema import sla_schema
+
+from blueprints.schema_wrapper import SchemaWrapper
 
 applicationblp = Blueprint(
     "Application operations",
