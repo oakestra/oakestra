@@ -1,6 +1,6 @@
 name: Python Codestyle Check (ruff)
 
-on: [pull_request]
+on: pull_request
 
 jobs:
   style-check:
