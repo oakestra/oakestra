@@ -234,9 +234,7 @@ class AddonsMonitor:
         curr_retries = self._retry_containers[addon_id].get(container.id, 0)
 
         if curr_retries >= MAX_CONTAINER_RETRIES:
-            logging.error(
-                (f"Addon-{addon_id}: container-{container.name} " f"exceeded max retries")
-            )
+            logging.error((f"Addon-{addon_id}: container-{container.name} exceeded max retries"))
 
             # remove container from retry list and add it to failed addons
             if not self._failed_containers.get(addon_id, None):
@@ -401,9 +399,7 @@ class AddonsMonitor:
                 self._failed_containers[addon_id].add(container_id)
                 continue
 
-            logging.info(
-                f"Restarting container '{container.name}' " f"for the ({retry_count}) time..."
-            )
+            logging.info(f"Restarting container '{container.name}' for the ({retry_count}) time...")
             container.restart()
 
 
