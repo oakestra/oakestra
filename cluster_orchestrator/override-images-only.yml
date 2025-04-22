@@ -12,11 +12,11 @@ services:
     pull_policy: always
 
   cluster_manager:
-    image: ghcr.io/oakestra/oakestra-net/cluster-manager:latest
+    image: ghcr.io/oakestra/oakestra/cluster-manager:latest
     pull_policy: always
 
   cluster_scheduler:
-    image: ghcr.io/oakestra/oakestra-net/cluster-scheduler:latest
+    image: ghcr.io/oakestra/oakestra/cluster-scheduler:latest
     pull_policy: always
 
   cluster_redis:
