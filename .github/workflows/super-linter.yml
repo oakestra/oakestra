@@ -33,7 +33,7 @@
               # FILTER_REGEX_EXCLUDE: .github/* #Exclude files from being linted
               LINTER_RULES_PATH: .github/linters_rules
               VALIDATE_PYTHON_RUFF: true
-              PYTHON_RUFF_CONFIG_FILE: pyproject.toml
+              PYTHON_RUFF_CONFIG_FILE: .ruff.toml
               # Validate Go files and Go modules - https://github.com/golangci/golangci-lint
               VALIDATE_GO_MODULES: true
               # Validate Dockerfiles with hadolint - https://github.com/hadolint/hadolint?tab=readme-ov-file#configure
