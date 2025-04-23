@@ -197,7 +197,6 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     mongo_update_jobs_status(TIME_INTERVAL)
     jobs = mongo_find_all_jobs()
 
-    # TODO(ME): what is "more"?
     return {
         **cumulative_values,
         "jobs": jobs,
