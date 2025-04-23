@@ -12,7 +12,7 @@ def verify_addon(addon_id, addon):
         image = service.get("image")
         image_id = None
         try:
-            # TODO validate image instead of pulling it.
+            # TODO(ME): validate image instead of pulling it.
             logging.info(f"Pulling image: {image}")
             pulled_image = client.images.pull(image)
             image_id = pulled_image.id

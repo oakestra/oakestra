@@ -10,7 +10,7 @@ def find_cluster_of_job(job_id, instance_num=-1):
     if not job_obj:
         return None
 
-    # TODO: we can ask resource-abstractor to return the instance directly
+    # TODO(ME): we can ask resource-abstractor to return the instance directly
     instances = job_obj.get("instance_list")
     if not instances:
         return None

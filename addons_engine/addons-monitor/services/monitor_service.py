@@ -20,7 +20,7 @@ ADDONS_ID_LABEL = os.environ.get("ADDONS_ID_LABEL") or "oak.addon.id"
 ADDONS_SERVICE_NAME_LABEL = os.environ.get("ADDONS_SERVICE_NAME_LABEL") or "oak.service.name"
 
 
-# TODO DUPLICATED CODE
+# TODO(ME): DUPLICATED CODE
 class AddonStatusEnum(Enum):
     INSTALLING = "installing"
     DISABLING = "disabling"
@@ -38,9 +38,9 @@ class AddonsMonitor:
     def __init__(self):
         self._running = True
 
-        # TODO ----> add fail policy for a container failures in an addon, e.g. max retries
+        # TODO(ME): ----> add fail policy for a container failures in an addon, e.g. max retries
         # OR if to stop the addon completely if a single container fails.
-        # TODO structure it by runner_type
+        # TODO(ME): structure it by runner_type
         self._retry_containers = defaultdict(lambda: {})
         self._failed_containers = {}
 
@@ -234,9 +234,7 @@ class AddonsMonitor:
         curr_retries = self._retry_containers[addon_id].get(container.id, 0)
 
         if curr_retries >= MAX_CONTAINER_RETRIES:
-            logging.error(
-                (f"Addon-{addon_id}: container-{container.name} " f"exceeded max retries")
-            )
+            logging.error((f"Addon-{addon_id}: container-{container.name} exceeded max retries"))
 
             # remove container from retry list and add it to failed addons
             if not self._failed_containers.get(addon_id, None):
@@ -401,9 +399,7 @@ class AddonsMonitor:
                 self._failed_containers[addon_id].add(container_id)
                 continue
 
-            logging.info(
-                f"Restarting container '{container.name}' " f"for the ({retry_count}) time..."
-            )
+            logging.info(f"Restarting container '{container.name}' for the ({retry_count}) time...")
             container.restart()
 
 

@@ -2,8 +2,9 @@ import logging
 
 from ext_requests.net_plugin_requests import net_inform_service_deploy, net_inform_service_undeploy
 from resource_abstractor_client import app_operations, job_operations
-from services.instance_management import request_scale_down_instance
 from sla.versioned_sla_parser import SLAFormatError, parse_sla_json
+
+from services.instance_management import request_scale_down_instance
 
 
 def insert_job(microservice):
@@ -59,12 +60,12 @@ def create_services_of_app(username, data, force=False):
             logging.warning(
                 f"service not inserted for app-{app_id}, service-{service['service_name']}"
             )
-            # TODO: add a reason why it failed.
+            # TODO(ME): add a reason why it failed.
             failed_services.append({"service_name": service["service_name"], "status": 500})
             continue
 
         # Insert job into app's services list
-        # TODO what should be done if updating job or application fails?
+        # TODO(ME): what should be done if updating job or application fails?
         job_operations.update_job(last_service_id, {"microserviceID": last_service_id})
         add_service_to_app(app_id, last_service_id, username)
         try:
@@ -81,7 +82,7 @@ def create_services_of_app(username, data, force=False):
                 }
             )
 
-    # TODO: check if service deployed already etc. force=True must force the insertion anyway
+    # TODO(ME): check if service deployed already etc. force=True must force the insertion anyway
     return {
         "job_id": str(last_service_id),
         "deployed_services": deployed_services,
@@ -110,8 +111,8 @@ def delete_service(username, serviceid):
 
 
 def update_service(username, sla, serviceid):
-    # TODO Check fields and redeploy service
-    # TODO this function is currently causing a lof of issues as such it is commented it out.
+    # TODO(ME): Check fields and redeploy service
+    # TODO(ME): this function is currently causing a lof of issues as such it is commented it out.
     # https://github.com/oakestra/oakestra/pull/282#discussion_r1526433174
 
     # apps = app_operations.get_user_apps(username)

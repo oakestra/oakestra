@@ -1,5 +1,6 @@
-import ext_requests.mongodb_client as db
 from bson import ObjectId
+
+import ext_requests.mongodb_client as db
 
 
 def mongo_add_organization(organization):

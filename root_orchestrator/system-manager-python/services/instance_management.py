@@ -36,7 +36,7 @@ def update_job_status_and_instances(
     instance_list: List[dict],
 ) -> None:
     logging.info(
-        f"Updating Job '{job_id}'s status to '{status}' " "and assigning a cluster for this job..."
+        f"Updating Job '{job_id}'s status to '{status}' and assigning a cluster for this job..."
     )
     updated_job = job_operations.update_job(
         job_id,

@@ -1,4 +1,3 @@
-from blueprints.schema_wrapper import SchemaWrapper
 from bson import json_util
 from ext_requests.user_db import mongo_get_user_by_name
 from flask import request
@@ -19,6 +18,8 @@ from services.application_management import (
     update_app,
 )
 from sla.schema import sla_schema
+
+from blueprints.schema_wrapper import SchemaWrapper
 
 applicationblp = Blueprint(
     "Application operations",
@@ -56,7 +57,7 @@ class ApplicationController(MethodView):
             result, code = get_user_app(current_user, appid)
             if code != 200:
                 abort(code, result)
-                # TODO Frontend should be able to handle the _id being a string and not an object.
+                # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
                 return {**result, "_id": {"$oid": str(result["_id"])}}
         except Exception as e:
             return abort(404, {"message": e})
@@ -98,7 +99,7 @@ class CreateApplicationController(Resource):
         if code != 200:
             abort(code, description=result)
 
-        # TODO Frontend should be able to handle the _id being a string and not an object.
+        # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
         for i in range(len(result)):
             result[i]["_id"] = {"$oid": result[i]["_id"]}
 
@@ -121,7 +122,7 @@ class MultipleApplicationControllerUser(Resource):
         if code != 200:
             abort(code, result)
 
-        # TODO Frontend should be able to handle the _id being a string and not an object.
+        # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
         for i in range(len(result)):
             result[i]["_id"] = {"$oid": result[i]["_id"]}
 
@@ -141,7 +142,7 @@ class MultipleApplicationController(Resource):
         if code != 200:
             abort(code, result)
 
-        # TODO Frontend should be able to handle the _id being a string and not an object.
+        # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
         for i in range(len(result)):
             result[i]["_id"] = {"$oid": result[i]["_id"]}
 

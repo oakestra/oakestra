@@ -11,7 +11,7 @@ MARKETPLACE_API = f"{MARKETPLACE_ADDR}/api/v1/marketplace/addons"
 addons_service = None
 
 
-# TODO: reuse this enum in addons_monitor
+# TODO(ME): reuse this enum in addons_monitor
 class AddonStatusEnum(Enum):
     INSTALLING = "installing"
     DISABLING = "disabling"

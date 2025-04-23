@@ -80,7 +80,7 @@ class ClusterController(MethodView):
         if updated_cluster is None:
             return abort(400, "Updating cluster failed")
 
-        # TODO: fire an event to react to the cluster update, and move this logic somewhere else.
+        # TODO(GB): fire an event to react to the cluster update, and move this logic somewhere else.
         jobs = data.get("jobs")
         for j in jobs:
             result = update_job_status(

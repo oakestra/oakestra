@@ -1,4 +1,5 @@
 from _datetime import datetime
+
 from bson.objectid import ObjectId
 
 CLUSTERS_FRESHNESS_INTERVAL = 30

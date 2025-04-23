@@ -1,8 +1,9 @@
-from blueprints.schema_wrapper import SchemaWrapper
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from roles.securityUtils import get_jwt_organization, identity_is_username, jwt_auth_required
 from users.auth import user_get_roles
+
+from blueprints.schema_wrapper import SchemaWrapper
 
 permissionbp = Blueprint("Permissions", "permissions", url_prefix="/api/permission")
 
