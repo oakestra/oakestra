@@ -13,7 +13,6 @@ import (
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	psnet "github.com/shirou/gopsutil/net"
 )
@@ -195,11 +194,14 @@ func getCpuCores() int {
 }
 
 func getAvgCpuUsage() float64 {
-	avg, err := load.Avg()
+	avg, err := cpu.Percent(0, false)
 	if err != nil {
 		return 100
 	}
-	return avg.Load5
+	if len(avg) == 0 {
+		return 100
+	}
+	return avg[0]
 }
 
 func getMemoryMB() int {
