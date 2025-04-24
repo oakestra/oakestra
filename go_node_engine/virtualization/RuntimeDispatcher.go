@@ -38,7 +38,7 @@ func NewRuntimeManager() (*RuntimeManager, error) {
 	var runtimeMap = make(map[model.RuntimeType]RuntimeGetter)
 	runtimeMap[model.CONTAINER_RUNTIME] = RuntimeGetter(GetContainerdRuntime)
 	runtimeMap[model.UNIKERNEL_RUNTIME] = RuntimeGetter(GetUnikernelQemuRuntime)
-	runtimeMap[model.CROSVM_RUNTIME] = RuntimeGetter(GetCrosvmRuntime)
+	runtimeMap[model.CROSVM_RUNTIME] = RuntimeGetter(func() { return crosvm.RuntimeSingleton(baseRuntimeDirPath) })
 
 	return &RuntimeManager{
 		baseRuntimeDirPath: baseRuntimeDirPath,
