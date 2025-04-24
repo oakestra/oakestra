@@ -2,7 +2,7 @@ package virtualization
 
 import (
 	"go_node_engine/model"
-	"go_node_engine/util"
+	"go_node_engine/util/iotools"
 	"go_node_engine/virtualization/crosvm"
 	"time"
 )
@@ -30,7 +30,7 @@ type RuntimeMonitoring interface {
 }
 
 func NewRuntimeManager() (*RuntimeManager, error) {
-	baseRuntimeDirPath, err := util.CreateBaseRuntimeDir()
+	baseRuntimeDirPath, err := iotools.CreateOakestraRuntimeDir()
 	if err != nil {
 		return nil, err
 	}

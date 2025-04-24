@@ -1,4 +1,4 @@
-package crosvm
+package crosvminstance
 
 // InstanceConfig represents the parameters of the "crosvm run" command and are passed to it as a JSON file via the "--cfg" argument.
 //
