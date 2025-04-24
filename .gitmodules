@@ -1,4 +1,0 @@
-[submodule "go_node_engine/third_party/crosvm/crosvm"]
-	path = go_node_engine/third_party/crosvm/crosvm
-	url = https://chromium.googlesource.com/crosvm/crosvm
-	branch = main
