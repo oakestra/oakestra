@@ -160,7 +160,7 @@ type QemuStopResult struct {
 	}
 }
 
-var path = "/tmp/node_engine/kernel/"
+var kernel_path = "/tmp/node_engine/kernel/"
 var inst_path = "/tmp/node_engine/inst/"
 
 /*
@@ -171,8 +171,8 @@ Return:
 func GetKernelImage(kernel string, name string, sname string) *string {
 
 	//filename := strings.ReplaceAll(kernel, "/", "_")
-	kernel_tar := path + sname + ".tar.gz"
-	kernel_location := path + sname + "/"
+	kernel_tar := kernel_path + sname + ".tar.gz"
+	kernel_location := kernel_path + sname + "/"
 	instance_path := inst_path + name
 	kernel_local := kernel_location + "kernel"
 
@@ -401,7 +401,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		revert(fmt.Errorf("Unable to create kernel path"), hostname)
 		return
 	}
-	qemuConfig.Kernel = path + service.Sname + "/kernel"
+	qemuConfig.Kernel = kernel_path + service.Sname + "/kernel"
 
 	qemuConfig.Instancepath = *kernelPath
 
