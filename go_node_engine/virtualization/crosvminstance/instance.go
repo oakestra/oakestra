@@ -57,11 +57,13 @@ const (
 type Instance struct {
 	executablePath string
 
-	id             string
-	runtimeDirPath string
-	restartMode    instanceRestartMode
-	config         InstanceConfig
-	configExt      InstanceConfigExt
+	id                  string
+	service             model.Service
+	statusChangeHandler func(service model.Service)
+	runtimeDirPath      string
+	restartMode         instanceRestartMode
+	config              InstanceConfig
+	configExt           InstanceConfigExt
 
 	lock       sync.Mutex
 	status     instanceStatus
@@ -72,7 +74,8 @@ type Instance struct {
 
 func NewInstance(
 	id string,
-	service *model.Service,
+	service model.Service,
+	statusChangeHandler func(service model.Service),
 	executablePath string,
 	baseRuntimeDirPath string,
 ) (*Instance, error) {
@@ -91,11 +94,13 @@ func NewInstance(
 	instance := &Instance{
 		executablePath: executablePath,
 
-		id:             id,
-		runtimeDirPath: runtimeDirPath,
-		restartMode:    restartMode,
-		config:         InstanceConfig{},
-		configExt:      InstanceConfigExt{},
+		id:                  id,
+		service:             service,
+		statusChangeHandler: statusChangeHandler,
+		runtimeDirPath:      runtimeDirPath,
+		restartMode:         restartMode,
+		config:              InstanceConfig{},
+		configExt:           InstanceConfigExt{},
 
 		lock:       sync.Mutex{},
 		status:     instanceStatusStopped,
@@ -257,7 +262,15 @@ func (i *Instance) handleUnclaimedExit(startNum uint32) {
 	i.status = instanceStatusStopped
 	i.lastExit = exit
 
-	if i.restartMode == instanceRestartModeUnlessStopped {
+	if i.restartMode == instanceRestartModeNever {
+		if exit == instanceExitTypeSuccess {
+			i.notifyStatusChange(model.SERVICE_COMPLETED)
+		} else {
+			i.notifyStatusChange(model.SERVICE_DEAD)
+		}
+	} else {
+		// since the service is not one-shot, it counts as dead
+		i.notifyStatusChange(model.SERVICE_DEAD)
 		defer i.restart()
 	}
 }
@@ -269,6 +282,12 @@ func (i *Instance) restart() {
 			logger.ErrorLogger().Printf("rt-crosvm: Failed to restart instance %q: %v", i.id, err)
 		}
 	}()
+}
+
+func (i *Instance) notifyStatusChange(updatedStatus string) {
+	updatedService := i.service
+	updatedService.Status = updatedStatus
+	i.statusChangeHandler(updatedService)
 }
 
 func (i *Instance) callCrosvmStop() bool {

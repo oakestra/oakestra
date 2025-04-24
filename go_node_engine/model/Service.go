@@ -37,10 +37,22 @@ type Resources struct {
 
 // ServiceStatus is the struct that describes the service status
 const (
-	SERVICE_CREATING   = "CREATING"
-	SERVICE_CREATED    = "CREATED"
-	SERVICE_FAILED     = "FAILED"
-	SERVICE_DEAD       = "DEAD"
-	SERVICE_COMPLETED  = "COMPLETED"
+	SERVICE_CREATING = "CREATING"
+	// SERVICE_CREATED means the service was started and is currently running.
+	// This status is managed from outside the runtimes.
+	SERVICE_CREATED = "CREATED"
+	// SERVICE_FAILED means starting the service failed.
+	// This status is managed from outside the runtimes.
+	SERVICE_FAILED = "FAILED"
+	// SERVICE_DEAD means the service exited without being undeployed/stopped
+	// and is not a one-shot service or exited with an error.
+	// This status managed by the individual runtimes.
+	SERVICE_DEAD = "DEAD"
+	// SERVICE_COMPLETED means the service exited without being undeployed/stopped
+	// and is a one-shot service and exited successfully.
+	// This status managed by the individual runtimes.
+	SERVICE_COMPLETED = "COMPLETED"
+	// SERVICE_UNDEPLOYED means the service was undeployed successfully and is not running anymore.
+	// This status is managed from outside the runtimes.
 	SERVICE_UNDEPLOYED = "UNDEPLOYED"
 )
