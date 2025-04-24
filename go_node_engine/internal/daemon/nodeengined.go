@@ -36,10 +36,14 @@ func main() {
 	// set cluster address
 	model.GetNodeInfo().SetClusterAddress(configs.ClusterAddress)
 
-	//Set Virtualization Runtimes
+	// Initialize virtualization runtimes
+	runtimeManager, err := virtualization.NewRuntimeManager()
+	if err != nil {
+		logger.ErrorLogger().Fatal(err)
+	}
 	for _, virt := range configs.Virtualizations {
 		if virt.Active {
-			rt := virtualization.GetRuntime(model.RuntimeType(virt.Runtime))
+			rt := runtimeManager.GetRuntime(model.RuntimeType(virt.Runtime))
 			defer rt.Stop()
 		}
 	}
@@ -81,7 +85,7 @@ func main() {
 	}
 
 	// binding the node MQTT client
-	mqtt.InitMqtt(handshakeResult.NodeId, configs.ClusterAddress, handshakeResult.MqttPort, configs.CertFile, configs.KeyFile)
+	mqtt.InitMqtt(handshakeResult.NodeId, configs.ClusterAddress, handshakeResult.MqttPort, configs.CertFile, configs.KeyFile, runtimeManager)
 
 	// starting node status background job.
 	jobs.NodeStatusUpdater(MONITORING_CYCLE, mqtt.ReportNodeInformation)
