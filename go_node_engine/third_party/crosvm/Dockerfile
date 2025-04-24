@@ -2,9 +2,6 @@ FROM debian:12.10-slim AS build
 
 ARG GPU_KERNEL_DRIVER=AMDGPU
 
-# set default shell for RUN commands to bash, so that bash-specific features can be used
-SHELL ["/bin/bash", "-c"]
-
 # install dependencies
 RUN apt-get update && apt-get --yes upgrade && apt-get install --yes --no-install-recommends \
         ca-certificates \
@@ -66,15 +63,16 @@ RUN mkdir --parents /scratch/edk2-crosvm \
         | tar --extract --gzip --file - --directory /scratch/edk2-crosvm
 
 # clone edk2 at the tag that the crosvm patches are based on and build it
-RUN export EDK_TAG=$(grep --perl-regexp --only-matching 'edk2-.+(?=\.tar\.gz)' /scratch/edk2-crosvm/Manifest) \
-    && git clone --recursive --depth 1 --branch ${EDK_TAG} https://github.com/tianocore/edk2.git /scratch/edk2 \
-    && cd /scratch/edk2 \
-    && git apply /scratch/edk2-crosvm/files/* \
-    && make --directory BaseTools \
-    && . ./edksetup.sh \
-    && build --platform OvmfPkg/Crosvm/CrosvmX64.dsc --tagname GCC5 --arch X64 --buildtarget RELEASE --define SECURE_BOOT_ENABLE --define FD_SIZE_4MB \
-    && install --mode 0644 Build/CrosvmX64/RELEASE_GCC5/FV/CROSVM_{CODE,VARS}.fd /opt/oakestra/share/edk2
-
+RUN <<-"EOT" bash
+    EDK_TAG=$(grep --perl-regexp --only-matching 'edk2-.+(?=\.tar\.gz)' /scratch/edk2-crosvm/Manifest)
+    git clone --recursive --depth 1 --branch ${EDK_TAG} https://github.com/tianocore/edk2.git /scratch/edk2
+    cd /scratch/edk2
+    git apply /scratch/edk2-crosvm/files/*
+    make --directory BaseTools
+    source edksetup.sh
+    build --platform OvmfPkg/Crosvm/CrosvmX64.dsc --tagname GCC5 --arch X64 --buildtarget RELEASE --define SECURE_BOOT_ENABLE --define FD_SIZE_4MB
+    install --mode 0644 Build/CrosvmX64/RELEASE_GCC5/FV/CROSVM_{CODE,VARS}.fd /opt/oakestra/share/edk2
+EOT
 
 FROM scratch
 

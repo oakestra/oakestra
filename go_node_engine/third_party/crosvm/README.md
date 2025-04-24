@@ -19,9 +19,10 @@ to the `/opt/oakestra` directory of the host system:
 2) `$ mkdir out`
 3) `$ docker build --output out`
 4) `$ sudo mkdir --parents /opt/oakestra`
-5) `$ sudo mv out/* /opt/oakestra`
-6) `$ sudo chown --recursive root:root /opt/oakestra`
-7) `$ rm --recursive out`
+5) `$ sudo chown 0755 /opt/oakestra`
+6) `$ sudo mv out/* /opt/oakestra`
+7) `$ sudo chown --recursive root:root /opt/oakestra`
+8) `$ rm --recursive out`
 
 Even with these custom-built artifacts present in `/opt/oakestra`, to actually run crosvm, some additional dynamic libraries
 have to be present on the system: 
