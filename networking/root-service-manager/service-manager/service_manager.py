@@ -1,26 +1,57 @@
+import os
+import socket
+from datetime import timedelta
+
 from flask import Flask, request
+from flask_jwt_extended import JWTManager
+from flask_smorest import Api
 from flask_socketio import SocketIO
+from flask_swagger_ui import get_swaggerui_blueprint
+
+from blueprints.netinfo_blueprints import netinfoblp
+from interfaces.jwt_generator_requests import get_public_key
 from interfaces.mongodb_requests import mongo_init
-from network.tablequery import *
+from net_logging import configure_logging
 from network import subnetwork_management, routes_interests
 from network.utils import sanitize
 from operations import instances_management, cluster_management
 from operations import service_management
-from net_logging import configure_logging
-from network import routes_interests, subnetwork_management
-from network.tablequery import *
-from network import subnetwork_management, routes_interests
-from operations import instances_management, cluster_management
-from operations import service_management
-from net_logging import configure_logging
-import os
-import socket
 
 my_logger = configure_logging()
 
 app = Flask(__name__)
+
+# OpenAPI/Swagger Environment
+app.config["OPENAPI_VERSION"] = "3.0.2"
+app.config["API_TITLE"] = "Oakestra Root Service Manager"
+app.config["API_VERSION"] = "v1"
+app.config["OPENAPI_URL_PREFIX"] = "/docs"
+
+# JWT Config
+app.config["JWT_ALGORITHM"] = "RS256"
+app.config["JWT_PUBLIC_KEY"] = get_public_key()
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=10)
+app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
+
 app.secret_key = b"\xc8I\xae\x85\x90E\x9aBxQP\xde\x8es\xfdY"
 app.logger.addHandler(my_logger)
+
+
+# OpenAPI/Swagger Configuration
+api = Api(app, spec_kwargs={"host": "oakestra.io", "x-internal-id": "1"})
+api.spec.components.security_scheme("bearer", {
+    "type": "http",
+    "scheme": "bearer",
+    "bearerFormat": "JWT"
+})
+api.spec.options["security"] = [{"bearer": []}]
+app.register_blueprint(get_swaggerui_blueprint(
+    "/api/docs",
+    "/docs/openapi.json",
+    config={"app_name": "Oakestra Root Service Manager"}
+))
+
+api.register_blueprint(netinfoblp)
 
 socketio = SocketIO(
     app,
@@ -29,6 +60,8 @@ socketio = SocketIO(
     engineio_logger=True,
     cors_allowed_origins="*",
 )
+
+jwt = JWTManager(app)
 
 MY_PORT = os.environ.get("MY_PORT") or 10100
 

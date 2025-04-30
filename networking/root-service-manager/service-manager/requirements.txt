@@ -1,9 +1,13 @@
-Flask==2.3.2
-Flask-PyMongo==2.3.0
-Flask-SocketIO==5.3.4
+flask~=2.3.3
+flask-pymongo~=2.3.0
+flask-socketio~=5.5.1
+flask-jwt-extended~=4.6.0
+flask-smorest~=0.39.0
+flask-swagger-ui~=4.11.1
+werkzeug~=2.3.8
 eventlet==0.30.2
+cryptography==44.0.1
 PyYAML
 requests
 Cerberus
 prometheus-client
-Werkzeug==2.3.6
