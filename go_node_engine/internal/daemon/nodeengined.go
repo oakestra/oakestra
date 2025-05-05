@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/containers/storage/pkg/reexec"
 	"go_node_engine/addons"
 	"go_node_engine/cmd"
 	"go_node_engine/config"
@@ -23,6 +24,13 @@ const MONITORING_CYCLE = time.Second * 2
 var configs config.ConfFile
 
 func main() {
+	// The OCI libraries support performing certain container-related tasks in a sandboxed child process.
+	// For this to work, binaries using these libraries must use the reexec.Init() hook before doing anything else.
+	// This way, the library can take over execution in the mentioned child processes and will return true in that case.
+	if reexec.Init() {
+		return
+	}
+
 	configManager := config.GetConfFileManager()
 	var err error
 	configs, err = configManager.Get()

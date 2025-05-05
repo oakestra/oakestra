@@ -1,0 +1,29 @@
+package image_test
+
+import (
+	"github.com/containers/image/v5/docker"
+	"github.com/containers/storage/pkg/reexec"
+	"go_node_engine/util/dirutil"
+	"go_node_engine/virtualization/crosvm/internal/image"
+	"gotest.tools/v3/assert"
+	"os"
+	"testing"
+)
+
+func init() {
+	reexec.Init()
+}
+
+func TestFetchImage(t *testing.T) {
+	tmpDirPath, err := dirutil.CreateLargeTempDir("image-store-test")
+	assert.NilError(t, err)
+	defer assert.NilError(t, os.RemoveAll(tmpDirPath))
+
+	store, err := image.NewStore(tmpDirPath, image.NewContainersSource(docker.Transport))
+	assert.NilError(t, err)
+
+	img, err := store.Retrieve("alpine:3.21.3", tmpDirPath, 2<<30)
+	assert.NilError(t, err)
+
+	println(img)
+}

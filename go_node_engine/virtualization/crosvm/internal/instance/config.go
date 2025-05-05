@@ -1,4 +1,9 @@
-package crosvminstance
+package instance
+
+import (
+	"go_node_engine/model"
+	"go_node_engine/util/ptr"
+)
 
 // InstanceConfig represents the parameters of the "crosvm run" command and are passed to it as a JSON file via the "--cfg" argument.
 //
@@ -277,4 +282,19 @@ type InstanceConfigVhostUser struct {
 type InstanceConfigVsock struct {
 	Cid    uint64  `json:"cid"`
 	Device *string `json:"device,omitempty"`
+}
+
+func NewInstanceConfig(
+	service *model.Service,
+	socketPath string,
+) (*InstanceConfig, error) {
+	return &InstanceConfig{
+		Cpus: &InstanceConfigCpus{
+			NumCores: ptr.Ptr(uint(service.Vcpus)),
+		},
+		Mem: &InstanceConfigMem{
+			Size: ptr.Ptr(uint64(service.Memory)),
+		},
+		Socket: &socketPath,
+	}, nil
 }

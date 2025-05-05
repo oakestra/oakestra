@@ -1,13 +1,14 @@
-package crosvmruntime
+package crosvm
 
 import (
 	"errors"
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
-	"go_node_engine/util/runtimedir"
+	"go_node_engine/util/dirutil"
 	"go_node_engine/util/taskid"
-	"go_node_engine/virtualization/crosvminstance"
+	cvinstance "go_node_engine/virtualization/crosvm/internal/instance"
+	"google.golang.org/genproto/googleapis/spanner/admin/instance/v1"
 	"os/exec"
 	"strings"
 	"sync"
@@ -24,7 +25,7 @@ type Runtime struct {
 	errors         []error
 
 	lock      sync.RWMutex
-	instances map[string]*crosvminstance.Instance
+	instances map[string]*cvinstance.Instance
 }
 
 var runtimeSingleton *Runtime = nil
@@ -46,7 +47,7 @@ func newRuntime(baseRuntimeDirPath string) *Runtime {
 		logger.ErrorLogger().Printf("Unable to find crosvm executable (%s): %v\n", executableName, err)
 	}
 
-	runtimeDirPath, err := runtimedir.CreateSubRuntimeDir(baseRuntimeDirPath, "runtime-crosvm")
+	runtimeDirPath, err := dirutil.CreateSubDir(baseRuntimeDirPath, "runtime-crosvm", 0o700)
 	if err != nil {
 		creationErrors = append(creationErrors, err)
 		logger.ErrorLogger().Printf("Failed to setup runtime directory for crosvm runtime: %v\n", err)
@@ -67,7 +68,7 @@ func newRuntime(baseRuntimeDirPath string) *Runtime {
 		runtimeDirPath: runtimeDirPath,
 		errors:         creationErrors,
 
-		instances: make(map[string]*crosvminstance.Instance),
+		instances: make(map[string]*instance.Instance),
 	}
 }
 
@@ -78,7 +79,7 @@ func (r *Runtime) Deploy(service model.Service, statusChangeNotificationHandler 
 	id := taskid.GenerateForModel(&service)
 	instance, ok := r.instances[id]
 	if !ok {
-		instance, err := crosvminstance.NewInstance(id, service, statusChangeNotificationHandler, r.executablePath, r.runtimeDirPath)
+		instance, err := cvinstance.NewInstance(id, service, statusChangeNotificationHandler, r.executablePath, r.runtimeDirPath)
 		if err != nil {
 			return err
 		}
@@ -120,7 +121,7 @@ func (r *Runtime) Stop() {
 	for id, instance := range r.instances {
 		wg.Add(1)
 
-		go func(id string, instance *crosvminstance.Instance) {
+		go func(id string, instance *cvinstance.Instance) {
 			defer wg.Done()
 			if err := instance.Close(); err != nil {
 				logger.ErrorLogger().Printf("rt-crosvm: Unable to stop and close instance %q: %v", id, err)

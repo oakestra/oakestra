@@ -16,6 +16,7 @@ type Service struct {
 	Vtpus           int      `json:"vtpus"`
 	Vgpus           int      `json:"vgpus"`
 	Vcpus           int      `json:"vcpus"`
+	// Memory is the amount of memory allocated to each instance in MiB
 	Memory          int      `json:"memory"`
 	UnikernelImages []string `json:"vm_images"`
 	Architectures   []string `json:"arch"`

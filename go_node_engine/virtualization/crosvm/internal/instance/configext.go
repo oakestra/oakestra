@@ -1,7 +1,9 @@
-package crosvminstance
+package instance
 
 import (
 	"fmt"
+	"go_node_engine/model"
+	"go_node_engine/util/ptr"
 	"strings"
 )
 
@@ -9,7 +11,8 @@ import (
 //
 // See InstanceConfig for an explanation.
 type InstanceConfigExt struct {
-	Gpu []InstanceConfigExtGpu
+	Gpu             []InstanceConfigExtGpu
+	GpuRenderServer *InstanceConfigExtGpuRenderServer
 }
 
 // InstanceConfigExtGpu represents the set of sub-options that can be specified in the "--gpu" argument of "crosvm run".
@@ -59,10 +62,54 @@ type InstanceConfigExtGpuDisplayDpi struct {
 	Vertical   uint32
 }
 
-func (c *InstanceConfigExt) toArgs() []string {
+type InstanceConfigExtGpuRenderServer struct {
+	Path                 string
+	CachePath            *string
+	CacheSize            *string
+	FozDbListPath        *string
+	PrecompiledCachePath *string
+	LdPreloadPath        *string
+}
+
+func NewInstanceConfigExt(service *model.Service) *InstanceConfigExt {
+	var gpus []InstanceConfigExtGpu
+	for range service.Vgpus {
+		gpus = append(gpus, InstanceConfigExtGpu{
+			Backend:     ptr.Ptr("virglrenderer"),
+			Egl:         ptr.Ptr(true),
+			Gles:        ptr.Ptr(true),
+			Glx:         ptr.Ptr(true),
+			Surfaceless: ptr.Ptr(true),
+			Vulkan:      ptr.Ptr(true),
+			Udmabuf:     ptr.Ptr(true),
+			ContextTypes: []string{
+				"virgl",
+				"virgl2",
+				"venus",
+				"drm",
+			},
+		})
+	}
+	var gpuRenderServer *InstanceConfigExtGpuRenderServer = nil
+	if len(gpus) > 0 {
+		gpuRenderServer = &InstanceConfigExtGpuRenderServer{
+			Path: "/opt/oakestra/libexec/virgl_render_server",
+		}
+	}
+
+	return &InstanceConfigExt{
+		Gpu:             gpus,
+		GpuRenderServer: gpuRenderServer,
+	}
+}
+
+func (c *InstanceConfigExt) ToArgs() []string {
 	var args []string
 	for _, gpu := range c.Gpu {
 		args = append(args, "--gpu", gpu.toArgString())
+	}
+	if c.GpuRenderServer != nil {
+		args = append(args, "--gpu-render-server", c.GpuRenderServer.toArgString())
 	}
 	return args
 }
@@ -157,4 +204,26 @@ func (c *InstanceConfigExtGpuDisplay) toArgString() string {
 		args = append(args, fmt.Sprintf("dpi=[%d,%d]", c.Dpi.Horizontal, c.Dpi.Vertical))
 	}
 	return fmt.Sprintf("[%s]", strings.Join(args, ","))
+}
+
+func (c *InstanceConfigExtGpuRenderServer) toArgString() string {
+	args := []string{
+		fmt.Sprintf("path=%s", c.Path),
+	}
+	if c.CachePath != nil {
+		args = append(args, fmt.Sprintf("cache-path=%s", *c.CachePath))
+	}
+	if c.CacheSize != nil {
+		args = append(args, fmt.Sprintf("cache-size=%s", *c.CacheSize))
+	}
+	if c.FozDbListPath != nil {
+		args = append(args, fmt.Sprintf("foz-db-list-path=%s", *c.FozDbListPath))
+	}
+	if c.PrecompiledCachePath != nil {
+		args = append(args, fmt.Sprintf("precompiled-cache-path=%s", *c.PrecompiledCachePath))
+	}
+	if c.LdPreloadPath != nil {
+		args = append(args, fmt.Sprintf("ld-preload-path=%s", *c.LdPreloadPath))
+	}
+	return strings.Join(args, ",")
 }

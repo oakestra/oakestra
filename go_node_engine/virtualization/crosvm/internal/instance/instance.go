@@ -1,4 +1,4 @@
-package crosvminstance
+package instance
 
 // #cgo pkg-config: /opt/oakestra/lib/pkgconfig/crosvm_control.pc
 // #include <crosvm_control.h>
@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
-	"go_node_engine/util/runtimedir"
+	"go_node_engine/util/dirutil"
 	"os"
 	"os/exec"
 	"path"
@@ -25,7 +25,7 @@ var errAlreadyClosed = errors.New("instance already closed")
 const configFileName = "config.json"
 const socketFileName = "instance.sock"
 
-type instanceStatus int
+type instanceStatus uint32
 
 const (
 	instanceStatusStopped instanceStatus = iota
@@ -79,7 +79,7 @@ func NewInstance(
 	executablePath string,
 	baseRuntimeDirPath string,
 ) (*Instance, error) {
-	runtimeDirPath, err := runtimedir.CreateSubRuntimeDir(baseRuntimeDirPath, fmt.Sprintf("instance-%s", id))
+	runtimeDirPath, err := dirutil.CreateSubDir(baseRuntimeDirPath, fmt.Sprintf("instance-%s", id), 0o700)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +91,19 @@ func NewInstance(
 		restartMode = instanceRestartModeUnlessStopped
 	}
 
+	//image, err := internal.NewImage(&service, runtimeDirPath, fileCache)
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	socketPath := path.Join(runtimeDirPath, socketFileName)
+	config, err := NewInstanceConfig(&service, socketPath)
+	if err != nil {
+		return nil, err
+	}
+
+	configExt := NewInstanceConfigExt(&service)
+
 	instance := &Instance{
 		executablePath: executablePath,
 
@@ -99,8 +112,8 @@ func NewInstance(
 		statusChangeHandler: statusChangeHandler,
 		runtimeDirPath:      runtimeDirPath,
 		restartMode:         restartMode,
-		config:              InstanceConfig{},
-		configExt:           InstanceConfigExt{},
+		config:              *config,
+		configExt:           *configExt,
 
 		lock:       sync.Mutex{},
 		status:     instanceStatusStopped,
@@ -325,6 +338,6 @@ func (i *Instance) generateRunArgs() []string {
 			"--cfg",
 			path.Join(i.runtimeDirPath, configFileName),
 		},
-		i.configExt.toArgs(),
+		i.configExt.ToArgs(),
 	)
 }
