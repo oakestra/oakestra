@@ -22,9 +22,8 @@ var (
 			return startNetManager()
 		},
 	}
-	cfgFile      string
-	defaultIface string
-	localPort    int
+	cfgFile   string
+	localPort int
 )
 
 const MONITORING_CYCLE = time.Second * 2
@@ -36,7 +35,6 @@ func Execute() error {
 
 func init() {
 	cfgFile = "/etc/netmanager/netcfg.json"
-	rootCmd.Flags().StringVarP(&defaultIface, "defaultInterface", "i", "", "Sets the default interface (only relevant if the system has more than one)")
 }
 
 func startNetManager() error {
@@ -48,11 +46,6 @@ func startNetManager() error {
 
 	if model.NetConfig.Debug {
 		logger.SetDebugMode()
-	}
-
-	// use cli argument if available
-	if defaultIface != "" {
-		model.NetConfig.DefaultInterface = defaultIface
 	}
 
 	log.Print(model.NetConfig)

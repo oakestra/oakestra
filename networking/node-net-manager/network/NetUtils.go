@@ -97,7 +97,7 @@ func defaultRoute() (*netlink.Link, error) {
 
 	if n := len(routes); n > 1 {
 		if model.NetConfig.DefaultInterface == "" {
-			return nil, fmt.Errorf("found more than one default net routes (%d). Specify the required default interface on startup with the -i flag", n)
+			return nil, fmt.Errorf("found more than one default net routes (%d). Specify the required default interface in the config file", n)
 		}
 		for _, r := range routes {
 			defNetlinkIdx := r.LinkIndex
