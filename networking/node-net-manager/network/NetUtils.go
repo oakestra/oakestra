@@ -17,7 +17,7 @@ import (
 func GetLocalIPandIface() (string, string) {
 	list, err := net.Interfaces()
 	if err != nil {
-		log.Printf("no net Interfaces found")
+		log.Printf("No net Interfaces found")
 		panic(err)
 	}
 	defaultIfce, err := defaultRoute()
