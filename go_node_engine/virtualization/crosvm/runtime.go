@@ -7,8 +7,7 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/util/dirutil"
 	"go_node_engine/util/taskid"
-	cvinstance "go_node_engine/virtualization/crosvm/internal/instance"
-	"google.golang.org/genproto/googleapis/spanner/admin/instance/v1"
+	"go_node_engine/virtualization/crosvm/internal/instance"
 	"os/exec"
 	"strings"
 	"sync"
@@ -25,7 +24,7 @@ type Runtime struct {
 	errors         []error
 
 	lock      sync.RWMutex
-	instances map[string]*cvinstance.Instance
+	instances map[string]*instance.Instance
 }
 
 var runtimeSingleton *Runtime = nil
@@ -77,9 +76,9 @@ func (r *Runtime) Deploy(service model.Service, statusChangeNotificationHandler 
 	defer r.lock.Unlock()
 
 	id := taskid.GenerateForModel(&service)
-	instance, ok := r.instances[id]
+	inst, ok := r.instances[id]
 	if !ok {
-		instance, err := cvinstance.NewInstance(id, service, statusChangeNotificationHandler, r.executablePath, r.runtimeDirPath)
+		instance, err := instance.NewInstance(id, service, statusChangeNotificationHandler, r.executablePath, r.runtimeDirPath)
 		if err != nil {
 			return err
 		}
@@ -87,7 +86,7 @@ func (r *Runtime) Deploy(service model.Service, statusChangeNotificationHandler 
 		r.instances[id] = instance
 	}
 
-	if err := instance.Start(); err != nil {
+	if err := inst.Start(); err != nil {
 		return err
 	}
 
@@ -118,16 +117,16 @@ func (r *Runtime) Stop() {
 	defer r.lock.Unlock()
 
 	var wg sync.WaitGroup
-	for id, instance := range r.instances {
+	for id, inst := range r.instances {
 		wg.Add(1)
 
-		go func(id string, instance *cvinstance.Instance) {
+		go func(id string, inst *instance.Instance) {
 			defer wg.Done()
-			if err := instance.Close(); err != nil {
+			if err := inst.Close(); err != nil {
 				logger.ErrorLogger().Printf("rt-crosvm: Unable to stop and close instance %q: %v", id, err)
 				// TODO(axiphi): What do we do in case of an error here? It might be problematic to just keep the VM running.
 			}
-		}(id, instance)
+		}(id, inst)
 	}
 
 	wg.Wait()
