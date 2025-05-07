@@ -1,4 +1,4 @@
-FROM python:3.8.5-slim-buster
+FROM python:3.10-slim-bookworm
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra-net
 
 ADD requirements.txt /
