@@ -1,7 +1,7 @@
 package fsimg
 
 import (
-	"go_node_engine/util/safedefer"
+	"go_node_engine/util/iotools"
 	"os"
 	"syscall"
 )
@@ -11,7 +11,7 @@ func CreateSparseFile(dstPath string, perm os.FileMode, size int64) error {
 	if err != nil {
 		return err
 	}
-	defer safedefer.SafeClose(dstFile, dstPath)
+	defer iotools.CloseOrWarn(dstFile, dstPath)
 
 	return ftruncate(dstFile, size)
 }

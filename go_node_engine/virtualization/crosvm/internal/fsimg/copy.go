@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"go_node_engine/logger"
-	"go_node_engine/util/safedefer"
+	"go_node_engine/util/iotools"
 	"os"
 	"os/exec"
 	"sync"
@@ -46,10 +46,7 @@ func CopySquashFsIntoExt4Img(squashfsPath string, ext4Path string, mountDirPath 
 	if err := os.Mkdir(mountDirPath, 0o700); err != nil {
 		return fmt.Errorf("failed to create mount directory: %w", err)
 	}
-	defer safedefer.SafeDefer(
-		func() error { return os.Remove(mountDirPath) },
-		fmt.Sprintf("failed to remove directory %q", mountDirPath),
-	)
+	defer iotools.RemoveOrWarn(mountDirPath)
 
 	logger.InfoLogger().Printf("mounting ext4 image at %q to %q", ext4Path, mountDirPath)
 

@@ -4,8 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"go_node_engine/util/dirutil"
-	"go_node_engine/util/fileutil"
+	"go_node_engine/util/iotools"
 	"go_node_engine/virtualization/crosvm/internal/fsimg"
 	"os"
 	"path"
@@ -111,24 +110,24 @@ func (s *Store) Retrieve(ref string, dstDirPath string, rootfsSize int64) (*Imag
 		return img, err
 	}
 
-	tmpDirPath, err := dirutil.CreateLargeTempDir("image")
+	tmpDirPath, err := iotools.CreateLargeTempDir("image")
 	if err != nil {
 		logger.ErrorLogger().Printf("failed to create temporary directory for %q: %v", ref, err)
 		return nil, err
 	}
 
 	if err = source.Retrieve(id, tmpDirPath); err != nil {
-		dirutil.RemoveAllOrWarn(tmpDirPath)
+		iotools.RemoveAllOrWarn(tmpDirPath)
 		return nil, err
 	}
 
 	img, err = CreateImageFromDir(tmpDirPath)
 	if err != nil {
-		dirutil.RemoveAllOrWarn(tmpDirPath)
+		iotools.RemoveAllOrWarn(tmpDirPath)
 		return nil, err
 	}
 	if err := copyImageFilesToDst(tmpDirPath, dstDirPath, rootfsSize, img.HasInitrd); err != nil {
-		dirutil.RemoveAllOrWarn(tmpDirPath)
+		iotools.RemoveAllOrWarn(tmpDirPath)
 		return nil, err
 	}
 
@@ -221,7 +220,7 @@ func (s *Store) moveIntoCache(ref string, img *Image, tmpDirPath string, imageDi
 
 	if err := os.Rename(tmpDirPath, imageDirPath); err != nil {
 		logger.ErrorLogger().Printf("moving image files into cache directory %q failed for image %q, it will be re-fetched the next time it is used: %v", imageDirPath, ref, err)
-		dirutil.RemoveAllOrWarn(tmpDirPath)
+		iotools.RemoveAllOrWarn(tmpDirPath)
 		return
 	}
 
@@ -273,14 +272,14 @@ func copyImageFilesToDst(
 
 	srcKernelPath := path.Join(srcDirPath, KernelFileName)
 	dstKernelPath := path.Join(dstDirPath, KernelFileName)
-	if err := fileutil.CopyFile(srcKernelPath, dstKernelPath, 0o0700); err != nil {
+	if err := iotools.CopyFile(srcKernelPath, dstKernelPath, 0o0700); err != nil {
 		return err
 	}
 
 	if hasInitrd {
 		srcInitrdPath := path.Join(srcDirPath, InitrdFileName)
 		dstInitrdPath := path.Join(dstDirPath, InitrdFileName)
-		if err := fileutil.CopyFile(srcInitrdPath, dstInitrdPath, 0o0700); err != nil {
+		if err := iotools.CopyFile(srcInitrdPath, dstInitrdPath, 0o0700); err != nil {
 			return err
 		}
 	}

@@ -1,4 +1,4 @@
-package dirutil
+package iotools
 
 import (
 	"os"

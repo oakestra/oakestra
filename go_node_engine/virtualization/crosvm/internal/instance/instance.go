@@ -11,7 +11,7 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
-	"go_node_engine/util/dirutil"
+	"go_node_engine/util/iotools"
 	"go_node_engine/virtualization/crosvm/internal/image"
 	"os"
 	"os/exec"
@@ -83,7 +83,7 @@ func NewInstance(
 	baseRuntimeDirPath string,
 	imageStore *image.Store,
 ) (*Instance, error) {
-	runtimeDirPath, err := dirutil.CreateSubDir(baseRuntimeDirPath, fmt.Sprintf("instance-%s", id), 0o700)
+	runtimeDirPath, err := iotools.CreateSubDir(baseRuntimeDirPath, fmt.Sprintf("instance-%s", id), 0o700)
 	if err != nil {
 		return nil, err
 	}

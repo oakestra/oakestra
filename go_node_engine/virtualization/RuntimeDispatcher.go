@@ -15,8 +15,9 @@ type Runtime interface {
 type RuntimeGetter func() Runtime
 
 type RuntimeManager struct {
-	baseRuntimeDirPath string
-	runtimeMap map[model.RuntimeType]RuntimeGetter
+	runtimeDirPath string
+	cacheDirPath   string
+	runtimeMap     map[model.RuntimeType]RuntimeGetter
 }
 
 type RuntimeInterface interface {
@@ -30,7 +31,12 @@ type RuntimeMonitoring interface {
 }
 
 func NewRuntimeManager() (*RuntimeManager, error) {
-	baseRuntimeDirPath, err := iotools.CreateOakestraRuntimeDir()
+	runtimeDirPath, err := iotools.CreateOakestraRuntimeDir()
+	if err != nil {
+		return nil, err
+	}
+
+	cacheDirPath, err := iotools.CreateOakestraCacheDir()
 	if err != nil {
 		return nil, err
 	}
@@ -38,10 +44,12 @@ func NewRuntimeManager() (*RuntimeManager, error) {
 	var runtimeMap = make(map[model.RuntimeType]RuntimeGetter)
 	runtimeMap[model.CONTAINER_RUNTIME] = RuntimeGetter(GetContainerdRuntime)
 	runtimeMap[model.UNIKERNEL_RUNTIME] = RuntimeGetter(GetUnikernelQemuRuntime)
-	runtimeMap[model.CROSVM_RUNTIME] = RuntimeGetter(func() { return crosvm.RuntimeSingleton(baseRuntimeDirPath) })
+	runtimeMap[model.CROSVM_RUNTIME] = RuntimeGetter(func() { return crosvm.RuntimeSingleton(runtimeDirPath, cacheDirPath)) })
 
 	return &RuntimeManager{
-		baseRuntimeDirPath: baseRuntimeDirPath,
+		runtimeDirPath: runtimeDirPath,
+		cacheDirPath:   cacheDirPath,
+		runtimeMap: runtimeMap,
 	}, nil
 }
 

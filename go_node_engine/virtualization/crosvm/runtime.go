@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
-	"go_node_engine/util/dirutil"
+	"go_node_engine/util/iotools"
 	"go_node_engine/util/taskid"
 	"go_node_engine/virtualization/crosvm/internal/image"
 	"go_node_engine/virtualization/crosvm/internal/instance"
@@ -20,9 +20,11 @@ var ErrNotDeployed = errors.New("specified instance is not deployed")
 const executableName = "crosvm"
 
 type Runtime struct {
+	error error
+
 	executablePath string
 	runtimeDirPath string
-	error          error
+	cacheDirPath   string
 
 	imageStore *image.Store
 
@@ -33,14 +35,14 @@ type Runtime struct {
 var runtimeSingleton *Runtime = nil
 var newRuntimeOnce = sync.Once{}
 
-func RuntimeSingleton(baseRuntimeDirPath string) *Runtime {
+func RuntimeSingleton(baseRuntimeDirPath string, baseCacheDirPath string) *Runtime {
 	newRuntimeOnce.Do(func() {
-		runtimeSingleton = newRuntime(baseRuntimeDirPath)
+		runtimeSingleton = newRuntime(baseRuntimeDirPath, baseCacheDirPath)
 	})
 	return runtimeSingleton
 }
 
-func newRuntime(baseRuntimeDirPath string) *Runtime {
+func newRuntime(baseRuntimeDirPath string, baseCacheDirPath string) *Runtime {
 	executablePath, err := exec.LookPath(executableName)
 	if err != nil {
 		logger.ErrorLogger().Printf("unable to find crosvm executable (%s): %v\n", executableName, err)
@@ -49,7 +51,7 @@ func newRuntime(baseRuntimeDirPath string) *Runtime {
 		}
 	}
 
-	runtimeDirPath, err := dirutil.CreateSubDir(baseRuntimeDirPath, "runtime-crosvm", 0o700)
+	runtimeDirPath, err := iotools.CreateSubDir(baseRuntimeDirPath, "runtime-crosvm", 0o700)
 	if err != nil {
 		logger.ErrorLogger().Printf("failed to setup runtime directory for crosvm runtime: %v", err)
 		return &Runtime{
@@ -57,7 +59,15 @@ func newRuntime(baseRuntimeDirPath string) *Runtime {
 		}
 	}
 
-	imageDirPath, err := dirutil.CreateSubDir(runtimeDirPath, "images", 0o700)
+	cacheDirPath, err := iotools.CreateSubDir(baseCacheDirPath, "runtime-crosvm", 0o700)
+	if err != nil {
+		logger.ErrorLogger().Printf("failed to setup cache directory for crosvm runtime: %v", err)
+		return &Runtime{
+			error: err,
+		}
+	}
+
+	imageDirPath, err := iotools.CreateSubDir(cacheDirPath, "images", 0o700)
 	if err != nil {
 		logger.ErrorLogger().Printf("failed to setup directory for crosvm images: %v", err)
 		return &Runtime{
@@ -67,7 +77,7 @@ func newRuntime(baseRuntimeDirPath string) *Runtime {
 
 	imageStore, err := image.NewStore(imageDirPath)
 	if err != nil {
-		logger.ErrorLogger().Printf("failed to create crosvm store: %v", err)
+		logger.ErrorLogger().Printf("failed to create crosvm image store: %v", err)
 		return &Runtime{
 			error: err,
 		}
@@ -82,9 +92,11 @@ func newRuntime(baseRuntimeDirPath string) *Runtime {
 	model.GetNodeInfo().AddSupportedTechnology(model.CROSVM_RUNTIME)
 
 	return &Runtime{
+		error: nil,
+
 		executablePath: executablePath,
 		runtimeDirPath: runtimeDirPath,
-		error:          nil,
+		cacheDirPath:   cacheDirPath,
 
 		imageStore: imageStore,
 

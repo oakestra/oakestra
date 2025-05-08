@@ -1,4 +1,4 @@
-package dirutil
+package iotools
 
 import (
 	"github.com/spf13/afero"

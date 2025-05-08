@@ -3,7 +3,7 @@ package image_test
 import (
 	"github.com/containers/image/v5/docker"
 	"github.com/containers/storage/pkg/reexec"
-	"go_node_engine/util/dirutil"
+	"go_node_engine/util/iotools"
 	"go_node_engine/virtualization/crosvm/internal/image"
 	"gotest.tools/v3/assert"
 	"os"
@@ -15,7 +15,7 @@ func init() {
 }
 
 func TestFetchImage(t *testing.T) {
-	tmpDirPath, err := dirutil.CreateLargeTempDir("image-store-test")
+	tmpDirPath, err := iotools.CreateLargeTempDir("image-store-test")
 	assert.NilError(t, err)
 	defer assert.NilError(t, os.RemoveAll(tmpDirPath))
 

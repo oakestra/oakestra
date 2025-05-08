@@ -11,9 +11,7 @@ import (
 	"github.com/containers/storage/pkg/chrootarchive"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"go_node_engine/logger"
-	"go_node_engine/util/dirutil"
-	"go_node_engine/util/fileutil"
-	"go_node_engine/util/safedefer"
+	"go_node_engine/util/iotools"
 	"go_node_engine/virtualization/crosvm/internal/fsimg"
 	"go_node_engine/virtualization/crosvm/internal/kernel"
 	"io"
@@ -67,7 +65,7 @@ func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
 	if err != nil {
 		return err
 	}
-	defer safedefer.SafeClose(imageSource, "ImageSource "+id)
+	defer iotools.CloseOrWarn(imageSource, "ImageSource "+id)
 
 	_, _, imageLayers, err := chooseImageParts(ctx, sys, imageSource)
 	if err != nil {
@@ -77,30 +75,23 @@ func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
 	// TODO(axiphi): check a special label in the manifest , so that only container images specifically built for this use-case work
 
 	layersDirRemoved := false // allow removing the layers directory early
-	layersDirPath, err := dirutil.CreateSubDir(dstDirPath, "layers", 0o700)
+	layersDirPath, err := iotools.CreateSubDir(dstDirPath, "layers", 0o700)
 	if err != nil {
 		logger.ErrorLogger().Printf("failed to create layers directory for %q: %v", id, err)
 		return err
 	}
-	defer safedefer.SafeDefer(
-		func() error {
-			if layersDirRemoved {
-				return nil
-			}
-			return os.RemoveAll(layersDirPath)
-		},
-		fmt.Sprintf("failed to remove directory %q", layersDirPath),
-	)
+	defer func() {
+		if !layersDirRemoved {
+			iotools.RemoveAllOrWarn(layersDirPath)
+		}
+	}()
 
-	rootfsDirPath, err := dirutil.CreateSubDir(dstDirPath, "rootfs", 0o700)
+	rootfsDirPath, err := iotools.CreateSubDir(dstDirPath, "rootfs", 0o700)
 	if err != nil {
 		logger.ErrorLogger().Printf("failed to create rootfs directory for %q: %v", id, err)
 		return err
 	}
-	defer safedefer.SafeDefer(
-		func() error { return os.RemoveAll(rootfsDirPath) },
-		fmt.Sprintf("failed to remove directory %q", rootfsDirPath),
-	)
+	defer iotools.RemoveAllOrWarn(rootfsDirPath)
 
 	// fetching the layers can happen concurrently
 	wg := sync.WaitGroup{}
@@ -120,7 +111,7 @@ func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
 				errs[i] = err
 				return
 			}
-			defer safedefer.SafeClose(blobReader, "Blob "+layer.Digest.String())
+			defer iotools.CloseOrWarn(blobReader, "Blob "+layer.Digest.String())
 
 			blobPath := path.Join(layersDirPath, layer.Digest.String())
 			blobFile, err := os.OpenFile(blobPath, os.O_WRONLY|os.O_CREATE|os.O_CREATE, 0o600)
@@ -128,7 +119,7 @@ func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
 				errs[i] = err
 				return
 			}
-			defer safedefer.SafeClose(blobFile, blobPath)
+			defer iotools.CloseOrWarn(blobFile, blobPath)
 
 			if _, err := io.Copy(blobFile, blobReader); err != nil {
 				errs[i] = err
@@ -151,7 +142,7 @@ func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
 			if err != nil {
 				return err
 			}
-			defer safedefer.SafeClose(layerFile, layerPath)
+			defer iotools.CloseOrWarn(layerFile, layerPath)
 
 			if _, err := chrootarchive.ApplyLayer(rootfsDirPath, layerFile); err != nil {
 				return err
@@ -176,14 +167,14 @@ func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
 	}
 
 	kernelPath := path.Join(dstDirPath, KernelFileName)
-	if err := fileutil.CopyFile(relativeKernelPath, kernelPath, 0600); err != nil {
+	if err := iotools.CopyFile(relativeKernelPath, kernelPath, 0600); err != nil {
 		return err
 	}
 
 	initrdPath := ""
 	if relativeInitrdPath != "" {
 		initrdPath = path.Join(dstDirPath, InitrdFileName)
-		if err := fileutil.CopyFile(relativeInitrdPath, initrdPath, 0600); err != nil {
+		if err := iotools.CopyFile(relativeInitrdPath, initrdPath, 0600); err != nil {
 			return err
 		}
 	}

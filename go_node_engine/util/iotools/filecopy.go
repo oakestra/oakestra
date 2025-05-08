@@ -1,8 +1,7 @@
-package fileutil
+package iotools
 
 import (
 	"github.com/spf13/afero"
-	"go_node_engine/util/safedefer"
 	"io"
 	"os"
 )
@@ -16,13 +15,13 @@ func CopyFileInFs(fs afero.Fs, srcPath string, dstPath string, dstPerm os.FileMo
 	if err != nil {
 		return err
 	}
-	defer safedefer.SafeClose(srcFile, srcPath)
+	defer CloseOrWarn(srcFile, srcPath)
 
 	dstFile, err := fs.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, dstPerm)
 	if err != nil {
 		return err
 	}
-	defer safedefer.SafeClose(dstFile, dstPath)
+	defer CloseOrWarn(dstFile, dstPath)
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		return err
