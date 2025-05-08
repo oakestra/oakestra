@@ -42,14 +42,14 @@ func NewRuntimeManager() (*RuntimeManager, error) {
 	}
 
 	var runtimeMap = make(map[model.RuntimeType]RuntimeGetter)
-	runtimeMap[model.CONTAINER_RUNTIME] = RuntimeGetter(GetContainerdRuntime)
-	runtimeMap[model.UNIKERNEL_RUNTIME] = RuntimeGetter(GetUnikernelQemuRuntime)
-	runtimeMap[model.CROSVM_RUNTIME] = RuntimeGetter(func() { return crosvm.RuntimeSingleton(runtimeDirPath, cacheDirPath)) })
+	runtimeMap[model.CONTAINER_RUNTIME] = GetContainerdRuntime
+	runtimeMap[model.UNIKERNEL_RUNTIME] = GetUnikernelQemuRuntime
+	runtimeMap[model.CROSVM_RUNTIME] = func() Runtime { return crosvm.RuntimeSingleton(runtimeDirPath, cacheDirPath) }
 
 	return &RuntimeManager{
 		runtimeDirPath: runtimeDirPath,
 		cacheDirPath:   cacheDirPath,
-		runtimeMap: runtimeMap,
+		runtimeMap:     runtimeMap,
 	}, nil
 }
 
