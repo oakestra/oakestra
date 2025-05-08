@@ -233,7 +233,7 @@ func (i *Instance) Close() error {
 			i.lastExit = exit
 			break
 		case <-time.After(10 * time.Second):
-			return fmt.Errorf("Failed to stop crosvm instance %q", i.id)
+			return fmt.Errorf("failed to stop crosvm instance %q", i.id)
 		}
 	} else if i.status == instanceStatusStopped {
 		i.status = instanceStatusClosed
