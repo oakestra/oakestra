@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
+	"go_node_engine/requests"
 	"go_node_engine/util/dirutil"
+	"go_node_engine/virtualization/crosvm/internal/image"
 	"os"
 	"os/exec"
 	"path"
@@ -62,6 +64,7 @@ type Instance struct {
 	statusChangeHandler func(service model.Service)
 	runtimeDirPath      string
 	restartMode         instanceRestartMode
+	img                 *image.Image
 	config              InstanceConfig
 	configExt           InstanceConfigExt
 
@@ -78,6 +81,7 @@ func NewInstance(
 	statusChangeHandler func(service model.Service),
 	executablePath string,
 	baseRuntimeDirPath string,
+	imageStore *image.Store,
 ) (*Instance, error) {
 	runtimeDirPath, err := dirutil.CreateSubDir(baseRuntimeDirPath, fmt.Sprintf("instance-%s", id), 0o700)
 	if err != nil {
@@ -91,13 +95,16 @@ func NewInstance(
 		restartMode = instanceRestartModeUnlessStopped
 	}
 
-	//image, err := internal.NewImage(&service, runtimeDirPath, fileCache)
-	//if err != nil {
-	//	return nil, err
-	//}
+	// TODO(axiphi): Currently this code is abusing the "vtpus" field of the service model to configure
+	// 	 			 the disk size for the VM, as it is otherwise unused in the crosvm runtime.
+	//               The left shift by 20 converts the unit of the field from MiB to bytes.
+	var rootfsSize = int64(service.Vtpus) << 20
+	img, err := imageStore.Retrieve(service.Image, runtimeDirPath, rootfsSize)
+	if err != nil {
+		return nil, err
+	}
 
-	socketPath := path.Join(runtimeDirPath, socketFileName)
-	config, err := NewInstanceConfig(&service, socketPath)
+	config, err := NewInstanceConfig(model.GetNodeInfo(), &service, img, runtimeDirPath)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +119,7 @@ func NewInstance(
 		statusChangeHandler: statusChangeHandler,
 		runtimeDirPath:      runtimeDirPath,
 		restartMode:         restartMode,
+		img:                 img,
 		config:              *config,
 		configExt:           *configExt,
 
@@ -123,7 +131,7 @@ func NewInstance(
 	}
 
 	if err := instance.createConfigFile(); err != nil {
-		logger.ErrorLogger().Printf("rt-crosvm: Could not create config file for instance %q: %v", instance.id, err)
+		logger.ErrorLogger().Printf("could not create config file for instance %q: %v", instance.id, err)
 		_ = instance.Close()
 		return nil, err
 	}
@@ -136,24 +144,36 @@ func (i *Instance) Start() error {
 	defer i.lock.Unlock()
 
 	if i.status == instanceStatusRunning {
-		logger.WarnLogger().Printf("rt-crosvm: Ignoring instance start for %q, because it is already running", i.id)
+		logger.WarnLogger().Printf("ignoring instance start for %q, because it is already running", i.id)
 		return nil
 	}
 
 	if i.status == instanceStatusClosed {
-		logger.ErrorLogger().Printf("rt-crosvm: Ignoring instance start for %q, because it is already closed", i.id)
+		logger.ErrorLogger().Printf("ignoring instance start for %q, because it is already closed", i.id)
 		return errAlreadyClosed
 	}
 
-	runArgs := i.generateRunArgs()
-	runCmd := exec.Command(i.executablePath, runArgs...)
+	if model.GetNodeInfo().Overlay {
+		if err := requests.CreateNetworkNamespaceForUnikernel(i.service.Sname, i.service.Instance, i.service.Ports); err != nil {
+			logger.ErrorLogger().Printf("network creation failed: %v", err)
+			return err
+		}
+	}
 
-	logger.InfoLogger().Printf("rt-crosvm: Starting instance %q with args %q", i.id, runArgs)
+	runExec := i.executablePath
+	runArgs := i.generateRunArgs()
+	if model.GetNodeInfo().Overlay {
+		runExec, runArgs = wrapCommandWithIpNetnsExec(i.id, runExec, runArgs)
+	}
+
+	runCmd := exec.Command(runExec, runArgs...)
+
+	logger.InfoLogger().Printf("starting instance %q with args %q", i.id, runArgs)
 	if err := runCmd.Start(); err != nil {
-		logger.ErrorLogger().Printf("rt-crosvm: Failed to start instance %q: %v", i.id, err)
+		logger.ErrorLogger().Printf("failed to start instance %q: %v", i.id, err)
 		return err
 	}
-	logger.InfoLogger().Printf("rt-crosvm: Started instance %q", i.id)
+	logger.InfoLogger().Printf("started instance %q", i.id)
 
 	i.startCount++
 	i.status = instanceStatusRunning
@@ -173,7 +193,7 @@ func (i *Instance) Stop() error {
 	}
 
 	if !i.callCrosvmStop() {
-		logger.WarnLogger().Printf("rt-crosvm: Stopping crosvm instance %q via library failed", i.id)
+		logger.WarnLogger().Printf("stopping crosvm instance %q via library failed", i.id)
 	}
 
 	select {
@@ -182,7 +202,14 @@ func (i *Instance) Stop() error {
 		i.lastExit = exit
 		break
 	case <-time.After(10 * time.Second):
-		return fmt.Errorf("rt-crosvm: Failed to stop crosvm instance %q", i.id)
+		return fmt.Errorf("timed out waiting for crosvm instance %q to stop", i.id)
+	}
+
+	if model.GetNodeInfo().Overlay {
+		if err := requests.DeleteNamespaceForUnikernel(i.service.Sname, i.service.Instance); err != nil {
+			logger.ErrorLogger().Printf("network deletion failed: %v", err)
+			return err
+		}
 	}
 
 	return nil
@@ -198,7 +225,7 @@ func (i *Instance) Close() error {
 
 	if i.status == instanceStatusRunning {
 		if !i.callCrosvmStop() {
-			logger.WarnLogger().Printf("rt-crosvm: Stopping crosvm instance %q via library failed", i.id)
+			logger.WarnLogger().Printf("Stopping crosvm instance %q via library failed", i.id)
 		}
 		select {
 		case exit := <-i.exitChan:
@@ -206,14 +233,14 @@ func (i *Instance) Close() error {
 			i.lastExit = exit
 			break
 		case <-time.After(10 * time.Second):
-			return fmt.Errorf("rt-crosvm: Failed to stop crosvm instance %q", i.id)
+			return fmt.Errorf("Failed to stop crosvm instance %q", i.id)
 		}
 	} else if i.status == instanceStatusStopped {
 		i.status = instanceStatusClosed
 	}
 
 	if err := os.RemoveAll(i.runtimeDirPath); err != nil {
-		logger.WarnLogger().Printf("rt-crosvm: Failed to remove runtime directory %q of instance %q: %v", i.runtimeDirPath, i.id, err)
+		logger.WarnLogger().Printf("failed to remove runtime directory %q of instance %q: %v", i.runtimeDirPath, i.id, err)
 	}
 	return nil
 }
@@ -223,14 +250,14 @@ func (i *Instance) waitForExit(cmd *exec.Cmd, startNum uint32) {
 
 	var exit instanceExitType
 	if runErr == nil {
-		logger.InfoLogger().Printf("rt-crosvm: Instance %q exited successfully", i.id)
+		logger.InfoLogger().Printf("instance %q exited successfully", i.id)
 		exit = instanceExitTypeSuccess
 	} else {
 		var err *exec.ExitError
 		if errors.As(runErr, &err) {
-			logger.ErrorLogger().Printf("rt-crosvm: Instance %q exited with error: %v", i.id, runErr)
+			logger.ErrorLogger().Printf("instance %q exited with error: %v", i.id, runErr)
 		} else {
-			logger.ErrorLogger().Printf("rt-crosvm: Unexpected error when trying to run instance %q: %v", i.id, runErr)
+			logger.ErrorLogger().Printf("unexpected error when trying to run instance %q: %v", i.id, runErr)
 		}
 		exit = instanceExitTypeError
 	}
@@ -240,7 +267,7 @@ func (i *Instance) waitForExit(cmd *exec.Cmd, startNum uint32) {
 		break
 	default:
 		logger.ErrorLogger().Printf(
-			"rt-crosvm: Instance %q exit could not be emitted into channel, this should never happen", i.id,
+			"instance %q exit could not be emitted into channel, this should never happen", i.id,
 		)
 		return
 	}
@@ -282,7 +309,7 @@ func (i *Instance) handleUnclaimedExit(startNum uint32) {
 			i.notifyStatusChange(model.SERVICE_DEAD)
 		}
 	} else {
-		// since the service is not one-shot, it counts as dead
+		// since the service is not one-shot, it counts as dead and not COMPLETED
 		i.notifyStatusChange(model.SERVICE_DEAD)
 		defer i.restart()
 	}
@@ -292,7 +319,7 @@ func (i *Instance) restart() {
 	go func() {
 		err := i.Start()
 		if err != nil {
-			logger.ErrorLogger().Printf("rt-crosvm: Failed to restart instance %q: %v", i.id, err)
+			logger.ErrorLogger().Printf("failed to restart instance %q: %v", i.id, err)
 		}
 	}()
 }
@@ -318,7 +345,7 @@ func (i *Instance) createConfigFile() error {
 	}
 	defer func() {
 		if err := configFile.Close(); err != nil {
-			logger.WarnLogger().Printf("virtualization-crosvm: failed to close config file %q: %v", configPath, err)
+			logger.WarnLogger().Printf("failed to close config file %q: %v", configPath, err)
 		}
 	}()
 
@@ -340,4 +367,8 @@ func (i *Instance) generateRunArgs() []string {
 		},
 		i.configExt.ToArgs(),
 	)
+}
+
+func wrapCommandWithIpNetnsExec(namespace string, executable string, args []string) (string, []string) {
+	return "ip", slices.Concat([]string{"netns", "exec", namespace, executable}, args)
 }

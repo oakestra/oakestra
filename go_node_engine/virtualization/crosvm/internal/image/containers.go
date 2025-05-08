@@ -58,7 +58,7 @@ func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
 	ctx := context.Background()
 	sys := &types.SystemContext{}
 
-	imageRef, err := s.transport.ParseReference("//" + id)
+	imageRef, err := s.transport.ParseReference(id)
 	if err != nil {
 		return err
 	}
@@ -79,7 +79,7 @@ func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
 	layersDirRemoved := false // allow removing the layers directory early
 	layersDirPath, err := dirutil.CreateSubDir(dstDirPath, "layers", 0o700)
 	if err != nil {
-		logger.ErrorLogger().Printf("imagecache: failed to create layers directory for %q: %v", id, err)
+		logger.ErrorLogger().Printf("failed to create layers directory for %q: %v", id, err)
 		return err
 	}
 	defer safedefer.SafeDefer(
@@ -94,7 +94,7 @@ func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
 
 	rootfsDirPath, err := dirutil.CreateSubDir(dstDirPath, "rootfs", 0o700)
 	if err != nil {
-		logger.ErrorLogger().Printf("imagecache: failed to create rootfs directory for %q: %v", id, err)
+		logger.ErrorLogger().Printf("failed to create rootfs directory for %q: %v", id, err)
 		return err
 	}
 	defer safedefer.SafeDefer(

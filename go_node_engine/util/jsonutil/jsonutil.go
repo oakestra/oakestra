@@ -18,7 +18,7 @@ func LoadJSONInFs[T any](fs afero.Fs, jsonPath string) (*T, error) {
 	}
 	defer func() {
 		if err := jsonFile.Close(); err != nil {
-			logger.WarnLogger().Printf("imagecache: failed to close JSON file %q: %v", jsonPath, err)
+			logger.WarnLogger().Printf("failed to close JSON file %q: %v", jsonPath, err)
 		}
 	}()
 
@@ -43,7 +43,7 @@ func StoreJSONInFs[T any](value *T, fs afero.Fs, jsonPath string, perm os.FileMo
 	}
 	defer func() {
 		if err := jsonFile.Close(); err != nil {
-			logger.WarnLogger().Printf("imagecache: failed to close JSON file %q: %v", jsonPath, err)
+			logger.WarnLogger().Printf("failed to close JSON file %q: %v", jsonPath, err)
 		}
 	}()
 

@@ -7,12 +7,12 @@ import (
 
 func SafeClose(closer io.Closer, name string) {
 	if err := closer.Close(); err != nil {
-		logger.WarnLogger().Printf("safedefer: failed to close %q: %v", name, err)
+		logger.WarnLogger().Printf("failed to close %q: %v", name, err)
 	}
 }
 
 func SafeDefer(closeFunc func() error, message string) {
 	if err := closeFunc(); err != nil {
-		logger.WarnLogger().Printf("safedefer: %s: %v", message, err)
+		logger.WarnLogger().Printf("%s: %v", message, err)
 	}
 }

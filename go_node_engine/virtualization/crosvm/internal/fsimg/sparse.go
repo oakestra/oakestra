@@ -1,7 +1,7 @@
 package fsimg
 
 import (
-	"go_node_engine/virtualization/crosvm/internal/safedefer"
+	"go_node_engine/util/safedefer"
 	"os"
 	"syscall"
 )

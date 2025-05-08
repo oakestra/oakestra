@@ -22,8 +22,7 @@ func TestFetchImage(t *testing.T) {
 	store, err := image.NewStore(tmpDirPath, image.NewContainersSource(docker.Transport))
 	assert.NilError(t, err)
 
-	img, err := store.Retrieve("alpine:3.21.3", tmpDirPath, 2<<30)
+	img, err := store.Retrieve("//alpine:3.21.3", tmpDirPath, 2<<30)
 	assert.NilError(t, err)
-
-	println(img)
+	assert.Assert(t, img != nil)
 }

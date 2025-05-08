@@ -3,6 +3,8 @@ package instance
 import (
 	"go_node_engine/model"
 	"go_node_engine/util/ptr"
+	"go_node_engine/virtualization/crosvm/internal/image"
+	"path"
 )
 
 // InstanceConfig represents the parameters of the "crosvm run" command and are passed to it as a JSON file via the "--cfg" argument.
@@ -191,13 +193,13 @@ type InstanceConfigMem struct {
 }
 
 type InstanceConfigNet struct {
-	TapName     InstanceConfigNetTapName   `json:"tap-name,omitempty"`
-	TapFd       InstanceConfigNetTapFd     `json:"tap-fd,omitempty"`
-	RawConfig   InstanceConfigNetRawConfig `json:"raw-config,omitempty"`
-	VqPairs     *uint16                    `json:"vq-pairs,omitempty"`
-	VhostNet    *InstanceConfigVhostNet    `json:"vhost-net,omitempty"`
-	PackedQueue *bool                      `json:"packed-queue,omitempty"`
-	PciAddress  *string                    `json:"pci-address,omitempty"`
+	TapName     *InstanceConfigNetTapName   `json:"tap-name,omitempty"`
+	TapFd       *InstanceConfigNetTapFd     `json:"tap-fd,omitempty"`
+	RawConfig   *InstanceConfigNetRawConfig `json:"raw-config,omitempty"`
+	VqPairs     *uint16                     `json:"vq-pairs,omitempty"`
+	VhostNet    *InstanceConfigVhostNet     `json:"vhost-net,omitempty"`
+	PackedQueue *bool                       `json:"packed-queue,omitempty"`
+	PciAddress  *string                     `json:"pci-address,omitempty"`
 }
 
 type InstanceConfigNetTapName struct {
@@ -285,16 +287,43 @@ type InstanceConfigVsock struct {
 }
 
 func NewInstanceConfig(
+	node *model.Node,
 	service *model.Service,
-	socketPath string,
+	img *image.Image,
+	runtimeDirPath string,
 ) (*InstanceConfig, error) {
+	var net []InstanceConfigNet
+	if node.Overlay {
+		net = append(net, InstanceConfigNet{
+			TapName: &InstanceConfigNetTapName{
+				TapName: "tap0",
+				Mac:     ptr.Ptr("52:55:00:d1:55:01"),
+			},
+			VhostNet: &InstanceConfigVhostNet{},
+		})
+	}
+	var initrd *string
+	if img.HasInitrd {
+		initrd = ptr.Ptr(path.Join(runtimeDirPath, image.InitrdFileName))
+	}
+
 	return &InstanceConfig{
+		Block: []InstanceConfigBlock{
+			{
+				Path:   path.Join(runtimeDirPath, image.RootfsFileName),
+				Root:   ptr.Ptr(true),
+				Sparse: ptr.Ptr(true),
+			},
+		},
 		Cpus: &InstanceConfigCpus{
 			NumCores: ptr.Ptr(uint(service.Vcpus)),
 		},
+		Initrd: initrd,
+		Kernel: ptr.Ptr(path.Join(image.KernelFileName)),
 		Mem: &InstanceConfigMem{
 			Size: ptr.Ptr(uint64(service.Memory)),
 		},
-		Socket: &socketPath,
+		Net:    net,
+		Socket: ptr.Ptr(path.Join(runtimeDirPath, socketFileName)),
 	}, nil
 }

@@ -7,6 +7,7 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/util/dirutil"
 	"go_node_engine/util/taskid"
+	"go_node_engine/virtualization/crosvm/internal/image"
 	"go_node_engine/virtualization/crosvm/internal/instance"
 	"os/exec"
 	"strings"
@@ -21,7 +22,9 @@ const executableName = "crosvm"
 type Runtime struct {
 	executablePath string
 	runtimeDirPath string
-	errors         []error
+	error          error
+
+	imageStore *image.Store
 
 	lock      sync.RWMutex
 	instances map[string]*instance.Instance
@@ -38,52 +41,76 @@ func RuntimeSingleton(baseRuntimeDirPath string) *Runtime {
 }
 
 func newRuntime(baseRuntimeDirPath string) *Runtime {
-	var creationErrors []error
-
 	executablePath, err := exec.LookPath(executableName)
 	if err != nil {
-		creationErrors = append(creationErrors, err)
-		logger.ErrorLogger().Printf("Unable to find crosvm executable (%s): %v\n", executableName, err)
+		logger.ErrorLogger().Printf("unable to find crosvm executable (%s): %v\n", executableName, err)
+		return &Runtime{
+			error: err,
+		}
 	}
 
 	runtimeDirPath, err := dirutil.CreateSubDir(baseRuntimeDirPath, "runtime-crosvm", 0o700)
 	if err != nil {
-		creationErrors = append(creationErrors, err)
-		logger.ErrorLogger().Printf("Failed to setup runtime directory for crosvm runtime: %v\n", err)
+		logger.ErrorLogger().Printf("failed to setup runtime directory for crosvm runtime: %v", err)
+		return &Runtime{
+			error: err,
+		}
 	}
 
-	if len(creationErrors) == 0 {
-		var infoMsg strings.Builder
-		infoMsg.WriteString("Enabled crosvm runtime:\n")
-		_, _ = fmt.Fprintf(&infoMsg, "  > crosvm executable: %s\n", executablePath)
-		_, _ = fmt.Fprintf(&infoMsg, "  > runtime directory: %s\n", runtimeDirPath)
-
-		logger.InfoLogger().Print(infoMsg)
-		model.GetNodeInfo().AddSupportedTechnology(model.CROSVM_RUNTIME)
+	imageDirPath, err := dirutil.CreateSubDir(runtimeDirPath, "images", 0o700)
+	if err != nil {
+		logger.ErrorLogger().Printf("failed to setup directory for crosvm images: %v", err)
+		return &Runtime{
+			error: err,
+		}
 	}
+
+	imageStore, err := image.NewStore(imageDirPath)
+	if err != nil {
+		logger.ErrorLogger().Printf("failed to create crosvm store: %v", err)
+		return &Runtime{
+			error: err,
+		}
+	}
+
+	var infoMsg strings.Builder
+	infoMsg.WriteString("enabled crosvm runtime:\n")
+	_, _ = fmt.Fprintf(&infoMsg, "  > crosvm executable: %s\n", executablePath)
+	_, _ = fmt.Fprintf(&infoMsg, "  > runtime directory: %s\n", runtimeDirPath)
+	logger.InfoLogger().Print(infoMsg)
+
+	model.GetNodeInfo().AddSupportedTechnology(model.CROSVM_RUNTIME)
 
 	return &Runtime{
 		executablePath: executablePath,
 		runtimeDirPath: runtimeDirPath,
-		errors:         creationErrors,
+		error:          nil,
 
+		imageStore: imageStore,
+
+		lock:      sync.RWMutex{},
 		instances: make(map[string]*instance.Instance),
 	}
 }
 
 func (r *Runtime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
+	if r.error != nil {
+		return r.error
+	}
+
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
 	id := taskid.GenerateForModel(&service)
 	inst, ok := r.instances[id]
 	if !ok {
-		instance, err := instance.NewInstance(id, service, statusChangeNotificationHandler, r.executablePath, r.runtimeDirPath)
+		var err error
+		inst, err = instance.NewInstance(id, service, statusChangeNotificationHandler, r.executablePath, r.runtimeDirPath, r.imageStore)
 		if err != nil {
 			return err
 		}
 
-		r.instances[id] = instance
+		r.instances[id] = inst
 	}
 
 	if err := inst.Start(); err != nil {
@@ -94,16 +121,20 @@ func (r *Runtime) Deploy(service model.Service, statusChangeNotificationHandler 
 }
 
 func (r *Runtime) Undeploy(sname string, instancenumber int) error {
+	if r.error != nil {
+		return r.error
+	}
+
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
 	id := taskid.Generate(sname, instancenumber)
-	instance, ok := r.instances[id]
+	inst, ok := r.instances[id]
 	if !ok {
 		return ErrNotDeployed
 	}
 
-	if err := instance.Close(); err != nil {
+	if err := inst.Close(); err != nil {
 		return err
 	}
 
@@ -113,6 +144,10 @@ func (r *Runtime) Undeploy(sname string, instancenumber int) error {
 }
 
 func (r *Runtime) Stop() {
+	if r.error != nil {
+		return
+	}
+
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -123,7 +158,7 @@ func (r *Runtime) Stop() {
 		go func(id string, inst *instance.Instance) {
 			defer wg.Done()
 			if err := inst.Close(); err != nil {
-				logger.ErrorLogger().Printf("rt-crosvm: Unable to stop and close instance %q: %v", id, err)
+				logger.ErrorLogger().Printf("unable to stop and close instance %q: %v", id, err)
 				// TODO(axiphi): What do we do in case of an error here? It might be problematic to just keep the VM running.
 			}
 		}(id, inst)
@@ -134,6 +169,10 @@ func (r *Runtime) Stop() {
 }
 
 func (r *Runtime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
+	if r.error != nil {
+		return
+	}
+
 	ticker := time.NewTicker(every)
 	for range ticker.C {
 		r.reportResources(notifyHandler)

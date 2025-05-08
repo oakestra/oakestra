@@ -44,34 +44,34 @@ func CopySquashFsIntoExt4Img(squashfsPath string, ext4Path string, mountDirPath 
 	}
 
 	if err := os.Mkdir(mountDirPath, 0o700); err != nil {
-		return fmt.Errorf("fsimg: failed to create mount directory: %w", err)
+		return fmt.Errorf("failed to create mount directory: %w", err)
 	}
 	defer safedefer.SafeDefer(
 		func() error { return os.Remove(mountDirPath) },
 		fmt.Sprintf("failed to remove directory %q", mountDirPath),
 	)
 
-	logger.InfoLogger().Printf("fsimg: mounting ext4 image at %q to %q", ext4Path, mountDirPath)
+	logger.InfoLogger().Printf("mounting ext4 image at %q to %q", ext4Path, mountDirPath)
 
 	mountCmd := exec.Command(mountExecPath, "-t", "ext4", "-o", "loop", ext4Path, mountDirPath)
 	if err := mountCmd.Run(); err != nil {
-		logger.ErrorLogger().Printf("fsimg: failed to run mount command: %v", err)
-		return fmt.Errorf("fsimg: failed to run mount command: %w", err)
+		logger.ErrorLogger().Printf("failed to run mount command: %v", err)
+		return fmt.Errorf("failed to run mount command: %w", err)
 	}
 	defer func() {
 		umountCmd := exec.Command(umountExecPath, "-d", mountDirPath)
 		if err := umountCmd.Run(); err != nil {
-			logger.WarnLogger().Printf("fsimg: failed to run umount command: %v", err)
+			logger.WarnLogger().Printf("failed to run umount command: %v", err)
 		}
 	}()
 
-	logger.InfoLogger().Printf("fsimg: copying squashfs contents of %q to ext4 mount at %q", squashfsPath, mountDirPath)
+	logger.InfoLogger().Printf("copying squashfs contents of %q to ext4 mount at %q", squashfsPath, mountDirPath)
 
 	if err := UnpackFromSquashFsImg(squashfsPath, mountDirPath); err != nil {
-		logger.ErrorLogger().Printf("fsimg: failed to unpack squashfs image: %v", err)
-		return fmt.Errorf("fsimg: failed to unpack squashfs image: %w", err)
+		logger.ErrorLogger().Printf("failed to unpack squashfs image: %v", err)
+		return fmt.Errorf("failed to unpack squashfs image: %w", err)
 	}
 
-	logger.InfoLogger().Printf("fsimg: successfully copied squashfs contents of %q into ext4 image at %q", squashfsPath, ext4Path)
+	logger.InfoLogger().Printf("successfully copied squashfs contents of %q into ext4 image at %q", squashfsPath, ext4Path)
 	return nil
 }
