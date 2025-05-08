@@ -1,7 +1,0 @@
-ARG VERSION
-
-FROM localhost/ubuntu-cloud:${VERSION}
-
-RUN apt-get update \
-    && apt-get --yes upgrade \
-    && apt-get --yes install --no-install-recommends linux-kvm
