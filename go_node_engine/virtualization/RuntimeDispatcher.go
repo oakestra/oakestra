@@ -3,31 +3,14 @@ package virtualization
 import (
 	"go_node_engine/model"
 	"go_node_engine/util/iotools"
-	"go_node_engine/virtualization/crosvm"
-	"time"
+	"go_node_engine/virtualization/internal/allruntimes"
+	virtrt "go_node_engine/virtualization/internal/runtime"
+	"sync"
 )
 
-type Runtime interface {
-	RuntimeInterface
-	RuntimeMonitoring
-}
-
-type RuntimeGetter func() Runtime
-
 type RuntimeManager struct {
-	runtimeDirPath string
-	cacheDirPath   string
-	runtimeMap     map[model.RuntimeType]RuntimeGetter
-}
-
-type RuntimeInterface interface {
-	Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error
-	Undeploy(sname string, instance int) error
-	Stop()
-}
-
-type RuntimeMonitoring interface {
-	ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources))
+	info         virtrt.RuntimeInfo
+	initializers map[string]func() virtrt.Runtime
 }
 
 func NewRuntimeManager() (*RuntimeManager, error) {
@@ -41,28 +24,30 @@ func NewRuntimeManager() (*RuntimeManager, error) {
 		return nil, err
 	}
 
-	var runtimeMap = make(map[model.RuntimeType]RuntimeGetter)
-	runtimeMap[model.CONTAINER_RUNTIME] = GetContainerdRuntime
-	runtimeMap[model.UNIKERNEL_RUNTIME] = GetUnikernelQemuRuntime
-	runtimeMap[model.CROSVM_RUNTIME] = func() Runtime { return crosvm.RuntimeSingleton(runtimeDirPath, cacheDirPath) }
+	info := virtrt.RuntimeInfo{
+		RuntimeDirPath: runtimeDirPath,
+		CacheDirPath:   cacheDirPath,
+	}
+
+	var onceInitializers map[string]func() virtrt.Runtime
+	for name, initializer := range allruntimes.GetInitializers() {
+		onceInitializers[name] = sync.OnceValue(func() virtrt.Runtime {
+			return initializer(info)
+		})
+		// maybe this shouldn't be global state
+		model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(name))
+	}
 
 	return &RuntimeManager{
-		runtimeDirPath: runtimeDirPath,
-		cacheDirPath:   cacheDirPath,
-		runtimeMap:     runtimeMap,
+		info:         info,
+		initializers: onceInitializers,
 	}, nil
 }
 
-func (m *RuntimeManager) GetRuntime(runtime model.RuntimeType) RuntimeInterface {
-	return m.runtimeMap[runtime]()
+func (m *RuntimeManager) GetRuntime(runtime model.RuntimeType) virtrt.RuntimeInterface {
+	return m.initializers[string(runtime)]()
 }
 
-func (m *RuntimeManager) GetRuntimeMonitoring(runtime model.RuntimeType) RuntimeMonitoring {
-	return m.runtimeMap[runtime]()
-}
-
-// can be used by registered runtimes to register additional sub-runtimes.
-// E.g. containerd can register runc as well as urunc
-func (m *RuntimeManager) registerRuntimeLink(name string, getter RuntimeGetter) {
-	m.runtimeMap[model.RuntimeType(name)] = getter
+func (m *RuntimeManager) GetRuntimeMonitoring(runtime model.RuntimeType) virtrt.RuntimeMonitoring {
+	return m.initializers[string(runtime)]()
 }

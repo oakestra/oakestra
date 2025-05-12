@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"go_node_engine/util/iotools"
-	"go_node_engine/virtualization/crosvm/internal/fsimg"
+	"go_node_engine/virtualization/internal/crosvm/internal/fsimg"
 	"os"
 	"path"
 	"path/filepath"

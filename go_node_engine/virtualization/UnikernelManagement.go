@@ -8,6 +8,8 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
+	"go_node_engine/virtualization/internal/allruntimes"
+	virtrt "go_node_engine/virtualization/internal/runtime"
 	"io"
 	"io/fs"
 	"net"
@@ -28,6 +30,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+func init() {
+	allruntimes.Register(string(model.UNIKERNEL_RUNTIME), newUnikernelQemuRuntime)
+}
+
 type qemuDomain struct {
 	Name        string
 	Sname       string
@@ -43,44 +49,40 @@ type UnikernelRuntime struct {
 	channelLock *sync.RWMutex
 }
 
-var ukruntime = UnikernelRuntime{
-	channelLock: &sync.RWMutex{},
-}
+func newUnikernelQemuRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
+	var command string
+	var err error
 
-var ukSyncOnce sync.Once
+	//Check which version of qemu is required for kvm support (local arch)
+	if rt.GOARCH == "amd64" {
+		command = "qemu-system-x86_64"
+	} else {
+		command = "qemu-system-aarch64"
+	}
 
-func GetUnikernelQemuRuntime() Runtime {
-	ukSyncOnce.Do(func() {
-		var command string
-		var err error
+	ukruntime := UnikernelRuntime{
+		channelLock: &sync.RWMutex{},
+	}
 
-		//Check which version of qemu is required for kvm support (local arch)
-		if rt.GOARCH == "amd64" {
-			command = "qemu-system-x86_64"
-		} else {
-			command = "qemu-system-aarch64"
-		}
+	path, err := exec.LookPath(command)
+	if err != nil {
+		logger.ErrorLogger().Fatalf("Unable to find qemu executable(%s): %v\n", command, err)
+		ukruntime.qemuPath = ""
+	}
+	ukruntime.qemuPath = path
+	logger.InfoLogger().Printf("Using qemu at %s\n", path)
+	ukruntime.killQueue = make(map[string]*chan bool)
+	ukruntime.qemuDomains = make(map[string]*qemuDomain)
+	err = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to create kernel directory: %v", err)
+	}
 
-		path, err := exec.LookPath(command)
-		if err != nil {
-			logger.ErrorLogger().Fatalf("Unable to find qemu executable(%s): %v\n", command, err)
-			ukruntime.qemuPath = ""
-		}
-		ukruntime.qemuPath = path
-		logger.InfoLogger().Printf("Using qemu at %s\n", path)
-		ukruntime.killQueue = make(map[string]*chan bool)
-		ukruntime.qemuDomains = make(map[string]*qemuDomain)
-		err = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
-		if err != nil {
-			logger.ErrorLogger().Printf("Unable to create kernel directory: %v", err)
-		}
+	err = os.MkdirAll("/tmp/node_engine/inst/", 0755)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to create instance directory: %v", err)
+	}
 
-		err = os.MkdirAll("/tmp/node_engine/inst/", 0755)
-		if err != nil {
-			logger.ErrorLogger().Printf("Unable to create instance directory: %v", err)
-		}
-		model.GetNodeInfo().AddSupportedTechnology(model.UNIKERNEL_RUNTIME)
-	})
 	return &ukruntime
 }
 

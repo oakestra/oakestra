@@ -12,7 +12,7 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/requests"
 	"go_node_engine/util/iotools"
-	"go_node_engine/virtualization/crosvm/internal/image"
+	"go_node_engine/virtualization/internal/crosvm/internal/image"
 	"os"
 	"os/exec"
 	"path"
@@ -23,9 +23,6 @@ import (
 )
 
 var errAlreadyClosed = errors.New("instance already closed")
-
-const configFileName = "config.json"
-const socketFileName = "instance.sock"
 
 type instanceStatus uint32
 

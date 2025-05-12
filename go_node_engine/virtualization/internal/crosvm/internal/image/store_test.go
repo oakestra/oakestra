@@ -4,7 +4,7 @@ import (
 	"github.com/containers/image/v5/docker"
 	"github.com/containers/storage/pkg/reexec"
 	"go_node_engine/util/iotools"
-	"go_node_engine/virtualization/crosvm/internal/image"
+	"go_node_engine/virtualization/internal/crosvm/internal/image"
 	"gotest.tools/v3/assert"
 	"os"
 	"testing"

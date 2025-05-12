@@ -3,9 +3,12 @@ package instance
 import (
 	"go_node_engine/model"
 	"go_node_engine/util/ptr"
-	"go_node_engine/virtualization/crosvm/internal/image"
+	"go_node_engine/virtualization/internal/crosvm/internal/image"
 	"path"
 )
+
+const configFileName = "config.json"
+const socketFileName = "instance.sock"
 
 // InstanceConfig represents the parameters of the "crosvm run" command and are passed to it as a JSON file via the "--cfg" argument.
 //

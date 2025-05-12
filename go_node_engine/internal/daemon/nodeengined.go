@@ -98,7 +98,7 @@ func main() {
 	// starting node status background job.
 	jobs.NodeStatusUpdater(MONITORING_CYCLE, mqtt.ReportNodeInformation)
 	// starting container resources background monitor.
-	jobs.StartServicesMonitoring(MONITORING_CYCLE, mqtt.ReportServiceResources)
+	jobs.StartServicesMonitoring(runtimeManager, MONITORING_CYCLE, mqtt.ReportServiceResources)
 
 	// catch SIGETRM or SIGINTERRUPT
 	termination := make(chan os.Signal, 1)
