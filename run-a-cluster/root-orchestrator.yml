@@ -75,6 +75,8 @@ services:
       - SYSTEM_MANAGER_PORT=10000
       - CLOUD_MONGO_URL=mongo_net
       - CLOUD_MONGO_PORT=10008
+      - JWT_GENERATOR_URL=jwt_generator
+      - JWT_GENERATOR_PORT=10011
     depends_on:
       - mongo_rootnet
 
