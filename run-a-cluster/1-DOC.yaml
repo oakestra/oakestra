@@ -108,6 +108,7 @@ services:
       - JWT_GENERATOR_PORT=10011
     depends_on:
       - mongo_rootnet
+      - jwt_generator
     logging: *default-logging
 
 
