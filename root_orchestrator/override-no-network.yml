@@ -8,3 +8,8 @@ services:
       mode: replicated
       replicas: 0
 
+  mongo_rootnet:
+    deploy:
+      mode: replicated
+      replicas: 0
+
