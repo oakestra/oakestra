@@ -1,0 +1,61 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "root-orchestrator-up",
+            "type": "shell",
+            "command": "docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml -f ${workspaceRoot}/root_orchestrator/override-network-host.yml up --build -d",
+            "options": {
+                "env": {
+                    "SYSTEM_MANAGER_URL": "localhost",
+                    "COMPOSE_BAKE":"true",
+                }
+            }
+        },
+        {
+            "label": "root-orchestrator-down",
+            "type": "shell",
+            "command": "docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml kill -s SIGINT",
+        },
+        {
+            "label": "cluster-orchestrator-up",
+            "type": "shell",
+            "command": "docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml -f ${workspaceRoot}/cluster_orchestrator/override-network-host.yml up --build -d",
+            "options": {
+                "env": {
+                    "SYSTEM_MANAGER_URL": "localhost",
+                    "CLUSTER_LOCATION": "48.13023160559729,11.583724427641824,100",
+                    "CLUSTER_NAME": "debug_cluster",
+                    "COMPOSE_BAKE":"true",
+                }
+            }
+        },
+        {
+            "label": "cluster-orchestrator-down",
+            "type": "shell",
+            "command": "docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml kill -s SIGINT",
+        },
+        {
+            "label": "remove-cluster-manager",
+            "type": "shell",
+            "command": "docker container rm -f cluster-manager",
+            "problemMatcher": []
+        },
+        {
+            "label": "prep-debug-cluster-manager-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "cluster-orchestrator-up",
+                "remove-cluster-manager"
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
+            "label": "destroy-debug-cluster-manager-env",
+            "dependsOn": [
+                "root-orchestrator-down",
+                "cluster-orchestrator-down"
+            ]
+        }
+    ]
+}
