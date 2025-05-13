@@ -40,7 +40,35 @@
             "env": {
                 "PATH": "${env:PATH}:/usr/local/go/bin" 
             }
-        }
+        },
+        {
+            "name": "Debug Cluster Manager Locally",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/cluster_orchestrator/cluster-manager/cluster_manager.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin",
+                "FLASK_ENV": "development",
+                "FLASK_DEBUG": "True",
+                "MQTT_BROKER_URL": "localhost",
+                "MQTT_BROKER_PORT": "10003",
+                "CLUSTER_MONGO_URL": "localhost",
+                "CLUSTER_MONGO_PORT": "10107",
+                "SYSTEM_MANAGER_PORT": "10000",
+                "CLUSTER_SCHEDULER_URL": "localhost",
+                "CLUSTER_SCHUEDLER_PORT": "10105",
+                "CLUSTER_SERVICE_MANAGER_ADDR": "localhost",
+                "CLUSTER_SERVICE_MANAGER_PORT": "10110",
+                "SYSTEM_MANAGER_URL": "localhost",
+                "CLUSTER_LOCATION": "48.13023160559729,11.583724427641824,100",
+                "CLUSTER_NAME": "debug_cluster",
+                "MY_PORT": "10100",
+                "SYSTEM_MANAGER_GRPC_PORT": "50052",
+            },
+            "preLaunchTask": "prep-debug-cluster-manager-env",
+            "postDebugTask": "destroy-debug-cluster-manager-env"
+        },
     ],
     "inputs": [
         {
