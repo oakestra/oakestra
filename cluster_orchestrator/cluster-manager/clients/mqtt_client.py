@@ -3,7 +3,7 @@ import os
 import re
 
 import paho.mqtt.client as paho_mqtt
-from mongodb_client import (
+from clients.mongodb_client import (
     mongo_find_node_by_id_and_update_cpu_mem,
     mongo_update_job_deployed,
     mongo_update_service_resources,
