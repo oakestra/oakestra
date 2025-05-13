@@ -39,4 +39,4 @@ volumes:
 networks:
   default:
     external:
-      name: rootorchestrator_default
+      name: oakestra
