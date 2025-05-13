@@ -38,7 +38,7 @@
         {
             "label": "remove-cluster-manager",
             "type": "shell",
-            "command": "docker container rm -f cluster-manager",
+            "command": "docker container rm -f cluster_manager",
             "problemMatcher": []
         },
         {
