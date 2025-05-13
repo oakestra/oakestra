@@ -162,7 +162,11 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     nodes = find_all_nodes()
     for n in nodes:
         try:
-            if n.get("last_modified_timestamp") < (datetime.now().timestamp() - TIME_INTERVAL):
+            date_of_last_update = n.get("last_modified_timestamp", -1)
+            if (
+                date_of_last_update < (datetime.now().timestamp() - TIME_INTERVAL)
+                and date_of_last_update > 0
+            ):
                 print("Node {0} is inactive.".format(n.get("_id")))
                 continue
 

@@ -3,10 +3,13 @@ import threading
 import traceback
 
 import requests
-import service_operations
-from cluster_scheduler_requests import scheduler_request_deploy
-from mongodb_client import mongo_aggregate_node_information, mongo_get_services_with_failed_instanes
-from my_prometheus_client import prometheus_set_metrics
+import services.service_operations as service_operations
+from ext_requests.cluster_scheduler_requests import scheduler_request_deploy
+from clients.mongodb_client import (
+    mongo_aggregate_node_information,
+    mongo_get_services_with_failed_instanes,
+)
+from clients.my_prometheus_client import prometheus_set_metrics
 from oakestra_utils.types.statuses import (
     DeploymentStatus,
     NegativeSchedulingStatus,
