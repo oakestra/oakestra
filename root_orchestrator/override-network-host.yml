@@ -1,0 +1,79 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "1m"
+    max-file: "1"
+    tag: "{{.Name}}"
+
+services:
+
+  # System Manager REST API of Root Orchestrator
+  system_manager:
+    network_mode: host
+    environment:
+      - CLOUD_MONGO_URL=localhost
+      - CLOUD_SCHEDULER_URL=localhost
+      - RESOURCE_ABSTRACTOR_URL=localhost
+      - NET_PLUGIN_URL=localhost
+      - JWT_GENERATOR_URL=localhost
+    logging: *default-logging
+
+  # MongoDB in Root Orchestrator
+  mongo_root:
+    network_mode: host
+
+  # cluster-level mongoDB
+  mongo_rootnet:
+    network_mode: host
+
+  # Cluster Manager
+  root_service_manager:
+    network_mode: host
+    environment:
+      - SYSTEM_MANAGER_URL=localhost
+      - CLOUD_MONGO_URL=localhost
+
+  # Redis for the Cloud Scheduler
+  redis:
+    network_mode: host
+
+  # Observability Stack
+  grafana:
+    network_mode: host
+
+  loki:
+    network_mode: host
+    #logging:
+    #  driver: none
+
+  promtail:
+    network_mode: host
+
+  dashboard:
+    network_mode: host
+
+  # Cloud Scheduler
+  cloud_scheduler:
+    network_mode: host
+    environment:
+      - SYSTEM_MANAGER_URL=localhost
+      - RESOURCE_ABSTRACTOR_URL=localhost
+      - REDIS_ADDR=redis://:cloudRedis@localhost:6379
+
+  resource_abstractor:
+    network_mode: host
+    environment:
+      - CLOUD_MONGO_URL=localhost
+
+  jwt_generator:
+    network_mode: host
+
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_net_data:
+    driver: local
+
+networks:
+  default:
+    name: oakestra
