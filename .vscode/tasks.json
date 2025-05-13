@@ -42,6 +42,20 @@
             "problemMatcher": []
         },
         {
+            "label": "remove-cluster-scheduler",
+            "type": "shell",
+            "command": "docker container rm -f cluster_scheduler",
+            "problemMatcher": []
+        },
+        {
+            "label": "prep-debug-node-engine-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "cluster-orchestrator-up",
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
             "label": "prep-debug-cluster-manager-env",
             "dependsOn": [
                 "root-orchestrator-up",
@@ -51,7 +65,16 @@
             "dependsOrder": "sequence",
         },
         {
-            "label": "destroy-debug-cluster-manager-env",
+            "label": "prep-debug-cluster-scheduler-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "cluster-orchestrator-up",
+                "remove-cluster-scheduler"
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
+            "label": "destroy-debug-env",
             "dependsOn": [
                 "root-orchestrator-down",
                 "cluster-orchestrator-down"
