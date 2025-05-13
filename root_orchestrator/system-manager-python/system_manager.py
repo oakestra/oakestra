@@ -26,7 +26,7 @@ from proto.clusterRegistration_pb2_grpc import (
 )
 from resource_abstractor_client import cluster_operations
 from sm_logging import configure_logging
-from utils.network import sanitize
+from utils.network import get_ip_from_grpc_transport
 from werkzeug.utils import redirect, secure_filename
 
 my_logger = configure_logging()
@@ -102,11 +102,10 @@ class ClusterRegistrationServicer(register_clusterServicer):
         app.logger.info(request)
         message = MessageToDict(request, preserving_proto_field_name=True)
         app.logger.info("Message: {}, request {}".format(message, request))
-        cluster_ip = context.peer().split(":")[1]
-        app.logger.info("GOT IP: {}".format(context.peer()))
+        cluster_address = get_ip_from_grpc_transport(context.peer())
 
-        cluster_address = sanitize(cluster_ip)
         app.logger.info("Cluster address: {}".format(cluster_address))
+
         cluster_data = {
             "ip": cluster_address,
             "clusterinfo": message["cluster_info"][0],
@@ -114,7 +113,9 @@ class ClusterRegistrationServicer(register_clusterServicer):
             "cluster_location": message["cluster_location"],
             "cluster_name": message["cluster_name"],
         }
+
         app.logger.info("Cluster data: {}".format(cluster_data))
+        
         cluster = cluster_operations.create_cluster(cluster_data)
         if cluster is None:
             app.logger.error("Creating cluster failed")
