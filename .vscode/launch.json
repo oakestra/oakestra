@@ -3,46 +3,35 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Node Engine Locally with Unikraft Support",
+            "name": "Debug Node Engine",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/go_node_engine/NodeEngine.go",
+            "console": "integratedTerminal",
+            "asRoot": true,
+            "args": ["-a", "0.0.0.0",],
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin" 
+            },
+            "preLaunchTask": "prep-debug-node-engine-env",
+            "postDebugTask": "destroy-debug-env"
+        },
+        {
+            "name": "Debug Node Engine With Custom Cluster",
             "type": "go",
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceRoot}/NodeEngine.go",
             "console": "integratedTerminal",
             "asRoot": true,
-            "args": ["-n", "6000", "-p", "10100", "-u"],
+            "args": ["-a","${input:enterClusterIp}"],
             "env": {
                 "PATH": "${env:PATH}:/usr/local/go/bin" 
             }
         },
         {
-            "name": "Debug Node Engine Locally Container Only",
-            "type": "go",
-            "request": "launch",
-            "mode": "auto",
-            "program": "${workspaceRoot}/NodeEngine.go",
-            "console": "integratedTerminal",
-            "asRoot": true,
-            "args": ["-n", "6000", "-p", "10100"],
-            "env": {
-                "PATH": "${env:PATH}:/usr/local/go/bin" 
-            }
-        },
-        {
-            "name": "Debug Node Engine Remote Cluster Container Only",
-            "type": "go",
-            "request": "launch",
-            "mode": "auto",
-            "program": "${workspaceRoot}/NodeEngine.go",
-            "console": "integratedTerminal",
-            "asRoot": true,
-            "args": ["-n", "6000", "-p", "10100", "-a","${input:enterClusterIp}"],
-            "env": {
-                "PATH": "${env:PATH}:/usr/local/go/bin" 
-            }
-        },
-        {
-            "name": "Debug Cluster Manager Locally",
+            "name": "Debug Cluster Manager",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceRoot}/cluster_orchestrator/cluster-manager/cluster_manager.py",
@@ -67,7 +56,27 @@
                 "SYSTEM_MANAGER_GRPC_PORT": "50052",
             },
             "preLaunchTask": "prep-debug-cluster-manager-env",
-            "postDebugTask": "destroy-debug-cluster-manager-env"
+            "postDebugTask": "destroy-debug-env"
+        },
+        {
+            "name": "Debug Cluster Scheduler",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/cluster_orchestrator/cluster-scheduler/cluster_scheduler.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin",
+                "FLASK_ENV": "development",
+                "FLASK_DEBUG": "True",
+                "MY_PORT":"10105",
+                "CLUSTER_MANAGER_URL":"localhost",
+                "CLUSTER_MANAGER_PORT":"10100",
+                "CLUSTER_MONGO_URL":"localhost",
+                "CLUSTER_MONGO_PORT":"10107",
+                "REDIS_ADDR":"redis://:clusterRedis@localhost:6479"
+            },
+            "preLaunchTask": "prep-debug-cluster-scheduler-env",
+            "postDebugTask": "destroy-debug-env"
         },
     ],
     "inputs": [
