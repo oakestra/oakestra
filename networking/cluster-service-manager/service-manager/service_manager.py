@@ -13,7 +13,13 @@ MY_PORT = os.environ.get('MY_PORT') or 10200
 
 my_logger = configure_logging()
 app = Flask(__name__)
-socketio = SocketIO(app, async_mode='eventlet', logger=True, engineio_logger=True, cors_allowed_origins='*')
+socketio = SocketIO(
+    app,
+    async_mode='eventlet',
+    logger=True,
+    engineio_logger=True,
+    cors_allowed_origins='*'
+)
 app.config['LOGGING_FILTERS'] = ['flask.logging.threaded']
 app.logger.addHandler(my_logger)
 mongo_init(app)
@@ -46,7 +52,9 @@ def delete_service(job_name):
        Remove a deployment and all its instances
     """
 
-    app.logger.info('Incoming Request DELETE /api/net/deployment/' + str(job_name))
+    app.logger.info(
+        'Incoming Request DELETE /api/net/deployment/%s', str(job_name)
+    )
 
     return remove_service(job_name)
 
@@ -76,4 +84,8 @@ def task_update():
 if __name__ == '__main__':
     import eventlet
 
-    eventlet.wsgi.server(eventlet.listen(('::', int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger)
+    eventlet.wsgi.server(
+        eventlet.listen(('::', int(MY_PORT)), family=socket.AF_INET6),
+        app,
+        log=my_logger
+    )

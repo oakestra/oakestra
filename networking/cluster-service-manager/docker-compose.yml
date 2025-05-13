@@ -33,6 +33,8 @@ services:
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_MONGO_URL=cluster_mongo_net
       - CLUSTER_MONGO_PORT=10108
+      - JWT_GENERATOR_URL=jwt_generator
+      - JWT_GENERATOR_PORT=10011
     depends_on:
       - mongo_clusternet
 
@@ -43,4 +45,4 @@ volumes:
 networks:
   default:
     external:
-      name: clusterorchestrator_default
+      name: oakestra

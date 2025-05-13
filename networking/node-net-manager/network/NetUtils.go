@@ -1,6 +1,7 @@
 package network
 
 import (
+	"NetManager/model"
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
@@ -16,12 +17,12 @@ import (
 func GetLocalIPandIface() (string, string) {
 	list, err := net.Interfaces()
 	if err != nil {
-		log.Printf("not net Interfaces found")
+		log.Printf("No net Interfaces found")
 		panic(err)
 	}
 	defaultIfce, err := defaultRoute()
 	if err != nil {
-		log.Printf("not default Interfaces found")
+		log.Printf("could not configure default interface")
 		panic(err)
 	}
 
@@ -89,18 +90,36 @@ func defaultRoute() (*netlink.Link, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving default route %w", err)
 	}
-	if n := len(routes); n > 1 {
-		return nil, fmt.Errorf("found more than one default net routes (%d)", n)
-	}
 
 	if len(routes) == 0 {
 		return nil, nil
+	}
+
+	if n := len(routes); n > 1 {
+		if model.NetConfig.DefaultInterface == "" {
+			return nil, fmt.Errorf("found more than one default net routes (%d). Specify the required default interface in the config file", n)
+		}
+		for _, r := range routes {
+			defNetlinkIdx := r.LinkIndex
+			defNetlink, err := netlink.LinkByIndex(defNetlinkIdx)
+			if err != nil {
+				continue
+			}
+			if defNetlink.Attrs().Name == model.NetConfig.DefaultInterface {
+				return &defNetlink, nil
+			}
+		}
+		return nil, fmt.Errorf("getting default interface with name %s", model.NetConfig.DefaultInterface)
 	}
 
 	defNetlinkIdx := routes[0].LinkIndex
 	defNetlink, err := netlink.LinkByIndex(defNetlinkIdx)
 	if err != nil {
 		return nil, fmt.Errorf("getting default netlink with index %d: %w", defNetlinkIdx, err)
+	}
+
+	if model.NetConfig.DefaultInterface != "" && defNetlink.Attrs().Name != model.NetConfig.DefaultInterface {
+		return nil, fmt.Errorf("default interface manually configured to %s, but only %s found", model.NetConfig.DefaultInterface, defNetlink.Attrs().Name)
 	}
 
 	return &defNetlink, nil
