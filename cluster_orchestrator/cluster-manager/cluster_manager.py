@@ -3,27 +3,30 @@ import os
 import socket
 
 import grpc
-import service_operations
-from analyzing_workers import looking_for_dead_workers
+import services.service_operations as service_operations
+from services.analyzing_workers import looking_for_dead_workers
 from apscheduler.schedulers.background import BackgroundScheduler
-from cluster_scheduler_requests import scheduler_request_status
-from cm_logging import configure_logging
+from ext_requests.cluster_scheduler_requests import scheduler_request_status
+from logs.cm_logging import configure_logging
 from flask import Flask, request
 from flask_socketio import SocketIO
-from mongodb_client import (
+from clients.mongodb_client import (
     mongo_find_job_by_system_id,
     mongo_init,
     mongo_update_job_status,
     mongo_upsert_node,
 )
-from mqtt_client import mqtt_init, mqtt_publish_edge_deploy
-from my_prometheus_client import prometheus_init_gauge_metrics
-from network_plugin_requests import network_notify_deployment
+from clients.mqtt_client import mqtt_init, mqtt_publish_edge_deploy
+from clients.my_prometheus_client import prometheus_init_gauge_metrics
+from ext_requests.network_plugin_requests import network_notify_deployment
 from oakestra_utils.types.statuses import NegativeSchedulingStatus, PositiveSchedulingStatus
 from prometheus_client import start_http_server
 from proto.clusterRegistration_pb2 import CS1Message, CS2Message, KeyValue, SC1Message, SC2Message
 from proto.clusterRegistration_pb2_grpc import register_clusterStub
-from system_manager_requests import re_deploy_dead_services_routine, send_aggregated_info_to_sm
+from ext_requests.system_manager_requests import (
+    re_deploy_dead_services_routine,
+    send_aggregated_info_to_sm,
+)
 
 MY_PORT = os.environ.get("MY_PORT")
 
