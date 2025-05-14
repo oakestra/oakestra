@@ -4,7 +4,7 @@
         {
             "label": "root-orchestrator-up",
             "type": "shell",
-            "command": "docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml -f ${workspaceRoot}/root_orchestrator/override-network-host.yml up --build -d",
+            "command": "docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml -f ${workspaceRoot}/root_orchestrator/override-network-host.yml up --build -d && sleep 1",
             "options": {
                 "env": {
                     "SYSTEM_MANAGER_URL": "localhost",
@@ -15,7 +15,7 @@
         {
             "label": "root-orchestrator-down",
             "type": "shell",
-            "command": "docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml kill -s SIGINT",
+            "command": "docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml down",
         },
         {
             "label": "cluster-orchestrator-up",
@@ -33,7 +33,17 @@
         {
             "label": "cluster-orchestrator-down",
             "type": "shell",
-            "command": "docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml kill -s SIGINT",
+            "command": "docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml down",
+        },
+        {
+            "label": "remove-volumes",
+            "type": "shell",
+            "command": "docker volume rm -f $(docker volume ls -q) > /dev/null 2>&1 ; exit 0",
+        },
+        {
+            "label": "remove-containers",
+            "type": "shell",
+            "command": "docker rm -f $(docker ps -a -q) > /dev/null 2>&1 ; exit 0",
         },
         {
             "label": "remove-cluster-manager",
@@ -74,10 +84,13 @@
             "dependsOrder": "sequence",
         },
         {
-            "label": "destroy-debug-env",
+            "label": "cleanup-debug-env",
+            "type": "shell",
             "dependsOn": [
                 "root-orchestrator-down",
-                "cluster-orchestrator-down"
+                "cluster-orchestrator-down",
+                "remove-containers",
+                "remove-volumes"
             ]
         }
     ]
