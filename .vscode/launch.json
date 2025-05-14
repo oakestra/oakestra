@@ -14,9 +14,7 @@
             "env": {
                 "PATH": "${env:PATH}:/usr/local/go/bin" 
             },
-            "preLaunchTask": "prep-debug-node-engine-env",
-            "postDebugTask": "destroy-debug-env"
-        },
+            "preLaunchTask": "prep-debug-node-engine-env",        },
         {
             "name": "Debug Node Engine With Custom Cluster",
             "type": "go",
@@ -56,7 +54,6 @@
                 "SYSTEM_MANAGER_GRPC_PORT": "50052",
             },
             "preLaunchTask": "prep-debug-cluster-manager-env",
-            "postDebugTask": "destroy-debug-env"
         },
         {
             "name": "Debug Cluster Scheduler",
@@ -76,8 +73,15 @@
                 "REDIS_ADDR":"redis://:clusterRedis@localhost:6479"
             },
             "preLaunchTask": "prep-debug-cluster-scheduler-env",
-            "postDebugTask": "destroy-debug-env"
         },
+        {
+            "name": "Cleanup Dev Environment",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/cluster_orchestrator/cluster-manager/logs/cm_logging.py",
+            "console": "integratedTerminal",
+            "preLaunchTask": "cleanup-debug-env",
+        }
     ],
     "inputs": [
         {
