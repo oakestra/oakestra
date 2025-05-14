@@ -62,17 +62,6 @@ RUN mkdir --parents /scratch/edk2-crosvm \
     && curl --proto '=https' --tlsv1.2 --silent --show-error --fail --location https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+archive/refs/heads/main/sys-firmware/edk2-ovmf-crosvm.tar.gz \
         | tar --extract --gzip --file - --directory /scratch/edk2-crosvm
 
-# clone edk2 at the tag that the crosvm patches are based on and build it
-RUN <<-"EOT" bash
-    EDK_TAG=$(grep --perl-regexp --only-matching 'edk2-.+(?=\.tar\.gz)' /scratch/edk2-crosvm/Manifest)
-    git clone --recursive --depth 1 --branch ${EDK_TAG} https://github.com/tianocore/edk2.git /scratch/edk2
-    cd /scratch/edk2
-    git apply /scratch/edk2-crosvm/files/*
-    make --directory BaseTools
-    source edksetup.sh
-    build --platform OvmfPkg/Crosvm/CrosvmX64.dsc --tagname GCC5 --arch X64 --buildtarget RELEASE --define SECURE_BOOT_ENABLE --define FD_SIZE_4MB
-    install --mode 0644 Build/CrosvmX64/RELEASE_GCC5/FV/CROSVM_{CODE,VARS}.fd /opt/oakestra/share/edk2
-EOT
 
 FROM scratch
 
@@ -82,6 +71,5 @@ COPY --from=build /opt/oakestra/bin /bin
 COPY --from=build /opt/oakestra/include /include
 COPY --from=build /opt/oakestra/lib /lib
 COPY --from=build /opt/oakestra/libexec /libexec
-COPY --from=build /opt/oakestra/share /share
 COPY --chown=0:0 --chmod=0755 crosvm-wrapper.sh /bin/crosvm-wrapper.sh
 COPY --chown=0:0 --chmod=0644 crosvm_control.pc /lib/pkgconfig/crosvm_control.pc
