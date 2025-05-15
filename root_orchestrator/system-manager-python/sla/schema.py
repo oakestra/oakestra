@@ -63,6 +63,8 @@ sla_schema = {
                                         "rr_ip_v6": {"type": "string"},
                                         "closest_ip": {"type": "string"},
                                         "closest_ip_v6": {"type": "string"},
+                                        "underutilized_ip": {"type": "string"},
+                                        "underutilized_ip_v6": {"type": "string"},
                                         "instances": {
                                             "type": "array",
                                             "items": {
