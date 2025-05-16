@@ -8,7 +8,7 @@ import (
 
 type RuntimeInitializer func(info virtrt.RuntimeInfo) virtrt.Runtime
 
-var runtimeInitializers map[string]RuntimeInitializer
+var runtimeInitializers = make(map[string]RuntimeInitializer)
 var lock sync.RWMutex
 
 func Register(name string, initializer RuntimeInitializer) {

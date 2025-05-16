@@ -4,6 +4,8 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/util/iotools"
 	"go_node_engine/virtualization/internal/allruntimes"
+	// make sure crosvm runtime is initialized, as it is not in the virtualization module
+	_ "go_node_engine/virtualization/internal/crosvm"
 	virtrt "go_node_engine/virtualization/internal/runtime"
 	"sync"
 )
@@ -29,7 +31,7 @@ func NewRuntimeManager() (*RuntimeManager, error) {
 		CacheDirPath:   cacheDirPath,
 	}
 
-	var onceInitializers map[string]func() virtrt.Runtime
+	onceInitializers := make(map[string]func() virtrt.Runtime)
 	for name, initializer := range allruntimes.GetInitializers() {
 		onceInitializers[name] = sync.OnceValue(func() virtrt.Runtime {
 			return initializer(info)

@@ -66,7 +66,7 @@ func newUnikernelQemuRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
 
 	path, err := exec.LookPath(command)
 	if err != nil {
-		logger.ErrorLogger().Fatalf("Unable to find qemu executable(%s): %v\n", command, err)
+		logger.ErrorLogger().Printf("Unable to find qemu executable(%s): %v\n", command, err)
 		ukruntime.qemuPath = ""
 	}
 	ukruntime.qemuPath = path

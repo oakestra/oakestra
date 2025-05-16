@@ -3,6 +3,7 @@ package crosvm
 import (
 	"errors"
 	"fmt"
+	"github.com/containers/image/v5/docker"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/util/iotools"
@@ -71,7 +72,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 		}
 	}
 
-	imageStore, err := image.NewStore(imageDirPath)
+	imageStore, err := image.NewStore(imageDirPath, image.NewContainersSource(docker.Transport))
 	if err != nil {
 		logger.ErrorLogger().Printf("failed to create crosvm image store: %v", err)
 		return &Runtime{

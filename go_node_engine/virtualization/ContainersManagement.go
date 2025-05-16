@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/containerd/containerd"
-	runcoptions "github.com/containerd/containerd/api/types/runc/options"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/contrib/nvidia"
@@ -28,6 +27,7 @@ import (
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/containerd/plugin"
 	docker_remote "github.com/containerd/containerd/remotes/docker"
+	runcoptions "github.com/containerd/containerd/runtime/v2/runc/options"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/shirou/gopsutil/docker"
 	"github.com/shirou/gopsutil/process"
@@ -36,8 +36,11 @@ import (
 
 func init() {
 	allruntimes.Register(string(model.CONTAINER_RUNTIME), newContainerdRuntime)
-	for additionalName := range findAdditionalRuntimePlugins() {
-		allruntimes.Register(additionalName, newContainerdRuntime)
+	plugins := findAdditionalRuntimePlugins()
+	if plugins != nil {
+		for additionalName := range findAdditionalRuntimePlugins() {
+			allruntimes.Register(additionalName, newContainerdRuntime)
+		}
 	}
 }
 

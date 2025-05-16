@@ -39,12 +39,13 @@ If you want to recompile *crosvm* on your host (e.g. to debug it in an IDE), you
 > These lists might be incomplete, if you find crosvm not starting on your system, please open an issue.
 
 On *Ubuntu*/*Debian*, these are the *APT* packages corresponding to both lists combined:
-- *libvulkan-dev*
-- *libdrm-dev*
-- *libepoxy-dev*
-- *libcap-dev*
-- *libclang-dev*
-- *libwayland-dev*
+- *libvulkan-dev* / *libvulkan1*
+- *libdrm-dev* / *libdrm2*
+- *libepoxy-dev* / *libepoxy0*
+- *libcap-dev* / *libcap2*
+- *libclang-dev* / *libclang1*
+- *libwayland-dev* / *...*
+- *...* / *libx11-6*
 
 For *Fedora*, these are the equivalent *DNF* packages:
 - *vulkan-loader-devel*

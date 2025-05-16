@@ -8,7 +8,12 @@ import (
 func CreateOakestraCacheDir() (string, error) {
 	basePath, err := os.UserCacheDir()
 	if err != nil {
-		return "", err
+		info, err := os.Stat("/var/cache")
+		if err != nil || !info.Mode().IsDir() {
+			return "", err
+		}
+
+		basePath = "/var/cache"
 	}
 
 	oakestraPath := path.Join(basePath, "oakestra")
