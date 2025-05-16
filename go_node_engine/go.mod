@@ -5,12 +5,13 @@ go 1.23.3
 toolchain go1.24.0
 
 require (
-	github.com/containerd/containerd v1.7.23
+	github.com/containerd/containerd v1.7.27
+	github.com/containerd/containerd/api v1.9.0
 	github.com/containerd/containerd/v2 v2.1.0
 	github.com/containers/image/v5 v5.35.0
 	github.com/containers/storage v1.58.0
-	github.com/digitalocean/go-qemu v0.0.0-20210326154740-ac9e0b687001
-	github.com/eclipse/paho.mqtt.golang v1.3.5
+	github.com/digitalocean/go-qemu v0.0.0-20250212194115-ee9b0668d242
+	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/opencontainers/runtime-spec v1.2.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
@@ -31,7 +32,6 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/Microsoft/hcsshim v0.13.0-rc.3 // indirect
 	github.com/containerd/cgroups/v3 v3.0.5 // indirect
-	github.com/containerd/containerd/api v1.9.0 // indirect
 	github.com/containerd/continuity v0.4.5 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
@@ -43,7 +43,7 @@ require (
 	github.com/containerd/typeurl/v2 v2.2.3 // indirect
 	github.com/containers/libtrust v0.0.0-20230121012942-c1716e8a8d01 // indirect
 	github.com/containers/ocicrypt v1.2.1 // indirect
-	github.com/digitalocean/go-libvirt v0.0.0-20201209184759-e2a69bcd5bd1 // indirect
+	github.com/digitalocean/go-libvirt v0.0.0-20220804181439-8648fbde413e // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker v28.0.4+incompatible // indirect
@@ -60,7 +60,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
-	github.com/gorilla/websocket v1.5.0 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
