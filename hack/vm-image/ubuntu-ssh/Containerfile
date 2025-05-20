@@ -1,0 +1,4 @@
+FROM oakestra-vm-ubuntu:25.04
+
+RUN useradd -m ubuntu \
+    && echo 'ubuntu:ubuntu' | chpasswd

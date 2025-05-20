@@ -17,7 +17,7 @@ func init() {
 func TestFetchImage(t *testing.T) {
 	tmpDirPath, err := iotools.CreateLargeTempDir("image-store-test")
 	assert.NilError(t, err)
-	defer assert.NilError(t, os.RemoveAll(tmpDirPath))
+	defer func() { assert.NilError(t, os.RemoveAll(tmpDirPath)) }()
 
 	store, err := image.NewStore(tmpDirPath, image.NewContainersSource(docker.Transport))
 	assert.NilError(t, err)

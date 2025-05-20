@@ -158,7 +158,7 @@ func (s *Store) Remove() error {
 			continue
 		}
 
-		if err := os.Remove(imageDirPath); err != nil {
+		if err := os.RemoveAll(imageDirPath); err != nil {
 			logger.WarnLogger().Printf("while removing store, failed to remove image directory %q: %v", imageDirPath, err)
 			skippedEntry = true
 			continue
@@ -218,6 +218,7 @@ func (s *Store) moveIntoCache(ref string, img *Image, tmpDirPath string, imageDi
 
 	_ = os.RemoveAll(imageDirPath)
 
+	// TODO(axiphi): this can fail when moving across different devices and we need to fall back to copying in that case
 	if err := os.Rename(tmpDirPath, imageDirPath); err != nil {
 		logger.ErrorLogger().Printf("moving image files into cache directory %q failed for image %q, it will be re-fetched the next time it is used: %v", imageDirPath, ref, err)
 		iotools.RemoveAllOrWarn(tmpDirPath)
@@ -290,7 +291,7 @@ func copyImageFilesToDst(
 func convertIdToKey(source Source, id string) string {
 	sum := sha256.Sum256([]byte(id))
 	hash := hex.EncodeToString(sum[:])
-	safeId := nonAlphanumeric.ReplaceAllString(hash, "_")
+	safeId := nonAlphanumeric.ReplaceAllString(id, "_")
 	return fmt.Sprintf("%s-%s-%s", source.Name(), safeId, hash)
 }
 

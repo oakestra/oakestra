@@ -31,7 +31,7 @@ type InstanceConfig struct {
 	BreakLinuxPciConfigIo *bool                             `json:"break-linux-pci-config-io,omitempty"`
 	BusLockRatelimit      *uint64                           `json:"bus-lock-ratelimit,omitempty"`
 	Cfg                   []string                          `json:"cfg,omitempty"`
-	CoreScheduling        *bool                             `json:"core-scheduling"`
+	CoreScheduling        *bool                             `json:"core-scheduling,omitempty"`
 	Cpus                  *InstanceConfigCpus               `json:"cpus,omitempty"`
 	DeviceTreeOverlay     []InstanceConfigDeviceTreeOverlay `json:"device-tree-overlay,omitempty"`
 	Hypervisor            *InstanceConfigHypervisor         `json:"hypervisor,omitempty"`
@@ -196,29 +196,15 @@ type InstanceConfigMem struct {
 }
 
 type InstanceConfigNet struct {
-	TapName     *InstanceConfigNetTapName   `json:"tap-name,omitempty"`
-	TapFd       *InstanceConfigNetTapFd     `json:"tap-fd,omitempty"`
-	RawConfig   *InstanceConfigNetRawConfig `json:"raw-config,omitempty"`
-	VqPairs     *uint16                     `json:"vq-pairs,omitempty"`
-	VhostNet    *InstanceConfigVhostNet     `json:"vhost-net,omitempty"`
-	PackedQueue *bool                       `json:"packed-queue,omitempty"`
-	PciAddress  *string                     `json:"pci-address,omitempty"`
-}
-
-type InstanceConfigNetTapName struct {
-	TapName string  `json:"tap-name"`
-	Mac     *string `json:"mac,omitempty"`
-}
-
-type InstanceConfigNetTapFd struct {
-	TapFd int     `json:"tap-fd"`
-	Mac   *string `json:"mac,omitempty"`
-}
-
-type InstanceConfigNetRawConfig struct {
-	HostIP  string `json:"host-ip"`
-	Netmask string `json:"netmask"`
-	Mac     string `json:"mac"`
+	TapName     *string                 `json:"tap-name,omitempty"`
+	TapFd       *int                    `json:"tap-fd,omitempty"`
+	HostIP      *string                 `json:"host-ip,omitempty"`
+	Netmask     *string                 `json:"netmask,omitempty"`
+	Mac         *string                 `json:"mac,omitempty"`
+	VqPairs     *uint16                 `json:"vq-pairs,omitempty"`
+	VhostNet    *InstanceConfigVhostNet `json:"vhost-net,omitempty"`
+	PackedQueue *bool                   `json:"packed-queue,omitempty"`
+	PciAddress  *string                 `json:"pci-address,omitempty"`
 }
 
 type InstanceConfigVhostNet struct {
@@ -296,15 +282,13 @@ func NewInstanceConfig(
 	runtimeDirPath string,
 ) (*InstanceConfig, error) {
 	var net []InstanceConfigNet
-	if node.Overlay {
-		net = append(net, InstanceConfigNet{
-			TapName: &InstanceConfigNetTapName{
-				TapName: "tap0",
-				Mac:     ptr.Ptr("52:55:00:d1:55:01"),
-			},
-			VhostNet: &InstanceConfigVhostNet{},
-		})
-	}
+	//if node.Overlay {
+	net = append(net, InstanceConfigNet{
+		TapName:  ptr.Ptr("tap0"),
+		Mac:      ptr.Ptr("52:55:00:d1:55:01"),
+		VhostNet: &InstanceConfigVhostNet{},
+	})
+	//}
 	var initrd *string
 	if img.HasInitrd {
 		initrd = ptr.Ptr(path.Join(runtimeDirPath, image.InitrdFileName))
@@ -322,7 +306,7 @@ func NewInstanceConfig(
 			NumCores: ptr.Ptr(uint(service.Vcpus)),
 		},
 		Initrd: initrd,
-		Kernel: ptr.Ptr(path.Join(image.KernelFileName)),
+		Kernel: ptr.Ptr(path.Join(runtimeDirPath, image.KernelFileName)),
 		Mem: &InstanceConfigMem{
 			Size: ptr.Ptr(uint64(service.Memory)),
 		},

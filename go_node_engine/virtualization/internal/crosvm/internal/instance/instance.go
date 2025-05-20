@@ -1,11 +1,6 @@
 package instance
 
-// #cgo pkg-config: /opt/oakestra/lib/pkgconfig/crosvm_control.pc
-// #include <crosvm_control.h>
-// #include <stdlib.h>
-import "C"
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"go_node_engine/logger"
@@ -13,13 +8,16 @@ import (
 	"go_node_engine/requests"
 	"go_node_engine/util/iotools"
 	"go_node_engine/virtualization/internal/crosvm/internal/image"
+	"go_node_engine/virtualization/internal/crosvm/internal/tailbuf"
+	"gopkg.in/natefinch/lumberjack.v2"
+	"io"
 	"os"
 	"os/exec"
 	"path"
 	"slices"
+	"strings"
 	"sync"
 	"time"
-	"unsafe"
 )
 
 var errAlreadyClosed = errors.New("instance already closed")
@@ -64,6 +62,9 @@ type Instance struct {
 	img                 *image.Image
 	config              InstanceConfig
 	configExt           InstanceConfigExt
+
+	stderrBuffer *tailbuf.TailBuffer
+	logger       io.WriteCloser
 
 	lock       sync.Mutex
 	status     instanceStatus
@@ -120,6 +121,13 @@ func NewInstance(
 		config:              *config,
 		configExt:           *configExt,
 
+		stderrBuffer: tailbuf.NewTailBuffer(4096),
+		logger: &lumberjack.Logger{
+			Filename:   path.Join(runtimeDirPath, "instance.log"),
+			MaxSize:    100,
+			MaxBackups: 1,
+		},
+
 		lock:       sync.Mutex{},
 		status:     instanceStatusStopped,
 		exitChan:   make(chan instanceExitType, 1),
@@ -157,13 +165,16 @@ func (i *Instance) Start() error {
 		}
 	}
 
-	runExec := i.executablePath
+	crosvmExec := i.executablePath
 	runArgs := i.generateRunArgs()
 	if model.GetNodeInfo().Overlay {
-		runExec, runArgs = wrapCommandWithIpNetnsExec(i.id, runExec, runArgs)
+		crosvmExec, runArgs = wrapCommandWithIpNetnsExec(i.id, crosvmExec, runArgs)
 	}
 
-	runCmd := exec.Command(runExec, runArgs...)
+	runCmd := exec.Command(crosvmExec, runArgs...)
+
+	runCmd.Stdout = i.logger
+	runCmd.Stderr = io.MultiWriter(i.stderrBuffer, i.logger)
 
 	logger.InfoLogger().Printf("starting instance %q with args %q", i.id, runArgs)
 	if err := runCmd.Start(); err != nil {
@@ -189,8 +200,8 @@ func (i *Instance) Stop() error {
 		return nil
 	}
 
-	if !i.callCrosvmStop() {
-		logger.WarnLogger().Printf("stopping crosvm instance %q via library failed", i.id)
+	if err := i.stopInternal(); err != nil {
+		logger.WarnLogger().Printf("Stopping crosvm instance %q via command failed: %v", i.id, err)
 	}
 
 	select {
@@ -200,13 +211,6 @@ func (i *Instance) Stop() error {
 		break
 	case <-time.After(10 * time.Second):
 		return fmt.Errorf("timed out waiting for crosvm instance %q to stop", i.id)
-	}
-
-	if model.GetNodeInfo().Overlay {
-		if err := requests.DeleteNamespaceForUnikernel(i.service.Sname, i.service.Instance); err != nil {
-			logger.ErrorLogger().Printf("network deletion failed: %v", err)
-			return err
-		}
 	}
 
 	return nil
@@ -221,8 +225,8 @@ func (i *Instance) Close() error {
 	}
 
 	if i.status == instanceStatusRunning {
-		if !i.callCrosvmStop() {
-			logger.WarnLogger().Printf("Stopping crosvm instance %q via library failed", i.id)
+		if err := i.stopInternal(); err != nil {
+			logger.WarnLogger().Printf("Stopping crosvm instance %q via command failed: %v", i.id, err)
 		}
 		select {
 		case exit := <-i.exitChan:
@@ -236,10 +240,42 @@ func (i *Instance) Close() error {
 		i.status = instanceStatusClosed
 	}
 
+	if model.GetNodeInfo().Overlay {
+		if err := requests.DeleteNamespaceForUnikernel(i.service.Sname, i.service.Instance); err != nil {
+			logger.ErrorLogger().Printf("network deletion failed: %v", err)
+			return err
+		}
+	}
+
+	iotools.CloseOrWarn(i.logger, "crosvm instance logger")
+
 	if err := os.RemoveAll(i.runtimeDirPath); err != nil {
 		logger.WarnLogger().Printf("failed to remove runtime directory %q of instance %q: %v", i.runtimeDirPath, i.id, err)
 	}
 	return nil
+}
+
+func (i *Instance) WaitForExit(timeout time.Duration) error {
+	i.lock.Lock()
+	defer i.lock.Unlock()
+
+	if i.status != instanceStatusRunning {
+		return nil
+	}
+
+	if timeout < 0 {
+		exit := <-i.exitChan
+		i.exitChan <- exit
+		return nil
+	}
+
+	select {
+	case exit := <-i.exitChan:
+		i.exitChan <- exit
+		return nil
+	case <-time.After(timeout):
+		return fmt.Errorf("crosvm instance didn't exit after %dms", timeout/time.Millisecond)
+	}
 }
 
 func (i *Instance) waitForExit(cmd *exec.Cmd, startNum uint32) {
@@ -252,12 +288,27 @@ func (i *Instance) waitForExit(cmd *exec.Cmd, startNum uint32) {
 	} else {
 		var err *exec.ExitError
 		if errors.As(runErr, &err) {
-			logger.ErrorLogger().Printf("instance %q exited with error: %v", i.id, runErr)
+			msgBuilder := strings.Builder{}
+			msgBuilder.WriteString(fmt.Sprintf("instance %q exited with error code %d, standard error excerpt:", i.id, err.ExitCode()))
+
+			stderrBuilder := strings.Builder{}
+			_, _ = i.stderrBuffer.WriteToSkippingUntil(&stderrBuilder, tailbuf.IsValidUTF8Start)
+			for line := range strings.Lines(stderrBuilder.String()) {
+				trimmed := strings.TrimSpace(line)
+				if len(trimmed) > 0 {
+					msgBuilder.WriteString("\n>   ")
+					msgBuilder.WriteString(trimmed)
+				}
+			}
+
+			logger.ErrorLogger().Printf(msgBuilder.String())
 		} else {
 			logger.ErrorLogger().Printf("unexpected error when trying to run instance %q: %v", i.id, runErr)
 		}
 		exit = instanceExitTypeError
 	}
+
+	i.stderrBuffer.Reset()
 
 	select {
 	case i.exitChan <- exit:
@@ -327,32 +378,13 @@ func (i *Instance) notifyStatusChange(updatedStatus string) {
 	i.statusChangeHandler(updatedService)
 }
 
-func (i *Instance) callCrosvmStop() bool {
-	socketPath := C.CString(path.Join(i.runtimeDirPath, socketFileName))
-	defer C.free(unsafe.Pointer(socketPath))
-
-	return bool(C.crosvm_client_stop_vm(socketPath))
+func (i *Instance) stopInternal() error {
+	stopCmd := exec.Command(i.executablePath, i.generateStopArgs()...)
+	return stopCmd.Run()
 }
 
 func (i *Instance) createConfigFile() error {
-	configPath := path.Join(i.runtimeDirPath, configFileName)
-	configFile, err := os.Create(configPath)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := configFile.Close(); err != nil {
-			logger.WarnLogger().Printf("failed to close config file %q: %v", configPath, err)
-		}
-	}()
-
-	configEncoder := json.NewEncoder(configFile)
-	err = configEncoder.Encode(i.config)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return iotools.StoreJSONWithIndent(&i.config, path.Join(i.runtimeDirPath, configFileName), 0o600, "  ")
 }
 
 func (i *Instance) generateRunArgs() []string {
@@ -364,6 +396,12 @@ func (i *Instance) generateRunArgs() []string {
 		},
 		i.configExt.ToArgs(),
 	)
+}
+func (i *Instance) generateStopArgs() []string {
+	return []string{
+		"stop",
+		path.Join(i.runtimeDirPath, socketFileName),
+	}
 }
 
 func wrapCommandWithIpNetnsExec(namespace string, executable string, args []string) (string, []string) {

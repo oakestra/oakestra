@@ -84,7 +84,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 	infoMsg.WriteString("created crosvm runtime:\n")
 	_, _ = fmt.Fprintf(&infoMsg, "  > crosvm executable: %s\n", executablePath)
 	_, _ = fmt.Fprintf(&infoMsg, "  > runtime directory: %s\n", runtimeDirPath)
-	logger.InfoLogger().Print(infoMsg)
+	logger.InfoLogger().Print(infoMsg.String())
 
 	return &Runtime{
 		error: nil,
@@ -188,10 +188,10 @@ func (r *Runtime) ResourceMonitoring(every time.Duration, notifyHandler func(res
 
 func (r *Runtime) reportResources(notifyHandler func(res []model.Resources)) {
 	r.lock.RLock()
-	defer r.lock.Unlock()
+	defer r.lock.RUnlock()
 
 	// TODO(axiphi): collect actual resources and parallelize
-	var resourcesList []model.Resources
+	var resourcesList []model.Resources = make([]model.Resources, 0)
 	for id, _ := range r.instances {
 		serviceName := taskid.ExtractServiceName(id)
 		instanceNumber := taskid.ExtractInstanceNumber(id)
