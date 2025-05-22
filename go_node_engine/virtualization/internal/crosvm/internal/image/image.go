@@ -13,7 +13,7 @@ type Image struct {
 }
 
 func CreateImageFromDir(imageDirPath string) (*Image, error) {
-	key := strings.TrimSuffix(imageDirPath, imageDirExtension)
+	key := strings.TrimSuffix(path.Base(imageDirPath), imageDirExtension)
 
 	kernelInfo, err := os.Stat(path.Join(imageDirPath, KernelFileName))
 	if err != nil {
