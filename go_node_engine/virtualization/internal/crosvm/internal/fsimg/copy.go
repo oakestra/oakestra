@@ -69,6 +69,11 @@ func CopySquashFsIntoExt4Img(squashfsPath string, ext4Path string, mountDirPath 
 		return fmt.Errorf("failed to unpack squashfs image: %w", err)
 	}
 
+	if err := os.Chmod(mountDirPath, 0o755); err != nil {
+		logger.ErrorLogger().Printf("failed to set root directory permissions in image: %v", err)
+		return fmt.Errorf("failed to set root directory permissions in image: %w", err)
+	}
+
 	logger.InfoLogger().Printf("successfully copied squashfs contents of %q into ext4 image at %q", squashfsPath, ext4Path)
 	return nil
 }
