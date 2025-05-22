@@ -1,0 +1,12 @@
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp0s4:
+      dhcp4: false
+      addresses:
+        - "192.168.1.2/30"
+      gateway4: "192.168.1.1"
+      nameservers:
+        addresses:
+          - "1.1.1.1"

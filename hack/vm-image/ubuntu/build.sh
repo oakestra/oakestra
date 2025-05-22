@@ -25,4 +25,4 @@ curl \
   | xzcat \
   | podman import --arch "$ARCH" - "ubuntu-cloud:${VERSION}"
 
-podman build --arch "$ARCH" --tag "oakestra-vm-ubuntu:${VERSION}" --build-arg "VERSION=${VERSION}" .
+podman build --arch "$ARCH" --tag "oakestra/vm-base:ubuntu-${VERSION}" --build-arg "VERSION=${VERSION}" .
