@@ -37,9 +37,10 @@ const (
 
 // Node is the struct that describes the node
 type Node struct {
-	Id              string            `json:"id"`
-	Host            string            `json:"host"`
-	Ip              string            `json:"ip"`
+	Id   string `json:"id"`
+	Host string `json:"host"`
+	Ip   string `json:"ip"`
+	// semicolon separated list, check network-manager for specific syntax
 	Port            string            `json:"port"`
 	SystemInfo      map[string]string `json:"system_info"`
 	CpuUsage        float64           `json:"cpu"`

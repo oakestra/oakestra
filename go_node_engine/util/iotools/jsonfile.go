@@ -3,7 +3,6 @@ package iotools
 import (
 	"encoding/json"
 	"github.com/spf13/afero"
-	"go_node_engine/logger"
 	"os"
 )
 
@@ -16,11 +15,7 @@ func LoadJSONInFs[T any](fs afero.Fs, jsonPath string) (*T, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err := jsonFile.Close(); err != nil {
-			logger.WarnLogger().Printf("failed to close JSON file %q: %v", jsonPath, err)
-		}
-	}()
+	defer CloseOrWarn(jsonFile, jsonPath)
 
 	decoder := json.NewDecoder(jsonFile)
 
@@ -49,11 +44,7 @@ func StoreJSONWithIndentInFs[T any](value *T, fs afero.Fs, jsonPath string, perm
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := jsonFile.Close(); err != nil {
-			logger.WarnLogger().Printf("failed to close JSON file %q: %v", jsonPath, err)
-		}
-	}()
+	defer CloseOrWarn(jsonFile, jsonPath)
 
 	encoder := json.NewEncoder(jsonFile)
 	encoder.SetIndent("", indent)
