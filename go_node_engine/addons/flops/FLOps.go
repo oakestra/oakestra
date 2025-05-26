@@ -1,61 +1,103 @@
 package flops
 
 import (
+	"fmt"
 	"go_node_engine/logger"
 	"os/exec"
 	"strings"
 )
 
+const (
+	mlDataServerContainerName  = "ml_data_server"
+	mlDataServerContainerImage = "ghcr.io/oakestra/addon-flops/ml-data-server:latest"
+	mlDataServerPort           = "11027"
+	mlDataServerVolume         = "ml_data_server_volume"
+)
+
 type FlopsAddon struct{}
 
-func (a FlopsAddon) Startup(configFile []string) {
-	logger.InfoLogger().Printf("Starting FLOps Data Manager")
-	HandleFLOpsDataManager()
-}
+// Startup initializes and starts the ML Data Server if not already running
+func (a *FlopsAddon) Startup(configFiles []string) {
+	log := logger.InfoLogger()
+	errLog := logger.ErrorLogger()
 
-func HandleFLOpsDataManager() {
-	ml_data_server_image := "ghcr.io/oakestra/addon-flops/ml-data-server:latest"
-	container_name := "ml_data_server"
+	log.Printf("Starting FLOps ML Data Server")
 
-	cmd := exec.Command("docker", "ps", "-a", "--format", "{{.Names}}")
-	output, err := cmd.Output()
+	isRunning, err := a.isContainerRunning()
 	if err != nil {
-		logger.ErrorLogger().Fatalln("Error:", err)
+		errLog.Printf("Failed to check ML Data Server status: %v", err)
 		return
 	}
 
-	var containerExists bool
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		if line == "" {
-			continue
-		} // Skip empty lines
-		if line == container_name {
-			containerExists = true
-			break
-		}
+	if isRunning {
+		log.Printf("FLOps ML Data Server is already running")
+		return
 	}
 
-	if !containerExists {
-		cmd := exec.Command("docker", "pull", ml_data_server_image)
-		err := cmd.Run()
-
-		if err != nil {
-			logger.ErrorLogger().Fatalf("Error pulling FLOps Data Manager image: %v\n", err)
-			return
-		}
-
-		cmd = exec.Command("docker", "run", "--rm", "-d", "-p", "11027:11027", "-v", "ml_data_server_volume:/ml_data_server_volume", "--name=ml_data_server", ml_data_server_image)
-		err = cmd.Run()
-
-		if err != nil {
-			logger.ErrorLogger().Fatalf("Error running container: %v\n", err)
-			return
-		}
-
+	if err := a.startMLDataServer(); err != nil {
+		errLog.Printf("Failed to start ML Data Server: %v", err)
 	} else {
-		logger.InfoLogger().Printf("Container %q already exists.", container_name)
+		log.Printf("FLOps ML Data Server started successfully")
+	}
+}
+
+// startMLDataServer pulls the container image and starts the ML Data Server
+func (a *FlopsAddon) startMLDataServer() error {
+	if err := a.pullContainerImage(); err != nil {
+		return err
 	}
 
-	logger.InfoLogger().Printf("FLOps Data Manager container started successfully.")
+	if err := a.runContainer(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// pullContainerImage pulls the latest ML Data Server container image
+func (a *FlopsAddon) pullContainerImage() error {
+	cmd := exec.Command("docker", "pull", mlDataServerContainerImage)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to pull container image: %w", err)
+	}
+
+	return nil
+}
+
+// runContainer starts the ML Data Server container with appropriate configuration
+func (a *FlopsAddon) runContainer() error {
+	args := []string{
+		"run",
+		"--rm",
+		"-d",
+		"-p", fmt.Sprintf("%s:%s", mlDataServerPort, mlDataServerPort),
+		"-v", fmt.Sprintf("%s:/%s", mlDataServerVolume, mlDataServerVolume),
+		"--name", mlDataServerContainerName,
+		mlDataServerContainerImage,
+	}
+
+	cmd := exec.Command("docker", args...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run container: %w", err)
+	}
+
+	return nil
+}
+
+// isContainerRunning checks if the ML Data Server container is currently running
+func (a *FlopsAddon) isContainerRunning() (bool, error) {
+	cmd := exec.Command("docker", "ps", "-a", "--format", "{{.Names}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	containerNames := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, name := range containerNames {
+		if strings.TrimSpace(name) == mlDataServerContainerName {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
