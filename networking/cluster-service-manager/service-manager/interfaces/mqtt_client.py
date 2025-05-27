@@ -147,10 +147,19 @@ def _tablequery_handler(client_id, payload):
 def _subnet_handler(client_id, payload):
     method = payload.get("METHOD")
     if method == "GET":
-        # associate new subnetwork to the node
-        addr = root_service_manager_get_subnet()
-        mongo_find_node_by_id_and_update_subnetwork(client_id, addr[0], addr[1])
-        mqtt_publish_subnetwork_result(client_id, {"address": addr[0], "addressv6": addr[1]})
+        try:
+            # associate new subnetwork to the node
+            addr = root_service_manager_get_subnet()
+            if addr is None:
+                logging.error(
+                    "Root service manager responded with an invalid subnetwork: "
+                    + str(addr)
+                )
+                return
+            mongo_find_node_by_id_and_update_subnetwork(client_id, addr[0], addr[1])
+            mqtt_publish_subnetwork_result(client_id, {"address": addr[0], "addressv6": addr[1]})
+        except Exception as e:
+            logging.error(e)
     elif method == 'DELETE':
         # remove subnetwork from node
         pass

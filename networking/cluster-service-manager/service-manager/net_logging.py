@@ -8,7 +8,11 @@ def configure_logging():
     formatter = logging.Formatter(format_str)
     my_filename = 'cm.log'
 
-    logging.basicConfig(filename=my_filename, format=format_str, level=logging.DEBUG)
+    logging.basicConfig(
+        filename=my_filename, 
+        format=format_str, 
+        level=logging.DEBUG
+        )
     my_logger = logging.getLogger("cluster_service_manager")
 
     stdout_handler = logging.StreamHandler(sys.stdout)
@@ -16,6 +20,10 @@ def configure_logging():
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     stdout_handler.setFormatter(formatter)
     my_logger.addHandler(stdout_handler)
-    rotating_handler = RotatingFileHandler(my_filename, maxBytes=1500, backupCount=2)
+    rotating_handler = RotatingFileHandler(
+        my_filename, 
+        maxBytes=1500, 
+        backupCount=2
+        )
     my_logger.addHandler(rotating_handler)
     return my_logger
