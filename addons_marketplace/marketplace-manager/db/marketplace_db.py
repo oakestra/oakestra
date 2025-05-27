@@ -34,3 +34,6 @@ def update_addon(addon_id, addon_data):
     return db.mongo_marketplace.find_one_and_update(
         {"_id": ObjectId(addon_id)}, {"$set": addon_data}, return_document=True
     )
+
+def delete_addon_by_id(addon_id):
+    return db.mongo_marketplace.delete_one({"_id": ObjectId(addon_id)})
