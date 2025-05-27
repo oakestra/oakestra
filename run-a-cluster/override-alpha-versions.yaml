@@ -24,7 +24,7 @@ services:
     image: ghcr.io/oakestra/oakestra/cluster-scheduler:alpha-v0.4.403
 
   dashboard:
-    image: ghcr.io/oakestra/dashboard:alpha-v0.4.207
+    image: ghcr.io/oakestra/dashboard:alpha-v0.4.208
 
   jwt_generator:
     image: ghcr.io/oakestra/oakestra/jwt-generator:alpha-v0.4.403
