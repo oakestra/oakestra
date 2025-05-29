@@ -65,6 +65,8 @@ sla_schema = {
                                         "closest_ip_v6": {"type": "string"},
                                         "underutilized_ip": {"type": "string"},
                                         "underutilized_ip_v6": {"type": "string"},
+                                        "fps_ip": {"type": "string"},
+                                        "fps_ip_v6": {"type": "string"},
                                         "instances": {
                                             "type": "array",
                                             "items": {
@@ -145,6 +147,7 @@ sla_schema = {
                                         ],
                                     },
                                 },
+                                "monitoring_class": {"type": "string"}, # currently supported: "fps"
                                 "monitoring": {
                                     "type": "array",
                                     "items": {

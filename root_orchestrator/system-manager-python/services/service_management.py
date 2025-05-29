@@ -164,6 +164,7 @@ def generate_db_structure(application, microservice):
     microservice["image"] = microservice["code"]
     microservice["next_instance_progressive_number"] = 0
     microservice["instance_list"] = []
+    microservice["monitoring_class"] = microservice.get("monitoring_class")
     if microservice["virtualization"] == "container":
         microservice["virtualization"] = "docker"
     addresses = microservice.get("addresses")
@@ -174,6 +175,8 @@ def generate_db_structure(application, microservice):
         microservice["RR_ip_v6"] = addresses.get("rr_ip_v6")
         microservice["underutilized_ip"] = addresses.get("underutilized_ip")
         microservice["underutilized_ip_v6"] = addresses.get("underutilized_ip_v6")
+        microservice["fps_ip"] = addresses.get("fps_ip")
+        microservice["fps_ip_v6"] = addresses.get("fps_ip_v6")
     if microservice["virtualization"] == "unikernel":
         microservice["arch"] = microservice["arch"]
     return microservice
