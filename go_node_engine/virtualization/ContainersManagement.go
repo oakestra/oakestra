@@ -185,7 +185,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 ) {
 
 	taskid := genTaskID(service.Sname, service.Instance)
-	hostname := fmt.Sprintf("instance-%d", service.Instance)
+	hostname := taskid
 
 	revert := func(err error) {
 		startup <- false
@@ -230,6 +230,13 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// SA9002: file mode 444 evaluates to 0674, which is not a valid file mode
 	_ = resolvconfFile.Chmod(0444)
 	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile.Name()))
+
+	// create the unix socket receiver directory for the container to be deployed
+	err = os.MkdirAll(fmt.Sprintf("/var/run/unixsocketreceiver/%s", taskid), 0755)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to create unix socket receiver directory: %v, continuing anyway", err)
+	}
+	specOpts = append(specOpts, withMonitoringMount(taskid))
 
 	// create the container
 	container, err := r.containerClient.NewContainer(
@@ -446,6 +453,13 @@ func (r *ContainerRuntime) removeContainer(container containerd.Container) {
 			logger.ErrorLogger().Printf("Unable to fetch kill task: %v", err)
 		}
 	}
+
+	// Delete the custom container metric mount folder
+	err = os.RemoveAll(fmt.Sprintf("/var/run/unixsocketreceiver/%s", container.ID()))
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to delete container metric mount folder: %v", err)
+	}
+
 	err = container.Delete(r.ctx)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to delete container: %v", err)
@@ -477,6 +491,18 @@ func withCustomResolvConf(src string) func(context.Context, oci.Client, *contain
 			Type:        "bind",
 			Source:      src,
 			Options:     []string{"rbind", "ro"},
+		})
+		return nil
+	}
+}
+
+func withMonitoringMount(taskid string) func(context.Context, oci.Client, *containers.Container, *oci.Spec) error {
+	return func(_ context.Context, _ oci.Client, _ *containers.Container, s *oci.Spec) error {
+		s.Mounts = append(s.Mounts, specs.Mount{
+			Destination: "/metrics",
+			Type:        "bind",
+			Source:      fmt.Sprintf("/var/run/unixsocketreceiver/%s", taskid),
+			Options:     []string{"rbind", "rw"},
 		})
 		return nil
 	}
