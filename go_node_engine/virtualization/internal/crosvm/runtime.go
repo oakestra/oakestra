@@ -31,6 +31,7 @@ type Runtime struct {
 
 	executablePath string
 	runtimeDirPath string
+	stateDirPath   string
 	cacheDirPath   string
 
 	imageStore *image.Store
@@ -51,6 +52,14 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 	runtimeDirPath, err := iotools.CreateSubDir(info.RuntimeDirPath, "crosvm", 0o700)
 	if err != nil {
 		logger.ErrorLogger().Printf("failed to setup runtime directory for crosvm runtime: %v", err)
+		return &Runtime{
+			error: err,
+		}
+	}
+
+	stateDirPath, err := iotools.CreateSubDir(info.StateDirPath, "crosvm", 0o700)
+	if err != nil {
+		logger.ErrorLogger().Printf("failed to setup state directory for crosvm runtime: %v", err)
 		return &Runtime{
 			error: err,
 		}
@@ -91,6 +100,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 
 		executablePath: executablePath,
 		runtimeDirPath: runtimeDirPath,
+		stateDirPath:   stateDirPath,
 		cacheDirPath:   cacheDirPath,
 
 		imageStore: imageStore,
@@ -112,7 +122,7 @@ func (r *Runtime) Deploy(service model.Service, statusChangeNotificationHandler 
 	inst, ok := r.instances[id]
 	if !ok {
 		var err error
-		inst, err = instance.NewInstance(id, service, statusChangeNotificationHandler, r.executablePath, r.runtimeDirPath, r.imageStore)
+		inst, err = instance.NewInstance(id, service, statusChangeNotificationHandler, r.executablePath, r.runtimeDirPath, r.stateDirPath, r.imageStore)
 		if err != nil {
 			return err
 		}

@@ -2,7 +2,6 @@ package iotools
 
 import (
 	"os"
-	"path"
 )
 
 func CreateOakestraCacheDir() (string, error) {
@@ -10,16 +9,11 @@ func CreateOakestraCacheDir() (string, error) {
 	if err != nil {
 		info, err := os.Stat("/var/cache")
 		if err != nil || !info.Mode().IsDir() {
-			return "", err
+			return CreateLargeTempDir("cache")
 		}
 
 		basePath = "/var/cache"
 	}
 
-	oakestraPath := path.Join(basePath, "oakestra")
-	if err := os.MkdirAll(oakestraPath, 0o700); err != nil {
-		return "", err
-	}
-
-	return oakestraPath, nil
+	return CreateSubDir(basePath, "oakestra", 0o700)
 }

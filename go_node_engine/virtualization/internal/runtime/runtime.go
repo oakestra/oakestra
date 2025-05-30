@@ -7,6 +7,7 @@ import (
 
 type RuntimeInfo struct {
 	RuntimeDirPath string
+	StateDirPath   string
 	CacheDirPath   string
 }
 

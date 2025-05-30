@@ -280,6 +280,7 @@ func NewInstanceConfig(
 	img *image.Image,
 	netConf *networkConfig,
 	runtimeDirPath string,
+	stateDirPath string,
 ) (*InstanceConfig, error) {
 	var net []InstanceConfigNet
 	if netConf != nil {
@@ -292,25 +293,25 @@ func NewInstanceConfig(
 
 	var initrd *string
 	if img.HasInitrd {
-		initrd = ptr.Ptr(path.Join(runtimeDirPath, image.InitrdFileName))
+		initrd = ptr.Ptr(path.Join(stateDirPath, image.InitrdFileName))
 	}
 
 	return &InstanceConfig{
 		Block: []InstanceConfigBlock{
 			{
-				Path:   path.Join(runtimeDirPath, image.RootfsFileName),
+				Path:   path.Join(stateDirPath, image.RootfsFileName),
 				Root:   ptr.Ptr(true),
 				Sparse: ptr.Ptr(true),
 			},
 			{
-				Path: path.Join(runtimeDirPath, cloudInitFileName),
+				Path: path.Join(stateDirPath, cloudInitFileName),
 			},
 		},
 		Cpus: &InstanceConfigCpus{
 			NumCores: ptr.Ptr(uint(service.Vcpus)),
 		},
 		Initrd: initrd,
-		Kernel: ptr.Ptr(path.Join(runtimeDirPath, image.KernelFileName)),
+		Kernel: ptr.Ptr(path.Join(stateDirPath, image.KernelFileName)),
 		Mem: &InstanceConfigMem{
 			Size: ptr.Ptr(uint64(service.Memory)),
 		},

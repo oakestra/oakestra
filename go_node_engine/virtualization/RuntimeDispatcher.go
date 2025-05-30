@@ -21,6 +21,11 @@ func NewRuntimeManager() (*RuntimeManager, error) {
 		return nil, err
 	}
 
+	stateDirPath, err := iotools.CreateOakestraStateDir()
+	if err != nil {
+		return nil, err
+	}
+
 	cacheDirPath, err := iotools.CreateOakestraCacheDir()
 	if err != nil {
 		return nil, err
@@ -28,6 +33,7 @@ func NewRuntimeManager() (*RuntimeManager, error) {
 
 	info := virtrt.RuntimeInfo{
 		RuntimeDirPath: runtimeDirPath,
+		StateDirPath:   stateDirPath,
 		CacheDirPath:   cacheDirPath,
 	}
 

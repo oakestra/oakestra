@@ -63,6 +63,7 @@ type Instance struct {
 	service             model.Service
 	statusChangeHandler func(service model.Service)
 	runtimeDirPath      string
+	stateDirPath        string
 	restartMode         instanceRestartMode
 	img                 *image.Image
 	config              InstanceConfig
@@ -84,13 +85,9 @@ func NewInstance(
 	statusChangeHandler func(service model.Service),
 	executablePath string,
 	baseRuntimeDirPath string,
+	baseStateDirPath string,
 	imageStore *image.Store,
 ) (*Instance, error) {
-	// TODO(axiphi): Remove this directory if one of the operations below fails
-	runtimeDirPath, err := iotools.CreateSubDir(baseRuntimeDirPath, fmt.Sprintf("instance-%s", id), 0o700)
-	if err != nil {
-		return nil, err
-	}
 	var restartMode instanceRestartMode
 	if service.OneShot {
 		restartMode = instanceRestartModeNever
@@ -107,7 +104,19 @@ func NewInstance(
 		return nil, fmt.Errorf("expected a disk size of atleast 512MiB for instance %q configured via 'vtpus' field", id)
 	}
 
-	img, err := imageStore.Retrieve(service.Image, runtimeDirPath, rootfsSize)
+	// TODO(axiphi): Remove this directory if one of the operations below fails
+	runtimeDirPath, err := iotools.CreateSubDir(baseRuntimeDirPath, fmt.Sprintf("instance-%s", id), 0o700)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO(axiphi): Remove this directory if one of the operations below fails
+	stateDirPath, err := iotools.CreateSubDir(baseStateDirPath, fmt.Sprintf("instance-%s", id), 0o700)
+	if err != nil {
+		return nil, err
+	}
+
+	img, err := imageStore.Retrieve(service.Image, stateDirPath, rootfsSize)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +128,7 @@ func NewInstance(
 	}
 	logger.InfoLogger().Printf("set up network for instance %q", id)
 
-	config, err := NewInstanceConfig(&service, img, netConf, runtimeDirPath)
+	config, err := NewInstanceConfig(&service, img, netConf, runtimeDirPath, stateDirPath)
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +142,7 @@ func NewInstance(
 		service:             service,
 		statusChangeHandler: statusChangeHandler,
 		runtimeDirPath:      runtimeDirPath,
+		stateDirPath:        stateDirPath,
 		restartMode:         restartMode,
 		img:                 img,
 		config:              *config,
@@ -140,7 +150,7 @@ func NewInstance(
 
 		stderrBuffer: tailbuf.NewTailBuffer(4096),
 		logger: &lumberjack.Logger{
-			Filename:   path.Join(runtimeDirPath, "instance.log"),
+			Filename:   path.Join(stateDirPath, "instance.log"),
 			MaxSize:    100,
 			MaxBackups: 1,
 		},
@@ -188,7 +198,7 @@ func NewInstance(
 				},
 			},
 		},
-		path.Join(inst.runtimeDirPath, cloudInitFileName),
+		path.Join(inst.stateDirPath, cloudInitFileName),
 	)
 	if err != nil {
 		logger.ErrorLogger().Printf("could not create cloud-init drive for instance %q: %v", inst.id, err)
@@ -297,10 +307,9 @@ func (i *Instance) Close() error {
 	}
 
 	iotools.CloseOrWarn(i.logger, "crosvm instance logger")
+	iotools.RemoveAllOrWarn(i.runtimeDirPath)
+	iotools.RemoveAllOrWarn(i.stateDirPath)
 
-	if err := os.RemoveAll(i.runtimeDirPath); err != nil {
-		logger.WarnLogger().Printf("failed to remove runtime directory %q of instance %q: %v", i.runtimeDirPath, i.id, err)
-	}
 	return nil
 }
 
@@ -433,7 +442,7 @@ func (i *Instance) stopInternal() error {
 }
 
 func (i *Instance) createConfigFile() error {
-	return iotools.StoreJSONWithIndent(&i.config, path.Join(i.runtimeDirPath, configFileName), 0o600, "  ")
+	return iotools.StoreJSONWithIndent(&i.config, path.Join(i.stateDirPath, configFileName), 0o600, "  ")
 }
 
 func (i *Instance) generateRunArgs() []string {
@@ -441,7 +450,7 @@ func (i *Instance) generateRunArgs() []string {
 		[]string{
 			"run",
 			"--cfg",
-			path.Join(i.runtimeDirPath, configFileName),
+			path.Join(i.stateDirPath, configFileName),
 		},
 		i.configExt.ToArgs(),
 	)

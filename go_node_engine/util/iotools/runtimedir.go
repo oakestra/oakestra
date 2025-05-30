@@ -2,20 +2,18 @@ package iotools
 
 import (
 	"os"
-	"path"
 )
 
 func CreateOakestraRuntimeDir() (string, error) {
 	basePath := os.Getenv("XDG_RUNTIME_DIR")
 	if basePath == "" {
-		return os.MkdirTemp("", "*-oakestra")
+		info, err := os.Stat("/run")
+		if err != nil || !info.Mode().IsDir() {
+			return CreateTempDir("runtime")
+		}
+
+		basePath = "/run"
 	}
 
-	oakestraPath := path.Join(basePath, "oakestra")
-	err := os.MkdirAll(oakestraPath, 0o700)
-	if err != nil {
-		return "", err
-	}
-
-	return oakestraPath, nil
+	return CreateSubDir(basePath, "oakestra", 0o700)
 }
