@@ -13,7 +13,7 @@ func CreateNoCloudFsImg(userData UserData, metaData MetaData, networkConfig Netw
 	if err != nil {
 		return err
 	}
-	defer iotools.RemoveOrWarn(tmpDirPath)
+	defer iotools.RemoveAllOrWarn(tmpDirPath)
 
 	// technically all files below are YAML files, but since YAML is a JSON superset, we can just use JSON
 

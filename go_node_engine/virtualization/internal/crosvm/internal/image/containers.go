@@ -51,8 +51,6 @@ func (s *ContainersSource) Name() string {
 // Internally, this function extracts the kernel (and initrd) from the root filesystem of the container image
 // and then constructs an ext4 filesystem image based on it.
 func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
-	logger.InfoLogger().Printf("retrieving %q to %q", id, dstDirPath)
-
 	ctx := context.Background()
 	sys := &types.SystemContext{}
 

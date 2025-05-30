@@ -9,6 +9,7 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/requests"
 	"go_node_engine/virtualization/internal/allruntimes"
+	"go_node_engine/virtualization/internal/network"
 	virtrt "go_node_engine/virtualization/internal/runtime"
 	"io"
 	"io/fs"
@@ -18,16 +19,12 @@ import (
 	"os/exec"
 	"reflect"
 	rt "runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/digitalocean/go-qemu/qmp"
 	"github.com/struCoder/pidusage"
-	"github.com/vishvananda/netlink"
-	"github.com/vishvananda/netns"
-	"golang.org/x/sys/unix"
 )
 
 func init() {
@@ -643,7 +640,7 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 	if model.GetNodeInfo().Overlay {
 
 		//Get the default route for the namespace
-		ip, gw, mask, mac, fd, err := deleteDefaultIpGwMask(*q.NSname)
+		ip, gw, mask, mac, err := network.DeleteDefaultIpGwMask(*q.NSname)
 		if err != nil {
 			logger.InfoLogger().Printf("Unable to get default route for namespace %s: %v", *q.NSname, err)
 			return "", []string{}, err
@@ -652,7 +649,7 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 		//Network
 		if model.GetNodeInfo().Overlay {
 			//Network backend fixed at tap0 and virbr0 created inside the namespace "tap,id=n0,fd=" + strconv.Itoa(devFd),
-			args = append(args, "-netdev", "tap,id=tap0,vhost=on,fd="+strconv.Itoa(fd))
+			args = append(args, "-netdev", "tap,id=tap0,vhost=on")
 			//Network device
 			args = append(args, "-device", "virtio-net-pci,id=nic1,addr=0x0a,netdev=tap0,mac="+mac)
 		}
@@ -710,105 +707,4 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 	}
 
 	return command, args, nil
-}
-
-// delete and returns the defaultIp Gateway and Netmask of a given namespace
-func deleteDefaultIpGwMask(namespace string) (string, string, string, string, int, error) {
-	defaultRouteFilter := &netlink.Route{Dst: nil}
-	ip, gw, mask, mac := "", "", "", ""
-	fd := -1
-
-	err := execInsideNsByName(namespace, func() error {
-
-		routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, defaultRouteFilter, netlink.RT_FILTER_DST)
-		if err != nil {
-			return err
-		}
-		if n := len(routes); n > 1 {
-			return err
-		}
-		if len(routes) == 0 {
-			return err
-		}
-		route := &routes[0]
-
-		routeIdx := route.LinkIndex
-		routelink, err := netlink.LinkByIndex(routeIdx)
-		if err != nil {
-			return err
-		}
-
-		macvtap, err := netlink.LinkByName("tap0")
-		if err != nil {
-			return err
-		}
-
-		addrs, err := netlink.AddrList(routelink, netlink.FAMILY_V4)
-		if err != nil {
-			return err
-		}
-		if len(addrs) == 0 {
-			return errors.New("No IP address found")
-		}
-
-		fd, err = getTapFd()
-		if err != nil {
-			return err
-		}
-
-		ip = addrs[0].IP.String()
-		gw = route.Gw.String()
-		mac = macvtap.Attrs().HardwareAddr.String()
-		mask = net.IP(addrs[0].Mask).String()
-
-		if err = netlink.AddrDel(routelink, &addrs[0]); err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	return ip, gw, mask, mac, fd, err
-}
-
-// defaultRoute returns the default route for the current namespace.
-func getTapFd() (int, error) {
-	var fd int
-
-	tapdev, err := netlink.LinkByName("tap0")
-	if err != nil {
-		return -1, err
-	}
-	fd, err = unix.Open("/dev/tap"+strconv.Itoa(tapdev.Attrs().Index), unix.O_RDWR, 0)
-	if err != nil {
-		return -1, err
-	}
-
-	return fd, nil
-}
-
-// Execute function inside a namespace based on Ns name
-func execInsideNsByName(Nsname string, function func() error) error {
-	var containerNs netns.NsHandle
-
-	rt.LockOSThread()
-	defer rt.UnlockOSThread()
-
-	stdNetns, err := netns.Get()
-	if err == nil {
-		defer func() {
-			_ = stdNetns.Close()
-		}()
-		containerNs, err = netns.GetFromName(Nsname)
-		if err == nil {
-			defer func() {
-				_ = netns.Set(stdNetns)
-			}()
-			err = netns.Set(containerNs)
-			if err == nil {
-				err = function()
-			}
-		}
-	}
-	return err
 }

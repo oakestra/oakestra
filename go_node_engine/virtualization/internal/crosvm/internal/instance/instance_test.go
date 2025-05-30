@@ -25,10 +25,7 @@ func TestFetchImage(t *testing.T) {
 	imageArchivePath, err := filepath.Abs(path.Join(workDirPath, "ssh-img.oci"))
 	assert.NilError(t, err)
 
-	storeDirPath, err := filepath.Abs(path.Join(workDirPath, "store"))
-	assert.NilError(t, err)
-
-	store, err := image.NewStore(storeDirPath, image.NewContainersSource(archive.Transport))
+	store, err := image.NewStore("/var/tmp/oakestra-test-store", image.NewContainersSource(archive.Transport))
 	assert.NilError(t, err)
 
 	runtimeDirPath, err := iotools.CreateLargeTempDir("instance-test-runtime")

@@ -116,20 +116,25 @@ func (s *Store) Retrieve(ref string, dstDirPath string, rootfsSize int64) (*Imag
 		return nil, err
 	}
 
+	logger.InfoLogger().Printf("retrieving image %q to %q...", id, tmpDirPath)
 	if err = source.Retrieve(id, tmpDirPath); err != nil {
 		iotools.RemoveAllOrWarn(tmpDirPath)
 		return nil, err
 	}
+	logger.InfoLogger().Printf("retrieved image %q to %q", id, tmpDirPath)
 
 	img, err = CreateImageFromDir(tmpDirPath)
 	if err != nil {
 		iotools.RemoveAllOrWarn(tmpDirPath)
 		return nil, err
 	}
+
+	logger.InfoLogger().Printf("copying image %q to destination %q...", id, dstDirPath)
 	if err := copyImageFilesToDst(tmpDirPath, dstDirPath, rootfsSize, img.HasInitrd); err != nil {
 		iotools.RemoveAllOrWarn(tmpDirPath)
 		return nil, err
 	}
+	logger.InfoLogger().Printf("copied image %q to destination %q", id, dstDirPath)
 
 	go s.moveIntoCache(ref, img, tmpDirPath, imageDirPath)
 

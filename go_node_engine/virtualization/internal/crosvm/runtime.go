@@ -48,7 +48,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 		}
 	}
 
-	runtimeDirPath, err := iotools.CreateSubDir(info.RuntimeDirPath, "runtime-crosvm", 0o700)
+	runtimeDirPath, err := iotools.CreateSubDir(info.RuntimeDirPath, "crosvm", 0o700)
 	if err != nil {
 		logger.ErrorLogger().Printf("failed to setup runtime directory for crosvm runtime: %v", err)
 		return &Runtime{
@@ -56,7 +56,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 		}
 	}
 
-	cacheDirPath, err := iotools.CreateSubDir(info.CacheDirPath, "runtime-crosvm", 0o700)
+	cacheDirPath, err := iotools.CreateSubDir(info.CacheDirPath, "crosvm", 0o700)
 	if err != nil {
 		logger.ErrorLogger().Printf("failed to setup cache directory for crosvm runtime: %v", err)
 		return &Runtime{
@@ -138,7 +138,8 @@ func (r *Runtime) Undeploy(sname string, instancenumber int) error {
 	id := taskid.Generate(sname, instancenumber)
 	inst, ok := r.instances[id]
 	if !ok {
-		return ErrNotDeployed
+		return nil
+		//return ErrNotDeployed
 	}
 
 	if err := inst.Close(); err != nil {

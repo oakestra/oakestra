@@ -276,19 +276,20 @@ type InstanceConfigVsock struct {
 }
 
 func NewInstanceConfig(
-	node *model.Node,
 	service *model.Service,
 	img *image.Image,
+	netConf *networkConfig,
 	runtimeDirPath string,
 ) (*InstanceConfig, error) {
 	var net []InstanceConfigNet
-	//if node.Overlay {
-	net = append(net, InstanceConfigNet{
-		TapName:  ptr.Ptr("tap0"),
-		Mac:      ptr.Ptr("52:55:00:d1:55:01"),
-		VhostNet: &InstanceConfigVhostNet{},
-	})
-	//}
+	if netConf != nil {
+		net = append(net, InstanceConfigNet{
+			TapName:  ptr.Ptr("tap0"),
+			Mac:      ptr.Ptr(netConf.Mac),
+			VhostNet: &InstanceConfigVhostNet{},
+		})
+	}
+
 	var initrd *string
 	if img.HasInitrd {
 		initrd = ptr.Ptr(path.Join(runtimeDirPath, image.InitrdFileName))
@@ -300,6 +301,9 @@ func NewInstanceConfig(
 				Path:   path.Join(runtimeDirPath, image.RootfsFileName),
 				Root:   ptr.Ptr(true),
 				Sparse: ptr.Ptr(true),
+			},
+			{
+				Path: path.Join(runtimeDirPath, cloudInitFileName),
 			},
 		},
 		Cpus: &InstanceConfigCpus{

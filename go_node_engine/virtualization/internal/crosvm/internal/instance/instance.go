@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
-	"go_node_engine/requests"
 	"go_node_engine/util/iotools"
+	"go_node_engine/util/ptr"
+	"go_node_engine/virtualization/internal/crosvm/internal/cloudinit"
 	"go_node_engine/virtualization/internal/crosvm/internal/image"
 	"go_node_engine/virtualization/internal/crosvm/internal/tailbuf"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -45,6 +46,10 @@ const (
 	instanceRestartModeUnlessStopped instanceRestartMode = iota
 )
 
+const (
+	cloudInitFileName = "cloud-init.img"
+)
+
 // Instance manages one crosvm VM and supports starting, stopping (can be restarted again) and closing (permanently stopping).
 // It also supports auto-restart if the VM exits by itself (not when the VM was previously stopped or closed).
 //
@@ -81,11 +86,11 @@ func NewInstance(
 	baseRuntimeDirPath string,
 	imageStore *image.Store,
 ) (*Instance, error) {
+	// TODO(axiphi): Remove this directory if one of the operations below fails
 	runtimeDirPath, err := iotools.CreateSubDir(baseRuntimeDirPath, fmt.Sprintf("instance-%s", id), 0o700)
 	if err != nil {
 		return nil, err
 	}
-
 	var restartMode instanceRestartMode
 	if service.OneShot {
 		restartMode = instanceRestartModeNever
@@ -97,19 +102,31 @@ func NewInstance(
 	// 	 			 the disk size for the VM, as it is otherwise unused in the crosvm runtime.
 	//               The left shift by 20 converts the unit of the field from MiB to bytes.
 	var rootfsSize = int64(service.Vtpus) << 20
+	// anything below 512MiB for the rootfs disk is likely an error, so we fail fast here
+	if rootfsSize < 536870912 {
+		return nil, fmt.Errorf("expected a disk size of atleast 512MiB for instance %q configured via 'vtpus' field", id)
+	}
+
 	img, err := imageStore.Retrieve(service.Image, runtimeDirPath, rootfsSize)
 	if err != nil {
 		return nil, err
 	}
 
-	config, err := NewInstanceConfig(model.GetNodeInfo(), &service, img, runtimeDirPath)
+	logger.InfoLogger().Printf("setting up network for instance %q...", id)
+	netConf, err := setupNetwork(service)
+	if err != nil {
+		return nil, err
+	}
+	logger.InfoLogger().Printf("set up network for instance %q", id)
+
+	config, err := NewInstanceConfig(&service, img, netConf, runtimeDirPath)
 	if err != nil {
 		return nil, err
 	}
 
 	configExt := NewInstanceConfigExt(&service)
 
-	instance := &Instance{
+	inst := &Instance{
 		executablePath: executablePath,
 
 		id:                  id,
@@ -135,13 +152,51 @@ func NewInstance(
 		startCount: 0,
 	}
 
-	if err := instance.createConfigFile(); err != nil {
-		logger.ErrorLogger().Printf("could not create config file for instance %q: %v", instance.id, err)
-		_ = instance.Close()
+	if err := inst.createConfigFile(); err != nil {
+		logger.ErrorLogger().Printf("could not create config file for instance %q: %v", inst.id, err)
+		_ = inst.Close()
 		return nil, err
 	}
 
-	return instance, nil
+	err = cloudinit.CreateNoCloudFsImg(
+		cloudinit.UserData{
+			CloudInitModules: []string{
+				"seed_random",
+			},
+			CloudConfigModules: []string{}, // needs to be empty slice and not nil to override option
+			CloudFinalModules:  []string{}, // needs to be empty slice and not nil to override option
+		},
+		cloudinit.MetaData{
+			InstanceId:    inst.id,
+			LocalHostname: nil,
+		},
+		cloudinit.NetworkConfig{
+			Version: 2,
+			Ethernets: map[string]cloudinit.NetworkConfigEthernet{
+				"main": {
+					Match: &cloudinit.NetworkConfigMatch{
+						Macaddress: &netConf.Mac,
+					},
+					Dhcp4:     ptr.Ptr(false),
+					Dhcp6:     ptr.Ptr(false),
+					Addresses: []string{netConf.AddressIpv4Cidr},
+					Gateway4:  &netConf.GatewayIpv4,
+					Gateway6:  nil,
+					Nameservers: &cloudinit.NetworkConfigNameservers{
+						Addresses: []string{"8.8.8.8"}, // use google DNS, like container runtime does
+					},
+				},
+			},
+		},
+		path.Join(inst.runtimeDirPath, cloudInitFileName),
+	)
+	if err != nil {
+		logger.ErrorLogger().Printf("could not create cloud-init drive for instance %q: %v", inst.id, err)
+		_ = inst.Close()
+		return nil, err
+	}
+
+	return inst, nil
 }
 
 func (i *Instance) Start() error {
@@ -158,17 +213,14 @@ func (i *Instance) Start() error {
 		return errAlreadyClosed
 	}
 
-	if model.GetNodeInfo().Overlay {
-		if err := requests.CreateNetworkNamespaceForUnikernel(i.service.Sname, i.service.Instance, i.service.Ports); err != nil {
-			logger.ErrorLogger().Printf("network creation failed: %v", err)
-			return err
-		}
-	}
-
 	crosvmExec := i.executablePath
 	runArgs := i.generateRunArgs()
 	if model.GetNodeInfo().Overlay {
-		crosvmExec, runArgs = wrapCommandWithIpNetnsExec(i.id, crosvmExec, runArgs)
+		crosvmExec, runArgs = wrapCommandWithIpNetnsExec(i.service, crosvmExec, runArgs)
+	}
+
+	if os.Getenv("OAKESTRA_CROSVM_DEBUG") == "true" {
+		crosvmExec, runArgs = wrapCommandWithScreen(i.id, crosvmExec, runArgs)
 	}
 
 	runCmd := exec.Command(crosvmExec, runArgs...)
@@ -240,11 +292,8 @@ func (i *Instance) Close() error {
 		i.status = instanceStatusClosed
 	}
 
-	if model.GetNodeInfo().Overlay {
-		if err := requests.DeleteNamespaceForUnikernel(i.service.Sname, i.service.Instance); err != nil {
-			logger.ErrorLogger().Printf("network deletion failed: %v", err)
-			return err
-		}
+	if err := teardownNetwork(i.service); err != nil {
+		return err
 	}
 
 	iotools.CloseOrWarn(i.logger, "crosvm instance logger")
@@ -404,6 +453,6 @@ func (i *Instance) generateStopArgs() []string {
 	}
 }
 
-func wrapCommandWithIpNetnsExec(namespace string, executable string, args []string) (string, []string) {
-	return "ip", slices.Concat([]string{"netns", "exec", namespace, executable}, args)
+func wrapCommandWithScreen(name string, executable string, args []string) (string, []string) {
+	return "screen", slices.Concat([]string{"-D", "-m", "-S", name, executable}, args)
 }

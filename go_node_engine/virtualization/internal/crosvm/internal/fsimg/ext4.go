@@ -2,8 +2,8 @@ package fsimg
 
 import (
 	"errors"
+	"fmt"
 	"os"
-	"os/exec"
 	"sync"
 )
 
@@ -25,6 +25,9 @@ func CreateExt4Img(dstPath string, perm os.FileMode, size int64) error {
 		return ErrMissingMkfsExt4Executable
 	}
 
-	cmd := exec.Command(execPath, dstPath)
-	return cmd.Run()
+	if err := runCapturingOutput(4096, 4096, execPath, dstPath); err != nil {
+		return fmt.Errorf("failed to create ext4 image: %v", err)
+	}
+
+	return nil
 }

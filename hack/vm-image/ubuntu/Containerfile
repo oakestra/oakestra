@@ -10,5 +10,3 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     && apt-get --yes install --no-install-recommends linux-virtual \
     && apt-get --yes autoremove \
     && apt-get --yes clean
-
-COPY --chown=root:root --chmod=0600 netplan.yaml /etc/netplan/00-oakestra.yaml

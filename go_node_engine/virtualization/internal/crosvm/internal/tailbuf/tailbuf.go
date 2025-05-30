@@ -79,6 +79,10 @@ func (t *TailBuffer) WriteToSkippingUntil(w io.Writer, predicate func(b byte) bo
 	return n1 + int64(n2), err
 }
 
+func (t *TailBuffer) Capacity() int {
+	return len(t.buf)
+}
+
 func writeToDropUntil(data []byte, w io.Writer, predicate func(b byte) bool) (int64, error) {
 	var startIdx = 0
 	for _, b := range data {
