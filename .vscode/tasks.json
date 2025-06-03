@@ -7,7 +7,7 @@
             "command": "docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml -f ${workspaceRoot}/root_orchestrator/override-network-host.yml up --build -d && sleep 1",
             "options": {
                 "env": {
-                    "SYSTEM_MANAGER_URL": "localhost",
+                    "SYSTEM_MANAGER_URL": "0.0.0.0",
                     "COMPOSE_BAKE":"true",
                 }
             }
@@ -23,7 +23,7 @@
             "command": "docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml -f ${workspaceRoot}/cluster_orchestrator/override-network-host.yml up --build -d",
             "options": {
                 "env": {
-                    "SYSTEM_MANAGER_URL": "localhost",
+                    "SYSTEM_MANAGER_URL": "0.0.0.0",
                     "CLUSTER_LOCATION": "48.13023160559729,11.583724427641824,100",
                     "CLUSTER_NAME": "debug_cluster",
                     "COMPOSE_BAKE":"true",

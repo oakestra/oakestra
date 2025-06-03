@@ -88,7 +88,9 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_payload):
 
     time_now = datetime.now()
 
-    mongo_nodes.db.nodes.find_one_and_update(
+    mongo_nodes.db.nodes.find({"_id": ObjectId(node_id)})
+
+    updated_document = mongo_nodes.db.nodes.find_one_and_update(
         {"_id": ObjectId(node_id)},
         {
             "$set": {
@@ -106,10 +108,15 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_payload):
                 "last_modified_timestamp": datetime.timestamp(time_now),
             }
         },
-        upsert=True,
+        upsert=False,
     )
 
-    return 1
+    if not updated_document:
+        app.logger.error("MONGODB - Node with id {0} not found".format(node_id))
+        return None
+    app.logger.info("MONGODB - Node {0} updated".format(node_id))
+    updated_document["_id"] = str(updated_document["_id"])
+    return updated_document
 
 
 def find_one_edge_node():
@@ -164,7 +171,10 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
                 print("Node {0} is inactive.".format(n.get("_id")))
                 continue
 
-            node_info = n.get("node_info")
+            node_info = n.get("node_info", None)
+            if node_info is None:
+                print("Node {0} has no node_info, skipping.".format(n.get("_id")))
+                continue
 
             # if it is not older than TIME_INTERVAL
             cumulative_values["cpu_percent"] += n.get("current_cpu_percent", 0)
@@ -178,11 +188,11 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
             cumulative_values["gpu_percent"] += n.get("gpu_usage", 0)
             cumulative_values["gpu_cores"] += n.get("gpu_cores", 0)
             cumulative_values["number_of_nodes"] += 1
-
+            
             technology.update(node_info.get("technology", []))
             supported_addons.update(node_info.get("supported_addons", []))
-
             arch = node_info.get("architecture")
+            
             aggregation = aggregation_per_architecture[arch]
             aggregation["cpu_percent"] += n.get("current_cpu_percent", 0)
             aggregation["cpu_cores"] += n.get("current_cpu_cores_free", 0)

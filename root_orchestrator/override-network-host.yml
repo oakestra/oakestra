@@ -11,11 +11,11 @@ services:
   system_manager:
     network_mode: host
     environment:
-      - CLOUD_MONGO_URL=localhost
-      - CLOUD_SCHEDULER_URL=localhost
-      - RESOURCE_ABSTRACTOR_URL=localhost
-      - NET_PLUGIN_URL=localhost
-      - JWT_GENERATOR_URL=localhost
+      - CLOUD_MONGO_URL=0.0.0.0
+      - CLOUD_SCHEDULER_URL=0.0.0.0
+      - RESOURCE_ABSTRACTOR_URL=0.0.0.0
+      - NET_PLUGIN_URL=0.0.0.0
+      - JWT_GENERATOR_URL=0.0.0.0
     logging: *default-logging
 
   # MongoDB in Root Orchestrator
@@ -30,8 +30,8 @@ services:
   root_service_manager:
     network_mode: host
     environment:
-      - SYSTEM_MANAGER_URL=localhost
-      - CLOUD_MONGO_URL=localhost
+      - SYSTEM_MANAGER_URL=0.0.0.0
+      - CLOUD_MONGO_URL=0.0.0.0
 
   # Redis for the Cloud Scheduler
   redis:
@@ -56,14 +56,14 @@ services:
   cloud_scheduler:
     network_mode: host
     environment:
-      - SYSTEM_MANAGER_URL=localhost
-      - RESOURCE_ABSTRACTOR_URL=localhost
-      - REDIS_ADDR=redis://:cloudRedis@localhost:6379
+      - SYSTEM_MANAGER_URL=0.0.0.0
+      - RESOURCE_ABSTRACTOR_URL=0.0.0.0
+      - REDIS_ADDR=redis://:cloudRedis@0.0.0.0:6379
 
   resource_abstractor:
     network_mode: host
     environment:
-      - CLOUD_MONGO_URL=localhost
+      - CLOUD_MONGO_URL=0.0.0.0
 
   jwt_generator:
     network_mode: host
