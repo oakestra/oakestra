@@ -43,7 +43,12 @@ def handle_mqtt_message(client, userdata, message):
 
     # if topic starts with nodes and ends with information
     if re_nodes_information_topic is not None:
-        mongo_find_node_by_id_and_update_cpu_mem(client_id, payload)
+        updated = mongo_find_node_by_id_and_update_cpu_mem(client_id, payload)
+        if updated is None:
+            mqtt.publish(
+                "nodes/" + client_id + "/control/error",
+                json.dumps({"message": "Node not registered to the cluster"}),
+            )
     if re_job_deployment_topic is not None:
         sname = payload.get("sname")
         status = convert_to_status(payload.get("status"))

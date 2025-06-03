@@ -36,7 +36,7 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
             + sanitize(cluster.get("ip"), request=True)
             + ":"
             + str(cluster.get("port"))
-            + "/api/deploy/"
+            + "/api/service/"
             + str(job_id)
             + "/"
             + str(instance_number)
@@ -60,13 +60,13 @@ def cluster_request_to_delete_job(job_id, instance_number):
             + sanitize(cluster.get("ip"), request=True)
             + ":"
             + str(cluster.get("port"))
-            + "/api/delete/"
+            + "/api/service/"
             + str(job_id)
             + "/"
             + str(instance_number)
         )
         print("Requesting:", cluster_addr)
-        resp = requests.get(cluster_addr)
+        resp = requests.delete(cluster_addr)
         print(resp)
     except Exception as e:
         logging.error(e)
