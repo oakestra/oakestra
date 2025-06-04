@@ -13,11 +13,23 @@ ARG MONGO_VERSION
 # set default shell for RUN commands to bash, so that bash-specific features can be used
 SHELL ["/bin/bash", "-c"]
 
-# add arm64 architecture and update all packages
-RUN dpkg --add-architecture arm64 && apt-get -y update && apt-get -y upgrade
-# install packages needed for compilation
-RUN apt-get -y install git lld ccache icecc crossbuild-essential-arm64 libssl-dev:arm64 libcurl4-openssl-dev:arm64 \
-      python3-dev python-dev-is-python3 python3-venv python3-poetry
+# add arm64 architecture, update all packages, and install packages needed for compilation
+RUN dpkg --add-architecture arm64 \
+    && apt-get -y update \
+    && apt-get -y upgrade \
+    && apt-get -y install --no-install-recommends \
+        git \
+        lld \
+        ccache \
+        icecc \
+        crossbuild-essential-arm64 \
+        libssl-dev:arm64 \
+        libcurl4-openssl-dev:arm64 \
+        python3-dev \
+        python-dev-is-python3 \
+        python3-venv \
+        python3-poetry
+
 # allow the arm64/aarch64 cross toolchain to use lld without needing to specify the absolute path everytime
 RUN ln -s /usr/bin/lld /usr/bin/aarch64-linux-gnu-ld.lld
 
