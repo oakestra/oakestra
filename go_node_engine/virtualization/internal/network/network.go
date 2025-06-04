@@ -8,6 +8,19 @@ import (
 	rt "runtime"
 )
 
+func RetrieveTapMacInNamespace(namespace string) (string, error) {
+	var mac string
+	err := execInsideNsByName(namespace, func() error {
+		link, err := netlink.LinkByName("tap0")
+		if err != nil {
+			return err
+		}
+		mac = link.Attrs().HardwareAddr.String()
+		return nil
+	})
+	return mac, err
+}
+
 // delete and returns the defaultIp Gateway and Netmask of a given namespace
 func DeleteDefaultIpGwMask(namespace string) (string, string, string, string, error) {
 	defaultRouteFilter := &netlink.Route{Dst: nil}

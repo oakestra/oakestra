@@ -12,6 +12,7 @@ import (
 	"go_node_engine/virtualization/internal/crosvm/internal/image"
 	"go_node_engine/virtualization/internal/crosvm/internal/instance"
 	virtrt "go_node_engine/virtualization/internal/runtime"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -41,6 +42,14 @@ type Runtime struct {
 }
 
 func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
+	// this is a workaround for a known issue in crosvm, which causes it to fail when /var/empty does not exist
+	if err := os.MkdirAll("/var/empty", 0o755); err != nil {
+		logger.ErrorLogger().Printf("failed to create /var/empty directory: %v", err)
+		return &Runtime{
+			error: err,
+		}
+	}
+
 	executablePath, err := exec.LookPath(executableName)
 	if err != nil {
 		logger.ErrorLogger().Printf("unable to find crosvm executable (%s): %v\n", executableName, err)
@@ -93,6 +102,8 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 	infoMsg.WriteString("created crosvm runtime:\n")
 	_, _ = fmt.Fprintf(&infoMsg, "  > crosvm executable: %s\n", executablePath)
 	_, _ = fmt.Fprintf(&infoMsg, "  > runtime directory: %s\n", runtimeDirPath)
+	_, _ = fmt.Fprintf(&infoMsg, "  > state directory: %s\n", stateDirPath)
+	_, _ = fmt.Fprintf(&infoMsg, "  > cache directory: %s\n", cacheDirPath)
 	logger.InfoLogger().Print(infoMsg.String())
 
 	return &Runtime{

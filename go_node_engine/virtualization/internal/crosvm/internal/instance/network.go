@@ -27,23 +27,15 @@ func setupNetwork(service model.Service) (*networkConfig, error) {
 		return nil, err
 	}
 
-	// the network namespace name is the task id of the instance
-	addressIpv4, gatewayIpv4, addressIpv4Mask, mac, err := network.DeleteDefaultIpGwMask(taskid.GenerateForModel(&service))
+	mac, err := network.RetrieveTapMacInNamespace(taskid.GenerateForModel(&service))
 	if err != nil {
 		return nil, err
 	}
-
-	addressIpv4CidrSuffix, err := convertIpv4MaskToCIDRSuffix(addressIpv4Mask)
-	if err != nil {
-		return nil, err
-	}
-
-	addressIpv4Cidr := fmt.Sprintf("%s/%d", addressIpv4, addressIpv4CidrSuffix)
 
 	return &networkConfig{
 		Mac:             mac,
-		AddressIpv4Cidr: addressIpv4Cidr,
-		GatewayIpv4:     gatewayIpv4,
+		AddressIpv4Cidr: "192.168.1.2/30",
+		GatewayIpv4:     "192.168.1.1",
 	}, nil
 }
 
