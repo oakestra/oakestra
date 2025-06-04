@@ -42,7 +42,8 @@ RUN source python3-venv/bin/activate \
   && aarch64-linux-gnu-strip build/install/bin/{mongod,mongos}
 
 
-# create final image based on specified mongo version
+# create final image based on specified mongo version; the platform is specified inline, since none other will work
+# hadolint ignore=DL3029
 FROM --platform=linux/arm64/v8 mongo:$MONGO_VERSION
 
 # replace mongo executables with the custom built ones
