@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go_node_engine/config"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"io"
@@ -23,7 +24,19 @@ func ClusterHandshake(address string, port int) HandshakeAnswer {
 		logger.ErrorLogger().Fatalf("Handshake failed, json encoding problem, %v", err)
 	}
 	jsonbody := bytes.NewBuffer(data)
-	resp, err := http.Post(fmt.Sprintf("http://%s:%d/api/node/register", address, port), "application/json", jsonbody)
+
+	cfg, err := config.GetConfFileManager().Get()
+	if err != nil {
+		logger.ErrorLogger().Fatalf("Could not get config")
+	}
+
+	var resp *http.Response
+	if cfg.ClusterSSL {
+		resp, err = http.Post(fmt.Sprintf("https://%s:%d/api/node/register", address, port), "application/json", jsonbody)
+	} else {
+		resp, err = http.Post(fmt.Sprintf("http://%s:%d/api/node/register", address, port), "application/json", jsonbody)
+	}
+
 	if err != nil {
 		logger.ErrorLogger().Fatalf("Handshake failed, %v", err)
 	}
