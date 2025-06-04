@@ -4,12 +4,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"go_node_engine/logger"
-	"go_node_engine/model"
 	"os"
 )
 
 var DEFAULT_LOG_DIR = "/tmp"
 var AUTO_OAK_NETWORK = "default"
+
+// RuntimeType is the type of runtime that the node executes
+type RuntimeType string
+
+// RuntimeType constants
+const (
+	CONTAINER_RUNTIME RuntimeType = "docker"
+	UNIKERNEL_RUNTIME RuntimeType = "unikernel"
+)
 
 type ConfFile struct {
 	ConfVersion     string           `json:"conf_version"`
@@ -151,7 +159,7 @@ func GenDefaultConfig() ConfFile {
 		Virtualizations: []Virtualization{
 			{
 				Name:    "containerd",
-				Runtime: string(model.CONTAINER_RUNTIME),
+				Runtime: string(CONTAINER_RUNTIME),
 				Active:  true,
 				Config:  []string{},
 			},
