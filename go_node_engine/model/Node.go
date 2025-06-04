@@ -28,6 +28,10 @@ var (
 	UNIKERNEL_RUNTIME config.RuntimeType = config.UNIKERNEL_RUNTIME
 )
 
+const SlowUpdateFactor = 60
+
+var SlowUpdateCounter = 0
+
 type AddonType string
 
 const (
@@ -152,12 +156,15 @@ func getIp() string {
 		logger.ErrorLogger().Fatal(err)
 	}
 	if conf.PublicIp {
-		//Todo remove
-		logger.InfoLogger().Printf("using public ip")
+		if SlowUpdateCounter != 0 {
+			SlowUpdateCounter = (SlowUpdateCounter + 1) % SlowUpdateFactor
+			return node.Ip
+		}
+		SlowUpdateCounter = (SlowUpdateCounter + 1) % SlowUpdateFactor
 
-		req, err := http.Get("ifconfig.co")
+		req, err := http.Get("https://ifconfig.co")
 		if err != nil {
-			return err.Error()
+			logger.ErrorLogger().Printf("%v", err.Error())
 		}
 		defer req.Body.Close()
 
@@ -166,7 +173,7 @@ func getIp() string {
 			return err.Error()
 		}
 
-		return string(body)
+		return string(body[:len(body)-1])
 	}
 
 	addresses, err := net.InterfaceAddrs()
