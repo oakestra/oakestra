@@ -17,6 +17,7 @@ type ConfFile struct {
 	ClusterPort     int              `json:"cluster_port"`
 	AppLogs         string           `json:"app_logs"`
 	OverlayNetwork  string           `json:"overlay_network"`
+	PublicIp        bool             `json:"public_ip"`
 	NetPort         int              `json:"overlay_network_port"`
 	CertFile        string           `json:"mqtt_cert_file"`
 	KeyFile         string           `json:"mqtt_key_file"`
@@ -145,6 +146,7 @@ func GenDefaultConfig() ConfFile {
 		ClusterPort:    10100,
 		AppLogs:        DEFAULT_LOG_DIR,
 		OverlayNetwork: AUTO_OAK_NETWORK,
+		PublicIp:       false,
 		NetPort:        0,
 		Virtualizations: []Virtualization{
 			{
