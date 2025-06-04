@@ -27,6 +27,7 @@ func init() {
 	setCni.AddCommand(disableNetwork)
 	setCni.AddCommand(enableManualNetwork)
 	addClusterCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Custom port of the cluster orchestrator")
+	addClusterCmd.Flags().BoolVarP(&clusterSSL, "clusterSSL", "s", false, "Perform cluster orchestrator handshake over HTTPS")
 	configCmd.AddCommand(setAddonCmd)
 	setAddonCmd.AddCommand(enableBuilder)
 	setAddonCmd.AddCommand(enableFlops)
@@ -175,11 +176,13 @@ func configCluster(address string) error {
 
 	clusterConf.ClusterAddress = address
 	clusterConf.ClusterPort = clusterPort
+	clusterConf.ClusterSSL = clusterSSL
 
 	return configManager.Write(clusterConf)
 }
 
 func configAddress(address string) error {
+	fmt.Println("here")
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
 	if err != nil {
@@ -196,6 +199,16 @@ func configPort(port int) error {
 		return err
 	}
 	clusterConf.ClusterPort = port
+	return configManager.Write(clusterConf)
+}
+
+func configSSL(encrypt bool) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+	clusterConf.ClusterSSL = encrypt
 	return configManager.Write(clusterConf)
 }
 

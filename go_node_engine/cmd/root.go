@@ -25,6 +25,7 @@ var (
 	}
 	clusterAddress string
 	clusterPort    int
+	clusterSSL     bool
 	detatched      bool
 	// Addons
 	imageBuilder        bool
@@ -74,6 +75,14 @@ func nodeEngineDaemonManager() error {
 		}
 	}
 
+	if clusterSSL != false {
+		// set new SSL settings
+		err := configSSL(clusterSSL)
+		if err != nil {
+			return err
+		}
+	}
+
 	if certFile != "" || keyFile != "" {
 		// set Mqtt auth parameters
 		err := setMqttAuth()
@@ -89,6 +98,7 @@ func nodeEngineDaemonManager() error {
 	}
 
 	fmt.Println("NodeEngine started  🟢")
+	fmt.Println("something")
 	if !detatched {
 		return attach()
 	}
