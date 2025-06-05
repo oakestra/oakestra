@@ -156,6 +156,8 @@ func getIp() string {
 		logger.ErrorLogger().Fatal(err)
 	}
 	if conf.PublicIp {
+
+		// Only get public IP every nth update cycle to prevent API overload
 		if SlowUpdateCounter != 0 {
 			SlowUpdateCounter = (SlowUpdateCounter + 1) % SlowUpdateFactor
 			return node.Ip
