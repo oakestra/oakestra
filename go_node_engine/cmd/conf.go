@@ -23,9 +23,11 @@ func init() {
 	setAuth.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
 	setAuth.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
 	setVirtualizationCmd.AddCommand(enableUnikernel)
+	setCni.AddCommand(explainNetManager)
 	setCni.AddCommand(enableNetwork)
 	setCni.AddCommand(disableNetwork)
 	setCni.AddCommand(enableManualNetwork)
+	setCni.AddCommand(explainIP)
 	setCni.AddCommand(publicIP)
 	setCni.AddCommand(privateIP)
 	addClusterCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Custom port of the cluster orchestrator")
@@ -121,8 +123,12 @@ var (
 
 	// --- NETWORKING
 	setCni = &cobra.Command{
-		Use:   "network [auto/custom/off]",
-		Short: "Enable/Disable networking support",
+		Use:   "network [auto/custom/off] [public/private]",
+		Short: "Configure networking support",
+	}
+	explainNetManager = &cobra.Command{
+		Use:   "[auto/custom/off]",
+		Short: "Enable/disable automatic networking support",
 	}
 	enableNetwork = &cobra.Command{
 		Use:   "auto",
@@ -144,10 +150,14 @@ var (
 	}
 	disableNetwork = &cobra.Command{
 		Use:   "off",
-		Short: "Disable overlay network support",
+		Short: "Disable overlay network support\n",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setNetwork("")
 		},
+	}
+	explainIP = &cobra.Command{
+		Use:   "[public/private]",
+		Short: "Use public or private IP",
 	}
 	publicIP = &cobra.Command{
 		Use:   "public",
