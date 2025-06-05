@@ -85,6 +85,7 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_payload):
     app.logger.info("MONGODB - update cpu and memory of worker node {0} ...".format(node_id))
     # o = mongo.db.nodes.find_one({'_id': node_id})
     # print(o)
+
     time_now = datetime.now()
 
     prev_document = mongo_nodes.db.nodes.find_one_and_update(
