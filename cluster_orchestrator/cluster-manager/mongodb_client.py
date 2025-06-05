@@ -86,12 +86,15 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_payload):
     # o = mongo.db.nodes.find_one({'_id': node_id})
     # print(o)
 
+    prev_ip = mongo_nodes.db.nodes.find_one({"_id": ObjectId(node_id)}).get("current_ip_address")
+
     time_now = datetime.now()
 
     mongo_nodes.db.nodes.find_one_and_update(
         {"_id": ObjectId(node_id)},
         {
             "$set": {
+                "current_ip_address": node_payload.get("ip", 0),
                 "current_cpu_percent": node_payload.get("cpu", 0),
                 "current_cpu_cores_free": node_payload.get("free_cores", 0),
                 "current_memory_percent": node_payload.get("memory", 0),
@@ -108,6 +111,10 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_payload):
         },
         upsert=True,
     )
+
+    curr_ip = mongo_nodes.db.nodes.find_one({"_id": ObjectId(node_id)}).get("current_ip_address")
+    if prev_ip != curr_ip:
+        app.logger.info("IP_CHANGE - Node with id {0} changed its IP address".format(node_id))
 
     return 1
 
