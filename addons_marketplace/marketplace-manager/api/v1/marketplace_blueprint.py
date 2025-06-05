@@ -34,3 +34,9 @@ class MarketPlaceAddonController(MethodView):
             abort(404, message="Addon not found")
 
         return addon
+
+    @marketplaceblp.response(204)
+    def delete(self, marketplace_addon_id):
+        del_res = marketplace_db.delete_addon_by_id(marketplace_addon_id)
+        if del_res.deleted_count == 0:
+            abort(404, message="Addon not found")
