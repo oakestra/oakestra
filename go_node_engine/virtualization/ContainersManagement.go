@@ -94,7 +94,7 @@ func checkAdditionalRuntimePlugins() {
 		if ok {
 			runtimes, ok := ctd["runtimes"].(map[string]interface{})
 			if ok {
-				for runtimeName, _ := range runtimes {
+				for runtimeName := range runtimes {
 					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", runtimeName, CONTAINERD_CONFIG_PATH)
 					model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(runtimeName))
 					registerRuntimeLink(runtimeName, GetContainerdRuntime)

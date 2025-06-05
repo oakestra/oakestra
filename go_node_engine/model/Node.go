@@ -168,7 +168,12 @@ func getIp() string {
 		if err != nil {
 			logger.ErrorLogger().Printf("%v", err.Error())
 		}
-		defer req.Body.Close()
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				logger.ErrorLogger().Printf("%v", err.Error())
+			}
+		}(req.Body)
 
 		body, err := io.ReadAll(req.Body)
 		if err != nil {
