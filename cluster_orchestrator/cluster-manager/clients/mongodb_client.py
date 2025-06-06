@@ -266,6 +266,17 @@ def mongo_find_job_by_system_id_and_instance(system_job_id, instance_number):
             "instance_list": {
                 "$elemMatch": {"instance_number": int(instance_number)}
             }
+        },
+        {
+            "_id": 1,
+            "system_job_id": 1,
+            "instance_list": {
+                "$filter": {
+                    "input": "$instance_list",
+                    "as": "instance",
+                    "cond": {"$eq": ["$$instance.instance_number", int(instance_number)]}
+                }
+            }
         }
     )
 

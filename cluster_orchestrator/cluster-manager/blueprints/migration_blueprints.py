@@ -76,7 +76,7 @@ class ServiceController(MethodView):
             job = mongo_find_job_by_system_id_and_instance(system_job_id, instance_number)
             if not job:
                 abort(404, "Job not found")
-            if len(job["instance_list"])!=1:
+            if len(job["instance_list"]) != 1:
                 abort(404, "Job not found")
             status = job["instance_list"][0]["status"]
             if status not in [DeploymentStatus.RUNNING.value]:
