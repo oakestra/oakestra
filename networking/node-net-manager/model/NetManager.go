@@ -1,8 +1,8 @@
 package model
 
 type NetConfiguration struct {
-	NodePublicAddress  string
-	NodePublicPort     string
+	NodeAddress        string
+	NodePort           string
 	ClusterUrl         string
 	ClusterMqttPort    string
 	DefaultInterface   string

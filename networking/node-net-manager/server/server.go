@@ -43,13 +43,13 @@ func update() {
 		case <-time.After(IP_UPDATE_TIMER):
 			func() {
 				defaultLink := network.GetOutboundIP()
-				if model.NetConfig.NodePublicAddress != defaultLink.String() {
-					logger.InfoLogger().Printf("Updating NodePublicAddress from %s to %s", model.NetConfig.NodePublicAddress, defaultLink.String())
-					defer func() { model.NetConfig.NodePublicAddress = defaultLink.String() }()
+				if model.NetConfig.NodeAddress != defaultLink.String() {
+					logger.InfoLogger().Printf("Updating NodeAddress from %s to %s", model.NetConfig.NodeAddress, defaultLink.String())
+					defer func() { model.NetConfig.NodeAddress = defaultLink.String() }()
 					// update service in the cluster
 					//for each service instance in the worker, update the public address
 					for _, si := range Env.GetTableEntriesOnNode() {
-						err := mqtt.NotifyDeploymentStatus(si.Appname, "DEPLOYED", si.Instancenumber, si.Nsip.String(), si.Nsipv6.String(), defaultLink.String(), model.NetConfig.NodePublicPort)
+						err := mqtt.NotifyDeploymentStatus(si.Appname, "DEPLOYED", si.Instancenumber, si.Nsip.String(), si.Nsipv6.String(), defaultLink.String(), model.NetConfig.NodePort)
 						if err != nil {
 							logger.ErrorLogger().Println("[ERROR]:", err)
 						}
@@ -65,13 +65,13 @@ func HandleRequests(port int) {
 	netRouter.HandleFunc("/register", register).Methods("POST")
 
 	//If default route, fetch default gateway address and use that, update regularly
-	if model.NetConfig.NodePublicAddress == "0.0.0.0" {
+	if model.NetConfig.NodeAddress == "0.0.0.0" {
 		defaultLink := network.GetOutboundIP()
-		model.NetConfig.NodePublicAddress = defaultLink.String()
+		model.NetConfig.NodeAddress = defaultLink.String()
 		go update()
 	}
 
-	handlers.RegisterAllManagers(&Env, &model.WorkerID, model.NetConfig.NodePublicAddress, model.NetConfig.NodePublicPort, netRouter)
+	handlers.RegisterAllManagers(&Env, &model.WorkerID, model.NetConfig.NodeAddress, model.NetConfig.NodePort, netRouter)
 
 	if port <= 0 {
 		logger.InfoLogger().Println("Starting NetManager on unix socket /etc/netmanager/netmanager.sock")
@@ -136,8 +136,8 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	//log registration startup
 	logger.InfoLogger().Printf(
 		"STARTUP_CONFIG: Node=%s:%s | Cluster=%s:%s",
-		model.NetConfig.NodePublicAddress,
-		model.NetConfig.NodePublicPort,
+		model.NetConfig.NodeAddress,
+		model.NetConfig.NodePort,
 		model.NetConfig.ClusterUrl,
 		model.NetConfig.ClusterMqttPort,
 	)

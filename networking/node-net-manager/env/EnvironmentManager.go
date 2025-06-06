@@ -464,7 +464,7 @@ func (env *Environment) CreateHostBridge() error {
 
 // GetTableEntriesOnNode performs a search in the local ServiceCache for entries with the NodeIp of this node
 func (env *Environment) GetTableEntriesOnNode() []TableEntryCache.TableEntry {
-	ip := net.ParseIP(model.NetConfig.NodePublicAddress)
+	ip := net.ParseIP(model.NetConfig.NodeAddress)
 	return env.translationTable.SearchByNodeIp(ip)
 }
 
