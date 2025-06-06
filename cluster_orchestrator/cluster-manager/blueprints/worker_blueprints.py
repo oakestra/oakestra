@@ -2,7 +2,7 @@ import logging
 import os
 
 from bson import json_util
-from clients.mongodb_client import mongo_upsert_node
+from clients.mongodb_client import mongo_upsert_node, find_all_nodes
 from flask import request, Response
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
@@ -12,15 +12,15 @@ from flask_smorest import Blueprint, abort
 # ......................................................#
 
 workerblp = Blueprint(
-    "Service operations",
-    "service",
+    "Worker operations",
+    "worker",
     url_prefix="/api/node",
     description="Node registration operations",
 )
 
 
 @workerblp.route("/register")
-class ServiceController(MethodView):
+class RegistrationController(MethodView):
     @workerblp.response(
         200,
         {},
@@ -40,3 +40,20 @@ class ServiceController(MethodView):
             "MQTT_BROKER_PORT": os.environ.get("MQTT_BROKER_PORT"),
         }
         return Response(json_util.dumps(response), mimetype='application/json')
+
+
+@workerblp.route("")
+class WorkerController(MethodView):
+    @workerblp.response(
+        200,
+        {},
+        content_type="application/json",
+    )
+    def get(self):
+        logging.info("Incoming Request GET /api/node")
+        return Response(
+            json_util.dumps(list(find_all_nodes(
+                {"_id": 1, "node_info.ip": 1, "node_info.host": 1}
+                ))),
+            mimetype='application/json'
+        )

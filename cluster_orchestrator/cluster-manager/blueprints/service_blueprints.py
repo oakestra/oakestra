@@ -11,8 +11,11 @@ from oakestra_utils.types.statuses import NegativeSchedulingStatus, PositiveSche
 from clients.mongodb_client import (
     mongo_find_job_by_system_id,
     mongo_update_job_status,
+    mongo_find_all_jobs
 )
+from marshmallow import Schema, fields
 
+PAGE_SIZE = 100  # Define a constant for pagination size
 
 # ........ Functions for job management ...............#
 # ......................................................#
@@ -30,6 +33,10 @@ schedulingblp = Blueprint(
     url_prefix="/api/result",
     description="Scheduling results operations",
 )
+
+
+class PaginationSchema(Schema):
+    page = fields.Int()
 
 
 @serviceblp.route("/<system_job_id>/<instance_number>")
@@ -70,6 +77,29 @@ class ServiceController(MethodView):
         return Response(json_util.dumps({"status": "ok"}), mimetype='application/json')
 
 
+@serviceblp.route("/service")
+class MultipleServicesController(MethodView):
+    @serviceblp.response(
+        200,
+        {"status": "ok"},
+        content_type="application/json",
+    )
+    @serviceblp.arguments(
+        schema=PaginationSchema, location="query", validate=False, unknown=True
+    )
+    def get(self, args):
+        logging.info("Incoming Request GET /api/service")
+        page = args.get("page", 0)  # Default to page 0 if not provided
+        service_list = []
+        try:
+            service_list = mongo_find_all_jobs(limit=PAGE_SIZE, skip=PAGE_SIZE*page)
+        except Exception as e:
+            logging.error(f"Failed to retrieve services: {e}")
+            abort(500, "Failed to retrieve services")
+
+        return Response(json_util.dumps(list(service_list)), mimetype='application/json')
+
+
 @schedulingblp.route("/<system_job_id>/<instance_number>")
 class SchedulingController(MethodView):
     @serviceblp.response(
@@ -87,8 +117,8 @@ class SchedulingController(MethodView):
             mongo_update_job_status(
                 system_job_id=system_job_id,
                 instance_number=instance_number,
-                node=data.get("node"),
                 status=PositiveSchedulingStatus.NODE_SCHEDULED,
+                node=data.get("node"),
             )
             job = mongo_find_job_by_system_id(system_job_id)
 
@@ -101,7 +131,6 @@ class SchedulingController(MethodView):
             mongo_update_job_status(
                 instance_number=instance_number,
                 system_job_id=system_job_id,
-                node=None,
                 status=NegativeSchedulingStatus.NO_WORKER_CAPACITY,
             )
         return Response(json_util.dumps({"status": "ok"}), mimetype='application/json')

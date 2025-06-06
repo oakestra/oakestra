@@ -61,14 +61,33 @@ class DeploymentStatus(Status):
 
     # The container task terminated with return code != 0 (failure).
     FAILED = "FAILED"  # 🟦
+
     # The container task terminated with return code  0 (success)
     # and is not a one-shot service - thus it should get restarted.
     DEAD = "DEAD"  # 🟦
+
     # The container task has terminated with return code 0 (success)
     # and the service was a one-shot - thus it should not be restarted.
     COMPLETED = "COMPLETED"  # 🟪
 
+    # After termination (DEAD or FAILED) the container is undeployed from the system (success)
     UNDEPLOYED = "UNDEPLOYED"  # 🟪
+
+    # Migration requested to a target node.
+    # The target node still has to accept the mgiration request
+    MIGRATION_REQUESTED = "MIGRATION REQUESTED"  # 🟪
+
+    # Migration request accepted by a target node.
+    # The service is ready to be migrated.
+    MIGRATION_ACCEPTED = "MIGRATION ACCEPTED"  # 🟪
+
+    # Service migration to target node in progress
+    # Node FROM is sending the data to Node TO.
+    MIGRATION_PROGRESS = "MIGRATION IN PROGRESS"  # 🟪
+
+    # Migration completed successfully
+    # The node FROM is slowly de-bouncing the traffinc and cleaning up the service.
+    MIGRATION_DEBOUNCE = "MIGRATION DEBOUNCING"  # 🟪
 
 
 def convert_to_status(name: Optional[str]) -> Optional[Status]:

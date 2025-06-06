@@ -15,6 +15,7 @@ from oakestra_utils.types.statuses import (
     Status,
     convert_to_status,
 )
+import logging
 
 MONGO_URL = os.environ.get("CLUSTER_MONGO_URL")
 MONGO_PORT = os.environ.get("CLUSTER_MONGO_PORT")
@@ -69,7 +70,7 @@ def mongo_upsert_node(obj):
 
 def mongo_find_node_by_id(node_id):
     global mongo_nodes
-    return mongo_nodes.db.nodes.find_one(node_id)
+    return mongo_nodes.db.nodes.find_one({"_id": ObjectId(node_id)})
 
 
 def mongo_find_node_by_name(node_name):
@@ -125,9 +126,9 @@ def find_one_edge_node():
     return mongo_nodes.db.nodes.find_one()
 
 
-def find_all_nodes():
+def find_all_nodes(filter: Optional[dict] = {}):
     global mongo_nodes
-    return mongo_nodes.db.nodes.find()
+    return mongo_nodes.db.nodes.find({}, filter)
 
 
 def mongo_dead_nodes():
@@ -213,7 +214,7 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
 
     return {
         **cumulative_values,
-        "jobs": jobs,
+        "jobs": list(jobs),
         "virtualization": list(technology),
         "aggregation_per_architecture": dict(aggregation_per_architecture),
         "more": 0,
@@ -257,6 +258,18 @@ def mongo_find_job_by_system_id(system_job_id):
     return mongo_jobs.db.jobs.find_one({"system_job_id": str(system_job_id)})
 
 
+def mongo_find_job_by_system_id_and_instance(system_job_id, instance_number):
+    """Find a job by its system_job_id and instance_number."""
+    return mongo_jobs.db.jobs.find_one(
+        {
+            "system_job_id": str(system_job_id),
+            "instance_list": {
+                "$elemMatch": {"instance_number": int(instance_number)}
+            }
+        }
+    )
+
+
 def mongo_find_job_by_id(id):
     print("Find job by Id")
     return mongo_jobs.db.jobs.find_one({"_id": ObjectId(id)})
@@ -268,10 +281,9 @@ def mongo_update_jobs_status(time_interval: int) -> None:
     If there are no updates from a job in the last TIME_INTERVAL mark it as failed,
     unless the job is completed.
     """
-    jobs = mongo_find_all_jobs()
+    jobs = mongo_find_jobs_with_inactive_instances(time_interval)
     for job in jobs:
         try:
-            updated = False
             for instance in range(len(job["instance_list"])):
                 last_time_job_was_modified = job["instance_list"][instance].get(
                     "last_modified_timestamp", datetime.now().timestamp()
@@ -283,35 +295,55 @@ def mongo_update_jobs_status(time_interval: int) -> None:
                     convert_to_status(job["instance_list"][instance].get("status"))
                     or LegacyStatus.LEGACY_0
                 )
+                # Set status to failed if no updates in the last TIME_INTERVAL
                 if (
                     job_is_inactive
                     and job_status not in PositiveSchedulingStatus
                     and job_status != DeploymentStatus.COMPLETED
                 ):
-                    print("Job is inactive: " + str(job.get("job_name")))
-                    new_job_status = DeploymentStatus.FAILED
-                    job["instance_list"][instance]["status"] = new_job_status.value
-                    updated = True
-            if updated:
-                mongo_jobs.db.jobs.update_one(
-                    {"system_job_id": str(job["system_job_id"])},
-                    {
-                        "$set": {
-                            "instance_list": job["instance_list"],
-                            "status": new_job_status.value,
-                        }
-                    },
-                )
+                    logging.info("Job is inactive: " + str(job.get("job_name")))
+                    mongo_update_job_status(job["system_job_id"], instance, DeploymentStatus.FAILED)
         except Exception as e:
+            logging.error(e)
             print(e)
 
 
-def mongo_find_all_jobs():
+def mongo_find_all_jobs(filter: Optional[dict] = None, limit: Optional[int] = None, skip: Optional[int] = None):
     global mongo_jobs
-    # list (= going into RAM) okey for small result sets (not clean for large data sets!)
-    return list(
-        mongo_jobs.db.jobs.find(
-            {},
+
+    default_filter = {
+                "_id": 0,
+                "system_job_id": 1,
+                "job_name": 1,
+                "status": int(LegacyStatus.LEGACY_1.value),
+                "instance_list": 1,
+            }
+   
+    # Merge default filter with provided filter
+    if filter is None:
+        filter = default_filter
+
+    query_result = mongo_jobs.db.jobs.find({}, filter)
+
+    if limit is not None:
+        query_result = query_result.limit(limit)
+    if skip is not None:
+        query_result = query_result.skip(skip)
+
+    return query_result
+
+
+def mongo_find_jobs_with_inactive_instances(inactive_time_interval: int):
+    inactivity_window = datetime.now().timestamp() - inactive_time_interval
+    global mongo_jobs
+    return mongo_jobs.db.jobs.find(
+            {
+                "instance_list":
+                    {
+                        "$elemMatch":
+                        {"last_modified_timestamp": {"$lt": inactivity_window}}
+                    },
+            },
             {
                 "_id": 0,
                 "system_job_id": 1,
@@ -320,8 +352,7 @@ def mongo_find_all_jobs():
                 "instance_list": 1,
             },
         )
-    )
-
+    
 
 def mongo_find_job_by_name(job_name):
     global mongo_jobs
@@ -342,25 +373,37 @@ def mongo_update_job_status(
     system_job_id: str,
     instance_number: str,
     status: Status,
-    node: dict,
+    node: Optional[dict] = None,
+    migration_target: Optional[dict] = None,
 ) -> pymongo.results.UpdateResult:
     global mongo_jobs
-    job = mongo_jobs.db.jobs.find_one({"system_job_id": str(system_job_id)})
-    instance_list = job["instance_list"]
-    for instance in instance_list:
-        if int(instance.get("instance_number")) == int(instance_number):
-            instance["status"] = status.value
-            if node is not None:
-                instance["host_ip"] = node["node_address"]
-                port = node["node_info"].get("node_port")
-                if port is None:
-                    port = 50011
-                instance["host_port"] = port
-                instance["worker_id"] = node.get("_id")
-            break
-    return mongo_jobs.db.jobs.update_one(
-        {"system_job_id": str(system_job_id)},
-        {"$set": {"status": status.value, "instance_list": instance_list}},
+
+    update_set = {   
+        "instance_list.$.status": status.value,
+        "instance_list.$.last_status_change_timestamp": datetime.timestamp(datetime.now()),
+    }
+    if node is not None:
+        port = node.get("node_info", {}).get("node_port", None)
+        if port is None:
+            port = 50011
+        update_set.update({
+            "instance_list.$.host_ip": node["node_address"],
+            "instance_list.$.host_port": port,
+            "instance_list.$.worker_id": node.get("_id"),
+        })
+    if migration_target is not None:
+        update_set.update({
+            "instance_list.$.migration_target": migration_target.get("_id"),
+        })
+
+    return mongo_jobs.db.jobs.find_one_and_update(
+        {
+            "system_job_id": str(system_job_id),
+            "instance_list": {"$elemMatch": {"instance_number": int(instance_number)}},
+        },
+        {
+            "$set": update_set
+        },
     )
 
 

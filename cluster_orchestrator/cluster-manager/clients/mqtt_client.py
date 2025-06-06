@@ -128,3 +128,20 @@ def mqtt_publish_edge_delete(worker_id, job_name, instance_number, runtime="dock
         "instance_number": int(instance_number),
     }
     mqtt.publish(topic, json.dumps(data))
+    app.logger.info(
+        (
+            f"MQTT - Published delete request for job {job_name} "
+            f"instance {instance_number} to worker {worker_id}"
+        )
+    )
+
+
+def mqtt_publish_edge_migrate(worker_id, migration_request):
+    app.logger.info(
+        (
+            f"MQTT - Published migration request to worker {worker_id}"
+            f" with content {migration_request}"
+        )
+    )
+    topic = "nodes/" + worker_id + "/control/migrate"
+    mqtt.publish(topic, json.dumps(migration_request))
