@@ -1,6 +1,7 @@
 package network
 
 import (
+	"NetManager/logger"
 	"NetManager/model"
 	"crypto/sha1"
 	"encoding/base64"
@@ -133,7 +134,14 @@ func GetOutboundIP() net.IP {
 	}
 	defer conn.Close()
 
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	// get public or private outbound ip
+	var addr *net.UDPAddr
+	if model.NetConfig.PublicIPNetworking {
+		addr = conn.RemoteAddr().(*net.UDPAddr)
+		logger.InfoLogger().Println("Using public IP address: ", addr.String())
+	} else {
+		addr = conn.LocalAddr().(*net.UDPAddr)
+	}
 
-	return localAddr.IP
+	return addr.IP
 }

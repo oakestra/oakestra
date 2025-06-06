@@ -15,9 +15,12 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/mux"
 )
+
+const IP_UPDATE_TIMER = 2 * time.Minute
 
 type undeployRequest struct {
 	Servicename    string `json:"serviceName"`
@@ -34,14 +37,38 @@ type DeployResponse struct {
 	NsAddress   string `json:"nsAddress"`
 }
 
+func update() {
+	for {
+		select {
+		case <-time.After(IP_UPDATE_TIMER):
+			func() {
+				defaultLink := network.GetOutboundIP()
+				if model.NetConfig.NodePublicAddress != defaultLink.String() {
+					logger.InfoLogger().Printf("Updating NodePublicAddress from %s to %s", model.NetConfig.NodePublicAddress, defaultLink.String())
+					defer func() { model.NetConfig.NodePublicAddress = defaultLink.String() }()
+					// update service in the cluster
+					//for each service instance in the worker, update the public address
+					for _, si := range Env.GetTableEntriesOnNode() {
+						err := mqtt.NotifyDeploymentStatus(si.Appname, "DEPLOYED", si.Instancenumber, si.Nsip.String(), si.Nsipv6.String(), defaultLink.String(), model.NetConfig.NodePublicPort)
+						if err != nil {
+							logger.ErrorLogger().Println("[ERROR]:", err)
+						}
+					}
+				}
+			}()
+		}
+	}
+}
+
 func HandleRequests(port int) {
 	netRouter := mux.NewRouter().StrictSlash(true)
 	netRouter.HandleFunc("/register", register).Methods("POST")
 
-	//If default route, fetch default gateway address and use that.
+	//If default route, fetch default gateway address and use that, update regularly
 	if model.NetConfig.NodePublicAddress == "0.0.0.0" {
 		defaultLink := network.GetOutboundIP()
 		model.NetConfig.NodePublicAddress = defaultLink.String()
+		go update()
 	}
 
 	handlers.RegisterAllManagers(&Env, &model.WorkerID, model.NetConfig.NodePublicAddress, model.NetConfig.NodePublicPort, netRouter)
