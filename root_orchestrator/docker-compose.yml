@@ -29,6 +29,7 @@ services:
       - root_service_manager
       - jwt_generator
     environment:
+      - MY_PORT=${SYSTEM_MANAGER_PORT}
       - CLOUD_MONGO_URL=mongo
       - CLOUD_MONGO_PORT=${CLOUD_MONGO_PORT}
       - CLOUD_SCHEDULER_URL=cloud_scheduler
