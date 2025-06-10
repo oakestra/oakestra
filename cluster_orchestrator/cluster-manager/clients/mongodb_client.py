@@ -319,7 +319,11 @@ def mongo_update_jobs_status(time_interval: int) -> None:
             print(e)
 
 
-def mongo_find_all_jobs(filter: Optional[dict] = None, limit: Optional[int] = None, skip: Optional[int] = None):
+def mongo_find_all_jobs(
+        filter: Optional[dict] = None,
+        limit: Optional[int] = None,
+        skip: Optional[int] = None
+):
     global mongo_jobs
 
     default_filter = {

@@ -58,16 +58,16 @@ def service_migration(job, instance_number, target_node):
         "migration_scheme": "default",  # default migration scheme
     }
 
-    # send migration request to the active worker node
-    migration_request["type"] = "migration_send"
-    mqtt_publish_edge_migrate(
-        job.get("instance_list")[0].get("worker_id"),
-        migration_request
-    )
-
     # send migrationr equest to receiver worker node
     migration_request["type"] = "migration_receive"
     mqtt_publish_edge_migrate(
         target_node.get("_id"),
+        migration_request
+    )
+
+    # send migration request to the active worker node
+    migration_request["type"] = "migration_send"
+    mqtt_publish_edge_migrate(
+        job.get("instance_list")[0].get("worker_id"),
         migration_request
     )
