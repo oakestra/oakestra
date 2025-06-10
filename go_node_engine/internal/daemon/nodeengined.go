@@ -82,17 +82,19 @@ func main() {
 
 	// binding the node MQTT client
 	mqtt.InitMqtt(handshakeResult.NodeId, configs.ClusterAddress, handshakeResult.MqttPort, configs.CertFile, configs.KeyFile)
-
 	// starting node status background job.
 	jobs.NodeStatusUpdater(MONITORING_CYCLE, mqtt.ReportNodeInformation)
 	// starting container resources background monitor.
 	jobs.StartServicesMonitoring(MONITORING_CYCLE, mqtt.ReportServiceResources)
+	// initialize migration handler
+	jobs.GetMigrationHandler()
 
 	// catch SIGETRM or SIGINTERRUPT
 	termination := make(chan os.Signal, 1)
 	signal.Notify(termination, syscall.SIGTERM, syscall.SIGINT)
 	select {
 	case ossignal := <-termination:
+		jobs.StopMigrationHandler()
 		logger.InfoLogger().Printf("Terminating the NodeEngine, signal:%v", ossignal)
 	}
 }

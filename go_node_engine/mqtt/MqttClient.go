@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"go_node_engine/jobs"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/virtualization"
@@ -11,6 +12,19 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+)
+
+// MigrationRequest represents the request structure for migration
+type MigrationRequest struct {
+	jobs.MigrationDetails
+	Type MigrationType `json:"type"` // e.g., "migration_send", "migration_receive", etc.
+}
+
+type MigrationType string
+
+const (
+	MIGRATION_SEND    MigrationType = "migration_send"
+	MIGRATION_RECEIVE MigrationType = "migration_receive"
 )
 
 // TOPICS is a map of topics and their handlers
@@ -147,6 +161,24 @@ func deleteHandler(client mqtt.Client, msg mqtt.Message) {
 		}
 		service.Status = model.SERVICE_UNDEPLOYED
 		ReportServiceStatus(service)
+	}()
+}
+func MigrationHandler(client mqtt.Client, msg mqtt.Message) {
+	logger.InfoLogger().Printf("Received migration request with payload: %s", string(msg.Payload()))
+	migrationReq := MigrationRequest{}
+	err := json.Unmarshal(msg.Payload(), &migrationReq)
+	if err != nil {
+		logger.ErrorLogger().Printf("ERROR: unable to unmarshal cluster orch request: %v", err)
+		return
+	}
+	//handle migration in background
+	go func() {
+		migrationHandler := jobs.GetMigrationHandler()
+		if migrationReq.Type == MIGRATION_SEND {
+			migrationHandler.Migrate(migrationReq.MigrationDetails)
+		} else if migrationReq.Type == MIGRATION_RECEIVE {
+			migrationHandler.AddIncomingMigration(migrationReq.MigrationDetails)
+		}
 	}()
 }
 

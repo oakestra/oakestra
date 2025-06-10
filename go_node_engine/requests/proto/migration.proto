@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+option go_package = "requests/proto";
+package requesrts;
+
+// The request message containing the service ID and payload.
+message MigrationRequest {
+  string service_id = 1;
+  string migration_token = 2;
+}
+
+
+// Send the actual service migration data.
+message MigrationData {
+  string service_id = 1;
+  string migration_token = 2;
+  bytes payload = 3;
+}
+
+// The response message indicating success and a message.
+message MigrationResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// The migration service definition.
+service MigrationService {
+  rpc ReceiveMigration(MigrationData) returns (MigrationResponse);
+  rpc RequestMigration(MigrationRequest) returns (MigrationResponse);
+  rpc MigrationAbort(MigrationRequest) returns (MigrationResponse);
+}
