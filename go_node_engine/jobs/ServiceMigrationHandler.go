@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"fmt"
+	"go_node_engine/model"
 	pb "go_node_engine/requests/proto" // Adjust import path if needed
 	"log"
 	"net"
@@ -11,15 +12,11 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 var migrationServiceSingletonOnce sync.Once
 var migrationServiceSingleton *serviceMigrationHandler
-
-const (
-	// DefaultMigrationServerAddress is the default address for the migration server.
-	DefaultMigrationServerAddress = "localhost:50103"
-)
 
 type MigrationDetails struct {
 	SystemJobID     string `json:"job_id"`
@@ -57,12 +54,15 @@ func GetMigrationHandler() MigrationHandler {
 		migrationServiceSingleton = &serviceMigrationHandler{
 			migrations: make(map[string]*MigrationDetails),
 		}
-		err := migrationServiceSingleton.startMigrationServer(DefaultMigrationServerAddress)
-		if err != nil {
-			log.Fatalf("Failed to start migration server: %v", err)
-		}
-	},
-	)
+		go func() {
+			err := migrationServiceSingleton.startMigrationServer(
+				fmt.Sprintf("[::]:%s", model.GetNodeInfo().Port), // Replace with your desired address and port
+			)
+			if err != nil {
+				log.Fatalf("Failed to start migration server: %v", err)
+			}
+		}()
+	})
 	return migrationServiceSingleton
 }
 
@@ -78,8 +78,8 @@ func (h *serviceMigrationHandler) startMigrationServer(address string) error {
 	if err != nil {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
-	h.server = grpc.NewServer()
-	pb.RegisterMigrationServiceServer(h.server, &serviceMigrationHandler{})
+	h.server = grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
+	pb.RegisterMigrationServiceServer(h.server, h)
 	log.Printf("Migration server listening at %s", address)
 	return h.server.Serve(lis)
 }
@@ -90,7 +90,7 @@ func (h *serviceMigrationHandler) AddIncomingMigration(details MigrationDetails)
 	h.migrations_mu.Lock()
 	defer h.migrations_mu.Unlock()
 
-	if _, exists := h.migrations[details.SystemJobID]; exists {
+	if h.migrations[details.SystemJobID] != nil {
 		return fmt.Errorf("migration for service %s already exists", details.SystemJobID)
 	}
 
@@ -131,18 +131,26 @@ func (h *serviceMigrationHandler) ReceiveMigration(ctx context.Context, req *pb.
 	defer h.migrations_mu.Unlock()
 
 	if h.migrations[req.GetServiceId()] == nil {
+		log.Printf("No migration request found for service: %s", req.GetServiceId())
 		return &pb.MigrationResponse{
 			Success: false,
-			Message: "Service migration request no found for migration: " + req.GetServiceId(),
+			Message: "Service migration request not found for migration: " + req.GetServiceId(),
 		}, nil
 	}
 	if h.migrations[req.GetServiceId()].MigrationToken != req.GetMigrationToken() {
+		log.Printf(
+			"Migration token mismatch for service: %s, expected: %s, received: %s",
+			req.GetServiceId(),
+			h.migrations[req.GetServiceId()].MigrationToken,
+			req.GetMigrationToken(),
+		)
 		return &pb.MigrationResponse{
 			Success: false,
 			Message: "Migration token mismatch for service: " + req.GetServiceId(),
 		}, nil
 	}
 	if !h.migrations[req.GetServiceId()].acknowledged {
+		log.Printf("Migration not acknowledged for service: %s", req.GetServiceId())
 		return &pb.MigrationResponse{
 			Success: false,
 			Message: "Migration not acknowledged: " + req.GetServiceId(),
@@ -173,12 +181,19 @@ func (h *serviceMigrationHandler) RequestMigration(ctx context.Context, req *pb.
 	defer h.migrations_mu.Unlock()
 
 	if h.migrations[req.GetServiceId()] == nil {
+		log.Printf("No migration request found for service: %s", req.GetServiceId())
 		return &pb.MigrationResponse{
 			Success: false,
 			Message: "Service migration request no found for migration: " + req.GetServiceId(),
 		}, nil
 	}
 	if h.migrations[req.GetServiceId()].MigrationToken != req.GetMigrationToken() {
+		log.Printf(
+			"Migration token mismatch for service: %s, expected: %s, received: %s",
+			req.GetServiceId(),
+			h.migrations[req.GetServiceId()].MigrationToken,
+			req.GetMigrationToken(),
+		)
 		return &pb.MigrationResponse{
 			Success: false,
 			Message: "Migration token mismatch for service: " + req.GetServiceId(),
@@ -240,6 +255,7 @@ func (h *serviceMigrationHandler) requestMigration(migration MigrationDetails) (
 	conn, err := grpc.NewClient(
 		fmt.Sprintf("%s:%s", migration.TargetNodeIP, migration.TargetNodePort),
 		grpc.WithMaxCallAttempts(5),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithConnectParams(
 			grpc.ConnectParams{
 				Backoff: backoff.Config{
@@ -282,7 +298,7 @@ func (h *serviceMigrationHandler) requestMigration(migration MigrationDetails) (
 			log.Printf("Migration request acknowledged by node %s for service %s", migration.TargetNodeID, migration.SystemJobID)
 			break
 		} else {
-			log.Printf("Migration request failed on node %s for service %s, retrying...", migration.TargetNodeID, migration.SystemJobID)
+			log.Printf("Migration request failed on node %s for service %s, error:%s, retrying...", migration.TargetNodeID, migration.SystemJobID, response.GetMessage())
 			// Optionally, you can add a sleep here to avoid hammering the server
 			time.Sleep(1 * time.Second) // Wait before retrying
 			continue

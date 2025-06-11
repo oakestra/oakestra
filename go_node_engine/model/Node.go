@@ -253,7 +253,7 @@ func getNetworkInfo() map[string]string {
 func getPort() string {
 	port := os.Getenv("MY_PORT")
 	if port == "" {
-		port = "3000"
+		port = "50103"
 	}
 	return port
 }

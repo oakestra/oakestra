@@ -82,6 +82,7 @@ func InitMqtt(clientid string, brokerurl string, brokerport string, certFile str
 
 	TOPICS[fmt.Sprintf("nodes/%s/control/deploy", clientID)] = deployHandler
 	TOPICS[fmt.Sprintf("nodes/%s/control/delete", clientID)] = deleteHandler
+	TOPICS[fmt.Sprintf("nodes/%s/control/migrate", clientID)] = migrationHandler
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%s", brokerUrl, brokerPort))
@@ -163,7 +164,7 @@ func deleteHandler(client mqtt.Client, msg mqtt.Message) {
 		ReportServiceStatus(service)
 	}()
 }
-func MigrationHandler(client mqtt.Client, msg mqtt.Message) {
+func migrationHandler(client mqtt.Client, msg mqtt.Message) {
 	logger.InfoLogger().Printf("Received migration request with payload: %s", string(msg.Payload()))
 	migrationReq := MigrationRequest{}
 	err := json.Unmarshal(msg.Payload(), &migrationReq)
