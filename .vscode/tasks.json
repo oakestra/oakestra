@@ -58,10 +58,17 @@
             "problemMatcher": []
         },
         {
+            "label": "set-default-cluster-to-node-engine",
+            "type": "shell",
+            "command": "cd ${workspaceRoot}/go_node_engine/build && ./build.sh && ./install.sh $(dpkg --print-architecture) && sudo NodeEngine config cluster 0.0.0.0",
+            "problemMatcher": []
+        },
+        {
             "label": "prep-debug-node-engine-env",
             "dependsOn": [
                 "root-orchestrator-up",
                 "cluster-orchestrator-up",
+                "set-default-cluster-to-node-engine",
             ],
             "dependsOrder": "sequence",
         },
