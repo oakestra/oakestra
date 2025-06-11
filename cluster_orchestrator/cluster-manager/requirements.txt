@@ -4,6 +4,9 @@ paho-mqtt==1.6.1
 Flask-PyMongo==2.3.0
 Flask-SocketIO==4.3.1
 eventlet==0.33.3
+flask_cors
+flask_swagger_ui
+flask-smorest==0.39.0
 requests
 pyyaml
 APScheduler
@@ -11,4 +14,5 @@ prometheus-client
 werkzeug==2.0.3
 grpcio~=1.60.0
 protobuf~=4.25.2
-git+https://github.com/oakestra/oakestra.git@develop#subdirectory=libraries/oakestra_utils_library
+# TODO: change library path to the correct one
+git+https://github.com/oakestra/oakestra.git@service-migration#subdirectory=libraries/oakestra_utils_library

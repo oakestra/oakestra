@@ -52,8 +52,8 @@ def service_migration(job, instance_number, target_node):
         "virtualization": job.get("virtualization", "docker"),
         "instance_number": int(instance_number),
         "target_node_id": target_node.get("_id"),
-        "target_node_ip": target_node.get("node_info", {}).get("node_address"),
-        "target_node_port": target_node.get("node_info", {}).get("node_port"),
+        "target_node_ip": target_node.get("node_info", {}).get("ip"),
+        "target_node_port": target_node.get("node_info", {}).get("port"),
         "migration_token": generate_token(64),
         "migration_scheme": "default",  # default migration scheme
     }

@@ -313,7 +313,11 @@ def mongo_update_jobs_status(time_interval: int) -> None:
                     and job_status != DeploymentStatus.COMPLETED
                 ):
                     logging.info("Job is inactive: " + str(job.get("job_name")))
-                    mongo_update_job_status(job["system_job_id"], instance, DeploymentStatus.FAILED)
+                    mongo_update_job_status(
+                        job["system_job_id"],
+                        job["instance_list"][instance]["instance_number"],
+                        DeploymentStatus.FAILED
+                        )
         except Exception as e:
             logging.error(e)
             print(e)
