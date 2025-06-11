@@ -15,6 +15,17 @@ type RuntimeMonitoring interface {
 	ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources))
 }
 
+// RuntimeMigration defines the interface for runtimes that support migration.
+// It includes methods to check if a service can be migrated, stop a service and get its state,
+// IMPORTANT: This runtime interface is OPTIONAL.
+// Runtimes that do not support statefull migration should not implement this interface.
+type RuntimeMigration interface {
+	CanBeMigrated(sname string, instance int) bool
+	StopAndGetState(sname string, instance int) ([]byte, error)
+	PrepareForInstantiantion(service model.Service, statusChangeNotificationHandler func(service model.Service)) error
+	ResumeFromState(sname string, instance int, state []byte) error
+}
+
 type Runtime interface {
 	RuntimeInterface
 	RuntimeMonitoring
@@ -32,6 +43,15 @@ func init() {
 
 func GetRuntime(runtime model.RuntimeType) RuntimeInterface {
 	return runtimeMap[runtime]()
+}
+
+func GetRuntimeMigration(runtime model.RuntimeType) (RuntimeMigration, error) {
+	if r, ok := runtimeMap[runtime]; ok {
+		if rm, ok := r().(RuntimeMigration); ok {
+			return rm, nil
+		}
+	}
+	return nil, model.ErrRuntimeMigrationNotSupported
 }
 
 func GetRuntimeMonitoring(runtime model.RuntimeType) RuntimeMonitoring {
