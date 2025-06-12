@@ -39,6 +39,7 @@ app.logger.addHandler(my_logger)
 
 # OpenAPI/Swagger Configuration
 api = Api(app, spec_kwargs={"host": "oakestra.io", "x-internal-id": "1"})
+api.DEFAULT_ERROR_RESPONSE_NAME = None
 api.spec.components.security_scheme("bearer", {
     "type": "http",
     "scheme": "bearer",
