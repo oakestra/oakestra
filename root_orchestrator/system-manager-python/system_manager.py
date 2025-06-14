@@ -170,21 +170,11 @@ def upload_file():
 
 
 def start_flask_server():
-    if os.environ.get('FLASK_DEBUG'):
-        # Development server
-        app.run(
-            host="::",
-            port=int(MY_PORT),
-            debug=True,
-            use_reloader=True
-        )
-    else:
-        # Production server
-        eventlet.wsgi.server(
-            eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6),
-            app,
-            log=my_logger
-        )
+    eventlet.wsgi.server(
+        eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6),
+        app,
+        log=my_logger
+    )
 
 
 def start_grpc_server():
@@ -193,15 +183,11 @@ def start_grpc_server():
 
 
 if __name__ == "__main__":
-    # Only monkey patch in production
-    if not os.environ.get('FLASK_DEBUG'):
-        import eventlet
-        eventlet.monkey_patch()
+    import eventlet
 
-    # Start gRPC in background thread
+    flask_thread = threading.Thread(target=start_flask_server)
     grpc_thread = threading.Thread(target=start_grpc_server)
-    grpc_thread.daemon = True
     grpc_thread.start()
-
-    # Run Flask in main thread
-    start_flask_server()
+    flask_thread.start()
+    flask_thread.join()
+    grpc_thread.join()

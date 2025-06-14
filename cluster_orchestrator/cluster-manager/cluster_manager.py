@@ -255,26 +255,13 @@ def register_with_system_manager():
 
 if __name__ == "__main__":
     import eventlet
+    # Only start these once, not in the reloader process
+    start_http_server(10001)  # start prometheus server
+    register_with_system_manager()  # register with system manager using gRPC
     
-    if not os.environ.get('WERKZEUG_RUN_MAIN'):
-        # Only start these once, not in the reloader process
-        start_http_server(10001)  # start prometheus server
-        register_with_system_manager()  # register with system manager using gRPC
-    
-    if os.environ.get('FLASK_DEBUG', '0') == '1':
-        # Development mode with hot reloading
-        socketioserver.run(
-            app,
-            host="::",
-            port=int(MY_PORT),
-            debug=True,
-            use_reloader=True,
-            log=my_logger
-        )
-    else:
-        # Production mode using eventlet
-        eventlet.wsgi.server(
-            eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6),
-            app,
-            log=my_logger
-        )
+    # Production mode using eventlet
+    eventlet.wsgi.server(
+        eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6),
+        app,
+        log=my_logger
+    )
