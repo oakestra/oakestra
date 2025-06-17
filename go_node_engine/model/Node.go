@@ -36,31 +36,32 @@ const (
 
 // Node is the struct that describes the node
 type Node struct {
-	Id              string            `json:"id"`
-	Host            string            `json:"host"`
-	Ip              string            `json:"ip"`
-	Port            string            `json:"port"`
-	SystemInfo      map[string]string `json:"system_info"`
-	CpuUsage        float64           `json:"cpu"`
-	CpuCores        int               `json:"free_cores"`
-	CpuArch         string            `json:"architecture"`
-	MemoryUsed      float64           `json:"memory"`
-	MemoryMB        int               `json:"memory_free_in_MB"`
-	DiskInfo        map[string]string `json:"disk_info"`
-	NetworkInfo     map[string]string `json:"network_info"`
-	GpuDriver       string            `json:"gpu_driver"`
-	GpuUsage        float64           `json:"gpu_usage"`
-	GpuCores        int               `json:"gpu_cores"`
-	GpuTemp         float64           `json:"gpu_temp"`
-	GpuMemUsage     float64           `json:"gpu_mem_used"`
-	GpuTotMem       float64           `json:"gpu_tot_mem"`
-	Technology      []RuntimeType     `json:"technology"`
-	SupportedAddons []AddonType       `json:"supported_addons"`
-	Overlay         bool
-	OverlaySocket   string
-	LogDirectory    string
-	NetManagerPort  int
-	ClusterAddress  string
+	Id                  string            `json:"id"`
+	Host                string            `json:"host"`
+	Ip                  string            `json:"ip"`
+	Port                string            `json:"port"`
+	SystemInfo          map[string]string `json:"system_info"`
+	CpuUsage            float64           `json:"cpu"`
+	CpuCores            int               `json:"free_cores"`
+	CpuArch             string            `json:"architecture"`
+	MemoryUsed          float64           `json:"memory"`
+	MemoryMB            int               `json:"memory_free_in_MB"`
+	DiskInfo            map[string]string `json:"disk_info"`
+	NetworkInfo         map[string]string `json:"network_info"`
+	GpuDriver           string            `json:"gpu_driver"`
+	GpuUsage            float64           `json:"gpu_usage"`
+	GpuCores            int               `json:"gpu_cores"`
+	GpuTemp             float64           `json:"gpu_temp"`
+	GpuMemUsage         float64           `json:"gpu_mem_used"`
+	GpuTotMem           float64           `json:"gpu_tot_mem"`
+	Technology          []RuntimeType     `json:"technology"`
+	SupportedAddons     []AddonType       `json:"supported_addons"`
+	Overlay             bool
+	OverlaySocket       string
+	CheckpointDirectory string
+	LogDirectory        string
+	NetManagerPort      int
+	ClusterAddress      string
 }
 
 var once sync.Once
@@ -70,15 +71,16 @@ var node Node
 func GetNodeInfo() *Node {
 	once.Do(func() {
 		node = Node{
-			Host:            getHostname(),
-			SystemInfo:      getSystemInfo(),
-			CpuCores:        getCpuCores(),
-			CpuArch:         runtime.GOARCH,
-			Port:            getPort(),
-			Technology:      make([]RuntimeType, 0),
-			SupportedAddons: make([]AddonType, 0),
-			Overlay:         false,
-			OverlaySocket:   "/etc/netmanager/netmanager.sock",
+			Host:                getHostname(),
+			SystemInfo:          getSystemInfo(),
+			CpuCores:            getCpuCores(),
+			CpuArch:             runtime.GOARCH,
+			Port:                getPort(),
+			Technology:          make([]RuntimeType, 0),
+			SupportedAddons:     make([]AddonType, 0),
+			Overlay:             false,
+			OverlaySocket:       "/etc/netmanager/netmanager.sock",
+			CheckpointDirectory: os.TempDir() + "/oakestra/checkpoints",
 		}
 	})
 	node.updateDynamicInfo()

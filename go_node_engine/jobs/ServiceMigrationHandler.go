@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go_node_engine/model"
 	pb "go_node_engine/requests/proto" // Adjust import path if needed
+	virtualization "go_node_engine/virtualization"
 	"log"
 	"net"
 	"sync"
@@ -93,6 +94,14 @@ func (h *serviceMigrationHandler) AddIncomingMigration(details MigrationDetails)
 	if h.migrations[details.SystemJobID] != nil {
 		return fmt.Errorf("migration for service %s already exists", details.SystemJobID)
 	}
+
+	// prepare instantiation
+	_, err := virtualization.GetRuntimeMigration(model.RuntimeType(details.Virtualization))
+	if err != nil {
+		log.Printf("Migration runtime not found for virtualization %s: %v", details.Virtualization, err)
+		return fmt.Errorf("migration runtime not found for virtualization %s: %v", details.Virtualization, err)
+	}
+	//TODO: Add Service structure to migration gRPC details
 
 	details.lastUpdated = time.Now()
 	h.migrations[details.SystemJobID] = &details

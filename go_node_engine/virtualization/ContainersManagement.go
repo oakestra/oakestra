@@ -33,7 +33,7 @@ import (
 // ContainerRuntime is the struct that describes the container runtime
 type ContainerRuntime struct {
 	containerClient *containerd.Client
-	killQueue       map[string]*chan bool
+	services        map[string]*model.Service // for migration purposes
 	channelLock     *sync.RWMutex
 	ctx             context.Context
 }
@@ -61,6 +61,14 @@ const CGROUPV2_BASE_MEM = "/sys/fs/cgroup/" + NAMESPACE
 // Containerd config path
 const CONTAINERD_CONFIG_PATH = "/etc/containerd/config.toml"
 
+// RuntimeRoutineOption is a function that can be used to configure the container runtime client
+type RoutineOption func(c *RoutineOptionConfig)
+type RoutineOptionConfig struct {
+	withContainer      containerd.Container
+	withImage          containerd.Image
+	withImageStatePath string
+}
+
 // GetContainerdRuntime returns the container runtime client
 func GetContainerdRuntime() Runtime {
 	containerdSingletonCLient.Do(func() {
@@ -69,7 +77,7 @@ func GetContainerdRuntime() Runtime {
 			logger.ErrorLogger().Fatalf("Unable to start the container engine: %v\n", err)
 		}
 		runtime.containerClient = client
-		runtime.killQueue = make(map[string]*chan bool)
+		runtime.services = make(map[string]*model.Service)
 		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
 		runtime.forceContainerCleanup()
 		// register default runtime name
@@ -107,7 +115,7 @@ func checkAdditionalRuntimePlugins() {
 // StopContainerdClient stops the container runtime client
 func (r *ContainerRuntime) Stop() {
 	r.channelLock.Lock()
-	taskIDs := reflect.ValueOf(r.killQueue).MapKeys()
+	taskIDs := reflect.ValueOf(r.services).MapKeys()
 	r.channelLock.Unlock()
 
 	for _, taskid := range taskIDs {
@@ -124,59 +132,37 @@ func (r *ContainerRuntime) Stop() {
 
 // Deploy deploys a service
 func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
-	var image containerd.Image
 
 	// pull the given image
-	sysimg, err := r.containerClient.ImageService().Get(r.ctx, service.Image)
-	if err == nil {
-		image = containerd.NewImage(r.containerClient, sysimg)
-	} else {
-		logger.ErrorLogger().Printf("Error retrieving the image: %v \n Trying to pull the image online.", err)
-
-		remoteOpt := []containerd.RemoteOpt{containerd.WithPullUnpack}
-		if service.Platform != "" {
-			remoteOpt = append(remoteOpt, containerd.WithPlatform(service.Platform))
-		}
-		image, err = r.containerClient.Pull(r.ctx, service.Image, remoteOpt...)
-
-		if err != nil {
-			// avoid crashing for HTTP based registires in local infrastructures
-			if strings.Contains(err.Error(), "http: server gave HTTP response to HTTPS client") {
-				alwaysPlainHTTP := func(string) (bool, error) {
-					return true, nil
-				}
-				ropts := []docker_remote.RegistryOpt{
-					docker_remote.WithPlainHTTP(alwaysPlainHTTP),
-				}
-				resolver := docker_remote.NewResolver(docker_remote.ResolverOptions{
-					Hosts: docker_remote.ConfigureDefaultRegistries(ropts...),
-				})
-				image, err = r.containerClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack, containerd.WithResolver(resolver))
-				if err != nil {
-					return err
-				}
-			} else {
-				return err
-			}
-		}
+	image, err := r.getContainerImage(service)
+	if err != nil {
+		return err
 	}
 
+	// create feedback channels for the container creation routine
 	startupChannel := make(chan bool)
 	errorChannel := make(chan error)
 
+	// check if the service is already deployed
 	_, err = r.getContainerByTaskID(genTaskID(service.Sname, service.Instance))
 	if err == nil {
 		return fmt.Errorf("task already deployed")
+	}
+	r.channelLock.Lock()
+	_, exists := r.services[genTaskID(service.Sname, service.Instance)]
+	r.channelLock.Unlock()
+	if exists {
+		return fmt.Errorf("service %s instance %d is already deployed", service.Sname, service.Instance)
 	}
 
 	// create startup routine which will accompany the container through its lifetime
 	go r.containerCreationRoutine(
 		r.ctx,
-		image,
 		service,
 		startupChannel,
 		errorChannel,
 		statusChangeNotificationHandler,
+		WithImage(image),
 	)
 
 	// wait for updates regarding the container creation
@@ -189,6 +175,14 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 
 // Undeploy undeploys a service
 func (r *ContainerRuntime) Undeploy(service string, instance int) error {
+	//cleanup service list
+	if _, ok := r.services[genTaskID(service, instance)]; ok {
+		r.channelLock.Lock()
+		delete(r.services, genTaskID(service, instance))
+		r.channelLock.Unlock()
+	}
+
+	//remove container by task ID
 	c, err := r.getContainerByTaskID(genTaskID(service, instance))
 	if err == nil {
 		_ = r.removeContainer(c)
@@ -196,28 +190,146 @@ func (r *ContainerRuntime) Undeploy(service string, instance int) error {
 	return err
 }
 
+// containerCreationRoutine is the routine that generates, executes and monitors the main task of a container
+// It is called by the Deploy method and runs in a separate goroutine.
+// If a base container is provided it will use it to create the task, otherwise it will create a new container from the image.
 func (r *ContainerRuntime) containerCreationRoutine(
 	ctx context.Context,
-	image containerd.Image,
 	service model.Service,
 	startup chan bool,
 	errorchan chan error,
 	statusChangeNotificationHandler func(service model.Service),
+	creationRoutineOptions ...RoutineOption,
 ) {
 
+	routineConfig := RoutineOptionConfig{}
+	for _, opt := range creationRoutineOptions {
+		opt(&routineConfig)
+	}
+
 	taskid := genTaskID(service.Sname, service.Instance)
-	hostname := fmt.Sprintf("instance-%d", service.Instance)
+	r.services[taskid] = &service
 
 	revert := func(err error) {
 		startup <- false
 		errorchan <- err
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
-		r.killQueue[taskid] = nil
+		delete(r.services, taskid)
 	}
 
-	// Container options
-	containerOpts := []containerd.NewContainerOpts{}
+	// create base container for this service, if not provided
+	container := routineConfig.withContainer
+	if container == nil {
+		if routineConfig.withImage == nil {
+			logger.ErrorLogger().Printf("ERROR: no image provided for service %s instance %d", service.Sname, service.Instance)
+			revert(fmt.Errorf("no image provided"))
+			return
+		}
+		createdContainer, err := r.createContainer(ctx, taskid, service, routineConfig.withImage, []containerd.NewContainerOpts{})
+		if err != nil {
+			logger.ErrorLogger().Printf("ERROR: containerd container creation failure: %v", err)
+			revert(err)
+			return
+		}
+		container = createdContainer
+	}
+
+	//create /tmp/taskid as default log directory
+	file, err := os.OpenFile(fmt.Sprintf("%s/%s", model.GetNodeInfo().LogDirectory, taskid), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		revert(err)
+		return
+	}
+	//defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			logger.ErrorLogger().Printf("Unable to close log file: %v", err)
+		}
+	}()
+
+	// if a state path is provided, use it to restore the image's task
+	newTaskOpts := []containerd.NewTaskOpts{}
+	if routineConfig.withImageStatePath != "" {
+		newTaskOpts = append(newTaskOpts, containerd.WithRestoreImagePath(routineConfig.withImageStatePath))
+		defer func() {
+			if err := os.Remove(routineConfig.withImageStatePath); err != nil {
+				logger.ErrorLogger().Printf("Unable to remove state file %s: %v", routineConfig.withImageStatePath, err)
+			}
+		}()
+	}
+
+	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStreams(nil, file, file)), newTaskOpts...)
+	if err != nil {
+		logger.ErrorLogger().Printf("ERROR: containerd task creation failure: %v", err)
+		_ = container.Delete(ctx)
+		revert(err)
+		return
+	}
+	defer func(ctx context.Context, task containerd.Task) {
+		_ = killTask(ctx, task, container)
+	}(ctx, task)
+
+	// get wait channel
+	exitStatusC, err := task.Wait(ctx)
+	if err != nil {
+		logger.ErrorLogger().Printf("ERROR: containerd task wait failure: %v", err)
+		revert(err)
+		return
+	}
+
+	// if Overlay mode is active then attach network to the task
+	if model.GetNodeInfo().Overlay {
+		taskpid := int(task.Pid())
+		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
+			revert(err)
+			return
+		}
+	}
+
+	// execute the image's task
+	if err := task.Start(ctx); err != nil {
+		logger.ErrorLogger().Printf("ERROR: containerd task start failure: %v", err)
+		revert(err)
+		return
+	}
+
+	// adv startup finished
+	startup <- true
+	r.channelLock.Lock()
+	service.Status = model.SERVICE_RUNNING
+	r.channelLock.Unlock()
+
+	// wait for manual task kill or task finish
+	exitStatus := <-exitStatusC
+	exitCode := exitStatus.ExitCode()
+
+	r.channelLock.Lock()
+	if exitCode == 0 && service.OneShot && service.Status == model.SERVICE_RUNNING {
+		service.Status = model.SERVICE_COMPLETED
+	} else {
+		service.Status = model.SERVICE_DEAD
+	}
+	r.channelLock.Unlock()
+
+	//detaching network
+	if model.GetNodeInfo().Overlay {
+		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
+	}
+
+	_ = r.Undeploy(service.Sname, service.Instance)
+	statusChangeNotificationHandler(service)
+}
+
+// createContainer creates a new container for the given service
+// It sets the container options based on the service configuration and returns the created container.
+func (r *ContainerRuntime) createContainer(ctx context.Context, taskid string, service model.Service, image containerd.Image, containerOpts []containerd.NewContainerOpts) (containerd.Container, error) {
+
+	// generate hostname
+	hostname := fmt.Sprintf("instance-%d", service.Instance)
+
 	// -- if custom runtime selected, add it to the container
 	if service.Runtime != string(model.CONTAINER_RUNTIME) {
 		if strings.Contains("io.containerd", service.Runtime) {
@@ -258,8 +370,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// ---- add resolve file with default google dns
 	resolvconfFile, err := getGoogleDNSResolveConf()
 	if err != nil {
-		revert(err)
-		return
+		return nil, err
 	}
 	specOpts = append(specOpts, withCustomResolvConf(resolvconfFile))
 
@@ -273,80 +384,50 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		containerOpts...,
 	)
 	if err != nil {
-		revert(err)
-		return
+		return nil, err
 	}
 
-	//	start task with /tmp/taskid default log directory
-	file, err := os.OpenFile(fmt.Sprintf("%s/%s", model.GetNodeInfo().LogDirectory, taskid), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		revert(err)
-		return
-	}
-	//defer file.Close()
-	defer func() {
-		if err := file.Close(); err != nil {
-			logger.ErrorLogger().Printf("Unable to close log file: %v", err)
-		}
-	}()
+	return container, nil
+}
 
-	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStreams(nil, file, file)))
+// getContainerImage retrieves the container image specified in the service from the containerd client
+func (r *ContainerRuntime) getContainerImage(service model.Service) (containerd.Image, error) {
+	var image containerd.Image
 
-	if err != nil {
-		logger.ErrorLogger().Printf("ERROR: containerd task creation failure: %v", err)
-		_ = container.Delete(ctx)
-		revert(err)
-		return
-	}
-	defer func(ctx context.Context, task containerd.Task) {
-		_ = killTask(ctx, task, container)
-	}(ctx, task)
-
-	// get wait channel
-	exitStatusC, err := task.Wait(ctx)
-	if err != nil {
-		logger.ErrorLogger().Printf("ERROR: containerd task wait failure: %v", err)
-		revert(err)
-		return
-	}
-
-	// if Overlay mode is active then attach network to the task
-	if model.GetNodeInfo().Overlay {
-		taskpid := int(task.Pid())
-		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports)
-		if err != nil {
-			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
-			revert(err)
-			return
-		}
-	}
-
-	// execute the image's task
-	if err := task.Start(ctx); err != nil {
-		logger.ErrorLogger().Printf("ERROR: containerd task start failure: %v", err)
-		revert(err)
-		return
-	}
-
-	// adv startup finished
-	startup <- true
-
-	// wait for manual task kill or task finish
-	exitStatus := <-exitStatusC
-
-	if exitStatus.ExitCode() == 0 && service.OneShot {
-		service.Status = model.SERVICE_COMPLETED
+	sysimg, err := r.containerClient.ImageService().Get(r.ctx, service.Image)
+	if err == nil {
+		image = containerd.NewImage(r.containerClient, sysimg)
 	} else {
-		service.Status = model.SERVICE_DEAD
-	}
+		logger.ErrorLogger().Printf("Error retrieving the image: %v \n Trying to pull the image online.", err)
 
-	//detaching network
-	if model.GetNodeInfo().Overlay {
-		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
-	}
+		remoteOpt := []containerd.RemoteOpt{containerd.WithPullUnpack}
+		if service.Platform != "" {
+			remoteOpt = append(remoteOpt, containerd.WithPlatform(service.Platform))
+		}
+		image, err = r.containerClient.Pull(r.ctx, service.Image, remoteOpt...)
 
-	_ = r.removeContainer(container)
-	statusChangeNotificationHandler(service)
+		if err != nil {
+			// avoid crashing for HTTP based registires in local infrastructures
+			if strings.Contains(err.Error(), "http: server gave HTTP response to HTTPS client") {
+				alwaysPlainHTTP := func(string) (bool, error) {
+					return true, nil
+				}
+				ropts := []docker_remote.RegistryOpt{
+					docker_remote.WithPlainHTTP(alwaysPlainHTTP),
+				}
+				resolver := docker_remote.NewResolver(docker_remote.ResolverOptions{
+					Hosts: docker_remote.ConfigureDefaultRegistries(ropts...),
+				})
+				image, err = r.containerClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack, containerd.WithResolver(resolver))
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, err
+			}
+		}
+	}
+	return image, nil
 }
 
 func getTotalCpuUsageByPid(pid int32) (float64, error) {
@@ -376,64 +457,61 @@ func getTotalCpuUsageByPid(pid int32) (float64, error) {
 func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
 	//start container monitoring service
 	startContainerMonitoring.Do(func() {
-		for {
-			select {
-			case <-time.After(every):
-				deployedContainers, err := r.containerClient.Containers(r.ctx)
-				if err != nil {
-					logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
-				}
-
-				resourceList := make([]model.Resources, 0)
-
-				for _, container := range deployedContainers {
-					task, err := container.Task(r.ctx, nil)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
-						continue
-					}
-
-					cpuUsage, err := getTotalCpuUsageByPid(int32(task.Pid()))
-					if err != nil {
-						sysInfo, err := pidusage.GetStat(int(task.Pid()))
-						if err != nil {
-							logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
-							continue
-						}
-						cpuUsage = sysInfo.CPU / float64(model.GetNodeInfo().CpuCores)
-					}
-
-					mem, err := r.getContainerMemoryUsage(container.ID(), int(task.Pid()))
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
-						mem = 0
-					}
-
-					containerMetadata, err := container.Info(r.ctx)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
-						continue
-					}
-
-					currentsnapshotter := r.containerClient.SnapshotService(containerMetadata.Snapshotter)
-					usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
-					}
-
-					resourceList = append(resourceList, model.Resources{
-						Cpu:      fmt.Sprintf("%f", cpuUsage),
-						Memory:   fmt.Sprintf("%f", mem),
-						Disk:     fmt.Sprintf("%d", usage.Size),
-						Sname:    extractSnameFromTaskID(container.ID()),
-						Runtime:  string(model.CONTAINER_RUNTIME),
-						Logs:     getLogs(container.ID()),
-						Instance: extractInstanceNumberFromTaskID(container.ID()),
-					})
-				}
-				//NOTIFY WITH THE CURRENT CONTAINERS STATUS
-				notifyHandler(resourceList)
+		for range time.Tick(every) {
+			deployedContainers, err := r.containerClient.Containers(r.ctx)
+			if err != nil {
+				logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 			}
+
+			resourceList := make([]model.Resources, 0)
+
+			for _, container := range deployedContainers {
+				task, err := container.Task(r.ctx, nil)
+				if err != nil {
+					logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+					continue
+				}
+
+				cpuUsage, err := getTotalCpuUsageByPid(int32(task.Pid()))
+				if err != nil {
+					sysInfo, err := pidusage.GetStat(int(task.Pid()))
+					if err != nil {
+						logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
+						continue
+					}
+					cpuUsage = sysInfo.CPU / float64(model.GetNodeInfo().CpuCores)
+				}
+
+				mem, err := r.getContainerMemoryUsage(container.ID(), int(task.Pid()))
+				if err != nil {
+					logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
+					mem = 0
+				}
+
+				containerMetadata, err := container.Info(r.ctx)
+				if err != nil {
+					logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
+					continue
+				}
+
+				currentsnapshotter := r.containerClient.SnapshotService(containerMetadata.Snapshotter)
+				usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
+				if err != nil {
+					logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
+				}
+
+				resourceList = append(resourceList, model.Resources{
+					Cpu:      fmt.Sprintf("%f", cpuUsage),
+					Memory:   fmt.Sprintf("%f", mem),
+					Disk:     fmt.Sprintf("%d", usage.Size),
+					Sname:    extractSnameFromTaskID(container.ID()),
+					Runtime:  string(model.CONTAINER_RUNTIME),
+					Logs:     getLogs(container.ID()),
+					Instance: extractInstanceNumberFromTaskID(container.ID()),
+				})
+			}
+			//NOTIFY WITH THE CURRENT CONTAINERS STATUS
+			notifyHandler(resourceList)
 		}
 	})
 }
@@ -451,18 +529,15 @@ func (r *ContainerRuntime) forceContainerCleanup() {
 func (r *ContainerRuntime) removeContainer(container containerd.Container) error {
 	logger.InfoLogger().Printf("Clenaning up container: %s", container.ID())
 	task, err := container.Task(r.ctx, nil)
-	if err != nil {
-		return fmt.Errorf("Unable to fetch container task: %v", err)
-	}
 	if err == nil {
 		err = killTask(r.ctx, task, container)
 		if err != nil {
-			return fmt.Errorf("Unable to fetch kill task: %v", err)
+			return fmt.Errorf("unable to fetch kill task: %v", err)
 		}
 	}
 	err = container.Delete(r.ctx)
 	if err != nil {
-		return fmt.Errorf("Unable to delete container: %v", err)
+		return fmt.Errorf("unable to delete container: %v", err)
 	}
 	return nil
 }
@@ -573,4 +648,302 @@ func (r *ContainerRuntime) getContainerByTaskID(taskid string) (containerd.Conta
 		}
 	}
 	return nil, fmt.Errorf("container not found")
+}
+
+// -------- Container migration implementation
+
+// SetMigrationCandidate checks if the service can be migrated and marks it as a candidate.
+func (r *ContainerRuntime) SetMigrationCandidate(sname string, instance int) (model.Service, error) {
+	taskid := genTaskID(sname, instance)
+
+	r.channelLock.Lock()
+	service, exists := r.services[taskid]
+	r.channelLock.Unlock()
+
+	if !exists {
+		return model.Service{}, fmt.Errorf("service %s instance %d is not deployed", sname, instance)
+	}
+
+	// check if the service is in any of the migration statuses
+	if service.Status == model.SERVICE_MIGRATION_ACCEPTED ||
+		service.Status == model.SERVICE_MIGRATION_PROGRESS ||
+		service.Status == model.SERVICE_MIGRATION_REQUESTED ||
+		service.Status == model.SERVICE_MIGRATION_DEBOUNCE {
+		return model.Service{}, fmt.Errorf("service %s instance %d is already in migration process", sname, instance)
+	}
+
+	// check if service is running
+	if service.Status != model.SERVICE_RUNNING {
+		return model.Service{}, fmt.Errorf("service %s instance %d is not running, cannot mark as migration candidate", sname, instance)
+	}
+
+	// mark the service as a migration candidate
+	r.channelLock.Lock()
+	service.Status = model.SERVICE_MIGRATION_ACCEPTED
+	r.channelLock.Unlock()
+
+	return *service, nil
+}
+
+// StopAndGetState stops a service and returns its the state file if it has been marked as a migration candidate.
+func (r *ContainerRuntime) StopAndGetState(sname string, instance int) ([]byte, error) {
+	taskid := genTaskID(sname, instance)
+
+	r.channelLock.Lock()
+	service, exists := r.services[taskid]
+	r.channelLock.Unlock()
+
+	if !exists {
+		return nil, fmt.Errorf("service %s instance %d is not deployed", sname, instance)
+	}
+
+	// check if the service is in any of the migration statuses
+	if service.Status != model.SERVICE_MIGRATION_ACCEPTED {
+		return nil, fmt.Errorf("service %s instance %d is not marked as a migration candidate", sname, instance)
+	}
+
+	r.channelLock.Lock()
+	service.Status = model.SERVICE_MIGRATION_PROGRESS
+	r.channelLock.Unlock()
+
+	// get the container by task ID
+	container, err := r.getContainerByTaskID(taskid)
+	if err != nil {
+		return nil, err
+	}
+
+	revertState := func() {
+		r.channelLock.Lock()
+		service.Status = model.SERVICE_RUNNING
+		r.channelLock.Unlock()
+	}
+
+	// stop the task and get its state
+	task, err := container.Task(r.ctx, nil)
+	if err != nil {
+		defer revertState()
+		return nil, err
+	}
+
+	revertRunning := func() {
+		task.Resume(r.ctx)
+	}
+
+	err = task.Pause(r.ctx)
+	if err != nil {
+		defer revertState()
+		defer revertRunning()
+		return nil, err
+	}
+
+	stateDir := fmt.Sprintf("%s/%s.checkpoint", model.GetNodeInfo().CheckpointDirectory, taskid)
+	stateFile := fmt.Sprintf("%s/%s.checkpoint.tar.gz", model.GetNodeInfo().CheckpointDirectory, taskid)
+	err = os.MkdirAll(stateDir, 0755)
+	if err != nil {
+		defer revertState()
+		defer revertRunning()
+		logger.ErrorLogger().Printf("Unable to create checkpoint directory: %v", err)
+		return nil, fmt.Errorf("unable to create checkpoint directory: %v", err)
+	}
+
+	_, err = task.Checkpoint(r.ctx, containerd.WithCheckpointImagePath(stateDir))
+	if err != nil {
+		defer revertState()
+		defer revertRunning()
+		logger.ErrorLogger().Printf("Unable to checkpoint the task: %v", err)
+		return nil, fmt.Errorf("unable to checkpoint the task: %v", err)
+	}
+
+	// compress stateDir into stateFile.tar.gz
+	cmd := exec.Command("tar", "-czf", stateFile, "-C", stateDir, ".")
+	if err := cmd.Run(); err != nil {
+		defer revertState()
+		defer revertRunning()
+		logger.ErrorLogger().Printf("Unable to compress checkpoint directory: %v", err)
+		return nil, fmt.Errorf("unable to compress checkpoint directory: %v", err)
+	}
+
+	// read the compressed file into a byte slice
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		defer revertState()
+		defer revertRunning()
+		logger.ErrorLogger().Printf("Unable to read compressed checkpoint file: %v", err)
+		return nil, fmt.Errorf("unable to read compressed checkpoint file: %v", err)
+	}
+
+	// remove the state directory and file after reading
+	os.Remove(stateFile)
+	os.RemoveAll(stateDir)
+
+	return data, nil
+}
+
+// PrepareForInstantiantion prepares the service for instantiation after migration.
+func (r *ContainerRuntime) PrepareForInstantiantion(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
+
+	taskid := genTaskID(service.Sname, service.Instance)
+
+	// check if the service is already deployed
+	_, err := r.getContainerByTaskID(taskid)
+	if err == nil {
+		return fmt.Errorf("task already deployed")
+	}
+	r.channelLock.Lock()
+	_, exists := r.services[taskid]
+	r.channelLock.Unlock()
+	if exists {
+		return fmt.Errorf("service %s instance %d is already deployed", service.Sname, service.Instance)
+	}
+
+	// Add the application to the services map
+	r.channelLock.Lock()
+	r.services[taskid] = &service
+	r.channelLock.Unlock()
+
+	// Update the service status to migration requested
+	r.channelLock.Lock()
+	service.Status = model.SERVICE_MIGRATION_PROGRESS
+	r.channelLock.Unlock()
+
+	// Notify the status change to cluster orchestrator
+	statusChangeNotificationHandler(service)
+
+	// Get container image
+	image, err := r.containerClient.GetImage(r.ctx, service.Image)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to get image %s for service %s instance %d: %v", service.Image, service.Sname, service.Instance, err)
+		r.channelLock.Lock()
+		service.Status = model.SERVICE_DEAD
+		r.channelLock.Unlock()
+		defer statusChangeNotificationHandler(service)
+		return fmt.Errorf("unable to get image %s for service %s instance %d: %v", service.Image, service.Sname, service.Instance, err)
+	}
+
+	// Create a new container for the service
+	_, err = r.createContainer(r.ctx, taskid, service, image, []containerd.NewContainerOpts{})
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to create container for service %s instance %d: %v", service.Sname, service.Instance, err)
+		r.channelLock.Lock()
+		service.Status = model.SERVICE_DEAD
+		r.channelLock.Unlock()
+		defer statusChangeNotificationHandler(service)
+		return fmt.Errorf("unable to create container for service %s instance %d: %v", service.Sname, service.Instance, err)
+	}
+
+	return nil
+}
+
+// ResumeFromState resumes a service prepared for instantiation with a given state.
+func (r *ContainerRuntime) ResumeFromState(sname string, instance int, state []byte, statusChangeNotificationHandler func(service model.Service)) error {
+
+	revert := func() {
+		r.channelLock.Lock()
+		defer r.channelLock.Unlock()
+		service, exists := r.services[genTaskID(sname, instance)]
+		if exists {
+			service.Status = model.SERVICE_DEAD
+			statusChangeNotificationHandler(*service)
+		}
+	}
+
+	taskid := genTaskID(sname, instance)
+
+	r.channelLock.Lock()
+	service, exists := r.services[taskid]
+	r.channelLock.Unlock()
+	if !exists {
+		return fmt.Errorf("service %s instance %d is not deployed", sname, instance)
+	}
+
+	// check if the service is in migration progress
+	if service.Status != model.SERVICE_MIGRATION_PROGRESS {
+		revert()
+		return fmt.Errorf("service %s instance %d is not in migration progress", sname, instance)
+	}
+
+	// Create temporary directory for the state
+	tempDir := fmt.Sprintf("%s/%s.checkpoint", model.GetNodeInfo().CheckpointDirectory, taskid)
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		logger.ErrorLogger().Printf("Unable to create temporary directory %s: %v", tempDir, err)
+		revert()
+		return fmt.Errorf("unable to create temporary directory %s: %v", tempDir, err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			logger.ErrorLogger().Printf("Unable to remove temporary directory %s: %v", tempDir, err)
+		}
+	}()
+
+	// Write state to a temporary file
+	stateFile := fmt.Sprintf("%s/%s.checkpoint.tar.gz", model.GetNodeInfo().CheckpointDirectory, taskid)
+	if err := os.WriteFile(stateFile, state, 0644); err != nil {
+		logger.ErrorLogger().Printf("Unable to write state file %s: %v", stateFile, err)
+		revert()
+		return fmt.Errorf("unable to write state file %s: %v", stateFile, err)
+	}
+	defer func() {
+		if err := os.Remove(stateFile); err != nil {
+			logger.ErrorLogger().Printf("Unable to remove state file %s: %v", stateFile, err)
+		}
+	}()
+
+	// Uncompress the state file to a temporary directory
+	cmd := exec.Command("tar", "-xzf", stateFile, "-C", tempDir)
+	if err := cmd.Run(); err != nil {
+		logger.ErrorLogger().Printf("Unable to uncompress state file %s: %v", stateFile, err)
+		revert()
+		return fmt.Errorf("unable to uncompress state file %s: %v", stateFile, err)
+	}
+
+	// get the container by task ID
+	container, err := r.getContainerByTaskID(taskid)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to get container by task ID %s: %v", taskid, err)
+		revert()
+		return err
+	}
+
+	// create startup routine which will accompany the container through its lifetime
+	startupChannel := make(chan bool)
+	errorChannel := make(chan error)
+	go r.containerCreationRoutine(
+		r.ctx,
+		*service,
+		startupChannel,
+		errorChannel,
+		statusChangeNotificationHandler,
+		WithContainer(container),
+		WithImageStatePath(stateFile),
+	)
+
+	// wait for updates regarding the container creation
+	if !<-startupChannel {
+		return <-errorChannel
+	}
+
+	return nil
+}
+
+// WithContainer sets the container to be used in the routine creation
+// If not set, a new container will be created from the image.
+func WithContainer(container containerd.Container) RoutineOption {
+	return func(c *RoutineOptionConfig) {
+		c.withContainer = container
+	}
+}
+
+// WithImageStatePath sets the path to the image state file to be used in the routine creation
+// If not set, the task will be created from the image without restoring any state.
+func WithImageStatePath(path string) RoutineOption {
+	return func(c *RoutineOptionConfig) {
+		c.withImageStatePath = path
+	}
+}
+
+// WithImage sets the image to be used in the routine creation
+func WithImage(image containerd.Image) RoutineOption {
+	return func(c *RoutineOptionConfig) {
+		c.withImage = image // set the image to be used in the routine creation
+	}
 }
