@@ -34,8 +34,8 @@ func ClusterHandshake(address string, port int) HandshakeAnswer {
 	proto := "http"
 	if cfg.ClusterSSL {
 		proto = "https"
-	} 
-	resp, err = http.Post(fmt.Sprintf("%s://%s:%d/api/node/register",proto, address, port), "application/json", jsonbody)
+	}
+	resp, err = http.Post(fmt.Sprintf("%s://%s:%d/api/node/register", proto, address, port), "application/json", jsonbody)
 
 	if err != nil {
 		logger.ErrorLogger().Fatalf("Handshake failed, %v", err)
