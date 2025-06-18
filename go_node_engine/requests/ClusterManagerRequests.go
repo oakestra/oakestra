@@ -31,11 +31,11 @@ func ClusterHandshake(address string, port int) HandshakeAnswer {
 	}
 
 	var resp *http.Response
+	proto := "http"
 	if cfg.ClusterSSL {
-		resp, err = http.Post(fmt.Sprintf("https://%s:%d/api/node/register", address, port), "application/json", jsonbody)
-	} else {
-		resp, err = http.Post(fmt.Sprintf("http://%s:%d/api/node/register", address, port), "application/json", jsonbody)
-	}
+		proto = "https"
+	} 
+	resp, err = http.Post(fmt.Sprintf("%s://%s:%d/api/node/register",proto, address, port), "application/json", jsonbody)
 
 	if err != nil {
 		logger.ErrorLogger().Fatalf("Handshake failed, %v", err)

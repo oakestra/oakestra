@@ -76,7 +76,7 @@ func nodeEngineDaemonManager() error {
 	}
 
 	if clusterSSL != false {
-		// set new SSL settings
+		// set SSL cluster handshake
 		err := configSSL(clusterSSL)
 		if err != nil {
 			return err
@@ -98,7 +98,6 @@ func nodeEngineDaemonManager() error {
 	}
 
 	fmt.Println("NodeEngine started  🟢")
-	fmt.Println("something")
 	if !detatched {
 		return attach()
 	}

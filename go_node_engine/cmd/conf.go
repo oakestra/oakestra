@@ -182,7 +182,6 @@ func configCluster(address string) error {
 }
 
 func configAddress(address string) error {
-	fmt.Println("here")
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
 	if err != nil {
