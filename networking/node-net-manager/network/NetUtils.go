@@ -141,6 +141,7 @@ func GetOutboundIP() net.IP {
 		logger.InfoLogger().Println("Using public IP address: ", addr.String())
 	} else {
 		addr = conn.LocalAddr().(*net.UDPAddr)
+		logger.InfoLogger().Println("Using public IP address: ", addr.String())
 	}
 
 	return addr.IP

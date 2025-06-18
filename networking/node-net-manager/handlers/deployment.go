@@ -3,6 +3,7 @@ package handlers
 import (
 	"NetManager/env"
 	"NetManager/logger"
+	"NetManager/model"
 	"NetManager/mqtt"
 	"fmt"
 	"net"
@@ -100,8 +101,8 @@ func deploymentHandler(requestStruct *ContainerDeployTask) (net.IP, net.IP, erro
 		requestStruct.Instancenumber,
 		addr.String(),
 		addrv6.String(),
-		requestStruct.PublicAddr,
-		requestStruct.PublicPort,
+		model.NetConfig.NodePublicAddress,
+		model.NetConfig.NodePublicPort,
 	)
 	if err != nil {
 		logger.ErrorLogger().Println("[ERROR]:", err)
