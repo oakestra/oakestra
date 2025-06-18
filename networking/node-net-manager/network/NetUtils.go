@@ -151,12 +151,12 @@ func GetOutboundIP() net.IP {
 
 		body, err := io.ReadAll(req.Body)
 		if err == nil {
-			logger.InfoLogger().Println("Using public IP address: ", body)
-			return net.ParseIP(string(body))
+			logger.InfoLogger().Println("Using public IP address: ", string(body))
+			return net.ParseIP(string(body[:len(body)-1]))
 		}
 		logger.ErrorLogger().Printf("%v", err.Error())
 	}
-	
+
 	// get local outbound ip
 	addr := conn.LocalAddr().(*net.UDPAddr)
 	logger.InfoLogger().Println("Using private IP address: ", addr.String())
