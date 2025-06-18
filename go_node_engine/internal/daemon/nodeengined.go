@@ -87,7 +87,7 @@ func main() {
 	// starting container resources background monitor.
 	jobs.StartServicesMonitoring(MONITORING_CYCLE, mqtt.ReportServiceResources)
 	// initialize migration handler
-	jobs.GetMigrationHandler()
+	jobs.GetMigrationHandler(jobs.WithStatusChangeNotificationHandler(mqtt.ReportServiceStatus))
 
 	// catch SIGETRM or SIGINTERRUPT
 	termination := make(chan os.Signal, 1)

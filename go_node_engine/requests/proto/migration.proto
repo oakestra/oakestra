@@ -9,7 +9,6 @@ message MigrationRequest {
   string migration_token = 2;
 }
 
-
 // Send the actual service migration data.
 message MigrationData {
   string service_id = 1;

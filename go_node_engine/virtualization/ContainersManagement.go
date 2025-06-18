@@ -685,6 +685,29 @@ func (r *ContainerRuntime) SetMigrationCandidate(sname string, instance int) (mo
 	return *service, nil
 }
 
+func (r *ContainerRuntime) RemoveMigrationCandidate(sname string, instance int) error {
+	taskid := genTaskID(sname, instance)
+
+	r.channelLock.Lock()
+	service, exists := r.services[taskid]
+	r.channelLock.Unlock()
+
+	if !exists {
+		return fmt.Errorf("service %s instance %d is not deployed", sname, instance)
+	}
+
+	// check if the service is in any of the migration statuses
+	if service.Status == model.SERVICE_MIGRATION_ACCEPTED {
+		r.channelLock.Lock()
+		service.Status = model.SERVICE_RUNNING
+		r.channelLock.Unlock()
+	} else {
+		return fmt.Errorf("service %s instance %d is not marked as a migration candidate", sname, instance)
+	}
+
+	return nil
+}
+
 // StopAndGetState stops a service and returns its the state file if it has been marked as a migration candidate.
 func (r *ContainerRuntime) StopAndGetState(sname string, instance int) ([]byte, error) {
 	taskid := genTaskID(sname, instance)
@@ -830,6 +853,31 @@ func (r *ContainerRuntime) PrepareForInstantiantion(service model.Service, statu
 		defer statusChangeNotificationHandler(service)
 		return fmt.Errorf("unable to create container for service %s instance %d: %v", service.Sname, service.Instance, err)
 	}
+
+	return nil
+}
+
+func (r *ContainerRuntime) AbortMigration(service model.Service) error {
+
+	taskid := genTaskID(service.Sname, service.Instance)
+
+	// check if the service is already deployed
+	_, err := r.getContainerByTaskID(taskid)
+	if err == nil {
+		return fmt.Errorf("task already deployed")
+	}
+	r.channelLock.Lock()
+	s, exists := r.services[taskid]
+	r.channelLock.Unlock()
+	if exists {
+		return fmt.Errorf("service %s instance %d is already deployed", service.Sname, service.Instance)
+	}
+
+	if s.Status != model.SERVICE_MIGRATION_PROGRESS {
+		return fmt.Errorf("service %s instance %d is not in migration progress", service.Sname, service.Instance)
+	}
+
+	r.Undeploy(service.Sname, service.Instance)
 
 	return nil
 }

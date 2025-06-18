@@ -19,11 +19,11 @@ import (
 var migrationServiceSingletonOnce sync.Once
 var migrationServiceSingleton *serviceMigrationHandler
 
+// MIGRATION_SELF_DESTRUCT_TIMEOUT defines the timeout for migration self-destruct.
+const MIGRATION_SELF_DESTRUCT_TIMEOUT = 30 * time.Second
+
 type MigrationDetails struct {
-	SystemJobID     string `json:"job_id"`
-	JobName         string `json:"job_name"`
-	Virtualization  string `json:"virtualization"`
-	InstanceNumber  int    `json:"instance_number"`
+	model.Service          // Embedding the Service struct to include service details
 	TargetNodeID    string `json:"target_node_id"`
 	TargetNodeIP    string `json:"target_node_ip"`
 	TargetNodePort  string `json:"target_node_port"`
@@ -38,10 +38,13 @@ type MigrationDetails struct {
 // ServiceMigrationHandler implements the MigrationServiceServer interface.
 type serviceMigrationHandler struct {
 	pb.UnimplementedMigrationServiceServer
-	migrations    map[string]*MigrationDetails // Maps service ID to current migration
-	migrations_mu sync.Mutex
-	server        *grpc.Server // gRPC server instance
+	migrations                      map[string]*MigrationDetails // Maps service ID to current migration
+	migrations_mu                   sync.Mutex
+	server                          *grpc.Server // gRPC server instance
+	statusChangeNotificationHandler func(service model.Service)
 }
+
+type HandlerOptions func(*serviceMigrationHandler)
 
 // ServiceMigrationHandler is responsible for handling service migration oeprations.
 type MigrationHandler interface {
@@ -50,10 +53,17 @@ type MigrationHandler interface {
 }
 
 // Get a singleton instance of the migration handler.
-func GetMigrationHandler() MigrationHandler {
+// The first time this function is called, it initializes the migration handler with the optin WithStatusChangeNotificationHandler
+func GetMigrationHandler(opts ...HandlerOptions) MigrationHandler {
 	migrationServiceSingletonOnce.Do(func() {
 		migrationServiceSingleton = &serviceMigrationHandler{
 			migrations: make(map[string]*MigrationDetails),
+		}
+		for _, opt := range opts {
+			opt(migrationServiceSingleton)
+		}
+		if migrationServiceSingleton.statusChangeNotificationHandler == nil {
+			log.Fatalf("Status change notification handler is not set. Use WithStatusChangeNotificationHandler to set it.")
 		}
 		go func() {
 			err := migrationServiceSingleton.startMigrationServer(
@@ -91,21 +101,38 @@ func (h *serviceMigrationHandler) AddIncomingMigration(details MigrationDetails)
 	h.migrations_mu.Lock()
 	defer h.migrations_mu.Unlock()
 
-	if h.migrations[details.SystemJobID] != nil {
-		return fmt.Errorf("migration for service %s already exists", details.SystemJobID)
+	if h.migrations[details.JobID] != nil {
+		return fmt.Errorf("migration for service %s already exists", details.JobID)
 	}
 
 	// prepare instantiation
-	_, err := virtualization.GetRuntimeMigration(model.RuntimeType(details.Virtualization))
+	migrationRuntime, err := virtualization.GetRuntimeMigration(model.RuntimeType(details.Runtime))
 	if err != nil {
-		log.Printf("Migration runtime not found for virtualization %s: %v", details.Virtualization, err)
-		return fmt.Errorf("migration runtime not found for virtualization %s: %v", details.Virtualization, err)
+		log.Printf("Migration runtime not found for virtualization %s: %v", details.Runtime, err)
+		return fmt.Errorf("migration runtime not found for virtualization %s: %v", details.Runtime, err)
 	}
 	//TODO: Add Service structure to migration gRPC details
 
 	details.lastUpdated = time.Now()
-	h.migrations[details.SystemJobID] = &details
-	log.Printf("Added incoming migration for service: %s to %s", details.SystemJobID, details.TargetNodeID)
+	h.migrations[details.JobID] = &details
+	log.Printf("Added incoming migration for service: %s to %s", details.JobID, details.TargetNodeID)
+
+	// Start migration self-destruct if ReceiveMigration is not called within MIGRATION_SELF_DESTRUCT_TIMEOUT seconds
+	go func(serviceID string) {
+		time.Sleep(MIGRATION_SELF_DESTRUCT_TIMEOUT)
+		h.migrations_mu.Lock()
+		defer h.migrations_mu.Unlock()
+		if h.migrations[serviceID] == nil {
+			log.Printf("Migration self-destruct for service: %s, already removed", serviceID)
+			return
+		}
+		if !h.migrations[serviceID].dataTransferred {
+			log.Printf("Migration self-destruct for service: %s, no data transferred", serviceID)
+			delete(h.migrations, serviceID)
+			migrationRuntime.AbortMigration(h.migrations[serviceID].Service)
+		}
+	}(details.JobID)
+
 	return nil
 }
 
@@ -116,17 +143,17 @@ func (h *serviceMigrationHandler) Migrate(details MigrationDetails) error {
 	// TODO: Check if the service is running and can be migrated
 
 	// Here you would implement the actual migration logic, such as transferring state, etc.
-	log.Printf("Migrating service %s fto %s", details.SystemJobID, details.TargetNodeID)
+	log.Printf("Migrating service %s to %s", details.JobID, details.TargetNodeID)
 
 	go func() {
 		// Perform the migration request in a separate goroutine
 		resp, err := h.requestMigration(details)
 		if err != nil {
-			log.Printf("Migration request failed for service %s: %v", details.SystemJobID, err)
+			log.Printf("Migration request failed for service %s: %v", details.JobID, err)
 			// Optionally, you can handle the error, such as logging it or notifying the user.
 			return
 		}
-		log.Printf("Migration request successful for service %s: %s", details.SystemJobID, resp.GetMessage())
+		log.Printf("Migration request successful for service %s: %s", details.JobID, resp.GetMessage())
 	}()
 
 	return nil
@@ -212,9 +239,26 @@ func (h *serviceMigrationHandler) RequestMigration(ctx context.Context, req *pb.
 	h.migrations[req.GetServiceId()].acknowledged = true
 	h.migrations[req.GetServiceId()].lastUpdated = time.Now()
 
-	//TODO: Inform runtime for incoming migration
-	log.Printf("Acknowledged migration request for service: %s", req.GetServiceId())
+	// Initialize the migration runtime for the service
+	// The runtime downloads the image and prepares the idle container for instantiation.
+	migrationRuntime, err := virtualization.GetRuntimeMigration(model.RuntimeType(h.migrations[req.GetServiceId()].Runtime))
+	if err != nil {
+		log.Printf("Failed to get runtime migration for service: %s, error: %v", req.GetServiceId(), err)
+		return &pb.MigrationResponse{
+			Success: false,
+			Message: "Failed to get runtime migration: " + req.GetServiceId(),
+		}, nil
+	}
+	err = migrationRuntime.PrepareForInstantiantion(h.migrations[req.GetServiceId()].Service, h.statusChangeNotificationHandler)
+	if err != nil {
+		log.Printf("Failed to prepare for instantiation for service: %s, error: %v", req.GetServiceId(), err)
+		return &pb.MigrationResponse{
+			Success: false,
+			Message: "Failed to prepare for instantiation: " + req.GetServiceId(),
+		}, nil
+	}
 
+	log.Printf("Acknowledged migration request for service: %s", req.GetServiceId())
 	return &pb.MigrationResponse{
 		Success: true,
 		Message: "Migration received successfully",
@@ -284,7 +328,14 @@ func (h *serviceMigrationHandler) requestMigration(migration MigrationDetails) (
 	defer cancel()
 
 	// PHASE 2: Verify migration pre-conditions
-	//TODO: Implement logic to verify if the service can be migrated, such as checking if the service is running, etc.
+	virtualizationRuntime, err := virtualization.GetRuntimeMigration(model.RuntimeType(migration.Runtime))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get virtualization runtime for migration: %v", err)
+	}
+	service, err := virtualizationRuntime.SetMigrationCandidate(migration.Sname, migration.Instance)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set migration candidate for service %s: %v", migration.Sname, err)
+	}
 
 	// PHASE 3: Request migration to target node and expect an acknowledgment
 	attempt := 0
@@ -295,48 +346,65 @@ func (h *serviceMigrationHandler) requestMigration(migration MigrationDetails) (
 		}
 		log.Printf("Attempting migration request to node %s, attempt %d", migration.TargetNodeIP, attempt)
 		response, err := remote.RequestMigration(ctx, &pb.MigrationRequest{
-			ServiceId:      migration.SystemJobID,
+			ServiceId:      migration.JobID,
 			MigrationToken: migration.MigrationToken,
 		})
 		if err != nil {
-			//TODO: add status migration failed in application status details
+			// If the migration request fails, remove the migration candidate, send out an error and return
+			// The service will keep running as usual.
+			virtualizationRuntime.RemoveMigrationCandidate(migration.Sname, migration.Instance)
 			return nil, fmt.Errorf("failed to request migration on node %s, error: %v", migration.TargetNodeID, err)
 		}
 		if response.GetSuccess() {
-			//TODO: add status migration failed in application status details
-			log.Printf("Migration request acknowledged by node %s for service %s", migration.TargetNodeID, migration.SystemJobID)
+			log.Printf("Migration request acknowledged by node %s for service %s", migration.TargetNodeID, migration.JobID)
 			break
 		} else {
-			log.Printf("Migration request failed on node %s for service %s, error:%s, retrying...", migration.TargetNodeID, migration.SystemJobID, response.GetMessage())
+			log.Printf("Migration request failed on node %s for service %s, error:%s, retrying...", migration.TargetNodeID, migration.JobID, response.GetMessage())
 			// Optionally, you can add a sleep here to avoid hammering the server
 			time.Sleep(1 * time.Second) // Wait before retrying
 			continue
 		}
 	}
 
-	// PHASE 4: Fetch runtime and get the payload
-	// TODO: Implement logic to fetch the payload from the service being migrated
-	payload := []byte("example payload") // Replace with actual payload fetching logic
-	err = nil
-	if err != nil {
+	revert := func() {
+		service.Status = model.SERVICE_FAILED
+		service.StatusDetail = fmt.Sprintf("Migration request failed: %v", err)
+		// Notify the status change handler
+		h.statusChangeNotificationHandler(service)
+		// Abort the migration on the remote node
 		remote.MigrationAbort(ctx, &pb.MigrationRequest{
-			ServiceId:      migration.SystemJobID,
+			ServiceId:      migration.JobID,
 			MigrationToken: migration.MigrationToken,
 		})
-		//TODO: add status migration failed in application status details
+	}
+
+	// PHASE 4: Fetch runtime and get the payload
+	// From this point on, the service is no longer responsibility of the current node.
+	// If a failure happens, the service must be rescheduled by the orchestrator.
+	payload, err := virtualizationRuntime.StopAndGetState(migration.Sname, migration.Instance)
+	if err != nil {
+		defer revert()
 		return nil, fmt.Errorf("failed to fetch payload for migration: %v, MIGRATION ABORTED", err)
 	}
 
 	// PHASE 5: Send migration request
 	req := &pb.MigrationData{
-		ServiceId:      migration.SystemJobID,
+		ServiceId:      migration.JobID,
 		MigrationToken: migration.MigrationToken,
 		Payload:        payload,
 	}
 	resp, err := remote.ReceiveMigration(ctx, req)
 	if err != nil {
+		defer revert()
 		return nil, fmt.Errorf("migration request failed: %v", err)
-		// TODO: add migration interruped and retry/rollback logic
 	}
 	return resp, nil
+}
+
+// WithStatusChangeNotificationHandler sets the handler for status change notifications.
+// This handler is called when the status of a service changes during migration.
+func WithStatusChangeNotificationHandler(notifyHandler func(service model.Service)) HandlerOptions {
+	return func(h *serviceMigrationHandler) {
+		h.statusChangeNotificationHandler = notifyHandler
+	}
 }
