@@ -64,6 +64,8 @@ services:
       - "${SERVICE_MANAGER_PORT}"
     ports:
       - "${SERVICE_MANAGER_PORT}:${SERVICE_MANAGER_PORT}"
+    volumes:
+      - ./service-manager-metrics:/metrics
     environment:
       - MY_PORT=${SERVICE_MANAGER_PORT}
       - MQTT_BROKER_PORT=${MQTT_BROKER_PORT}
@@ -110,6 +112,7 @@ services:
       - MQTT_BROKER_PORT=${MQTT_BROKER_PORT}
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
+      - MONITORING_MANAGER_ADDR=${MONITORING_MANAGER_HOST}:${MONITORING_MANAGER_GRPC_PORT}
     depends_on:
       - mongo_cluster
       - mqtt
