@@ -1,6 +1,6 @@
 ## Terraform Setup 
 
-This directory contains Terraform scripts to set up different VMs to run the Go Node Engine.
+This directory contains Terraform scripts to set up a VMs with the NodeEngine pre-installed.
 
 ### Prerequisites
 
@@ -23,7 +23,19 @@ This directory contains Terraform scripts to set up different VMs to run the Go 
    terraform apply
    ```
 
-3. Destroy the resources (when no longer needed):
+3. After the VM is created, you can SSH into it using:
+
+   ```bash
+   ssh test@192.168.123.1
+   ```
+
+   and them run the Node Engine:
+
+   ```bash
+   sudo NodeEngine -a <IP of your cluster orchestrator> [-d]
+   ```
+
+4. Destroy the resources (when no longer needed):
 
    ```bash
    terraform destroy
