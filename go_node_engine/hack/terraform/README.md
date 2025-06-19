@@ -17,19 +17,13 @@ This directory contains Terraform scripts to set up different VMs to run the Go 
    terraform init
    ```
 
-2. Plan the deployment:
-
-   ```bash
-   terraform plan
-   ```
-
-3. Apply the changes:
+2. Create the VM running the Go Node Engine:
 
    ```bash
    terraform apply
    ```
 
-4. Destroy the resources (when no longer needed):
+3. Destroy the resources (when no longer needed):
 
    ```bash
    terraform destroy
@@ -42,12 +36,14 @@ This directory contains Terraform scripts to set up different VMs to run the Go 
 - Run: `sudo virsh undefine --domain vm1` to remove the existing domain.
 
 *Error*: `error creating libvirt domain: internal error: process exited while connecting to monitor: 2025-06-19T10:41:09.134982Z qemu-system-x86_64: -blockdev {"driver":"file","filename":"/opt/kvm/pool1/vm1","node-name":"libvirt-1-storage","auto-read-only":true,"discard":"unmap"}: Could not open '/opt/kvm/pool1/vm1': Permission denied``
-- Add the following to your `/etc/libvirt/qemu.conf` file:
+- Set the following values to `/etc/libvirt/qemu.conf` file:
   ```ini
   user = "root"
   group = "root"
+  security_driver = "none"
   ```
-- Reboot your system:
+  Note: This is not recommended for production environments as it disables security features.
+- Restart the libvirt service:
   ```bash
-  sudo reboot -n
+  sudo systemctl restart libvirtd
   ```

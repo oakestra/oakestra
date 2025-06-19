@@ -1,10 +1,56 @@
 #!/usr/bin/env bash
 
-if [ -z "$1" ]; then
-    echo "Architecture not set"
-    echo "Usage ./install.sh <architecture>"
-    echo "supported architectures: amd64, arm64"
-    exit 1
+
+# Get last argument from argument list 
+arch="${@: -1}"
+
+# Check if last argument is amd64 or arm64
+if [ "$arch" != "amd64" ] && [ "$arch" != "arm64" ]; then
+  echo "Invalid architecture specified. Supported architectures: amd64, arm64"
+  echo "Usage: ./install.sh <architecture>"
+  exit 1
+fi
+
+remote_host="localhost"
+key=""
+while getopts "hr:i:" flag; do
+ case $flag in
+   h) # Handle the -h flag
+   echo "Usage: $0 <architecture>"
+    echo "Supported architectures: amd64, arm64"
+    echo "Options:"
+    echo "  -h    Show this help message"
+    echo "  -r [user@host]  Specify a remote user and host for NodeEngine installation"
+    echo "  -i [key_path]   Specify the path to the SSH key for remote installation"
+    exit 0
+   ;;
+   r) # Handle the -r flag
+   echo "Remote host specified: $OPTARG"
+   remote_host=$OPTARG
+   ;;
+   i) # set key [ath for remote host installation
+   echo "Key path: $OPTARG"
+   key=$OPTARG
+   ;;
+   \?)
+   # Handle invalid options
+   ;;
+ esac
+done
+
+if [ "$remote_host" != "localhost" ]; then
+  # Check if key is provided for remote installation
+  opts=""
+  if [ "$key" != "" ]; then
+    echo "Using key $key for remote installation"
+    opts="-i $key"
+  fi
+  # ssh to remote host and run the script
+  echo "Moving NodeEngine_$arch, nodeengined_$arch, nodeengine.service and install.sh to remote host $remote_host"
+  scp $opts NodeEngine_$arch nodeengined_$arch nodeengine.service ../nodeengine.service install.sh "$remote_host":~/
+  # run node engine stop on remote host
+  ssh $opts -t "$remote_host" "sudo NodeEngine stop >/dev/null 2>&1; ./install.sh $arch"
+  exit $?
 fi
 
 systemd --version > /dev/null 2>&1
@@ -15,8 +61,6 @@ if [ ! $? -eq 0 ]; then
     exit 1
   fi
 fi
-
-arch="$1"
 
 #check containerd installation
 if sudo systemctl | grep -Fq 'containerd'; then

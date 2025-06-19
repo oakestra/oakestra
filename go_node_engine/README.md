@@ -6,6 +6,14 @@ The node engine is the core of the Oakestra worker node.
 
 Move to the build directory and run `./build.sh` and then `./install.sh $(dpkg --print-architecture)`.
 
+> *N.b.* the `install.sh` scripts also supports remote installations, so you can run it on a remote machine. 
+>E.g.
+>```bash
+>./install.sh -r ubuntu@192.168.123.1 -i ~/.ssh/my_cert amd64
+>```
+>This command will install the NodeEngine on the remote machine `ubuntu@192.168.123.1` with the specified architecture (in this case, `amd64`). The login is performed using the SSH key located at `~/.ssh/my_cert`.
+> Please use `./install.sh -h` to see the full list of options.
+
 ## Use the NodeEngine 
 
 You can start the node engine using the `sudo NodeEngine` command.
