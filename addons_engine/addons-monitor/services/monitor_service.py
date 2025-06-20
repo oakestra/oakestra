@@ -169,7 +169,7 @@ class AddonsMonitor:
                 container_networks = runner_engine.get_container_networks(similar_container)
                 container_ports = runner_engine.get_container_ports(similar_container)
                 if container_networks:
-                    service.get("networks").extend(container_networks)
+                    service.get("networks").extend(x for x in container_networks if x not in service.get("networks"))
 
                 # extending the ports of the image, but don't override the configured ones
                 service["ports"] = service.get("ports", {})
