@@ -6,6 +6,7 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"net/http"
+	"net/http/pprof"
 	"time"
 )
 
@@ -17,6 +18,12 @@ func startServer(port string) error {
 
 	// Register the /id route
 	mux.HandleFunc("/id", handleIDRequest)
+
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
 	// Create the server
 	server = &http.Server{
