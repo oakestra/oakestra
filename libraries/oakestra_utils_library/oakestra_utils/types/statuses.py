@@ -75,19 +75,19 @@ class DeploymentStatus(Status):
 
     # Migration requested to a target node.
     # The target node still has to accept the mgiration request
-    MIGRATION_REQUESTED = "MIGRATION REQUESTED"  # 🟪
+    MIGRATION_REQUESTED = "MIGRATION_REQUESTED"  # 🟪
 
     # Migration request accepted by a target node.
     # The service is ready to be migrated.
-    MIGRATION_ACCEPTED = "MIGRATION ACCEPTED"  # 🟪
+    MIGRATION_ACCEPTED = "MIGRATION_ACCEPTED"  # 🟪
 
     # Service migration to target node in progress
     # Node FROM is sending the data to Node TO.
-    MIGRATION_PROGRESS = "MIGRATION IN PROGRESS"  # 🟪
+    MIGRATION_PROGRESS = "MIGRATION_IN_PROGRESS"  # 🟪
 
     # Migration completed successfully
     # The node FROM is slowly de-bouncing the traffinc and cleaning up the service.
-    MIGRATION_DEBOUNCE = "MIGRATION DEBOUNCING"  # 🟪
+    MIGRATION_DEBOUNCE = "MIGRATION_DEBOUNCING"  # 🟪
 
 
 def convert_to_status(name: Optional[str]) -> Optional[Status]:
