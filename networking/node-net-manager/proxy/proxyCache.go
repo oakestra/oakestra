@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"NetManager/logger"
 	"net"
 	"sync"
 	"time"
@@ -82,7 +83,6 @@ func (cache *ProxyCache) RetrieveByServiceIP(srcip net.IP, instanceIP net.IP, sr
 				cacheEntry.srcip.Equal(srcip) &&
 				cacheEntry.srcInstanceIp.Equal(instanceIP) {
 				elem.lastUsed = time.Now().Unix()
-				logger.InfoLogger().Printf("Found cached flow: %v\nCurrent length of cacheList: %d", cacheEntry, len(elem.conversionList))
 				return cacheEntry, true
 			}
 		}
