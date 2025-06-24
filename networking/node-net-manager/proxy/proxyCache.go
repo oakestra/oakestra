@@ -29,10 +29,43 @@ type ProxyCache struct {
 }
 
 func NewProxyCache() ProxyCache {
-	return ProxyCache{
+	cache := ProxyCache{
 		cache:                 make([]ConversionList, 65535),
 		conversionListMaxSize: 10,
 		rwlock:                sync.RWMutex{},
+	}
+	cache.runEvictionJob(30*time.Second, 1*time.Minute)
+	return cache
+}
+
+// runEvictionJob starts a goroutine that periodically evicts old cache entries.
+func (cache *ProxyCache) runEvictionJob(interval time.Duration, timeout time.Duration) {
+	ticker := time.NewTicker(interval)
+	go func() {
+		for range ticker.C {
+			cache.evictOldEntries(timeout)
+		}
+	}()
+}
+
+// evictOldEntries removes entries that have not been used for the duration of the timeout.
+func (cache *ProxyCache) evictOldEntries(timeout time.Duration) {
+	cache.rwlock.Lock()
+	defer cache.rwlock.Unlock()
+
+	now := time.Now().Unix()
+	timeoutSeconds := int64(timeout.Seconds())
+	evictedCount := 0
+	for i, elem := range cache.cache {
+		// An entry is considered old if it has not been used for the timeout period.
+		if elem.lastUsed != 0 && (now-elem.lastUsed) > timeoutSeconds {
+			// To evict the entry, we just reset it to its zero value.
+			cache.cache[i] = ConversionList{}
+			evictedCount++
+		}
+	}
+	if evictedCount > 0 {
+		logger.InfoLogger().Printf("Evicted %d entries from cache", evictedCount)
 	}
 }
 
@@ -41,14 +74,15 @@ func (cache *ProxyCache) RetrieveByServiceIP(srcip net.IP, instanceIP net.IP, sr
 	cache.rwlock.Lock()
 	defer cache.rwlock.Unlock()
 
-	elem := cache.cache[srcport]
-	elem.lastUsed = time.Now().Unix()
+	elem := &cache.cache[srcport]
 	if elem.conversionList != nil {
 		for _, cacheEntry := range elem.conversionList {
 			if cacheEntry.dstport == dstport &&
 				cacheEntry.dstServiceIp.Equal(dstServiceIp) &&
 				cacheEntry.srcip.Equal(srcip) &&
 				cacheEntry.srcInstanceIp.Equal(instanceIP) {
+				elem.lastUsed = time.Now().Unix()
+				logger.InfoLogger().Printf("Found cached flow: %v\nCurrent length of cacheList: %d", cacheEntry, len(elem.conversionList))
 				return cacheEntry, true
 			}
 		}
@@ -61,11 +95,11 @@ func (cache *ProxyCache) RetrieveByInstanceIp(srcip net.IP, srcport int, dstport
 	cache.rwlock.Lock()
 	defer cache.rwlock.Unlock()
 
-	elem := cache.cache[srcport]
-	elem.lastUsed = time.Now().Unix()
+	elem := &cache.cache[srcport]
 	if elem.conversionList != nil {
 		for _, entry := range elem.conversionList {
 			if entry.dstport == dstport && entry.srcip.Equal(srcip) {
+				elem.lastUsed = time.Now().Unix()
 				return entry, true
 			}
 		}
@@ -78,18 +112,17 @@ func (cache *ProxyCache) Add(entry ConversionEntry) {
 	cache.rwlock.Lock()
 	defer cache.rwlock.Unlock()
 
-	elem := cache.cache[entry.srcport]
+	elem := &cache.cache[entry.srcport]
 	if elem.conversionList == nil || len(elem.conversionList) == 0 {
 		elem.nextEntry = 0
 		elem.conversionList = make([]ConversionEntry, cache.conversionListMaxSize)
 	}
-	cache.cache[entry.srcport] = elem
 
 	cache.addToConversionList(entry)
 }
 
 func (cache *ProxyCache) addToConversionList(entry ConversionEntry) {
-	elem := cache.cache[entry.srcport]
+	elem := &cache.cache[entry.srcport]
 	elem.lastUsed = time.Now().Unix()
 	alreadyExist := false
 	alreadyExistPosition := 0
