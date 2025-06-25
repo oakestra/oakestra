@@ -22,11 +22,11 @@ type CgroupMetrics struct {
 	CurrentMemoryBytes uint64
 }
 
-func NewCgroupStatsTracker(cgroupPath string) (*CgroupMetricsTracker, error) {
+func NewCgroupStatsTracker(cgroupPath string) *CgroupMetricsTracker {
 	return &CgroupMetricsTracker{
 		cgroupPath:         cgroupPath,
 		lastTotalCpuMicros: 0,
-	}, nil
+	}
 }
 
 func (c *CgroupMetricsTracker) GatherMetrics() (*CgroupMetrics, error) {

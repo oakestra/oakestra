@@ -11,9 +11,11 @@ import (
 	"go_node_engine/virtualization/internal/allruntimes"
 	"go_node_engine/virtualization/internal/crosvm/internal/image"
 	"go_node_engine/virtualization/internal/crosvm/internal/instance"
+	"go_node_engine/virtualization/internal/crosvm/internal/stats"
 	virtrt "go_node_engine/virtualization/internal/runtime"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -39,9 +41,19 @@ type Runtime struct {
 
 	lock      sync.RWMutex
 	instances map[string]*instance.Instance
+
+	systemMetricsTracker *stats.SystemMetricsTracker
 }
 
 func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
+	systemMetricsTracker, err := stats.NewSystemMetricsTracker()
+	if err != nil {
+		logger.ErrorLogger().Printf("failed to create SystemMetricsTracker: %v", err)
+		return &Runtime{
+			error: err,
+		}
+	}
+
 	// this is a workaround for a known issue in crosvm, which causes it to fail when /var/empty does not exist
 	if err := os.MkdirAll("/var/empty", 0o755); err != nil {
 		logger.ErrorLogger().Printf("failed to create /var/empty directory: %v", err)
@@ -118,6 +130,8 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 
 		lock:      sync.RWMutex{},
 		instances: make(map[string]*instance.Instance),
+
+		systemMetricsTracker: systemMetricsTracker,
 	}
 }
 
@@ -212,20 +226,38 @@ func (r *Runtime) reportResources(notifyHandler func(res []model.Resources)) {
 	r.lock.RLock()
 	defer r.lock.RUnlock()
 
-	// TODO(axiphi): collect actual resources and parallelize
-	var resourcesList []model.Resources = make([]model.Resources, 0)
-	for id, _ := range r.instances {
+	systemMetrics, err := r.systemMetricsTracker.GatherMetrics()
+	if err != nil {
+		logger.WarnLogger().Printf("failed to gather system metrics: %v", err)
+		return
+	}
+
+	resourcesList := make([]model.Resources, 0)
+	for id, inst := range r.instances {
+		cpu := ""
+		memory := ""
+		metrics, err := inst.GatherMetrics()
+		// There's no need to log anything here when an error occurs,
+		// since we expect them when the instance is still starting or stopped.
+		if err == nil {
+			cpu = strconv.FormatFloat(stats.CalculateCpuPercentage(systemMetrics, metrics), 'f', 2, 64)
+			memory = strconv.FormatFloat(stats.CalculateMemoryPercentage(systemMetrics, metrics), 'f', 2, 64)
+		}
+
+		logs := inst.GatherLogs()
+
 		serviceName := taskid.ExtractServiceName(id)
 		instanceNumber := taskid.ExtractInstanceNumber(id)
 		resourcesList = append(resourcesList, model.Resources{
-			Cpu:      "0.0",
-			Memory:   "0.0",
+			Cpu:      cpu,
+			Memory:   memory,
 			Disk:     "0",
 			Sname:    serviceName,
-			Logs:     "",
+			Logs:     logs,
 			Runtime:  string(model.CROSVM_RUNTIME),
 			Instance: instanceNumber,
 		})
 	}
+
 	notifyHandler(resourcesList)
 }

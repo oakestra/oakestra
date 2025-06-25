@@ -5,3 +5,18 @@ func IsValidUTF8Start(b byte) bool {
 	// not a valid start to a sequence of UTF-8 characters
 	return (b & 0xC0) != 0x80
 }
+
+func IsLineStart() func(byte) bool {
+	foundNewline := false
+	return func(b byte) bool {
+		if foundNewline {
+			return true
+		}
+
+		if b == '\n' {
+			foundNewline = true
+		}
+
+		return false
+	}
+}

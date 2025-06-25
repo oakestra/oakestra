@@ -7,8 +7,10 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/util/iotools"
 	"go_node_engine/util/ptr"
+	"go_node_engine/virtualization/internal/crosvm/internal/cgroup"
 	"go_node_engine/virtualization/internal/crosvm/internal/cloudinit"
 	"go_node_engine/virtualization/internal/crosvm/internal/image"
+	"go_node_engine/virtualization/internal/crosvm/internal/stats"
 	"go_node_engine/virtualization/internal/crosvm/internal/tailbuf"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
@@ -69,7 +71,9 @@ type Instance struct {
 	config              InstanceConfig
 	configExt           InstanceConfigExt
 
-	stderrBuffer *tailbuf.TailBuffer
+	// Even though the exec module prevents concurrent writes from Cmd.Stdin and Cmd.Stdout,
+	// we need a LockingTailBuffer, because we concurrently read from it during resource monitoring.
+	outputBuffer *tailbuf.LockingTailBuffer
 	logger       io.WriteCloser
 
 	lock       sync.Mutex
@@ -77,6 +81,9 @@ type Instance struct {
 	exitChan   chan instanceExitType
 	lastExit   instanceExitType
 	startCount uint32
+
+	machineName          string
+	cgroupMetricsTracker *stats.CgroupMetricsTracker
 }
 
 func NewInstance(
@@ -135,6 +142,8 @@ func NewInstance(
 
 	configExt := NewInstanceConfigExt(&service)
 
+	machineName := cgroup.ConvertTaskIdToMachineName(id)
+
 	inst := &Instance{
 		executablePath: executablePath,
 
@@ -148,7 +157,7 @@ func NewInstance(
 		config:              *config,
 		configExt:           *configExt,
 
-		stderrBuffer: tailbuf.NewTailBuffer(4096),
+		outputBuffer: tailbuf.NewLockingTailBuffer(8192),
 		logger: &lumberjack.Logger{
 			Filename:   path.Join(stateDirPath, "instance.log"),
 			MaxSize:    100,
@@ -160,7 +169,16 @@ func NewInstance(
 		exitChan:   make(chan instanceExitType, 1),
 		lastExit:   instanceExitTypeNone,
 		startCount: 0,
+
+		machineName:          machineName,
+		cgroupMetricsTracker: stats.NewCgroupStatsTracker(cgroup.GetMachineCgroupPath(machineName)),
 	}
+
+	// When the logs are exported for resource monitoring,
+	// it skips until the first newline, to prevent partial lines from being returned.
+	// To make sure the first line is returned correctly before the tailbuffer loops,
+	// we prefill the outputBuffer with an initial newline.
+	_, _ = inst.outputBuffer.Write([]byte{'\n'})
 
 	if err := inst.createConfigFile(); err != nil {
 		logger.ErrorLogger().Printf("could not create config file for instance %q: %v", inst.id, err)
@@ -233,10 +251,12 @@ func (i *Instance) Start() error {
 		crosvmExec, runArgs = wrapCommandWithScreen(i.id, crosvmExec, runArgs)
 	}
 
-	runCmd := exec.Command(crosvmExec, runArgs...)
+	combinedArgs := slices.Concat([]string{crosvmExec}, runArgs)
+	runCmd := cgroup.MachinedExecCommand(i.machineName, cgroup.MachineTypeVM, combinedArgs...)
 
-	runCmd.Stdout = i.logger
-	runCmd.Stderr = io.MultiWriter(i.stderrBuffer, i.logger)
+	outputWriter := io.MultiWriter(i.outputBuffer, i.logger)
+	runCmd.Stdout = outputWriter
+	runCmd.Stderr = outputWriter
 
 	logger.InfoLogger().Printf("starting instance %q with args %q", i.id, runArgs)
 	if err := runCmd.Start(); err != nil {
@@ -336,6 +356,19 @@ func (i *Instance) WaitForExit(timeout time.Duration) error {
 	}
 }
 
+func (i *Instance) GatherMetrics() (*stats.CgroupMetrics, error) {
+	return i.cgroupMetricsTracker.GatherMetrics()
+}
+
+func (i *Instance) GatherLogs() string {
+	output := strings.Builder{}
+	// tailbuf.IsLineStart() prevents partial first line from being part of the logs
+	// no error can occur jere because strings.Builder.Write doesn't error
+	_, _ = i.outputBuffer.WriteToSkippingUntil(&output, tailbuf.IsLineStart())
+
+	return output.String()
+}
+
 func (i *Instance) waitForExit(cmd *exec.Cmd, startNum uint32) {
 	runErr := cmd.Wait()
 
@@ -350,7 +383,7 @@ func (i *Instance) waitForExit(cmd *exec.Cmd, startNum uint32) {
 			msgBuilder.WriteString(fmt.Sprintf("instance %q exited with error code %d, standard error excerpt:", i.id, err.ExitCode()))
 
 			stderrBuilder := strings.Builder{}
-			_, _ = i.stderrBuffer.WriteToSkippingUntil(&stderrBuilder, tailbuf.IsValidUTF8Start)
+			_, _ = i.outputBuffer.WriteToSkippingUntil(&stderrBuilder, tailbuf.IsValidUTF8Start)
 			for line := range strings.Lines(stderrBuilder.String()) {
 				trimmed := strings.TrimSpace(line)
 				if len(trimmed) > 0 {
@@ -366,7 +399,9 @@ func (i *Instance) waitForExit(cmd *exec.Cmd, startNum uint32) {
 		exit = instanceExitTypeError
 	}
 
-	i.stderrBuffer.Reset()
+	i.outputBuffer.Reset()
+	// see NewInstance for why this initial newline is put into the buffer
+	_, _ = i.outputBuffer.Write([]byte{'\n'})
 
 	select {
 	case i.exitChan <- exit:
