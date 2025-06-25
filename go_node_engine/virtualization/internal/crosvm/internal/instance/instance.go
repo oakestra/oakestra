@@ -186,6 +186,23 @@ func NewInstance(
 		return nil, err
 	}
 
+	ethernets := make(map[string]cloudinit.NetworkConfigEthernet)
+	if netConf != nil {
+		ethernets["main"] = cloudinit.NetworkConfigEthernet{
+			Match: &cloudinit.NetworkConfigMatch{
+				Macaddress: &netConf.Mac,
+			},
+			Dhcp4:     ptr.Ptr(false),
+			Dhcp6:     ptr.Ptr(false),
+			Addresses: []string{netConf.AddressIpv4Cidr},
+			Gateway4:  &netConf.GatewayIpv4,
+			Gateway6:  nil,
+			Nameservers: &cloudinit.NetworkConfigNameservers{
+				Addresses: []string{"8.8.8.8"}, // use google DNS, like container runtime does
+			},
+		}
+	}
+
 	err = cloudinit.CreateNoCloudFsImg(
 		cloudinit.UserData{
 			CloudInitModules: []string{
@@ -199,22 +216,8 @@ func NewInstance(
 			LocalHostname: nil,
 		},
 		cloudinit.NetworkConfig{
-			Version: 2,
-			Ethernets: map[string]cloudinit.NetworkConfigEthernet{
-				"main": {
-					Match: &cloudinit.NetworkConfigMatch{
-						Macaddress: &netConf.Mac,
-					},
-					Dhcp4:     ptr.Ptr(false),
-					Dhcp6:     ptr.Ptr(false),
-					Addresses: []string{netConf.AddressIpv4Cidr},
-					Gateway4:  &netConf.GatewayIpv4,
-					Gateway6:  nil,
-					Nameservers: &cloudinit.NetworkConfigNameservers{
-						Addresses: []string{"8.8.8.8"}, // use google DNS, like container runtime does
-					},
-				},
-			},
+			Version:   2,
+			Ethernets: ethernets,
 		},
 		path.Join(inst.stateDirPath, cloudInitFileName),
 	)
