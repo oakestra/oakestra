@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"go_node_engine/util/iotools"
+	"io"
 	"log"
 	"os"
 	"path"
@@ -17,7 +18,8 @@ type CgroupMetricsTracker struct {
 }
 
 type CgroupMetrics struct {
-	CpuMicrosDelta uint64
+	CpuMicrosDelta     uint64
+	CurrentMemoryBytes uint64
 }
 
 func NewCgroupStatsTracker(cgroupPath string) (*CgroupMetricsTracker, error) {
@@ -38,14 +40,16 @@ func (c *CgroupMetricsTracker) GatherMetrics() (*CgroupMetrics, error) {
 		cpuMicrosDelta = newTotalCpuMicros - c.lastTotalCpuMicros
 	}
 
+	currentMemoryBytes, err := obtainCurrentMemoryBytes(c.cgroupPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to gather metrics for cgroup %q: %w", c.cgroupPath, err)
+	}
+
 	c.lastTotalCpuMicros = newTotalCpuMicros
 	return &CgroupMetrics{
-		CpuMicrosDelta: cpuMicrosDelta,
+		CpuMicrosDelta:     cpuMicrosDelta,
+		CurrentMemoryBytes: currentMemoryBytes,
 	}, nil
-
-	//utime := (cpuStats.userUsec * 100) / c.kernelTicksPerSecond
-	//stime := (cpuStats.systemUsec * 100) / c.kernelTicksPerSecond
-	//cpuPercentage := float32(saturatingSub(utime+stime, lasttimes)) / (float32(period) * 100.0)
 }
 
 func obtainTotalCpuMicros(cgroupPath string) (uint64, error) {
@@ -73,9 +77,31 @@ func obtainTotalCpuMicros(cgroupPath string) (uint64, error) {
 			if err != nil {
 				return 0, fmt.Errorf("failed to parse usage_usec value in cpu.stat file of cgroup %q: %w", cgroupPath, err)
 			}
+
 			return usageUsec, nil
 		}
 	}
 
 	return 0, fmt.Errorf("failed to find usage_usec line in cpu.stat file of cgroup %q", cgroupPath)
+}
+
+func obtainCurrentMemoryBytes(cgroupPath string) (uint64, error) {
+	memoryCurrentPath := path.Join(cgroupPath, "memory.current")
+	memoryCurrentFile, err := os.OpenFile(memoryCurrentPath, os.O_RDONLY, 0)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read memory.current file in cgroup %q: %w", cgroupPath, err)
+	}
+	defer iotools.CloseOrWarn(memoryCurrentFile, memoryCurrentPath)
+
+	memoryCurrentContent, err := io.ReadAll(memoryCurrentFile)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read memory.current file in cgroup %q: %w", cgroupPath, err)
+	}
+
+	memoryCurrent, err := strconv.ParseUint(strings.TrimSuffix(string(memoryCurrentContent), "\n"), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse memory.current file in cgroup %q: %w", cgroupPath, err)
+	}
+
+	return memoryCurrent, nil
 }

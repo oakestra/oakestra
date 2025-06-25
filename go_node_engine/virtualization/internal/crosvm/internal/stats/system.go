@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"fmt"
 	"github.com/prometheus/procfs"
 	"github.com/prometheus/procfs/sysfs"
 	"os/exec"
@@ -9,61 +10,64 @@ import (
 )
 
 type SystemMetricsTracker struct {
-	cpuTicksPerSecond uint64
-	lastTotalCpuTicks uint64
+	defaultProcfs *procfs.FS
+	defaultSysfs  *sysfs.FS
+
+	lastTotalCpuSeconds float64
 }
 
 type SystemMetrics struct {
-	CpuTicksPerSecond  uint64
-	CpuTicksDelta      uint64
-	OnlineCpuCoreCount uint64
+	CpuMicrosDelta   uint64
+	OnlineCpuCount   uint64
+	TotalMemoryBytes uint64
 }
 
 func NewSystemMetricsTracker() (*SystemMetricsTracker, error) {
+	defaultProcfs, err := procfs.NewDefaultFS()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default procfs: %w", err)
+	}
+
+	defaultSysfs, err := sysfs.NewDefaultFS()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default sysfs: %w", err)
+	}
+
 	return &SystemMetricsTracker{
-		cpuTicksPerSecond: obtainCpuTicksPerSecond(),
-		lastTotalCpuTicks: 0,
+		defaultProcfs: &defaultProcfs,
+		defaultSysfs:  &defaultSysfs,
+
+		lastTotalCpuSeconds: 0,
 	}, nil
 }
 
 func (s *SystemMetricsTracker) GatherMetrics() (*SystemMetrics, error) {
-	newTotalCpuTicks, err := obtainTotalCpuTicks()
+	newTotalCpuSeconds, err := s.obtainTotalCpuSeconds()
 	if err != nil {
 		return nil, err
 	}
 
-	var cpuTicksDelta uint64 = 0
-	if newTotalCpuTicks > s.lastTotalCpuTicks {
-		cpuTicksDelta = newTotalCpuTicks - s.lastTotalCpuTicks
+	var cpuSecondsDelta float64 = 0
+	if newTotalCpuSeconds > s.lastTotalCpuSeconds {
+		cpuSecondsDelta = newTotalCpuSeconds - s.lastTotalCpuSeconds
 	}
 
-	onlineCpuCount, err := obtainOnlineCpuCount()
+	onlineCpuCount, err := s.obtainOnlineCpuCount()
 	if err != nil {
 		return nil, err
 	}
 
-	s.lastTotalCpuTicks = newTotalCpuTicks
+	totalMemoryBytes, err := s.obtainTotalMemoryBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	s.lastTotalCpuSeconds = newTotalCpuSeconds
 	return &SystemMetrics{
-		CpuTicksPerSecond:  s.cpuTicksPerSecond,
-		CpuTicksDelta:      cpuTicksDelta,
-		OnlineCpuCoreCount: onlineCpuCount,
+		CpuMicrosDelta:   uint64(cpuSecondsDelta * float64(1000000)),
+		OnlineCpuCount:   onlineCpuCount,
+		TotalMemoryBytes: totalMemoryBytes,
 	}, nil
-}
-
-// obtainCpuTicksPerSecond obtains the ticks (jiffies) the kernel does per second.
-// The correct way to do this is by calling "sysconf(_SC_CLK_TCK)" with libc,
-// but this would mean that node engine needs to be compiled CGO which is a lot of setup effort.
-// As an alternative, this function uses the "getconf" command with "CLK_TCK" which per Debian's documentation
-// is obsolete, but still seems to work.
-// If the getconf method fails, it falls back to returning 100, which is the value pretty much all Linux systems
-// use anyway.
-func obtainCpuTicksPerSecond() uint64 {
-	getconfCpuTicksPerSecond, err := obtainCpuTicksPerSecondWithGetconf()
-	if err == nil {
-		return getconfCpuTicksPerSecond
-	}
-
-	return 100
 }
 
 func obtainCpuTicksPerSecondWithGetconf() (uint64, error) {
@@ -78,45 +82,53 @@ func obtainCpuTicksPerSecondWithGetconf() (uint64, error) {
 	return strconv.ParseUint(out.String(), 10, 64)
 }
 
-func obtainTotalCpuTicks() (uint64, error) {
-	fs, err := procfs.NewDefaultFS()
+func (s *SystemMetricsTracker) obtainTotalCpuSeconds() (float64, error) {
+	stat, err := s.defaultProcfs.Stat()
 	if err != nil {
 		return 0, err
 	}
 
-	stat, err := fs.Stat()
-	if err != nil {
-		return 0, err
-	}
+	// the procfs library already converts the readings from /proc/stat from ticks to seconds internally
+	totalCpuSeconds := stat.CPUTotal.User +
+		stat.CPUTotal.Nice +
+		stat.CPUTotal.System +
+		stat.CPUTotal.IRQ +
+		stat.CPUTotal.SoftIRQ +
+		stat.CPUTotal.Idle +
+		stat.CPUTotal.Iowait +
+		stat.CPUTotal.Steal
 
-	var totalCpuTicks uint64 = uint64(stat.CPUTotal.User) +
-		uint64(stat.CPUTotal.Nice) +
-		uint64(stat.CPUTotal.System) +
-		uint64(stat.CPUTotal.IRQ) +
-		uint64(stat.CPUTotal.SoftIRQ) +
-		uint64(stat.CPUTotal.Idle) +
-		uint64(stat.CPUTotal.Iowait) +
-		uint64(stat.CPUTotal.Steal)
-
-	return totalCpuTicks, nil
+	return totalCpuSeconds, nil
 }
 
-func obtainOnlineCpuCount() (uint64, error) {
-	fs, err := sysfs.NewDefaultFS()
+func (s *SystemMetricsTracker) obtainOnlineCpuCount() (uint64, error) {
+	cpus, err := s.defaultSysfs.CPUs()
 	if err != nil {
 		return 0, err
 	}
 
 	var onlineCpuCount uint64 = 0
-
-	cpus, err := fs.CPUs()
 	for _, cpu := range cpus {
 		online, err := cpu.Online()
+		// if reading the online status fails, we also consider the cpu online
 		if err != nil || online {
-			// if reading the online status fails, we also consider the cpu online
 			onlineCpuCount++
 		}
 	}
 
 	return onlineCpuCount, nil
+}
+
+func (s *SystemMetricsTracker) obtainTotalMemoryBytes() (uint64, error) {
+	meminfo, err := s.defaultProcfs.Meminfo()
+	if err != nil {
+		return 0, err
+	}
+
+	totalMemoryBytes := meminfo.MemTotalBytes
+	if totalMemoryBytes == nil {
+		return 0, fmt.Errorf("total memory bytes was not available in /proc/meminfo")
+	}
+
+	return *totalMemoryBytes, nil
 }

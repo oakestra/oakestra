@@ -1,13 +1,18 @@
 package stats
 
 func CalculateCpuPercentage(systemMetrics *SystemMetrics, cgroupMetrics *CgroupMetrics) float64 {
-	if systemMetrics.CpuTicksDelta == 0 || systemMetrics.OnlineCpuCoreCount == 0 {
+	if systemMetrics.CpuMicrosDelta == 0 || systemMetrics.OnlineCpuCount == 0 {
 		return 0
 	}
 
-	var systemCpuSeconds float64 = float64(systemMetrics.CpuTicksDelta) / float64(systemMetrics.CpuTicksPerSecond)
-	var systemCpuMicros float64 = systemCpuSeconds * 1000000
-	var systemCpuMicrosPerCore = systemCpuMicros / float64(systemMetrics.OnlineCpuCoreCount)
+	systemCpuMicrosDeltaPerCore := float64(systemMetrics.CpuMicrosDelta) / float64(systemMetrics.OnlineCpuCount)
+	return (float64(cgroupMetrics.CpuMicrosDelta) / systemCpuMicrosDeltaPerCore) * 100.0
+}
 
-	return (float64(cgroupMetrics.CpuMicrosDelta) / systemCpuMicrosPerCore) * 100.0
+func CalculateMemoryPercentage(systemMetrics *SystemMetrics, cgroupMetrics *CgroupMetrics) float64 {
+	if systemMetrics.TotalMemoryBytes == 0 {
+		return 0
+	}
+
+	return (float64(cgroupMetrics.CurrentMemoryBytes) / float64(systemMetrics.TotalMemoryBytes)) * 100.0
 }
