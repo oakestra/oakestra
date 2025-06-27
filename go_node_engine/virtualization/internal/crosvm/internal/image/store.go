@@ -3,6 +3,7 @@ package image
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"go_node_engine/util/iotools"
 	"go_node_engine/virtualization/internal/crosvm/internal/fsimg"
@@ -12,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 
 	"go_node_engine/logger"
 )
@@ -225,9 +227,22 @@ func (s *Store) moveIntoCache(ref string, img *Image, tmpDirPath string, imageDi
 
 	// TODO(axiphi): this can fail when moving across different devices and we need to fall back to copying in that case
 	if err := os.Rename(tmpDirPath, imageDirPath); err != nil {
-		logger.ErrorLogger().Printf("moving image files into cache directory %q failed for image %q, it will be re-fetched the next time it is used: %v", imageDirPath, ref, err)
-		iotools.RemoveAllOrWarn(tmpDirPath)
-		return
+		// moving the temporary directory failed, so we need to remove it
+		defer iotools.RemoveAllOrWarn(tmpDirPath)
+
+		// errno 18: "invalid cross-device link" means os.Rename failed,
+		// because we tried to move the directory across filesystems.
+		// We can fall back to copying it in that case.
+		var errnoErr syscall.Errno
+		if ok := errors.As(err, &errnoErr); ok && errnoErr == 18 {
+			if err := iotools.CopyDir(tmpDirPath, imageDirPath); err != nil {
+				logger.ErrorLogger().Printf("failed to copy image %q into cache directory %q, it will be re-fetched the next time it is used: %v", imageDirPath, ref, err)
+				return
+			}
+		} else {
+			logger.ErrorLogger().Printf("failed to move image %q into cache directory %q, it will be re-fetched the next time it is used: %v", imageDirPath, ref, err)
+			return
+		}
 	}
 
 	if oldImg, ok := s.images[img.Key]; ok {
