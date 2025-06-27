@@ -200,7 +200,15 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		oci.WithImageConfig(image),
 		oci.WithHostHostsFile,
 		oci.WithHostname(hostname),
-		oci.WithEnv(append([]string{fmt.Sprintf("HOSTNAME=%s", hostname)}, service.Env...)),
+		oci.WithEnv(
+			append(
+				[]string{
+					fmt.Sprintf("HOSTNAME=%s", hostname),
+					fmt.Sprintf("OTEL_EXPORTER_OTLP_ENDPOINT=%s:4317", model.GetNodeInfo().Ip),
+				},
+				service.Env...,
+			),
+		),
 	}
 	if service.Privileged {
 		specOpts = append(specOpts, oci.WithDevices("/dev/fuse", "/dev/fuse", "rwm"))
