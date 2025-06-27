@@ -225,7 +225,6 @@ func (s *Store) moveIntoCache(ref string, img *Image, tmpDirPath string, imageDi
 
 	_ = os.RemoveAll(imageDirPath)
 
-	// TODO(axiphi): this can fail when moving across different devices and we need to fall back to copying in that case
 	if err := os.Rename(tmpDirPath, imageDirPath); err != nil {
 		// moving the temporary directory failed, so we need to remove it
 		defer iotools.RemoveAllOrWarn(tmpDirPath)
