@@ -8,6 +8,7 @@ import (
 	"go_node_engine/util/taskid"
 	"go_node_engine/virtualization/internal/network"
 	"net"
+	"os"
 	"slices"
 )
 
@@ -18,6 +19,14 @@ type networkConfig struct {
 }
 
 func setupNetwork(service model.Service) (*networkConfig, error) {
+	if os.Getenv("OAKESTRA_CROSVM_DEBUG") == "true" {
+		return &networkConfig{
+			Mac:             "ce:16:76:d4:52:52",
+			AddressIpv4Cidr: "192.168.10.2/24",
+			GatewayIpv4:     "192.168.10.1",
+		}, nil
+	}
+
 	if !model.GetNodeInfo().Overlay {
 		return nil, nil
 	}

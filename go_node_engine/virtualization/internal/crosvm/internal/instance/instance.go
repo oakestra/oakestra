@@ -200,16 +200,32 @@ func NewInstance(
 			Nameservers: &cloudinit.NetworkConfigNameservers{
 				Addresses: []string{"8.8.8.8"}, // use google DNS, like container runtime does
 			},
+			LinkLocal: []string{}, // needs to be empty slice and not nil to override option
 		}
+	}
+
+	var writeFiles []cloudinit.WriteFileConfig
+	if len(service.Env) != 0 {
+		writeFiles = append(writeFiles, cloudinit.WriteFileConfig{
+			Path:        "/etc/environment",
+			Content:     buildEtcEnvironmentString(service.Env),
+			Owner:       ptr.Ptr("root:root"),
+			Permissions: ptr.Ptr("0644"),
+			Append:      ptr.Ptr(true),
+		})
 	}
 
 	err = cloudinit.CreateNoCloudFsImg(
 		cloudinit.UserData{
 			CloudInitModules: []string{
 				"seed_random",
+				"write_files",
+				"ssh",
 			},
-			CloudConfigModules: []string{}, // needs to be empty slice and not nil to override option
-			CloudFinalModules:  []string{}, // needs to be empty slice and not nil to override option
+			CloudConfigModules: []string{},     // needs to be empty slice and not nil to override option
+			CloudFinalModules:  []string{},     // needs to be empty slice and not nil to override option
+			DisableRoot:        ptr.Ptr(false), // this way we let the image decide whether root ssh is disabled
+			WriteFiles:         writeFiles,
 		},
 		cloudinit.MetaData{
 			InstanceId:    inst.id,
@@ -502,4 +518,21 @@ func (i *Instance) generateStopArgs() []string {
 
 func wrapCommandWithScreen(name string, executable string, args []string) (string, []string) {
 	return "screen", slices.Concat([]string{"-D", "-m", "-S", name, executable}, args)
+}
+
+// buildEtcEnvironmentString takes model.Service.Env and creates a string
+// that can be written or appended to /etc/environment.
+// It should only be used if env is non-empty, because otherwise an empty line will be returned.
+func buildEtcEnvironmentString(env []string) string {
+	var result strings.Builder
+	// Usually, when /etc/environment already exists, it should already end in a newline,
+	// but since we're appending, we really have to make sure.
+	result.WriteString("\n")
+
+	for _, variable := range env {
+		result.WriteString(variable)
+		result.WriteString("\n")
+	}
+
+	return result.String()
 }
