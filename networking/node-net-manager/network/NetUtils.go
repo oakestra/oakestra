@@ -125,11 +125,11 @@ func defaultRoute() (*netlink.Link, error) {
 	return &defNetlink, nil
 }
 
-// Get preferred outbound ip of this machine
+// GetOutboundIP finds the preferred outbound ip of this machine
 func GetOutboundIP() net.IP {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Unable to dial DNS: %s", err)
 	}
 	defer conn.Close()
 
