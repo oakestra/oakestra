@@ -19,6 +19,7 @@ func init() {
 	configCmd.AddCommand(setVirtualizationCmd)
 	configCmd.AddCommand(defaultConfigCmd)
 	configCmd.AddCommand(setCni)
+	configCmd.AddCommand(visibility)
 	configCmd.AddCommand(setAuth)
 	setAuth.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
 	setAuth.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
@@ -27,9 +28,8 @@ func init() {
 	setCni.AddCommand(enableNetwork)
 	setCni.AddCommand(disableNetwork)
 	setCni.AddCommand(enableManualNetwork)
-	setCni.AddCommand(explainIP)
-	setCni.AddCommand(publicIP)
-	setCni.AddCommand(privateIP)
+	visibility.AddCommand(publicIP)
+	visibility.AddCommand(privateIP)
 	addClusterCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Custom port of the cluster orchestrator")
 	configCmd.AddCommand(setAddonCmd)
 	setAddonCmd.AddCommand(enableBuilder)
@@ -123,7 +123,7 @@ var (
 
 	// --- NETWORKING
 	setCni = &cobra.Command{
-		Use:   "network [auto/custom/off] [public/private]",
+		Use:   "network [auto/custom/off]",
 		Short: "Configure networking support",
 	}
 	explainNetManager = &cobra.Command{
@@ -150,13 +150,15 @@ var (
 	}
 	disableNetwork = &cobra.Command{
 		Use:   "off",
-		Short: "Disable overlay network support\n",
+		Short: "Disable overlay network support",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setNetwork("")
 		},
 	}
-	explainIP = &cobra.Command{
-		Use:   "[public/private]",
+
+	// --- VISIBILITY
+	visibility = &cobra.Command{
+		Use:   "visibility [public/private]",
 		Short: "Use public or private IP",
 	}
 	publicIP = &cobra.Command{

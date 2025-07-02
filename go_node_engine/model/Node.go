@@ -28,8 +28,7 @@ var (
 	UNIKERNEL_RUNTIME config.RuntimeType = config.UNIKERNEL_RUNTIME
 )
 
-const SlowUpdateFactor = 60
-
+const SlowUpdateFactor = 60 // For updating certain Node parameters at a lower frequency
 var SlowUpdateCounter = 0
 
 type AddonType string
