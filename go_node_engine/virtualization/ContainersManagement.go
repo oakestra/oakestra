@@ -390,6 +390,10 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 					task, err := container.Task(r.ctx, nil)
 					if err != nil {
 						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+						err := r.removeContainer(container)
+						if err != nil {
+							return
+						}
 						continue
 					}
 
@@ -454,11 +458,9 @@ func (r *ContainerRuntime) removeContainer(container containerd.Container) error
 	if err != nil {
 		return fmt.Errorf("Unable to fetch container task: %v", err)
 	}
-	if err == nil {
-		err = killTask(r.ctx, task, container)
-		if err != nil {
-			return fmt.Errorf("Unable to fetch kill task: %v", err)
-		}
+	err = killTask(r.ctx, task, container)
+	if err != nil {
+		return fmt.Errorf("Unable to fetch kill task: %v", err)
 	}
 	err = container.Delete(r.ctx)
 	if err != nil {
