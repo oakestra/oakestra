@@ -1,4 +1,4 @@
-FROM localhost/oakestra/vm-base:ubuntu-25.04
+FROM localhost/oakestra/vm-ubuntu:25.04
 
 RUN useradd -m ubuntu -G sudo \
     && echo 'ubuntu:ubuntu' | chpasswd

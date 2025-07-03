@@ -3,6 +3,7 @@ package instance
 import (
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/util/iotools"
@@ -64,7 +65,7 @@ type Instance struct {
 	id                  string
 	service             model.Service
 	statusChangeHandler func(service model.Service)
-	runtimeDirPath      string
+	socketPath          string
 	stateDirPath        string
 	restartMode         instanceRestartMode
 	img                 *image.Image
@@ -112,12 +113,6 @@ func NewInstance(
 	}
 
 	// TODO(axiphi): Remove this directory if one of the operations below fails
-	runtimeDirPath, err := iotools.CreateSubDir(baseRuntimeDirPath, fmt.Sprintf("instance-%s", id), 0o700)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO(axiphi): Remove this directory if one of the operations below fails
 	stateDirPath, err := iotools.CreateSubDir(baseStateDirPath, fmt.Sprintf("instance-%s", id), 0o700)
 	if err != nil {
 		return nil, err
@@ -135,7 +130,9 @@ func NewInstance(
 	}
 	logger.InfoLogger().Printf("set up network for instance %q", id)
 
-	config, err := NewInstanceConfig(&service, img, netConf, runtimeDirPath, stateDirPath)
+	socketPath := path.Join(baseRuntimeDirPath, uuid.New().String()+".sock")
+
+	config, err := NewInstanceConfig(&service, img, netConf, socketPath, stateDirPath)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +147,7 @@ func NewInstance(
 		id:                  id,
 		service:             service,
 		statusChangeHandler: statusChangeHandler,
-		runtimeDirPath:      runtimeDirPath,
+		socketPath:          socketPath,
 		stateDirPath:        stateDirPath,
 		restartMode:         restartMode,
 		img:                 img,
@@ -346,7 +343,6 @@ func (i *Instance) Close() error {
 	}
 
 	iotools.CloseOrWarn(i.logger, "crosvm instance logger")
-	iotools.RemoveAllOrWarn(i.runtimeDirPath)
 	iotools.RemoveAllOrWarn(i.stateDirPath)
 
 	return nil
@@ -505,6 +501,7 @@ func (i *Instance) generateRunArgs() []string {
 			"run",
 			"--cfg",
 			path.Join(i.stateDirPath, configFileName),
+			"--disable-sandbox",
 		},
 		i.configExt.ToArgs(),
 	)
@@ -512,13 +509,15 @@ func (i *Instance) generateRunArgs() []string {
 func (i *Instance) generateStopArgs() []string {
 	return []string{
 		"stop",
-		path.Join(i.runtimeDirPath, socketFileName),
+		i.socketPath,
 	}
 }
 
 func wrapCommandWithScreen(name string, executable string, args []string) (string, []string) {
 	return "screen", slices.Concat([]string{"-D", "-m", "-S", name, executable}, args)
 }
+
+// /var/run/oakestra/oakestragaming.2LDX3BEFPZBXTOLNBUG4Z7OOF4.MightyWavesJump.default.instance.0.sock
 
 // buildEtcEnvironmentString takes model.Service.Env and creates a string
 // that can be written or appended to /etc/environment.

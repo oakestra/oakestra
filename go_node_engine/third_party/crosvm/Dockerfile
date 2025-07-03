@@ -37,7 +37,7 @@ RUN mkdir --parents /opt/oakestra /opt/oakestra/bin /opt/oakestra/include /opt/o
 RUN git clone --depth 1 https://chromium.googlesource.com/chromiumos/platform/minigbm.git /scratch/minigbm \
     && cd /scratch/minigbm \
     && sed --in-place 's/-Wxor-used-as-pow/-Wno-xor-used-as-pow/g' common.mk \
-    && make CPPFLAGS="-DDRV_${GPU_KERNEL_DRIVER}" DRV_${GPU_KERNEL_DRIVER}=1 OUT=out DESTDIR=/opt/oakestra INCLUDEDIR=include LIBDIR=lib install
+    && make OUT=out DESTDIR=/opt/oakestra INCLUDEDIR=include LIBDIR=lib install
 
 # build virglrenderer (maybe a specific branch or commit should be used, e.g. "1.1.0")
 RUN git clone --depth 1 https://gitlab.freedesktop.org/virgl/virglrenderer.git /scratch/virglrenderer \
@@ -49,7 +49,7 @@ RUN git clone --depth 1 https://gitlab.freedesktop.org/virgl/virglrenderer.git /
 # build crosvm (maybe a specific commit should be used)
 # NOTE: libcrosvm_control.so has its SONAME set to exactly "libcrosvm_control.so",
 #       so there's no need to create versioned symlinks
-RUN git clone --depth 1 --recursive https://chromium.googlesource.com/crosvm/crosvm.git /scratch/crosvm \
+RUN git clone --depth 1 --recursive https://chromium.googlesource.com/crosvm/crosqvm.git /scratch/crosvm \
     && cd /scratch/crosvm \
     && . /root/.cargo/env \
     && LD_LIBRARY_PATH=/opt/oakestra/lib PKG_CONFIG_PATH=/opt/oakestra/lib/pkgconfig CROSVM_USE_SYSTEM_MINIGBM=1 CROSVM_USE_SYSTEM_VIRGLRENDERER=1 cargo build --release --package crosvm --package crosvm_control --features 'virgl_renderer' \

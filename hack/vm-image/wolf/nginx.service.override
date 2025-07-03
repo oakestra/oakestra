@@ -1,0 +1,15 @@
+[Service]
+EnvironmentFile=/etc/environment
+RuntimeMaxSec=200d
+ExecStartPre=
+ExecStartPre=/usr/bin/openssl req \
+    -quiet \
+    -x509 \
+    -days 365 \
+    -subj '/C=DE/ST=Bavaria/O=Oakestra/CN=wolf.oakestra.local' \
+    -newkey rsa:4096 \
+    -noenc \
+    -keyout /etc/nginx/ssl.key \
+    -out /etc/nginx/ssl.crt
+ExecStartPre=/usr/bin/bash -c 'envsubst "\$WOLF_API_PORT \$WOLF_API_KEY" < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf'
+ExecStartPre=/usr/sbin/nginx -t -q -g 'daemon on; master_process on;'

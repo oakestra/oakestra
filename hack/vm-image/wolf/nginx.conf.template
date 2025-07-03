@@ -1,0 +1,53 @@
+# The workers needs to be able to write to /var/run/wolf/wolf.sock,
+# which is created by the wolf docker container and therefore owned by root.
+user root;
+worker_processes auto;
+worker_cpu_affinity auto;
+pid /run/nginx.pid;
+error_log /var/log/nginx/error.log;
+include /etc/nginx/modules-enabled/*.conf;
+
+events {
+	worker_connections 768;
+}
+
+http {
+	sendfile on;
+	tcp_nopush on;
+	types_hash_max_size 2048;
+	server_tokens off;
+
+	include /etc/nginx/mime.types;
+	default_type application/octet-stream;
+
+	ssl_protocols TLSv1.2 TLSv1.3;
+	ssl_prefer_server_ciphers off;
+
+	access_log /var/log/nginx/access.log;
+
+	gzip on;
+
+	server {
+        listen ${WOLF_API_PORT} ssl;
+        listen [::]:${WOLF_API_PORT} ssl;
+        server_name _;
+
+        http2 on;
+
+        ssl_certificate /etc/nginx/ssl.crt;
+        ssl_certificate_key /etc/nginx/ssl.key;
+
+        location / {
+            if ($http_x_api_key != "${WOLF_API_KEY}") {
+              return 401;
+            }
+
+            proxy_pass http://unix:/var/run/wolf/wolf.sock;
+            proxy_http_version 1.0;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+}

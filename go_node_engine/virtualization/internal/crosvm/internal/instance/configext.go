@@ -86,7 +86,7 @@ func NewInstanceConfigExt(service *model.Service) *InstanceConfigExt {
 				"virgl",
 				"virgl2",
 				"venus",
-				"drm",
+				//"drm",
 			},
 		})
 	}

@@ -279,7 +279,7 @@ func NewInstanceConfig(
 	service *model.Service,
 	img *image.Image,
 	netConf *networkConfig,
-	runtimeDirPath string,
+	socketPath string,
 	stateDirPath string,
 ) (*InstanceConfig, error) {
 	var net []InstanceConfigNet
@@ -316,6 +316,6 @@ func NewInstanceConfig(
 			Size: ptr.Ptr(uint64(service.Memory)),
 		},
 		Net:    net,
-		Socket: ptr.Ptr(path.Join(runtimeDirPath, socketFileName)),
+		Socket: ptr.Ptr(socketPath),
 	}, nil
 }
