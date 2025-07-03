@@ -51,7 +51,7 @@ func HandleRequests(port int) {
 		_ = os.Remove("/etc/netmanager/netmanager.sock")
 		listener, err := net.Listen("unix", "/etc/netmanager/netmanager.sock")
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("Could not create listner: %s", err)
 		}
 		log.Fatal(http.Serve(listener, netRouter))
 	} else {

@@ -118,7 +118,7 @@ func (proxy *GoProxyTunnel) createTun() {
 	config.Name = proxy.HostTUNDeviceName
 	ifce, err := water.New(config)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Unable to create new TUN/TAP interface: %s", err)
 	}
 
 	logger.InfoLogger().Println("Bringing tun up with addr " + proxy.tunNetIP + "/12")

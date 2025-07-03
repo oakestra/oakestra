@@ -41,7 +41,7 @@ func startNetManager() error {
 
 	err := gonfig.GetConf(cfgFile, &model.NetConfig)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Unable to load config file: %s", err)
 	}
 
 	if model.NetConfig.Debug {
