@@ -62,6 +62,7 @@ func main() {
 		cmd := exec.Command("systemctl", "start", "netmanager")
 		_ = cmd.Run()
 		model.EnableOverlay()
+		time.Sleep(time.Second * 2) // wait for netmanager to start. Worst case scenario, it will timeout and reboot.
 	case cmd.DISABLE_NETWORK:
 		logger.InfoLogger().Printf("Overlay network disabled 🟠")
 	default:

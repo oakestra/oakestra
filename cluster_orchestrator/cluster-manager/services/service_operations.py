@@ -44,11 +44,8 @@ def service_migration(job, instance_number, target_node):
     :param job: The job object containing service details.
     :param target_node: The target node where the service will be migrated.
     """
-    system_job_id = job.get("system_job_id")
 
     migration_request = {
-        "job_id": system_job_id,
-        "job_name": job.get("job_name"),
         "virtualization": job.get("virtualization", "docker"),
         "instance_number": int(instance_number),
         "target_node_id": target_node.get("_id"),
@@ -56,9 +53,11 @@ def service_migration(job, instance_number, target_node):
         "target_node_port": target_node.get("node_info", {}).get("port"),
         "migration_token": generate_token(64),
         "migration_scheme": "default",  # default migration scheme
+        **job
     }
+    migration_request["_id"] = str(job.get("_id"))
 
-    # send migrationr equest to receiver worker node
+    # send migration request to receiver worker node
     migration_request["type"] = "migration_receive"
     mqtt_publish_edge_migrate(
         target_node.get("_id"),

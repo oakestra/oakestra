@@ -30,10 +30,15 @@ import (
 	"github.com/struCoder/pidusage"
 )
 
+type ContainerService struct {
+	model.Service
+	container containerd.Container
+}
+
 // ContainerRuntime is the struct that describes the container runtime
 type ContainerRuntime struct {
 	containerClient *containerd.Client
-	services        map[string]*model.Service // for migration purposes
+	services        map[string]*ContainerService // for migration purposes
 	channelLock     *sync.RWMutex
 	ctx             context.Context
 }
@@ -77,7 +82,7 @@ func GetContainerdRuntime() Runtime {
 			logger.ErrorLogger().Fatalf("Unable to start the container engine: %v\n", err)
 		}
 		runtime.containerClient = client
-		runtime.services = make(map[string]*model.Service)
+		runtime.services = make(map[string]*ContainerService)
 		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
 		runtime.forceContainerCleanup()
 		// register default runtime name
@@ -149,9 +154,9 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 		return fmt.Errorf("task already deployed")
 	}
 	r.channelLock.Lock()
-	_, exists := r.services[genTaskID(service.Sname, service.Instance)]
+	val, exists := r.services[genTaskID(service.Sname, service.Instance)]
 	r.channelLock.Unlock()
-	if exists {
+	if exists && val != nil {
 		return fmt.Errorf("service %s instance %d is already deployed", service.Sname, service.Instance)
 	}
 
@@ -175,8 +180,11 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 
 // Undeploy undeploys a service
 func (r *ContainerRuntime) Undeploy(service string, instance int) error {
+
+	task, exists := r.services[genTaskID(service, instance)]
+
 	//cleanup service list
-	if _, ok := r.services[genTaskID(service, instance)]; ok {
+	if exists {
 		r.channelLock.Lock()
 		delete(r.services, genTaskID(service, instance))
 		r.channelLock.Unlock()
@@ -184,9 +192,16 @@ func (r *ContainerRuntime) Undeploy(service string, instance int) error {
 
 	//remove container by task ID
 	c, err := r.getContainerByTaskID(genTaskID(service, instance))
-	if err == nil {
+	if err == nil && c != nil {
 		_ = r.removeContainer(c)
+	} else {
+		if task != nil {
+			if task.container != nil {
+				r.removeContainer(task.container)
+			}
+		}
 	}
+
 	return err
 }
 
@@ -207,8 +222,23 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		opt(&routineConfig)
 	}
 
+	// Get or generate the task
+	currentContainer := &ContainerService{
+		Service: service,
+	}
 	taskid := genTaskID(service.Sname, service.Instance)
-	r.services[taskid] = &service
+	if s, exists := r.services[taskid]; !exists || s == nil {
+		r.services[taskid] = currentContainer
+	} else {
+		// container exists already, this can only happen during migration
+		// check if status is MIGRATION_PROGRESS
+		if s.Status != model.SERVICE_MIGRATION_PROGRESS {
+			logger.ErrorLogger().Printf("Service %s instance %d is already deployed, cannot create a new task", service.Sname, service.Instance)
+			errorchan <- fmt.Errorf("service %s instance %d is already deployed", service.Sname, service.Instance)
+			return
+		}
+		currentContainer = s
+	}
 
 	revert := func(err error) {
 		startup <- false
@@ -234,6 +264,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		}
 		container = createdContainer
 	}
+	currentContainer.container = container
 
 	//create /tmp/taskid as default log directory
 	file, err := os.OpenFile(fmt.Sprintf("%s/%s", model.GetNodeInfo().LogDirectory, taskid), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
@@ -299,7 +330,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// adv startup finished
 	startup <- true
 	r.channelLock.Lock()
-	service.Status = model.SERVICE_RUNNING
+	currentContainer.Status = model.SERVICE_RUNNING
 	r.channelLock.Unlock()
 
 	// wait for manual task kill or task finish
@@ -308,9 +339,13 @@ func (r *ContainerRuntime) containerCreationRoutine(
 
 	r.channelLock.Lock()
 	if exitCode == 0 && service.OneShot && service.Status == model.SERVICE_RUNNING {
-		service.Status = model.SERVICE_COMPLETED
-	} else {
-		service.Status = model.SERVICE_DEAD
+		currentContainer.Status = model.SERVICE_COMPLETED
+	}
+	if exitCode != 0 && service.Status == model.SERVICE_RUNNING {
+		currentContainer.Status = model.SERVICE_FAILED
+	}
+	if exitCode == 0 && service.Status != model.SERVICE_MIGRATION_PROGRESS {
+		currentContainer.Status = model.SERVICE_DEAD
 	}
 	r.channelLock.Unlock()
 
@@ -500,6 +535,15 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 					logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
 				}
 
+				//Get service status.
+				r.channelLock.RLock()
+				currentService := r.services[container.ID()]
+				r.channelLock.RUnlock()
+				status := model.SERVICE_DEAD
+				if currentService != nil {
+					status = currentService.Status
+				}
+
 				resourceList = append(resourceList, model.Resources{
 					Cpu:      fmt.Sprintf("%f", cpuUsage),
 					Memory:   fmt.Sprintf("%f", mem),
@@ -508,6 +552,7 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 					Runtime:  string(model.CONTAINER_RUNTIME),
 					Logs:     getLogs(container.ID()),
 					Instance: extractInstanceNumberFromTaskID(container.ID()),
+					Status:   status,
 				})
 			}
 			//NOTIFY WITH THE CURRENT CONTAINERS STATUS
@@ -527,18 +572,43 @@ func (r *ContainerRuntime) forceContainerCleanup() {
 }
 
 func (r *ContainerRuntime) removeContainer(container containerd.Container) error {
+	if container == nil {
+		return nil
+	}
+
 	logger.InfoLogger().Printf("Clenaning up container: %s", container.ID())
+	containerMetadata, err := container.Info(r.ctx)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
+	}
+
+	//kill task
 	task, err := container.Task(r.ctx, nil)
 	if err == nil {
-		err = killTask(r.ctx, task, container)
+		err := killTask(r.ctx, task, container)
 		if err != nil {
-			return fmt.Errorf("unable to fetch kill task: %v", err)
+			logger.ErrorLogger().Printf("Unable to kill task: %v", err)
 		}
 	}
+
+	//remove snapshotter
+	if containerMetadata.Snapshotter != "" {
+		currentsnapshotter := r.containerClient.SnapshotService(containerMetadata.Snapshotter)
+		if currentsnapshotter != nil {
+			err = currentsnapshotter.Remove(r.ctx, containerMetadata.SnapshotKey)
+			if err != nil {
+				logger.ErrorLogger().Printf("Unable to remove snapshotter %s: %v", containerMetadata.Snapshotter, err)
+			}
+			currentsnapshotter.Close()
+		}
+	}
+
+	// remove container
 	err = container.Delete(r.ctx)
 	if err != nil {
-		return fmt.Errorf("unable to delete container: %v", err)
+		logger.ErrorLogger().Printf("Unable to delete container: %v", err)
 	}
+
 	return nil
 }
 
@@ -660,7 +730,7 @@ func (r *ContainerRuntime) SetMigrationCandidate(sname string, instance int) (mo
 	service, exists := r.services[taskid]
 	r.channelLock.Unlock()
 
-	if !exists {
+	if !exists || service == nil {
 		return model.Service{}, fmt.Errorf("service %s instance %d is not deployed", sname, instance)
 	}
 
@@ -682,7 +752,7 @@ func (r *ContainerRuntime) SetMigrationCandidate(sname string, instance int) (mo
 	service.Status = model.SERVICE_MIGRATION_ACCEPTED
 	r.channelLock.Unlock()
 
-	return *service, nil
+	return service.Service, nil
 }
 
 func (r *ContainerRuntime) RemoveMigrationCandidate(sname string, instance int) error {
@@ -692,7 +762,7 @@ func (r *ContainerRuntime) RemoveMigrationCandidate(sname string, instance int) 
 	service, exists := r.services[taskid]
 	r.channelLock.Unlock()
 
-	if !exists {
+	if !exists || service == nil {
 		return fmt.Errorf("service %s instance %d is not deployed", sname, instance)
 	}
 
@@ -716,7 +786,7 @@ func (r *ContainerRuntime) StopAndGetState(sname string, instance int) ([]byte, 
 	service, exists := r.services[taskid]
 	r.channelLock.Unlock()
 
-	if !exists {
+	if !exists || service == nil {
 		return nil, fmt.Errorf("service %s instance %d is not deployed", sname, instance)
 	}
 
@@ -729,12 +799,6 @@ func (r *ContainerRuntime) StopAndGetState(sname string, instance int) ([]byte, 
 	service.Status = model.SERVICE_MIGRATION_PROGRESS
 	r.channelLock.Unlock()
 
-	// get the container by task ID
-	container, err := r.getContainerByTaskID(taskid)
-	if err != nil {
-		return nil, err
-	}
-
 	revertState := func() {
 		r.channelLock.Lock()
 		service.Status = model.SERVICE_RUNNING
@@ -742,7 +806,7 @@ func (r *ContainerRuntime) StopAndGetState(sname string, instance int) ([]byte, 
 	}
 
 	// stop the task and get its state
-	task, err := container.Task(r.ctx, nil)
+	task, err := service.container.Task(r.ctx, nil)
 	if err != nil {
 		defer revertState()
 		return nil, err
@@ -799,6 +863,9 @@ func (r *ContainerRuntime) StopAndGetState(sname string, instance int) ([]byte, 
 	os.Remove(stateFile)
 	os.RemoveAll(stateDir)
 
+	// undeploy the service
+	_ = r.Undeploy(sname, instance)
+
 	return data, nil
 }
 
@@ -813,20 +880,23 @@ func (r *ContainerRuntime) PrepareForInstantiantion(service model.Service, statu
 		return fmt.Errorf("task already deployed")
 	}
 	r.channelLock.Lock()
-	_, exists := r.services[taskid]
+	val, exists := r.services[taskid]
 	r.channelLock.Unlock()
-	if exists {
+	if exists && val != nil {
 		return fmt.Errorf("service %s instance %d is already deployed", service.Sname, service.Instance)
 	}
 
 	// Add the application to the services map
+	containerService := ContainerService{
+		Service: service,
+	}
 	r.channelLock.Lock()
-	r.services[taskid] = &service
+	r.services[taskid] = &containerService
 	r.channelLock.Unlock()
 
 	// Update the service status to migration requested
 	r.channelLock.Lock()
-	service.Status = model.SERVICE_MIGRATION_PROGRESS
+	containerService.Status = model.SERVICE_MIGRATION_PROGRESS
 	r.channelLock.Unlock()
 
 	// Notify the status change to cluster orchestrator
@@ -844,7 +914,7 @@ func (r *ContainerRuntime) PrepareForInstantiantion(service model.Service, statu
 	}
 
 	// Create a new container for the service
-	_, err = r.createContainer(r.ctx, taskid, service, image, []containerd.NewContainerOpts{})
+	container, err := r.createContainer(r.ctx, taskid, service, image, []containerd.NewContainerOpts{})
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to create container for service %s instance %d: %v", service.Sname, service.Instance, err)
 		r.channelLock.Lock()
@@ -853,6 +923,7 @@ func (r *ContainerRuntime) PrepareForInstantiantion(service model.Service, statu
 		defer statusChangeNotificationHandler(service)
 		return fmt.Errorf("unable to create container for service %s instance %d: %v", service.Sname, service.Instance, err)
 	}
+	containerService.container = container
 
 	return nil
 }
@@ -862,15 +933,11 @@ func (r *ContainerRuntime) AbortMigration(service model.Service) error {
 	taskid := genTaskID(service.Sname, service.Instance)
 
 	// check if the service is already deployed
-	_, err := r.getContainerByTaskID(taskid)
-	if err == nil {
-		return fmt.Errorf("task already deployed")
-	}
 	r.channelLock.Lock()
 	s, exists := r.services[taskid]
 	r.channelLock.Unlock()
-	if exists {
-		return fmt.Errorf("service %s instance %d is already deployed", service.Sname, service.Instance)
+	if !exists || s == nil {
+		return fmt.Errorf("service %s instance %d is already undeployed", service.Sname, service.Instance)
 	}
 
 	if s.Status != model.SERVICE_MIGRATION_PROGRESS {
@@ -889,9 +956,9 @@ func (r *ContainerRuntime) ResumeFromState(sname string, instance int, state []b
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
 		service, exists := r.services[genTaskID(sname, instance)]
-		if exists {
+		if exists && service != nil {
 			service.Status = model.SERVICE_DEAD
-			statusChangeNotificationHandler(*service)
+			statusChangeNotificationHandler(service.Service)
 		}
 	}
 
@@ -900,7 +967,7 @@ func (r *ContainerRuntime) ResumeFromState(sname string, instance int, state []b
 	r.channelLock.Lock()
 	service, exists := r.services[taskid]
 	r.channelLock.Unlock()
-	if !exists {
+	if !exists || service == nil {
 		return fmt.Errorf("service %s instance %d is not deployed", sname, instance)
 	}
 
@@ -908,6 +975,12 @@ func (r *ContainerRuntime) ResumeFromState(sname string, instance int, state []b
 	if service.Status != model.SERVICE_MIGRATION_PROGRESS {
 		revert()
 		return fmt.Errorf("service %s instance %d is not in migration progress", sname, instance)
+	}
+
+	// Check if service container exists
+	if service.container == nil {
+		revert()
+		return fmt.Errorf("service %s instance %d container is not available", sname, instance)
 	}
 
 	// Create temporary directory for the state
@@ -944,24 +1017,16 @@ func (r *ContainerRuntime) ResumeFromState(sname string, instance int, state []b
 		return fmt.Errorf("unable to uncompress state file %s: %v", stateFile, err)
 	}
 
-	// get the container by task ID
-	container, err := r.getContainerByTaskID(taskid)
-	if err != nil {
-		logger.ErrorLogger().Printf("Unable to get container by task ID %s: %v", taskid, err)
-		revert()
-		return err
-	}
-
 	// create startup routine which will accompany the container through its lifetime
 	startupChannel := make(chan bool)
 	errorChannel := make(chan error)
 	go r.containerCreationRoutine(
 		r.ctx,
-		*service,
+		service.Service,
 		startupChannel,
 		errorChannel,
 		statusChangeNotificationHandler,
-		WithContainer(container),
+		WithContainer(service.container),
 		WithImageStatePath(stateFile),
 	)
 

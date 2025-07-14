@@ -478,7 +478,10 @@ def mongo_update_service_resources(
             if int(instance_list[instance]["instance_number"]) == int(instance_num):
                 if instance_list[instance].get("worker_id") != workerid:
                     return None  # cannot update another worker's resources
-                instance_list[instance]["status"] = DeploymentStatus.RUNNING.value
+                instance_list[instance]["status"] = service.get(
+                    "status",
+                    DeploymentStatus.RUNNING.value
+                    )
                 instance_list[instance]["status_detail"] = service.get("status_detail")
                 instance_list[instance]["last_modified_timestamp"] = datetime.timestamp(
                     datetime.now()
