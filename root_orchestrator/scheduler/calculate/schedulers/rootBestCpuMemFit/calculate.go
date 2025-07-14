@@ -13,7 +13,7 @@ type CpuMemConstraints struct {
 type CpuMemResources struct {
 	Constraints    CpuMemConstraints `json:"constraints"`
 	Id             string            `json:"_id"`
-	Virtualization bool              `json:"virtualization"`
+	Virtualization []string          `json:"virtualization"`
 	AvailableMem   float64           `json:"memory_in_mb"`
 	AvailableCPU   float64           `json:"total_cpu_cores"`
 	CPUPercent     float64           `json:"aggregated_cpu_percent"`
@@ -57,7 +57,7 @@ func (a BestCpuMemFit) Calculate(job CpuMemResources, candidates []CpuMemResourc
 func filterRequirements(job CpuMemResources, candidates []CpuMemResources) []CpuMemResources {
 	filteredCandidates := make([]CpuMemResources, 0, len(candidates))
 	for _, candidate := range candidates {
-		if candidate.Virtualization == job.Virtualization {
+		if slices.Contains(candidate.Virtualization, job.Virtualization[0]) {
 			if candidate.AvailableCPU >= job.AvailableCPU {
 				if candidate.AvailableMem >= job.AvailableMem {
 					filteredCandidates = append(filteredCandidates, candidate)

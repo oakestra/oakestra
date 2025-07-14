@@ -52,5 +52,6 @@ func calculate(c *gin.Context) {
 		logger.ErrorLogger().Printf("Task enqueue error: %v", err)
 		c.Status(http.StatusInternalServerError)
 	}
-	logger.InfoLogger().Printf("Task enqueue result: %v", info)
+	logger.InfoLogger().Printf("Task enqueued: ID=%s, Type=%s, Queue=%s, Payload=%s",
+		info.ID, info.Type, info.Queue, string(info.Payload))
 }
