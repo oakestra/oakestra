@@ -27,7 +27,7 @@ func StartTaskQueueServer() {
 	srv := asynq.NewServer(redisOpt, asynq.Config{})
 
 	mux := asynq.NewServeMux()
-	mux.HandleFunc("scheduler:job", scheduleRequestHandler)
+	mux.HandleFunc(TaskTypeScheduler, scheduleRequestHandler)
 
 	if err := srv.Run(mux); err != nil {
 		log.Fatal(err)
@@ -43,6 +43,7 @@ func scheduleRequestHandler(ctx context.Context, t *asynq.Task) error {
 		logger.ErrorLogger().Println("Could not unmarshal job data")
 		return err
 	}
+	logger.InfoLogger().Printf("Received job data: %v", jobData)
 	err = calculate.PerformSchedulingRequest(jobData, algorithm)
 	if err != nil {
 		logger.ErrorLogger().Println("Could not Schedule job %v", err)
