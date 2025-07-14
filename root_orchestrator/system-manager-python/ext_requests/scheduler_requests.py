@@ -11,7 +11,7 @@ SCHUEDULER_ADDR = (
 
 
 def scheduler_request_deploy(job, job_id):
-    print("new job: asking cloud_scheduler...")
+    print("new job: asking scheduler...")
     request_addr = SCHUEDULER_ADDR + "/api/calculate/deploy"
     print(request_addr)
     try:
@@ -32,7 +32,7 @@ def scheduler_request_replicate(job, replicas):
 
 
 def scheduler_request_status():
-    print("new job: asking cloud_scheduler status...")
+    print("new job: asking scheduler status...")
     request_addr = SCHUEDULER_ADDR + "/status"
     print(request_addr)
     try:
