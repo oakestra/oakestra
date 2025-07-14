@@ -504,6 +504,10 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 				task, err := container.Task(r.ctx, nil)
 				if err != nil {
 					logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+					err := r.removeContainer(container)
+					if err != nil {
+						return
+					}
 					continue
 				}
 
