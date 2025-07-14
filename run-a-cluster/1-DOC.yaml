@@ -42,7 +42,7 @@ services:
     environment:
       - CLOUD_MONGO_URL=mongo
       - CLOUD_MONGO_PORT=10007
-      - CLOUD_SCHEDULER_URL=cloud_scheduler
+      - CLOUD_SCHEDULER_URL=scheduler
       - CLOUD_SCHEDULER_PORT=10004
       - RESOURCE_ABSTRACTOR_URL=resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
@@ -162,8 +162,8 @@ services:
   cloud_scheduler:
     image: ghcr.io/oakestra/oakestra/cloud-scheduler:latest
     pull_policy: always
-    container_name: cloud_scheduler
-    hostname: cloud_scheduler
+    container_name: scheduler
+    hostname: scheduler
     labels:
       logging: "promtail"
       logging_jobname: "rootlogs"

@@ -150,7 +150,7 @@ services:
   # Cloud Scheduler
   cloud_scheduler:
     image: cloud_scheduler
-    build: cloud-scheduler/
+    build: scheduler/
     container_name: cloud_scheduler
     labels:
       logging: "promtail"
