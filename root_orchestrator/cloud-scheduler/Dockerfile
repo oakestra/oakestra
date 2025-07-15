@@ -1,4 +1,4 @@
-FROM python:3.10-slim-buster
+FROM python:3.10-slim-bookworm
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
 # Installing git to be able to install oakestra libraries. 
