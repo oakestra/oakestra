@@ -222,6 +222,15 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		opt(&routineConfig)
 	}
 
+	// if a temporary directory is provided, make sure we clean it up after the routine is done
+	if routineConfig.withImageStatePath != "" {
+		defer func() {
+			if err := os.RemoveAll(routineConfig.withImageStatePath); err != nil {
+				logger.ErrorLogger().Printf("Unable to remove temporary directory %s: %v", routineConfig.withImageStatePath, err)
+			}
+		}()
+	}
+
 	// Get or generate the task
 	currentContainer := &ContainerService{
 		Service: service,
@@ -232,7 +241,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	} else {
 		// container exists already, this can only happen during migration
 		// check if status is MIGRATION_PROGRESS
-		if s.Status != model.SERVICE_MIGRATION_PROGRESS {
+		if currentContainer.Status != model.SERVICE_MIGRATION_PROGRESS {
 			logger.ErrorLogger().Printf("Service %s instance %d is already deployed, cannot create a new task", service.Sname, service.Instance)
 			errorchan <- fmt.Errorf("service %s instance %d is already deployed", service.Sname, service.Instance)
 			return
@@ -290,6 +299,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		}()
 	}
 
+	// startup or resume the container task
 	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStreams(nil, file, file)), newTaskOpts...)
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR: containerd task creation failure: %v", err)
@@ -338,13 +348,13 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	exitCode := exitStatus.ExitCode()
 
 	r.channelLock.Lock()
-	if exitCode == 0 && service.OneShot && service.Status == model.SERVICE_RUNNING {
+	if exitCode == 0 && service.OneShot && currentContainer.Status == model.SERVICE_RUNNING {
 		currentContainer.Status = model.SERVICE_COMPLETED
 	}
-	if exitCode != 0 && service.Status == model.SERVICE_RUNNING {
+	if exitCode != 0 && currentContainer.Status == model.SERVICE_RUNNING {
 		currentContainer.Status = model.SERVICE_FAILED
 	}
-	if exitCode == 0 && service.Status != model.SERVICE_MIGRATION_PROGRESS {
+	if exitCode == 0 && currentContainer.Status != model.SERVICE_MIGRATION_PROGRESS {
 		currentContainer.Status = model.SERVICE_DEAD
 	}
 	r.channelLock.Unlock()
@@ -355,7 +365,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 
 	_ = r.Undeploy(service.Sname, service.Instance)
-	statusChangeNotificationHandler(service)
+	statusChangeNotificationHandler(currentContainer.Service)
 }
 
 // createContainer creates a new container for the given service
@@ -503,10 +513,20 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 			for _, container := range deployedContainers {
 				task, err := container.Task(r.ctx, nil)
 				if err != nil {
-					logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
-					err := r.removeContainer(container)
-					if err != nil {
-						return
+					//check if migration in progess for this container
+					r.channelLock.Lock()
+					service, exists := r.services[container.ID()]
+					r.channelLock.Unlock()
+					if exists && service != nil {
+						if service.Status == model.SERVICE_MIGRATION_PROGRESS {
+							logger.InfoLogger().Printf("Container %s is in migration progress, skipping resource monitoring", container.ID())
+						}
+					} else {
+						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+						err := r.removeContainer(container)
+						if err != nil {
+							logger.ErrorLogger().Printf("Unable to remove container %s: %v", container.ID(), err)
+						}
 					}
 					continue
 				}
@@ -867,8 +887,8 @@ func (r *ContainerRuntime) StopAndGetState(sname string, instance int) ([]byte, 
 	os.Remove(stateFile)
 	os.RemoveAll(stateDir)
 
-	// undeploy the service
-	_ = r.Undeploy(sname, instance)
+	// let's undeploy the service after migration
+	go r.Undeploy(service.Sname, service.Instance)
 
 	return data, nil
 }
@@ -988,17 +1008,12 @@ func (r *ContainerRuntime) ResumeFromState(sname string, instance int, state []b
 	}
 
 	// Create temporary directory for the state
-	tempDir := fmt.Sprintf("%s/%s.checkpoint", model.GetNodeInfo().CheckpointDirectory, taskid)
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
-		logger.ErrorLogger().Printf("Unable to create temporary directory %s: %v", tempDir, err)
+	stateDir := fmt.Sprintf("%s/%s.checkpoint", model.GetNodeInfo().CheckpointDirectory, taskid)
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		logger.ErrorLogger().Printf("Unable to create temporary directory %s: %v", stateDir, err)
 		revert()
-		return fmt.Errorf("unable to create temporary directory %s: %v", tempDir, err)
+		return fmt.Errorf("unable to create temporary directory %s: %v", stateDir, err)
 	}
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			logger.ErrorLogger().Printf("Unable to remove temporary directory %s: %v", tempDir, err)
-		}
-	}()
 
 	// Write state to a temporary file
 	stateFile := fmt.Sprintf("%s/%s.checkpoint.tar.gz", model.GetNodeInfo().CheckpointDirectory, taskid)
@@ -1014,7 +1029,7 @@ func (r *ContainerRuntime) ResumeFromState(sname string, instance int, state []b
 	}()
 
 	// Uncompress the state file to a temporary directory
-	cmd := exec.Command("tar", "-xzf", stateFile, "-C", tempDir)
+	cmd := exec.Command("tar", "-xzf", stateFile, "-C", stateDir)
 	if err := cmd.Run(); err != nil {
 		logger.ErrorLogger().Printf("Unable to uncompress state file %s: %v", stateFile, err)
 		revert()
@@ -1031,7 +1046,7 @@ func (r *ContainerRuntime) ResumeFromState(sname string, instance int, state []b
 		errorChannel,
 		statusChangeNotificationHandler,
 		WithContainer(service.container),
-		WithImageStatePath(stateFile),
+		WithImageStatePath(stateDir),
 	)
 
 	// wait for updates regarding the container creation

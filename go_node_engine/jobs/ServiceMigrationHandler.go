@@ -426,6 +426,9 @@ func (h *serviceMigrationHandler) reDeployIfMigrationFails(service model.Service
 		logger.ErrorLogger().Printf("Failed to get virtualization runtime for re-deployment: %v", err)
 		return
 	}
+
+	time.Sleep(5 * time.Second) // Wait for cooldown before re-deploying
+
 	err = virtualizationRuntime.PrepareForInstantiantion(service, h.statusChangeNotificationHandler)
 	if err != nil {
 		logger.ErrorLogger().Printf("Failed to prepare for instantiation after migration failure: %v", err)
