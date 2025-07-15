@@ -67,9 +67,9 @@ if sudo systemctl | grep -Fq 'containerd'; then
   sudo systemctl daemon-reload
   sudo systemctl enable --now containerd
 else
-  wget https://github.com/containerd/containerd/releases/download/v1.6.1/cri-containerd-cni-1.6.1-linux-$arch.tar.gz
-  chmod 777 cri-containerd-cni-1.6.1-linux-$arch.tar.gz
-  sudo tar --no-overwrite-dir -C / -xzf cri-containerd-cni-1.6.1-linux-$arch.tar.gz
+  wget https://github.com/containerd/containerd/releases/download/v2.1.3/containerd-2.1.3-linux-$arch.tar.gz
+  chmod 777 containerd-2.1.3-linux-$arch.tar.gz
+  sudo tar --no-overwrite-dir -C / -xzf containerd-2.1.3-linux-$arch.tar.gz
   sudo systemctl daemon-reload
   sudo systemctl enable --now containerd
   rm cri-containerd-cni-1.6.1-linux-$arch.tar.*

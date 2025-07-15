@@ -254,7 +254,12 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		errorchan <- err
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
+		currentContainer.Status = model.SERVICE_FAILED
 		delete(r.services, taskid)
+		defer statusChangeNotificationHandler(currentContainer.Service)
+		if currentContainer.container != nil {
+			defer r.removeContainer(currentContainer.container)
+		}
 	}
 
 	// create base container for this service, if not provided
@@ -391,14 +396,18 @@ func (r *ContainerRuntime) createContainer(ctx context.Context, taskid string, s
 	// -- add custom snapshotter
 	containerOpts = append(containerOpts, containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image))
 	// -- add image
-	containerOpts = append(containerOpts, containerd.WithImage(image))
+	if image != nil {
+		containerOpts = append(containerOpts, containerd.WithImage(image))
+	}
 
 	// ---- Custom container general oci specs
 	specOpts := []oci.SpecOpts{
-		oci.WithImageConfig(image),
 		oci.WithHostHostsFile,
 		oci.WithHostname(hostname),
 		oci.WithEnv(append([]string{fmt.Sprintf("HOSTNAME=%s", hostname)}, service.Env...)),
+	}
+	if image != nil {
+		specOpts = append(specOpts, oci.WithImageConfig(image))
 	}
 	if service.Privileged {
 		specOpts = append(specOpts, oci.WithDevices("/dev/fuse", "/dev/fuse", "rwm"))
@@ -938,7 +947,7 @@ func (r *ContainerRuntime) PrepareForInstantiantion(service model.Service, statu
 	}
 
 	// Create a new container for the service
-	container, err := r.createContainer(r.ctx, taskid, service, image, []containerd.NewContainerOpts{})
+	container, err := r.createContainer(r.ctx, taskid, service, nil, []containerd.NewContainerOpts{containerd.WithNewSpec(oci.WithImageConfig(image))})
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to create container for service %s instance %d: %v", service.Sname, service.Instance, err)
 		r.channelLock.Lock()
