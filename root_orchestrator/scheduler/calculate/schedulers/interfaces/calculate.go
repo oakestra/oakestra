@@ -17,5 +17,5 @@ type ResourceList interface {
 type Algorithm[T ResourceList] interface {
 	ResourceList() []T
 	JobData() T
-	Calculate(job T, candidates []T) T
+	Calculate(job T, candidates []T) (T, error)
 }

@@ -16,7 +16,7 @@ def scheduler_request_deploy(job, job_id):
     print(request_addr)
     try:
         job["_id"] = str(job["_id"])
-        requests.post(request_addr, json={"job": job, "system_job_id": job_id})
+        requests.post(request_addr, json=job)
     except requests.exceptions.RequestException:
         print("Calling Cloud Scheduler /api/calculate/deploy not successful.")
 

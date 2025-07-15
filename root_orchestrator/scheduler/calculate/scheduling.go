@@ -14,7 +14,10 @@ func PerformSchedulingRequest[T interfaces.ResourceList](job T, algorithm interf
 		return err
 	}
 
-	placementCandidate := algorithm.Calculate(job, data)
+	placementCandidate, err := algorithm.Calculate(job, data)
+	if err != nil {
+		return err
+	}
 
 	err = manager.Deploy(job.GetId(), placementCandidate.GetId())
 
