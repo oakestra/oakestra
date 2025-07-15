@@ -30,7 +30,7 @@ const (
 //
 // The migration service definition.
 type MigrationServiceClient interface {
-	ReceiveMigration(ctx context.Context, in *MigrationData, opts ...grpc.CallOption) (*MigrationResponse, error)
+	ReceiveMigration(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[MigrationData, MigrationResponse], error)
 	RequestMigration(ctx context.Context, in *MigrationRequest, opts ...grpc.CallOption) (*MigrationResponse, error)
 	MigrationAbort(ctx context.Context, in *MigrationRequest, opts ...grpc.CallOption) (*MigrationResponse, error)
 }
@@ -43,15 +43,18 @@ func NewMigrationServiceClient(cc grpc.ClientConnInterface) MigrationServiceClie
 	return &migrationServiceClient{cc}
 }
 
-func (c *migrationServiceClient) ReceiveMigration(ctx context.Context, in *MigrationData, opts ...grpc.CallOption) (*MigrationResponse, error) {
+func (c *migrationServiceClient) ReceiveMigration(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[MigrationData, MigrationResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(MigrationResponse)
-	err := c.cc.Invoke(ctx, MigrationService_ReceiveMigration_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MigrationService_ServiceDesc.Streams[0], MigrationService_ReceiveMigration_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[MigrationData, MigrationResponse]{ClientStream: stream}
+	return x, nil
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MigrationService_ReceiveMigrationClient = grpc.ClientStreamingClient[MigrationData, MigrationResponse]
 
 func (c *migrationServiceClient) RequestMigration(ctx context.Context, in *MigrationRequest, opts ...grpc.CallOption) (*MigrationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -79,7 +82,7 @@ func (c *migrationServiceClient) MigrationAbort(ctx context.Context, in *Migrati
 //
 // The migration service definition.
 type MigrationServiceServer interface {
-	ReceiveMigration(context.Context, *MigrationData) (*MigrationResponse, error)
+	ReceiveMigration(grpc.ClientStreamingServer[MigrationData, MigrationResponse]) error
 	RequestMigration(context.Context, *MigrationRequest) (*MigrationResponse, error)
 	MigrationAbort(context.Context, *MigrationRequest) (*MigrationResponse, error)
 	mustEmbedUnimplementedMigrationServiceServer()
@@ -92,8 +95,8 @@ type MigrationServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedMigrationServiceServer struct{}
 
-func (UnimplementedMigrationServiceServer) ReceiveMigration(context.Context, *MigrationData) (*MigrationResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReceiveMigration not implemented")
+func (UnimplementedMigrationServiceServer) ReceiveMigration(grpc.ClientStreamingServer[MigrationData, MigrationResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method ReceiveMigration not implemented")
 }
 func (UnimplementedMigrationServiceServer) RequestMigration(context.Context, *MigrationRequest) (*MigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestMigration not implemented")
@@ -122,23 +125,12 @@ func RegisterMigrationServiceServer(s grpc.ServiceRegistrar, srv MigrationServic
 	s.RegisterService(&MigrationService_ServiceDesc, srv)
 }
 
-func _MigrationService_ReceiveMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MigrationData)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MigrationServiceServer).ReceiveMigration(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: MigrationService_ReceiveMigration_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MigrationServiceServer).ReceiveMigration(ctx, req.(*MigrationData))
-	}
-	return interceptor(ctx, in, info, handler)
+func _MigrationService_ReceiveMigration_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(MigrationServiceServer).ReceiveMigration(&grpc.GenericServerStream[MigrationData, MigrationResponse]{ServerStream: stream})
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MigrationService_ReceiveMigrationServer = grpc.ClientStreamingServer[MigrationData, MigrationResponse]
 
 func _MigrationService_RequestMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MigrationRequest)
@@ -184,10 +176,6 @@ var MigrationService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*MigrationServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "ReceiveMigration",
-			Handler:    _MigrationService_ReceiveMigration_Handler,
-		},
-		{
 			MethodName: "RequestMigration",
 			Handler:    _MigrationService_RequestMigration_Handler,
 		},
@@ -196,6 +184,12 @@ var MigrationService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MigrationService_MigrationAbort_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ReceiveMigration",
+			Handler:       _MigrationService_ReceiveMigration_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "requests/proto/migration.proto",
 }

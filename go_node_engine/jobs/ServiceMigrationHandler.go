@@ -6,8 +6,11 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	pb "go_node_engine/requests/proto" // Adjust import path if needed
+	"go_node_engine/utils"
 	virtualization "go_node_engine/virtualization"
+	"io"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -160,53 +163,86 @@ func (h *serviceMigrationHandler) Migrate(details MigrationDetails) error {
 }
 
 // ReceiveMigration handles incoming migration data.
-func (h *serviceMigrationHandler) ReceiveMigration(ctx context.Context, req *pb.MigrationData) (*pb.MigrationResponse, error) {
-	logger.InfoLogger().Printf("Received migration for service: %s, payload size: %d", req.GetServiceId(), len(req.GetPayload()))
+func (h *serviceMigrationHandler) ReceiveMigration(stream pb.MigrationService_ReceiveMigrationServer) error {
+	logger.InfoLogger().Println("Received migration data stream")
 
-	h.migrations_mu.Lock()
-	defer h.migrations_mu.Unlock()
-
-	if h.migrations[req.GetServiceId()] == nil {
-		logger.ErrorLogger().Printf("No migration request found for service: %s", req.GetServiceId())
-		return &pb.MigrationResponse{
+	stateFileName := fmt.Sprintf("%s/%s.checkpoint.tar.gz", model.GetNodeInfo().CheckpointDirectory, utils.GenerateRandomString(16))
+	stateFile, err := os.Create(stateFileName) // Create the file to store the migration state
+	if err != nil {
+		logger.ErrorLogger().Printf("Failed to create state file for migration: %v", err)
+		stream.SendAndClose(&pb.MigrationResponse{
 			Success: false,
-			Message: "Service migration request not found for migration: " + req.GetServiceId(),
-		}, nil
+			Message: "Failed to create state file for migration: " + err.Error(),
+		})
+		return err
 	}
-	if h.migrations[req.GetServiceId()].MigrationToken != req.GetMigrationToken() {
-		logger.ErrorLogger().Printf(
-			"Migration token mismatch for service: %s, expected: %s, received: %s",
-			req.GetServiceId(),
-			h.migrations[req.GetServiceId()].MigrationToken,
-			req.GetMigrationToken(),
-		)
-		return &pb.MigrationResponse{
-			Success: false,
-			Message: "Migration token mismatch for service: " + req.GetServiceId(),
-		}, nil
+	totWritten := 0
+
+	for {
+		data, err := stream.Recv()
+		if err != nil && err != io.EOF {
+			os.Remove(stateFileName)
+			return err
+		}
+
+		rsp, err := h.checkReceivedMigrationDataChunk(data)
+		if err != nil {
+			stream.SendAndClose(rsp)
+			os.Remove(stateFileName) // Clean up the state file on error
+			return err
+		}
+
+		// Write the received data to the state file
+		if len(data.GetPayload()) > 0 {
+			n, writeErr := stateFile.WriteAt(data.GetPayload(), int64(totWritten))
+			if writeErr != nil || n != len(data.GetPayload()) {
+				logger.ErrorLogger().Printf("Failed to write migration data to file: %v", writeErr)
+				os.Remove(stateFileName) // Clean up the state file on error
+				stream.SendAndClose(&pb.MigrationResponse{
+					Success: false,
+					Message: "Failed to write migration data to file: " + writeErr.Error(),
+				})
+				return writeErr
+			}
+			totWritten += n
+		}
+
+		if err == io.EOF || (data != nil && data.IsFinal) {
+			logger.InfoLogger().Printf("Received all migration data for service: %s, total bytes written: %d", data.GetServiceId(), totWritten)
+			h.migrations_mu.Lock()
+			defer h.migrations_mu.Unlock()
+			h.migrations[data.GetServiceId()].dataTransferred = true
+			h.migrations[data.GetServiceId()].lastUpdated = time.Now()
+			sname := h.migrations[data.GetServiceId()].Sname
+			instance := h.migrations[data.GetServiceId()].Instance
+
+			migrationRuntime, err := virtualization.GetRuntimeMigration(model.RuntimeType(h.migrations[data.GetServiceId()].Runtime))
+			if err != nil {
+				logger.ErrorLogger().Printf("Failed to get migration runtime: %v", err)
+				os.Remove(stateFileName) // Clean up the state file on error
+				stream.SendAndClose(&pb.MigrationResponse{
+					Success: false,
+					Message: "Failed to write migration data to file: " + err.Error(),
+				})
+				return err
+			}
+			// Resume the service from the state file asyncrhonously
+			go func() {
+				err := migrationRuntime.ResumeFromState(sname, instance, stateFileName, h.statusChangeNotificationHandler)
+				if err != nil {
+					logger.ErrorLogger().Printf("Failed to resume migration for service: %s, error: %v", data.GetServiceId(), err)
+				}
+			}()
+
+			// Migration successful, remove from the map
+			delete(h.migrations, data.GetServiceId())
+
+			return stream.SendAndClose(&pb.MigrationResponse{
+				Success: true,
+			})
+		}
+
 	}
-	if !h.migrations[req.GetServiceId()].acknowledged {
-		logger.ErrorLogger().Printf("Migration not acknowledged for service: %s", req.GetServiceId())
-		return &pb.MigrationResponse{
-			Success: false,
-			Message: "Migration not acknowledged: " + req.GetServiceId(),
-		}, nil
-	}
-
-	h.migrations[req.GetServiceId()].dataTransferred = true
-	h.migrations[req.GetServiceId()].lastUpdated = time.Now()
-
-	logger.InfoLogger().Printf("Processing migration payload for service: %s", req.GetServiceId())
-	//TODO: Add payload to the runtime
-	//TODO: Implement the logic to handle the migration payload, such as deserializing it and starting the service.
-
-	// Migration successful, remove from the map
-	delete(h.migrations, req.GetServiceId())
-
-	return &pb.MigrationResponse{
-		Success: true,
-		Message: "Migration ack",
-	}, nil
 }
 
 // RequestMigration handles incoming migration requests. Acks the migration and waits for furhter data.
@@ -391,25 +427,50 @@ func (h *serviceMigrationHandler) requestMigration(migration MigrationDetails) (
 	// PHASE 4: Fetch runtime and get the payload
 	// From this point on, the service is no longer responsibility of the current node.
 	// If a failure happens, the service must be rescheduled by the orchestrator.
-	payload, err := virtualizationRuntime.StopAndGetState(migration.Sname, migration.Instance)
+
+	// get the application state
+	stateReader, err := virtualizationRuntime.StopAndGetState(migration.Sname, migration.Instance)
 	if err != nil {
 		defer revertMigrationAbort()
 		return nil, fmt.Errorf("failed to fetch payload for migration: %v, MIGRATION ABORTED", err)
 	}
 
 	// PHASE 5: Send migration request, from now on the service is no longer responsibility of the current node.
-	req := &pb.MigrationData{
-		ServiceId:      migration.JobID,
-		MigrationToken: migration.MigrationToken,
-		Payload:        payload,
-	}
-	resp, err := remote.ReceiveMigration(ctx, req)
+	// Read the state data from the OnceReader
+	migrationStreamingInterface, err := remote.ReceiveMigration(ctx)
 	if err != nil {
 		defer revertMigrationAbort()
-		defer h.reDeployIfMigrationFails(migration.Service, payload)
+		defer h.reDeployIfMigrationFails(migration.Service, stateReader)
 		return nil, fmt.Errorf("migration request failed: %v", err)
 	}
-	return resp, nil
+
+	buffer := make([]byte, 1024*1024*4) // 4MB buffer
+	sendData := pb.MigrationData{
+		ServiceId:      migration.JobID,
+		MigrationToken: migration.MigrationToken,
+		Payload:        nil,
+		IsFinal:        false, // This will be set to true when the last chunk is sent
+	}
+
+	for {
+		n, readErr := stateReader.Read(buffer)
+
+		if n > 0 {
+			sendData.Payload = buffer[:n]
+			migrationStreamingInterface.Send(&sendData)
+		}
+		if readErr == io.EOF {
+			sendData.IsFinal = true // Mark the last chunk
+			migrationStreamingInterface.Send(&sendData)
+			break
+		}
+		if readErr != nil {
+			defer revertMigrationAbort()
+			return nil, fmt.Errorf("failed to fetch payload for migration: %v, MIGRATION ABORTED", err)
+		}
+	}
+
+	return migrationStreamingInterface.CloseAndRecv()
 }
 
 // WithStatusChangeNotificationHandler sets the handler for status change notifications.
@@ -420,7 +481,7 @@ func WithStatusChangeNotificationHandler(notifyHandler func(service model.Servic
 	}
 }
 
-func (h *serviceMigrationHandler) reDeployIfMigrationFails(service model.Service, payload []byte) {
+func (h *serviceMigrationHandler) reDeployIfMigrationFails(service model.Service, stateReader utils.OnceReader) {
 	virtualizationRuntime, err := virtualization.GetRuntimeMigration(model.RuntimeType(service.Runtime))
 	if err != nil {
 		logger.ErrorLogger().Printf("Failed to get virtualization runtime for re-deployment: %v", err)
@@ -434,7 +495,7 @@ func (h *serviceMigrationHandler) reDeployIfMigrationFails(service model.Service
 		logger.ErrorLogger().Printf("Failed to prepare for instantiation after migration failure: %v", err)
 		return
 	}
-	err = virtualizationRuntime.ResumeFromState(service.Sname, service.Instance, payload, h.statusChangeNotificationHandler)
+	err = virtualizationRuntime.ResumeFromState(service.Sname, service.Instance, stateReader.GetFile().Name(), h.statusChangeNotificationHandler)
 	if err != nil {
 		logger.ErrorLogger().Printf("Failed to re-deploy service %s after migration failure: %v", service.Sname, err)
 		return
@@ -442,4 +503,45 @@ func (h *serviceMigrationHandler) reDeployIfMigrationFails(service model.Service
 	logger.InfoLogger().Printf("Service %s re-deployed successfully after migration failure", service.Sname)
 	service.Status = model.SERVICE_RUNNING
 	h.statusChangeNotificationHandler(service)
+}
+
+func (h *serviceMigrationHandler) checkReceivedMigrationDataChunk(req *pb.MigrationData) (*pb.MigrationResponse, error) {
+	logger.InfoLogger().Printf("Received migration chunk for service: %s, payload size: %d", req.GetServiceId(), len(req.GetPayload()))
+
+	h.migrations_mu.Lock()
+	defer h.migrations_mu.Unlock()
+
+	if h.migrations[req.GetServiceId()] == nil {
+		logger.ErrorLogger().Printf("No migration request found for service: %s", req.GetServiceId())
+		return &pb.MigrationResponse{
+			Success: false,
+			Message: "Service migration request not found for migration: " + req.GetServiceId(),
+		}, nil
+	}
+	if h.migrations[req.GetServiceId()].MigrationToken != req.GetMigrationToken() {
+		logger.ErrorLogger().Printf(
+			"Migration token mismatch for service: %s, expected: %s, received: %s",
+			req.GetServiceId(),
+			h.migrations[req.GetServiceId()].MigrationToken,
+			req.GetMigrationToken(),
+		)
+		return &pb.MigrationResponse{
+			Success: false,
+			Message: "Migration token mismatch for service: " + req.GetServiceId(),
+		}, nil
+	}
+	if !h.migrations[req.GetServiceId()].acknowledged {
+		logger.ErrorLogger().Printf("Migration not acknowledged for service: %s", req.GetServiceId())
+		return &pb.MigrationResponse{
+			Success: false,
+			Message: "Migration not acknowledged: " + req.GetServiceId(),
+		}, nil
+	}
+	h.migrations[req.GetServiceId()].dataTransferred = true
+	h.migrations[req.GetServiceId()].lastUpdated = time.Now()
+
+	return &pb.MigrationResponse{
+		Success: true,
+		Message: "Migration data chunk received successfully",
+	}, nil
 }

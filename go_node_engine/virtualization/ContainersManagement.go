@@ -6,6 +6,7 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
+	"go_node_engine/utils"
 	"os"
 	"os/exec"
 	"reflect"
@@ -812,7 +813,7 @@ func (r *ContainerRuntime) RemoveMigrationCandidate(sname string, instance int) 
 }
 
 // StopAndGetState stops a service and returns its the state file if it has been marked as a migration candidate.
-func (r *ContainerRuntime) StopAndGetState(sname string, instance int) ([]byte, error) {
+func (r *ContainerRuntime) StopAndGetState(sname string, instance int) (utils.OnceReader, error) {
 	taskid := genTaskID(sname, instance)
 
 	r.channelLock.Lock()
@@ -884,22 +885,22 @@ func (r *ContainerRuntime) StopAndGetState(sname string, instance int) ([]byte, 
 	}
 
 	// read the compressed file into a byte slice
-	data, err := os.ReadFile(stateFile)
+	f, err := os.Open(stateFile)
 	if err != nil {
 		defer revertState()
 		defer revertRunning()
 		logger.ErrorLogger().Printf("Unable to read compressed checkpoint file: %v", err)
 		return nil, fmt.Errorf("unable to read compressed checkpoint file: %v", err)
 	}
+	reader := utils.NewOnceReader(f)
 
-	// remove the state directory and file after reading
-	os.Remove(stateFile)
+	// remove the state directory
 	os.RemoveAll(stateDir)
 
 	// let's undeploy the service after migration
 	go r.Undeploy(service.Sname, service.Instance)
 
-	return data, nil
+	return reader, nil
 }
 
 // PrepareForInstantiantion prepares the service for instantiation after migration.
@@ -983,7 +984,14 @@ func (r *ContainerRuntime) AbortMigration(service model.Service) error {
 }
 
 // ResumeFromState resumes a service prepared for instantiation with a given state.
-func (r *ContainerRuntime) ResumeFromState(sname string, instance int, state []byte, statusChangeNotificationHandler func(service model.Service)) error {
+func (r *ContainerRuntime) ResumeFromState(sname string, instance int, stateFile string, statusChangeNotificationHandler func(service model.Service)) error {
+
+	// remove the state file after the function execution
+	defer func() {
+		if err := os.Remove(stateFile); err != nil {
+			logger.ErrorLogger().Printf("Unable to remove state file %s: %v", stateFile, err)
+		}
+	}()
 
 	revert := func() {
 		r.channelLock.Lock()
@@ -1023,19 +1031,6 @@ func (r *ContainerRuntime) ResumeFromState(sname string, instance int, state []b
 		revert()
 		return fmt.Errorf("unable to create temporary directory %s: %v", stateDir, err)
 	}
-
-	// Write state to a temporary file
-	stateFile := fmt.Sprintf("%s/%s.checkpoint.tar.gz", model.GetNodeInfo().CheckpointDirectory, taskid)
-	if err := os.WriteFile(stateFile, state, 0644); err != nil {
-		logger.ErrorLogger().Printf("Unable to write state file %s: %v", stateFile, err)
-		revert()
-		return fmt.Errorf("unable to write state file %s: %v", stateFile, err)
-	}
-	defer func() {
-		if err := os.Remove(stateFile); err != nil {
-			logger.ErrorLogger().Printf("Unable to remove state file %s: %v", stateFile, err)
-		}
-	}()
 
 	// Uncompress the state file to a temporary directory
 	cmd := exec.Command("tar", "-xzf", stateFile, "-C", stateDir)

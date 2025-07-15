@@ -79,7 +79,8 @@ type MigrationData struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	ServiceId      string                 `protobuf:"bytes,1,opt,name=service_id,json=serviceId,proto3" json:"service_id,omitempty"`
 	MigrationToken string                 `protobuf:"bytes,2,opt,name=migration_token,json=migrationToken,proto3" json:"migration_token,omitempty"`
-	Payload        []byte                 `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
+	IsFinal        bool                   `protobuf:"varint,3,opt,name=is_final,json=isFinal,proto3" json:"is_final,omitempty"`
+	Payload        []byte                 `protobuf:"bytes,4,opt,name=payload,proto3" json:"payload,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -126,6 +127,13 @@ func (x *MigrationData) GetMigrationToken() string {
 		return x.MigrationToken
 	}
 	return ""
+}
+
+func (x *MigrationData) GetIsFinal() bool {
+	if x != nil {
+		return x.IsFinal
+	}
+	return false
 }
 
 func (x *MigrationData) GetPayload() []byte {
@@ -196,17 +204,18 @@ const file_requests_proto_migration_proto_rawDesc = "" +
 	"\x10MigrationRequest\x12\x1d\n" +
 	"\n" +
 	"service_id\x18\x01 \x01(\tR\tserviceId\x12'\n" +
-	"\x0fmigration_token\x18\x02 \x01(\tR\x0emigrationToken\"q\n" +
+	"\x0fmigration_token\x18\x02 \x01(\tR\x0emigrationToken\"\x8c\x01\n" +
 	"\rMigrationData\x12\x1d\n" +
 	"\n" +
 	"service_id\x18\x01 \x01(\tR\tserviceId\x12'\n" +
-	"\x0fmigration_token\x18\x02 \x01(\tR\x0emigrationToken\x12\x18\n" +
-	"\apayload\x18\x03 \x01(\fR\apayload\"G\n" +
+	"\x0fmigration_token\x18\x02 \x01(\tR\x0emigrationToken\x12\x19\n" +
+	"\bis_final\x18\x03 \x01(\bR\aisFinal\x12\x18\n" +
+	"\apayload\x18\x04 \x01(\fR\apayload\"G\n" +
 	"\x11MigrationResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage2\xfa\x01\n" +
-	"\x10MigrationService\x12J\n" +
-	"\x10ReceiveMigration\x12\x18.requesrts.MigrationData\x1a\x1c.requesrts.MigrationResponse\x12M\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage2\xfc\x01\n" +
+	"\x10MigrationService\x12L\n" +
+	"\x10ReceiveMigration\x12\x18.requesrts.MigrationData\x1a\x1c.requesrts.MigrationResponse(\x01\x12M\n" +
 	"\x10RequestMigration\x12\x1b.requesrts.MigrationRequest\x1a\x1c.requesrts.MigrationResponse\x12K\n" +
 	"\x0eMigrationAbort\x12\x1b.requesrts.MigrationRequest\x1a\x1c.requesrts.MigrationResponseB\x10Z\x0erequests/protob\x06proto3"
 

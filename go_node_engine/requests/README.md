@@ -1,5 +1,7 @@
 # To generate the gRPC code
 
+Install gRPC for go following [this](https://grpc.io/docs/languages/go/quickstart/) guide. 
+
 Run the following command while in the `go_node_engine` directory:
 
 ```

@@ -13,7 +13,8 @@ message MigrationRequest {
 message MigrationData {
   string service_id = 1;
   string migration_token = 2;
-  bytes payload = 3;
+  bool is_final = 3;
+  bytes payload = 4;
 }
 
 // The response message indicating success and a message.
@@ -24,7 +25,7 @@ message MigrationResponse {
 
 // The migration service definition.
 service MigrationService {
-  rpc ReceiveMigration(MigrationData) returns (MigrationResponse);
+  rpc ReceiveMigration(stream MigrationData) returns (MigrationResponse);
   rpc RequestMigration(MigrationRequest) returns (MigrationResponse);
   rpc MigrationAbort(MigrationRequest) returns (MigrationResponse);
 }

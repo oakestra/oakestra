@@ -2,6 +2,7 @@ package virtualization
 
 import (
 	"go_node_engine/model"
+	"go_node_engine/utils"
 	"time"
 )
 
@@ -28,7 +29,7 @@ type RuntimeMigration interface {
 	RemoveMigrationCandidate(sname string, instance int) error
 	// StopAndGetState stops a service and returns its state if it has been marked as a migration candidate.
 	// The state is a byte slice that can be used to resume the service later.
-	StopAndGetState(sname string, instance int) ([]byte, error)
+	StopAndGetState(sname string, instance int) (utils.OnceReader, error)
 	// PrepareForInstantiantion prepares the service for instantiation after mgiration. The state is not ready
 	// to be resumed yet, but the service code can be donwloaded and the virtualization's environment prepared.
 	PrepareForInstantiantion(service model.Service, statusChangeNotificationHandler func(service model.Service)) error
@@ -38,7 +39,7 @@ type RuntimeMigration interface {
 	// ResumeFromState resumes a service prepared for instantiation with a given state.
 	// The state is a byte slice that was returned by StopAndGetState method.
 	// This method can be called only after PrepareForInstantiantion returned without an error.
-	ResumeFromState(sname string, instance int, state []byte, statusChangeNotificationHandler func(service model.Service)) error
+	ResumeFromState(sname string, instance int, stateFile string, statusChangeNotificationHandler func(service model.Service)) error
 }
 
 type Runtime interface {
