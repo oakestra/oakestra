@@ -38,15 +38,16 @@ func scheduleRequestHandler(ctx context.Context, t *asynq.Task) error {
 	var algorithm A
 	var jobData = algorithm.JobData()
 
+	logger.InfoLogger().Printf("Received payload: %v", string(t.Payload()))
 	err := json.Unmarshal(t.Payload(), &jobData)
 	if err != nil {
-		logger.ErrorLogger().Println("Could not unmarshal job data")
+		logger.ErrorLogger().Printf("Could not unmarshal job data: %v", err)
 		return err
 	}
 	logger.InfoLogger().Printf("Received job data: %v", jobData)
 	err = calculate.PerformSchedulingRequest(jobData, algorithm)
 	if err != nil {
-		logger.ErrorLogger().Println("Could not Schedule job %v", err)
+		logger.ErrorLogger().Printf("Could not Schedule job: %v", err)
 	}
 	return err
 }
