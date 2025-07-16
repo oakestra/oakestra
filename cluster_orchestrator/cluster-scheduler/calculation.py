@@ -83,7 +83,7 @@ def deploy_on_best_among_desired_nodes(job: dict, nodes) -> Union[dict, Negative
     else:
         desired_nodes_list = nodes.split(";")
         for node in active_nodes:
-            if node.get("node_info",{}).get("host") in desired_nodes_list:
+            if node.get("node_info", {}).get("host") in desired_nodes_list:
                 selected_nodes.append(node)
     return greedy_load_balanced_algorithm(job, active_nodes=selected_nodes)
 
