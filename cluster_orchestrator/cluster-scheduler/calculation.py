@@ -57,14 +57,14 @@ def first_fit_algorithm(job: dict) -> Union[dict, NegativeSchedulingStatus]:
     print("active_nodes: ")
     for node in active_nodes:
         try:
-            available_cpu = node.get("current_cpu_cores_free")
-            available_memory = node.get("current_free_memory_in_MB")
+            available_cpu = node.get("vcpus")
+            available_memory = node.get("memory")
             node_info = node.get("node_info")
             technology = node_info.get("technology")
 
             job_req = job.get("requirements")
             if (
-                available_cpu >= job_req.get("cpu")
+                available_cpu >= job_req.get("vcpus")
                 and available_memory >= job_req.get("memory")
                 and job.get("image_runtime") in technology
             ):
@@ -112,8 +112,8 @@ def greedy_load_balanced_algorithm(
 
     # Return the cluster with the most cpu+ram.
     for node in qualified_nodes:
-        cpu = float(node.get("current_cpu_cores_free"))
-        mem = float(node.get("current_free_memory_in_MB"))
+        cpu = float(node.get("vcpus"))
+        mem = float(node.get("memory"))
         if cpu >= target_cpu and mem >= target_mem:
             target_cpu = cpu
             target_mem = mem
@@ -128,10 +128,10 @@ def replicate(job):
 
 def extract_specs(node):
     return {
-        "available_cpu": node.get("current_cpu_cores_free", 0)
-        * (100 - node.get("current_memory_percent"))
+        "available_cpu": node.get("vcpus", 0)
+        * (100 - node.get("memory_percent"))
         / 100,
-        "available_memory": node.get("current_free_memory_in_MB", 0),
+        "available_memory": node.get("memory", 0),
         "available_gpu": len(node.get("gpu_info", [])),
         "virtualization": node.get("node_info", {}).get("technology", []),
         "arch": node.get("node_info", {}).get("architecture"),
@@ -144,12 +144,12 @@ def does_node_respects_requirements(node_specs, job):
         memory = job.get("memory")
 
     vcpu = 0
-    if job.get("vcpu"):
-        vcpu = job.get("vcpu")
+    if job.get("vcpus"):
+        vcpu = job.get("vcpus")
 
     vgpu = 0
-    if job.get("vgpu"):
-        vgpu = job.get("vgpu")
+    if job.get("vgpus"):
+        vgpu = job.get("vgpus")
 
     virtualization = job.get("virtualization")
     if virtualization == "unikernel":
