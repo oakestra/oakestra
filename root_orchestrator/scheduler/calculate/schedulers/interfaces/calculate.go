@@ -1,6 +1,36 @@
 // Package interfaces
 package interfaces
 
+type NegativeSchedulingStatus int
+
+const (
+	TargetClusterNotFound NegativeSchedulingStatus = iota
+	TargetClusterNotActive
+	TargetClusterNoCapacity
+	NoActiveClusterWithCapacity
+	NoWorkerCapacity
+	NoQualifiedWorkerFound
+	NoNodeFound
+)
+
+var NegativeSchedulingStatusName = map[NegativeSchedulingStatus]string{
+	TargetClusterNotFound:       "TargetClusterNotFound",
+	TargetClusterNotActive:      "TargetClusterNotActive",
+	TargetClusterNoCapacity:     "TargetClusterNoCapacity",
+	NoActiveClusterWithCapacity: "NoActiveClusterWithCapacity",
+	NoWorkerCapacity:            "NO_WORKER_CAPACITY",
+	NoQualifiedWorkerFound:      "NO_QUALIFIED_WORKER_FOUND",
+	NoNodeFound:                 "NO_NODE_FOUND",
+}
+
+type SchedulingError struct {
+	NegativeSchedulingStatus NegativeSchedulingStatus
+}
+
+func (e SchedulingError) Error() string {
+	return NegativeSchedulingStatusName[e.NegativeSchedulingStatus]
+}
+
 type GenericConstraints struct {
 	Type    string `json:"type"`
 	Node    string `json:"node"`

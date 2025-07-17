@@ -34,7 +34,7 @@ func formatRequestParameters(r map[string]string) string {
 	return sb.String()[:sb.Len()-1]
 }
 
-func AvailableResources[T interfaces.ResourceList](data []T, requestParameters map[string]string) error {
+func AvailableResources[T interfaces.ResourceList](data *[]T, requestParameters map[string]string) error {
 	url := fmt.Sprintf("%s://%s:%s%s/%s", PROTOCOL, RESOURCE_ABSTRACTOR_URL, RESOURCE_ABSTRACTOR_PORT, RESOURCES, formatRequestParameters(requestParameters))
 	resp, err := http.Get(url)
 	if err != nil {
@@ -54,7 +54,7 @@ func AvailableResources[T interfaces.ResourceList](data []T, requestParameters m
 		return err
 	}
 
-	err = json.Unmarshal(body, &data)
+	err = json.Unmarshal(body, data)
 	if err != nil {
 		logger.ErrorLogger().Println("Error unmarshalling body")
 		return err

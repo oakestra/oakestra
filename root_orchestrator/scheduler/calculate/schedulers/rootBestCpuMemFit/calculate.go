@@ -87,10 +87,13 @@ func (a BestCpuMemFit) JobData() CpuMemResources {
 }
 
 func (a BestCpuMemFit) Calculate(job CpuMemResources, candidates []CpuMemResources) (CpuMemResources, error) {
+	if len(candidates) == 0 {
+		return CpuMemResources{}, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.TargetClusterNotActive}
+	}
 	filteredCandidates := filterRequirements(job, candidates)
 
 	if len(filteredCandidates) == 0 {
-		return CpuMemResources{}, errors.New("no placement candidates found")
+		return CpuMemResources{}, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.TargetClusterNoCapacity}
 	}
 
 	slices.SortFunc(filteredCandidates, cmpMemCpu)
