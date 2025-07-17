@@ -2,12 +2,13 @@
 package api
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/hibiken/asynq"
 	"log"
 	"net/http"
 	"os"
 	"scheduler/logger"
+
+	"github.com/gin-gonic/gin"
+	"github.com/hibiken/asynq"
 )
 
 const TaskTypeScheduler = "schedule:job"
