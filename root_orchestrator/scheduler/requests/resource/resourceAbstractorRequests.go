@@ -29,6 +29,9 @@ func formatRequestParameters(r map[string]string) string {
 	var sb strings.Builder
 	sb.WriteString("?")
 	for k, v := range r {
+		if v == "" {
+			continue
+		}
 		sb.WriteString(fmt.Sprintf("%s=%s&", k, v))
 	}
 	return sb.String()[:sb.Len()-1]
@@ -36,6 +39,8 @@ func formatRequestParameters(r map[string]string) string {
 
 func AvailableResources[T interfaces.ResourceList](data *[]T, requestParameters map[string]string) error {
 	url := fmt.Sprintf("%s://%s:%s%s/%s", PROTOCOL, RESOURCE_ABSTRACTOR_URL, RESOURCE_ABSTRACTOR_PORT, RESOURCES, formatRequestParameters(requestParameters))
+	logger.DebugLogger().Printf("Request URL: %v", url)
+
 	resp, err := http.Get(url)
 	if err != nil {
 		logger.ErrorLogger().Println("Error fetching resources")

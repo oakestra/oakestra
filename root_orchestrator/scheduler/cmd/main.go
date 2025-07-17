@@ -6,7 +6,6 @@ import (
 )
 
 func main() {
-
 	go func() {
 		StartTaskQueueServer()
 		log.Fatal("Task queue server stopped")

@@ -14,12 +14,12 @@ type CpuMemConstraints struct {
 
 // CpuMemResources implements ResourceList
 type CpuMemResources struct {
-	Constraints    CpuMemConstraints `json:"constraints"`
-	Id             string            `json:"_id"`
-	Virtualization []string          `json:"virtualization"`
-	AvailableMem   float64           `json:"memory"`
-	AvailableCPU   float64           `json:"vcpus"`
-	CPUPercent     float64           `json:"cpu_percent"`
+	Constraints    []CpuMemConstraints `json:"constraints"`
+	Id             string              `json:"_id"`
+	Virtualization []string            `json:"virtualization"`
+	AvailableMem   float64             `json:"memory"`
+	AvailableCPU   float64             `json:"vcpus"`
+	CPUPercent     float64             `json:"cpu_percent"`
 }
 
 func (r CpuMemResources) GetId() string {
@@ -27,10 +27,13 @@ func (r CpuMemResources) GetId() string {
 }
 
 func (r CpuMemResources) ResourceConstraints() map[string]string {
-	var constraints map[string]string
-	if r.Constraints.Type == "direct" {
-		constraints["cluster_name"] = r.Constraints.Cluster
-		constraints["node_name"] = r.Constraints.Node
+	var constraints = make(map[string]string)
+	for _, constraint := range r.Constraints {
+		logger.DebugLogger().Printf("Constraint: %+v", constraint)
+		if constraint.Type == "direct" {
+			constraints["cluster_name"] = constraint.Cluster
+			constraints["node_name"] = constraint.Node
+		}
 	}
 	return constraints
 }
