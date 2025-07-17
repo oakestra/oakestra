@@ -25,15 +25,31 @@ type deploymentRequest struct {
 	ClusterId string `json:"cluster_id"`
 }
 
+type deploymentFailedRequest struct {
+	JobId  string `json:"job_id"`
+	Status string `json:"status"`
+}
+
 // Deploy sends the scheduling result to the system or cluster manager
-func Deploy(jobID string, clusterID string) error {
+func Deploy(jobId string, result string, success bool) error {
 	url := fmt.Sprintf("%s://%s:%s%s", PROTOCOL, SYSTEM_MANAGER_URL, SYSTEM_MANAGER_PORT, DEPLOY)
 
-	req := deploymentRequest{jobID, clusterID}
-	payload, err := json.Marshal(req)
-	if err != nil {
-		logger.ErrorLogger().Println("Could not marshal deployment request")
-		return err
+	var payload []byte
+	var err error
+	if success {
+		req := deploymentRequest{jobId, result}
+		payload, err = json.Marshal(req)
+		if err != nil {
+			logger.ErrorLogger().Println("Could not marshal deployment request")
+			return err
+		}
+	} else {
+		req := deploymentFailedRequest{jobId, result}
+		payload, err = json.Marshal(req)
+		if err != nil {
+			logger.ErrorLogger().Println("Could not marshal deployment request")
+			return err
+		}
 	}
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
