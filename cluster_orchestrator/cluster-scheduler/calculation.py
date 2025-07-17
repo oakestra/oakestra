@@ -128,9 +128,7 @@ def replicate(job):
 
 def extract_specs(node):
     return {
-        "available_cpu": node.get("vcpus", 0)
-        * (100 - node.get("memory_percent"))
-        / 100,
+        "available_cpu": node.get("vcpus", 0) * (100 - node.get("memory_percent")) / 100,
         "available_memory": node.get("memory", 0),
         "available_gpu": len(node.get("gpu_info", [])),
         "virtualization": node.get("node_info", {}).get("technology", []),

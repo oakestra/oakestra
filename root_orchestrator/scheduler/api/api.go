@@ -21,6 +21,12 @@ func StartApiServer() {
 		log.Fatalf("could not parse Redis URL: %v", err)
 	}
 	asynqClient = asynq.NewClient(redisOpt)
+	defer func(asynqClient *asynq.Client) {
+		err := asynqClient.Close()
+		if err != nil {
+			log.Fatalf("could not close asynq client: %v", err)
+		}
+	}(asynqClient)
 
 	router := gin.Default()
 
@@ -31,7 +37,6 @@ func StartApiServer() {
 	// start listening
 	if err := router.Run(":10004"); err != nil {
 		log.Fatal(err)
-		asynqClient.Close()
 	}
 }
 
