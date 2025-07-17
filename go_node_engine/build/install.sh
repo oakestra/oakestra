@@ -4,13 +4,6 @@
 # Get last argument from argument list 
 arch="${@: -1}"
 
-# Check if last argument is amd64 or arm64
-if [ "$arch" != "amd64" ] && [ "$arch" != "arm64" ]; then
-  echo "Invalid architecture specified. Supported architectures: amd64, arm64"
-  echo "Usage: ./install.sh <architecture>"
-  exit 1
-fi
-
 remote_host="localhost"
 key=""
 while getopts "hr:i:" flag; do
@@ -37,6 +30,14 @@ while getopts "hr:i:" flag; do
    ;;
  esac
 done
+
+# Check if last argument is amd64 or arm64
+if [ "$arch" != "amd64" ] && [ "$arch" != "arm64" ]; then
+  echo "Invalid architecture specified. Supported architectures: amd64, arm64"
+  echo "Usage: ./install.sh <architecture>"
+  exit 1
+fi
+
 
 if [ "$remote_host" != "localhost" ]; then
   # Check if key is provided for remote installation

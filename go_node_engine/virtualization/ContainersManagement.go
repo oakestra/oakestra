@@ -108,7 +108,7 @@ func checkAdditionalRuntimePlugins() {
 		if ok {
 			runtimes, ok := ctd["runtimes"].(map[string]interface{})
 			if ok {
-				for runtimeName, _ := range runtimes {
+				for runtimeName := range runtimes {
 					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", runtimeName, CONTAINERD_CONFIG_PATH)
 					model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(runtimeName))
 					registerRuntimeLink(runtimeName, GetContainerdRuntime)
@@ -271,7 +271,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 			revert(fmt.Errorf("no image provided"))
 			return
 		}
-		createdContainer, err := r.createContainer(ctx, taskid, service, routineConfig.withImage, []containerd.NewContainerOpts{})
+		createdContainer, err := r.createContainer(ctx, taskid, service, routineConfig.withImage, []containerd.NewContainerOpts{}, []oci.SpecOpts{})
 		if err != nil {
 			logger.ErrorLogger().Printf("ERROR: containerd container creation failure: %v", err)
 			revert(err)
@@ -299,7 +299,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	if routineConfig.withImageStatePath != "" {
 		newTaskOpts = append(newTaskOpts, containerd.WithRestoreImagePath(routineConfig.withImageStatePath))
 		defer func() {
-			if err := os.Remove(routineConfig.withImageStatePath); err != nil {
+			if err := os.RemoveAll(routineConfig.withImageStatePath); err != nil {
 				logger.ErrorLogger().Printf("Unable to remove state file %s: %v", routineConfig.withImageStatePath, err)
 			}
 		}()
@@ -376,7 +376,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 
 // createContainer creates a new container for the given service
 // It sets the container options based on the service configuration and returns the created container.
-func (r *ContainerRuntime) createContainer(ctx context.Context, taskid string, service model.Service, image containerd.Image, containerOpts []containerd.NewContainerOpts) (containerd.Container, error) {
+func (r *ContainerRuntime) createContainer(ctx context.Context, taskid string, service model.Service, image containerd.Image, containerOpts []containerd.NewContainerOpts, specOpts []oci.SpecOpts) (containerd.Container, error) {
 
 	// generate hostname
 	hostname := fmt.Sprintf("instance-%d", service.Instance)
@@ -395,18 +395,20 @@ func (r *ContainerRuntime) createContainer(ctx context.Context, taskid string, s
 		}
 	}
 	// -- add custom snapshotter
-	containerOpts = append(containerOpts, containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image))
+	if image != nil {
+		containerOpts = append(containerOpts, containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image))
+	}
 	// -- add image
 	if image != nil {
 		containerOpts = append(containerOpts, containerd.WithImage(image))
 	}
 
 	// ---- Custom container general oci specs
-	specOpts := []oci.SpecOpts{
+	specOpts = append(specOpts, []oci.SpecOpts{
 		oci.WithHostHostsFile,
 		oci.WithHostname(hostname),
 		oci.WithEnv(append([]string{fmt.Sprintf("HOSTNAME=%s", hostname)}, service.Env...)),
-	}
+	}...)
 	if image != nil {
 		specOpts = append(specOpts, oci.WithImageConfig(image))
 	}
@@ -948,7 +950,14 @@ func (r *ContainerRuntime) PrepareForInstantiantion(service model.Service, statu
 	}
 
 	// Create a new container for the service
-	container, err := r.createContainer(r.ctx, taskid, service, nil, []containerd.NewContainerOpts{containerd.WithNewSpec(oci.WithImageConfig(image))})
+	container, err := r.createContainer(r.ctx, taskid, service, nil,
+		[]containerd.NewContainerOpts{
+			containerd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskid), image),
+		},
+		[]oci.SpecOpts{
+			oci.WithImageConfig(image),
+		},
+	)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to create container for service %s instance %d: %v", service.Sname, service.Instance, err)
 		r.channelLock.Lock()
@@ -974,7 +983,7 @@ func (r *ContainerRuntime) AbortMigration(service model.Service) error {
 		return fmt.Errorf("service %s instance %d is already undeployed", service.Sname, service.Instance)
 	}
 
-	if s.Status != model.SERVICE_MIGRATION_PROGRESS {
+	if s.Status != model.SERVICE_MIGRATION_PROGRESS && s.Status != model.SERVICE_MIGRATION_ACCEPTED && s.Status != model.SERVICE_MIGRATION_REQUESTED {
 		return fmt.Errorf("service %s instance %d is not in migration progress", service.Sname, service.Instance)
 	}
 

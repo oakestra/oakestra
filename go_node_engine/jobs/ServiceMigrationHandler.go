@@ -133,6 +133,8 @@ func (h *serviceMigrationHandler) AddIncomingMigration(details MigrationDetails)
 		if !h.migrations[serviceID].dataTransferred {
 			logger.ErrorLogger().Printf("Migration self-destruct for service: %s, no data transferred", serviceID)
 			migrationRuntime.AbortMigration(h.migrations[serviceID].Service)
+			delete(h.migrations, serviceID)
+			logger.InfoLogger().Printf("Migration self-destruct for service: %s, migration aborted", serviceID)
 		}
 	}(details.JobID)
 
@@ -166,6 +168,8 @@ func (h *serviceMigrationHandler) Migrate(details MigrationDetails) error {
 func (h *serviceMigrationHandler) ReceiveMigration(stream pb.MigrationService_ReceiveMigrationServer) error {
 	logger.InfoLogger().Println("Received migration data stream")
 
+	// create model.GetNodeInfo().CheckpointDirectory
+	os.MkdirAll(model.GetNodeInfo().CheckpointDirectory, 0755)
 	stateFileName := fmt.Sprintf("%s/%s.checkpoint.tar.gz", model.GetNodeInfo().CheckpointDirectory, utils.GenerateRandomString(16))
 	stateFile, err := os.Create(stateFileName) // Create the file to store the migration state
 	if err != nil {
@@ -444,7 +448,7 @@ func (h *serviceMigrationHandler) requestMigration(migration MigrationDetails) (
 		return nil, fmt.Errorf("migration request failed: %v", err)
 	}
 
-	buffer := make([]byte, 1024*1024*4) // 4MB buffer
+	buffer := make([]byte, 1024*1024) // 1MB buffer
 	sendData := pb.MigrationData{
 		ServiceId:      migration.JobID,
 		MigrationToken: migration.MigrationToken,
@@ -457,16 +461,28 @@ func (h *serviceMigrationHandler) requestMigration(migration MigrationDetails) (
 
 		if n > 0 {
 			sendData.Payload = buffer[:n]
-			migrationStreamingInterface.Send(&sendData)
+		} else {
+			sendData.IsFinal = true
 		}
 		if readErr == io.EOF {
 			sendData.IsFinal = true // Mark the last chunk
-			migrationStreamingInterface.Send(&sendData)
+		}
+		err = migrationStreamingInterface.Send(&sendData)
+		if err != nil {
+			defer revertMigrationAbort()
+			defer h.reDeployIfMigrationFails(migration.Service, stateReader)
+			return nil, fmt.Errorf("failed to send migration data: %v", err)
+		}
+
+		if sendData.IsFinal {
+			logger.InfoLogger().Printf("Sent all migration data for service: %s, total bytes sent: %d", migration.JobID, n)
+			stateReader.Delete()
 			break
 		}
-		if readErr != nil {
+		if readErr != nil && readErr != io.EOF {
 			defer revertMigrationAbort()
-			return nil, fmt.Errorf("failed to fetch payload for migration: %v, MIGRATION ABORTED", err)
+			stateReader.Delete() // Clean up the state file on error
+			return nil, fmt.Errorf("failed to get payload for migration: %v, MIGRATION ABORTED", readErr)
 		}
 	}
 
@@ -482,6 +498,8 @@ func WithStatusChangeNotificationHandler(notifyHandler func(service model.Servic
 }
 
 func (h *serviceMigrationHandler) reDeployIfMigrationFails(service model.Service, stateReader utils.OnceReader) {
+	defer stateReader.Delete() // Ensure the state file is deleted after re-deployment
+
 	virtualizationRuntime, err := virtualization.GetRuntimeMigration(model.RuntimeType(service.Runtime))
 	if err != nil {
 		logger.ErrorLogger().Printf("Failed to get virtualization runtime for re-deployment: %v", err)

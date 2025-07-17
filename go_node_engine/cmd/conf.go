@@ -19,13 +19,17 @@ func init() {
 	configCmd.AddCommand(setVirtualizationCmd)
 	configCmd.AddCommand(defaultConfigCmd)
 	configCmd.AddCommand(setCni)
+	configCmd.AddCommand(visibility)
 	configCmd.AddCommand(setAuth)
 	setAuth.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
 	setAuth.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
 	setVirtualizationCmd.AddCommand(enableUnikernel)
+	setCni.AddCommand(explainNetManager)
 	setCni.AddCommand(enableNetwork)
 	setCni.AddCommand(disableNetwork)
 	setCni.AddCommand(enableManualNetwork)
+	visibility.AddCommand(publicIP)
+	visibility.AddCommand(privateIP)
 	addClusterCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Custom port of the cluster orchestrator")
 	configCmd.AddCommand(setAddonCmd)
 	setAddonCmd.AddCommand(enableBuilder)
@@ -120,7 +124,11 @@ var (
 	// --- NETWORKING
 	setCni = &cobra.Command{
 		Use:   "network [auto/custom/off]",
-		Short: "Enable/Disable networking support",
+		Short: "Configure networking support",
+	}
+	explainNetManager = &cobra.Command{
+		Use:   "[auto/custom/off]",
+		Short: "Enable/disable automatic networking support",
 	}
 	enableNetwork = &cobra.Command{
 		Use:   "auto",
@@ -131,7 +139,7 @@ var (
 	}
 	enableManualNetwork = &cobra.Command{
 		Use:   "manual [socket path]",
-		Short: "Manually pre-configured overlay network client. Default socket: /etc/netmanager/netmanager.sock (usefull for debug and testing of custom overlay networks)",
+		Short: "Manually pre-configured overlay network client. Default socket: /etc/netmanager/netmanager.sock (useful for debug and testing of custom overlay networks)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			socketPath := "custom:/etc/netmanager/netmanager.sock"
 			if len(args) == 1 {
@@ -145,6 +153,26 @@ var (
 		Short: "Disable overlay network support",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setNetwork("")
+		},
+	}
+
+	// --- VISIBILITY
+	visibility = &cobra.Command{
+		Use:   "visibility [public/private]",
+		Short: "Use public or private IP",
+	}
+	publicIP = &cobra.Command{
+		Use:   "public",
+		Short: "Allow networking over the public IP address",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setPublicIp(true)
+		},
+	}
+	privateIP = &cobra.Command{
+		Use:   "private",
+		Short: "Disallow networking over the public IP address",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setPublicIp(false)
 		},
 	}
 
@@ -383,6 +411,17 @@ func setNetwork(cniName string) error {
 	}
 
 	clusterConf.OverlayNetwork = cniName
+
+	return configManager.Write(clusterConf)
+}
+
+func setPublicIp(public bool) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+	clusterConf.PublicIp = public
 
 	return configManager.Write(clusterConf)
 }

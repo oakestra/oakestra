@@ -43,7 +43,7 @@ var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
 	logger.InfoLogger().Println("Connected to the MQTT broker")
 
 	topicsQosMap := make(map[string]byte)
-	for key, _ := range TOPICS {
+	for key := range TOPICS {
 		topicsQosMap[key] = 1
 	}
 

@@ -11,6 +11,7 @@ import (
 type OnceReader interface {
 	Read(p []byte) (n int, err error)
 	GetFile() *os.File
+	Delete() error
 }
 
 type deletingReadCloser struct {
@@ -36,7 +37,6 @@ func (drc *deletingReadCloser) Read(p []byte) (n int, err error) {
 
 	n, err = drc.ReadCloser.Read(p)
 	if err != nil {
-		drc.cleanup()
 		return n, err
 	}
 
@@ -44,7 +44,7 @@ func (drc *deletingReadCloser) Read(p []byte) (n int, err error) {
 }
 
 // Close closes the underlying reader and then deletes the file.
-func (drc *deletingReadCloser) cleanup() error {
+func (drc *deletingReadCloser) Delete() error {
 
 	if drc.file != nil {
 		if err := os.Remove(drc.file.Name()); err != nil {
