@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"github.com/hibiken/asynq"
 	"log"
 	"os"
 	"scheduler/calculate"
 	"scheduler/calculate/schedulers/rootBestCpuMemFit"
 	"scheduler/logger"
+
+	"github.com/hibiken/asynq"
 )
 
 const TaskTypeScheduler = "schedule:job"
