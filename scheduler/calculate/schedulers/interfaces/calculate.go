@@ -45,7 +45,7 @@ type ResourceList interface {
 
 // Algorithm chooses the best PlacementCandidate for a Job
 type Algorithm[T ResourceList] interface {
-	ResourceList() []T
-	JobData() T
-	Calculate(job T, candidates []T) (T, error)
+	ResourceList() []T                          // Return a slice of empty ResourceList objects as a containers for the Resource Abstractor response
+	JobData() T                                 // Return an empty ResourceList object as a container for the job request
+	Calculate(job T, candidates []T) (T, error) // Return the best placement candidate with respect to the job
 }
