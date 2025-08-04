@@ -160,10 +160,10 @@ services:
 
   # Cloud Scheduler
   cloud_scheduler:
-    image: ghcr.io/oakestra/oakestra/cloud-scheduler:latest
+    image: ghcr.io/oakestra/oakestra/scheduler:latest
     pull_policy: always
-    container_name: scheduler
-    hostname: scheduler
+    container_name: cloud_scheduler
+    hostname: cloud_scheduler
     labels:
       logging: "promtail"
       logging_jobname: "rootlogs"
