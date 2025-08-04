@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	SYSTEM_MANAGER_URL  = os.Getenv("SYSTEM_MANAGER_URL")
-	SYSTEM_MANAGER_PORT = os.Getenv("SYSTEM_MANAGER_PORT")
+	MANAGER_URL  = os.Getenv("MANAGER_URL")
+	MANAGER_PORT = os.Getenv("MANAGER_PORT")
 )
 
 const (
@@ -32,7 +32,7 @@ type deploymentFailedRequest struct {
 
 // Deploy sends the scheduling result to the system or cluster manager
 func Deploy(jobId string, result string, success bool) error {
-	url := fmt.Sprintf("%s://%s:%s%s", PROTOCOL, SYSTEM_MANAGER_URL, SYSTEM_MANAGER_PORT, DEPLOY)
+	url := fmt.Sprintf("%s://%s:%s%s", PROTOCOL, MANAGER_URL, MANAGER_PORT, DEPLOY)
 
 	var payload []byte
 	var err error

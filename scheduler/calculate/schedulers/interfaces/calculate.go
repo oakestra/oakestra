@@ -6,7 +6,6 @@ type NegativeSchedulingStatus int
 const (
 	TargetClusterNotFound NegativeSchedulingStatus = iota
 	TargetClusterNotActive
-	TargetClusterNoCapacity
 	NoActiveClusterWithCapacity
 	NoWorkerCapacity
 	NoQualifiedWorkerFound
@@ -16,7 +15,6 @@ const (
 var NegativeSchedulingStatusName = map[NegativeSchedulingStatus]string{
 	TargetClusterNotFound:       "TargetClusterNotFound",
 	TargetClusterNotActive:      "TargetClusterNotActive",
-	TargetClusterNoCapacity:     "TargetClusterNoCapacity",
 	NoActiveClusterWithCapacity: "NoActiveClusterWithCapacity",
 	NoWorkerCapacity:            "NO_WORKER_CAPACITY",
 	NoQualifiedWorkerFound:      "NO_QUALIFIED_WORKER_FOUND",

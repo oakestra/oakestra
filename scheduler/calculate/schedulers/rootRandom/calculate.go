@@ -97,7 +97,7 @@ func (a BestCpuMemFit) Calculate(job RandomResources, candidates []RandomResourc
 	filteredCandidates := filterRequirements(job, candidates)
 
 	if len(filteredCandidates) == 0 {
-		return RandomResources{}, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.TargetClusterNoCapacity}
+		return RandomResources{}, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.NoActiveClusterWithCapacity}
 	}
 
 	idx := rand.IntN(len(filteredCandidates))

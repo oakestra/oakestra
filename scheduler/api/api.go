@@ -13,6 +13,8 @@ import (
 
 const TaskTypeScheduler = "schedule:job"
 
+var API_PORT = os.Getenv("API_PORT")
+
 var RedisAddr = os.Getenv("REDIS_ADDR")
 var asynqClient *asynq.Client
 
