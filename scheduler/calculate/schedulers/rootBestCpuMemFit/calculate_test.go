@@ -2,9 +2,10 @@ package rootBestCpuMemFit
 
 import (
 	"errors"
-	"gotest.tools/assert"
 	"scheduler/calculate/schedulers/interfaces"
 	"testing"
+
+	"gotest.tools/assert"
 )
 
 func TestCalculateConstraints(t *testing.T) {
