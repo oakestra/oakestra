@@ -96,7 +96,7 @@ func (a BestCpuMemFit) Calculate(job CpuMemResources, candidates []CpuMemResourc
 	filteredCandidates := filterRequirements(job, candidates)
 
 	if len(filteredCandidates) == 0 {
-		return CpuMemResources{}, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.TargetClusterNoCapacity}
+		return CpuMemResources{}, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.NoActiveClusterWithCapacity}
 	}
 
 	slices.SortFunc(filteredCandidates, cmpMemCpu)

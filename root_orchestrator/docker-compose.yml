@@ -161,9 +161,9 @@ services:
     ports:
       - "10004:10004"
     environment:
-      - MY_PORT=10004
-      - SYSTEM_MANAGER_URL=system_manager
-      - SYSTEM_MANAGER_PORT=10000
+      - API_PORT=10004
+      - MANAGER_URL=system_manager
+      - MANAGER_PORT=10000
       - RESOURCE_ABSTRACTOR_URL=resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - REDIS_ADDR=redis://:cloudRedis@redis:6379
