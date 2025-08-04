@@ -22,6 +22,7 @@ const (
 type ConfFile struct {
 	ConfVersion     string           `json:"conf_version"`
 	ClusterAddress  string           `json:"cluster_address"`
+	ClusterSSL      bool             `json:"cluster_ssl"`
 	ClusterPort     int              `json:"cluster_port"`
 	AppLogs         string           `json:"app_logs"`
 	OverlayNetwork  string           `json:"overlay_network"`
@@ -152,6 +153,7 @@ func GenDefaultConfig() ConfFile {
 		ConfVersion:    "1.0",
 		ClusterAddress: "0.0.0.0",
 		ClusterPort:    10100,
+		ClusterSSL:     false,
 		AppLogs:        DEFAULT_LOG_DIR,
 		OverlayNetwork: AUTO_OAK_NETWORK,
 		PublicIp:       false,

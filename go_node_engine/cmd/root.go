@@ -25,6 +25,7 @@ var (
 	}
 	clusterAddress string
 	clusterPort    int
+	clusterSSL     bool
 	detatched      bool
 	// Addons
 	imageBuilder        bool
@@ -69,6 +70,14 @@ func nodeEngineDaemonManager() error {
 	if clusterPort != 10100 {
 		// set new cluster port if users selected a custom one
 		err := configPort(clusterPort)
+		if err != nil {
+			return err
+		}
+	}
+
+	if clusterSSL != false {
+		// set SSL cluster handshake
+		err := configSSL(clusterSSL)
 		if err != nil {
 			return err
 		}
