@@ -101,7 +101,7 @@ func (a BestCpuMemFit) Calculate(job CpuMemResources, candidates []CpuMemResourc
 
 	slices.SortFunc(filteredCandidates, cmpMemCpu)
 
-	return filteredCandidates[0], nil
+	return filteredCandidates[len(filteredCandidates)-1], nil
 }
 
 // filterRequirements returns a slice of PlacementCandidates which meet the job requirements
