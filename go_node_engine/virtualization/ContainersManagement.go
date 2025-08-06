@@ -454,6 +454,7 @@ func (r *ContainerRuntime) forceContainerCleanup() {
 
 func (r *ContainerRuntime) removeContainer(container containerd.Container) error {
 	if container == nil {
+		logger.WarningLogger().Printf("Container is nil, nothing to remove")
 		return nil
 	}
 
@@ -491,6 +492,7 @@ func (r *ContainerRuntime) removeContainer(container containerd.Container) error
 	err = container.Delete(r.ctx)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to delete container: %v", err)
+		return err
 	}
 
 	return nil
