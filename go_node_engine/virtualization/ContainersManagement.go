@@ -457,7 +457,7 @@ func (r *ContainerRuntime) removeContainer(container containerd.Container) error
 		return nil
 	}
 
-	logger.InfoLogger().Printf("Clenaning up container: %s", container.ID())
+	logger.InfoLogger().Printf("Cleaning up container: %s", container.ID())
 	containerMetadata, err := container.Info(r.ctx)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
