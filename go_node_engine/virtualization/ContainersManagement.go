@@ -478,9 +478,12 @@ func (r *ContainerRuntime) removeContainer(container containerd.Container) error
 		if currentsnapshotter != nil {
 			err = currentsnapshotter.Remove(r.ctx, containerMetadata.SnapshotKey)
 			if err != nil {
-				logger.ErrorLogger().Printf("Unable to remove snapshotter %s: %v", containerMetadata.Snapshotter, err)
+				logger.WarningLogger().Printf("Unable to remove snapshotter %s: %v", containerMetadata.Snapshotter, err)
 			}
-			currentsnapshotter.Close()
+			err = currentsnapshotter.Close()
+			if err != nil {
+				logger.WarningLogger().Printf("Unable to close snapshotter %s: %v", containerMetadata.Snapshotter, err)
+			}
 		}
 	}
 
