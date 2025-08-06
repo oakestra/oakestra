@@ -64,16 +64,24 @@ if [ ! $? -eq 0 ]; then
 fi
 
 #check containerd installation
-if sudo systemctl | grep -Fq 'containerd'; then
+if sudo systemctl status containerd.service &>/dev/null; then
   sudo systemctl daemon-reload
   sudo systemctl enable --now containerd
 else
-  wget https://github.com/containerd/containerd/releases/download/v1.6.1/cri-containerd-cni-1.6.1-linux-$arch.tar.gz
-  chmod 777 cri-containerd-cni-1.6.1-linux-$arch.tar.gz
-  sudo tar --no-overwrite-dir -C / -xzf cri-containerd-cni-1.6.1-linux-$arch.tar.gz
+  wget https://github.com/containerd/containerd/releases/download/v2.0.0/containerd-2.0.0-linux-$arch.tar.gz
+  chmod 777 containerd-2.0.0-linux-$arch.tar.gz
+  sudo tar Cxzvf /usr/local containerd-2.0.0-linux-$arch.tar.gz
+  wget https://raw.githubusercontent.com/containerd/containerd/main/containerd.service
+  sudo mv containerd.service /lib/systemd/system/containerd.service
+  wget https://github.com/opencontainers/runc/releases/download/v1.3.0/runc.$arch
+  sudo install -m 755 runc.$arch /usr/local/sbin/runc
+  wget https://github.com/containernetworking/plugins/releases/download/v1.7.1/cni-plugins-linux-$arch-v1.7.1.tgz
+  sudo tar Cxzvf /opt/cni/bin cni-plugins-linux-$arch-v1.7.1.tgz
   sudo systemctl daemon-reload
   sudo systemctl enable --now containerd
-  rm cri-containerd-cni-1.6.1-linux-$arch.tar.*
+  rm containerd-2.0.0-linux-$arch.tar.gz
+  rm runc.$arch
+  rm cni-plugins-linux-$arch-v1.7.1.tgz
 fi
 
 #install latest version

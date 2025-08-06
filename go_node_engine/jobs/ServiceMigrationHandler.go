@@ -197,7 +197,7 @@ func (h *serviceMigrationHandler) ReceiveMigration(stream pb.MigrationService_Re
 		}
 
 		// Write the received data to the state file
-		if len(data.GetPayload()) > 0 {
+		if len(data.GetPayload()) > 0 && !data.IsFinal {
 			n, writeErr := stateFile.WriteAt(data.GetPayload(), int64(totWritten))
 			if writeErr != nil || n != len(data.GetPayload()) {
 				logger.ErrorLogger().Printf("Failed to write migration data to file: %v", writeErr)

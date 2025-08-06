@@ -1041,12 +1041,12 @@ func (r *ContainerRuntime) ResumeFromState(sname string, instance int, stateFile
 		return fmt.Errorf("unable to create temporary directory %s: %v", stateDir, err)
 	}
 
-	// Uncompress the state file to a temporary directory
+	// Decompress the state file to a temporary directory
 	cmd := exec.Command("tar", "-xzf", stateFile, "-C", stateDir)
 	if err := cmd.Run(); err != nil {
-		logger.ErrorLogger().Printf("Unable to uncompress state file %s: %v", stateFile, err)
+		logger.ErrorLogger().Printf("Unable to decompress state file %s: %v", stateFile, err)
 		revert()
-		return fmt.Errorf("unable to uncompress state file %s: %v", stateFile, err)
+		return fmt.Errorf("unable to decompress state file %s: %v", stateFile, err)
 	}
 
 	// create startup routine which will accompany the container through its lifetime
