@@ -191,3 +191,7 @@ volumes:
     driver: local
   mongodb_net_data:
     driver: local
+
+networks:
+  default:
+    name: oakestra
