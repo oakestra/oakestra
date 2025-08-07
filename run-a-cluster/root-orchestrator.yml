@@ -181,6 +181,10 @@ services:
       - mongo_root
 
 
+networks:
+  default:
+    name: oakestra
+
 volumes:
   mongodb_data:
     driver: local
