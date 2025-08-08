@@ -94,7 +94,7 @@ func checkAdditionalRuntimePlugins() {
 		if ok {
 			runtimes, ok := ctd["runtimes"].(map[string]interface{})
 			if ok {
-				for runtimeName, _ := range runtimes {
+				for runtimeName := range runtimes {
 					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", runtimeName, CONTAINERD_CONFIG_PATH)
 					model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(runtimeName))
 					registerRuntimeLink(runtimeName, GetContainerdRuntime)
@@ -390,6 +390,10 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 					task, err := container.Task(r.ctx, nil)
 					if err != nil {
 						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+						err := r.removeContainer(container)
+						if err != nil {
+							return
+						}
 						continue
 					}
 
@@ -454,11 +458,9 @@ func (r *ContainerRuntime) removeContainer(container containerd.Container) error
 	if err != nil {
 		return fmt.Errorf("Unable to fetch container task: %v", err)
 	}
-	if err == nil {
-		err = killTask(r.ctx, task, container)
-		if err != nil {
-			return fmt.Errorf("Unable to fetch kill task: %v", err)
-		}
+	err = killTask(r.ctx, task, container)
+	if err != nil {
+		return fmt.Errorf("Unable to fetch kill task: %v", err)
 	}
 	err = container.Delete(r.ctx)
 	if err != nil {

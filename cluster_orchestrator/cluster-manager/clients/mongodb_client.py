@@ -85,15 +85,13 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_payload):
     app.logger.info("MONGODB - update cpu and memory of worker node {0} ...".format(node_id))
     # o = mongo.db.nodes.find_one({'_id': node_id})
     # print(o)
-
     time_now = datetime.now()
 
-    mongo_nodes.db.nodes.find({"_id": ObjectId(node_id)})
-
-    updated_document = mongo_nodes.db.nodes.find_one_and_update(
+    prev_document = mongo_nodes.db.nodes.find_one_and_update(
         {"_id": ObjectId(node_id)},
         {
             "$set": {
+                "current_ip_address": node_payload.get("ip", 0),
                 "current_cpu_percent": node_payload.get("cpu", 0),
                 "current_cpu_cores_free": node_payload.get("free_cores", 0),
                 "current_memory_percent": node_payload.get("memory", 0),
@@ -111,12 +109,12 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_payload):
         upsert=False,
     )
 
-    if not updated_document:
-        app.logger.error("MONGODB - Node with id {0} not found".format(node_id))
-        return None
-    app.logger.info("MONGODB - Node {0} updated".format(node_id))
-    updated_document["_id"] = str(updated_document["_id"])
-    return updated_document
+    prev_ip = prev_document.get("current_ip_address")
+    curr_ip = node_payload.get("ip", 0)
+    if prev_ip != curr_ip:
+        app.logger.info("IP_CHANGE - Node with id {0} changed its IP address".format(node_id))
+
+    return 1
 
 
 def find_one_edge_node():

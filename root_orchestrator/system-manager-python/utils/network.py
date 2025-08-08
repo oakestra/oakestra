@@ -1,5 +1,6 @@
 import socket
 from urllib.parse import unquote
+from urllib.parse import unquote
 
 
 def is_ipv6(address):

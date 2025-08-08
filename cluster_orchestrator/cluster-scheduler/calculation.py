@@ -5,7 +5,7 @@ from mongodb_client import mongo_find_all_active_nodes
 from oakestra_utils.types.statuses import NegativeSchedulingStatus
 
 # TODO(AM): Introduce proper constraint enums to oakestra-utils.
-SUPPORTED_CONSTRAINT_TYPES = ["latency", "geo", "addons"]
+SUPPORTED_CONSTRAINT_TYPES = ["latency", "geo", "addons", "direct"]
 
 
 def calculate(app, job: dict) -> Union[dict, NegativeSchedulingStatus]:
@@ -83,7 +83,7 @@ def deploy_on_best_among_desired_nodes(job: dict, nodes) -> Union[dict, Negative
     else:
         desired_nodes_list = nodes.split(";")
         for node in active_nodes:
-            if node["node_info"]["host"] in desired_nodes_list:
+            if node.get("node_info", {}).get("host") in desired_nodes_list:
                 selected_nodes.append(node)
     return greedy_load_balanced_algorithm(job, active_nodes=selected_nodes)
 
