@@ -17,6 +17,7 @@ type RuntimeType string
 const (
 	CONTAINER_RUNTIME RuntimeType = "docker"
 	UNIKERNEL_RUNTIME RuntimeType = "unikernel"
+	WASM_RUNTIME      RuntimeType = "wasm"
 )
 
 type ConfFile struct {

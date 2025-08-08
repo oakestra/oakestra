@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 version=$(git describe --tags --abbrev=0)
 
 #arm build

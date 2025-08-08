@@ -26,6 +26,7 @@ type RuntimeType = config.RuntimeType
 var (
 	CONTAINER_RUNTIME config.RuntimeType = config.CONTAINER_RUNTIME
 	UNIKERNEL_RUNTIME config.RuntimeType = config.UNIKERNEL_RUNTIME
+	WASM_RUNTIME      config.RuntimeType = config.WASM_RUNTIME
 )
 
 const SlowUpdateFactor = 60 // For updating certain Node parameters at a lower frequency

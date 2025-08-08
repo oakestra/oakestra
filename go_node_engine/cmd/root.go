@@ -25,6 +25,7 @@ var (
 	}
 	clusterAddress string
 	clusterPort    int
+	wasmSupport    bool
 	detatched      bool
 	// Addons
 	imageBuilder        bool
