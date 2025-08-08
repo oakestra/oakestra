@@ -256,7 +256,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		logger.InfoLogger().Printf("NVIDIA - Adding GPU driver")
 	}
 	// ---- add resolve file with default google dns
-	resolvconfFile, err := getGoogleDNSResolveConf()
+	resolvconfFile, err := getResolveConfFile()
 	if err != nil {
 		revert(err)
 		return
@@ -390,7 +390,18 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 					task, err := container.Task(r.ctx, nil)
 					if err != nil {
 						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
-						err := r.removeContainer(container)
+
+						info, err := container.Info(r.ctx)
+						if err != nil {
+							logger.ErrorLogger().Printf("Unable to fetch container info: %v", err)
+							continue
+						}
+						// if container created less than 10 seconds ago, then skip removal
+						if time.Since(info.CreatedAt) < 10*time.Second {
+							logger.InfoLogger().Printf("Skipping container %s, it is still starting up", container.ID())
+							continue
+						}
+						err = r.removeContainer(container)
 						if err != nil {
 							return
 						}
@@ -528,7 +539,13 @@ func withCustomResolvConf(src string) func(context.Context, oci.Client, *contain
 	}
 }
 
-func getGoogleDNSResolveConf() (string, error) {
+func getResolveConfFile() (string, error) {
+	//check if /run/systemd/resolve/resolv.conf exists and use that
+	if _, err := os.Stat("/run/systemd/resolve/resolv.conf"); err == nil {
+		logger.InfoLogger().Printf("Using systemd-resolved resolv.conf")
+		return "/run/systemd/resolve/resolv.conf", nil
+	}
+
 	file, err := os.CreateTemp("/tmp", "oakestra-resolv-conf")
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to create temp resolv file: %v", err)
