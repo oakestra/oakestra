@@ -109,12 +109,14 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_payload):
         upsert=False,
     )
 
+    if prev_document is None:
+        app.logger.info("MONGODB - Node with id {0} does not exist".format(node_id))
+        return
+
     prev_ip = prev_document.get("current_ip_address")
     curr_ip = node_payload.get("ip", 0)
     if prev_ip != curr_ip:
         app.logger.info("IP_CHANGE - Node with id {0} changed its IP address".format(node_id))
-
-    return 1
 
 
 def find_one_edge_node():
