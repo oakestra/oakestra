@@ -1,18 +1,17 @@
 import logging
 
-from bson import json_util
-from flask import request, Response
-from flask.views import MethodView
-from flask_smorest import Blueprint, abort
-from ext_requests.network_plugin_requests import network_notify_deployment
-from clients.mqtt_client import mqtt_publish_edge_deploy
 import services.service_operations as service_operations
-from oakestra_utils.types.statuses import NegativeSchedulingStatus, PositiveSchedulingStatus
+from bson import json_util
 from clients.mongodb_client import (
     mongo_find_job_by_system_id,
     mongo_update_job_status,
 )
-
+from clients.mqtt_client import mqtt_publish_edge_deploy
+from ext_requests.network_plugin_requests import network_notify_deployment
+from flask import Response, request
+from flask.views import MethodView
+from flask_smorest import Blueprint, abort
+from oakestra_utils.types.statuses import NegativeSchedulingStatus, PositiveSchedulingStatus
 
 # ........ Functions for job management ...............#
 # ......................................................#

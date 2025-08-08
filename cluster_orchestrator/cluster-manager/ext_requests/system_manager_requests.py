@@ -4,7 +4,6 @@ import traceback
 
 import requests
 import services.service_operations as service_operations
-from ext_requests.cluster_scheduler_requests import scheduler_request_deploy
 from clients.mongodb_client import (
     mongo_aggregate_node_information,
     mongo_get_services_with_failed_instanes,
@@ -15,6 +14,8 @@ from oakestra_utils.types.statuses import (
     NegativeSchedulingStatus,
     convert_to_status,
 )
+
+from ext_requests.cluster_scheduler_requests import scheduler_request_deploy
 
 SYSTEM_MANAGER_ADDR = (
     "http://" + os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_PORT")

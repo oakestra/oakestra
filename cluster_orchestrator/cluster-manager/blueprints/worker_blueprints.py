@@ -3,10 +3,9 @@ import os
 
 from bson import json_util
 from clients.mongodb_client import mongo_upsert_node
-from flask import request, Response
+from flask import Response, request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
-
 
 # ........ Functions for job management ...............#
 # ......................................................#
