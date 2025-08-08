@@ -39,4 +39,4 @@ class ServiceController(MethodView):
             "id": str(client_id),
             "MQTT_BROKER_PORT": os.environ.get("MQTT_BROKER_PORT"),
         }
-        return Response(json_util.dumps(response), mimetype='application/json')
+        return Response(json_util.dumps(response), mimetype="application/json")

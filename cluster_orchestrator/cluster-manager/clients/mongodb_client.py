@@ -188,11 +188,11 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
             cumulative_values["gpu_percent"] += n.get("gpu_usage", 0)
             cumulative_values["gpu_cores"] += n.get("gpu_cores", 0)
             cumulative_values["number_of_nodes"] += 1
-            
+
             technology.update(node_info.get("technology", []))
             supported_addons.update(node_info.get("supported_addons", []))
             arch = node_info.get("architecture")
-            
+
             aggregation = aggregation_per_architecture[arch]
             aggregation["cpu_percent"] += n.get("current_cpu_percent", 0)
             aggregation["cpu_cores"] += n.get("current_cpu_cores_free", 0)
