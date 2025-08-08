@@ -114,7 +114,6 @@ class ClusterRegistrationServicer(register_clusterServicer):
             "cluster_name": message["cluster_name"],
         }
 
-
         app.logger.info("Cluster data: {}".format(cluster_data))
 
         cluster = cluster_operations.create_cluster(cluster_data)

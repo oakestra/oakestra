@@ -50,6 +50,6 @@ def get_ip_from_grpc_transport(transport):
         cluster_ip = transport_parts[1]
     elif l3_protocol == "ipv6":
         cluster_ip = url.replace("ipv6:", "")
-        cluster_ip = cluster_ip.replace(":"+transport_port, "")
+        cluster_ip = cluster_ip.replace(":" + transport_port, "")
 
     return sanitize(cluster_ip)
