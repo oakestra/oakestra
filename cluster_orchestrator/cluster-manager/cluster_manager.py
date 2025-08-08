@@ -3,27 +3,27 @@ import os
 import socket
 
 import grpc
-from services.analyzing_workers import looking_for_dead_workers
 from apscheduler.schedulers.background import BackgroundScheduler
-from logs.cm_logging import configure_logging
-from flask_cors import CORS
-from flask import Flask
-from flask_socketio import SocketIO
+from blueprints import blueprints
 from clients.mongodb_client import (
     mongo_init,
 )
 from clients.mqtt_client import mqtt_init
 from clients.my_prometheus_client import prometheus_init_gauge_metrics
-from prometheus_client import start_http_server
-from proto.clusterRegistration_pb2 import CS1Message, CS2Message, KeyValue, SC1Message, SC2Message
-from proto.clusterRegistration_pb2_grpc import register_clusterStub
 from ext_requests.system_manager_requests import (
     re_deploy_dead_services_routine,
     send_aggregated_info_to_sm,
 )
-from flask_swagger_ui import get_swaggerui_blueprint
-from blueprints import blueprints
+from flask import Flask
+from flask_cors import CORS
 from flask_smorest import Api
+from flask_socketio import SocketIO
+from flask_swagger_ui import get_swaggerui_blueprint
+from logs.cm_logging import configure_logging
+from prometheus_client import start_http_server
+from proto.clusterRegistration_pb2 import CS1Message, CS2Message, KeyValue, SC1Message, SC2Message
+from proto.clusterRegistration_pb2_grpc import register_clusterStub
+from services.analyzing_workers import looking_for_dead_workers
 
 MY_PORT = os.environ.get("MY_PORT")
 

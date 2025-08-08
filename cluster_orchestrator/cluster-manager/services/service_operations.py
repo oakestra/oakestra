@@ -1,10 +1,10 @@
-from ext_requests.cluster_scheduler_requests import scheduler_request_deploy
 from clients.mongodb_client import (
     mongo_create_new_job_instance,
     mongo_find_job_by_system_id,
     mongo_remove_job_instance,
 )
 from clients.mqtt_client import mqtt_publish_edge_delete
+from ext_requests.cluster_scheduler_requests import scheduler_request_deploy
 
 
 def deploy_service(job, system_job_id, instance_number):

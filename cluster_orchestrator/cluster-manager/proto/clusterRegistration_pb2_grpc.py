@@ -2,6 +2,7 @@
 """Client and server classes corresponding to protobuf-defined services."""
 
 import grpc
+
 import proto.clusterRegistration_pb2 as clusterRegistration__pb2
 
 
