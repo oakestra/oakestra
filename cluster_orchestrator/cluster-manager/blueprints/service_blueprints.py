@@ -48,7 +48,7 @@ class ServiceController(MethodView):
         except Exception:
             abort(500, "Failed to deploy service")
 
-        return Response(json_util.dumps({"status": "ok"}), mimetype='application/json')
+        return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
 
     @serviceblp.response(
         200,
@@ -67,7 +67,7 @@ class ServiceController(MethodView):
         except Exception:
             abort(500, "Failed to delete service")
 
-        return Response(json_util.dumps({"status": "ok"}), mimetype='application/json')
+        return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
 
 
 @schedulingblp.route("/<system_job_id>/<instance_number>")
@@ -104,4 +104,4 @@ class SchedulingController(MethodView):
                 node=None,
                 status=NegativeSchedulingStatus.NO_WORKER_CAPACITY,
             )
-        return Response(json_util.dumps({"status": "ok"}), mimetype='application/json')
+        return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")

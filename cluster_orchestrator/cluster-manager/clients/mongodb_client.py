@@ -172,7 +172,10 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
                 print("Node {0} is inactive.".format(n.get("_id")))
                 continue
 
-            node_info = n.get("node_info")
+            node_info = n.get("node_info", None)
+            if node_info is None:
+                print("Node {0} has no node_info, skipping.".format(n.get("_id")))
+                continue
 
             # if it is not older than TIME_INTERVAL
             cumulative_values["cpu_percent"] += n.get("cpu_percent", 0)
