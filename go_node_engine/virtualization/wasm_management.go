@@ -1,12 +1,5 @@
 package virtualization
 
-//#cgo CFLAGS: -I/usr/local/lib/wasmtime-go/include
-//#cgo LDFLAGS: -L/usr/local/lib/wasmtime-go/ -lwasmtime-go
-//#cgo LDFLAGS: -L/usr/local/lib -lwasmtime
-// #include <wasi.h>
-// #include <wasmtime.h>
-// #include <wasm.h>
-// #include <doc-wasm.h>
 import (
 	"errors"
 	"fmt"
@@ -19,7 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/struCoder/pidusage"
+	"github.com/opencontainers/cgroups"
+	"github.com/opencontainers/cgroups/fs"
 )
 
 type WasmRuntime struct {
@@ -118,7 +112,7 @@ func (r *WasmRuntime) Cleanup() {
 	}
 	for _, file := range files {
 		logger.InfoLogger().Printf("Cleaning up running app: %s", file.Name())
-		//TODO: Remvoe task with name files.Name()
+		r.killWasmComputation(file.Name())
 	}
 }
 
@@ -146,6 +140,43 @@ func (r *WasmRuntime) Undeploy(service string, instance int) error {
 		return nil
 	}
 	return errors.New("service not found")
+}
+
+func (r *WasmRuntime) killWasmComputation(taskID string) error {
+	cgroupsPath := fmt.Sprintf("%s/%d", NAMESPACE, taskID)
+	if err := os.RemoveAll(cgroupsPath); err != nil {
+		return fmt.Errorf("error removing cgroup %s: %v", cgroupsPath, err)
+	}
+
+	statsManager, err := getCgroupStatsManager(cgroupsPath)
+	if err != nil {
+		return fmt.Errorf("error getting cgroup stats manager for task %s: %v", taskID, err)
+	}
+
+	pids, err := statsManager.GetAllPids()
+	if err != nil {
+		return fmt.Errorf("error getting all PIDs for task %s: %v", taskID, err)
+	}
+
+	if len(pids) == 0 {
+		return fmt.Errorf("no PIDs found for task %s", taskID)
+	}
+
+	for _, pid := range pids {
+		//kill pid
+		process, err := os.FindProcess(pid)
+		if err != nil {
+			logger.ErrorLogger().Printf("Error finding process %d for task %s: %v", pid, taskID, err)
+			continue
+		}
+		if err := process.Kill(); err != nil {
+			logger.ErrorLogger().Printf("Error killing process %d for task %s: %v", pid, taskID, err)
+		}
+	}
+
+	_ = statsManager.Destroy()
+
+	return nil
 }
 
 func (r *WasmRuntime) wasmRuntimeCreationRoutine(
@@ -224,12 +255,15 @@ func (r *WasmRuntime) wasmRuntimeCreationRoutine(
 	}
 
 	//create IPC and memory files
-	os.Create(runtimePath + "/ipc")
-	os.Create(runtimePath + "/main_memory.b")
-	os.Create(runtimePath + "/checkpoint_memory.b")
+	ipcpath := runtimePath + "/ipc"
+	mainmempath := runtimePath + "/main_memory.b"
+	checkpointmempath := runtimePath + "/checkpoint_memory.b"
+	os.Create(ipcpath)
+	os.Create(mainmempath)
+	os.Create(checkpointmempath)
 
 	// execute ./create_command comp.wasm ipc_file.txt main_memory.b checkpoint_memory.b
-	cmd := exec.Command("/etc/oakestra/wasm/create_command", codePath, "ipc", "main_memory.b", "checkpoint_memory.b")
+	cmd := exec.Command("/etc/oakestra/wasm/create_command", codePath, ipcpath, mainmempath, checkpointmempath, fmt.Sprintf("%s/%s", NAMESPACE, taskID))
 	cmd.Dir = runtimePath
 	if err := cmd.Run(); err != nil {
 		revert(fmt.Errorf("error executing create command: %v", err))
@@ -239,8 +273,7 @@ func (r *WasmRuntime) wasmRuntimeCreationRoutine(
 	select {
 	case <-killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for WASM module %s", taskID)
-		// TODO: Cleanup the running app path and kill the process if it is runnings
-
+		r.killWasmComputation(taskID)
 		service.Status = model.SERVICE_DEAD
 		statusChangeNotificationHandler(service)
 	}
@@ -254,30 +287,48 @@ func (r *WasmRuntime) wasmRuntimeCreationRoutine(
 
 func (r *WasmRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
 	for {
-		select {
-		case <-time.After(every):
-			resourceList := make([]model.Resources, 0)
-			r.channelLock.RLock()
-			pid := os.Getpid()
-			sysInfo, err := pidusage.GetStat(pid)
+		time.Sleep(every)
+		resourceList := []model.Resources{}
+		r.channelLock.RLock()
+		for taskid := range r.killQueue {
+			// get resource usage from cgroup with taskid
+			cgroupPath := fmt.Sprintf("/sys/fs/cgroup/%s/%s", NAMESPACE, taskid)
+
+			statsManager, err := getCgroupStatsManager(cgroupPath)
 			if err != nil {
-				logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
-				r.channelLock.RUnlock()
+				logger.ErrorLogger().Printf("Error getting cgroup stats manager for task %s: %v", taskid, err)
 				continue
 			}
-			for taskid := range r.killQueue {
-				resourceList = append(resourceList, model.Resources{
-					Cpu:      fmt.Sprintf("%f", sysInfo.CPU),
-					Memory:   fmt.Sprintf("%f", sysInfo.Memory),
-					Disk:     "0",
-					Sname:    extractSnameFromTaskID(taskid),
-					Logs:     getLogs(taskid),
-					Runtime:  string(model.WASM_RUNTIME),
-					Instance: extractInstanceNumberFromTaskID(taskid),
-				})
+			stats, err := statsManager.GetStats()
+			if err != nil {
+				logger.ErrorLogger().Printf("Error getting cgroup stats for task %s: %v", taskid, err)
+				continue
 			}
-			r.channelLock.RUnlock()
-			notifyHandler(resourceList)
+
+			// get resource consumption from cgroupPath
+			resourceList = append(resourceList, model.Resources{
+				Cpu:      fmt.Sprintf("%f", float64(stats.CpuStats.CpuUsage.TotalUsage)),
+				Memory:   fmt.Sprintf("%f", float64(stats.MemoryStats.Usage.Usage)),
+				Disk:     "0",
+				Sname:    extractSnameFromTaskID(taskid),
+				Logs:     getLogs(taskid),
+				Runtime:  string(model.WASM_RUNTIME),
+				Instance: extractInstanceNumberFromTaskID(taskid),
+			})
 		}
+		r.channelLock.RUnlock()
+		notifyHandler(resourceList)
 	}
+}
+
+func getCgroupStatsManager(path string) (*fs.Manager, error) {
+	statsManager, err := fs.NewManager(
+		&cgroups.Cgroup{
+			Path: path,
+		},
+		nil)
+	if err != nil {
+		return nil, err
+	}
+	return statsManager, nil
 }
