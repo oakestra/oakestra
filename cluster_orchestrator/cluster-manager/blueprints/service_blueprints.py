@@ -59,7 +59,7 @@ class ServiceController(MethodView):
         find service in db and ask corresponding worker to delete task,
         instance_number -1 undeploy all known instances
         """
-        logging.info("Incoming Request /api/delete/ - to delete task...")
+        logging.info("Incoming Request /api/service/ - to delete task...")
 
         try:
             service_operations.delete_service(system_job_id, instance_number)
