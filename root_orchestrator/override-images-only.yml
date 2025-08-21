@@ -36,6 +36,6 @@ services:
     pull_policy: always
     
   resource_abstractor:
-    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:latest
+    image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
     pull_policy: always
     

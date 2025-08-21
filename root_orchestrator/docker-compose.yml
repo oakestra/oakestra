@@ -174,7 +174,7 @@ services:
 
   resource_abstractor:
     image: resource_abstractor
-    build: resource-abstractor/
+    build: ../resource-abstractor/
     container_name: resource_abstractor
     labels:
       logging: "promtail"

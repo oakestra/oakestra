@@ -123,7 +123,7 @@ services:
     command: redis-server --requirepass rootRedis
 
   resource_abstractor:
-    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:latest
+    image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
     pull_policy: always
     container_name: resource_abstractor
     hostname: resource_abstractor
