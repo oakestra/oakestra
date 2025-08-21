@@ -35,15 +35,15 @@ services:
       - "50052:50052"
     depends_on:
       - mongo_root
-      - cloud_scheduler
+      - root_scheduler
       - resource_abstractor
       - root_service_manager
       - jwt_generator
     environment:
-      - CLOUD_MONGO_URL=mongo
-      - CLOUD_MONGO_PORT=10007
-      - CLOUD_SCHEDULER_URL=scheduler
-      - CLOUD_SCHEDULER_PORT=10004
+      - ROOT_MONGO_URL=mongo
+      - ROOT_MONGO_PORT=10007
+      - ROOT_SCHEDULER_URL=scheduler
+      - ROOT_SCHEDULER_PORT=10004
       - RESOURCE_ABSTRACTOR_URL=resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
@@ -102,8 +102,8 @@ services:
       - MY_PORT=10099
       - SYSTEM_MANAGER_URL=system_manager
       - SYSTEM_MANAGER_PORT=10000
-      - CLOUD_MONGO_URL=mongo_net
-      - CLOUD_MONGO_PORT=10008
+      - ROOT_MONGO_URL=mongo_net
+      - ROOT_MONGO_PORT=10008
       - JWT_GENERATOR_URL=jwt_generator
       - JWT_GENERATOR_PORT=10011
     depends_on:
@@ -112,7 +112,7 @@ services:
     logging: *default-logging
 
 
-  # Redis for the Cloud Scheduler
+  # Redis for the Root Scheduler
   redis:
     image: redis
     pull_policy: always
@@ -120,7 +120,7 @@ services:
     container_name: redis
     expose:
       - "6379"
-    command: redis-server --requirepass cloudRedis
+    command: redis-server --requirepass rootRedis
 
   resource_abstractor:
     image: ghcr.io/oakestra/oakestra/root-resource-abstractor:latest
@@ -136,8 +136,8 @@ services:
       - "11011:11011"
     environment:
       - RESOURCE_ABSTRACTOR_PORT=11011
-      - CLOUD_MONGO_URL=mongo
-      - CLOUD_MONGO_PORT=10007
+      - ROOT_MONGO_URL=mongo
+      - ROOT_MONGO_PORT=10007
     depends_on:
       - mongo_root
     logging: *default-logging
@@ -158,12 +158,12 @@ services:
     logging: *default-logging
 
 
-  # Cloud Scheduler
-  cloud_scheduler:
+  # Root Scheduler
+  root_scheduler:
     image: ghcr.io/oakestra/oakestra/scheduler:latest
     pull_policy: always
-    container_name: cloud_scheduler
-    hostname: cloud_scheduler
+    container_name: root_scheduler
+    hostname: root_scheduler
     labels:
       logging: "promtail"
       logging_jobname: "rootlogs"
@@ -175,9 +175,9 @@ services:
       - SYSTEM_MANAGER_PORT=10000
       - RESOURCE_ABSTRACTOR_URL=resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
-      - REDIS_ADDR=redis://:cloudRedis@redis:6379
-      - CLOUD_MONGO_URL=mongo #adding this for consistency with version 0.4.300
-      - CLOUD_MONGO_PORT=10007 #adding this for consistency with version 0.4.300
+      - REDIS_ADDR=redis://:rootRedis@redis:6379
+      - ROOT_MONGO_URL=mongo #adding this for consistency with version 0.4.300
+      - ROOT_MONGO_PORT=10007 #adding this for consistency with version 0.4.300
     depends_on:
       - redis
       - resource_abstractor

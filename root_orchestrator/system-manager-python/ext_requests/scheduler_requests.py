@@ -4,9 +4,9 @@ import requests
 
 SCHUEDULER_ADDR = (
     "http://"
-    + os.environ.get("CLOUD_SCHEDULER_URL", "localhost")
+    + os.environ.get("ROOT_SCHEDULER_URL", "localhost")
     + ":"
-    + str(os.environ.get("CLOUD_SCHEDULER_PORT", "10004"))
+    + str(os.environ.get("ROOT_SCHEDULER_PORT", "10004"))
 )
 
 

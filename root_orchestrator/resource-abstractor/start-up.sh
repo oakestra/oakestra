@@ -8,8 +8,8 @@ source .venv/bin/activate
 export FLASK_ENV=development
 export FLASK_DEBUG=False
 
-export CLOUD_MONGO_URL=localhost
-export CLOUD_MONGO_PORT=10007
+export ROOT_MONGO_URL=localhost
+export ROOT_MONGO_PORT=10007
 
 export RESOURCE_ABSTRACTOR_PORT=11011
 

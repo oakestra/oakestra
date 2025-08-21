@@ -31,8 +31,8 @@ services:
     image: grafana/promtail:2.9.2
     pull_policy: always
     
-  cloud_scheduler:
-    image: ghcr.io/oakestra/oakestra/cloud-scheduler:latest
+  root_scheduler:
+    image: ghcr.io/oakestra/oakestra/scheduler:latest
     pull_policy: always
     
   resource_abstractor:

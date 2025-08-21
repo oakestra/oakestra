@@ -11,7 +11,7 @@ services:
   resource_abstractor:
     image: ghcr.io/oakestra/oakestra/root-resource-abstractor:alpha-v0.4.403
 
-  cloud_scheduler:
+  root_scheduler:
     image: ghcr.io/oakestra/oakestra/cloud-scheduler:alpha-v0.4.403
 
   cluster_service_manager:
