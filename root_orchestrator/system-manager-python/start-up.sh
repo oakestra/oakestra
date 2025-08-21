@@ -9,11 +9,11 @@ source .venv/bin/activate
 export FLASK_ENV=development
 # export FLASK_DEBUG=False # TRUE for logging
 
-export CLOUD_MONGO_URL=3.120.37.66
-export CLOUD_MONGO_PORT=10007
+export ROOT_MONGO_URL=3.120.37.66
+export ROOT_MONGO_PORT=10007
 
-export CLOUD_SCHEDULER_URL=localhost
-export CLOUD_SCHEDULER_PORT=7777
+export ROOT_SCHEDULER_URL=localhost
+export ROOT_SCHEDULER_PORT=7777
 
 export MY_PORT=10000
 

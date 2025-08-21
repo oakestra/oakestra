@@ -1,6 +1,6 @@
 # System Manager
 
-The System Manager is one of the components of the Root Orchestrator. It has an overview of all participating clusters and communicates with the Cloud Scheduler to decide a task placement.
+The System Manager is one of the components of the Root Orchestrator. It has an overview of all participating clusters and communicates with the Root Scheduler to decide a task placement.
 
 ## Purpose and Tasks of System Manager
 

@@ -2,8 +2,8 @@ import os
 
 from flask_pymongo import ASCENDING, PyMongo
 
-MONGO_URL = os.environ.get("CLOUD_MONGO_URL")
-MONGO_PORT = os.environ.get("CLOUD_MONGO_PORT")
+MONGO_URL = os.environ.get("ROOT_MONGO_URL")
+MONGO_PORT = os.environ.get("ROOT_MONGO_PORT")
 
 MONGO_BASE_ADDR = f"mongodb://{MONGO_URL}:{MONGO_PORT}"
 

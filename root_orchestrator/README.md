@@ -1,4 +1,4 @@
-# Cloud-components
+# Root-components
 
 By design, the centralized Root Orchestrator contains
 
