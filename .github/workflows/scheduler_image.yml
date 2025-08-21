@@ -1,4 +1,4 @@
-name: Docker root-scheduler-python
+name: Docker scheduler-image
 
 on:
   push:
