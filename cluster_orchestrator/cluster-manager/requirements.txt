@@ -11,4 +11,7 @@ prometheus-client
 werkzeug==2.0.3
 grpcio~=1.60.0
 protobuf~=4.25.2
+flask_smorest
+flask_cors
+flask_swagger_ui
 git+https://github.com/oakestra/oakestra.git@develop#subdirectory=libraries/oakestra_utils_library
