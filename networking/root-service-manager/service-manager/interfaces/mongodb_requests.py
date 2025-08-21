@@ -3,8 +3,8 @@ from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
 from datetime import datetime
 
-MONGO_URL = os.environ.get('CLOUD_MONGO_URL')
-MONGO_PORT = os.environ.get('CLOUD_MONGO_PORT')
+MONGO_URL = os.environ.get('ROOT_MONGO_URL')
+MONGO_PORT = os.environ.get('ROOT_MONGO_PORT')
 
 MONGO_ADDR_JOBS = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/jobs'
 MONGO_ADDR_NET = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/netcache'

@@ -33,7 +33,7 @@ def service_resolution(service_name):
 
     # if no results, ask the root orc
     if job is None:
-        job = root_service_manager_requests.cloud_table_query_service_name(service_name)
+        job = root_service_manager_requests.root_table_query_service_name(service_name)
         instances = job['instance_list']
         siplist = job['service_ip_list']
         mongodb_requests.mongo_insert_job(copy.deepcopy(job))
@@ -72,7 +72,7 @@ def service_resolution_ip(ip_string):
 
     # if no results, ask the root orc
     if job is None:
-        job = root_service_manager_requests.cloud_table_query_ip(ip_string)
+        job = root_service_manager_requests.root_table_query_ip(ip_string)
         mongodb_requests.mongo_insert_job(copy.deepcopy(job))
         for instance in job.get('instance_list'):
             mongo_update_job_instance(job['job_name'], instance)

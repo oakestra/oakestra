@@ -143,7 +143,7 @@ def test_tablequery_service_name_local(add_interest):
 
 
 @patch("network.tablequery.interests.add_interest")
-def test_tablequery_service_ip_cloud(add_interest, requests_mock):
+def test_tablequery_service_ip_root(add_interest, requests_mock):
     from interfaces.root_service_manager_requests import ROOT_SERVICE_MANAGER_ADDR
 
     job = _get_fake_job("aaa")
@@ -187,7 +187,7 @@ def test_tablequery_service_ip_cloud(add_interest, requests_mock):
 
 
 @patch("network.tablequery.interests.add_interest")
-def test_tablequery_service_name_cloud(add_interest, requests_mock):
+def test_tablequery_service_name_root(add_interest, requests_mock):
     from interfaces.root_service_manager_requests import ROOT_SERVICE_MANAGER_ADDR
 
     job = _get_fake_job("aaa")

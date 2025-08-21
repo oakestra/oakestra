@@ -13,7 +13,7 @@ JWT_GENERATOR_ADDR = (
 
 def get_public_key():
     logger = logging.getLogger()
-    logger.info("new job: asking cloud_scheduler...")
+    logger.info("new job: asking root_scheduler...")
     request_addr = JWT_GENERATOR_ADDR + "/key"
     while True:
         try:

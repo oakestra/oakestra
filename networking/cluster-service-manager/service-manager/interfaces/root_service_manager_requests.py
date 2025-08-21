@@ -52,7 +52,7 @@ def system_manager_notify_deployment_status(job, worker_id):
         print("Calling System Manager /api/result/cluster_deploy not successful.")
 
 
-def cloud_table_query_ip(ip):
+def root_table_query_ip(ip):
     print("table query to the System Manager...")
     job_ip = ip.replace(".", "_")
     request_addr = (
@@ -65,7 +65,7 @@ def cloud_table_query_ip(ip):
         print("Calling System Manager /api/job/ip/../instances not successful.")
 
 
-def cloud_table_query_service_name(name):
+def root_table_query_service_name(name):
     print("table query to the System Manager...")
     job_name = name.replace(".", "_")
     request_addr = (
@@ -80,7 +80,7 @@ def cloud_table_query_service_name(name):
         logging.error("Calling System Manager /api/job/../instances not successful.")
 
 
-def cloud_remove_interest(job_name):
+def root_remove_interest(job_name):
     request_addr = ROOT_SERVICE_MANAGER_ADDR + "/api/net/interest/" + str(job_name)
     try:
         result = requests.delete(request_addr)
