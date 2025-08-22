@@ -186,8 +186,8 @@ services:
       - "11011:11011"
     environment:
       - RESOURCE_ABSTRACTOR_PORT=11011
-      - ROOT_MONGO_URL=mongo
-      - ROOT_MONGO_PORT=10007
+      - MONGO_URL=mongo
+      - MONGO_PORT=10007
     depends_on:
       - mongo_root
     logging: *default-logging

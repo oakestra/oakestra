@@ -1,6 +1,6 @@
 from bson import ObjectId
-from db import clusters_db
-from db.clusters_helper import build_filter
+from db import candidates_db
+from db.candidates_helper import build_filter
 from db.jobs_db import find_job_by_id
 from flask.views import MethodView
 from flask_smorest import Blueprint
@@ -13,8 +13,8 @@ resourcesblp = Blueprint("Resources", "resources", url_prefix="/api/v1/resources
 
 class ResourceSchema(Schema):
     _id = fields.String()
-    cluster_name = fields.String()
-    cluster_location = fields.String()
+    candidate_name = fields.String()
+    candidate_location = fields.String()
     ip = fields.String()
     port = fields.String()
     active_nodes = fields.Integer()
@@ -35,7 +35,7 @@ class ResourceSchema(Schema):
 class ResourceFilterSchema(Schema):
     active = fields.Boolean()
     job_id = fields.String()
-    cluster_name = fields.String()
+    candidate_name = fields.String()
     ip = fields.String()
 
 
@@ -54,33 +54,33 @@ class AllResourcesController(MethodView):
             if job is None:
                 raise exceptions.NotFound()
 
-            cluster_id = job.get("cluster")
-            if cluster_id is None:
+            candidate_id = job.get("candidate")
+            if candidate_id is None:
                 raise exceptions.NotFound()
 
-            filter["cluster_id"] = cluster_id
+            filter["candidate_id"] = candidate_id
         filter = build_filter(query)
 
-        return list(clusters_db.find_clusters(filter))
+        return list(candidates_db.find_candidates(filter))
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(201, ResourceSchema, content_type="application/json")
     @pre_post_hook("resources")
     def post(self, data, **kwargs):
-        return clusters_db.create_cluster(data)
+        return candidates_db.create_candidate(data)
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
     def put(self, data, **kwargs):
-        resource_name = data.get("cluster_name")
+        resource_name = data.get("candidate_name")
 
-        cluster = clusters_db.find_cluster_by_name(resource_name)
-        if cluster:
+        candidate = candidates_db.find_candidate_by_name(resource_name)
+        if candidate:
             return perform_update(
-                "resources", clusters_db.update_cluster, str(cluster["_id"]), data
+                "resources", candidates_db.update_candidate, str(candidate["_id"]), data
             )
 
-        return perform_create("resources", clusters_db.create_cluster, data)
+        return perform_create("resources", candidates_db.create_candidate, data)
 
 
 @resourcesblp.route("/<resource_id>")
@@ -90,11 +90,11 @@ class ResourceController(MethodView):
         if ObjectId.is_valid(resource_id) is False:
             raise exceptions.BadRequest()
 
-        cluster = clusters_db.find_cluster_by_id(resource_id)
-        if cluster is None:
+        candidate = candidates_db.find_candidate_by_id(resource_id)
+        if candidate is None:
             raise exceptions.NotFound()
 
-        return cluster
+        return candidate
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
@@ -105,11 +105,11 @@ class ResourceController(MethodView):
         if ObjectId.is_valid(resource_id) is False:
             raise exceptions.BadRequest()
 
-        return clusters_db.update_cluster_information(resource_id, data)
+        return candidates_db.update_candidate_information(resource_id, data)
 
     @resourcesblp.response(204, ResourceSchema, content_type="application/json")
     @pre_post_hook("resources", with_param_id="resource_id")
     def delete(self, *args, **kwargs):
         resource_id = kwargs.get("resource_id")
 
-        clusters_db.delete_cluster(resource_id)
+        candidates_db.delete_candidate(resource_id)

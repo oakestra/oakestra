@@ -1,5 +1,5 @@
 # Resource Abstractor
-The resource abstractor service is a microservice that interacts with the cluster database and abstracts the available information. The service exposes an API that can be used to query the currently available resources.
+The resource abstractor service is a microservice that interacts with the candidate database and abstracts the available information. The service exposes an API that can be used to query the currently available resources.
 
 
 ## Ingoing Endpoints
