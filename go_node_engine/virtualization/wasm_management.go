@@ -262,8 +262,9 @@ func (r *WasmRuntime) wasmRuntimeCreationRoutine(
 	os.Create(mainmempath)
 	os.Create(checkpointmempath)
 
-	// execute ./create_command comp.wasm ipc_file.txt main_memory.b checkpoint_memory.b
-	cmd := exec.Command("/etc/oakestra/wasm/create_command", codePath, ipcpath, mainmempath, checkpointmempath, fmt.Sprintf("%s/%s", NAMESPACE, taskID))
+	// execute ./create_command comp.wasm ipc_file.txt main_memory.b checkpoint_memory.b cgroup name
+	// this command creates a compuntation directly inside the oakestra namespace
+	cmd := exec.Command("/etc/oakestra/wasm/create_command", codePath, ipcpath, mainmempath, checkpointmempath, taskID)
 	cmd.Dir = runtimePath
 	if err := cmd.Run(); err != nil {
 		revert(fmt.Errorf("error executing create command: %v", err))
