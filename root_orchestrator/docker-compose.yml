@@ -33,7 +33,7 @@ services:
       - ROOT_MONGO_PORT=10007
       - ROOT_SCHEDULER_URL=root_scheduler
       - ROOT_SCHEDULER_PORT=10004
-      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10099
@@ -164,7 +164,7 @@ services:
       - API_PORT=10004
       - MANAGER_URL=system_manager
       - MANAGER_PORT=10000
-      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - REDIS_ADDR=redis://:rootRedis@redis:6379
     depends_on:
@@ -172,7 +172,7 @@ services:
       - resource_abstractor
     logging: *default-logging
 
-  resource_abstractor:
+  root_resource_abstractor:
     image: resource_abstractor
     build: ../resource-abstractor/
     container_name: resource_abstractor
