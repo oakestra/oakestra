@@ -9,7 +9,7 @@ from ext_requests.net_plugin_requests import (
 )
 from ext_requests.scheduler_requests import scheduler_request_deploy
 from oakestra_utils.types.statuses import PositiveSchedulingStatus, Status, convert_to_status
-from resource_abstractor_client import app_operations, cluster_operations, job_operations
+from resource_abstractor_client import app_operations, candidate_operations, job_operations
 
 
 def update_job_status(
@@ -116,7 +116,7 @@ def instance_scale_up_scheduled_handler(job_id, cluster_id):
     if job is None:
         return
 
-    cluster = cluster_operations.get_resource_by_id(cluster_id)
+    cluster = candidate_operations.get_candidate_by_id(cluster_id)
     if cluster is None:
         return
 

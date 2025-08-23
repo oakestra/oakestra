@@ -24,7 +24,7 @@ from proto.clusterRegistration_pb2_grpc import (
     add_register_clusterServicer_to_server,
     register_clusterServicer,
 )
-from resource_abstractor_client import cluster_operations
+from resource_abstractor_client import candidate_operations
 from sm_logging import configure_logging
 from utils.network import get_ip_from_grpc_transport
 from werkzeug.utils import redirect, secure_filename
@@ -115,7 +115,7 @@ class ClusterRegistrationServicer(register_clusterServicer):
         }
 
         app.logger.info("Cluster data: {}".format(cluster_data))
-        cluster = cluster_operations.create_cluster(cluster_data)
+        cluster = candidate_operations.create_candidate(cluster_data)
         if cluster is None:
             app.logger.error("Creating cluster failed")
             return

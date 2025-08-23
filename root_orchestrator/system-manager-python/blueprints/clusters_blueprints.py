@@ -4,7 +4,7 @@ from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from oakestra_utils.types.statuses import convert_to_status
-from resource_abstractor_client import cluster_operations
+from resource_abstractor_client import candidate_operations
 from services.instance_management import update_job_status
 from utils.network import sanitize
 
@@ -53,7 +53,7 @@ cluster_info_schema = {
 @clustersbp.route("/")
 class ClustersController(MethodView):
     def get(self, *args, **kwargs):
-        clusters = cluster_operations.get_resources()
+        clusters = candidate_operations.get_candidates()
         if clusters is None:
             return abort(500, "Getting clusters failed")
         return json_util.dumps(clusters)
@@ -62,7 +62,7 @@ class ClustersController(MethodView):
 @clustersbp.route("/active")
 class ActiveClustersController(MethodView):
     def get(self, *args, **kwargs):
-        clusters = cluster_operations.get_resources(active=True)
+        clusters = candidate_operations.get_candidates(active=True)
         if clusters is None:
             return abort(500, "Getting clusters failed")
         return json_util.dumps(clusters)
@@ -76,7 +76,7 @@ class ClusterController(MethodView):
     def post(self, *args, **kwargs):
         data = request.json
         cluster_id = kwargs["clusterid"]
-        updated_cluster = cluster_operations.update_cluster_information(cluster_id, data)
+        updated_cluster = candidate_operations.update_candidate_information(cluster_id, data)
         if updated_cluster is None:
             return abort(400, "Updating cluster failed")
 

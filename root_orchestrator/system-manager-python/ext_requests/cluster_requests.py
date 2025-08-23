@@ -1,14 +1,14 @@
 import logging
 
 import requests
-from resource_abstractor_client import cluster_operations, job_operations
+from resource_abstractor_client import candidate_operations, job_operations
 from services.cluster_management import find_cluster_of_job
 from utils.network import sanitize
 
 
 def cluster_request_status(cluster_id):
     print("Status Request...")
-    cluster = cluster_operations.get_resource_by_id(cluster_id)
+    cluster = candidate_operations.get_candidate_by_id(cluster_id)
     try:
         cluster_addr = "http://" + cluster.get("ip") + ":" + str(cluster.get("port")) + "/status"
         print(cluster_addr)
@@ -20,7 +20,7 @@ def cluster_request_status(cluster_id):
 
 def cluster_request_to_deploy(cluster_id, job_id, instance_number):
     print("propagate to cluster...")
-    cluster = cluster_operations.get_resource_by_id(cluster_id)
+    cluster = candidate_operations.get_candidate_by_id(cluster_id)
     if cluster is None:
         logging.error(f"Cluster with {cluster_id} not found.")
         return
@@ -76,7 +76,7 @@ def cluster_request_to_delete_job(job_id, instance_number):
 
 def cluster_request_to_delete_job_by_ip(job_id, instance_number, ip):
     try:
-        cluster = cluster_operations.get_resource_by_ip(ip)
+        cluster = candidate_operations.get_candidate_by_ip(ip)
         if cluster is None:
             logging.error(f"Cluster with {ip} not found")
             return

@@ -26,4 +26,3 @@ EXPOSE 10000
 EXPOSE 50052
 
 CMD ["python", "system_manager.py"]
-
