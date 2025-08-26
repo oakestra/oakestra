@@ -143,7 +143,7 @@ func (r *WasmRuntime) Undeploy(service string, instance int) error {
 }
 
 func (r *WasmRuntime) killWasmComputation(taskID string) error {
-	cgroupsPath := fmt.Sprintf("%s/%d", NAMESPACE, taskID)
+	cgroupsPath := fmt.Sprintf("%s/%s", NAMESPACE, taskID)
 	if err := os.RemoveAll(cgroupsPath); err != nil {
 		return fmt.Errorf("error removing cgroup %s: %v", cgroupsPath, err)
 	}
@@ -212,6 +212,7 @@ func (r *WasmRuntime) wasmRuntimeCreationRoutine(
 	computationName = strings.ReplaceAll(computationName, ":", "_")
 	computationName = strings.ReplaceAll(computationName, "/", "_")
 	computationName = strings.ReplaceAll(computationName, ".", "_")
+	computationName = strings.ReplaceAll(computationName, "?alt=media", "")
 
 	//Check if module already downloaded otherwise download it
 	compPath := downloadedModulesPath + computationName
