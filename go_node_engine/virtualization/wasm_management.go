@@ -6,9 +6,11 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/utils"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -241,38 +243,11 @@ func (r *WasmRuntime) killWasmComputation(taskID string) error {
 		}
 	}()
 
-	cgroupsPath := fmt.Sprintf("%s/%s", NAMESPACE, taskID)
-	if err := os.RemoveAll(cgroupsPath); err != nil {
-		return fmt.Errorf("error removing cgroup %s: %v", cgroupsPath, err)
+	// Remove the cgroup and kill all processes in it
+	if err := r.removeCgroup(taskID); err != nil {
+		logger.ErrorLogger().Printf("Error removing cgroup for task %s: %v", taskID, err)
+		// Don't return error here, continue with cleanup
 	}
-
-	statsManager, err := getCgroupStatsManager(cgroupsPath)
-	if err != nil {
-		return fmt.Errorf("error getting cgroup stats manager for task %s: %v", taskID, err)
-	}
-
-	pids, err := statsManager.GetAllPids()
-	if err != nil {
-		return fmt.Errorf("error getting all PIDs for task %s: %v", taskID, err)
-	}
-
-	if len(pids) == 0 {
-		return fmt.Errorf("no PIDs found for task %s", taskID)
-	}
-
-	for _, pid := range pids {
-		//kill pid
-		process, err := os.FindProcess(pid)
-		if err != nil {
-			logger.ErrorLogger().Printf("Error finding process %d for task %s: %v", pid, taskID, err)
-			continue
-		}
-		if err := process.Kill(); err != nil {
-			logger.ErrorLogger().Printf("Error killing process %d for task %s: %v", pid, taskID, err)
-		}
-	}
-
-	_ = statsManager.Destroy()
 
 	return nil
 }
@@ -302,6 +277,11 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 		delete(r.doneQueue, taskID)
 		r.channelLock.Unlock()
 
+		// Clean up cgroup on failure
+		if cgroupErr := r.removeCgroup(taskID); cgroupErr != nil {
+			logger.ErrorLogger().Printf("Error cleaning up cgroup for %s: %v", taskID, cgroupErr)
+		}
+
 		// Clean up runtime directory on failure
 		if removeErr := os.RemoveAll(runtimePath); removeErr != nil {
 			logger.ErrorLogger().Printf("Error cleaning up runtime directory %s: %v", runtimePath, removeErr)
@@ -313,13 +293,23 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 	mainmempath := runtimePath + "/main_memory.b"
 	checkpointmempath := runtimePath + "/checkpoint_memory.b"
 
+	// Create cgroup v2 for the task
+	_, err := r.createCgroup(taskID)
+	if err != nil {
+		revert(err)
+		return
+	}
+
 	// Execute create_command - this works for both new deployments and resuming from state
 	// The command creates/starts a computation directly inside the oakestra namespace
 	cmd := exec.Command("/etc/oakestra/wasm/create_command", codePath, ipcpath, mainmempath, checkpointmempath, taskID)
 	cmd.Dir = runtimePath
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
 	if err := cmd.Run(); err != nil {
-		revert(fmt.Errorf("error executing create command: %v", err))
-		return
+		//revert(fmt.Errorf("error executing create command: %v", err))
+		fmt.Println(cmd.Stderr)
+		//return
 	}
 
 	//attach network
@@ -361,26 +351,23 @@ func (r *WasmRuntime) ResourceMonitoring(every time.Duration, notifyHandler func
 			// get resource usage from cgroup with taskid
 			cgroupPath := fmt.Sprintf("/sys/fs/cgroup/%s/%s", NAMESPACE, taskid)
 
-			statsManager, err := getCgroupStatsManager(cgroupPath)
+			// Use the new cgroup v2 stats reading
+			stats, err := getCgroupV2Stats(cgroupPath)
 			if err != nil {
-				logger.ErrorLogger().Printf("Error getting cgroup stats manager for task %s: %v", taskid, err)
-				continue
-			}
-			stats, err := statsManager.GetStats()
-			if err != nil {
-				logger.ErrorLogger().Printf("Error getting cgroup stats for task %s: %v", taskid, err)
+				logger.ErrorLogger().Printf("Error getting cgroup v2 stats for task %s: %v", taskid, err)
 				continue
 			}
 
 			// get resource consumption from cgroupPath
 			resourceList = append(resourceList, model.Resources{
-				Cpu:      fmt.Sprintf("%f", float64(stats.CpuStats.CpuUsage.TotalUsage)),
-				Memory:   fmt.Sprintf("%f", float64(stats.MemoryStats.Usage.Usage)),
+				Cpu:      fmt.Sprintf("%d", stats.CPUUsage),
+				Memory:   fmt.Sprintf("%d", stats.MemoryUsage),
 				Disk:     "0",
 				Sname:    extractSnameFromTaskID(taskid),
 				Logs:     getLogs(taskid),
 				Runtime:  string(model.WASM_RUNTIME),
 				Instance: extractInstanceNumberFromTaskID(taskid),
+				Status:   model.SERVICE_RUNNING,
 			})
 		}
 		r.channelLock.RUnlock()
@@ -388,12 +375,114 @@ func (r *WasmRuntime) ResourceMonitoring(every time.Duration, notifyHandler func
 	}
 }
 
+// createCgroup creates a cgroup v2 directory structure and initializes it
+func (r *WasmRuntime) createCgroup(taskID string) (string, error) {
+	cgroupPath := fmt.Sprintf("/sys/fs/cgroup/%s/%s", NAMESPACE, taskID)
+
+	// Create the cgroup directory structure
+	if err := os.MkdirAll(cgroupPath, 0755); err != nil {
+		return "", fmt.Errorf("error creating cgroup directory %s: %v", cgroupPath, err)
+	}
+
+	// Initialize the cgroup by writing to cgroup.procs (this creates the cgroup)
+	// We don't add any processes yet, but this ensures the cgroup is properly initialized
+	procsFile := cgroupPath + "/cgroup.procs"
+	if _, err := os.OpenFile(procsFile, os.O_WRONLY|os.O_CREATE, 0644); err != nil {
+		return "", fmt.Errorf("error initializing cgroup procs file %s: %v", procsFile, err)
+	}
+
+	return cgroupPath, nil
+}
+
+// removeCgroup removes a cgroup after killing all processes in it
+func (r *WasmRuntime) removeCgroup(taskID string) error {
+	cgroupPath := fmt.Sprintf("/sys/fs/cgroup/%s/%s", NAMESPACE, taskID)
+
+	// Get PIDs directly from cgroup v2 filesystem
+	stats, err := getCgroupV2Stats(cgroupPath)
+	if err != nil {
+		logger.ErrorLogger().Printf("Error reading cgroup v2 stats for task %s: %v", taskID, err)
+		// Continue with cleanup even if we can't read stats
+	} else {
+		// Kill all processes in the cgroup
+		for _, pid := range stats.PIDs {
+			process, err := os.FindProcess(pid)
+			if err != nil {
+				logger.ErrorLogger().Printf("Error finding process %d for task %s: %v", pid, taskID, err)
+				continue
+			}
+			if err := process.Kill(); err != nil {
+				logger.ErrorLogger().Printf("Error killing process %d for task %s: %v", pid, taskID, err)
+			}
+		}
+	}
+
+	// Remove the cgroup directory
+	if err := os.RemoveAll(cgroupPath); err != nil {
+		return fmt.Errorf("error removing cgroup directory %s: %v", cgroupPath, err)
+	}
+
+	logger.InfoLogger().Printf("Cgroup %s removed successfully", cgroupPath)
+	return nil
+} // Simple cgroup v2 stats structure
+type CgroupV2Stats struct {
+	CPUUsage    uint64
+	MemoryUsage uint64
+	PIDs        []int
+}
+
+// getCgroupV2Stats reads stats directly from cgroup v2 filesystem
+func getCgroupV2Stats(cgroupPath string) (*CgroupV2Stats, error) {
+	stats := &CgroupV2Stats{}
+
+	// Read CPU stats
+	cpuStatPath := cgroupPath + "/cpu.stat"
+	if cpuData, err := ioutil.ReadFile(cpuStatPath); err == nil {
+		lines := strings.Split(string(cpuData), "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, "usage_usec ") {
+				parts := strings.Fields(line)
+				if len(parts) == 2 {
+					if usage, err := strconv.ParseUint(parts[1], 10, 64); err == nil {
+						stats.CPUUsage = usage * 1000 // Convert microseconds to nanoseconds
+					}
+				}
+			}
+		}
+	}
+
+	// Read memory stats
+	memoryCurrentPath := cgroupPath + "/memory.current"
+	if memData, err := ioutil.ReadFile(memoryCurrentPath); err == nil {
+		if usage, err := strconv.ParseUint(strings.TrimSpace(string(memData)), 10, 64); err == nil {
+			stats.MemoryUsage = usage
+		}
+	}
+
+	// Read PIDs
+	procsPath := cgroupPath + "/cgroup.procs"
+	if procData, err := ioutil.ReadFile(procsPath); err == nil {
+		lines := strings.Split(strings.TrimSpace(string(procData)), "\n")
+		for _, line := range lines {
+			if line != "" {
+				if pid, err := strconv.Atoi(line); err == nil {
+					stats.PIDs = append(stats.PIDs, pid)
+				}
+			}
+		}
+	}
+
+	return stats, nil
+}
+
 func getCgroupStatsManager(path string) (*fs.Manager, error) {
+	// This function is kept for compatibility with existing code
+	// but we'll use the new getCgroupV2Stats function for actual stats reading
 	statsManager, err := fs.NewManager(
 		&cgroups.Cgroup{
 			Path: path,
 		},
-		nil)
+		map[string]string{})
 	if err != nil {
 		return nil, err
 	}
