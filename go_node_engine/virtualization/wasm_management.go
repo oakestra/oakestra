@@ -1,7 +1,6 @@
 package virtualization
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"go_node_engine/logger"
@@ -372,7 +371,6 @@ func (r *WasmRuntime) ResourceMonitoring(every time.Duration, notifyHandler func
 				Logs:     getLogs(taskid),
 				Runtime:  string(model.WASM_RUNTIME),
 				Instance: extractInstanceNumberFromTaskID(taskid),
-				Status:   model.SERVICE_RUNNING,
 			})
 		}
 		r.channelLock.RUnlock()
@@ -775,17 +773,15 @@ func (r *WasmRuntime) ResumeFromState(sname string, instance int, stateFile stri
 func wasmCreateCommand(codePath, ipcpath, mainmempath, checkpointmempath, runtimePath, taskID string) (int, error) {
 	cmd := exec.Command("/etc/oakestra/wasm/create_command", codePath, ipcpath, mainmempath, checkpointmempath, taskID)
 	cmd.Dir = runtimePath
-	//save stdout to string
-	var stdoutBuf bytes.Buffer
-	cmd.Stdout = &stdoutBuf
-	if err := cmd.Run(); err != nil {
+	output, err := cmd.Output()
+	if err != nil {
 		//revert(fmt.Errorf("error executing create command: %v", err))
 		fmt.Println(cmd.Stderr)
 		//return
 	}
 
 	//read stdout lines
-	stdoutLines := strings.Split(stdoutBuf.String(), "\n")
+	stdoutLines := strings.Split(string(output), "\n")
 	taskPID := 0
 	for _, line := range stdoutLines {
 		if strings.Contains(line, "Child PID =") {
