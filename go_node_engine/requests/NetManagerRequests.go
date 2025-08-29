@@ -38,8 +38,15 @@ var httpClient = &http.Client{
 	Timeout: time.Second * 10,
 }
 
+type NetworkType string
+
+const (
+	NETWORK_TYPE_CONTAINER NetworkType = "container"
+	NETWORK_TYPE_WASM      NetworkType = "wasm"
+)
+
 // AttachNetworkToTask attaches a network to a task
-func AttachNetworkToTask(pid int, servicename string, instance int, portMappings string) error {
+func AttachNetworkToTask(pid int, servicename string, instance int, portMappings string, network NetworkType) error {
 
 	ongoingDeployment.Lock()
 	defer ongoingDeployment.Unlock()
@@ -56,7 +63,7 @@ func AttachNetworkToTask(pid int, servicename string, instance int, portMappings
 	}
 
 	response, err := httpClient.Post(
-		fmt.Sprintf("http://localhost:%d/container/deploy", model.GetNodeInfo().NetManagerPort),
+		fmt.Sprintf("http://localhost:%d/%s/deploy", model.GetNodeInfo().NetManagerPort, network),
 		"application/json",
 		bytes.NewBuffer(jsonReq),
 	)
@@ -70,7 +77,7 @@ func AttachNetworkToTask(pid int, servicename string, instance int, portMappings
 }
 
 // DetachNetworkFromTask detaches a network from a task
-func DetachNetworkFromTask(servicename string, instance int) error {
+func DetachNetworkFromTask(servicename string, instance int, network NetworkType) error {
 	request := connectNetworkRequest{
 		Pid:            -1,
 		Servicename:    servicename,
@@ -82,7 +89,7 @@ func DetachNetworkFromTask(servicename string, instance int) error {
 	}
 
 	response, err := httpClient.Post(
-		fmt.Sprintf("http://localhost:%d/container/undeploy", model.GetNodeInfo().NetManagerPort),
+		fmt.Sprintf("http://localhost:%d/%s/undeploy", model.GetNodeInfo().NetManagerPort, network),
 		"application/json",
 		bytes.NewBuffer(jsonReq),
 	)

@@ -328,7 +328,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// if Overlay mode is active then attach network to the task
 	if model.GetNodeInfo().Overlay {
 		taskpid := int(task.Pid())
-		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports)
+		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports, requests.NETWORK_TYPE_CONTAINER)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
 			revert(err)
@@ -367,7 +367,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 
 	//detaching network
 	if model.GetNodeInfo().Overlay {
-		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
+		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance, requests.NETWORK_TYPE_WASM)
 	}
 
 	_ = r.Undeploy(service.Sname, service.Instance)

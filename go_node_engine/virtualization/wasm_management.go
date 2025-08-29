@@ -1,10 +1,12 @@
 package virtualization
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
+	"go_node_engine/requests"
 	"go_node_engine/utils"
 	"io/ioutil"
 	"os"
@@ -302,20 +304,23 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 
 	// Execute create_command - this works for both new deployments and resuming from state
 	// The command creates/starts a computation directly inside the oakestra namespace
-	cmd := exec.Command("/etc/oakestra/wasm/create_command", codePath, ipcpath, mainmempath, checkpointmempath, taskID)
-	cmd.Dir = runtimePath
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	if err := cmd.Run(); err != nil {
-		//revert(fmt.Errorf("error executing create command: %v", err))
-		fmt.Println(cmd.Stderr)
-		//return
+	taskpid, err := wasmCreateCommand(codePath, ipcpath, mainmempath, checkpointmempath, runtimePath, taskID)
+	if err != nil {
+		revert(err)
+		return
 	}
 
-	//attach network
-	//TODO
+	//attach network if node in overlay network mode
+	if model.GetNodeInfo().Overlay {
+		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports, requests.NETWORK_TYPE_WASM)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
+			revert(err)
+			return
+		}
+	}
 
-	cmd = exec.Command("/etc/oakestra/wasm/start_command", ipcpath)
+	cmd := exec.Command("/etc/oakestra/wasm/start_command", ipcpath)
 	cmd.Dir = runtimePath
 	if err := cmd.Run(); err != nil {
 		revert(fmt.Errorf("error executing create command: %v", err))
@@ -420,6 +425,12 @@ func (r *WasmRuntime) removeCgroup(taskID string) error {
 	// Remove the cgroup directory
 	if err := os.RemoveAll(cgroupPath); err != nil {
 		return fmt.Errorf("error removing cgroup directory %s: %v", cgroupPath, err)
+	}
+
+	//remove network
+	//detaching network
+	if model.GetNodeInfo().Overlay {
+		go requests.DetachNetworkFromTask(extractSnameFromTaskID(taskID), extractInstanceNumberFromTaskID(taskID), requests.NETWORK_TYPE_WASM)
 	}
 
 	logger.InfoLogger().Printf("Cgroup %s removed successfully", cgroupPath)
@@ -757,4 +768,39 @@ func (r *WasmRuntime) ResumeFromState(sname string, instance int, stateFile stri
 
 	logger.InfoLogger().Printf("Service %s resumed from migration state", taskID)
 	return nil
+}
+
+// performs the wasm create command
+// returns the PID or an error
+func wasmCreateCommand(codePath, ipcpath, mainmempath, checkpointmempath, runtimePath, taskID string) (int, error) {
+	cmd := exec.Command("/etc/oakestra/wasm/create_command", codePath, ipcpath, mainmempath, checkpointmempath, taskID)
+	cmd.Dir = runtimePath
+	//save stdout to string
+	var stdoutBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	if err := cmd.Run(); err != nil {
+		//revert(fmt.Errorf("error executing create command: %v", err))
+		fmt.Println(cmd.Stderr)
+		//return
+	}
+
+	//read stdout lines
+	stdoutLines := strings.Split(stdoutBuf.String(), "\n")
+	taskPID := 0
+	for _, line := range stdoutLines {
+		if strings.Contains(line, "Child PID =") {
+			taskPIDstr := strings.Replace(line, "Child PID = ", "", 1)
+			taskPIDstr = strings.TrimSpace(taskPIDstr)
+			fmt.Println("Created task with PID:", taskPIDstr)
+			var err error
+			taskPID, err = strconv.Atoi(taskPIDstr)
+			if err != nil {
+				return 0, err
+			}
+		}
+	}
+	if taskPID == 0 {
+		return 0, fmt.Errorf("No PID returned from create command")
+	}
+	return taskPID, nil
 }
