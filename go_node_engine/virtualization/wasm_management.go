@@ -293,6 +293,7 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 	ipcpath := runtimePath + "/ipc"
 	mainmempath := runtimePath + "/main_memory.b"
 	checkpointmempath := runtimePath + "/checkpoint_memory.b"
+	logpath := model.GetNodeInfo().LogDirectory + "/" + taskID
 
 	// Create cgroup v2 for the task
 	_, err := r.createCgroup(taskID)
@@ -303,11 +304,23 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 
 	// Execute create_command - this works for both new deployments and resuming from state
 	// The command creates/starts a computation directly inside the oakestra namespace
-	taskpid, err := wasmCreateCommand(codePath, ipcpath, mainmempath, checkpointmempath, runtimePath, taskID)
+	taskpid, err := wasmCreateCommand(codePath, ipcpath, mainmempath, checkpointmempath, runtimePath, taskID, logpath)
 	if err != nil {
 		revert(err)
 		return
 	}
+
+	exitChannel := make(chan bool, 1)
+	go func(pid int) {
+		procPath := fmt.Sprintf("/proc/%d", pid)
+		for {
+			time.Sleep(1 * time.Second)
+			if _, err := os.Stat(procPath); os.IsNotExist(err) {
+				exitChannel <- true
+				return
+			}
+		}
+	}(taskpid)
 
 	//attach network if node in overlay network mode
 	if model.GetNodeInfo().Overlay {
@@ -332,6 +345,15 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 	statusChangeNotificationHandler(service)
 
 	select {
+	case <-exitChannel:
+		logger.InfoLogger().Printf("WASM module %s has exited", taskID)
+		r.killWasmComputation(taskID)
+		service.Status = model.SERVICE_FAILED
+		if service.OneShot {
+			// If this is a one-shot service, mark it as completed
+			service.Status = model.SERVICE_COMPLETED
+		}
+		statusChangeNotificationHandler(service)
 	case <-killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for WASM module %s", taskID)
 		r.killWasmComputation(taskID)
@@ -371,6 +393,7 @@ func (r *WasmRuntime) ResourceMonitoring(every time.Duration, notifyHandler func
 				Logs:     getLogs(taskid),
 				Runtime:  string(model.WASM_RUNTIME),
 				Instance: extractInstanceNumberFromTaskID(taskid),
+				Status:   model.SERVICE_RUNNING,
 			})
 		}
 		r.channelLock.RUnlock()
@@ -479,6 +502,10 @@ func getCgroupV2Stats(cgroupPath string) (*CgroupV2Stats, error) {
 				}
 			}
 		}
+	}
+
+	if len(stats.PIDs) == 0 {
+		return nil, fmt.Errorf("no PIDs found in cgroup %s", cgroupPath)
 	}
 
 	return stats, nil
@@ -770,31 +797,32 @@ func (r *WasmRuntime) ResumeFromState(sname string, instance int, stateFile stri
 
 // performs the wasm create command
 // returns the PID or an error
-func wasmCreateCommand(codePath, ipcpath, mainmempath, checkpointmempath, runtimePath, taskID string) (int, error) {
-	cmd := exec.Command("/etc/oakestra/wasm/create_command", codePath, ipcpath, mainmempath, checkpointmempath, taskID)
+func wasmCreateCommand(codePath, ipcpath, mainmempath, checkpointmempath, runtimePath, taskID string, logpath string) (int, error) {
+	cmd := exec.Command("/etc/oakestra/wasm/create_command", codePath, ipcpath, mainmempath, checkpointmempath, taskID, logpath)
 	cmd.Dir = runtimePath
-	output, err := cmd.Output()
+	cmd.Stdin = nil
+	err := cmd.Run()
 	if err != nil {
-		//revert(fmt.Errorf("error executing create command: %v", err))
-		fmt.Println(cmd.Stderr)
-		//return
+		fmt.Println(err)
+		//return 0, fmt.Errorf("error executing create command: %v", err)
 	}
 
-	//read stdout lines
-	stdoutLines := strings.Split(string(output), "\n")
-	taskPID := 0
-	for _, line := range stdoutLines {
-		if strings.Contains(line, "Child PID =") {
-			taskPIDstr := strings.Replace(line, "Child PID = ", "", 1)
-			taskPIDstr = strings.TrimSpace(taskPIDstr)
-			fmt.Println("Created task with PID:", taskPIDstr)
-			var err error
-			taskPID, err = strconv.Atoi(taskPIDstr)
-			if err != nil {
-				return 0, err
-			}
-		}
+	//get PID from cgroup filesystem
+	cgroupPath := fmt.Sprintf("/sys/fs/cgroup/%s/%s", NAMESPACE, taskID)
+	procsFile := cgroupPath + "/cgroup.procs"
+	data, err := os.ReadFile(procsFile)
+	if err != nil {
+		return 0, fmt.Errorf("error reading cgroup procs file %s: %v", procsFile, err)
 	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) == 0 {
+		return 0, fmt.Errorf("no PID found in cgroup procs file %s", procsFile)
+	}
+	taskPID, err := strconv.Atoi(lines[0])
+	if err != nil {
+		return 0, fmt.Errorf("error converting PID to integer: %v", err)
+	}
+
 	if taskPID == 0 {
 		return 0, fmt.Errorf("No PID returned from create command")
 	}

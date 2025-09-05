@@ -1,9 +1,18 @@
 #! /bin/bash
 set -e
 
-sudo apt-get install g++ wget git
-curl https://sh.rustup.rs -sSf | sh
-. "$HOME/.cargo/env" 
+sudo apt update 
+sudo apt upgrade 
+sudo apt-get install -y g++ wget git curl libcurl4-openssl-dev
+
+if command -v rustc &> /dev/null; then
+    echo "Rust is already installed."
+else
+    echo "Rust is not installed. Installing..."
+    curl https://sh.rustup.rs -sSf | sh
+    . "$HOME/.cargo/env" 
+fi
+
 
 # check if cmake installed
 if ! command -v cmake &> /dev/null; then
