@@ -367,7 +367,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 
 	//detaching network
 	if model.GetNodeInfo().Overlay {
-		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance, requests.NETWORK_TYPE_WASM)
+		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance, requests.NETWORK_TYPE_CONTAINER)
 	}
 
 	_ = r.Undeploy(service.Sname, service.Instance)

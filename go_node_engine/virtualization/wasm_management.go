@@ -152,7 +152,8 @@ func (r *WasmRuntime) Deploy(service model.Service, statusChangeNotificationHand
 	taskID := genTaskID(service.Sname, service.Instance)
 
 	r.channelLock.Lock()
-	if _, serviceFound := r.killQueue[taskID]; serviceFound {
+	val, serviceFound := r.killQueue[taskID]
+	if serviceFound && val != nil {
 		r.channelLock.Unlock()
 		return errors.New("Service already deployed")
 	}
@@ -361,6 +362,11 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 		statusChangeNotificationHandler(service)
 	}
 
+	//detaching network
+	if model.GetNodeInfo().Overlay {
+		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance, requests.NETWORK_TYPE_WASM)
+	}
+
 	doneChannel <- true
 	r.channelLock.Lock()
 	delete(r.killQueue, taskID)
@@ -530,10 +536,10 @@ func (r *WasmRuntime) SetMigrationCandidate(sname string, instance int) (model.S
 	taskID := genTaskID(sname, instance)
 
 	r.channelLock.RLock()
-	_, serviceExists := r.killQueue[taskID]
+	val, serviceExists := r.killQueue[taskID]
 	r.channelLock.RUnlock()
 
-	if !serviceExists {
+	if serviceExists && val == nil {
 		return model.Service{}, fmt.Errorf("service %s instance %d is not deployed", sname, instance)
 	}
 
@@ -591,7 +597,7 @@ func (r *WasmRuntime) StopAndGetState(sname string, instance int) (utils.OnceRea
 	doneChannel, _ := r.doneQueue[taskID]
 	r.channelLock.RUnlock()
 
-	if !serviceExists {
+	if serviceExists && killChannel == nil {
 		return nil, fmt.Errorf("service %s instance %d is not running", sname, instance)
 	}
 
@@ -661,10 +667,10 @@ func (r *WasmRuntime) PrepareForInstantiantion(service model.Service, statusChan
 
 	// Check if service is already running
 	r.channelLock.RLock()
-	_, serviceExists := r.killQueue[taskID]
+	val, serviceExists := r.killQueue[taskID]
 	r.channelLock.RUnlock()
 
-	if serviceExists {
+	if serviceExists && val == nil {
 		return fmt.Errorf("service %s instance %d is already running", service.Sname, service.Instance)
 	}
 
@@ -720,10 +726,10 @@ func (r *WasmRuntime) ResumeFromState(sname string, instance int, stateFile stri
 
 	// Check if service is already running
 	r.channelLock.RLock()
-	_, serviceExists := r.killQueue[taskID]
+	val, serviceExists := r.killQueue[taskID]
 	r.channelLock.RUnlock()
 
-	if serviceExists {
+	if serviceExists && val == nil {
 		return fmt.Errorf("service %s instance %d is already running", sname, instance)
 	}
 
