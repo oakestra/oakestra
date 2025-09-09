@@ -226,17 +226,29 @@ func (r *WasmRuntime) Undeploy(service string, instance int) error {
 			logger.InfoLogger().Printf("Service %s stopped", taskID)
 		case <-time.After(5 * time.Second):
 			logger.ErrorLogger().Printf("Timeout while stopping service %s", taskID)
+			// TODO: Force kill if necessary
 		}
-		r.channelLock.Lock()
-		delete(r.killQueue, taskID)
-		delete(r.doneQueue, taskID)
-		r.channelLock.Unlock()
 		return nil
 	}
 	return errors.New("service not found")
 }
 
 func (r *WasmRuntime) killWasmComputation(taskID string) error {
+	kq, exists := r.killQueue[taskID]
+	sq, doneExists := r.doneQueue[taskID]
+
+	//cleanup service list
+	if exists && kq != nil {
+		r.channelLock.Lock()
+		delete(r.killQueue, taskID)
+		r.channelLock.Unlock()
+	}
+	if doneExists && sq != nil {
+		r.channelLock.Lock()
+		delete(r.doneQueue, taskID)
+		r.channelLock.Unlock()
+	}
+
 	// Clean up the runtime directory first
 	runtimePath := runningAppPath + taskID
 	defer func() {
@@ -348,7 +360,6 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 	select {
 	case <-exitChannel:
 		logger.InfoLogger().Printf("WASM module %s has exited", taskID)
-		r.killWasmComputation(taskID)
 		service.Status = model.SERVICE_FAILED
 		if service.OneShot {
 			// If this is a one-shot service, mark it as completed
@@ -357,7 +368,6 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 		statusChangeNotificationHandler(service)
 	case <-killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for WASM module %s", taskID)
-		r.killWasmComputation(taskID)
 		service.Status = model.SERVICE_DEAD
 		statusChangeNotificationHandler(service)
 	}
@@ -367,11 +377,7 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance, requests.NETWORK_TYPE_WASM)
 	}
 
-	doneChannel <- true
-	r.channelLock.Lock()
-	delete(r.killQueue, taskID)
-	delete(r.doneQueue, taskID)
-	r.channelLock.Unlock()
+	r.killWasmComputation(taskID)
 }
 
 func (r *WasmRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
