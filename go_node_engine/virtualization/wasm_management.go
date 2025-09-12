@@ -20,20 +20,20 @@ import (
 	"github.com/opencontainers/cgroups/fs"
 )
 
+type WasmService struct {
+	service *model.Service
+	kill    chan bool
+	done    chan bool
+}
+
 type WasmRuntime struct {
-	killQueue               map[string]chan bool
-	doneQueue               map[string]chan bool
-	channelLock             *sync.RWMutex
-	migrationCandidates     map[string]bool
-	migrationCandidatesLock *sync.RWMutex
+	services    map[string]*WasmService
+	channelLock *sync.RWMutex
 }
 
 var wasmRuntime = WasmRuntime{
-	channelLock:             &sync.RWMutex{},
-	migrationCandidates:     make(map[string]bool),
-	killQueue:               make(map[string]chan bool),
-	doneQueue:               make(map[string]chan bool),
-	migrationCandidatesLock: &sync.RWMutex{},
+	channelLock: &sync.RWMutex{},
+	services:    make(map[string]*WasmService),
 }
 
 var wasmSingletonOnce sync.Once
@@ -71,7 +71,7 @@ func GetWasmRuntime() Runtime {
 func (r *WasmRuntime) Stop() {
 	logger.InfoLogger().Print("Stopping WASM runtime")
 	r.channelLock.Lock()
-	taskIDs := reflect.ValueOf(r.killQueue).MapKeys()
+	taskIDs := reflect.ValueOf(r.services).MapKeys()
 	r.channelLock.Unlock()
 
 	for _, taskid := range taskIDs {
@@ -152,8 +152,8 @@ func (r *WasmRuntime) Deploy(service model.Service, statusChangeNotificationHand
 	taskID := genTaskID(service.Sname, service.Instance)
 
 	r.channelLock.Lock()
-	val, serviceFound := r.killQueue[taskID]
-	if serviceFound && val != nil {
+	s, serviceFound := r.services[taskID]
+	if serviceFound && s != nil {
 		r.channelLock.Unlock()
 		return errors.New("Service already deployed")
 	}
@@ -177,11 +177,15 @@ func (r *WasmRuntime) Deploy(service model.Service, statusChangeNotificationHand
 	errorChannel := make(chan error, 1)
 
 	r.channelLock.Lock()
-	r.killQueue[taskID] = killChannel
-	r.doneQueue[taskID] = doneChannel
+	s = &WasmService{
+		service: &service,
+		kill:    killChannel,
+		done:    doneChannel,
+	}
+	r.services[taskID] = s
 	r.channelLock.Unlock()
 
-	go r.wasmRuntimeStartRoutine(service, killChannel, doneChannel, startupChannel, errorChannel, statusChangeNotificationHandler, codePath, false)
+	go r.wasmRuntimeStartRoutine(s, killChannel, doneChannel, startupChannel, errorChannel, statusChangeNotificationHandler, codePath)
 
 	success := <-startupChannel
 	if !success {
@@ -214,15 +218,15 @@ func (r *WasmRuntime) Undeploy(service string, instance int) error {
 	taskID := genTaskID(service, instance)
 
 	r.channelLock.RLock()
-	killChannel, foundKill := r.killQueue[taskID]
-	doneChannel, foundDone := r.doneQueue[taskID]
+	s, found := r.services[taskID]
 	r.channelLock.RUnlock()
 
-	if foundKill && foundDone {
+	if found && s != nil {
 		logger.InfoLogger().Printf("Sending kill signal to %s", taskID)
-		killChannel <- true
+		s.kill <- true
+
 		select {
-		case <-doneChannel:
+		case <-s.done:
 			logger.InfoLogger().Printf("Service %s stopped", taskID)
 		case <-time.After(5 * time.Second):
 			logger.ErrorLogger().Printf("Timeout while stopping service %s", taskID)
@@ -234,18 +238,12 @@ func (r *WasmRuntime) Undeploy(service string, instance int) error {
 }
 
 func (r *WasmRuntime) killWasmComputation(taskID string) error {
-	kq, exists := r.killQueue[taskID]
-	sq, doneExists := r.doneQueue[taskID]
+	s, exists := r.services[taskID]
 
 	//cleanup service list
-	if exists && kq != nil {
+	if exists && s != nil {
 		r.channelLock.Lock()
-		delete(r.killQueue, taskID)
-		r.channelLock.Unlock()
-	}
-	if doneExists && sq != nil {
-		r.channelLock.Lock()
-		delete(r.doneQueue, taskID)
+		delete(r.services, taskID)
 		r.channelLock.Unlock()
 	}
 
@@ -267,18 +265,18 @@ func (r *WasmRuntime) killWasmComputation(taskID string) error {
 }
 
 func (r *WasmRuntime) wasmRuntimeStartRoutine(
-	service model.Service,
+	s *WasmService,
 	killChannel chan bool,
 	doneChannel chan bool,
 	startup chan bool,
 	errorchan chan error,
 	statusChangeNotificationHandler func(service model.Service),
 	codePath string,
-	isResuming bool,
 ) {
+	service := s.service
 	taskID := genTaskID(service.Sname, service.Instance)
 	service.Status = model.SERVICE_CREATED
-	statusChangeNotificationHandler(service)
+	statusChangeNotificationHandler(*service)
 
 	// Create runtime path early for cleanup purposes
 	runtimePath := runningAppPath + taskID
@@ -287,8 +285,7 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 		startup <- false
 		errorchan <- err
 		r.channelLock.Lock()
-		delete(r.killQueue, taskID)
-		delete(r.doneQueue, taskID)
+		delete(r.services, taskID)
 		r.channelLock.Unlock()
 
 		// Clean up cgroup on failure
@@ -355,7 +352,7 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 	// Notify successful startup
 	startup <- true
 	service.Status = model.SERVICE_RUNNING
-	statusChangeNotificationHandler(service)
+	statusChangeNotificationHandler(*service)
 
 	select {
 	case <-exitChannel:
@@ -365,11 +362,11 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 			// If this is a one-shot service, mark it as completed
 			service.Status = model.SERVICE_COMPLETED
 		}
-		statusChangeNotificationHandler(service)
+		statusChangeNotificationHandler(*service)
 	case <-killChannel:
 		logger.InfoLogger().Printf("Kill channel message received for WASM module %s", taskID)
 		service.Status = model.SERVICE_DEAD
-		statusChangeNotificationHandler(service)
+		statusChangeNotificationHandler(*service)
 	}
 
 	//detaching network
@@ -385,28 +382,34 @@ func (r *WasmRuntime) ResourceMonitoring(every time.Duration, notifyHandler func
 		time.Sleep(every)
 		resourceList := []model.Resources{}
 		r.channelLock.RLock()
-		for taskid := range r.killQueue {
-			// get resource usage from cgroup with taskid
-			cgroupPath := fmt.Sprintf("/sys/fs/cgroup/%s/%s", NAMESPACE, taskid)
+		for taskid := range r.services {
+			if r.services[taskid] != nil {
 
-			// Use the new cgroup v2 stats reading
-			stats, err := getCgroupV2Stats(cgroupPath)
-			if err != nil {
-				logger.ErrorLogger().Printf("Error getting cgroup v2 stats for task %s: %v", taskid, err)
-				continue
+				s := r.services[taskid]
+
+				// get resource usage from cgroup with taskid
+				cgroupPath := fmt.Sprintf("/sys/fs/cgroup/%s/%s", NAMESPACE, taskid)
+
+				// Use the new cgroup v2 stats reading
+				stats, err := getCgroupV2Stats(cgroupPath)
+				if err != nil {
+					logger.ErrorLogger().Printf("Error getting cgroup v2 stats for task %s: %v", taskid, err)
+					continue
+				}
+
+				// get resource consumption from cgroupPath
+				resourceList = append(resourceList, model.Resources{
+					Cpu:      fmt.Sprintf("%d", stats.CPUUsage),
+					Memory:   fmt.Sprintf("%d", stats.MemoryUsage),
+					Disk:     "0",
+					Sname:    extractSnameFromTaskID(taskid),
+					Logs:     getLogs(taskid),
+					Runtime:  string(model.WASM_RUNTIME),
+					Instance: extractInstanceNumberFromTaskID(taskid),
+					Status:   s.service.Status,
+				})
+
 			}
-
-			// get resource consumption from cgroupPath
-			resourceList = append(resourceList, model.Resources{
-				Cpu:      fmt.Sprintf("%d", stats.CPUUsage),
-				Memory:   fmt.Sprintf("%d", stats.MemoryUsage),
-				Disk:     "0",
-				Sname:    extractSnameFromTaskID(taskid),
-				Logs:     getLogs(taskid),
-				Runtime:  string(model.WASM_RUNTIME),
-				Instance: extractInstanceNumberFromTaskID(taskid),
-				Status:   model.SERVICE_RUNNING,
-			})
 		}
 		r.channelLock.RUnlock()
 		notifyHandler(resourceList)
@@ -542,46 +545,56 @@ func (r *WasmRuntime) SetMigrationCandidate(sname string, instance int) (model.S
 	taskID := genTaskID(sname, instance)
 
 	r.channelLock.RLock()
-	val, serviceExists := r.killQueue[taskID]
+	s, serviceExists := r.services[taskID]
 	r.channelLock.RUnlock()
 
-	if serviceExists && val == nil {
+	if serviceExists && s == nil {
 		return model.Service{}, fmt.Errorf("service %s instance %d is not deployed", sname, instance)
 	}
 
-	r.migrationCandidatesLock.Lock()
-	defer r.migrationCandidatesLock.Unlock()
-
-	if r.migrationCandidates[taskID] {
-		return model.Service{}, fmt.Errorf("service %s instance %d is already marked as migration candidate", sname, instance)
+	// check if the service is in any of the migration statuses
+	if s.service.Status == model.SERVICE_MIGRATION_ACCEPTED ||
+		s.service.Status == model.SERVICE_MIGRATION_PROGRESS ||
+		s.service.Status == model.SERVICE_MIGRATION_REQUESTED ||
+		s.service.Status == model.SERVICE_MIGRATION_DEBOUNCE {
+		return model.Service{}, fmt.Errorf("service %s instance %d is already in migration process", sname, instance)
 	}
 
-	r.migrationCandidates[taskID] = true
+	// check if service is running
+	if s.service.Status != model.SERVICE_RUNNING {
+		return model.Service{}, fmt.Errorf("service %s instance %d is not running, cannot mark as migration candidate", sname, instance)
+	}
+
+	// mark the service as a migration candidate
+	r.channelLock.Lock()
+	s.service.Status = model.SERVICE_MIGRATION_ACCEPTED
+	r.channelLock.Unlock()
+
 	logger.InfoLogger().Printf("Service %s marked as migration candidate", taskID)
 
-	// Return the service information (we need to reconstruct it from taskID)
-	service := model.Service{
-		Sname:    sname,
-		Instance: instance,
-		Status:   model.SERVICE_MIGRATION_ACCEPTED,
-	}
-
-	return service, nil
+	return *s.service, nil
 }
 
 // RemoveMigrationCandidate removes the migration candidate mark from a service.
 func (r *WasmRuntime) RemoveMigrationCandidate(sname string, instance int) error {
 	taskID := genTaskID(sname, instance)
 
-	r.migrationCandidatesLock.Lock()
-	defer r.migrationCandidatesLock.Unlock()
+	r.channelLock.Lock()
+	s, exists := r.services[taskID]
+	r.channelLock.Unlock()
 
-	if !r.migrationCandidates[taskID] {
-		return fmt.Errorf("service %s instance %d is not marked as migration candidate", sname, instance)
+	if !exists || s == nil {
+		return fmt.Errorf("service %s instance %d is not deployed", sname, instance)
 	}
 
-	delete(r.migrationCandidates, taskID)
-	logger.InfoLogger().Printf("Service %s removed from migration candidates", taskID)
+	// check if the service is in any of the migration statuses
+	if s.service.Status == model.SERVICE_MIGRATION_ACCEPTED {
+		r.channelLock.Lock()
+		s.service.Status = model.SERVICE_RUNNING
+		r.channelLock.Unlock()
+	} else {
+		return fmt.Errorf("service %s instance %d is not marked as a migration candidate", sname, instance)
+	}
 
 	return nil
 }
@@ -590,27 +603,27 @@ func (r *WasmRuntime) RemoveMigrationCandidate(sname string, instance int) error
 func (r *WasmRuntime) StopAndGetState(sname string, instance int) (utils.OnceReader, error) {
 	taskID := genTaskID(sname, instance)
 
-	r.migrationCandidatesLock.RLock()
-	isMigrationCandidate := r.migrationCandidates[taskID]
-	r.migrationCandidatesLock.RUnlock()
-
-	if !isMigrationCandidate {
-		return nil, fmt.Errorf("service %s instance %d is not marked as migration candidate", sname, instance)
-	}
-
 	r.channelLock.RLock()
-	killChannel, serviceExists := r.killQueue[taskID]
-	doneChannel, _ := r.doneQueue[taskID]
+	s, exists := r.services[taskID]
 	r.channelLock.RUnlock()
 
-	if serviceExists && killChannel == nil {
+	if exists && s == nil {
 		return nil, fmt.Errorf("service %s instance %d is not running", sname, instance)
 	}
 
-	revertMigrationCandidate := func() {
-		r.migrationCandidatesLock.Lock()
-		delete(r.migrationCandidates, taskID)
-		r.migrationCandidatesLock.Unlock()
+	// check if the service is in any of the migration statuses
+	if s.service.Status != model.SERVICE_MIGRATION_ACCEPTED {
+		return nil, fmt.Errorf("service %s instance %d is not marked as a migration candidate", sname, instance)
+	}
+
+	r.channelLock.Lock()
+	s.service.Status = model.SERVICE_MIGRATION_PROGRESS
+	r.channelLock.Unlock()
+
+	revertState := func() {
+		r.channelLock.Lock()
+		s.service.Status = model.SERVICE_RUNNING
+		r.channelLock.Unlock()
 	}
 
 	// Create checkpoint before stopping
@@ -623,7 +636,7 @@ func (r *WasmRuntime) StopAndGetState(sname string, instance int) (utils.OnceRea
 	cmd := exec.Command("/etc/oakestra/wasm/migrate_command", ipcpath)
 	cmd.Dir = runtimePath
 	if err := cmd.Run(); err != nil {
-		defer revertMigrationCandidate()
+		defer revertState()
 		return nil, fmt.Errorf("error creating checkpoint for %s: %v", taskID, err)
 	}
 
@@ -631,37 +644,26 @@ func (r *WasmRuntime) StopAndGetState(sname string, instance int) (utils.OnceRea
 	// Use -C to change to runtime directory and compress just the checkpoint_memory.b file
 	cmd = exec.Command("tar", "-czf", stateFile, "-C", runtimePath, "checkpoint_memory.b")
 	if err := cmd.Run(); err != nil {
-		defer revertMigrationCandidate()
+		defer revertState()
 		return nil, fmt.Errorf("error compressing checkpoint for %s: %v", taskID, err)
 	}
-
-	// Stop the service
-	logger.InfoLogger().Printf("Stopping WASM service %s for migration", taskID)
-	killChannel <- true
-
-	// Wait for service to stop
-	select {
-	case <-doneChannel:
-		logger.InfoLogger().Printf("Service %s stopped for migration", taskID)
-	case <-time.After(10 * time.Second):
-		defer revertMigrationCandidate()
-		defer os.Remove(stateFile)
-		return nil, fmt.Errorf("timeout stopping service %s for migration", taskID)
-	}
-
-	// Clean up migration candidate status
-	r.migrationCandidatesLock.Lock()
-	delete(r.migrationCandidates, taskID)
-	r.migrationCandidatesLock.Unlock()
 
 	// Create OnceReader for the checkpoint file
 	f, err := os.Open(stateFile)
 	if err != nil {
 		defer os.Remove(stateFile)
+		defer revertState()
 		return nil, fmt.Errorf("error opening checkpoint file %s: %v", stateFile, err)
 	}
-
 	reader := utils.NewOnceReader(f)
+
+	// Stop the service
+	logger.InfoLogger().Printf("Stopping WASM service %s for migration", taskID)
+	err = r.Undeploy(extractSnameFromTaskID(taskID), extractInstanceNumberFromTaskID(taskID))
+	if err != nil {
+		defer revertState()
+		return nil, fmt.Errorf("error stopping service %s: %v", taskID, err)
+	}
 
 	logger.InfoLogger().Printf("Service %s stopped and state captured for migration", taskID)
 	return reader, nil
@@ -673,10 +675,10 @@ func (r *WasmRuntime) PrepareForInstantiantion(service model.Service, statusChan
 
 	// Check if service is already running
 	r.channelLock.RLock()
-	val, serviceExists := r.killQueue[taskID]
+	s, exists := r.services[taskID]
 	r.channelLock.RUnlock()
 
-	if serviceExists && val == nil {
+	if exists && s == nil {
 		return fmt.Errorf("service %s instance %d is already running", service.Sname, service.Instance)
 	}
 
@@ -715,12 +717,7 @@ func (r *WasmRuntime) AbortMigration(service model.Service) error {
 	}
 
 	// Remove from migration candidates if present
-	r.migrationCandidatesLock.Lock()
-	delete(r.migrationCandidates, taskID)
-	r.migrationCandidatesLock.Unlock()
-
-	//delete running directory
-	os.RemoveAll(runtimePath)
+	r.killWasmComputation(taskID)
 
 	logger.InfoLogger().Printf("Migration aborted for service %s", taskID)
 	return nil
@@ -732,10 +729,10 @@ func (r *WasmRuntime) ResumeFromState(sname string, instance int, stateFile stri
 
 	// Check if service is already running
 	r.channelLock.RLock()
-	val, serviceExists := r.killQueue[taskID]
+	s, exists := r.services[taskID]
 	r.channelLock.RUnlock()
 
-	if serviceExists && val == nil {
+	if exists && s == nil {
 		return fmt.Errorf("service %s instance %d is already running", sname, instance)
 	}
 
@@ -764,16 +761,9 @@ func (r *WasmRuntime) ResumeFromState(sname string, instance int, stateFile stri
 	errorChannel := make(chan error, 1)
 
 	r.channelLock.Lock()
-	r.killQueue[taskID] = killChannel
-	r.doneQueue[taskID] = doneChannel
+	s.kill = killChannel
+	s.done = doneChannel
 	r.channelLock.Unlock()
-
-	// Create service object for status notification
-	service := model.Service{
-		Sname:    sname,
-		Instance: instance,
-		Status:   model.SERVICE_RUNNING,
-	}
 
 	// Find the code path (WASM module) in the runtime directory
 	files, err := os.ReadDir(runtimePath)
@@ -794,7 +784,7 @@ func (r *WasmRuntime) ResumeFromState(sname string, instance int, stateFile stri
 	}
 
 	// Start the WASM runtime creation routine
-	go r.wasmRuntimeStartRoutine(service, killChannel, doneChannel, startupChannel, errorChannel, statusChangeNotificationHandler, codePath, true)
+	go r.wasmRuntimeStartRoutine(s, killChannel, doneChannel, startupChannel, errorChannel, statusChangeNotificationHandler, codePath)
 
 	// Wait for startup
 	success := <-startupChannel
