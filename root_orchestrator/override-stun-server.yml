@@ -10,4 +10,4 @@ services:
       --stun-only
       --listening-port 3478
       --verbose
-      --external-ip=${PROXY_ADDRESS}
+      --external-ip=${PUBLIC_ADDRESS}

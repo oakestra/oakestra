@@ -55,3 +55,10 @@ Example: IPv6 server receiving IPv4 request -> source address is in 4-to-6 mappe
 E.g.: Disable [observability stack](../root_orchestrator/config/README.md)
 
 Usage: `docker-compose -f docker-compose.yml -f override-no-observe.yml`
+
+E.g. Deploy a STUN Server for NAT traversal
+
+Usage: `docker compose -f docker-compose.yml -f override-stun-server.yml`
+
+This will deploy a STUN server which can be queried by nodes in order to perform NAT traversal operation.
+The env variable `PUBLIC_ADDRESS` should be set accordingly. If behind a proxy, the address of the proxy should be specified
