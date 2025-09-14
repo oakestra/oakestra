@@ -1,0 +1,13 @@
+services:
+  stun:
+    image: coturn/coturn:latest
+    container_name: stun-server
+    restart: unless-stopped
+    network_mode: "host"
+    command: >
+      turnserver
+      --no-auth
+      --stun-only
+      --listening-port 3478
+      --verbose
+      --external-ip=${PROXY_ADDRESS}
