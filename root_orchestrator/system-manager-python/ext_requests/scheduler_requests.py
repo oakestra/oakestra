@@ -11,12 +11,12 @@ SCHUEDULER_ADDR = (
 
 
 def scheduler_request_deploy(job, job_id):
-    print("new job: asking cloud_scheduler...")
+    print("new job: asking scheduler...")
     request_addr = SCHUEDULER_ADDR + "/api/calculate/deploy"
     print(request_addr)
     try:
         job["_id"] = str(job["_id"])
-        requests.post(request_addr, json={"job": job, "system_job_id": job_id})
+        requests.post(request_addr, json=job)
     except requests.exceptions.RequestException:
         print("Calling Cloud Scheduler /api/calculate/deploy not successful.")
 
@@ -32,7 +32,7 @@ def scheduler_request_replicate(job, replicas):
 
 
 def scheduler_request_status():
-    print("new job: asking cloud_scheduler status...")
+    print("new job: asking scheduler status...")
     request_addr = SCHUEDULER_ADDR + "/status"
     print(request_addr)
     try:
