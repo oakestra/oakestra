@@ -10,7 +10,7 @@ mongodb_client = sys.modules['interfaces.mongodb_requests']
 def _get_fake_job(name):
     return {
         "job_name": name,
-        "system_job_id": "123",
+        "_id": "123",
         "instance_list": [
             {
                 "instance_number": 1
@@ -51,7 +51,7 @@ def test_deploy_request():
     mongodb_client. \
         mongo_create_job_instance. \
         assert_called_with(
-        system_job_id="123",
+        _id="123",
         instance={
             "instance_number": 0,
             "instance_ip": "10.30.0.253",
@@ -76,7 +76,7 @@ def test_deploy_request_2_instances():
     mongodb_client. \
         mongo_create_job_instance. \
         assert_called_with(
-        system_job_id="123",
+        _id="123",
         instance={
             "instance_number": 0,
             "instance_ip": "10.30.0.253",
@@ -97,7 +97,7 @@ def test_deploy_request_2_instances():
     mongodb_client. \
         mongo_create_job_instance. \
         assert_called_with(
-        system_job_id="123",
+        _id="123",
         instance={
             "instance_number": 1,
             "instance_ip": "10.30.1.0",
@@ -118,7 +118,7 @@ def test_deploy_request_2_instances():
     mongodb_client. \
         mongo_create_job_instance. \
         assert_called_with(
-        system_job_id="123",
+        _id="123",
         instance={
             "instance_number": 2,
             "instance_ip": "10.30.1.1",

@@ -50,7 +50,7 @@ def mongo_insert_job(obj):
                + "." + deployment_descriptor['service_name'] \
                + "." + deployment_descriptor['service_ns']
     job_content = {
-        'system_job_id': obj.get('system_job_id'),
+        '_id': obj.get('_id'),
         'job_name': job_name,
         'service_ip_list': obj.get('service_ip_list'),
         'instance_list': [],
@@ -69,9 +69,9 @@ def mongo_insert_job(obj):
     return str(new_job.get('_id'))
 
 
-def mongo_remove_job(system_job_id):
+def mongo_remove_job(_id):
     global mongo_jobs
-    return mongo_jobs.db.jobs.delete_one({"system_job_id": system_job_id})
+    return mongo_jobs.db.jobs.delete_one({"_id": _id})
 
 
 def mongo_get_all_jobs():
@@ -94,7 +94,7 @@ def mongo_update_job_net_status(job_id, instances):
     for instance in instances:
         mongo_update_job_instance(job_id, instance)
 
-    return mongo_jobs.db.jobs.find_one({'system_job_id': job_id})
+    return mongo_jobs.db.jobs.find_one({'_id': job_id})
 
 
 def mongo_find_job_by_id(job_id):
@@ -104,7 +104,7 @@ def mongo_find_job_by_id(job_id):
 
 def mongo_find_job_by_systemid(sys_id):
     global mongo_jobs
-    return mongo_jobs.db.jobs.find_one({"system_job_id": sys_id})
+    return mongo_jobs.db.jobs.find_one({"_id": sys_id})
 
 
 def mongo_find_job_by_name(job_name):
@@ -128,12 +128,12 @@ def mongo_find_job_by_ip(ip):
     return job
 
 
-def mongo_update_job_instance(system_job_id, instance):
+def mongo_update_job_instance(_id, instance):
     global mongo_jobs
     print('Updating job instance')
     mongo_jobs.db.jobs.update_one(
         {
-            'system_job_id': system_job_id,
+            '_id': _id,
             "instance_list": {'$elemMatch': {'instance_number': instance['instance_number']}}},
         {
             '$set': {
@@ -146,16 +146,16 @@ def mongo_update_job_instance(system_job_id, instance):
     )
 
 
-def mongo_create_job_instance(system_job_id, instance):
+def mongo_create_job_instance(_id, instance):
     global mongo_jobs
     print('Updating job instance')
     if not mongo_jobs.db.jobs.find_one(
             {
-                "system_job_id": system_job_id,
+                "_id": _id,
                 "instance_list.instance_number": instance["instance_number"]
             }):
         mongo_jobs.db.jobs.update_one(
-            {'system_job_id': system_job_id},
+            {'_id': _id},
             {
                 '$push': {
                     "instance_list": instance
@@ -163,19 +163,19 @@ def mongo_create_job_instance(system_job_id, instance):
             }
         )
     else:
-        mongo_update_job_instance(system_job_id, instance)
+        mongo_update_job_instance(_id, instance)
 
 
-def mongo_update_clean_one_instance(system_job_id, instance_number):
+def mongo_update_clean_one_instance(_id, instance_number):
     """
     returns the replicas left
     """
     global mongo_jobs
     if instance_number == -1:
-        return mongo_jobs.db.jobs.update_one({'system_job_id': system_job_id},
+        return mongo_jobs.db.jobs.update_one({'_id': _id},
                                              {'$set': {'instance_list': []}})
     else:
-        return mongo_jobs.db.jobs.update_one({'system_job_id': system_job_id},
+        return mongo_jobs.db.jobs.update_one({'_id': _id},
                                              {'$pull': {'instance_list': {'instance_number': instance_number}}})
 
 

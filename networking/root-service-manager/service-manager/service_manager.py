@@ -143,7 +143,7 @@ def new_service_deployment():
     """
     Input:
         {
-            system_job_id:int,
+            _id:int,
             deployment_descriptor:{}
         }
     service deployment descriptor and job_id
@@ -156,20 +156,20 @@ def new_service_deployment():
 
     return service_management.deploy_request(
         deployment_descriptor=data.get("deployment_descriptor"),
-        system_job_id=data.get("system_job_id"),
+        _id=data.get("_id"),
     )
 
 
-@app.route("/api/net/service/<system_job_id>", methods=["DELETE"])
-def service_undeployment(system_job_id):
+@app.route("/api/net/service/<_id>", methods=["DELETE"])
+def service_undeployment(_id):
     """
     service deployment descriptor and job_id
     The System Manager decorates the service with a new RR Ip in its own DB
     """
 
-    app.logger.info("Incoming Request DELETE /api/net/service/" + system_job_id)
+    app.logger.info("Incoming Request DELETE /api/net/service/" + _id)
 
-    return service_management.remove_service(system_job_id=str(system_job_id))
+    return service_management.remove_service(_id=str(_id))
 
 
 @app.route("/api/net/instance/deploy", methods=["POST"])
@@ -177,7 +177,7 @@ def new_instance_deployment():
     """
     Input:
         {
-            system_job_id:int,
+            _id:int,
             instance_number:int,
             cluster_id:string,
         }
@@ -189,27 +189,27 @@ def new_instance_deployment():
     app.logger.info(data)
 
     return instances_management.deploy_request(
-        sys_job_id=data.get("system_job_id"),
+        sys_job_id=data.get("_id"),
         instance_number=data.get("instance_number"),
         cluster_id=data.get("cluster_id"),
     )
 
 
-@app.route("/api/net/<system_job_id>/<instance_number>", methods=["DELETE"])
-def instance_undeployment(system_job_id, instance_number):
+@app.route("/api/net/<_id>/<instance_number>", methods=["DELETE"])
+def instance_undeployment(_id, instance_number):
     """
     Undeployment request for the instance number "instance", if instance ==-1 remove the service all together
     """
 
     app.logger.info(
         "Incoming Request /api/net/undeploy/"
-        + str(system_job_id)
+        + str(_id)
         + "/"
         + str(instance_number)
     )
 
     return instances_management.undeploy_request(
-        str(system_job_id), int(instance_number)
+        str(_id), int(instance_number)
     )
 
 

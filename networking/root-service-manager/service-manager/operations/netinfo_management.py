@@ -18,7 +18,7 @@ def _get_service_info_internal(job):
 
 def _convert_job_to_netinfo(job):
     netinfo = _subdict(job, [
-        "system_job_id",
+        "_id",
         "applicationID",
         "app_ns",
         "app_name",

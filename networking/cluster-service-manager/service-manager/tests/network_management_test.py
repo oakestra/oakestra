@@ -14,7 +14,7 @@ mongodb_client = sys.modules["interfaces.mongodb_requests"]
 def _get_fake_job(name):
     return {
         "job_name": name,
-        "system_job_id": "123",
+        "_id": "123",
         "instance_list": [
             {
                 "worker_id": "abab",
@@ -72,7 +72,7 @@ def test_deployment_status_report(requests_mock):
             "host_port": job_instance["host_port"],
         }
     ]
-    data = {"job_id": job["system_job_id"], "instances": instances}
+    data = {"job_id": job["_id"], "instances": instances}
     assert adapter.call_count == 1
     assert adapter.called
     assert adapter.last_request.json() == data

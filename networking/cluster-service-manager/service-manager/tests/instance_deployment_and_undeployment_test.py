@@ -12,7 +12,7 @@ mongodb_client = sys.modules['interfaces.mongodb_requests']
 def _get_fake_job(name):
     return {
         "job_name": name,
-        "system_job_id": "123",
+        "_id": "123",
         "instance_list": [
             {
                 "instance_number": 0,

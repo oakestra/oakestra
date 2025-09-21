@@ -53,7 +53,7 @@ def mongo_insert_job(job):
     global mongo_jobs
     app.logger.info("MONGODB - insert job...")
     job_content = {
-        'system_job_id': job['system_job_id'],
+        '_id': job['_id'],
         'job_name': job['job_name'],
         'service_ip_list': job['service_ip_list']
     }
