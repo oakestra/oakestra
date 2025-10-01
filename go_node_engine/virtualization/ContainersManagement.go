@@ -387,12 +387,16 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 
 			resourceList := make([]model.Resources, 0)
 
-			for _, container := range deployedContainers {
-				task, err := container.Task(r.ctx, nil)
-				if err != nil {
-					logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
-					continue
-				}
+				for _, container := range deployedContainers {
+					task, err := container.Task(r.ctx, nil)
+					if err != nil {
+						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+						err := r.removeContainer(container)
+						if err != nil {
+							return
+						}
+						continue
+					}
 
 				cpuUsage, err := getTotalCpuUsageByPid(int32(task.Pid()))
 				if err != nil {
@@ -449,21 +453,48 @@ func (r *ContainerRuntime) forceContainerCleanup() {
 }
 
 func (r *ContainerRuntime) removeContainer(container containerd.Container) error {
-	logger.InfoLogger().Printf("Clenaning up container: %s", container.ID())
-	task, err := container.Task(r.ctx, nil)
-	if err != nil {
-		return fmt.Errorf("Unable to fetch container task: %v", err)
+	if container == nil {
+		logger.WarningLogger().Printf("Container is nil, nothing to remove")
+		return nil
 	}
+
+	logger.InfoLogger().Printf("Cleaning up container: %s", container.ID())
+	containerMetadata, err := container.Info(r.ctx)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
+	}
+
+	//kill task
+	task, err := container.Task(r.ctx, nil)
 	if err == nil {
-		err = killTask(r.ctx, task, container)
+		err := killTask(r.ctx, task, container)
 		if err != nil {
-			return fmt.Errorf("Unable to fetch kill task: %v", err)
+			logger.ErrorLogger().Printf("Unable to kill task: %v", err)
 		}
 	}
+
+	//remove snapshotter
+	if containerMetadata.Snapshotter != "" {
+		currentsnapshotter := r.containerClient.SnapshotService(containerMetadata.Snapshotter)
+		if currentsnapshotter != nil {
+			err = currentsnapshotter.Remove(r.ctx, containerMetadata.SnapshotKey)
+			if err != nil {
+				logger.WarningLogger().Printf("Unable to remove snapshotter %s: %v", containerMetadata.Snapshotter, err)
+			}
+			err = currentsnapshotter.Close()
+			if err != nil {
+				logger.WarningLogger().Printf("Unable to close snapshotter %s: %v", containerMetadata.Snapshotter, err)
+			}
+		}
+	}
+
+	// remove container
 	err = container.Delete(r.ctx)
 	if err != nil {
-		return fmt.Errorf("Unable to delete container: %v", err)
+		logger.ErrorLogger().Printf("Unable to delete container: %v", err)
+		return err
 	}
+
 	return nil
 }
 

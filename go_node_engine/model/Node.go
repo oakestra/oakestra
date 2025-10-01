@@ -2,9 +2,12 @@ package model
 
 import (
 	"fmt"
+	"go_node_engine/config"
 	"go_node_engine/logger"
 	"go_node_engine/model/gpu"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"runtime"
 	"strconv"
@@ -17,15 +20,16 @@ import (
 	psnet "github.com/shirou/gopsutil/net"
 )
 
-// RuntimeType is the type of runtime that the node executes
-type RuntimeType string
+type RuntimeType = config.RuntimeType
 
-// RuntimeType constants
 const (
-	CONTAINER_RUNTIME RuntimeType = "docker"
-	UNIKERNEL_RUNTIME RuntimeType = "unikernel"
-	CROSVM_RUNTIME    RuntimeType = "crosvm"
+	CONTAINER_RUNTIME config.RuntimeType = config.CONTAINER_RUNTIME
+	UNIKERNEL_RUNTIME config.RuntimeType = config.UNIKERNEL_RUNTIME
+	CROSVM_RUNTIME    config.RuntimeType = config.CROSVM_RUNTIME
 )
+
+const SlowUpdateFactor = 60 // For updating certain Node parameters at a lower frequency
+var SlowUpdateCounter = 0
 
 // AddonType is the type of addon that the node supports
 type AddonType string
@@ -41,23 +45,23 @@ type Node struct {
 	Host string `json:"host"`
 	Ip   string `json:"ip"`
 	// semicolon separated list, check network-manager for specific syntax
-	Port            string            `json:"port"`
-	SystemInfo      map[string]string `json:"system_info"`
-	CpuUsage        float64           `json:"cpu"`
-	CpuCores        int               `json:"free_cores"`
-	CpuArch         string            `json:"architecture"`
-	MemoryUsed      float64           `json:"memory"`
-	MemoryMB        int               `json:"memory_free_in_MB"`
-	DiskInfo        map[string]string `json:"disk_info"`
-	NetworkInfo     map[string]string `json:"network_info"`
-	GpuDriver       string            `json:"gpu_driver"`
-	GpuUsage        float64           `json:"gpu_usage"`
-	GpuCores        int               `json:"gpu_cores"`
-	GpuTemp         float64           `json:"gpu_temp"`
-	GpuMemUsage     float64           `json:"gpu_mem_used"`
-	GpuTotMem       float64           `json:"gpu_tot_mem"`
-	Technology      []RuntimeType     `json:"technology"`
-	SupportedAddons []AddonType       `json:"supported_addons"`
+	Port            string               `json:"port"`
+	SystemInfo      map[string]string    `json:"system_info"`
+	CpuUsage        float64              `json:"cpu"`
+	CpuCores        int                  `json:"free_cores"`
+	CpuArch         string               `json:"architecture"`
+	MemoryUsed      float64              `json:"memory"`
+	MemoryMB        int                  `json:"memory_free_in_MB"`
+	DiskInfo        map[string]string    `json:"disk_info"`
+	NetworkInfo     map[string]string    `json:"network_info"`
+	GpuDriver       string               `json:"gpu_driver"`
+	GpuUsage        float64              `json:"gpu_usage"`
+	GpuCores        int                  `json:"gpu_cores"`
+	GpuTemp         float64              `json:"gpu_temp"`
+	GpuMemUsage     float64              `json:"gpu_mem_used"`
+	GpuTotMem       float64              `json:"gpu_tot_mem"`
+	Technology      []config.RuntimeType `json:"technology"`
+	SupportedAddons []AddonType          `json:"supported_addons"`
 	Overlay         bool
 	OverlaySocket   string
 	LogDirectory    string
@@ -77,7 +81,7 @@ func GetNodeInfo() *Node {
 			CpuCores:        getCpuCores(),
 			CpuArch:         runtime.GOARCH,
 			Port:            getPort(),
-			Technology:      make([]RuntimeType, 0),
+			Technology:      make([]config.RuntimeType, 0),
 			SupportedAddons: make([]AddonType, 0),
 			Overlay:         false,
 			OverlaySocket:   "/etc/netmanager/netmanager.sock",
@@ -104,6 +108,7 @@ func (n *Node) SetOverlaySocket(socket string) {
 func GetDynamicInfo() Node {
 	node.updateDynamicInfo()
 	return Node{
+		Ip:          node.Ip,
 		CpuUsage:    node.CpuUsage,
 		CpuCores:    node.CpuCores,
 		MemoryUsed:  node.MemoryUsed,
@@ -147,6 +152,38 @@ func SetNodeId(id string) {
 }
 
 func getIp() string {
+	conf, err := config.GetConfFileManager().Get()
+	if err != nil {
+		logger.ErrorLogger().Fatal(err)
+	}
+	if conf.PublicIp {
+
+		// Only get public IP every nth update cycle to prevent API overload
+		if SlowUpdateCounter != 0 {
+			SlowUpdateCounter = (SlowUpdateCounter + 1) % SlowUpdateFactor
+			return node.Ip
+		}
+		SlowUpdateCounter = (SlowUpdateCounter + 1) % SlowUpdateFactor
+
+		req, err := http.Get("https://ifconfig.co")
+		if err != nil {
+			logger.ErrorLogger().Printf("%v", err.Error())
+		}
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				logger.ErrorLogger().Printf("%v", err.Error())
+			}
+		}(req.Body)
+
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			return err.Error()
+		}
+
+		return string(body[:len(body)-1])
+	}
+
 	addresses, err := net.InterfaceAddrs()
 	if err != nil {
 		return ""
@@ -261,12 +298,12 @@ func getPort() string {
 }
 
 // AddSupportedTechnology adds a supported technology to the node
-func (n *Node) AddSupportedTechnology(tech RuntimeType) {
+func (n *Node) AddSupportedTechnology(tech config.RuntimeType) {
 	n.Technology = append(n.Technology, tech)
 }
 
 // GetSupportedTechnologyList returns the list of supported technologies
-func (n *Node) GetSupportedTechnologyList() []RuntimeType {
+func (n *Node) GetSupportedTechnologyList() []config.RuntimeType {
 	return n.Technology
 }
 

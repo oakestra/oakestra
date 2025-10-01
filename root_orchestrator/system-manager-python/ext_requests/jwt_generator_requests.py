@@ -66,7 +66,7 @@ def create_refresh_token(
 
 def get_public_key():
     logger = logging.getLogger()
-    logger.info("new job: asking cloud_scheduler...")
+    logger.info("new job: asking scheduler...")
     request_addr = JWT_GENERATOR_ADDR + "/key"
     while True:
         try:

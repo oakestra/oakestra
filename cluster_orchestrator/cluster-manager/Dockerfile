@@ -1,4 +1,4 @@
-FROM python:3.10-slim-buster
+FROM python:3.10-slim-bookworm
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
 RUN apt-get update -y &&\
@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /
 
-# ENV FLASK_APP=cloud_scheduler.py
+# ENV FLASK_APP=scheduler.py
 ENV FLASK_ENV=development
 # TRUE for verbose logging
 ENV FLASK_DEBUG=FALSE

@@ -4,19 +4,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"go_node_engine/logger"
-	"go_node_engine/model"
 	"os"
 )
 
 var DEFAULT_LOG_DIR = "/tmp"
 var AUTO_OAK_NETWORK = "default"
 
+// RuntimeType is the type of runtime that the node executes
+type RuntimeType string
+
+// RuntimeType constants
+const (
+	CONTAINER_RUNTIME RuntimeType = "docker"
+	UNIKERNEL_RUNTIME RuntimeType = "unikernel"
+)
+
 type ConfFile struct {
 	ConfVersion     string           `json:"conf_version"`
 	ClusterAddress  string           `json:"cluster_address"`
+	ClusterSSL      bool             `json:"cluster_ssl"`
 	ClusterPort     int              `json:"cluster_port"`
 	AppLogs         string           `json:"app_logs"`
 	OverlayNetwork  string           `json:"overlay_network"`
+	PublicIp        bool             `json:"public_ip"`
 	NetPort         int              `json:"overlay_network_port"`
 	CertFile        string           `json:"mqtt_cert_file"`
 	KeyFile         string           `json:"mqtt_key_file"`
@@ -143,13 +153,15 @@ func GenDefaultConfig() ConfFile {
 		ConfVersion:    "1.0",
 		ClusterAddress: "0.0.0.0",
 		ClusterPort:    10100,
+		ClusterSSL:     false,
 		AppLogs:        DEFAULT_LOG_DIR,
 		OverlayNetwork: AUTO_OAK_NETWORK,
+		PublicIp:       false,
 		NetPort:        0,
 		Virtualizations: []Virtualization{
 			{
 				Name:    "containerd",
-				Runtime: string(model.CONTAINER_RUNTIME),
+				Runtime: string(CONTAINER_RUNTIME),
 				Active:  true,
 				Config:  []string{},
 			},

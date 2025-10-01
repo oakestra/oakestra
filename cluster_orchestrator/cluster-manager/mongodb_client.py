@@ -88,28 +88,36 @@ def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_payload):
 
     time_now = datetime.now()
 
-    mongo_nodes.db.nodes.find_one_and_update(
+    prev_document = mongo_nodes.db.nodes.find_one_and_update(
         {"_id": ObjectId(node_id)},
         {
             "$set": {
-                "current_cpu_percent": node_payload.get("cpu", 0),
-                "current_cpu_cores_free": node_payload.get("free_cores", 0),
-                "current_memory_percent": node_payload.get("memory", 0),
-                "current_free_memory_in_MB": node_payload.get("memory_free_in_MB", 0),
+                "current_ip_address": node_payload.get("ip", 0),
+                "cpu_percent": node_payload.get("cpu", 0),
+                "vcpus": node_payload.get("free_cores", 0),
+                "memory_percent": node_payload.get("memory", 0),
+                "memory": node_payload.get("memory_free_in_MB", 0),
                 "gpu_driver": node_payload.get("gpu_driver", "-"),
-                "gpu_usage": node_payload.get("gpu_usage", 0),
-                "gpu_cores": node_payload.get("gpu_cores", 0),
+                "gpu_percent": node_payload.get("gpu_usage", 0),
+                "vgpus": node_payload.get("gpu_cores", 0),
                 "gpu_temp": node_payload.get("gpu_temp", 0),
-                "gpu_mem_used": node_payload.get("gpu_mem_used", 0),
-                "gpu_tot_mem": node_payload.get("gpu_tot_mem", 0),
+                "vram_percent": node_payload.get("gpu_mem_used", 0),
+                "vram": node_payload.get("gpu_tot_mem", 0),
                 "last_modified": time_now,
                 "last_modified_timestamp": datetime.timestamp(time_now),
             }
         },
-        upsert=True,
+        upsert=False,
     )
 
-    return 1
+    if prev_document is None:
+        app.logger.info("MONGODB - Node with id {0} does not exist".format(node_id))
+        return
+
+    prev_ip = prev_document.get("current_ip_address")
+    curr_ip = node_payload.get("ip", 0)
+    if prev_ip != curr_ip:
+        app.logger.info("IP_CHANGE - Node with id {0} changed its IP address".format(node_id))
 
 
 def find_one_edge_node():
@@ -135,22 +143,22 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
 
     cumulative_values = {
         "cpu_percent": 0,
-        "cpu_cores": 0,
+        "vcpus": 0,
         "memory_percent": 0,
-        "gpu_tot_mem": 0,
-        "gpu_mem_used": 0,
+        "vram": 0,
+        "vram_percent": 0,
         "gpu_temp": 0,
         "gpu_drivers": [],
         "gpu_percent": 0,
-        "gpu_cores": 0,
-        "cumulative_memory_in_mb": 0,
-        "number_of_nodes": 0,
+        "vgpus": 0,
+        "memory": 0,
+        "active_nodes": 0,
     }
 
     technology = set()
     supported_addons = set()
     aggregation_per_architecture = defaultdict(
-        lambda: {"cpu_percent": 0, "cpu_cores": 0, "memory": 0, "memory_in_mb": 0}
+        lambda: {"cpu_percent": 0, "vcpus": 0, "memory_percent": 0, "memory": 0}
     )
 
     nodes = find_all_nodes()
@@ -163,27 +171,27 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
             node_info = n.get("node_info")
 
             # if it is not older than TIME_INTERVAL
-            cumulative_values["cpu_percent"] += n.get("current_cpu_percent", 0)
-            cumulative_values["cpu_cores"] += n.get("current_cpu_cores_free", 0)
-            cumulative_values["memory_percent"] += n.get("current_memory_percent", 0)
-            cumulative_values["gpu_tot_mem"] += n.get("gpu_tot_mem", 0)
-            cumulative_values["gpu_mem_used"] += n.get("gpu_mem_used", 0)
+            cumulative_values["cpu_percent"] += n.get("cpu_percent", 0)
+            cumulative_values["vcpus"] += n.get("vcpus", 0)
+            cumulative_values["memory_percent"] += n.get("memory_percent", 0)
+            cumulative_values["vram"] += n.get("vram", 0)
+            cumulative_values["vram_percent"] += n.get("vram_percent", 0)
             cumulative_values["gpu_temp"] += n.get("gpu_temp", 0)
             cumulative_values["gpu_drivers"].append(n.get("gpu_driver", "-"))
-            cumulative_values["cumulative_memory_in_mb"] += n.get("current_free_memory_in_MB", 0)
-            cumulative_values["gpu_percent"] += n.get("gpu_usage", 0)
-            cumulative_values["gpu_cores"] += n.get("gpu_cores", 0)
-            cumulative_values["number_of_nodes"] += 1
+            cumulative_values["memory"] += n.get("memory", 0)
+            cumulative_values["gpu_percent"] += n.get("gpu_percent", 0)
+            cumulative_values["vgpus"] += n.get("vgpus", 0)
+            cumulative_values["active_nodes"] += 1
 
             technology.update(node_info.get("technology", []))
             supported_addons.update(node_info.get("supported_addons", []))
 
             arch = node_info.get("architecture")
             aggregation = aggregation_per_architecture[arch]
-            aggregation["cpu_percent"] += n.get("current_cpu_percent", 0)
-            aggregation["cpu_cores"] += n.get("current_cpu_cores_free", 0)
-            aggregation["memory"] += n.get("current_memory_percent", 0)
-            aggregation["memory_in_mb"] += n.get("current_free_memory_in_MB", 0)
+            aggregation["cpu_percent"] += n.get("cpu_percent", 0)
+            aggregation["vcpus"] += n.get("vcpus", 0)
+            aggregation["memory_percent"] += n.get("memory_percent", 0)
+            aggregation["memory"] += n.get("memory", 0)
             # GPU not aggregated for unikernel
 
         except Exception as e:
