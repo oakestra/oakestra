@@ -1,3 +1,4 @@
+# hadolint global ignore=SC3040,DL4006,DL3003
 FROM debian:12.10-slim AS build
 
 ARG GPU_KERNEL_DRIVER=AMDGPU
