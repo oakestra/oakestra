@@ -91,5 +91,5 @@ func assertContentsEqual(t *testing.T, tb *tailbuf.TailBuffer, data []byte) {
 	if len(data) > 0 {
 		assert.DeepEqual(t, buf.Bytes(), data)
 	}
-	assert.Equal(t, len(data), size)
+	assert.Equal(t, len(data), int(size))
 }
