@@ -1,13 +1,11 @@
 package instance
 
 import (
-	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
 	"go_node_engine/util/taskid"
 	"go_node_engine/virtualization/internal/network"
-	"net"
 	"slices"
 )
 
@@ -55,19 +53,4 @@ func teardownNetwork(service model.Service) error {
 func wrapCommandWithIpNetnsExec(service model.Service, executable string, args []string) (string, []string) {
 	// the network namespace name is the task id of the instance
 	return "ip", slices.Concat([]string{"netns", "exec", taskid.GenerateForModel(&service), executable}, args)
-}
-
-func convertIpv4MaskToCIDRSuffix(ipv4Mask string) (int, error) {
-	ip := net.ParseIP(ipv4Mask)
-	if ip == nil {
-		return 0, fmt.Errorf("invalid IP address: %s", ipv4Mask)
-	}
-
-	ipv4 := ip.To4()
-	if ipv4 == nil {
-		return 0, fmt.Errorf("not an IPv4 address: %s", ipv4Mask)
-	}
-
-	ones, _ := net.IPMask(ipv4).Size()
-	return ones, nil
 }

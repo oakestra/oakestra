@@ -2,9 +2,6 @@ package stats
 
 import (
 	"fmt"
-	"os/exec"
-	"strconv"
-	"strings"
 
 	"github.com/prometheus/procfs"
 	"github.com/prometheus/procfs/sysfs"
@@ -69,18 +66,6 @@ func (s *SystemMetricsTracker) GatherMetrics() (*SystemMetrics, error) {
 		OnlineCpuCount:   onlineCpuCount,
 		TotalMemoryBytes: totalMemoryBytes,
 	}, nil
-}
-
-func obtainCpuTicksPerSecondWithGetconf() (uint64, error) {
-	var out strings.Builder
-	getconf := exec.Command("getconf", "CLK_TCK")
-	getconf.Stdout = &out
-
-	if err := getconf.Run(); err != nil {
-		return 0, err
-	}
-
-	return strconv.ParseUint(out.String(), 10, 64)
 }
 
 func (s *SystemMetricsTracker) obtainTotalCpuSeconds() (float64, error) {

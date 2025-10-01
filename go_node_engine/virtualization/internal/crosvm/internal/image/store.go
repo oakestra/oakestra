@@ -99,10 +99,7 @@ func NewStore(dirPath string, sources ...Source) (*Store, error) {
 // the Store might try to retrieve the corresponding src multiple times,
 // in which case all of them but the first one to complete is thrown away.
 func (s *Store) Retrieve(ref string, dstDirPath string, rootfsSize int64) (*Image, error) {
-	source, id, err := s.parseRef(ref)
-	if err != nil {
-		return nil, err
-	}
+	source, id := s.parseRef(ref)
 
 	key := convertIdToKey(source, id)
 	imageDirPath := filepath.Join(s.dirPath, key+imageDirExtension)
@@ -255,19 +252,19 @@ func (s *Store) moveIntoCache(ref string, img *Image, tmpDirPath string, imageDi
 }
 
 // parseRef takes an image reference and splits it into its source and id parts
-func (s *Store) parseRef(ref string) (Source, string, error) {
+func (s *Store) parseRef(ref string) (Source, string) {
 	splitIdx := strings.Index(ref, ":")
 	if splitIdx == -1 {
-		return s.defaultSource, ref, nil
+		return s.defaultSource, ref
 	}
 
 	sourceName, id := ref[:splitIdx], ref[splitIdx+1:]
 	source, ok := s.sources[sourceName]
 	if !ok {
-		return s.defaultSource, ref, nil
+		return s.defaultSource, ref
 	}
 
-	return source, id, nil
+	return source, id
 }
 
 func copyImageFilesToDst(
