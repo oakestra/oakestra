@@ -2,22 +2,24 @@ package model
 
 // Service is the struct that describes the service
 type Service struct {
-	JobID           string   `json:"_id"`
-	Sname           string   `json:"job_name"`
-	Instance        int      `json:"instance_number"`
-	Image           string   `json:"image"`
-	Commands        []string `json:"cmd"`
-	Env             []string `json:"environment"`
-	Ports           string   `json:"port"`
-	Status          string   `json:"status"`
-	Runtime         string   `json:"virtualization"`
-	Platform        string   `json:"platform"`
-	StatusDetail    string   `json:"status_detail"`
-	Vtpus           int      `json:"vtpus"`
-	Vgpus           int      `json:"vgpus"`
-	Vcpus           int      `json:"vcpus"`
+	JobID        string   `json:"_id"`
+	Sname        string   `json:"job_name"`
+	Instance     int      `json:"instance_number"`
+	Image        string   `json:"image"`
+	Commands     []string `json:"cmd"`
+	Env          []string `json:"environment"`
+	Ports        string   `json:"port"`
+	Status       string   `json:"status"`
+	Runtime      string   `json:"virtualization"`
+	Platform     string   `json:"platform"`
+	StatusDetail string   `json:"status_detail"`
+	Vtpus        int      `json:"vtpus"`
+	Vgpus        int      `json:"vgpus"`
+	Vcpus        int      `json:"vcpus"`
 	// Memory is the amount of memory allocated to each instance in MiB
-	Memory          int      `json:"memory"`
+	Memory int `json:"memory"`
+	// Storage is the disk size of the instances in MiB
+	Storage         int      `json:"storage"`
 	UnikernelImages []string `json:"vm_images"`
 	Architectures   []string `json:"arch"`
 	Pid             int

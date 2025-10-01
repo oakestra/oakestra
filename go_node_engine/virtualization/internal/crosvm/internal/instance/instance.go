@@ -103,10 +103,8 @@ func NewInstance(
 		restartMode = instanceRestartModeUnlessStopped
 	}
 
-	// TODO(axiphi): Currently this code is abusing the "vtpus" field of the service model to configure
-	// 	 			 the disk size for the VM, as it is otherwise unused in the crosvm runtime.
-	//               The left shift by 20 converts the unit of the field from MiB to bytes.
-	var rootfsSize = int64(service.Vtpus) << 20
+	// the left shift by 20 converts the unit of the field from MiB to bytes
+	var rootfsSize = int64(service.Storage) << 20
 	// anything below 512MiB for the rootfs disk is likely an error, so we fail fast here
 	if rootfsSize < 536870912 {
 		return nil, fmt.Errorf("expected a disk size of atleast 512MiB for instance %q configured via 'vtpus' field", id)
