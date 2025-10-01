@@ -37,7 +37,7 @@ RUN mkdir --parents /opt/oakestra /opt/oakestra/bin /opt/oakestra/include /opt/o
 RUN git clone --depth 1 https://chromium.googlesource.com/chromiumos/platform/minigbm.git /scratch/minigbm \
     && cd /scratch/minigbm \
     && sed --in-place 's/-Wxor-used-as-pow/-Wno-xor-used-as-pow/g' common.mk \
-    && make OUT=out DESTDIR=/opt/oakestra INCLUDEDIR=include LIBDIR=lib install
+    && make CPPFLAGS="-DDRV_${GPU_KERNEL_DRIVER}" DRV_${GPU_KERNEL_DRIVER}=1 OUT=out DESTDIR=/opt/oakestra INCLUDEDIR=include LIBDIR=lib install
 
 # build virglrenderer (maybe a specific branch or commit should be used, e.g. "1.1.0")
 RUN git clone --depth 1 https://gitlab.freedesktop.org/virgl/virglrenderer.git /scratch/virglrenderer \
@@ -49,7 +49,7 @@ RUN git clone --depth 1 https://gitlab.freedesktop.org/virgl/virglrenderer.git /
 # build crosvm (maybe a specific commit should be used)
 # NOTE: libcrosvm_control.so has its SONAME set to exactly "libcrosvm_control.so",
 #       so there's no need to create versioned symlinks
-RUN git clone --depth 1 --recursive https://chromium.googlesource.com/crosvm/crosqvm.git /scratch/crosvm \
+RUN git clone --depth 1 --recursive https://chromium.googlesource.com/crosvm/crosvm.git /scratch/crosvm \
     && cd /scratch/crosvm \
     && . /root/.cargo/env \
     && LD_LIBRARY_PATH=/opt/oakestra/lib PKG_CONFIG_PATH=/opt/oakestra/lib/pkgconfig CROSVM_USE_SYSTEM_MINIGBM=1 CROSVM_USE_SYSTEM_VIRGLRENDERER=1 cargo build --release --package crosvm --package crosvm_control --features 'virgl_renderer' \
@@ -62,6 +62,18 @@ RUN mkdir --parents /scratch/edk2-crosvm \
     && curl --proto '=https' --tlsv1.2 --silent --show-error --fail --location https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+archive/refs/heads/main/sys-firmware/edk2-ovmf-crosvm.tar.gz \
         | tar --extract --gzip --file - --directory /scratch/edk2-crosvm
 
+# clone edk2 at the tag that the crosvm patches are based on and build it
+RUN <<-"EOT" bash
+    EDK_TAG=$(grep --perl-regexp --only-matching 'edk2-.+(?=\.tar\.gz)' /scratch/edk2-crosvm/Manifest)
+    git clone --recursive --depth 1 --branch ${EDK_TAG} https://github.com/tianocore/edk2.git /scratch/edk2
+    cd /scratch/edk2
+    git apply /scratch/edk2-crosvm/files/*
+    make --directory BaseTools
+    source edksetup.sh
+    build --platform OvmfPkg/Crosvm/CrosvmX64.dsc --tagname GCC5 --arch X64 --buildtarget RELEASE --define SECURE_BOOT_ENABLE --define FD_SIZE_4MB
+    install --mode 0644 Build/CrosvmX64/RELEASE_GCC5/FV/CROSVM_{CODE,VARS}.fd /opt/oakestra/share/edk2
+EOT
+
 
 FROM scratch
 
@@ -71,5 +83,6 @@ COPY --from=build /opt/oakestra/bin /bin
 COPY --from=build /opt/oakestra/include /include
 COPY --from=build /opt/oakestra/lib /lib
 COPY --from=build /opt/oakestra/libexec /libexec
+COPY --from=build /opt/oakestra/share /share
 COPY --chown=0:0 --chmod=0755 crosvm-wrapper.sh /bin/crosvm-wrapper.sh
 COPY --chown=0:0 --chmod=0644 crosvm_control.pc /lib/pkgconfig/crosvm_control.pc

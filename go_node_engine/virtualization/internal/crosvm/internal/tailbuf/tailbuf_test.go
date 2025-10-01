@@ -10,7 +10,7 @@ import (
 func TestEmpty(t *testing.T) {
 	tb := tailbuf.NewTailBuffer(8)
 
-	assertDumpTo(t, tb, []byte{})
+	assertContentsEqual(t, tb, []byte{})
 }
 
 func TestNoWrapHalf(t *testing.T) {
@@ -18,7 +18,7 @@ func TestNoWrapHalf(t *testing.T) {
 
 	assertWrite(t, tb, []byte("hello"))
 
-	assertDumpTo(t, tb, []byte("hello"))
+	assertContentsEqual(t, tb, []byte("hello"))
 }
 
 func TestNoWrapFull(t *testing.T) {
@@ -26,7 +26,7 @@ func TestNoWrapFull(t *testing.T) {
 
 	assertWrite(t, tb, []byte("hello"))
 
-	assertDumpTo(t, tb, []byte("hello"))
+	assertContentsEqual(t, tb, []byte("hello"))
 }
 
 func TestMultiWriteSingleWrap(t *testing.T) {
@@ -35,7 +35,7 @@ func TestMultiWriteSingleWrap(t *testing.T) {
 	assertWrite(t, tb, []byte("abcd")) // buffer = abcd
 	assertWrite(t, tb, []byte("ef"))   // buffer = cdef
 
-	assertDumpTo(t, tb, []byte("cdef"))
+	assertContentsEqual(t, tb, []byte("cdef"))
 }
 
 func TestSingleWriteMultiWrap(t *testing.T) {
@@ -43,7 +43,7 @@ func TestSingleWriteMultiWrap(t *testing.T) {
 
 	assertWrite(t, tb, []byte("abcdefghijklmnopqrstuvwxyz"))
 
-	assertDumpTo(t, tb, []byte("wxyz"))
+	assertContentsEqual(t, tb, []byte("wxyz"))
 }
 
 func TestMultiWriteMultiWrap(t *testing.T) {
@@ -55,7 +55,7 @@ func TestMultiWriteMultiWrap(t *testing.T) {
 	assertWrite(t, tb, []byte("7890")) // 67890
 	assertWrite(t, tb, []byte("34"))   // 89034
 
-	assertDumpTo(t, tb, []byte("89034"))
+	assertContentsEqual(t, tb, []byte("89034"))
 }
 
 func TestSmallThenLargeWriteWrap(t *testing.T) {
@@ -67,7 +67,7 @@ func TestSmallThenLargeWriteWrap(t *testing.T) {
 	assertWrite(t, tb, []byte("7890"))                       // 67890
 	assertWrite(t, tb, []byte("abcdefghijklmnopqrstuvwxyz")) // vwxyz
 
-	assertDumpTo(t, tb, []byte("vwxyz"))
+	assertContentsEqual(t, tb, []byte("vwxyz"))
 }
 
 func TestMultiWrapDivisible(t *testing.T) {
@@ -75,7 +75,7 @@ func TestMultiWrapDivisible(t *testing.T) {
 
 	assertWrite(t, tb, []byte("12341234123412341234")) // 1234
 
-	assertDumpTo(t, tb, []byte("1234"))
+	assertContentsEqual(t, tb, []byte("1234"))
 }
 
 func assertWrite(t *testing.T, tb *tailbuf.TailBuffer, data []byte) {
@@ -84,9 +84,9 @@ func assertWrite(t *testing.T, tb *tailbuf.TailBuffer, data []byte) {
 	assert.Equal(t, len(data), size)
 }
 
-func assertDumpTo(t *testing.T, tb *tailbuf.TailBuffer, data []byte) {
+func assertContentsEqual(t *testing.T, tb *tailbuf.TailBuffer, data []byte) {
 	buf := &bytes.Buffer{}
-	size, err := tb.DumpTo(buf)
+	size, err := tb.WriteTo(buf)
 	assert.NilError(t, err)
 	if len(data) > 0 {
 		assert.DeepEqual(t, buf.Bytes(), data)
