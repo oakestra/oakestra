@@ -1,8 +1,9 @@
 package iotools
 
 import (
-	"github.com/spf13/afero"
 	"go_node_engine/logger"
+
+	"github.com/spf13/afero"
 )
 
 func RemoveOrWarn(name string) {

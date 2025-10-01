@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/containers/storage/pkg/reexec"
 	"go_node_engine/addons"
 	"go_node_engine/cmd"
 	"go_node_engine/config"
@@ -17,6 +16,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/containers/storage/pkg/reexec"
 )
 
 const MONITORING_CYCLE = time.Second * 2

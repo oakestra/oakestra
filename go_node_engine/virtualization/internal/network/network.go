@@ -2,10 +2,11 @@ package network
 
 import (
 	"errors"
-	"github.com/vishvananda/netlink"
-	"github.com/vishvananda/netns"
 	"net"
 	rt "runtime"
+
+	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netns"
 )
 
 func RetrieveTapMacInNamespace(namespace string) (string, error) {

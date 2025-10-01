@@ -2,9 +2,10 @@ package iotools
 
 import (
 	"fmt"
-	"github.com/spf13/afero"
 	"os"
 	"sync"
+
+	"github.com/spf13/afero"
 )
 
 var largeTempDirBase = sync.OnceValue(func() string {

@@ -3,9 +3,10 @@ package cgroup
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/godbus/dbus/v5"
 	"path"
 	"regexp"
+
+	"github.com/godbus/dbus/v5"
 )
 
 type MachinedClient struct {

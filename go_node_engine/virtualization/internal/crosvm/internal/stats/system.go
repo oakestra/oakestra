@@ -2,11 +2,12 @@ package stats
 
 import (
 	"fmt"
-	"github.com/prometheus/procfs"
-	"github.com/prometheus/procfs/sysfs"
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/prometheus/procfs"
+	"github.com/prometheus/procfs/sysfs"
 )
 
 type SystemMetricsTracker struct {

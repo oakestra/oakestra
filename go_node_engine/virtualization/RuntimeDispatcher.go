@@ -4,6 +4,7 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/util/iotools"
 	"go_node_engine/virtualization/internal/allruntimes"
+
 	// make sure crosvm runtime is initialized, as it is not in the virtualization module
 	_ "go_node_engine/virtualization/internal/crosvm"
 	virtrt "go_node_engine/virtualization/internal/runtime"

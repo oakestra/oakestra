@@ -3,7 +3,6 @@ package instance
 import (
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/util/iotools"
@@ -13,7 +12,6 @@ import (
 	"go_node_engine/virtualization/internal/crosvm/internal/image"
 	"go_node_engine/virtualization/internal/crosvm/internal/stats"
 	"go_node_engine/virtualization/internal/crosvm/internal/tailbuf"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
 	"os/exec"
@@ -22,6 +20,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var errAlreadyClosed = errors.New("instance already closed")

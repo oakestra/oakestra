@@ -3,7 +3,6 @@ package crosvm
 import (
 	"errors"
 	"fmt"
-	"github.com/containers/image/v5/docker"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/util/iotools"
@@ -19,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/containers/image/v5/docker"
 )
 
 func init() {

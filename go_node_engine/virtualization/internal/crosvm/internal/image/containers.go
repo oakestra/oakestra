@@ -4,12 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/containers/image/v5/image"
-	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/pkg/blobinfocache/none"
-	"github.com/containers/image/v5/types"
-	"github.com/containers/storage/pkg/chrootarchive"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"go_node_engine/logger"
 	"go_node_engine/util/iotools"
 	"go_node_engine/virtualization/internal/crosvm/internal/fsimg"
@@ -19,6 +13,13 @@ import (
 	"path"
 	"slices"
 	"sync"
+
+	"github.com/containers/image/v5/image"
+	"github.com/containers/image/v5/manifest"
+	"github.com/containers/image/v5/pkg/blobinfocache/none"
+	"github.com/containers/image/v5/types"
+	"github.com/containers/storage/pkg/chrootarchive"
+	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 var errUnsupportedLayerType = errors.New("unsupported layer type")

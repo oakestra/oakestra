@@ -2,11 +2,12 @@ package iotools
 
 import (
 	"fmt"
-	"github.com/spf13/afero"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/afero"
 )
 
 func CopyFile(srcPath string, dstPath string, dstPerm os.FileMode) error {

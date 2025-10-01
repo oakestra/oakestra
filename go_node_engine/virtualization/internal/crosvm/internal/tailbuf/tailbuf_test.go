@@ -3,8 +3,9 @@ package tailbuf_test
 import (
 	"bytes"
 	"go_node_engine/virtualization/internal/crosvm/internal/tailbuf"
-	"gotest.tools/v3/assert"
 	"testing"
+
+	"gotest.tools/v3/assert"
 )
 
 func TestEmpty(t *testing.T) {

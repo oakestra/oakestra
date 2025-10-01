@@ -2,8 +2,9 @@ package iotools
 
 import (
 	"encoding/json"
-	"github.com/spf13/afero"
 	"os"
+
+	"github.com/spf13/afero"
 )
 
 func LoadJSON[T any](jsonPath string) (*T, error) {
