@@ -1,4 +1,5 @@
 import socket
+from urllib.parse import unquote
 
 
 def is_ipv6(address):
@@ -34,3 +35,20 @@ def sanitize(address, request=False):
     if request:
         return add_brackets_if_ipv6(address)
     return address
+
+
+def get_ip_from_grpc_transport(transport):
+    """Extracts the IP address from the gRPC transport string."""
+    transport_parts = transport.split(":")  # grpc format is protocol:ip:port
+    l3_protocol = transport_parts[0]
+    transport_port = transport_parts[len(transport_parts) - 1]
+    url = unquote(transport)
+    cluster_ip = ""
+
+    if l3_protocol == "ipv4":
+        cluster_ip = transport_parts[1]
+    elif l3_protocol == "ipv6":
+        cluster_ip = url.replace("ipv6:", "")
+        cluster_ip = cluster_ip.replace(":" + transport_port, "")
+
+    return sanitize(cluster_ip)
