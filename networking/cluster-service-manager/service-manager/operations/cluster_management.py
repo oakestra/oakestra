@@ -9,7 +9,7 @@ def init_cluster(cluster_id):
 
     # table query the root to get the instances
     try:
-        mongodb_requests.mongo_update_cluster_info(cluster_id=cluster_id)
+        mongodb_requests.mongo_update_cluster_info(worker_id=cluster_id)
     except Exception as e:
         logging.error("Incoming Request /api/net/deployment failed service_resolution")
         logging.debug(traceback.format_exc())

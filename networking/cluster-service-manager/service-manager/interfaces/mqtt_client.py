@@ -38,19 +38,19 @@ def handle_mqtt_message(client, userdata, message):
     payload = json.loads(data["payload"])
 
     if re_job_deployment_topic is not None:
-        logging.debug("JOB-DEPLOYMENT-UPDATE")
+        print("JOB-DEPLOYMENT-UPDATE")
         _deployment_handler(client_id, payload)
     if re_job_undeployment_topic is not None:
-        logging.debug("JOB-UNDEPLOYMENT-UPDATE")
+        print("JOB-UNDEPLOYMENT-UPDATE")
         _undeployment_handler(client_id, payload)
     if re_job_tablequery_topic is not None:
-        logging.debug("JOB-TABLEQUERY-REQUEST")
+        print("JOB-TABLEQUERY-REQUEST")
         _tablequery_handler(client_id, payload)
     if re_job_subnet_topic is not None:
-        logging.debug("JOB-SUBNET-REQUEST")
+        print("JOB-SUBNET-REQUEST")
         _subnet_handler(client_id, payload)
     if re_job_interest_remove is not None:
-        logging.debug("JOB-INTEREST-REMOVE")
+        print("JOB-INTEREST-REMOVE")
         _interest_remove_handler(client_id, payload)
 
 
@@ -141,6 +141,7 @@ def _tablequery_handler(client_id, payload):
         "instance_list": resolution.format_instance_response(instances, siplist),
         "query_key": query_key,
     }
+    print("Tablequery Result: ", result)
     mqtt_publish_tablequery_result(client_id, result)
 
 

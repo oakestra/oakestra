@@ -8,6 +8,7 @@ from interfaces.mongodb_requests import mongo_remove_job, mongo_update_job_insta
 
 
 def create_service(job_name):
+    print("Creating Service ", job_name)
     if job_name is None:
         return "Invalid argument", 400
 

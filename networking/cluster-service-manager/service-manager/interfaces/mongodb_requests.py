@@ -53,7 +53,7 @@ def mongo_insert_job(job):
     global mongo_jobs
     app.logger.info("MONGODB - insert job...")
     job_content = {
-        '_id': job['_id'],
+        '_id': ObjectId(job['_id']),
         'job_name': job['job_name'],
         'service_ip_list': job['service_ip_list']
     }
@@ -81,6 +81,7 @@ def mongo_remove_job(job_name):
 
 
 def mongo_update_job(job):
+    print("updating job ", job)
     if job is None:
         return
     if job.get("job_name", "") == "":
@@ -101,6 +102,7 @@ def mongo_update_job(job):
 
 
 def mongo_update_job_instance(job_name, instance):
+    print("updating job ", job_name, " instance ", instance)
     # update if exist otherwise push a new instance
     if mongo_jobs.db.jobs.find_one(
             {
@@ -172,6 +174,8 @@ def mongo_find_job_by_ip(ip):
     return job
 
 def mongo_update_job_deployed(job_name, status, ns_ip, ns_ipv6, node_id, instance_number, host_ip, host_port):
+    print("mongo update job deployed: ", job_name)
+    print("Updating instance", instance_number, "with status", status)
     global mongo_jobs
     job = mongo_jobs.db.jobs.find_one({'job_name': job_name})
     if job is None:

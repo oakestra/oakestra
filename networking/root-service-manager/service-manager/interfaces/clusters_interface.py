@@ -18,7 +18,7 @@ def notify_undeployment(cluster_addr, cluster_port, job_name, instancenum):
 
 
 def notify_deployment(cluster_addr, cluster_port, job_name, instancenum):
-    logging.debug("Notifying deployment of " + job_name + " to a cluster")
+    print("Notifying deployment of " + job_name + " to a cluster")
     return _notify_interest_update(
         cluster_addr, cluster_port, job_name, instancenum, "DEPLOYMENT"
     )

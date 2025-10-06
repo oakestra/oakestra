@@ -16,6 +16,8 @@ def deploy_request(sys_job_id=None, instance_number=None, cluster_id=None):
 
 
 def update_instance_local_addresses(job_id=None, instances=None):
+    print("update local addresses")
+    print("Received instances: ", instances)
     if instances is None or job_id is None:
         return "Invalid input parameters", 400
     for instance in instances:
@@ -39,6 +41,7 @@ def update_instance_local_addresses(job_id=None, instances=None):
 
 
 def undeploy_request(sys_job_id=None, instance_number=None):
+    print("undeploy: ", sys_job_id, instance_number)
     if sys_job_id is None or instance_number is None:
         return "Invalid input parameters", 400
     if mongodb_requests.mongo_update_clean_one_instance(

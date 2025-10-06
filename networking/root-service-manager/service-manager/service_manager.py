@@ -184,9 +184,9 @@ def new_instance_deployment():
     The System Manager adds an instance ip for a new deployed instance to a new cluster
     """
 
-    app.logger.info("Incoming Request /api/net/instance/deploy")
+    print("Incoming Request /api/net/instance/deploy")
     data = request.json
-    app.logger.info(data)
+    print("Data: ", data)
 
     return instances_management.deploy_request(
         sys_job_id=data.get("_id"),

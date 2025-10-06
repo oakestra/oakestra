@@ -42,6 +42,7 @@ def mongo_init(flask_app):
 
 def mongo_insert_job(obj):
     global mongo_jobs
+    print("inserting job: ", obj)
     app.logger.info("MONGODB - insert job...")
     deployment_descriptor = obj['deployment_descriptor']
     # jobname and details generation
@@ -49,15 +50,15 @@ def mongo_insert_job(obj):
                + "." + deployment_descriptor['app_ns'] \
                + "." + deployment_descriptor['service_name'] \
                + "." + deployment_descriptor['service_ns']
+
     job_content = {
-        '_id': obj.get('_id'),
+        '_id': ObjectId(obj.get("_id")),
         'job_name': job_name,
         'service_ip_list': obj.get('service_ip_list'),
         'instance_list': [],
         **deployment_descriptor  # The content of the input deployment descriptor
     }
-    if "_id" in job_content:
-        del job_content['_id']
+
     # job insertion
     new_job = mongo_jobs.db.jobs.find_one_and_update(
         {'job_name': job_name},
@@ -71,7 +72,7 @@ def mongo_insert_job(obj):
 
 def mongo_remove_job(_id):
     global mongo_jobs
-    return mongo_jobs.db.jobs.delete_one({"_id": _id})
+    return mongo_jobs.db.jobs.delete_one({"_id": ObjectId(_id)})
 
 
 def mongo_get_all_jobs():
@@ -90,11 +91,12 @@ def mongo_update_job_status(job_id, status):
 
 
 def mongo_update_job_net_status(job_id, instances):
+    print("Job net status instances: ", instances)
     global mongo_jobs
     for instance in instances:
         mongo_update_job_instance(job_id, instance)
 
-    return mongo_jobs.db.jobs.find_one({'_id': job_id})
+    return mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)})
 
 
 def mongo_find_job_by_id(job_id):
@@ -104,7 +106,7 @@ def mongo_find_job_by_id(job_id):
 
 def mongo_find_job_by_systemid(sys_id):
     global mongo_jobs
-    return mongo_jobs.db.jobs.find_one({"_id": sys_id})
+    return mongo_jobs.db.jobs.find_one({"_id": ObjectId(sys_id)})
 
 
 def mongo_find_job_by_name(job_name):
@@ -130,10 +132,10 @@ def mongo_find_job_by_ip(ip):
 
 def mongo_update_job_instance(_id, instance):
     global mongo_jobs
-    print('Updating job instance')
+    print("Updating job instance: ", instance, "to job ", _id)
     mongo_jobs.db.jobs.update_one(
         {
-            '_id': _id,
+            '_id': ObjectId(_id),
             "instance_list": {'$elemMatch': {'instance_number': instance['instance_number']}}},
         {
             '$set': {
@@ -147,8 +149,11 @@ def mongo_update_job_instance(_id, instance):
 
 
 def mongo_create_job_instance(_id, instance):
+    if isinstance(_id, str):
+        _id = ObjectId(_id)
+
     global mongo_jobs
-    print('Updating job instance')
+    print("Creating job instance: ", instance, "to job ", _id)
     if not mongo_jobs.db.jobs.find_one(
             {
                 "_id": _id,
@@ -172,10 +177,10 @@ def mongo_update_clean_one_instance(_id, instance_number):
     """
     global mongo_jobs
     if instance_number == -1:
-        return mongo_jobs.db.jobs.update_one({'_id': _id},
+        return mongo_jobs.db.jobs.update_one({'_id': ObjectId(_id)},
                                              {'$set': {'instance_list': []}})
     else:
-        return mongo_jobs.db.jobs.update_one({'_id': _id},
+        return mongo_jobs.db.jobs.update_one({'_id': ObjectId(_id)},
                                              {'$pull': {'instance_list': {'instance_number': instance_number}}})
 
 
@@ -591,6 +596,7 @@ def mongo_free_subnet_address_to_cache_v6(address):
 ####################################################
 
 def mongo_cluster_add(cluster_id, cluster_port, cluster_address, status):
+    print("Adding cluster with id", cluster_id)
     global mongo_clusters
 
     mongo_clusters.db.cluster.find_one_and_update(
