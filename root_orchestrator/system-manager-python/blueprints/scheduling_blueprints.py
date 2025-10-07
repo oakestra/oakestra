@@ -13,7 +13,7 @@ auth_schema = {
     "type": "object",
     "properties": {
         "job_id": {"type": "string"},
-        "cluster_id": {"type": "string"},
+        "candidate_id": {"type": "string"},
     },
 }
 
@@ -25,7 +25,7 @@ class SchedulingController(MethodView):
         data = request.get_json()
         logging.log(logging.INFO, data)
         job_id = data.get("job_id")
-        cluster_id = data.get("cluster_id")
+        cluster_id = data.get("candidate_id")
         if cluster_id is None:
             # scheduling failed
             status = data.get("status")

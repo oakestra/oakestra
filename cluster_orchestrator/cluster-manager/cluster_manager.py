@@ -5,13 +5,10 @@ import socket
 import grpc
 from apscheduler.schedulers.background import BackgroundScheduler
 from blueprints import blueprints
-from clients.mongodb_client import (
-    mongo_init,
-)
 from clients.mqtt_client import mqtt_init
 from clients.my_prometheus_client import prometheus_init_gauge_metrics
 from ext_requests.system_manager_requests import (
-    re_deploy_dead_services_routine,
+    re_deploy_dead_jobs_routine,
     send_aggregated_info_to_sm,
 )
 from flask import Flask
@@ -23,7 +20,6 @@ from logs.cm_logging import configure_logging
 from prometheus_client import start_http_server
 from proto.clusterRegistration_pb2 import CS1Message, CS2Message, KeyValue, SC1Message, SC2Message
 from proto.clusterRegistration_pb2_grpc import register_clusterStub
-from services.analyzing_workers import looking_for_dead_workers
 
 MY_PORT = os.environ.get("MY_PORT")
 
@@ -52,7 +48,6 @@ socketioserver = SocketIO(app, logger=True, engineio_logger=True)
 api = Api(app, spec_kwargs={"x-internal-id": "1", "host": "oakestra.io"})
 cors = CORS(app, resources={r"/*": {"origins": "*"}})
 
-mongo_init(app)
 mqtt_init(app)
 
 BACKGROUND_JOB_INTERVAL = 15
@@ -85,15 +80,8 @@ def background_job_send_aggregated_information_to_sm():
             "time_interval": 2 * BACKGROUND_JOB_INTERVAL,
         },
     )
-    # job_dead_nodes
-    scheduler.add_job(
-        looking_for_dead_workers,
-        "interval",
-        seconds=BACKGROUND_JOB_INTERVAL,
-        kwargs={"interval": 2 * BACKGROUND_JOB_INTERVAL},
-    )
     # job_re_deploy_dead_jobs
-    scheduler.add_job(re_deploy_dead_services_routine, "interval", seconds=BACKGROUND_JOB_INTERVAL)
+    scheduler.add_job(re_deploy_dead_jobs_routine, "interval", seconds=BACKGROUND_JOB_INTERVAL)
 
     scheduler.start()
 

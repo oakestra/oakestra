@@ -72,8 +72,8 @@ def update_job_instance(job_id, instance_number, job_data):
     job_data.pop("_id", None)
 
     current_time = datetime.now().isoformat()
-    cpu_update = {"value": job_data.get("cpu"), "timestamp": current_time}
-    memory_update = {"value": job_data.get("memory"), "timestamp": current_time}
+    cpu_update = {"value": job_data.get("cpu_percent"), "timestamp": current_time}
+    memory_update = {"value": job_data.get("memory_percent"), "timestamp": current_time}
 
     return db.mongo_jobs.find_one_and_update(
         {
@@ -92,8 +92,8 @@ def update_job_instance(job_id, instance_number, job_data):
                 },
             },
             "$set": {
-                "instance_list.$.cpu": job_data.get("cpu"),
-                "instance_list.$.memory": job_data.get("memory"),
+                "instance_list.$.cpu_percent": job_data.get("cpu_percent"),
+                "instance_list.$.memory_percent": job_data.get("memory_percent"),
                 "instance_list.$.publicip": job_data.get("publicip"),
                 "instance_list.$.disk": job_data.get("disk"),
                 "instance_list.$.status": job_data.get("status"),
@@ -101,6 +101,10 @@ def update_job_instance(job_id, instance_number, job_data):
                     "status_detail", "No extra information"
                 ),
                 "instance_list.$.logs": job_data.get("logs", ""),
+                "instance_list.$.worker_id": job_data.get("worker_id"),
+                "instance_list.$.host_ip": job_data.get("host_ip"),
+                "instance_list.$.host_port": job_data.get("host_port"),
+                "instance_list.$.last_modified_timestamp": job_data.get("last_modified_timestamp"),
             },
         },
     )
@@ -110,3 +114,15 @@ def create_job(job_data):
     inserted = db.mongo_jobs.insert_one(job_data)
 
     return db.mongo_jobs.find_one({"_id": inserted.inserted_id})
+
+
+def delete_job_instance(job_id, instance_id):
+    return db.mongo_jobs.find_one_and_update(
+        {"_id": ObjectId(job_id)},
+        {
+            "$pull": {
+                "instance_list": {"instance_number": int(instance_id)}
+            }
+        },
+        return_document=True
+    )

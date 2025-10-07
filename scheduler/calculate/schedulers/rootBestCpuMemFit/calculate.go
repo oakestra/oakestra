@@ -108,7 +108,6 @@ func (a BestCpuMemFit) Calculate(job CpuMemResources, candidates []CpuMemResourc
 func filterRequirements(job CpuMemResources, candidates []CpuMemResources) []CpuMemResources {
 	filteredCandidates := make([]CpuMemResources, 0, len(candidates))
 	for _, candidate := range candidates {
-		logger.DebugLogger().Printf("Filtering candidate: %v", candidate)
 		if slices.Contains(candidate.Virtualization, job.Virtualization[0]) {
 			if candidate.AvailableCPU >= job.AvailableCPU {
 				if candidate.AvailableMem >= job.AvailableMem {

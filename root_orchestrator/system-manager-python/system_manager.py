@@ -110,8 +110,8 @@ class ClusterRegistrationServicer(register_clusterServicer):
             "ip": cluster_address,
             "clusterinfo": message["cluster_info"][0],
             "port": str(message["manager_port"]),
-            "cluster_location": message["cluster_location"],
-            "cluster_name": message["cluster_name"],
+            "candidate_location": message["cluster_location"],
+            "candidate_name": message["cluster_name"],
         }
 
         app.logger.info("Cluster data: {}".format(cluster_data))

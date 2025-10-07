@@ -11,7 +11,6 @@ SERVICE_MANAGER_ADDR = (
 
 
 def network_notify_deployment(job_id, job):
-    print("Sending network deployment notification to the network component")
     job["_id"] = str(job["_id"])
     try:
         requests.post(

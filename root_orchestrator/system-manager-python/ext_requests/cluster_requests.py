@@ -26,6 +26,7 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
         return
 
     job = job_operations.get_job_by_id(job_id)
+    print("Sending job to cluster: ", job)
     if job is None:
         logging.error(f"Job with {job_id} not found.")
         return
@@ -49,6 +50,7 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
 
 
 def cluster_request_to_delete_job(job_id, instance_number):
+    print("Requesting delete instance")
     cluster = find_cluster_of_job(job_id, int(instance_number))
     if cluster is None:
         logging.error(f"Cluster for job {job_id} not found.")
@@ -71,10 +73,11 @@ def cluster_request_to_delete_job(job_id, instance_number):
     except Exception as e:
         logging.error(e)
         print(e)
-        print("Calling Cluster Orchestrator /api/delete job not successful.")
+        print("Calling Cluster Orchestrator /api/service job not successful.")
 
 
 def cluster_request_to_delete_job_by_ip(job_id, instance_number, ip):
+    print("Requesting delete instance")
     try:
         cluster = candidate_operations.get_candidate_by_ip(ip)
         if cluster is None:
@@ -86,17 +89,17 @@ def cluster_request_to_delete_job_by_ip(job_id, instance_number, ip):
             + sanitize(cluster.get("ip"), request=True)
             + ":"
             + str(cluster.get("port"))
-            + "/api/delete/"
+            + "/api/service/"
             + str(job_id)
             + "/"
             + str(instance_number)
         )
         print("Requesting:", cluster_addr)
-        resp = requests.get(cluster_addr)
+        resp = requests.delete(cluster_addr)
         print(resp)
     except Exception as e:
         logging.error(e)
-        print("Calling Cluster Orchestrator /api/delete job by ip not successful.")
+        print("Calling Cluster Orchestrator /api/service job by ip not successful.")
 
 
 def cluster_request_to_replicate_up(cluster_obj, job_obj, int_replicas):

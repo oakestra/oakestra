@@ -58,7 +58,7 @@ type Node struct {
 	GpuTemp         float64              `json:"gpu_temp"`
 	GpuMemUsage     float64              `json:"vram_percent"`
 	GpuTotMem       float64              `json:"vram"`
-	Technology      []config.RuntimeType `json:"technology"`
+	Technology      []config.RuntimeType `json:"virtualization"`
 	SupportedAddons []AddonType          `json:"supported_addons"`
 	Overlay         bool
 	OverlaySocket   string

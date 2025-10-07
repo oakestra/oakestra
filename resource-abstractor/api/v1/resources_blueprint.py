@@ -29,6 +29,7 @@ class ResourceSchema(Schema):
     gpu_percent = fields.Integer()
     virtualization = fields.List(fields.String())
     supported_addons = fields.List(fields.String())
+    architecture = fields.String()
     last_modified_timestamp = fields.Float()
 
 
@@ -38,6 +39,16 @@ class ResourceFilterSchema(Schema):
     candidate_name = fields.String()
     ip = fields.String()
 
+@resourcesblp.errorhandler(422)
+def handle_unprocessable_entity(err):
+    details = {}
+    if hasattr(err, "data") and err.data:
+        details = err.data.get("messages", {})
+
+    return {
+        "message": "Invalid input",
+        "details": details
+    }, 422
 
 @resourcesblp.route("/")
 class AllResourcesController(MethodView):
@@ -102,8 +113,8 @@ class ResourceController(MethodView):
     def patch(self, data, **kwargs):
         resource_id = kwargs.get("resource_id")
 
-        if ObjectId.is_valid(resource_id) is False:
-            raise exceptions.BadRequest()
+        if not ObjectId.is_valid(resource_id):
+            raise exceptions.NotFound
 
         return candidates_db.update_candidate_information(resource_id, data)
 

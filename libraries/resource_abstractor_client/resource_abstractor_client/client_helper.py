@@ -16,7 +16,7 @@ def make_request(method, api: str, **kwargs) -> Optional[dict]:
         response = method(url, **kwargs)
         response.raise_for_status()
         return response.json()
-    except exceptions.RequestException:
+    except exceptions.RequestException as e:
         logging.warning(f"Calling {url} not successful.")
 
     return None

@@ -25,7 +25,7 @@ services:
     depends_on:
       - mongo_root
       - root_scheduler
-      - resource_abstractor
+      - root_resource_abstractor
       - root_service_manager
       - jwt_generator
     environment:
@@ -169,17 +169,17 @@ services:
       - REDIS_ADDR=redis://:rootRedis@redis:6379
     depends_on:
       - redis
-      - resource_abstractor
+      - root_resource_abstractor
     logging: *default-logging
 
   root_resource_abstractor:
     image: resource_abstractor
     build: ../resource-abstractor/
-    container_name: resource_abstractor
+    container_name: root_resource_abstractor
     labels:
       logging: "promtail"
       logging_jobname: "containerlogs"
-    hostname: resource_abstractor
+    hostname: root_resource_abstractor
     expose:
       - "11011"
     ports:

@@ -193,6 +193,7 @@ func (r *ContainerRuntime) Undeploy(service string, instance int) error {
 	if err == nil {
 		_ = r.removeContainer(c)
 	}
+	logger.ErrorLogger().Printf("Unable to undeploy service %s instance %d, error: %v", service, instance, err)
 	return err
 }
 
@@ -407,10 +408,10 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						cpuUsage = sysInfo.CPU / float64(model.GetNodeInfo().CpuCores)
 					}
 
-					mem, err := r.getContainerMemoryUsage(container.ID(), int(task.Pid()))
+					memUsage, err := r.getContainerMemoryUsage(container.ID(), int(task.Pid()))
 					if err != nil {
 						logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
-						mem = 0
+						memUsage = 0
 					}
 
 					containerMetadata, err := container.Info(r.ctx)
@@ -427,7 +428,7 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 
 					resourceList = append(resourceList, model.Resources{
 						Cpu:      fmt.Sprintf("%f", cpuUsage),
-						Memory:   fmt.Sprintf("%f", mem),
+						Memory:   fmt.Sprintf("%f", memUsage),
 						Disk:     fmt.Sprintf("%d", usage.Size),
 						Sname:    extractSnameFromTaskID(container.ID()),
 						Runtime:  string(model.CONTAINER_RUNTIME),
@@ -513,7 +514,10 @@ func (r *ContainerRuntime) getContainerMemoryUsage(containerID string, pid int) 
 			return sysInfo.Memory, nil
 		}
 	}
-	return float64(mem.MemUsageInBytes), nil
+	if model.GetNodeInfo().MemoryMB == 0 {
+		return 100, nil
+	}
+	return float64(mem.MemUsageInBytes) / float64(model.GetNodeInfo().MemoryMB), nil
 }
 
 func withCustomResolvConf(src string) func(context.Context, oci.Client, *containers.Container, *oci.Spec) error {

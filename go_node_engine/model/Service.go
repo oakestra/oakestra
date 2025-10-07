@@ -26,8 +26,8 @@ type Service struct {
 
 // Resources is the struct that describes the resources
 type Resources struct {
-	Cpu      string `json:"cpu"`
-	Memory   string `json:"memory"`
+	Cpu      string `json:"cpu_percent"`
+	Memory   string `json:"memory_percent"`
 	Disk     string `json:"disk"`
 	Logs     string `json:"logs"`
 	Sname    string `json:"job_name"`

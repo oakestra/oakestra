@@ -24,6 +24,14 @@ class AllJobsController(MethodView):
         filter = {}
         if appID:
             filter["applicationID"] = appID
+
+        job_name = request.args.get("job_name")
+        if job_name:
+            filter["job_name"] = job_name
+
+        params = request.args.get("params")
+        if params:
+            filter = params
         return json.dumps(list(jobs_db.find_jobs(filter)), default=str)
 
     @pre_post_hook("jobs")
@@ -33,6 +41,11 @@ class AllJobsController(MethodView):
 
     def put(self, *args, **kwargs):
         job_data = request.json
+
+        if "_id" in job_data.keys():
+            if isinstance(job_data["_id"], str):
+                job_data["_id"] = ObjectId(job_data["_id"])
+
         job_name = job_data.get("job_name")
         job = jobs_db.find_job_by_name(job_name)
 
@@ -86,6 +99,19 @@ class JobInstanceController(MethodView):
             raise exceptions.BadRequest()
 
         result = jobs_db.update_job_instance(job_id, instance_id, data)
+        if result is None:
+            raise exceptions.NotFound()
+
+        return json.dumps(result, default=str)
+
+    @pre_post_hook("jobs", with_param_id="job_id")
+    def delete(self, data=None, *args, **kwargs):
+        job_id = kwargs.get("job_id")
+        instance_id = kwargs.get("instance_id")
+        if not ObjectId.is_valid(job_id):
+            raise exceptions.BadRequest()
+
+        result = jobs_db.delete_job_instance(job_id, instance_id)
         if result is None:
             raise exceptions.NotFound()
 

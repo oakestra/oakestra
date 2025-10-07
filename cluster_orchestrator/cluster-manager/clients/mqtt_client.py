@@ -5,10 +5,13 @@ import re
 import paho.mqtt.client as paho_mqtt
 from oakestra_utils.types.statuses import convert_to_status
 
-from clients.mongodb_client import (
-    mongo_find_node_by_id_and_update_cpu_mem,
-    mongo_update_job_deployed,
-    mongo_update_service_resources,
+from resource_abstractor_client import (
+    candidate_operations
+)
+
+from clients.job_management import (
+    update_deployed_instance_job,
+    update_deployed_instance_worker
 )
 
 mqtt = None
@@ -44,18 +47,19 @@ def handle_mqtt_message(client, userdata, message):
 
     # if topic starts with nodes and ends with information
     if re_nodes_information_topic is not None:
-        updated = mongo_find_node_by_id_and_update_cpu_mem(client_id, payload)
+        payload = {k: v for k, v in payload.items() if v is not None}
+        updated = candidate_operations.update_candidate_information(client_id, payload)
         if updated is None:
             mqtt.publish(
                 "nodes/" + client_id + "/control/error",
                 json.dumps({"message": "Node not registered to the cluster"}),
             )
     if re_job_deployment_topic is not None:
-        sname = payload.get("sname")
+        job_name = payload.get("sname")
         status = convert_to_status(payload.get("status"))
         instance = payload.get("instance")
         publicip = payload.get("publicip", "--")
-        mongo_update_job_deployed(sname, instance, status, publicip, client_id)
+        update_deployed_instance_worker(job_name, instance, status.value, publicip, client_id)
     if re_job_resources_topic is not None:
         services = payload.get("services")
         for service in services:
@@ -63,12 +67,11 @@ def handle_mqtt_message(client, userdata, message):
                 # If unable to update then worker has outdated information
                 # and service must be undeployed
                 if (
-                    mongo_update_service_resources(
+                    update_deployed_instance_job(
                         service.get("job_name"),
+                        service.get("instance", 0),
                         service,
-                        client_id,
-                        service.get("instance"),
-                    )
+                        client_id)
                     is None
                 ):
                     mqtt_publish_edge_delete(

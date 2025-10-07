@@ -15,3 +15,4 @@ flask_smorest
 flask_cors
 flask_swagger_ui
 git+https://github.com/oakestra/oakestra.git@develop#subdirectory=libraries/oakestra_utils_library
+git+https://github.com/oakestra/oakestra.git@develop#subdirectory=libraries/resource_abstractor_client

@@ -117,6 +117,7 @@ def instance_scale_up_scheduled_handler(job_id, cluster_id):
         return
 
     cluster = candidate_operations.get_candidate_by_id(cluster_id)
+    print("Found cluster: ", cluster)
     if cluster is None:
         return
 
@@ -124,7 +125,7 @@ def instance_scale_up_scheduled_handler(job_id, cluster_id):
     instance_info = {
         "instance_number": instance_number,
         "cluster_id": cluster_id,
-        "cluster_location": cluster.get("cluster_location", "location-unknown"),
+        "cluster_location": cluster.get("candidate_location", "location-unknown"),
     }
     instance_list = job["instance_list"]
     instance_list.append(instance_info)

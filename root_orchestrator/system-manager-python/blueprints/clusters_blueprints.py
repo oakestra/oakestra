@@ -29,7 +29,7 @@ cluster_info_schema = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "system_job_id": {"type": "string"},
+                    "_id": {"type": "string"},
                     "status": {"type": "string"},
                     "instance_list": {
                         "type": "array",
@@ -76,15 +76,17 @@ class ClusterController(MethodView):
     def post(self, *args, **kwargs):
         data = request.json
         cluster_id = kwargs["clusterid"]
+        jobs = data.get("jobs")
+        print("Received cluster update for ", cluster_id, ": ", data)
+        del data["jobs"]
         updated_cluster = candidate_operations.update_candidate_information(cluster_id, data)
         if updated_cluster is None:
             return abort(400, "Updating cluster failed")
 
         # TODO(GB): fire an event to react to the cluster update, and move this logic somewhere else.
-        jobs = data.get("jobs")
         for j in jobs:
             result = update_job_status(
-                job_id=j.get("system_job_id"),
+                job_id=j.get("_id"),
                 status=convert_to_status(j.get("status")),
                 status_detail=j.get("status_detail"),
                 instances=j.get("instance_list"),
@@ -92,6 +94,6 @@ class ClusterController(MethodView):
             if result is None:
                 # cluster has outdated jobs, ask to undeploy
                 addr = sanitize(request.remote_addr)
-                cluster_request_to_delete_job_by_ip(j.get("system_job_id"), -1, addr)
+                cluster_request_to_delete_job_by_ip(j.get("_id"), -1, addr)
 
         return "ok"

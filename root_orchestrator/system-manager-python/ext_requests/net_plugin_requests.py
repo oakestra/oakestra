@@ -20,9 +20,8 @@ def net_inform_service_deploy(job, job_id):
     request_addr = NET_PLUGIN_ADDR + "/api/net/service/deploy"
     logging.debug(request_addr)
 
-    job["_id"] = str(job_id)
-    job["system_job_id"] = str(job_id)
-    r = requests.post(request_addr, json={"deployment_descriptor": job, "system_job_id": job_id})
+    print("Inform service deploy with id ", job_id)
+    r = requests.post(request_addr, json={"deployment_descriptor": job, "_id": job_id})
     r.raise_for_status()
 
 
@@ -58,7 +57,7 @@ def net_inform_instance_deploy(job_id, instance_number, cluster_id):
         json={
             "instance_number": instance_number,
             "cluster_id": cluster_id,
-            "system_job_id": job_id,
+            "_id": job_id,
         },
     )
     r.raise_for_status()
