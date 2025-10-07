@@ -4,11 +4,12 @@ import (
 	"NetManager/logger"
 	"crypto/tls"
 	"fmt"
-	"github.com/eclipse/paho.mqtt.golang"
 	"log"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/eclipse/paho.mqtt.golang"
 )
 
 var initMqttClient sync.Once
@@ -77,7 +78,7 @@ func InitNetMqttClient(clientid string, brokerurl string, brokerport string, mqt
 		}
 
 		var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
-			log.Printf("Connect lost: %v", err)
+			logger.ErrorLogger().Printf("Connect lost: %v", err)
 		}
 
 		netMqttClient.topics[fmt.Sprintf("nodes/%s/net/tablequery/result", netMqttClient.clientID)] =

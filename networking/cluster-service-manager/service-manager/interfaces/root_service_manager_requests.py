@@ -12,7 +12,6 @@ ROOT_SERVICE_MANAGER_ADDR = (
 
 
 def root_service_manager_get_subnet():
-    print("Asking the System Manager for a subnet")
     try:
         response = requests.get(ROOT_SERVICE_MANAGER_ADDR + "/api/net/subnet")
         addr = json.loads(response.text).get("subnet_addr")
@@ -26,8 +25,6 @@ def root_service_manager_get_subnet():
 
 
 def system_manager_notify_deployment_status(job, worker_id):
-    print("Sending deployment status information to System Manager.")
-    print("Job: ", job)
     data = {
         "job_id": str(job["_id"]),
         "instances": [],
@@ -44,8 +41,6 @@ def system_manager_notify_deployment_status(job, worker_id):
             }
             data["instances"].append(elem)
     try:
-        print("Sending deployment information to the root")
-        print(job)
         logging.debug(job)
         requests.post(
             ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/net_deploy_status", json=data
@@ -55,12 +50,10 @@ def system_manager_notify_deployment_status(job, worker_id):
 
 
 def root_table_query_ip(ip):
-    print("table query to the System Manager...")
     job_ip = ip.replace(".", "_")
     request_addr = (
         ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/ip/" + str(job_ip) + "/instances"
     )
-    print(request_addr)
     try:
         return requests.get(request_addr).json()
     except requests.exceptions.RequestException as e:
@@ -68,12 +61,10 @@ def root_table_query_ip(ip):
 
 
 def root_table_query_service_name(name):
-    print("table query to the System Manager...")
     job_name = name.replace(".", "_")
     request_addr = (
         ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/" + str(job_name) + "/instances"
     )
-    print(request_addr)
     try:
         resp = requests.get(request_addr)
         return resp.json()

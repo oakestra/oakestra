@@ -42,7 +42,6 @@ def mongo_init(flask_app):
 
 def mongo_insert_job(obj):
     global mongo_jobs
-    print("inserting job: ", obj)
     app.logger.info("MONGODB - insert job...")
     deployment_descriptor = obj['deployment_descriptor']
     # jobname and details generation
@@ -91,7 +90,6 @@ def mongo_update_job_status(job_id, status):
 
 
 def mongo_update_job_net_status(job_id, instances):
-    print("Job net status instances: ", instances)
     global mongo_jobs
     for instance in instances:
         mongo_update_job_instance(job_id, instance)
@@ -132,7 +130,6 @@ def mongo_find_job_by_ip(ip):
 
 def mongo_update_job_instance(_id, instance):
     global mongo_jobs
-    print("Updating job instance: ", instance, "to job ", _id)
     mongo_jobs.db.jobs.update_one(
         {
             '_id': ObjectId(_id),
@@ -153,7 +150,6 @@ def mongo_create_job_instance(_id, instance):
         _id = ObjectId(_id)
 
     global mongo_jobs
-    print("Creating job instance: ", instance, "to job ", _id)
     if not mongo_jobs.db.jobs.find_one(
             {
                 "_id": _id,
@@ -596,7 +592,6 @@ def mongo_free_subnet_address_to_cache_v6(address):
 ####################################################
 
 def mongo_cluster_add(cluster_id, cluster_port, cluster_address, status):
-    print("Adding cluster with id", cluster_id)
     global mongo_clusters
 
     mongo_clusters.db.cluster.find_one_and_update(
