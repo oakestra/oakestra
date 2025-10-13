@@ -22,6 +22,23 @@ const (
 	RESOURCES = "/api/v1/resources"
 )
 
+func formatQuery(requestParameters map[string]string, interestedResources []string) string {
+	requestParams := formatRequestParameters(requestParameters)
+	resources := formatInterestedResources(interestedResources)
+
+	var sb strings.Builder
+	sb.WriteString("?")
+	if requestParams != "" {
+		sb.WriteString(requestParams)
+		sb.WriteString("&")
+	}
+	if resources != "" {
+		sb.WriteString(resources)
+		return sb.String()
+	}
+	return sb.String()[:sb.Len()-1]
+}
+
 func formatRequestParameters(r map[string]string) string {
 	if len(r) == 0 {
 		return ""
@@ -37,8 +54,21 @@ func formatRequestParameters(r map[string]string) string {
 	return sb.String()[:sb.Len()-1]
 }
 
-func AvailableResources[T interfaces.ResourceList](data *[]T, requestParameters map[string]string) error {
-	url := fmt.Sprintf("%s://%s:%s%s/%s", PROTOCOL, RESOURCE_ABSTRACTOR_URL, RESOURCE_ABSTRACTOR_PORT, RESOURCES, formatRequestParameters(requestParameters))
+func formatInterestedResources(interestedResources []string) string {
+	if len(interestedResources) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	for _, interestedResource := range interestedResources {
+		sb.WriteString(interestedResource)
+		sb.WriteString(",")
+	}
+
+	return sb.String()[:sb.Len()-1]
+}
+
+func AvailableResources[T interfaces.ResourceList](data *[]T, requestParameters map[string]string, interestedResources []string) error {
+	url := fmt.Sprintf("%s://%s:%s%s/%s", PROTOCOL, RESOURCE_ABSTRACTOR_URL, RESOURCE_ABSTRACTOR_PORT, RESOURCES, formatQuery(requestParameters, interestedResources))
 	logger.DebugLogger().Printf("Request URL: %v", url)
 
 	resp, err := http.Get(url)

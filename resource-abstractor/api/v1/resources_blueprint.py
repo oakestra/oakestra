@@ -1,4 +1,6 @@
 from bson import ObjectId
+from flask import jsonify, request
+
 from db import candidates_db
 from db.candidates_helper import build_filter
 from db.jobs_db import find_job_by_id
@@ -53,7 +55,6 @@ def handle_unprocessable_entity(err):
 @resourcesblp.route("/")
 class AllResourcesController(MethodView):
     @resourcesblp.arguments(ResourceFilterSchema, location="query")
-    @resourcesblp.response(200, ResourceSchema(many=True), content_type="application/json")
     def get(self, query={}):
         filter = query
         job_id = filter.get("job_id")
@@ -72,7 +73,17 @@ class AllResourcesController(MethodView):
             filter["candidate_id"] = candidate_id
         filter = build_filter(query)
 
-        return list(candidates_db.find_candidates(filter))
+        if request.args.get("resources"):
+            print("Resources: ", request.args.get("resources"), flush=True)
+            res = list(candidates_db.find_candidates(filter, request.args.get("resources")))
+        else:
+            res = list(candidates_db.find_candidates(filter))
+
+        for candidate in res:
+            if "_id" in candidate:
+                candidate["_id"] = str(candidate["_id"])
+
+        return jsonify(res)
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(201, ResourceSchema, content_type="application/json")

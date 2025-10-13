@@ -6,6 +6,10 @@ import db.mongodb_client as db
 from db.candidates_helper import get_freshness_threshold
 
 HISTORY_SLICE_SIZE = -100
+CANONICAL_RESOURCES = ["_id", "cpu_percent", "vcpus", "memory_percent", "vram",
+                       "vram_percent","gpu_temp", "gpu_drivers", "gpu_percent", "vgpus",
+                       "memory", "virtualization", "supported_addons", "active_nodes", "ip",
+                       "port", "candidate_location", "candidate_name", "cpu_history", "memory_history"]
 
 
 def create_candidate(data):
@@ -24,7 +28,7 @@ def update_candidate(candidate_id, data):
     )
 
 
-def find_candidates(filter):
+def find_candidates(filter, resources=None):
     pipeline = [
         {"$match": filter},
         {
@@ -33,8 +37,18 @@ def find_candidates(filter):
             }
         },
     ]
-    return db.mongo_candidates.aggregate(pipeline)
 
+    request = set(CANONICAL_RESOURCES)
+    if resources:
+        resources = [r.strip() for r in resources.split(",") if r.strip()]
+        request.update(resources)
+
+    print("Request: ", request, flush=True)
+
+    projection = {field: 1 for field in request}
+    pipeline.append({"$project": projection})
+
+    return db.mongo_candidates.aggregate(pipeline)
 
 def find_candidate_by_id(candidate_id):
     candidate = list(find_candidates({"_id": ObjectId(candidate_id)}))
