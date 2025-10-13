@@ -27,7 +27,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build Docker images
-        working-directory: ../resource-abstractor
+        working-directory: resource-abstractor
         run: |
           docker build -t resource_abstractor:test .
       
