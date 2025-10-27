@@ -55,7 +55,8 @@ func PerformSchedulingRequest[T interfaces.ResourceList](job T, algorithm interf
 	if err != nil {
 		return err
 	}
-	logger.DebugLogger().Printf("Available Resources: %v", data)
+	logger.DebugLogger().Printf("Scheduling job: %+v", job)
+	logger.DebugLogger().Printf("Available Resources: %+v", data)
 
 	placementCandidate, err := algorithm.Calculate(job, data)
 	if err != nil {

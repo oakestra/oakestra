@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"scheduler/api"
+	"scheduler/logger"
 )
 
 func main() {
@@ -10,5 +11,6 @@ func main() {
 		StartTaskQueueServer()
 		log.Fatal("Task queue server stopped")
 	}()
+	logger.SetDebugMode()
 	api.StartApiServer()
 }

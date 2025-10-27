@@ -141,6 +141,8 @@ func (n *Node) updateDynamicInfo() {
 	n.GpuCores = getGpuCores()
 	n.GpuTemp = getGpuTemp()
 
+	// Custom Info
+
 }
 
 // SetNodeId sets the node id

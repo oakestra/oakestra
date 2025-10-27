@@ -67,9 +67,9 @@ def net_inform_instance_undeploy(job_id, instance):
     """
     Inform the network plugin about an undeployed instance
     """
-    logging.debug("new job: communicating instance undeploy to network plugin...")
+    print("communicating instance undeploy to network plugin for job instance ", job_id, instance)
     request_addr = NET_PLUGIN_ADDR + "/api/net/" + str(job_id) + "/" + str(instance)
-    logging.debug(request_addr)
+    print(request_addr)
     try:
         r = requests.delete(request_addr)
         r.raise_for_status()

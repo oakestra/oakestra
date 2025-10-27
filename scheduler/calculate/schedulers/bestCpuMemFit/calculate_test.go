@@ -1,4 +1,4 @@
-package rootBestCpuMemFit
+package bestCpuMemFit
 
 import (
 	"errors"
