@@ -18,6 +18,7 @@ import (
 
 	"github.com/opencontainers/cgroups"
 	"github.com/opencontainers/cgroups/fs"
+	"github.com/vishvananda/netns"
 )
 
 type WasmService struct {
@@ -261,6 +262,12 @@ func (r *WasmRuntime) killWasmComputation(taskID string) error {
 		// Don't return error here, continue with cleanup
 	}
 
+	// Remove netns
+	if err := netns.DeleteNamed(taskID); err != nil {
+		logger.ErrorLogger().Printf("Error removing netns for task %s: %v", taskID, err)
+		// Don't return error here, continue with cleanup
+	}
+
 	return nil
 }
 
@@ -334,7 +341,7 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 
 	//attach network if node in overlay network mode
 	if model.GetNodeInfo().Overlay {
-		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports, requests.NETWORK_TYPE_WASM)
+		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports, requests.NETWORK_TYPE_CONTAINER)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
 			revert(err)
@@ -371,7 +378,7 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 
 	//detaching network
 	if model.GetNodeInfo().Overlay {
-		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance, requests.NETWORK_TYPE_WASM)
+		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance, requests.NETWORK_TYPE_CONTAINER)
 	}
 
 	r.killWasmComputation(taskID)
@@ -800,33 +807,44 @@ func (r *WasmRuntime) ResumeFromState(sname string, instance int, stateFile stri
 // performs the wasm create command
 // returns the PID or an error
 func wasmCreateCommand(codePath, ipcpath, mainmempath, checkpointmempath, runtimePath, taskID string, logpath string) (int, error) {
-	cmd := exec.Command("/etc/oakestra/wasm/create_command", codePath, ipcpath, mainmempath, checkpointmempath, taskID, logpath)
-	cmd.Dir = runtimePath
-	cmd.Stdin = nil
-	err := cmd.Run()
+	err := utils.CreateNetnsByName(taskID)
 	if err != nil {
-		fmt.Println(err)
-		//return 0, fmt.Errorf("error executing create command: %v", err)
+		return 0, fmt.Errorf("error creating network namespace: %v", err)
 	}
 
-	//get PID from cgroup filesystem
-	cgroupPath := fmt.Sprintf("/sys/fs/cgroup/%s/%s", NAMESPACE, taskID)
-	procsFile := cgroupPath + "/cgroup.procs"
-	data, err := os.ReadFile(procsFile)
-	if err != nil {
-		return 0, fmt.Errorf("error reading cgroup procs file %s: %v", procsFile, err)
-	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) == 0 {
-		return 0, fmt.Errorf("no PID found in cgroup procs file %s", procsFile)
-	}
-	taskPID, err := strconv.Atoi(lines[0])
-	if err != nil {
-		return 0, fmt.Errorf("error converting PID to integer: %v", err)
-	}
+	taskPID := 0
 
-	if taskPID == 0 {
-		return 0, fmt.Errorf("No PID returned from create command")
-	}
+	err = utils.ExecInsideNsByName(taskID, func() error {
+		cmd := exec.Command("nohup", "/etc/oakestra/wasm/create_command", codePath, ipcpath, mainmempath, checkpointmempath, taskID, logpath, ">>", logpath, "2>&1")
+		cmd.Dir = runtimePath
+		cmd.Stdin = nil
+		err := cmd.Run()
+		if err != nil {
+			fmt.Println(err)
+			//return 0, fmt.Errorf("error executing create command: %v", err)
+		}
+
+		//get PID from cgroup filesystem
+		cgroupPath := fmt.Sprintf("/sys/fs/cgroup/%s/%s", NAMESPACE, taskID)
+		procsFile := cgroupPath + "/cgroup.procs"
+		data, err := os.ReadFile(procsFile)
+		if err != nil {
+			return fmt.Errorf("error reading cgroup procs file %s: %v", procsFile, err)
+		}
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		if len(lines) == 0 {
+			return fmt.Errorf("no PID found in cgroup procs file %s", procsFile)
+		}
+		taskPID, err = strconv.Atoi(lines[0])
+		if err != nil {
+			return fmt.Errorf("error converting PID to integer: %v", err)
+		}
+
+		if taskPID == 0 {
+			return fmt.Errorf("No PID returned from create command")
+		}
+
+		return nil
+	})
 	return taskPID, nil
 }

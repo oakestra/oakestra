@@ -8,6 +8,7 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
+	"go_node_engine/utils"
 	"io"
 	"io/fs"
 	"net"
@@ -24,7 +25,6 @@ import (
 	"github.com/digitalocean/go-qemu/qmp"
 	"github.com/struCoder/pidusage"
 	"github.com/vishvananda/netlink"
-	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
 )
 
@@ -716,7 +716,7 @@ func deleteDefaultIpGwMask(namespace string) (string, string, string, string, in
 	ip, gw, mask, mac := "", "", "", ""
 	fd := -1
 
-	err := execInsideNsByName(namespace, func() error {
+	err := utils.ExecInsideNsByName(namespace, func() error {
 
 		routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, defaultRouteFilter, netlink.RT_FILTER_DST)
 		if err != nil {
@@ -783,30 +783,4 @@ func getTapFd() (int, error) {
 	}
 
 	return fd, nil
-}
-
-// Execute function inside a namespace based on Ns name
-func execInsideNsByName(Nsname string, function func() error) error {
-	var containerNs netns.NsHandle
-
-	rt.LockOSThread()
-	defer rt.UnlockOSThread()
-
-	stdNetns, err := netns.Get()
-	if err == nil {
-		defer func() {
-			_ = stdNetns.Close()
-		}()
-		containerNs, err = netns.GetFromName(Nsname)
-		if err == nil {
-			defer func() {
-				_ = netns.Set(stdNetns)
-			}()
-			err = netns.Set(containerNs)
-			if err == nil {
-				err = function()
-			}
-		}
-	}
-	return err
 }
