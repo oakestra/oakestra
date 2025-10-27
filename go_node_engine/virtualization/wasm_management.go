@@ -341,7 +341,7 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 
 	//attach network if node in overlay network mode
 	if model.GetNodeInfo().Overlay {
-		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports, requests.NETWORK_TYPE_CONTAINER)
+		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports, requests.NETWORK_TYPE_WASM)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
 			revert(err)
@@ -378,7 +378,7 @@ func (r *WasmRuntime) wasmRuntimeStartRoutine(
 
 	//detaching network
 	if model.GetNodeInfo().Overlay {
-		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance, requests.NETWORK_TYPE_CONTAINER)
+		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance, requests.NETWORK_TYPE_WASM)
 	}
 
 	r.killWasmComputation(taskID)
