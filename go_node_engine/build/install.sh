@@ -101,6 +101,8 @@ fi
 
 sudo cp NodeEngine_$1 /bin/NodeEngine
 sudo cp nodeengined_$1 /bin/nodeengined
+sudo cp NodeEngine_$1 /usr/bin/NodeEngine
+sudo cp nodeengined_$1 /usr/bin/nodeengined
 
 if [ -e nodeengine.service ]
 then
