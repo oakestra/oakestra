@@ -23,8 +23,8 @@ jobs:
       - name: Build NodeEngine ({{ matrix.architecture }})
         run: |
           cd go_node_engine
-          env GOOS=linux GOARCH=${{ matrix.architecture }}  go build -ldflags="-X 'go_node_engine/cmd.Version=${{ github.ref_name }}'" -o ../NodeEngine NodeEngine.go
-          env GOOS=linux GOARCH=${{ matrix.architecture }}  go build -o ../nodeengined internal/daemon/nodeengined.go
+          env GOOS=linux GOARCH=${{ matrix.architecture }} CGO_ENABLED=0  go build -ldflags="-X 'go_node_engine/cmd.Version=${{ github.ref_name }}'" -o ../NodeEngine NodeEngine.go
+          env GOOS=linux GOARCH=${{ matrix.architecture }} CGO_ENABLED=0 go build -o ../nodeengined internal/daemon/nodeengined.go
 
       - name: Package Artifacts
         run: |
