@@ -2,11 +2,120 @@ package worstLatencyFitLatencyAware
 
 import (
 	"errors"
+	"math"
 	"scheduler/calculate/schedulers/interfaces"
+	"scheduler/calculate/schedulers/latencyAware"
 	"testing"
+	"time"
 
 	"gotest.tools/assert"
 )
+
+func convertResources(generatedResources []latencyAware.LatencyAwareResources) []LatencyAwareResources {
+	out := make([]LatencyAwareResources, len(generatedResources))
+	for i, s := range generatedResources {
+		out[i] = LatencyAwareResources{
+			Id:             s.Id,
+			JobName:        s.JobName,
+			Virtualization: s.Virtualization,
+			AvailableMem:   float64(s.AvailableMem),
+			AvailableCPU:   float64(s.AvailableCPU),
+			Latency:        s.Latency,
+			// Optional: include CarbonIntensity if your real struct has it
+		}
+	}
+	return out
+}
+
+func BenchmarkCalculateWorstFitLatencyAware(b *testing.B) {
+	const numJobs = 20
+	const numNodes = 100
+
+	b.ReportAllocs()
+
+	// Generate a static pool of candidate nodes
+	generatedNodes := latencyAware.GenerateNodes(0, numNodes)
+	nodes := convertResources(generatedNodes)
+
+	algorithm := WorstLatencyFitLatencyAware{}
+
+	var (
+		durations   []float64
+		totalErrors int
+	)
+
+	b.ResetTimer() // only time what's inside the loop
+
+	for i := 0; i < b.N; i++ {
+		// Make a deep copy of nodes for this run
+		candidates := make([]LatencyAwareResources, len(nodes))
+		copy(candidates, nodes)
+
+		// Generate a fresh set of jobs
+		generatedJobs := latencyAware.GenerateJobs(0, numJobs)
+		jobs := convertResources(generatedJobs)
+
+		start := time.Now()
+		errorsInRun := 0
+
+		for _, job := range jobs {
+			res, err := algorithm.Calculate(job, candidates)
+			if err != nil {
+				errorsInRun++
+				continue
+			}
+
+			// Update node resources
+			for i := range candidates {
+				if candidates[i].Id == res.Id {
+					candidates[i].AvailableMem -= job.AvailableMem
+					candidates[i].AvailableCPU -= job.AvailableCPU
+					break
+				}
+			}
+		}
+
+		duration := time.Since(start).Seconds() * 1000 // ms
+
+		durations = append(durations, duration)
+		totalErrors += errorsInRun
+
+		//b.Logf("Iteration %d: %.3f ms total for %d jobs (%d errors). N = %d", i+1, duration, numJobs, errorsInRun, b.N)
+	}
+
+	// --- Compute statistics ---
+	mean, stddev := calcStats(durations)
+	avgErrors := float64(totalErrors) / float64(b.N)
+
+	b.StopTimer()
+	b.Logf("\n==== Benchmark Summary ====")
+	b.Logf("Total iterations: %d", b.N)
+	b.Logf("Average time: %.3f ms (stddev: %.3f ms)", mean, stddev)
+	b.Logf("Average errors per run: %.2f", avgErrors)
+	b.Logf("Total errors: %d", totalErrors)
+	b.Logf("===========================\n")
+}
+
+// calcStats computes the mean and standard deviation for a slice of float64s.
+func calcStats(values []float64) (mean, stddev float64) {
+	if len(values) == 0 {
+		return 0, 0
+	}
+	var sum float64
+	for _, v := range values {
+		sum += v
+	}
+	mean = sum / float64(len(values))
+
+	var variance float64
+	for _, v := range values {
+		diff := v - mean
+		variance += diff * diff
+	}
+	variance /= float64(len(values))
+	stddev = math.Sqrt(variance)
+	return mean, stddev
+}
 
 func TestCalculateWorstFitLatencyAware(t *testing.T) {
 	var algorithm WorstLatencyFitLatencyAware

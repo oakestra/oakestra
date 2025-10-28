@@ -29,7 +29,7 @@ func convertResources(generatedResources []latencyAware.LatencyAwareResources) [
 
 func BenchmarkCalculateWorstFitLatencyAware(b *testing.B) {
 	const numJobs = 20
-	const numNodes = 60
+	const numNodes = 100
 
 	b.ReportAllocs()
 
