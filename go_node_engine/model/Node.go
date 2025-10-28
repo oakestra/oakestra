@@ -60,6 +60,7 @@ type Node struct {
 	GpuTotMem       float64              `json:"vram"`
 	Technology      []config.RuntimeType `json:"virtualization"`
 	SupportedAddons []AddonType          `json:"supported_addons"`
+	CarbonIntensity float64              `json:"carbon_intensity"`
 	Overlay         bool
 	OverlaySocket   string
 	LogDirectory    string
@@ -106,16 +107,17 @@ func (n *Node) SetOverlaySocket(socket string) {
 func GetDynamicInfo() Node {
 	node.updateDynamicInfo()
 	return Node{
-		Ip:          node.Ip,
-		CpuUsage:    node.CpuUsage,
-		CpuCores:    node.CpuCores,
-		MemoryUsed:  node.MemoryUsed,
-		MemoryMB:    node.MemoryMB,
-		GpuDriver:   node.GpuDriver,
-		GpuTemp:     node.GpuTemp,
-		GpuUsage:    node.GpuUsage,
-		GpuTotMem:   node.GpuTotMem,
-		GpuMemUsage: node.GpuMemUsage,
+		Ip:              node.Ip,
+		CpuUsage:        node.CpuUsage,
+		CpuCores:        node.CpuCores,
+		MemoryUsed:      node.MemoryUsed,
+		MemoryMB:        node.MemoryMB,
+		GpuDriver:       node.GpuDriver,
+		GpuTemp:         node.GpuTemp,
+		GpuUsage:        node.GpuUsage,
+		GpuTotMem:       node.GpuTotMem,
+		GpuMemUsage:     node.GpuMemUsage,
+		CarbonIntensity: node.CarbonIntensity,
 	}
 }
 
@@ -142,13 +144,17 @@ func (n *Node) updateDynamicInfo() {
 	n.GpuTemp = getGpuTemp()
 
 	// Custom Info
-
+	n.CarbonIntensity = getCarbonIntensity()
 }
 
 // SetNodeId sets the node id
 func SetNodeId(id string) {
 	GetNodeInfo()
 	node.Id = id
+}
+
+func getCarbonIntensity() float64 {
+	return 42.0
 }
 
 func getIp() string {

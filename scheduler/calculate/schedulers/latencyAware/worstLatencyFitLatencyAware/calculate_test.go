@@ -1,4 +1,4 @@
-package worstFitLatencyAware
+package worstLatencyFitLatencyAware
 
 import (
 	"errors"
@@ -9,11 +9,12 @@ import (
 )
 
 func TestCalculateWorstFitLatencyAware(t *testing.T) {
-	var algorithm WorstFitLatencyAware
+	var algorithm WorstLatencyFitLatencyAware
 
 	// Minimal requirements, no dependencies
 	job1 := LatencyAwareResources{
 		Id:             "job1",
+		JobName:        "job1",
 		AvailableMem:   2_000,
 		AvailableCPU:   1,
 		Virtualization: []string{"docker"},
@@ -22,6 +23,7 @@ func TestCalculateWorstFitLatencyAware(t *testing.T) {
 	// Impossible requirements, no dependencies
 	job2 := LatencyAwareResources{
 		Id:             "job2",
+		JobName:        "job2",
 		AvailableMem:   2_000,
 		AvailableCPU:   1,
 		Virtualization: []string{"unikernel"},
@@ -29,18 +31,38 @@ func TestCalculateWorstFitLatencyAware(t *testing.T) {
 
 	job3 := LatencyAwareResources{
 		Id:             "job3",
+		JobName:        "job3",
 		AvailableMem:   4_000,
 		AvailableCPU:   2,
 		Virtualization: []string{"docker"},
-		Latency:        map[string]int{"job4": 2},
+		Latency:        map[string]int{"job4": 3},
 	}
 
 	job4 := LatencyAwareResources{
 		Id:             "job4",
+		JobName:        "job4",
 		AvailableMem:   4_000,
 		AvailableCPU:   2,
 		Virtualization: []string{"docker"},
-		Latency:        map[string]int{"job3": 2},
+		Latency:        map[string]int{"job3": 3},
+	}
+
+	job5 := LatencyAwareResources{
+		Id:             "job5",
+		JobName:        "job5",
+		AvailableMem:   8_000,
+		AvailableCPU:   4,
+		Virtualization: []string{"docker"},
+		Latency:        map[string]int{"job6": 1},
+	}
+
+	job6 := LatencyAwareResources{
+		Id:             "job6",
+		JobName:        "job6",
+		AvailableMem:   8_000,
+		AvailableCPU:   4,
+		Virtualization: []string{"docker"},
+		Latency:        map[string]int{"job5": 1},
 	}
 
 	node1 := LatencyAwareResources{
@@ -51,7 +73,7 @@ func TestCalculateWorstFitLatencyAware(t *testing.T) {
 			"node1": 0,
 			"node2": 1,
 			"node3": 2,
-			"node4": 3,
+			"node4": 4,
 			"node5": 5,
 		},
 		Virtualization: []string{"docker"},
@@ -75,9 +97,9 @@ func TestCalculateWorstFitLatencyAware(t *testing.T) {
 		AvailableCPU: 4,
 		Latency: map[string]int{
 			"node1": 2,
-			"node2": 3,
+			"node2": 4,
 			"node3": 0,
-			"node4": 4,
+			"node4": 3,
 			"node5": 5,
 		},
 		Virtualization: []string{"docker"},
@@ -87,9 +109,9 @@ func TestCalculateWorstFitLatencyAware(t *testing.T) {
 		AvailableMem: 4_000,
 		AvailableCPU: 2,
 		Latency: map[string]int{
-			"node1": 3,
+			"node1": 4,
 			"node2": 3,
-			"node3": 4,
+			"node3": 3,
 			"node4": 0,
 			"node5": 2,
 		},
@@ -117,12 +139,15 @@ func TestCalculateWorstFitLatencyAware(t *testing.T) {
 		res        LatencyAwareResources
 		error      error
 	}{
-		{"Trivial worst fit", []LatencyAwareResources{}, job1, []LatencyAwareResources{node1, node2, node3, node4, node5}, node4, nil},
+		{"Trivial worst fit", []LatencyAwareResources{}, job1, []LatencyAwareResources{node1, node2, node3, node4, node5}, node1, nil},
 		{"Trivial no candidate", []LatencyAwareResources{}, job2, []LatencyAwareResources{node1, node3, node4, node5}, node1, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.NoActiveClusterWithCapacity}},
-		{"Interdependant a", []LatencyAwareResources{job3}, job4, []LatencyAwareResources{node1, node2, node3, node4, node5}, node2, nil},
-		{"Interdependant b", []LatencyAwareResources{job3, job4}, job4, []LatencyAwareResources{node1, node2, node3, node4, node5}, node2, nil},
-		{"Spoke and wheel dependencies a", []LatencyAwareResources{job3, job4, job4, job4, job4}, job4, []LatencyAwareResources{node1, node2, node3, node4, node5}, node5, nil},
-		{"Spoke and wheel dependencies b", []LatencyAwareResources{job3, job4, job4, job4, job4, job4, job4}, job4, []LatencyAwareResources{node1, node2, node3, node4, node5}, node1, nil},
+		{"Interdependant a", []LatencyAwareResources{job3}, job4, []LatencyAwareResources{node1, node2, node3, node4, node5}, node1, nil},
+		{"Interdependant b", []LatencyAwareResources{job3, job4}, job4, []LatencyAwareResources{node1, node2, node3, node4, node5}, node1, nil},
+		{"Spoke and wheel dependencies a", []LatencyAwareResources{job3, job4, job4, job4}, job4, []LatencyAwareResources{node1, node2, node3, node4, node5}, node1, nil},
+		{"Spoke and wheel dependencies b", []LatencyAwareResources{job3, job4, job4, job4, job4, job4}, job4, []LatencyAwareResources{node1, node2, node3, node4, node5}, node1, nil},
+		{"Many jobs a", []LatencyAwareResources{job3, job4, job4, job4, job4, job4, job4, job4}, job4, []LatencyAwareResources{node1, node2, node3, node4, node5}, node2, nil},
+		{"Many jobs b", []LatencyAwareResources{job3, job4, job4, job4, job4, job4, job4, job4, job4, job4}, job4, []LatencyAwareResources{node1, node2, node3, node4, node5}, node3, nil},
+		{"MTP Latency Requirement", []LatencyAwareResources{job5}, job6, []LatencyAwareResources{node1, node2, node3, node4, node5}, node1, nil},
 	}
 
 	for _, tt := range tests {

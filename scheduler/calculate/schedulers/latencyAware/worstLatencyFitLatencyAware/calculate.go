@@ -1,4 +1,4 @@
-package worstFitLatencyAware
+package worstLatencyFitLatencyAware
 
 import (
 	"encoding/json"
@@ -13,14 +13,15 @@ type LatencyAwareConstraints struct {
 }
 
 type LatencyAwareResources struct {
-	Constraints    []LatencyAwareConstraints `json:"constraints"`
-	Id             string                    `json:"_id"`
-	Virtualization []string                  `json:"virtualization"`
-	AvailableMem   float64                   `json:"memory"`
-	AvailableCPU   float64                   `json:"vcpus"`
-	CPUPercent     float64                   `json:"cpu_percent"`
-	JobName        string                    `json:"job_name"`
-	Latency        map[string]int            `json:"latency"` // map candidate/job->latency
+	Constraints     []LatencyAwareConstraints `json:"constraints"`
+	Id              string                    `json:"_id"`
+	Virtualization  []string                  `json:"virtualization"`
+	AvailableMem    float64                   `json:"memory"`
+	AvailableCPU    float64                   `json:"vcpus"`
+	CPUPercent      float64                   `json:"cpu_percent"`
+	JobName         string                    `json:"job_name"`
+	Latency         map[string]int            `json:"latency"` // map candidate/job->latency
+	CarbonIntensity float64                   `json:"carbon_intensity"`
 }
 
 func (r LatencyAwareResources) GetId() string {
@@ -77,21 +78,21 @@ func (r *LatencyAwareResources) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-type WorstFitLatencyAware struct {
+type WorstLatencyFitLatencyAware struct {
 	Deployments map[string]map[string]bool // maps names of jobs to set of candidate _ids (instance of a job could be spread across multiple candidates
 }
 
-func (a WorstFitLatencyAware) ResourceList() []LatencyAwareResources {
+func (a WorstLatencyFitLatencyAware) ResourceList() []LatencyAwareResources {
 	var data []LatencyAwareResources
 	return data
 }
 
-func (a WorstFitLatencyAware) JobData() LatencyAwareResources {
+func (a WorstLatencyFitLatencyAware) JobData() LatencyAwareResources {
 	var data LatencyAwareResources
 	return data
 }
 
-func (a WorstFitLatencyAware) Calculate(job LatencyAwareResources, candidates []LatencyAwareResources) (LatencyAwareResources, error) {
+func (a *WorstLatencyFitLatencyAware) Calculate(job LatencyAwareResources, candidates []LatencyAwareResources) (LatencyAwareResources, error) {
 	if len(candidates) == 0 {
 		return LatencyAwareResources{}, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.TargetClusterNotActive}
 	}
@@ -103,7 +104,7 @@ func (a WorstFitLatencyAware) Calculate(job LatencyAwareResources, candidates []
 	}
 
 	// todo revert to non-stable, only useful for testing
-	slices.SortStableFunc(filteredCandidates, cmpMemory)
+	slices.SortStableFunc(filteredCandidates, cmpLatencyScore)
 	res := filteredCandidates[0]
 
 	// update deployments
@@ -120,14 +121,15 @@ func (a WorstFitLatencyAware) Calculate(job LatencyAwareResources, candidates []
 }
 
 // filterRequirements returns a slice of PlacementCandidates which meet the job requirements
-func (a WorstFitLatencyAware) filterRequirements(job LatencyAwareResources, candidates []LatencyAwareResources) []LatencyAwareResources {
+func (a *WorstLatencyFitLatencyAware) filterRequirements(job LatencyAwareResources, candidates []LatencyAwareResources) []LatencyAwareResources {
 	filteredCandidates := make([]LatencyAwareResources, 0, len(candidates))
-	for _, candidate := range candidates {
+	for i := range candidates {
+		candidate := &candidates[i]
 		if slices.Contains(candidate.Virtualization, job.Virtualization[0]) {
 			if candidate.AvailableCPU >= job.AvailableCPU {
 				if candidate.AvailableMem >= job.AvailableMem {
-					if a.checkLatencyRequirement(job, candidate) {
-						filteredCandidates = append(filteredCandidates, candidate)
+					if a.checkLatencyRequirement(job, *candidate) {
+						filteredCandidates = append(filteredCandidates, *candidate)
 					}
 				}
 			}
@@ -137,7 +139,7 @@ func (a WorstFitLatencyAware) filterRequirements(job LatencyAwareResources, cand
 }
 
 // checkLatencyRequirements verifies if the latency to every dependency is below the given threshold
-func (a WorstFitLatencyAware) checkLatencyRequirement(job LatencyAwareResources, candidate LatencyAwareResources) bool {
+func (a *WorstLatencyFitLatencyAware) checkLatencyRequirement(job LatencyAwareResources, candidate LatencyAwareResources) bool {
 	for dependency, latency := range job.Latency {
 		if res, ok := a.Deployments[dependency]; ok {
 			// if dependency is deployed on at least one candidate with threshold
@@ -159,27 +161,24 @@ func (a WorstFitLatencyAware) checkLatencyRequirement(job LatencyAwareResources,
 	return true
 }
 
-// cmpMemory compares two candidates according to their available memory
-func cmpMemory(a LatencyAwareResources, b LatencyAwareResources) int {
-	if a.AvailableMem > b.AvailableMem {
-		return 1
+// cmpLatencyScore compares two candidates according to their total latency score
+func cmpLatencyScore(a LatencyAwareResources, b LatencyAwareResources) int {
+	scoreA := 0
+	scoreB := 0
+
+	for _, latency := range a.Latency {
+		scoreA += latency
 	}
-	if a.AvailableMem < b.AvailableMem {
+	for _, latency := range b.Latency {
+		scoreB += latency
+	}
+
+	if scoreA < scoreB {
 		return -1
 	}
-	return 0
-}
-
-// cmpMemCpu compares two PlacementCandidates with respect to available memory + cpu
-func cmpMemCpu(a LatencyAwareResources, b LatencyAwareResources) int {
-	scoreA := (100.00 - a.CPUPercent) + b.AvailableMem
-	scoreB := (100.00 - b.CPUPercent) + b.AvailableMem
 
 	if scoreA > scoreB {
 		return 1
-	}
-	if scoreA < scoreB {
-		return -1
 	}
 	return 0
 }

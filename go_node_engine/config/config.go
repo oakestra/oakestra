@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go_node_engine/logger"
 	"os"
+	"time"
 )
 
 var DEFAULT_LOG_DIR = "/tmp"
@@ -32,6 +33,12 @@ type ConfFile struct {
 	KeyFile         string           `json:"mqtt_key_file"`
 	Addons          []Addon          `json:"addons"`
 	Virtualizations []Virtualization `json:"virtualizations"`
+
+	// experiment config
+	Co2File   string    `json:"co2_file"`
+	Location  string    `json:"location"`
+	StartTime time.Time `json:"start_time"`
+	Timestep  int       `json:"timestep"` // timestep in mins
 }
 
 type Addon struct {
