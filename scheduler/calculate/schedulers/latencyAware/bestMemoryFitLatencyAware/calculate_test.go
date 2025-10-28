@@ -18,10 +18,9 @@ func convertResources(generatedResources []latencyAware.LatencyAwareResources) [
 			Id:             s.Id,
 			JobName:        s.JobName,
 			Virtualization: s.Virtualization,
-			AvailableMem:   float64(s.AvailableMem),
-			AvailableCPU:   float64(s.AvailableCPU),
+			AvailableMem:   s.AvailableMem,
+			AvailableCPU:   s.AvailableCPU,
 			Latency:        s.Latency,
-			// Optional: include CarbonIntensity if your real struct has it
 		}
 	}
 	return out

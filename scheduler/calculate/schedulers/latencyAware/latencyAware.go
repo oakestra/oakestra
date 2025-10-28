@@ -11,8 +11,8 @@ import (
 type LatencyAwareResources struct {
 	Id              string
 	JobName         string
-	AvailableMem    int
-	AvailableCPU    int
+	AvailableMem    float64
+	AvailableCPU    float64
 	Virtualization  []string
 	Latency         map[string]int
 	CarbonIntensity float64
@@ -57,7 +57,7 @@ func GenerateNodes(seed int64, count int) []LatencyAwareResources {
 	for i := 0; i < count; i++ {
 		id := fmt.Sprintf("node%d", i+1)
 
-		var mem, cpu int
+		var mem, cpu float64
 		switch {
 		case i < largeCount:
 			mem, cpu = 32000, 16
@@ -145,6 +145,164 @@ func GenerateNodes(seed int64, count int) []LatencyAwareResources {
 	return nodes
 }
 
+// GenerateClusteredNodes creates a set of clusters, each containing a number of latency-aware nodes.
+//
+// Arguments:
+//
+//	clusters         number of clusters
+//	nodesPerCluster  number of nodes per cluster
+//	seed             random seed (0 = time-based random)
+//
+// Returns:
+//   - [][]LatencyAwareResources: list of clusters, each containing its nodes
+//   - []LatencyAwareResources: cluster-level aggregate summaries
+func GenerateClusteredNodes(clusters int, nodesPerCluster int, seed int64) ([][]LatencyAwareResources, []LatencyAwareResources) {
+	if clusters < 1 {
+		clusters = 1
+	}
+	if nodesPerCluster < 1 {
+		nodesPerCluster = 1
+	}
+
+	var rng *rand.Rand
+	if seed == 0 {
+		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+	} else {
+		rng = rand.New(rand.NewSource(seed))
+	}
+
+	carbonSamples := []float64{
+		543.85725163, 502.58034596, 459.94266318,
+		813.74471178, 562.4545388, 419.57294225, 693.08914136,
+		496.68364515, 430.9127515, 708.51128194, 786.98276195,
+		471.7360648,
+	}
+
+	// Helper for weighted latency distribution (1–6, mostly 2–3)
+	randomLatency := func() int {
+		p := rng.Float64()
+		switch {
+		case p < 0.10:
+			return 1
+		case p < 0.60:
+			return 2 + rng.Intn(2) // 2–3
+		case p < 0.9:
+			return 4
+		default:
+			return 5 + rng.Intn(2) // 5–6
+		}
+	}
+
+	// --- Build clusters ---
+	clusteredNodes := make([][]LatencyAwareResources, clusters)
+	nodeCounter := 0
+
+	for c := 0; c < clusters; c++ {
+		nodes := make([]LatencyAwareResources, nodesPerCluster)
+
+		// Cluster composition biases
+		biasLarge := rng.Float64() * 0.25
+		biasSmall := rng.Float64() * 0.35
+		biasMedium := 1.0 - biasLarge - biasSmall
+		if biasMedium < 0 {
+			biasMedium = 0.1
+		}
+
+		clusterCarbon := carbonSamples[c%len(carbonSamples)]
+
+		for i := 0; i < nodesPerCluster; i++ {
+			nodeCounter++
+			id := fmt.Sprintf("cluster%d-node%d", c+1, i+1)
+
+			r := rng.Float64()
+			var mem, cpu float64
+			switch {
+			case r < biasLarge:
+				mem, cpu = 32000, 16 // large
+			case r < biasLarge+biasMedium:
+				mem, cpu = 8000, 4 // medium
+			default:
+				mem, cpu = 4000, 2 // small
+			}
+
+			variation := 1.0 + (rng.Float64()*0.3 - 0.15) // range [0.85, 1.15]
+			nodeCarbon := clusterCarbon * variation
+
+			nodes[i] = LatencyAwareResources{
+				Id:              id,
+				AvailableMem:    mem,
+				AvailableCPU:    cpu,
+				Virtualization:  []string{"docker"},
+				CarbonIntensity: nodeCarbon,
+				Latency:         make(map[string]int),
+			}
+		}
+
+		// --- Symmetric intra-cluster latency matrix ---
+		for i := range nodes {
+			for j := i; j < len(nodes); j++ {
+				lat := 0
+				if i != j {
+					lat = randomLatency()
+				}
+				nodes[i].Latency[nodes[j].Id] = lat
+				nodes[j].Latency[nodes[i].Id] = lat
+			}
+		}
+		clusteredNodes[c] = nodes
+	}
+
+	// --- Aggregate cluster summaries ---
+	clusterSummaries := make([]LatencyAwareResources, clusters)
+	for c := 0; c < clusters; c++ {
+		clusterID := fmt.Sprintf("cluster%d", c+1)
+		var totalMem, totalCPU float64
+		var totalCarbon float64
+
+		for _, n := range clusteredNodes[c] {
+			totalMem += n.AvailableMem
+			totalCPU += n.AvailableCPU
+			totalCarbon += n.CarbonIntensity
+		}
+		avgCarbon := totalCarbon / float64(nodesPerCluster)
+
+		clusterSummaries[c] = LatencyAwareResources{
+			Id:              clusterID,
+			AvailableMem:    totalMem,
+			AvailableCPU:    totalCPU,
+			Virtualization:  []string{"docker"},
+			CarbonIntensity: avgCarbon, // NEW: averaged over nodes
+			Latency:         make(map[string]int),
+		}
+	}
+
+	// --- Inter-cluster latency (symmetric, high bias) ---
+	for i := 0; i < clusters; i++ {
+		for j := i; j < clusters; j++ {
+			var lat int
+			if i == j {
+				lat = 0
+			} else {
+				p := rng.Float64()
+				switch {
+				case p < 0.1:
+					lat = 3
+				case p < 0.6:
+					lat = 4
+				case p < 0.9:
+					lat = 5
+				default:
+					lat = 6
+				}
+			}
+			clusterSummaries[i].Latency[clusterSummaries[j].Id] = lat
+			clusterSummaries[j].Latency[clusterSummaries[i].Id] = lat
+		}
+	}
+
+	return clusteredNodes, clusterSummaries
+}
+
 // GenerateJobs creates synthetic jobs with realistic dependencies and resource demands.
 func GenerateJobs(seed int64, n int) []LatencyAwareResources {
 	var rng *rand.Rand
@@ -156,13 +314,19 @@ func GenerateJobs(seed int64, n int) []LatencyAwareResources {
 
 	jobs := make([]LatencyAwareResources, n)
 
-	// --- Basic job creation ---
+	// --- Basic job creation (weighted low) ---
 	for i := 0; i < n; i++ {
 		id := fmt.Sprintf("job%d", i+1)
 
-		// Random resource demands (skewed towards lighter jobs)
-		mem := 500 + rng.Intn(7500) // 500–8000 MB
-		cpu := 1 + rng.Intn(8)      // 1–8 cores
+		// Weighted random helper (skews toward small)
+		weighted := func(min, max float64) float64 {
+			r := rng.Float64()
+			r = r * r * r // cubic weighting — heavy bias to smaller numbers
+			return min + (max-min)*r
+		}
+
+		mem := weighted(500, 8000) // MB, heavily biased to smaller values
+		cpu := weighted(0, 4)      // vCPU, same bias
 
 		jobs[i] = LatencyAwareResources{
 			Id:             id,
@@ -178,8 +342,8 @@ func GenerateJobs(seed int64, n int) []LatencyAwareResources {
 	for i := 0; i < n; i++ {
 		dependencyCount := 0
 
-		// ~35% of jobs have no dependencies
-		if rng.Float64() < 0.35 {
+		// ~40% of jobs have no dependencies
+		if rng.Float64() < 0.40 {
 			continue
 		}
 
@@ -195,15 +359,15 @@ func GenerateJobs(seed int64, n int) []LatencyAwareResources {
 				continue // already linked
 			}
 
-			// Random latency distribution
+			// Random latency distribution (favoring smaller values)
 			lat := func() int {
 				p := rng.Float64()
 				switch {
-				case p < 0.1:
+				case p < 0.4:
 					return 1
-				case p < 0.7:
-					return 2 + rng.Intn(2) // 2 or 3
-				case p < 0.9:
+				case p < 0.8:
+					return 2 + rng.Intn(2) // 2–3
+				case p < 0.95:
 					return 4
 				default:
 					return 5 + rng.Intn(2) // 5–6
@@ -215,10 +379,6 @@ func GenerateJobs(seed int64, n int) []LatencyAwareResources {
 			jobs[target].Latency[jobs[i].Id] = lat
 
 			dependencyCount++
-		}
-
-		if retries >= n*2 {
-			// fmt.Printf("Warning: job%d hit dependency retry limit (created %d/%d deps)\n", i+1, dependencyCount, maxDeps)
 		}
 	}
 
