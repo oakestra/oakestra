@@ -153,27 +153,36 @@ func BenchmarkTwoStageAllConfigs(b *testing.B) {
 	}
 
 	const (
-		numJobs = 15
-		seed    = 42
+		numJobs = 20
+		seed    = 0
 	)
 
 	b.ReportAllocs()
 
 	// ✅ Generate jobs once and reuse across all configurations
 	baseJobs := GenerateJobs(seed, numJobs)
-	writeJobsCSV(baseJobs, 0, 0) // optional: export a single reference jobs.csv
+	writeJobsCSV(baseJobs, 0, 0) // optional: export reference jobs.csv
 
+	// ✅ Initialize CSV header for overall benchmark results
+	resultsFile := "benchmark_results.csv"
+	if _, err := os.Stat(resultsFile); os.IsNotExist(err) {
+		header := "config,algA,algB,avg_total_ms,avg_A_ms,avg_B_ms,avg_latency,avg_co2,avg_errors\n"
+		os.WriteFile(resultsFile, []byte(header), 0644)
+	}
+
+	// --- Iterate through configurations ---
 	for _, cfg := range configs {
 		clusters, nodesPerCluster := cfg[0], cfg[1]
+		configLabel := fmt.Sprintf("%d-%d", clusters, nodesPerCluster)
 
 		// Generate a new cluster/node topology for each config
 		baseClusterNodes, baseClusterSummaries := GenerateClusteredNodes(clusters, nodesPerCluster, seed)
 
-		// Write cluster & node CSVs per configuration
+		// Export generated data for reproducibility
 		writeClusterCSV(baseClusterSummaries, clusters, nodesPerCluster)
 		writeNodesCSV(baseClusterNodes, clusters, nodesPerCluster)
 
-		b.Logf("\n===================== CONFIG %d-%d (clusters-nodes) =====================", clusters, nodesPerCluster)
+		b.Logf("\n===================== CONFIG %s (clusters-nodes) =====================", configLabel)
 
 		// --- Aggregation variables ---
 		var (
@@ -190,13 +199,17 @@ func BenchmarkTwoStageAllConfigs(b *testing.B) {
 					algB,
 					baseClusterNodes,
 					baseClusterSummaries,
-					baseJobs, // same jobs every time
+					baseJobs, // same jobs for all configs
 				)
 
+				// Log to test output
 				b.Logf("A=%-15s B=%-15s | Total=%7.2fms (A=%6.2f, B=%6.2f) | Lat=%6.2f | CO₂=%8.2f | Err=%5.2f",
 					res.A, res.B,
 					res.AvgTotalMs, res.AvgAms, res.AvgBms,
 					res.AvgLatency, res.AvgCO2, res.AvgErrors)
+
+				// Append to CSV for pandas/seaborn
+				appendBenchmarkCSV(resultsFile, configLabel, res)
 
 				totalTime += res.AvgTotalMs
 				pairCount++
@@ -606,4 +619,20 @@ func writeJobsCSV(jobs []LatencyAwareResources, c, n int) {
 			strconv.Itoa(len(job.Latency)), // dependency count
 		})
 	}
+}
+
+// appendBenchmarkCSV appends a single result to the global results CSV.
+func appendBenchmarkCSV(filename, config string, res result) {
+	line := fmt.Sprintf("%s,%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
+		config, res.A, res.B,
+		res.AvgTotalMs, res.AvgAms, res.AvgBms,
+		res.AvgLatency, res.AvgCO2, res.AvgErrors,
+	)
+	f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Printf("Error writing to CSV: %v\n", err)
+		return
+	}
+	defer f.Close()
+	f.WriteString(line)
 }
