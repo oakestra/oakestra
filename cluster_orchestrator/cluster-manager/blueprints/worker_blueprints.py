@@ -29,9 +29,9 @@ class ServiceController(MethodView):
         print("Incoming Request /api/node/register - to register node")
         data = request.json  # get POST body
         data.get("token")  # registration_token
-        # TODO(GB): check and generate tokens   
-        print("Data: ", data.get("system_info"))
-        data["candidate_name"] = data.get("full_stats", {}).get("hostname", "")
+        # TODO(GB): check and generate tokens
+        data["candidate_name"] = data.get("host", "")
+        print("Candidate Name: ", data.get("candidate_name"))
         worker = candidate_operations.create_candidate(data)
         if worker is None:
             logging.error("Failed to register node")
