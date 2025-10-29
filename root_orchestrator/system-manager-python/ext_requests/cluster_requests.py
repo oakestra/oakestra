@@ -36,7 +36,7 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
             + sanitize(cluster.get("ip"), request=True)
             + ":"
             + str(cluster.get("port"))
-            + "/api/deploy/"
+            + "/api/service/"
             + str(job_id)
             + "/"
             + str(instance_number)
@@ -60,18 +60,18 @@ def cluster_request_to_delete_job(job_id, instance_number):
             + sanitize(cluster.get("ip"), request=True)
             + ":"
             + str(cluster.get("port"))
-            + "/api/delete/"
+            + "/api/service/"
             + str(job_id)
             + "/"
             + str(instance_number)
         )
         print("Requesting:", cluster_addr)
-        resp = requests.get(cluster_addr)
+        resp = requests.delete(cluster_addr)
         print(resp)
     except Exception as e:
         logging.error(e)
         print(e)
-        print("Calling Cluster Orchestrator /api/delete job not successful.")
+        print("Calling Cluster Orchestrator DELETE /api/service job not successful.")
 
 
 def cluster_request_to_delete_job_by_ip(job_id, instance_number, ip):
@@ -86,17 +86,17 @@ def cluster_request_to_delete_job_by_ip(job_id, instance_number, ip):
             + sanitize(cluster.get("ip"), request=True)
             + ":"
             + str(cluster.get("port"))
-            + "/api/delete/"
+            + "/api/service/"
             + str(job_id)
             + "/"
             + str(instance_number)
         )
         print("Requesting:", cluster_addr)
-        resp = requests.get(cluster_addr)
+        resp = requests.delete(cluster_addr)
         print(resp)
     except Exception as e:
         logging.error(e)
-        print("Calling Cluster Orchestrator /api/delete job by ip not successful.")
+        print("Calling Cluster Orchestrator DELETE /api/service job by ip not successful.")
 
 
 def cluster_request_to_replicate_up(cluster_obj, job_obj, int_replicas):

@@ -164,11 +164,18 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
     nodes = find_all_nodes()
     for n in nodes:
         try:
-            if n.get("last_modified_timestamp") < (datetime.now().timestamp() - TIME_INTERVAL):
+            date_of_last_update = n.get("last_modified_timestamp", -1)
+            if (
+                date_of_last_update < (datetime.now().timestamp() - TIME_INTERVAL)
+                and date_of_last_update > 0
+            ):
                 print("Node {0} is inactive.".format(n.get("_id")))
                 continue
 
-            node_info = n.get("node_info")
+            node_info = n.get("node_info", None)
+            if node_info is None:
+                print("Node {0} has no node_info, skipping.".format(n.get("_id")))
+                continue
 
             # if it is not older than TIME_INTERVAL
             cumulative_values["cpu_percent"] += n.get("cpu_percent", 0)
@@ -185,8 +192,8 @@ def mongo_aggregate_node_information(TIME_INTERVAL):
 
             technology.update(node_info.get("technology", []))
             supported_addons.update(node_info.get("supported_addons", []))
-
             arch = node_info.get("architecture")
+
             aggregation = aggregation_per_architecture[arch]
             aggregation["cpu_percent"] += n.get("cpu_percent", 0)
             aggregation["vcpus"] += n.get("vcpus", 0)
