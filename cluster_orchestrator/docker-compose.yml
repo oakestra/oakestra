@@ -54,7 +54,8 @@ services:
 
   # Cluster Manager
   cluster_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
+    # Do not commit!
+    build: ../../oakestra-net/cluster-service-manager/service-manager
     container_name: cluster_service_manager
     labels:
       logging: "cluster_promtail"

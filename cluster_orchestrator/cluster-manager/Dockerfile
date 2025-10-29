@@ -9,7 +9,12 @@ RUN apt-get update -y &&\
         git
 
 COPY requirements.txt /
-RUN pip install --no-cache-dir -r requirements.txt 
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Don't commit me!
+COPY resource_abstractor_client /resource_abstractor_client
+RUN pip install -e /resource_abstractor_client
+
 
 COPY . /
 

@@ -8,6 +8,10 @@ COPY requirements.txt /
 
 RUN pip install -r requirements.txt --no-cache-dir && rm /requirements.txt
 
+# Don't commit me!
+COPY resource_abstractor_client /resource_abstractor_client
+RUN pip install -e /resource_abstractor_client
+
 COPY . /
 
 # TRUE for verbose logging
