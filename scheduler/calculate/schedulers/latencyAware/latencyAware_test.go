@@ -6,6 +6,7 @@ import (
 	"os"
 	"scheduler/calculate/schedulers/latencyAware/bestMemoryFitLatencyAware"
 	"scheduler/calculate/schedulers/latencyAware/lowestCarbonFitLatencyAware"
+	"scheduler/calculate/schedulers/latencyAware/randomFitLatencyAware"
 	"scheduler/calculate/schedulers/latencyAware/worstLatencyFitLatencyAware"
 	"strconv"
 	"testing"
@@ -47,6 +48,21 @@ func convertResourcesWorstLatencyFit(generatedResources []LatencyAwareResources)
 	out := make([]worstLatencyFitLatencyAware.LatencyAwareResources, len(generatedResources))
 	for i, s := range generatedResources {
 		out[i] = worstLatencyFitLatencyAware.LatencyAwareResources{
+			Id:             s.Id,
+			JobName:        s.JobName,
+			Virtualization: s.Virtualization,
+			AvailableMem:   s.AvailableMem,
+			AvailableCPU:   s.AvailableCPU,
+			Latency:        s.Latency,
+		}
+	}
+	return out
+}
+
+func convertResourcesRandomFit(generatedResources []LatencyAwareResources) []randomFitLatencyAware.LatencyAwareResources {
+	out := make([]randomFitLatencyAware.LatencyAwareResources, len(generatedResources))
+	for i, s := range generatedResources {
+		out[i] = randomFitLatencyAware.LatencyAwareResources{
 			Id:             s.Id,
 			JobName:        s.JobName,
 			Virtualization: s.Virtualization,
@@ -133,10 +149,32 @@ func (a LowestCarbonAdapter) Calculate(job LatencyAwareResources, candidates int
 	return res.Id, nil
 }
 
+// --- RandomFit ---
+type RandomFitAdapter struct {
+	Algo randomFitLatencyAware.RandomFitLatencyAware
+}
+
+func (a RandomFitAdapter) Name() string { return "RandomFit" }
+
+func (a RandomFitAdapter) ConvertResources(res []LatencyAwareResources) interface{} {
+	return convertResourcesRandomFit(res)
+}
+
+func (a RandomFitAdapter) Calculate(job LatencyAwareResources, candidates interface{}) (string, error) {
+	jobConv := convertResourcesRandomFit([]LatencyAwareResources{job})[0]
+	nodes := candidates.([]randomFitLatencyAware.LatencyAwareResources)
+	res, err := a.Algo.Calculate(jobConv, nodes)
+	if err != nil {
+		return "", err
+	}
+	return res.Id, nil
+}
+
 // 3️⃣ Automated Two-Stage Comparison Benchmark
 func BenchmarkTwoStageAllConfigs(b *testing.B) {
 	// --- Algorithm adapters ---
 	algorithms := []Scheduler{
+		&RandomFitAdapter{},
 		&BestMemoryAdapter{},
 		&WorstLatencyAdapter{},
 		&LowestCarbonAdapter{},
@@ -339,6 +377,10 @@ func runTwoStageOnce(
 			}
 		}
 
+		// Account for both double counting since latencies are symmetric
+		totalLatencySum /= 2
+		totalDepCount /= 2
+
 		// --- Aggregate iteration stats ---
 		totalA += iterTimeA
 		totalB += iterTimeB
@@ -388,6 +430,10 @@ func deepCopyClusters(src []interface{}) []interface{} {
 			tmp := make([]lowestCarbonFitLatencyAware.LatencyAwareResources, len(nodes))
 			copy(tmp, nodes)
 			dst[i] = tmp
+		case []randomFitLatencyAware.LatencyAwareResources:
+			tmp := make([]randomFitLatencyAware.LatencyAwareResources, len(nodes))
+			copy(tmp, nodes)
+			dst[i] = tmp
 		default:
 			dst[i] = cluster
 		}
@@ -407,6 +453,10 @@ func deepCopySummaries(src interface{}) interface{} {
 		return tmp
 	case []lowestCarbonFitLatencyAware.LatencyAwareResources:
 		tmp := make([]lowestCarbonFitLatencyAware.LatencyAwareResources, len(s))
+		copy(tmp, s)
+		return tmp
+	case []randomFitLatencyAware.LatencyAwareResources:
+		tmp := make([]randomFitLatencyAware.LatencyAwareResources, len(s))
 		copy(tmp, s)
 		return tmp
 	default:
@@ -429,6 +479,12 @@ func getClusterIndex(clusters interface{}, id string) int {
 			}
 		}
 	case []lowestCarbonFitLatencyAware.LatencyAwareResources:
+		for i, c := range cs {
+			if c.Id == id {
+				return i
+			}
+		}
+	case []randomFitLatencyAware.LatencyAwareResources:
 		for i, c := range cs {
 			if c.Id == id {
 				return i
@@ -464,6 +520,14 @@ func deductClusterResources(clusters interface{}, id string, mem, cpu float64) {
 				return
 			}
 		}
+	case []randomFitLatencyAware.LatencyAwareResources:
+		for i := range cs {
+			if cs[i].Id == id {
+				cs[i].AvailableMem -= mem
+				cs[i].AvailableCPU -= cpu
+				return
+			}
+		}
 	}
 }
 
@@ -486,6 +550,14 @@ func deductNodeResources(cluster interface{}, nodeID string, mem, cpu float64) {
 			}
 		}
 	case []lowestCarbonFitLatencyAware.LatencyAwareResources:
+		for i := range nodes {
+			if nodes[i].Id == nodeID {
+				nodes[i].AvailableMem -= mem
+				nodes[i].AvailableCPU -= cpu
+				return
+			}
+		}
+	case []randomFitLatencyAware.LatencyAwareResources:
 		for i := range nodes {
 			if nodes[i].Id == nodeID {
 				nodes[i].AvailableMem -= mem
