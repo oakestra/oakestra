@@ -3,6 +3,7 @@ from marshmallow import fields, Schema
 
 from operations import netinfo_management
 from utils.security_utils import jwt_auth_required
+from network.subnetwork_management import get_next_available_ip
 
 # ........ Service networking information endpoints ............. #
 
@@ -38,6 +39,21 @@ class ServiceNetinfoSchema(Schema):
     service_ip_list = fields.Nested(ServiceIpSchema, many=True)
     instance_list = fields.Nested(InstanceSchema, many=True)
 
+
+
+class AvailableServiceIPSchema(Schema):
+    service_ip = fields.String(allow_none=True)
+
+@netinfoblp.route("/available-ip", methods=["GET"])
+@netinfoblp.response(200, AvailableServiceIPSchema, content_type="application/json")
+@jwt_auth_required()
+def get_available_service_ip():
+    """
+    Get the next available service IP address from the 10.30.x.y range without reserving it
+    """
+    ip = get_next_available_ip()
+
+    return {"service_ip": ip}
 
 @netinfoblp.route("/<service_name>", methods=["GET"])
 @netinfoblp.response(200, ServiceNetinfoSchema, content_type="application/json")

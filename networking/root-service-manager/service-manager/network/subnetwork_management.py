@@ -34,6 +34,35 @@ def new_job_rr_address(job_data):
     return new_instance_ip()
 
 
+
+def get_next_available_ip():
+    """
+    Function used to get the next available service IP address without reserving it.
+    This function is read-only and does not modify the pool of available addresses.
+    @return: string,
+        The next available IP address from the pool, or None if no addresses are available. It does not remove the IP from the pool. 
+    """
+    addr = mongodb_requests.mongo_get_service_address_from_cache()
+    
+    if addr is None:
+        addr = mongodb_requests.mongo_get_next_service_ip()
+        job = mongodb_requests.mongo_find_job_by_ip(addr)
+        if job is not None:
+            next_addr = _increase_service_address(addr)
+            while job is not None:
+                job = mongodb_requests.mongo_find_job_by_ip(next_addr)
+                if job is not None:
+                    next_addr = _increase_service_address(next_addr)
+            addr = next_addr
+    
+    if addr[2] == 253 and addr[3] == 253: 
+        return None
+
+    return _addr_stringify(addr)
+
+
+
+
 def new_instance_ip():
     """
     Function used to assign a new instance IP address for a Service that is going to be deployed.
