@@ -52,6 +52,7 @@ You can:
 
 E.g.: 
 ```
+export OAKESTRA_BRANCH=develop #or your preferred branch
 export OVERRIDE_FILES=override-local-service-manager.yml
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/StartOakestraRoot.sh | sh - 
 ```
