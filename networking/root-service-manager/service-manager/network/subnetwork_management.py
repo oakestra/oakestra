@@ -212,45 +212,7 @@ def new_rr_ip_v6():
         return _addr_stringify(addr)
     
 
-   
-def get_next_available_ip_v6(x=1):
-    """
-    Function used to get the next x available service IPv6 addresses without reserving them.
-    Prioritizes cached free addresses before scanning for new ones.
-    This function is read-only and does not modify the pool of available addresses.
-    @param x: int, number of IPs to fetch
-    @return: list of string,
-        The next available IPv6 addresses from the pool, or an empty list if none are available.
-    """
-    ips = []
 
-    while len(ips) < x:
-        addr = mongodb_requests.mongo_get_service_address_from_cache_v6()
-        if addr is None:
-            break
-        ips.append(_addr_stringify(addr))
-
-    if len(ips) < x:
-        addr = mongodb_requests.mongo_get_next_service_ip_v6()
-
-        while len(ips) < x:
-            if addr is None:
-                break
-
-            job = mongodb_requests.mongo_find_job_by_ip(_addr_stringify(addr))
-            while job is not None:
-                next_addr = _increase_service_address_v6(addr)
-                job = mongodb_requests.mongo_find_job_by_ip(_addr_stringify(next_addr))
-                addr = next_addr
-
-            if addr is None:
-                break
-
-            ips.append(_addr_stringify(addr))
-
-            addr = _increase_service_address_v6(addr)
-
-    return ips
 
 
 def get_next_available_ip_v6(x=1):
