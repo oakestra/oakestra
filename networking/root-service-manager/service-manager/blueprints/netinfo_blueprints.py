@@ -40,19 +40,18 @@ class ServiceNetinfoSchema(Schema):
 
 class IPQueryArgsSchema(Schema):
     v = fields.String(
-        required=False, 
-        load_default=None, 
-        validate=lambda x: x in ("4", "6")
+        required=False
     )
 
 class AvailableServiceIPsSchema(Schema):
-    available_service_ips = fields.Nested(ServiceIpSchema, allow_none=True)
+    available_service_ips = fields.Nested(ServiceIpSchema, many=True)
 
 @netinfoblp.route("/available-ip/<x>", methods=["GET"])
 @netinfoblp.route("/available-ip/", methods=["GET"])
 @netinfoblp.arguments(IPQueryArgsSchema, location="query")
 @netinfoblp.response(200, AvailableServiceIPsSchema, content_type="application/json")
-def get_available_service_ip(query_args,x=1):
+@jwt_auth_required()
+def get_available_service_ip(query_args, x=1):
     """
     Get the next x available service IP addresses without reserving them. If x is not asigned, returns a single available IP. 
     Its IP version can be specified via query parameter "v" -> "4" for IPv4, "6" for IPv6, or omit for both.

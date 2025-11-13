@@ -49,7 +49,7 @@ def get_next_available_ip(x=1):
     # if theres no more in cache, get them from mongo
     if len(ips) < x:
         addr = mongodb_requests.mongo_get_next_service_ip()
-        
+
         while len(ips) < x:
             
             if addr is None:

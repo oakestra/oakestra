@@ -86,6 +86,7 @@ def get_next_x_available_service_ips(x=1, version=None):
     ipv4_list = []
     ipv6_list = []
 
+
     if version is None:
         ipv4_list = get_next_available_ip(x)
         ipv6_list = get_next_available_ip_v6(x)
@@ -93,6 +94,7 @@ def get_next_x_available_service_ips(x=1, version=None):
         ipv4_list = get_next_available_ip(x)
     elif version == "v6":
         ipv6_list = get_next_available_ip_v6(x)
+    
 
 
     for ip in ipv4_list:
@@ -100,5 +102,6 @@ def get_next_x_available_service_ips(x=1, version=None):
         
     for ip in ipv6_list:
         ips["available_service_ips"].append(_format_service_ip(addr_v6=ip))
+
 
     return ips
