@@ -34,31 +34,44 @@ def new_job_rr_address(job_data):
     return new_instance_ip()
 
 
-
-def get_next_available_ip():
+def get_next_available_ip(x=1):
     """
-    Function used to get the next available service IP address without reserving it.
+    Function used to get the next x available service IPv4 addresses without reserving them.
     This function is read-only and does not modify the pool of available addresses.
-    @return: string,
-        The next available IP address from the pool, or None if no addresses are available. It does not remove the IP from the pool. 
+    @param x: int, number of IPs to fetch
+    @return: list of string,
+        The next available IP addresses from the pool, or an empty list if none are available.
     """
-    addr = mongodb_requests.mongo_get_service_address_from_cache()
-    
-    if addr is None:
-        addr = mongodb_requests.mongo_get_next_service_ip()
-        job = mongodb_requests.mongo_find_job_by_ip(addr)
-        if job is not None:
-            next_addr = _increase_service_address(addr)
-            while job is not None:
-                job = mongodb_requests.mongo_find_job_by_ip(next_addr)
-                if job is not None:
-                    next_addr = _increase_service_address(next_addr)
-            addr = next_addr
-    
-    if addr[2] == 253 and addr[3] == 253: 
-        return None
+    ips = []
 
-    return _addr_stringify(addr)
+    while len(ips) < x:
+        addr = mongodb_requests.mongo_get_service_address_from_cache()
+        if addr is None:
+            break  
+        ips.append(_addr_stringify(addr))
+
+    if len(ips) < x:
+        addr = mongodb_requests.mongo_get_next_service_ip()
+
+        while len(ips) < x:
+            if addr is None:
+                break
+            job = mongodb_requests.mongo_find_job_by_ip(_addr_stringify(addr))
+            while job is not None:
+                next_addr = _increase_service_address(addr)
+                job = mongodb_requests.mongo_find_job_by_ip(_addr_stringify(next_addr))
+                addr = next_addr
+
+            if addr is None or (addr[2] == 253 and addr[3] == 253):
+                break
+
+            ips.append(_addr_stringify(addr))
+
+            addr = _increase_service_address(addr)
+
+    return ips
+
+
 
 
 
@@ -194,6 +207,51 @@ def new_rr_ip_v6():
                 addr = None
 
         return _addr_stringify(addr)
+    
+
+   
+def get_next_available_ip_v6(x=1):
+    """
+    Function used to get the next x available service IPv6 addresses without reserving them.
+    Prioritizes cached free addresses before scanning for new ones.
+    This function is read-only and does not modify the pool of available addresses.
+    @param x: int, number of IPs to fetch
+    @return: list of string,
+        The next available IPv6 addresses from the pool, or an empty list if none are available.
+    """
+    ips = []
+
+    while len(ips) < x:
+        addr = mongodb_requests.mongo_get_service_address_from_cache_v6()
+        if addr is None:
+            break
+        ips.append(_addr_stringify(addr))
+
+    if len(ips) < x:
+        addr = mongodb_requests.mongo_get_next_service_ip_v6()
+
+        while len(ips) < x:
+            if addr is None:
+                break
+
+            job = mongodb_requests.mongo_find_job_by_ip(_addr_stringify(addr))
+            while job is not None:
+                next_addr = _increase_service_address_v6(addr)
+                job = mongodb_requests.mongo_find_job_by_ip(_addr_stringify(next_addr))
+                addr = next_addr
+
+            if addr is None:
+                break
+
+            ips.append(_addr_stringify(addr))
+
+            addr = _increase_service_address_v6(addr)
+
+    return ips
+
+
+
+
 
 def new_instance_ip_v6():
     """
@@ -413,3 +471,4 @@ def _addr_destringify_v6(addrstr):
         addr.append(int(num[0:2], 16))
         addr.append(int(num[2:4], 16))
     return addr
+

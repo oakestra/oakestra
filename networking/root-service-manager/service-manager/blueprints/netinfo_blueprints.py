@@ -3,7 +3,6 @@ from marshmallow import fields, Schema
 
 from operations import netinfo_management
 from utils.security_utils import jwt_auth_required
-from network.subnetwork_management import get_next_available_ip
 
 # ........ Service networking information endpoints ............. #
 
@@ -39,21 +38,34 @@ class ServiceNetinfoSchema(Schema):
     service_ip_list = fields.Nested(ServiceIpSchema, many=True)
     instance_list = fields.Nested(InstanceSchema, many=True)
 
+class IPQueryArgsSchema(Schema):
+    v = fields.String(
+        required=False, 
+        load_default=None, 
+        validate=lambda x: x in ("4", "6")
+    )
 
+class AvailableServiceIPsSchema(Schema):
+    available_service_ips = fields.Nested(ServiceIpSchema, allow_none=True)
 
-class AvailableServiceIPSchema(Schema):
-    service_ip = fields.String(allow_none=True)
-
-@netinfoblp.route("/available-ip", methods=["GET"])
-@netinfoblp.response(200, AvailableServiceIPSchema, content_type="application/json")
+@netinfoblp.route("/available-ip/<x>", methods=["GET"])
+@netinfoblp.arguments(IPQueryArgsSchema, location="query")
+@netinfoblp.response(200, AvailableServiceIPsSchema, content_type="application/json")
 @jwt_auth_required()
-def get_available_service_ip():
+def get_available_service_ip(query_args,x=1):
     """
-    Get the next available service IP address from the 10.30.x.y range without reserving it
+    Get the next x available service IP addresses without reserving them. If x is not asigned, returns a single available IP. 
+    Its IP version can be specified via query parameter "v" -> "4" for IPv4, "6" for IPv6, or omit for both.
     """
-    ip = get_next_available_ip()
+    version_param = query_args.get("v")
+    if version_param == "4":
+        version = "v4"
+    elif version_param == "6":
+        version = "v6"
+    else:
+        version = None
 
-    return {"service_ip": ip}
+    return netinfo_management.get_next_x_available_service_ips(x,version=version)
 
 @netinfoblp.route("/<service_name>", methods=["GET"])
 @netinfoblp.response(200, ServiceNetinfoSchema, content_type="application/json")
