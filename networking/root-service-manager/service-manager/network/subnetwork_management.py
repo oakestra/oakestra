@@ -45,34 +45,20 @@ def get_next_available_ip(x=1):
     """
     ips_from_cache = mongodb_requests.mongo_get_service_address_from_cache_not_deleting(x)
     ips = [_addr_stringify(addr) for addr in ips_from_cache]
-
     # if theres no more in cache, get them from mongo
     if len(ips) < x:
         addr = mongodb_requests.mongo_get_next_service_ip()
 
-        while len(ips) < x:
-            
-            if addr is None:
-                break
-            
-            while True:
-                ip_str = _addr_stringify(addr)
-                
-                job = mongodb_requests.mongo_find_job_by_ip(ip_str)
-                
-                if job is None:
-                    ips.append(ip_str)
-                    break 
-                else:
-                    try:
-                        addr = _increase_service_address(addr)
-                    except RuntimeError:
-                        return ips 
-            
+        while len(ips) < x and addr is not None:
+            ip_str = _addr_stringify(addr)
+            job = mongodb_requests.mongo_find_job_by_ip(ip_str)
+            if job is None:
+                ips.append(ip_str)
+
             try:
                 addr = _increase_service_address(addr)
             except RuntimeError:
-                break 
+                break
 
     return ips
 
@@ -224,38 +210,26 @@ def get_next_available_ip_v6(x=1):
     @return: list of string,
         The next available IPv6 addresses from the pool, or an empty list if none are available.
     """
-
     ips_from_cache = mongodb_requests.mongo_get_service_address_from_cache_not_deleting_v6(x)
     ips = [_addr_stringify(addr) for addr in ips_from_cache]
 
     if len(ips) < x:
         addr = mongodb_requests.mongo_get_next_service_ip_v6()
 
-        while len(ips) < x:
-            
-            if addr is None:
-                break
-            
-            while True:
-                ip_str = _addr_stringify(addr)
-                
-                job = mongodb_requests.mongo_find_job_by_ip(ip_str)
-                
-                if job is None:
-                    ips.append(ip_str)
-                    break 
-                else:
-                    try:
-                        addr = _increase_service_address_v6(addr)
-                    except RuntimeError:
-                        return ips 
-            
+        while len(ips) < x and addr is not None:
+            ip_str = _addr_stringify(addr)
+            job = mongodb_requests.mongo_find_job_by_ip(ip_str)
+
+            if job is None:
+                ips.append(ip_str)
+
             try:
                 addr = _increase_service_address_v6(addr)
             except RuntimeError:
-                break 
+                break
 
     return ips
+
 
 
 def new_instance_ip_v6():
