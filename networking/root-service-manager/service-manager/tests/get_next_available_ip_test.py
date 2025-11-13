@@ -75,7 +75,7 @@ def test_get_available_ip_exhausted():
     # mock mongo db with exhausted address space
     mongodb_client.mongo_get_service_address_from_cache_not_deleting = MagicMock(return_value=[])
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[10, 30, 253, 253])
-    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
+    mongodb_client.mongo_find_job_by_ip = MagicMock(return_value={"job_name": "used"})
 
     # test address space exhaustion detection
     ips = get_next_available_ip()

@@ -52,7 +52,7 @@ def get_next_available_ip(x=1):
         
         while len(ips) < x:
             
-            if addr is None or (addr[2] == 253 and addr[3] == 253):
+            if addr is None:
                 break
             
             while True:
