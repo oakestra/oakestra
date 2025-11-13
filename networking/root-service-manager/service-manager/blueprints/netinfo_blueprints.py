@@ -49,9 +49,9 @@ class AvailableServiceIPsSchema(Schema):
     available_service_ips = fields.Nested(ServiceIpSchema, allow_none=True)
 
 @netinfoblp.route("/available-ip/<x>", methods=["GET"])
+@netinfoblp.route("/available-ip/", methods=["GET"])
 @netinfoblp.arguments(IPQueryArgsSchema, location="query")
 @netinfoblp.response(200, AvailableServiceIPsSchema, content_type="application/json")
-@jwt_auth_required()
 def get_available_service_ip(query_args,x=1):
     """
     Get the next x available service IP addresses without reserving them. If x is not asigned, returns a single available IP. 
@@ -65,7 +65,7 @@ def get_available_service_ip(query_args,x=1):
     else:
         version = None
 
-    return netinfo_management.get_next_x_available_service_ips(x,version=version)
+    return netinfo_management.get_next_x_available_service_ips(int(x),version=version)
 
 @netinfoblp.route("/<service_name>", methods=["GET"])
 @netinfoblp.response(200, ServiceNetinfoSchema, content_type="application/json")
