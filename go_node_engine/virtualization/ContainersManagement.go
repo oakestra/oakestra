@@ -32,10 +32,24 @@ import (
 
 // ContainerRuntime is the struct that describes the container runtime
 type ContainerRuntime struct {
-	containerClient *containerd.Client
-	killQueue       map[string]*chan bool
-	channelLock     *sync.RWMutex
-	ctx             context.Context
+	containerClient  *containerd.Client
+	killQueue        map[string]*chan bool
+	pullRequestQueue chan ContainerImageRequest
+	channelLock      *sync.RWMutex
+	deployLock       sync.Mutex
+	ctx              context.Context
+}
+
+type ContainerImageRequest struct {
+	imageName string
+	platform  string
+	forcePull bool
+	response  chan ContainerImageResponse
+}
+
+type ContainerImageResponse struct {
+	image containerd.Image
+	err   error
 }
 
 var runtime = ContainerRuntime{
@@ -70,6 +84,7 @@ func GetContainerdRuntime() Runtime {
 		}
 		runtime.containerClient = client
 		runtime.killQueue = make(map[string]*chan bool)
+		runtime.pullRequestQueue = make(chan ContainerImageRequest, 100)
 		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
 		runtime.forceContainerCleanup()
 		// register default runtime name
@@ -77,6 +92,9 @@ func GetContainerdRuntime() Runtime {
 
 		//fetch containerd runtime configuration
 		checkAdditionalRuntimePlugins()
+
+		//start image pulling routine
+		go runtime.containerImageService()
 
 	})
 	return &runtime
@@ -127,46 +145,23 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 	var image containerd.Image
 
 	// pull the given image
-	sysimg, err := r.containerClient.ImageService().Get(r.ctx, service.Image)
-	if err == nil {
-		image = containerd.NewImage(r.containerClient, sysimg)
-	} else {
-		logger.ErrorLogger().Printf("Error retrieving the image: %v \n Trying to pull the image online.", err)
-
-		remoteOpt := []containerd.RemoteOpt{containerd.WithPullUnpack}
-		if service.Platform != "" {
-			remoteOpt = append(remoteOpt, containerd.WithPlatform(service.Platform))
-		}
-		image, err = r.containerClient.Pull(r.ctx, service.Image, remoteOpt...)
-
-		if err != nil {
-			// avoid crashing for HTTP based registires in local infrastructures
-			if strings.Contains(err.Error(), "http: server gave HTTP response to HTTPS client") {
-				alwaysPlainHTTP := func(string) (bool, error) {
-					return true, nil
-				}
-				ropts := []docker_remote.RegistryOpt{
-					docker_remote.WithPlainHTTP(alwaysPlainHTTP),
-				}
-				resolver := docker_remote.NewResolver(docker_remote.ResolverOptions{
-					Hosts: docker_remote.ConfigureDefaultRegistries(ropts...),
-				})
-				image, err = r.containerClient.Pull(r.ctx, service.Image, containerd.WithPullUnpack, containerd.WithResolver(resolver))
-				if err != nil {
-					return err
-				}
-			} else {
-				return err
-			}
-		}
+	image, err := r.getContainerImage(service.Image, service.Platform, false)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to fetch container image %s: %v", service.Image, err)
+		return err
 	}
 
 	startupChannel := make(chan bool)
 	errorChannel := make(chan error)
 
+	// deploy lock (only one deployment at a time)
+	r.deployLock.Lock()
+	defer r.deployLock.Unlock()
+
 	_, err = r.getContainerByTaskID(genTaskID(service.Sname, service.Instance))
 	if err == nil {
-		return fmt.Errorf("task already deployed")
+		logger.ErrorLogger().Printf("Task %s already deployed", genTaskID(service.Sname, service.Instance))
+		return nil
 	}
 
 	// create startup routine which will accompany the container through its lifetime
@@ -185,6 +180,18 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 	}
 
 	return nil
+}
+
+func (r *ContainerRuntime) getContainerImage(imageName string, platform string, forcePull bool) (containerd.Image, error) {
+	request := ContainerImageRequest{
+		imageName: imageName,
+		platform:  platform,
+		forcePull: forcePull,
+		response:  make(chan ContainerImageResponse),
+	}
+	r.pullRequestQueue <- request
+	response := <-request.response
+	return response.image, response.err
 }
 
 // Undeploy undeploys a service
@@ -338,6 +345,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		service.Status = model.SERVICE_COMPLETED
 	} else {
 		service.Status = model.SERVICE_DEAD
+		service.StatusDetail = fmt.Sprintf("Exit code: %d, Error: %v", exitStatus.ExitCode(), exitStatus.Error())
 	}
 
 	//detaching network
@@ -376,79 +384,78 @@ func getTotalCpuUsageByPid(pid int32) (float64, error) {
 func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
 	//start container monitoring service
 	startContainerMonitoring.Do(func() {
-		for {
-			select {
-			case <-time.After(every):
-				deployedContainers, err := r.containerClient.Containers(r.ctx)
-				if err != nil {
-					logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
-				}
-
-				resourceList := make([]model.Resources, 0)
-
-				for _, container := range deployedContainers {
-					task, err := container.Task(r.ctx, nil)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
-
-						info, err := container.Info(r.ctx)
-						if err != nil {
-							logger.ErrorLogger().Printf("Unable to fetch container info: %v", err)
-							continue
-						}
-						// if container created less than 10 seconds ago, then skip removal
-						if time.Since(info.CreatedAt) < 10*time.Second {
-							logger.InfoLogger().Printf("Skipping container %s, it is still starting up", container.ID())
-							continue
-						}
-						err = r.removeContainer(container)
-						if err != nil {
-							return
-						}
-						continue
-					}
-
-					cpuUsage, err := getTotalCpuUsageByPid(int32(task.Pid()))
-					if err != nil {
-						sysInfo, err := pidusage.GetStat(int(task.Pid()))
-						if err != nil {
-							logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
-							continue
-						}
-						cpuUsage = sysInfo.CPU / float64(model.GetNodeInfo().CpuCores)
-					}
-
-					mem, err := r.getContainerMemoryUsage(container.ID(), int(task.Pid()))
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
-						mem = 0
-					}
-
-					containerMetadata, err := container.Info(r.ctx)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
-						continue
-					}
-
-					currentsnapshotter := r.containerClient.SnapshotService(containerMetadata.Snapshotter)
-					usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
-					}
-
-					resourceList = append(resourceList, model.Resources{
-						Cpu:      fmt.Sprintf("%f", cpuUsage),
-						Memory:   fmt.Sprintf("%f", mem),
-						Disk:     fmt.Sprintf("%d", usage.Size),
-						Sname:    extractSnameFromTaskID(container.ID()),
-						Runtime:  string(model.CONTAINER_RUNTIME),
-						Logs:     getLogs(container.ID()),
-						Instance: extractInstanceNumberFromTaskID(container.ID()),
-					})
-				}
-				//NOTIFY WITH THE CURRENT CONTAINERS STATUS
-				notifyHandler(resourceList)
+		ticker := time.NewTicker(every)
+		defer ticker.Stop()
+		for range ticker.C {
+			deployedContainers, err := r.containerClient.Containers(r.ctx)
+			if err != nil {
+				logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 			}
+
+			resourceList := make([]model.Resources, 0)
+
+			for _, container := range deployedContainers {
+				task, err := container.Task(r.ctx, nil)
+				if err != nil {
+					logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+
+					info, err := container.Info(r.ctx)
+					if err != nil {
+						logger.ErrorLogger().Printf("Unable to fetch container info: %v", err)
+						continue
+					}
+					// if container created less than 10 seconds ago, then skip removal
+					if time.Since(info.CreatedAt) < 10*time.Second {
+						logger.InfoLogger().Printf("Skipping container %s, it is still starting up", container.ID())
+						continue
+					}
+					err = r.removeContainer(container)
+					if err != nil {
+						return
+					}
+					continue
+				}
+
+				cpuUsage, err := getTotalCpuUsageByPid(int32(task.Pid()))
+				if err != nil {
+					sysInfo, err := pidusage.GetStat(int(task.Pid()))
+					if err != nil {
+						logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
+						continue
+					}
+					cpuUsage = sysInfo.CPU / float64(model.GetNodeInfo().CpuCores)
+				}
+
+				mem, err := r.getContainerMemoryUsage(container.ID(), int(task.Pid()))
+				if err != nil {
+					logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
+					mem = 0
+				}
+
+				containerMetadata, err := container.Info(r.ctx)
+				if err != nil {
+					logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
+					continue
+				}
+
+				currentsnapshotter := r.containerClient.SnapshotService(containerMetadata.Snapshotter)
+				usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
+				if err != nil {
+					logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
+				}
+
+				resourceList = append(resourceList, model.Resources{
+					Cpu:      fmt.Sprintf("%f", cpuUsage),
+					Memory:   fmt.Sprintf("%f", mem),
+					Disk:     fmt.Sprintf("%d", usage.Size),
+					Sname:    extractSnameFromTaskID(container.ID()),
+					Runtime:  string(model.CONTAINER_RUNTIME),
+					Logs:     getLogs(container.ID()),
+					Instance: extractInstanceNumberFromTaskID(container.ID()),
+				})
+			}
+			//NOTIFY WITH THE CURRENT CONTAINERS STATUS
+			notifyHandler(resourceList)
 		}
 	})
 }
@@ -582,6 +589,52 @@ func killTask(ctx context.Context, task containerd.Task, container containerd.Co
 
 	logger.ErrorLogger().Printf("Task %s terminated", task.ID())
 	return nil
+}
+
+// containerImageService is the background service that handles image pulling requests.
+// This is started once at runtime initialization. Then listens for image pull requests from the getContainerImage function.
+func (r *ContainerRuntime) containerImageService() {
+	for {
+		rq := <-r.pullRequestQueue
+		var resp ContainerImageResponse
+
+		sysimg, err := r.containerClient.ImageService().Get(r.ctx, rq.imageName)
+		if err == nil {
+			resp.image = containerd.NewImage(r.containerClient, sysimg)
+		}
+
+		if rq.forcePull || err != nil {
+			logger.ErrorLogger().Printf("Error retrieving the image: %v \n Trying to pull the image online.", err)
+
+			remoteOpt := []containerd.RemoteOpt{containerd.WithPullUnpack}
+			if rq.platform != "" {
+				remoteOpt = append(remoteOpt, containerd.WithPlatform(rq.platform))
+			}
+			resp.image, err = r.containerClient.Pull(r.ctx, rq.imageName, remoteOpt...)
+
+			if err != nil {
+				// avoid crashing for HTTP based registires in local infrastructures
+				if strings.Contains(err.Error(), "http: server gave HTTP response to HTTPS client") {
+					alwaysPlainHTTP := func(string) (bool, error) {
+						return true, nil
+					}
+					ropts := []docker_remote.RegistryOpt{
+						docker_remote.WithPlainHTTP(alwaysPlainHTTP),
+					}
+					resolver := docker_remote.NewResolver(docker_remote.ResolverOptions{
+						Hosts: docker_remote.ConfigureDefaultRegistries(ropts...),
+					})
+					resp.image, err = r.containerClient.Pull(r.ctx, rq.imageName, containerd.WithPullUnpack, containerd.WithResolver(resolver))
+					if err != nil {
+						resp.err = err
+					}
+				} else {
+					resp.err = err
+				}
+			}
+		}
+		rq.response <- resp
+	}
 }
 
 func extractSnameFromTaskID(taskid string) string {

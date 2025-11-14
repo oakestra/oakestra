@@ -5,6 +5,7 @@ import traceback
 import requests
 import services.service_operations as service_operations
 from clients.mongodb_client import (
+    mongo_find_job_by_system_id,
     mongo_aggregate_node_information,
     mongo_get_services_with_failed_instanes,
 )
@@ -14,6 +15,7 @@ from oakestra_utils.types.statuses import (
     NegativeSchedulingStatus,
     convert_to_status,
 )
+from clients.mqtt_client import mqtt_publish_edge_deploy
 
 from ext_requests.cluster_scheduler_requests import scheduler_request_deploy
 
@@ -38,18 +40,32 @@ def re_deploy_dead_services_routine():
         DeploymentStatus.DEAD,
         NegativeSchedulingStatus.NO_WORKER_CAPACITY,
     ]
+
     try:
         services = mongo_get_services_with_failed_instanes()
         if services is not None:
             for service in services:
                 for instance in service.get("instance_list", []):
-                    if convert_to_status(instance.get("status")) in re_deploy_triggers:
+                    status = convert_to_status(instance.get("status"))
+                    # we trigger a re-deploy only if the instance is not currently deployed
+                    #  or its status is in the re_deploy_triggers list
+                    if status in re_deploy_triggers or instance.get("node") is None:
                         print("FAILED INSTANCE, ATTEMPTING RE-DEPLOY")
                         threading.Thread(
                             group=None,
                             target=trigger_undeploy_and_re_deploy,
                             args=(service, instance),
                         ).start()
+                    else:
+                        # if the instance is still deployed but in UNKNOWN status
+                        # we refresh its deployment
+                        print("REFRESHING DEPLOYMENT")
+                        threading.Thread(
+                            group=None,
+                            target=refresh_deployment,
+                            args=(service, instance),
+                        ).start()
+                            
     except Exception as e:
         print(e)
         traceback.print_exc()
@@ -73,6 +89,17 @@ def trigger_undeploy_and_re_deploy(service, instance):
             str(service.get("system_job_id")),
             str(instance.get("instance_number")),
         )
+    except Exception as e:
+        print(e)
+
+
+# Tries to re-deploy the service in the same machine as before.
+# The node will discard the re-deploy if the instance is still running.
+def refresh_deployment(service, instance):
+    try:
+        node_id = service.get("node").get("_id")
+        job = mongo_find_job_by_system_id(service.get("system_job_id"))
+        mqtt_publish_edge_deploy(node_id, job, instance)
     except Exception as e:
         print(e)
 

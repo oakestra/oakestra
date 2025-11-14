@@ -70,6 +70,9 @@ class DeploymentStatus(Status):
 
     UNDEPLOYED = "UNDEPLOYED"  # 🟪
 
+    # We did not get service information from the node for a prolonged time. 
+    UNKNOWN = "UNKNOWN"  # 🟪
+
 
 def convert_to_status(name: Optional[str]) -> Optional[Status]:
     """Converts a given string to its matching Status enum

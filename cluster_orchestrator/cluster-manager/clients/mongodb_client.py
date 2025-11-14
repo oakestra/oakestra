@@ -244,6 +244,7 @@ def mongo_create_new_job_instance(job: dict, system_job_id: str, instance_number
         {
             "instance_number": instance_number,
             "status": PositiveSchedulingStatus.CLUSTER_SCHEDULED.value,
+            "last_modified_timestamp": datetime.now().timestamp(),
         }
     )
     mongo_jobs.db.jobs.find_one_and_update(
@@ -286,11 +287,10 @@ def mongo_update_jobs_status(time_interval: int) -> None:
                 )
                 if (
                     job_is_inactive
-                    and job_status not in PositiveSchedulingStatus
                     and job_status != DeploymentStatus.COMPLETED
                 ):
                     print("Job is inactive: " + str(job.get("job_name")))
-                    new_job_status = DeploymentStatus.FAILED
+                    new_job_status = DeploymentStatus.UNKNOWN
                     job["instance_list"][instance]["status"] = new_job_status.value
                     updated = True
             if updated:
@@ -358,6 +358,7 @@ def mongo_update_job_status(
                     port = 50011
                 instance["host_port"] = port
                 instance["worker_id"] = node.get("_id")
+                instance["last_modified_timestamp"] = datetime.timestamp(datetime.now())
             break
     return mongo_jobs.db.jobs.update_one(
         {"system_job_id": str(system_job_id)},
@@ -372,6 +373,7 @@ def mongo_get_services_with_failed_instanes():
                 {"instance_list.status": DeploymentStatus.FAILED.value},
                 {"instance_list.status": DeploymentStatus.DEAD.value},
                 {"instance_list.status": NegativeSchedulingStatus.NO_WORKER_CAPACITY.value},
+                {"instance_list.status": DeploymentStatus.UNKNOWN.value}
             ]
         }
     )
@@ -381,6 +383,7 @@ def mongo_update_job_deployed(
     sname: str,
     instance_num: int,
     status: Status,
+    status_detail: str,
     publicip: str,
     workerid: str,
 ) -> Optional[pymongo.results.UpdateResult]:
@@ -394,7 +397,10 @@ def mongo_update_job_deployed(
                 if instance_list[instance].get("worker_id") != workerid:
                     return None  # cannot update another worker's resources
                 instance_list[instance]["status"] = status.value
+                instance_list[instance]["status_detail"] = status_detail
                 instance_list[instance]["publicip"] = publicip
+                ts = datetime.timestamp(datetime.now())
+                instance_list[instance]["last_modified_timestamp"] = ts
                 updated = True
         if updated:
             return mongo_jobs.db.jobs.update_one(
