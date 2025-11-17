@@ -8,8 +8,13 @@ RUN apt-get update -y &&\
         build-essential \
         git
 
+# Branch of the oakestra_utils_library to install
+ARG LIB_BRANCH=develop
+ENV LIB_BRANCH=$LIB_BRANCH
+
 COPY requirements.txt /
-RUN pip install --no-cache-dir -r requirements.txt 
+RUN sed "s/@develop/@${LIB_BRANCH}/g" requirements.txt > reqs_subst.txt
+RUN pip install --no-cache-dir -r reqs_subst.txt
 
 COPY . /
 

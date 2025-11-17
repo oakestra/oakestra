@@ -10,20 +10,21 @@ from clients.mongodb_client import (
 )
 from clients.mqtt_client import mqtt_init
 from clients.my_prometheus_client import prometheus_init_gauge_metrics
-from ext_requests.system_manager_requests import (
+from background_jobs.service_monitoring import (
     re_deploy_dead_services_routine,
-    send_aggregated_info_to_sm,
 )
+from background_jobs.resource_aggregation import (
+    aggregate_cluster_resources_and_send_to_sm
+    )
 from flask import Flask
 from flask_cors import CORS
 from flask_smorest import Api
 from flask_socketio import SocketIO
 from flask_swagger_ui import get_swaggerui_blueprint
-from logs.cm_logging import configure_logging
+from logs import logger
 from prometheus_client import start_http_server
 from proto.clusterRegistration_pb2 import CS1Message, CS2Message, KeyValue, SC1Message, SC2Message
 from proto.clusterRegistration_pb2_grpc import register_clusterStub
-from services.analyzing_workers import looking_for_dead_workers
 
 MY_PORT = os.environ.get("MY_PORT")
 
@@ -37,8 +38,6 @@ SYSTEM_MANAGER_ADDR = (
     os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_GRPC_PORT")
 )
 GRPC_REQUEST_TIMEOUT = 120
-
-my_logger = configure_logging()
 
 app = Flask(__name__)
 
@@ -77,20 +76,13 @@ def background_job_send_aggregated_information_to_sm():
     scheduler = BackgroundScheduler()
     # job_send_info
     scheduler.add_job(
-        send_aggregated_info_to_sm,
+        aggregate_cluster_resources_and_send_to_sm,
         "interval",
         seconds=BACKGROUND_JOB_INTERVAL,
         kwargs={
             "my_id": MY_ASSIGNED_CLUSTER_ID,
             "time_interval": 2 * BACKGROUND_JOB_INTERVAL,
         },
-    )
-    # job_dead_nodes
-    scheduler.add_job(
-        looking_for_dead_workers,
-        "interval",
-        seconds=BACKGROUND_JOB_INTERVAL,
-        kwargs={"interval": 2 * BACKGROUND_JOB_INTERVAL},
     )
     # job_re_deploy_dead_jobs
     scheduler.add_job(re_deploy_dead_services_routine, "interval", seconds=BACKGROUND_JOB_INTERVAL)
@@ -152,7 +144,7 @@ def register_with_system_manager():
             if response.id is not None:
                 MY_ASSIGNED_CLUSTER_ID = response.id
                 app.logger.info("Received ID. Go ahead with Background Jobs")
-                prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID, app.logger)
+                prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID)
                 background_job_send_aggregated_information_to_sm()
             else:
                 app.logger.error("No ID received.")
@@ -170,5 +162,5 @@ if __name__ == "__main__":
 
     register_with_system_manager()  # register with system manager using gRPC
     eventlet.wsgi.server(
-        eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger
+        eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=logger
     )  # see README for logging notes

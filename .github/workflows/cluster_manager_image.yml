@@ -74,6 +74,8 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: ./cluster_orchestrator/cluster-manager/
+          build-args: |
+            LIB_BRANCH=${{ github.ref_name }}
           platforms: linux/amd64,linux/armhf,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}

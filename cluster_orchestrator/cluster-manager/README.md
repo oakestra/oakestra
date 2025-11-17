@@ -21,7 +21,7 @@ The Cluster Manager is a component in the Cluster Orchestrator. Edge nodes regis
 - Cluster Manager reports aggregated information to the System Manager
 - Cluster Manager pulls edge node information from MQTT Broker
 
-## Start the Cluster Manager manually
+## Start the Cluster Manager manually with Docker Compose
 
 Export the environment variables with the URL of the root orchestrator, as well as cluster name and location.
 
@@ -39,6 +39,10 @@ Then use docker compose:
 ```
 sudo -E docker-compose -f cluster_orchestrator/docker-compose.yml up
 ```
+
+## Start the Cluster Manager manually with python
+
+If you're using VS Code, you can run the `Debug Cluster Manager` profile to run a full Oakestra Root Orchestrator and Cluster Orchestrator, with your Cluster Manager running in debug mode inside VS Code. 
 
 ## Built With
 

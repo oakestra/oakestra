@@ -3,7 +3,7 @@ from clients.mongodb_client import (
     mongo_find_job_by_system_id,
     mongo_remove_job_instance,
 )
-from clients.mqtt_client import mqtt_publish_edge_delete
+from ext_requests.worker_node_request import delete_from_worker
 from ext_requests.cluster_scheduler_requests import scheduler_request_deploy
 
 
@@ -23,7 +23,7 @@ def delete_service(system_job_id, instance_number, erase=True):
         if int(instance["instance_number"]) == int(instance_number) or int(instance_number) == -1:
             node_id = instance.get("worker_id")
             if node_id is not None:
-                mqtt_publish_edge_delete(
+                delete_from_worker(
                     node_id,
                     job.get("job_name"),
                     instance["instance_number"],
