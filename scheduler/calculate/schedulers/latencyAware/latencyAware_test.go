@@ -3,6 +3,7 @@ package latencyAware
 import (
 	"fmt"
 	"os"
+	"scheduler/calculate/schedulers/latencyAware/bestLatencyFitLatencyAware"
 	"scheduler/calculate/schedulers/latencyAware/bestMemoryFitLatencyAware"
 	"scheduler/calculate/schedulers/latencyAware/lowestCarbonFitLatencyAware"
 	"scheduler/calculate/schedulers/latencyAware/randomFitLatencyAware"
@@ -62,6 +63,21 @@ func convertResourcesWorstLatencyFit(generatedResources []LatencyAwareResources)
 	out := make([]worstLatencyFitLatencyAware.LatencyAwareResources, len(generatedResources))
 	for i, s := range generatedResources {
 		out[i] = worstLatencyFitLatencyAware.LatencyAwareResources{
+			Id:             s.Id,
+			JobName:        s.JobName,
+			Virtualization: s.Virtualization,
+			AvailableMem:   s.AvailableMem,
+			AvailableCPU:   s.AvailableCPU,
+			Latency:        s.Latency,
+		}
+	}
+	return out
+}
+
+func convertResourcesBestLatencyFit(generatedResources []LatencyAwareResources) []bestLatencyFitLatencyAware.LatencyAwareResources {
+	out := make([]bestLatencyFitLatencyAware.LatencyAwareResources, len(generatedResources))
+	for i, s := range generatedResources {
+		out[i] = bestLatencyFitLatencyAware.LatencyAwareResources{
 			Id:             s.Id,
 			JobName:        s.JobName,
 			Virtualization: s.Virtualization,
@@ -163,6 +179,25 @@ func (a WorstLatencyAdapter) Calculate(job LatencyAwareResources, candidates int
 	return res.Id, nil
 }
 
+// --- BestLatencyFit ---
+type BestLatencyAdapter struct {
+	Algo bestLatencyFitLatencyAware.BestLatencyFitLatencyAware
+}
+
+func (a BestLatencyAdapter) Name() string { return "BestLatencyFit" }
+func (a BestLatencyAdapter) ConvertResources(res []LatencyAwareResources) interface{} {
+	return convertResourcesBestLatencyFit(res)
+}
+func (a BestLatencyAdapter) Calculate(job LatencyAwareResources, candidates interface{}) (string, error) {
+	jobConv := convertResourcesBestLatencyFit([]LatencyAwareResources{job})[0]
+	nodes := candidates.([]bestLatencyFitLatencyAware.LatencyAwareResources)
+	res, err := a.Algo.Calculate(jobConv, nodes)
+	if err != nil {
+		return "", err
+	}
+	return res.Id, nil
+}
+
 // --- LowestCarbonFit ---
 type LowestCarbonAdapter struct {
 	Algo lowestCarbonFitLatencyAware.LowestCarbonFitLatencyAware
@@ -210,6 +245,7 @@ func BenchmarkTwoStageAllConfigs(b *testing.B) {
 		&WorstMemoryAdapter{},
 		&BestMemoryAdapter{},
 		&WorstLatencyAdapter{},
+		&BestLatencyAdapter{},
 		&LowestCarbonAdapter{},
 	}
 
@@ -451,8 +487,16 @@ func deepCopyClusters(src []interface{}) []interface{} {
 			tmp := make([]worstMemoryFitLatencyAware.LatencyAwareResources, len(nodes))
 			copy(tmp, nodes)
 			dst[i] = tmp
+		case []bestMemoryFitLatencyAware.LatencyAwareResources:
+			tmp := make([]bestMemoryFitLatencyAware.LatencyAwareResources, len(nodes))
+			copy(tmp, nodes)
+			dst[i] = tmp
 		case []worstLatencyFitLatencyAware.LatencyAwareResources:
 			tmp := make([]worstLatencyFitLatencyAware.LatencyAwareResources, len(nodes))
+			copy(tmp, nodes)
+			dst[i] = tmp
+		case []bestLatencyFitLatencyAware.LatencyAwareResources:
+			tmp := make([]bestLatencyFitLatencyAware.LatencyAwareResources, len(nodes))
 			copy(tmp, nodes)
 			dst[i] = tmp
 		case []lowestCarbonFitLatencyAware.LatencyAwareResources:
@@ -476,8 +520,16 @@ func deepCopySummaries(src interface{}) interface{} {
 		tmp := make([]worstMemoryFitLatencyAware.LatencyAwareResources, len(s))
 		copy(tmp, s)
 		return tmp
+	case []bestMemoryFitLatencyAware.LatencyAwareResources:
+		tmp := make([]bestMemoryFitLatencyAware.LatencyAwareResources, len(s))
+		copy(tmp, s)
+		return tmp
 	case []worstLatencyFitLatencyAware.LatencyAwareResources:
 		tmp := make([]worstLatencyFitLatencyAware.LatencyAwareResources, len(s))
+		copy(tmp, s)
+		return tmp
+	case []bestLatencyFitLatencyAware.LatencyAwareResources:
+		tmp := make([]bestLatencyFitLatencyAware.LatencyAwareResources, len(s))
 		copy(tmp, s)
 		return tmp
 	case []lowestCarbonFitLatencyAware.LatencyAwareResources:
@@ -502,6 +554,12 @@ func getClusterIndex(clusters interface{}, id string) int {
 			}
 		}
 	case []worstLatencyFitLatencyAware.LatencyAwareResources:
+		for i, c := range cs {
+			if c.Id == id {
+				return i
+			}
+		}
+	case []bestLatencyFitLatencyAware.LatencyAwareResources:
 		for i, c := range cs {
 			if c.Id == id {
 				return i
@@ -555,6 +613,14 @@ func deductClusterResources(clusters interface{}, id string, mem, cpu float64) {
 				return
 			}
 		}
+	case []bestLatencyFitLatencyAware.LatencyAwareResources:
+		for i := range cs {
+			if cs[i].Id == id {
+				cs[i].AvailableMem -= mem
+				cs[i].AvailableCPU -= cpu
+				return
+			}
+		}
 	case []lowestCarbonFitLatencyAware.LatencyAwareResources:
 		for i := range cs {
 			if cs[i].Id == id {
@@ -593,6 +659,14 @@ func deductNodeResources(cluster interface{}, nodeID string, mem, cpu float64) {
 			}
 		}
 	case []worstLatencyFitLatencyAware.LatencyAwareResources:
+		for i := range nodes {
+			if nodes[i].Id == nodeID {
+				nodes[i].AvailableMem -= mem
+				nodes[i].AvailableCPU -= cpu
+				return
+			}
+		}
+	case []bestLatencyFitLatencyAware.LatencyAwareResources:
 		for i := range nodes {
 			if nodes[i].Id == nodeID {
 				nodes[i].AvailableMem -= mem
