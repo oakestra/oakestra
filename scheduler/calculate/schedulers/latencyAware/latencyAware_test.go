@@ -1,14 +1,13 @@
 package latencyAware
 
 import (
-	"encoding/csv"
 	"fmt"
 	"os"
+	"scheduler/calculate/schedulers/latencyAware/bestMemoryFitLatencyAware"
 	"scheduler/calculate/schedulers/latencyAware/lowestCarbonFitLatencyAware"
 	"scheduler/calculate/schedulers/latencyAware/randomFitLatencyAware"
 	"scheduler/calculate/schedulers/latencyAware/worstLatencyFitLatencyAware"
 	"scheduler/calculate/schedulers/latencyAware/worstMemoryFitLatencyAware"
-	"strconv"
 	"testing"
 	"time"
 )
@@ -17,6 +16,21 @@ func convertResourcesWorstMemoryFit(generatedResources []LatencyAwareResources) 
 	out := make([]worstMemoryFitLatencyAware.LatencyAwareResources, len(generatedResources))
 	for i, s := range generatedResources {
 		out[i] = worstMemoryFitLatencyAware.LatencyAwareResources{
+			Id:             s.Id,
+			JobName:        s.JobName,
+			Virtualization: s.Virtualization,
+			AvailableMem:   s.AvailableMem,
+			AvailableCPU:   s.AvailableCPU,
+			Latency:        s.Latency,
+		}
+	}
+	return out
+}
+
+func convertResourcesBestMemoryFit(generatedResources []LatencyAwareResources) []bestMemoryFitLatencyAware.LatencyAwareResources {
+	out := make([]bestMemoryFitLatencyAware.LatencyAwareResources, len(generatedResources))
+	for i, s := range generatedResources {
+		out[i] = bestMemoryFitLatencyAware.LatencyAwareResources{
 			Id:             s.Id,
 			JobName:        s.JobName,
 			Virtualization: s.Virtualization,
@@ -111,6 +125,25 @@ func (a WorstMemoryAdapter) Calculate(job LatencyAwareResources, candidates inte
 	return res.Id, nil
 }
 
+// --- BestMemoryFit ---
+type BestMemoryAdapter struct {
+	Algo bestMemoryFitLatencyAware.BestMemoryFitLatencyAware
+}
+
+func (a BestMemoryAdapter) Name() string { return "BestMemoryFit" }
+func (a BestMemoryAdapter) ConvertResources(res []LatencyAwareResources) interface{} {
+	return convertResourcesBestMemoryFit(res)
+}
+func (a BestMemoryAdapter) Calculate(job LatencyAwareResources, candidates interface{}) (string, error) {
+	jobConv := convertResourcesBestMemoryFit([]LatencyAwareResources{job})[0]
+	nodes := candidates.([]bestMemoryFitLatencyAware.LatencyAwareResources)
+	res, err := a.Algo.Calculate(jobConv, nodes)
+	if err != nil {
+		return "", err
+	}
+	return res.Id, nil
+}
+
 // --- WorstLatencyFit ---
 type WorstLatencyAdapter struct {
 	Algo worstLatencyFitLatencyAware.WorstLatencyFitLatencyAware
@@ -175,6 +208,7 @@ func BenchmarkTwoStageAllConfigs(b *testing.B) {
 	algorithms := []Scheduler{
 		&RandomFitAdapter{},
 		&WorstMemoryAdapter{},
+		&BestMemoryAdapter{},
 		&WorstLatencyAdapter{},
 		&LowestCarbonAdapter{},
 	}
@@ -485,6 +519,12 @@ func getClusterIndex(clusters interface{}, id string) int {
 				return i
 			}
 		}
+	case []bestMemoryFitLatencyAware.LatencyAwareResources:
+		for i, c := range cs {
+			if c.Id == id {
+				return i
+			}
+		}
 	}
 	return -1
 }
@@ -492,6 +532,14 @@ func getClusterIndex(clusters interface{}, id string) int {
 func deductClusterResources(clusters interface{}, id string, mem, cpu float64) {
 	switch cs := clusters.(type) {
 	case []worstMemoryFitLatencyAware.LatencyAwareResources:
+		for i := range cs {
+			if cs[i].Id == id {
+				cs[i].AvailableMem -= mem
+				cs[i].AvailableCPU -= cpu
+				return
+			}
+		}
+	case []bestMemoryFitLatencyAware.LatencyAwareResources:
 		for i := range cs {
 			if cs[i].Id == id {
 				cs[i].AvailableMem -= mem
@@ -529,6 +577,14 @@ func deductClusterResources(clusters interface{}, id string, mem, cpu float64) {
 func deductNodeResources(cluster interface{}, nodeID string, mem, cpu float64) {
 	switch nodes := cluster.(type) {
 	case []worstMemoryFitLatencyAware.LatencyAwareResources:
+		for i := range nodes {
+			if nodes[i].Id == nodeID {
+				nodes[i].AvailableMem -= mem
+				nodes[i].AvailableCPU -= cpu
+				return
+			}
+		}
+	case []bestMemoryFitLatencyAware.LatencyAwareResources:
 		for i := range nodes {
 			if nodes[i].Id == nodeID {
 				nodes[i].AvailableMem -= mem
@@ -612,82 +668,6 @@ func getBaseLatencyByID(baseClusters [][]LatencyAwareResources, srcID, depID str
 	return 0
 }
 
-func writeClusterCSV(clusters []LatencyAwareResources, c, n int) {
-	fileName := fmt.Sprintf("clusters_%d-%d.csv", c, n)
-	file, err := os.Create(fileName)
-	if err != nil {
-		fmt.Printf("Error creating %s: %v\n", fileName, err)
-		return
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	writer.Write([]string{"ClusterID", "AvailableMem", "AvailableCPU", "CarbonIntensity"})
-
-	for _, cl := range clusters {
-		writer.Write([]string{
-			cl.Id,
-			fmt.Sprintf("%.2f", cl.AvailableMem),
-			fmt.Sprintf("%.2f", cl.AvailableCPU),
-			fmt.Sprintf("%.2f", cl.CarbonIntensity),
-		})
-	}
-}
-
-func writeNodesCSV(clusteredNodes [][]LatencyAwareResources, c, n int) {
-	fileName := fmt.Sprintf("nodes_%d-%d.csv", c, n)
-	file, err := os.Create(fileName)
-	if err != nil {
-		fmt.Printf("Error creating %s: %v\n", fileName, err)
-		return
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	writer.Write([]string{"Cluster", "NodeID", "Mem", "CPU", "CarbonIntensity"})
-
-	for ci, cluster := range clusteredNodes {
-		for _, node := range cluster {
-			writer.Write([]string{
-				fmt.Sprintf("cluster%d", ci+1),
-				node.Id,
-				strconv.FormatFloat(node.AvailableMem, 'f', 2, 64),
-				strconv.FormatFloat(node.AvailableCPU, 'f', 2, 64),
-				strconv.FormatFloat(node.CarbonIntensity, 'f', 2, 64),
-			})
-		}
-	}
-}
-
-func writeJobsCSV(jobs []LatencyAwareResources, c, n int) {
-	fileName := fmt.Sprintf("jobs_%d-%d.csv", c, n)
-	file, err := os.Create(fileName)
-	if err != nil {
-		fmt.Printf("Error creating %s: %v\n", fileName, err)
-		return
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	writer.Write([]string{"JobID", "JobName", "MemReq", "CPUReq", "NumDeps"})
-
-	for _, job := range jobs {
-		writer.Write([]string{
-			job.Id,
-			job.JobName,
-			fmt.Sprintf("%.2f", job.AvailableMem),
-			fmt.Sprintf("%.2f", job.AvailableCPU),
-			strconv.Itoa(len(job.Latency)), // dependency count
-		})
-	}
-}
-
 // appendBenchmarkCSV appends a single result to the global results CSV.
 func appendBenchmarkCSV(filename, config string, res result) {
 	line := fmt.Sprintf("%s,%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
@@ -700,18 +680,6 @@ func appendBenchmarkCSV(filename, config string, res result) {
 		fmt.Printf("Error writing to CSV: %v\n", err)
 		return
 	}
-	defer f.Close()
-	f.WriteString(line)
-}
-
-func appendBenchmarkCSVWithRun(filename string, run int, config string, r result) {
-	line := fmt.Sprintf(
-		"%d,%s,%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
-		run, config, r.A, r.B,
-		r.AvgTotalMs, r.AvgAms, r.AvgBms,
-		r.AvgLatency, r.AvgCO2, r.AvgErrors,
-	)
-	f, _ := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
 	defer f.Close()
 	f.WriteString(line)
 }
