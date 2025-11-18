@@ -4,19 +4,19 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
-	"scheduler/calculate/schedulers/latencyAware/bestMemoryFitLatencyAware"
 	"scheduler/calculate/schedulers/latencyAware/lowestCarbonFitLatencyAware"
 	"scheduler/calculate/schedulers/latencyAware/randomFitLatencyAware"
 	"scheduler/calculate/schedulers/latencyAware/worstLatencyFitLatencyAware"
+	"scheduler/calculate/schedulers/latencyAware/worstMemoryFitLatencyAware"
 	"strconv"
 	"testing"
 	"time"
 )
 
-func convertResourcesBestMemoryFit(generatedResources []LatencyAwareResources) []bestMemoryFitLatencyAware.LatencyAwareResources {
-	out := make([]bestMemoryFitLatencyAware.LatencyAwareResources, len(generatedResources))
+func convertResourcesWorstMemoryFit(generatedResources []LatencyAwareResources) []worstMemoryFitLatencyAware.LatencyAwareResources {
+	out := make([]worstMemoryFitLatencyAware.LatencyAwareResources, len(generatedResources))
 	for i, s := range generatedResources {
-		out[i] = bestMemoryFitLatencyAware.LatencyAwareResources{
+		out[i] = worstMemoryFitLatencyAware.LatencyAwareResources{
 			Id:             s.Id,
 			JobName:        s.JobName,
 			Virtualization: s.Virtualization,
@@ -92,18 +92,18 @@ type Scheduler interface {
 // 2️⃣ Concrete Adapters
 //
 
-// --- BestMemoryFit ---
-type BestMemoryAdapter struct {
-	Algo bestMemoryFitLatencyAware.BestMemoryFitLatencyAware
+// --- WorstMemoryFit ---
+type WorstMemoryAdapter struct {
+	Algo worstMemoryFitLatencyAware.WorstMemoryFitLatencyAware
 }
 
-func (a BestMemoryAdapter) Name() string { return "BestMemoryFit" }
-func (a BestMemoryAdapter) ConvertResources(res []LatencyAwareResources) interface{} {
-	return convertResourcesBestMemoryFit(res)
+func (a WorstMemoryAdapter) Name() string { return "WorstMemoryFit" }
+func (a WorstMemoryAdapter) ConvertResources(res []LatencyAwareResources) interface{} {
+	return convertResourcesWorstMemoryFit(res)
 }
-func (a BestMemoryAdapter) Calculate(job LatencyAwareResources, candidates interface{}) (string, error) {
-	jobConv := convertResourcesBestMemoryFit([]LatencyAwareResources{job})[0]
-	nodes := candidates.([]bestMemoryFitLatencyAware.LatencyAwareResources)
+func (a WorstMemoryAdapter) Calculate(job LatencyAwareResources, candidates interface{}) (string, error) {
+	jobConv := convertResourcesWorstMemoryFit([]LatencyAwareResources{job})[0]
+	nodes := candidates.([]worstMemoryFitLatencyAware.LatencyAwareResources)
 	res, err := a.Algo.Calculate(jobConv, nodes)
 	if err != nil {
 		return "", err
@@ -172,15 +172,14 @@ func (a RandomFitAdapter) Calculate(job LatencyAwareResources, candidates interf
 
 // 3️⃣ Automated Two-Stage Comparison Benchmark
 func BenchmarkTwoStageAllConfigs(b *testing.B) {
-	// --- Algorithm adapters ---
 	algorithms := []Scheduler{
 		&RandomFitAdapter{},
-		&BestMemoryAdapter{},
+		&WorstMemoryAdapter{},
 		&WorstLatencyAdapter{},
 		&LowestCarbonAdapter{},
 	}
 
-	// --- Cluster-node configurations (clusters-nodesPerCluster) ---
+	// clusters, nodesPerCluster
 	configs := [][2]int{
 		{1, 45},
 		{3, 15},
@@ -191,76 +190,72 @@ func BenchmarkTwoStageAllConfigs(b *testing.B) {
 	}
 
 	const (
-		numJobs = 20
+		numJobs = 30
 		seed    = 0
+		repeats = 100
 	)
 
 	b.ReportAllocs()
 
-	// ✅ Generate jobs once and reuse across all configurations
-	baseJobs := GenerateJobs(seed, numJobs)
-	writeJobsCSV(baseJobs, 0, 0) // optional: export reference jobs.csv
+	// ✅ Generate jobs once
+	jobs := GenerateJobs(seed, numJobs)
 
-	// ✅ Initialize CSV header for overall benchmark results
+	// ✅ Reset CSV once
 	resultsFile := "benchmark_results.csv"
-	if _, err := os.Stat(resultsFile); os.IsNotExist(err) {
-		header := "config,algA,algB,avg_total_ms,avg_A_ms,avg_B_ms,avg_latency,avg_co2,avg_errors\n"
-		os.WriteFile(resultsFile, []byte(header), 0644)
-	}
+	header := "config,algA,algB,avg_total_ms,avg_A_ms,avg_B_ms,avg_latency,avg_co2,avg_errors\n"
+	_ = os.WriteFile(resultsFile, []byte(header), 0644)
 
-	// --- Iterate through configurations ---
-	for _, cfg := range configs {
-		clusters, nodesPerCluster := cfg[0], cfg[1]
-		configLabel := fmt.Sprintf("%d-%d", clusters, nodesPerCluster)
+	// ✅ Repeat *full sweep* of all configs N times
+	for sweep := 1; sweep <= repeats; sweep++ {
+		b.Logf("\n==================== FULL SWEEP %d ====================\n", sweep)
 
-		// Generate a new cluster/node topology for each config
-		baseClusterNodes, baseClusterSummaries := GenerateClusteredNodes(clusters, nodesPerCluster, seed)
+		// ✅ Now iterate through all configurations
+		for _, cfg := range configs {
+			clusters, nodesPerCluster := cfg[0], cfg[1]
+			configLabel := fmt.Sprintf("%d-%d", clusters, nodesPerCluster)
 
-		// Export generated data for reproducibility
-		writeClusterCSV(baseClusterSummaries, clusters, nodesPerCluster)
-		writeNodesCSV(baseClusterNodes, clusters, nodesPerCluster)
+			b.Logf("\n========== CONFIG %s (sweep %d) ==========\n", configLabel, sweep)
 
-		b.Logf("\n===================== CONFIG %s (clusters-nodes) =====================", configLabel)
+			// Generate fresh topology for this config + sweep
+			clusterNodes, clusterSummaries := GenerateClusteredNodes(
+				clusters, nodesPerCluster, seed,
+			)
 
-		// --- Aggregation variables ---
-		var (
-			totalTime float64
-			pairCount int
-		)
+			var totalTime float64
+			var count int
 
-		// --- Run all algorithm pairings ---
-		for _, algA := range algorithms {
-			for _, algB := range algorithms {
-				res := runTwoStageOnce(
-					b,
-					algA,
-					algB,
-					baseClusterNodes,
-					baseClusterSummaries,
-					baseJobs, // same jobs for all configs
-				)
+			// ✅ Run all algorithm pairings
+			for _, algA := range algorithms {
+				for _, algB := range algorithms {
 
-				// Log to test output
-				b.Logf("A=%-15s B=%-15s | Total=%7.2fms (A=%6.2f, B=%6.2f) | Lat=%6.2f | CO₂=%8.2f | Err=%5.2f",
-					res.A, res.B,
-					res.AvgTotalMs, res.AvgAms, res.AvgBms,
-					res.AvgLatency, res.AvgCO2, res.AvgErrors)
+					res := runTwoStageOnce(
+						b,
+						algA,
+						algB,
+						clusterNodes,
+						clusterSummaries,
+						jobs,
+					)
 
-				// Append to CSV for pandas/seaborn
-				appendBenchmarkCSV(resultsFile, configLabel, res)
+					// Log per-result
+					b.Logf("A=%-15s B=%-15s | Total=%.2f (A=%.2f B=%.2f) | Lat=%.2f | CO₂=%.2f | Err=%.2f",
+						res.A, res.B,
+						res.AvgTotalMs, res.AvgAms, res.AvgBms,
+						res.AvgLatency, res.AvgCO2, res.AvgErrors,
+					)
 
-				totalTime += res.AvgTotalMs
-				pairCount++
+					// ✅ Write to CSV
+					appendBenchmarkCSV(resultsFile, configLabel, res)
+
+					totalTime += res.AvgTotalMs
+					count++
+				}
 			}
-		}
 
-		// --- Summary for this configuration ---
-		avgTime := 0.0
-		if pairCount > 0 {
-			avgTime = totalTime / float64(pairCount)
+			avgTime := totalTime / float64(count)
+			b.Logf("▶ CONFIG %s — Avg total scheduling time: %.2f ms\n",
+				configLabel, avgTime)
 		}
-
-		b.Logf("▶ Avg Scheduling Time across all algorithm pairings: %.2f ms\n", avgTime)
 	}
 }
 
@@ -418,8 +413,8 @@ func deepCopyClusters(src []interface{}) []interface{} {
 	dst := make([]interface{}, len(src))
 	for i, cluster := range src {
 		switch nodes := cluster.(type) {
-		case []bestMemoryFitLatencyAware.LatencyAwareResources:
-			tmp := make([]bestMemoryFitLatencyAware.LatencyAwareResources, len(nodes))
+		case []worstMemoryFitLatencyAware.LatencyAwareResources:
+			tmp := make([]worstMemoryFitLatencyAware.LatencyAwareResources, len(nodes))
 			copy(tmp, nodes)
 			dst[i] = tmp
 		case []worstLatencyFitLatencyAware.LatencyAwareResources:
@@ -443,8 +438,8 @@ func deepCopyClusters(src []interface{}) []interface{} {
 
 func deepCopySummaries(src interface{}) interface{} {
 	switch s := src.(type) {
-	case []bestMemoryFitLatencyAware.LatencyAwareResources:
-		tmp := make([]bestMemoryFitLatencyAware.LatencyAwareResources, len(s))
+	case []worstMemoryFitLatencyAware.LatencyAwareResources:
+		tmp := make([]worstMemoryFitLatencyAware.LatencyAwareResources, len(s))
 		copy(tmp, s)
 		return tmp
 	case []worstLatencyFitLatencyAware.LatencyAwareResources:
@@ -466,7 +461,7 @@ func deepCopySummaries(src interface{}) interface{} {
 
 func getClusterIndex(clusters interface{}, id string) int {
 	switch cs := clusters.(type) {
-	case []bestMemoryFitLatencyAware.LatencyAwareResources:
+	case []worstMemoryFitLatencyAware.LatencyAwareResources:
 		for i, c := range cs {
 			if c.Id == id {
 				return i
@@ -496,7 +491,7 @@ func getClusterIndex(clusters interface{}, id string) int {
 
 func deductClusterResources(clusters interface{}, id string, mem, cpu float64) {
 	switch cs := clusters.(type) {
-	case []bestMemoryFitLatencyAware.LatencyAwareResources:
+	case []worstMemoryFitLatencyAware.LatencyAwareResources:
 		for i := range cs {
 			if cs[i].Id == id {
 				cs[i].AvailableMem -= mem
@@ -533,7 +528,7 @@ func deductClusterResources(clusters interface{}, id string, mem, cpu float64) {
 
 func deductNodeResources(cluster interface{}, nodeID string, mem, cpu float64) {
 	switch nodes := cluster.(type) {
-	case []bestMemoryFitLatencyAware.LatencyAwareResources:
+	case []worstMemoryFitLatencyAware.LatencyAwareResources:
 		for i := range nodes {
 			if nodes[i].Id == nodeID {
 				nodes[i].AvailableMem -= mem
@@ -705,6 +700,18 @@ func appendBenchmarkCSV(filename, config string, res result) {
 		fmt.Printf("Error writing to CSV: %v\n", err)
 		return
 	}
+	defer f.Close()
+	f.WriteString(line)
+}
+
+func appendBenchmarkCSVWithRun(filename string, run int, config string, r result) {
+	line := fmt.Sprintf(
+		"%d,%s,%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
+		run, config, r.A, r.B,
+		r.AvgTotalMs, r.AvgAms, r.AvgBms,
+		r.AvgLatency, r.AvgCO2, r.AvgErrors,
+	)
+	f, _ := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
 	defer f.Close()
 	f.WriteString(line)
 }

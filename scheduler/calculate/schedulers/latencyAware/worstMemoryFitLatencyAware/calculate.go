@@ -1,4 +1,4 @@
-package bestMemoryFitLatencyAware
+package worstMemoryFitLatencyAware
 
 import (
 	"encoding/json"
@@ -77,21 +77,21 @@ func (r *LatencyAwareResources) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-type BestMemoryFitLatencyAware struct {
+type WorstMemoryFitLatencyAware struct {
 	Deployments map[string]map[string]bool // maps names of jobs to set of candidate _ids (instance of a job could be spread across multiple candidates
 }
 
-func (a BestMemoryFitLatencyAware) ResourceList() []LatencyAwareResources {
+func (a WorstMemoryFitLatencyAware) ResourceList() []LatencyAwareResources {
 	var data []LatencyAwareResources
 	return data
 }
 
-func (a BestMemoryFitLatencyAware) JobData() LatencyAwareResources {
+func (a WorstMemoryFitLatencyAware) JobData() LatencyAwareResources {
 	var data LatencyAwareResources
 	return data
 }
 
-func (a *BestMemoryFitLatencyAware) Calculate(job LatencyAwareResources, candidates []LatencyAwareResources) (LatencyAwareResources, error) {
+func (a *WorstMemoryFitLatencyAware) Calculate(job LatencyAwareResources, candidates []LatencyAwareResources) (LatencyAwareResources, error) {
 	if len(candidates) == 0 {
 		return LatencyAwareResources{}, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.TargetClusterNotActive}
 	}
@@ -104,7 +104,7 @@ func (a *BestMemoryFitLatencyAware) Calculate(job LatencyAwareResources, candida
 
 	// todo revert to non-stable, only useful for testing
 	slices.SortStableFunc(filteredCandidates, cmpMemory)
-	res := filteredCandidates[0]
+	res := filteredCandidates[len(filteredCandidates)-1]
 
 	// update deployments
 	if a.Deployments == nil {
@@ -120,7 +120,7 @@ func (a *BestMemoryFitLatencyAware) Calculate(job LatencyAwareResources, candida
 }
 
 // filterRequirements returns a slice of PlacementCandidates which meet the job requirements
-func (a BestMemoryFitLatencyAware) filterRequirements(job LatencyAwareResources, candidates []LatencyAwareResources) []LatencyAwareResources {
+func (a WorstMemoryFitLatencyAware) filterRequirements(job LatencyAwareResources, candidates []LatencyAwareResources) []LatencyAwareResources {
 	filteredCandidates := make([]LatencyAwareResources, 0, len(candidates))
 	for _, candidate := range candidates {
 		if slices.Contains(candidate.Virtualization, job.Virtualization[0]) {
@@ -137,7 +137,7 @@ func (a BestMemoryFitLatencyAware) filterRequirements(job LatencyAwareResources,
 }
 
 // checkLatencyRequirements verifies if the latency to every dependency is below the given threshold
-func (a BestMemoryFitLatencyAware) checkLatencyRequirement(job LatencyAwareResources, candidate LatencyAwareResources) bool {
+func (a WorstMemoryFitLatencyAware) checkLatencyRequirement(job LatencyAwareResources, candidate LatencyAwareResources) bool {
 	for dependency, latency := range job.Latency {
 		if res, ok := a.Deployments[dependency]; ok {
 			// if dependency is deployed on at least one candidate with threshold

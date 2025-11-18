@@ -1,4 +1,4 @@
-package bestMemoryFitLatencyAware
+package worstMemoryFitLatencyAware
 
 import (
 	"errors"

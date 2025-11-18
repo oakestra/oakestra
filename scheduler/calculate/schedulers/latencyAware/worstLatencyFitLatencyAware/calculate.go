@@ -79,7 +79,8 @@ func (r *LatencyAwareResources) UnmarshalJSON(data []byte) error {
 }
 
 type WorstLatencyFitLatencyAware struct {
-	Deployments map[string]map[string]bool // maps names of jobs to set of candidate _ids (instance of a job could be spread across multiple candidates
+	Deployments      map[string]map[string]bool // maps names of jobs to set of candidate _ids (instance of a job could be spread across multiple candidates
+	LatencyScoreCash map[string]int             // maps candidate _ids to their latency score
 }
 
 func (a WorstLatencyFitLatencyAware) ResourceList() []LatencyAwareResources {
@@ -97,6 +98,10 @@ func (a *WorstLatencyFitLatencyAware) Calculate(job LatencyAwareResources, candi
 		return LatencyAwareResources{}, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.TargetClusterNotActive}
 	}
 
+	if a.LatencyScoreCash == nil {
+		a.LatencyScoreCash = make(map[string]int)
+	}
+
 	filteredCandidates := a.filterRequirements(job, candidates)
 
 	if len(filteredCandidates) == 0 {
@@ -104,7 +109,7 @@ func (a *WorstLatencyFitLatencyAware) Calculate(job LatencyAwareResources, candi
 	}
 
 	// todo revert to non-stable, only useful for testing
-	slices.SortStableFunc(filteredCandidates, cmpLatencyScore)
+	slices.SortStableFunc(filteredCandidates, a.cmpLatencyScore)
 	res := filteredCandidates[0]
 
 	// update deployments
@@ -162,15 +167,25 @@ func (a *WorstLatencyFitLatencyAware) checkLatencyRequirement(job LatencyAwareRe
 }
 
 // cmpLatencyScore compares two candidates according to their total latency score
-func cmpLatencyScore(a LatencyAwareResources, b LatencyAwareResources) int {
-	scoreA := 0
-	scoreB := 0
+func (a *WorstLatencyFitLatencyAware) cmpLatencyScore(c1 LatencyAwareResources, c2 LatencyAwareResources) int {
+	var scoreA, scoreB int
 
-	for _, latency := range a.Latency {
-		scoreA += latency
+	if val, ok := a.LatencyScoreCash[c1.Id]; ok {
+		scoreA = val
+	} else {
+		for _, latency := range c1.Latency {
+			scoreA += latency
+		}
+		a.LatencyScoreCash[c1.Id] = scoreA
 	}
-	for _, latency := range b.Latency {
-		scoreB += latency
+
+	if val, ok := a.LatencyScoreCash[c2.Id]; ok {
+		scoreB = val
+	} else {
+		for _, latency := range c2.Latency {
+			scoreB += latency
+		}
+		a.LatencyScoreCash[c2.Id] = scoreB
 	}
 
 	if scoreA < scoreB {
