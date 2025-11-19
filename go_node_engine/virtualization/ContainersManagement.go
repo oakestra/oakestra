@@ -99,7 +99,7 @@ func findAdditionalRuntimePlugins() iter.Seq[string] {
 		if ok {
 			runtimes, ok := ctd["runtimes"].(map[string]interface{})
 			if ok {
-				for _, runtimeName := range runtimes {
+				for runtimeName := range runtimes {
 					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", runtimeName, CONTAINERD_CONFIG_PATH)
 				}
 				return maps.Keys(runtimes)
