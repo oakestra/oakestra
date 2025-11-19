@@ -71,7 +71,8 @@ const CONTAINERD_CONFIG_PATH = "/etc/containerd/config.toml"
 func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
 	client, err := containerd.New("/run/containerd/containerd.sock")
 	if err != nil {
-		logger.ErrorLogger().Fatalf("Unable to start the container engine: %v\n", err)
+		logger.ErrorLogger().Printf("Unable to start the container engine: %v\n", err)
+		return &ContainerRuntime{}
 	}
 
 	runtime := ContainerRuntime{
@@ -378,6 +379,10 @@ func getTotalCpuUsageByPid(pid int32) (float64, error) {
 }
 
 func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
+	if r.containerClient == nil {
+		return
+	}
+
 	for {
 		select {
 		case <-time.After(every):
