@@ -108,7 +108,7 @@ func NewInstance(
 	var rootfsSize = int64(service.Storage) << 20
 	// anything below 512MiB for the rootfs disk is likely an error, so we fail fast here
 	if rootfsSize < 536870912 {
-		return nil, fmt.Errorf("expected a disk size of atleast 512MiB for instance %q configured via 'vtpus' field", id)
+		return nil, fmt.Errorf("expected a disk size of at least 512MiB for instance %q configured via 'vtpus' field", id)
 	}
 
 	// TODO(axiphi): Remove this directory if one of the operations below fails
@@ -377,7 +377,7 @@ func (i *Instance) GatherMetrics() (*stats.CgroupMetrics, error) {
 func (i *Instance) GatherLogs() string {
 	output := strings.Builder{}
 	// tailbuf.IsLineStart() prevents partial first line from being part of the logs
-	// no error can occur jere because strings.Builder.Write doesn't error
+	// no error can occur here because strings.Builder.Write doesn't error
 	_, _ = i.outputBuffer.WriteToSkippingUntil(&output, tailbuf.IsLineStart())
 
 	return output.String()

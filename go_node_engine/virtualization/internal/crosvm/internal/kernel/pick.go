@@ -13,7 +13,7 @@ var (
 	initrdPatterns = []string{"initramfs-*", "initrd-*", "initrd.img-*"}
 )
 
-// FindLinuxKernelFiles tried to find kernel and initrd images under root and returns (kernelPath, initrdPath, err).
+// FindLinuxKernelFiles tries to find kernel and initrd images under root and returns (kernelPath, initrdPath, err).
 // If no kernel is found ErrNoKernelFound is returned,
 // while not finding an initrd image will only result in an empty string for its path.
 func FindLinuxKernelFiles(root string) (string, string, error) {

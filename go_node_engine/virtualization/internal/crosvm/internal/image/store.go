@@ -48,7 +48,7 @@ type Store struct {
 // NewStore ensures dirPath exists, scans it for existing “*.oakcache” directories, and indexes them.
 func NewStore(dirPath string, sources ...Source) (*Store, error) {
 	if len(sources) == 0 {
-		return nil, fmt.Errorf("store needs to have atleast one source")
+		return nil, fmt.Errorf("store needs to have at least one source")
 
 	}
 
