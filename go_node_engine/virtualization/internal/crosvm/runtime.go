@@ -242,7 +242,7 @@ func (r *Runtime) reportResources(notifyHandler func(res []model.Resources)) {
 		// since we expect them when the instance is still starting or stopped.
 		if err == nil {
 			cpu = strconv.FormatFloat(stats.CalculateCpuPercentage(systemMetrics, metrics), 'f', 2, 64)
-			memory = strconv.FormatFloat(stats.CalculateMemoryPercentage(systemMetrics, metrics), 'f', 2, 64)
+			memory = strconv.FormatUint(metrics.CurrentMemoryBytes, 10)
 		}
 
 		logs := inst.GatherLogs()
