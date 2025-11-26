@@ -28,58 +28,66 @@ def handle_logging(client, userdata, level, buf):
 
 
 def handle_mqtt_message(client, userdata, message):
-    data = dict(topic=message.topic, payload=message.payload.decode())
-    app.logger.info("MQTT - Received from worker: ")
-    app.logger.info(data)
+    try:
 
-    topic = data["topic"]
+        data = dict(topic=message.topic, payload=message.payload.decode())
+        app.logger.info("MQTT - Received from worker: ")
+        app.logger.info(data)
 
-    re_nodes_information_topic = re.search("^nodes/.*/information$", topic)
-    re_job_deployment_topic = re.search("^nodes/.*/job$", topic)
-    re_job_resources_topic = re.search("^nodes/.*/jobs/resources$", topic)
+        topic = data["topic"]
 
-    topic_split = topic.split("/")
-    client_id = topic_split[1]
-    payload = json.loads(data["payload"])
+        re_nodes_information_topic = re.search("^nodes/.*/information$", topic)
+        re_job_deployment_topic = re.search("^nodes/.*/job$", topic)
+        re_job_resources_topic = re.search("^nodes/.*/jobs/resources$", topic)
 
-    # if topic starts with nodes and ends with information
-    if re_nodes_information_topic is not None:
-        updated = mongo_find_node_by_id_and_update_cpu_mem(client_id, payload)
-        if updated is None:
-            mqtt.publish(
-                "nodes/" + client_id + "/control/error",
-                json.dumps({"message": "Node not registered to the cluster"}),
-            )
-    if re_job_deployment_topic is not None:
-        sname = payload.get("sname")
-        status = convert_to_status(payload.get("status"))
-        instance = payload.get("instance")
-        publicip = payload.get("publicip", "--")
-        mongo_update_job_deployed(sname, instance, status, publicip, client_id)
-    if re_job_resources_topic is not None:
-        services = payload.get("services")
-        for service in services:
-            try:
-                # If unable to update then worker has outdated information
-                # and service must be undeployed
-                if (
-                    mongo_update_service_resources(
-                        service.get("job_name"),
-                        service,
-                        client_id,
-                        service.get("instance"),
-                    )
-                    is None
-                ):
-                    mqtt_publish_edge_delete(
-                        client_id,
-                        service.get("job_name"),
-                        service.get("instance"),
-                        service.get("virtualization"),
-                    )
-            except Exception as e:
-                app.logger.error("MQTT - unable to update service resources")
-                app.logger.error(e)
+        topic_split = topic.split("/")
+        client_id = topic_split[1]
+        payload = json.loads(data["payload"])
+
+        # if topic starts with nodes and ends with information
+        if re_nodes_information_topic is not None:
+            updated = mongo_find_node_by_id_and_update_cpu_mem(client_id, payload)
+            if updated is None:
+                mqtt.publish(
+                    "nodes/" + client_id + "/control/error",
+                    json.dumps({"message": "Node not registered to the cluster"}),
+                )
+        if re_job_deployment_topic is not None:
+            sname = payload.get("sname")
+            status = convert_to_status(payload.get("status"))
+            status_detail = payload.get("status_detail")
+            instance = payload.get("instance")
+            publicip = payload.get("publicip", "--")
+            mongo_update_job_deployed(sname, instance, status, status_detail, publicip, client_id)
+        if re_job_resources_topic is not None:
+            services = payload.get("services")
+            for service in services:
+                try:
+                    # If unable to update then worker has outdated information
+                    # and service must be undeployed
+                    if (
+                        mongo_update_service_resources(
+                            service.get("job_name"),
+                            service,
+                            client_id,
+                            service.get("instance"),
+                        )
+                        is None
+                    ):
+                        mqtt_publish_edge_delete(
+                            client_id,
+                            service.get("job_name"),
+                            service.get("instance"),
+                            service.get("virtualization"),
+                        )
+                        
+                except Exception as e:
+                    app.logger.error("MQTT - unable to update service resources")
+                    app.logger.error(e)
+
+    except Exception as e:
+        app.logger.error("MQTT - unable to process message")
+        app.logger.error(e)
 
 
 def mqtt_init(flask_app):

@@ -1,4 +1,4 @@
-import logging
+from logs import logger
 import os
 
 from bson import json_util
@@ -26,13 +26,13 @@ class ServiceController(MethodView):
         content_type="application/json",
     )
     def post(self):
-        logging.info("Incoming Request /api/node/register - to register node")
+        logger.info("Incoming Request /api/node/register - to register node")
         data = request.json  # get POST body
         data.get("token")  # registration_token
         # TODO(GB): check and generate tokens
         client_id = mongo_upsert_node({"ip": request.remote_addr, "node_info": data})
         if not client_id:
-            logging.error("Failed to register node, client_id is None")
+            logger.error("Failed to register node, client_id is None")
             abort(500, "Failed to register node")
         response = {
             "id": str(client_id),

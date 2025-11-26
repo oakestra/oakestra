@@ -1,4 +1,4 @@
-import logging
+from logs import logger
 
 import services.service_operations as service_operations
 from bson import json_util
@@ -6,7 +6,7 @@ from clients.mongodb_client import (
     mongo_find_job_by_system_id,
     mongo_update_job_status,
 )
-from clients.mqtt_client import mqtt_publish_edge_deploy
+from ext_requests.worker_node_request import deploy_to_worker
 from ext_requests.network_plugin_requests import network_notify_deployment
 from flask import Response, request
 from flask.views import MethodView
@@ -39,7 +39,7 @@ class ServiceController(MethodView):
         content_type="application/json",
     )
     def post(self, system_job_id, instance_number):
-        logging.info("Incoming Request /api/deploy")
+        logger.info("Incoming Request /api/deploy")
         job = request.json  # contains job_id and job_description
 
         try:
@@ -59,7 +59,7 @@ class ServiceController(MethodView):
         find service in db and ask corresponding worker to delete task,
         instance_number -1 undeploy all known instances
         """
-        logging.info("Incoming Request /api/service/ - to delete task...")
+        logger.info("Incoming Request /api/service/ - to delete task...")
 
         try:
             service_operations.delete_service(system_job_id, instance_number)
@@ -77,9 +77,9 @@ class SchedulingController(MethodView):
         content_type="application/json",
     )
     def post(self, system_job_id, instance_number):
-        logging.info("Incoming Request /api/result - received cluster_scheduler result")
+        logger.info("Incoming Request /api/result - received cluster_scheduler result")
         data = request.json  # get POST body
-        logging.info(data)
+        logger.info(data)
 
         if data.get("found", False):
             resulting_node_id = data.get("node").get("_id")
@@ -95,7 +95,7 @@ class SchedulingController(MethodView):
             network_notify_deployment(str(job["system_job_id"]), job)
 
             # Publish job
-            mqtt_publish_edge_deploy(resulting_node_id, job, instance_number)
+            deploy_to_worker(resulting_node_id, job, instance_number)
         else:
             mongo_update_job_status(
                 instance_number=instance_number,

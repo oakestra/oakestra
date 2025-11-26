@@ -56,7 +56,7 @@ services:
   cloud_scheduler:
     network_mode: host
     environment:
-      - SYSTEM_MANAGER_URL=0.0.0.0
+      - MANAGER_URL=0.0.0.0
       - RESOURCE_ABSTRACTOR_URL=0.0.0.0
       - REDIS_ADDR=redis://:cloudRedis@0.0.0.0:6379
 

@@ -1,13 +1,13 @@
 from prometheus_client import Gauge
+from logs import logger
 
 metrics = {}
 jobs = {}
 cluster_id = None
-logger = None
 
 
 def add_or_set_metric(name, value):
-    global metrics, logger
+    global metrics
     metrics_name = "_gauge_" + str(name) + "_" + str(cluster_id)
     if type(value) is not list and type(value) is not dict and value is not None:
         try:
@@ -20,11 +20,10 @@ def add_or_set_metric(name, value):
             logger.error(e)
 
 
-def prometheus_init_gauge_metrics(my_id, app_logger):
-    global cluster_id, logger
-    logger = app_logger
+def prometheus_init_gauge_metrics(my_id):
+    global cluster_id
     cluster_id = my_id
-    print("prometheus gauge metrics initialized.")
+    logger.info("prometheus gauge metrics initialized.")
 
 
 def prometheus_set_metrics(data):

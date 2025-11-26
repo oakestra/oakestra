@@ -58,10 +58,17 @@
             "problemMatcher": []
         },
         {
+            "label": "set-default-cluster-to-node-engine",
+            "type": "shell",
+            "command": "cd ${workspaceRoot}/go_node_engine/build && ./build.sh && ./install.sh $(dpkg --print-architecture) && sudo NodeEngine config cluster 0.0.0.0",
+            "problemMatcher": []
+        },
+        {
             "label": "prep-debug-node-engine-env",
             "dependsOn": [
                 "root-orchestrator-up",
                 "cluster-orchestrator-up",
+                "set-default-cluster-to-node-engine",
             ],
             "dependsOrder": "sequence",
         },
@@ -70,9 +77,16 @@
             "dependsOn": [
                 "root-orchestrator-up",
                 "cluster-orchestrator-up",
-                "remove-cluster-manager"
+                "remove-cluster-manager",
+                "install-cluster-manager-dependencies"
             ],
             "dependsOrder": "sequence",
+        },
+        {
+            "label": "install-cluster-manager-dependencies",
+            "type": "shell",
+            "command": "pip install -r <(sed \"s/\\${LIB_BRANCH}/$(git rev-parse --abbrev-ref HEAD)/g\" ${workspaceRoot}/cluster_orchestrator/cluster-manager/requirements.txt)" ,
+            "problemMatcher": []
         },
         {
             "label": "prep-debug-cluster-scheduler-env",

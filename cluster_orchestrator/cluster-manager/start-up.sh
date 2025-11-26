@@ -6,7 +6,8 @@
 virtualenv --clear -p python3 .venv
 source .venv/bin/activate
 
-.venv/bin/pip install -r requirements.txt
+BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+.venv/bin/pip install -r <(sed "s|\${BRANCH}|${BRANCH}|g" cluster_orchestrator/cluster-manager/requirements.txt)
 
 export FLASK_ENV=development
 export FLASK_DEBUG=True # TRUE for logging
