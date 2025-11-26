@@ -3,12 +3,13 @@ import os
 import re
 
 import paho.mqtt.client as paho_mqtt
-from mongodb_client import (
+from oakestra_utils.types.statuses import convert_to_status
+
+from clients.mongodb_client import (
     mongo_find_node_by_id_and_update_cpu_mem,
     mongo_update_job_deployed,
     mongo_update_service_resources,
 )
-from oakestra_utils.types.statuses import convert_to_status
 
 mqtt = None
 app = None
@@ -43,7 +44,12 @@ def handle_mqtt_message(client, userdata, message):
 
     # if topic starts with nodes and ends with information
     if re_nodes_information_topic is not None:
-        mongo_find_node_by_id_and_update_cpu_mem(client_id, payload)
+        updated = mongo_find_node_by_id_and_update_cpu_mem(client_id, payload)
+        if updated is None:
+            mqtt.publish(
+                "nodes/" + client_id + "/control/error",
+                json.dumps({"message": "Node not registered to the cluster"}),
+            )
     if re_job_deployment_topic is not None:
         sname = payload.get("sname")
         status = convert_to_status(payload.get("status"))

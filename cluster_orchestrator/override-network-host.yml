@@ -1,0 +1,84 @@
+
+x-logging:
+  &default-logging
+  driver: "json-file"
+  options:
+    max-size: "1m"
+    max-file: "1"
+    tag: "{{.Name}}"
+
+services:
+
+  # MQTT 
+  mqtt:
+    network_mode: host
+
+      
+  # cluster-level mongoDB
+  mongo_cluster:
+    network_mode: host
+
+  # cluster-level mongoDB
+  mongo_clusternet:
+    network_mode: host
+
+
+  # Cluster Manager
+  cluster_service_manager:
+    network_mode: host
+    environment:
+      - MQTT_BROKER_URL=0.0.0.0
+      - SYSTEM_MANAGER_URL=0.0.0.0
+      - CLUSTER_MONGO_URL=0.0.0.0
+      - ROOT_SERVICE_MANAGER_URL=0.0.0.0
+
+  # Cluster Manager
+  cluster_manager:
+    network_mode: host
+    environment:
+      - CLUSTER_SERVICE_MANAGER_ADDR=0.0.0.0
+      - CLUSTER_MONGO_URL=0.0.0.0
+      - CLUSTER_SCHEDULER_URL=0.0.0.0
+      - MQTT_BROKER_URL=0.0.0.0
+
+
+
+  # Cluster Scheduler
+  cluster_scheduler:
+    network_mode: host
+    environment:
+      - CLUSTER_MANAGER_URL=0.0.0.0
+      - CLUSTER_MONGO_URL=0.0.0.0
+      - REDIS_ADDR=redis://:clusterRedis@0.0.0.0:6479
+    depends_on:
+      - cluster_redis
+      - mongo_cluster
+    logging: *default-logging
+
+
+  # Redis for the Cluster Scheduler as Job Queue
+  cluster_redis:
+    network_mode: host
+
+
+  prometheus:
+    network_mode: host
+
+
+  # Observability stack (Grafana, Loki, Promtail)
+  cluster_grafana:
+    network_mode: host
+
+  cluster_loki:
+    network_mode: host
+
+  
+  cluster_promtail:
+    network_mode: host
+
+
+volumes:
+  mongodb_cluster_data:
+    driver: local
+  mongodb_cluster_net_data:
+    driver: local

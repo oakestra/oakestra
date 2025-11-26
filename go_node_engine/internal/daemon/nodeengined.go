@@ -87,6 +87,10 @@ func main() {
 		}
 	}
 	if model.GetNodeInfo().Overlay {
+		logger.InfoLogger().Printf("Overlay network enabled 🟢")
+		// wait for systemctl to start the netmanager service
+		logger.InfoLogger().Printf("Waiting for NetManager to start...")
+		time.Sleep(5 * time.Second)
 		err := requests.RegisterSelfToNetworkComponent()
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Error registering to NetManager: %v", err)

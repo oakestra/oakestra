@@ -1,7 +1,7 @@
 import json
 
 import requests
-from mongodb_client import find_one_edge_node
+from clients.mongodb_client import find_one_edge_node
 
 
 def edge_request():
