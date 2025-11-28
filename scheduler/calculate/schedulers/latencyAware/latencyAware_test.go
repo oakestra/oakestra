@@ -109,6 +109,7 @@ type result struct {
 	AvgTotalMs                    float64
 	AvgAms, AvgBms                float64
 	AvgLatency, AvgCO2, AvgErrors float64
+	DistributionIndex             float64
 }
 
 // 1️⃣ Scheduler Adapter Interface
@@ -262,17 +263,14 @@ func BenchmarkTwoStageAllConfigs(b *testing.B) {
 	const (
 		numJobs = 30
 		seed    = 0
-		repeats = 100
+		repeats = 10000
 	)
 
 	b.ReportAllocs()
 
-	// ✅ Generate jobs once
-	jobs := GenerateJobs(seed, numJobs)
-
 	// ✅ Reset CSV once
 	resultsFile := "benchmark_results.csv"
-	header := "config,algA,algB,avg_total_ms,avg_A_ms,avg_B_ms,avg_latency,avg_co2,avg_errors\n"
+	header := "config,algA,algB,avg_total_ms,avg_A_ms,avg_B_ms,avg_latency,avg_co2,avg_fairness,avg_errors\n"
 	_ = os.WriteFile(resultsFile, []byte(header), 0644)
 
 	// ✅ Repeat *full sweep* of all configs N times
@@ -291,6 +289,9 @@ func BenchmarkTwoStageAllConfigs(b *testing.B) {
 				clusters, nodesPerCluster, seed,
 			)
 
+			// Generate jobs
+			jobs := GenerateJobs(seed, numJobs)
+
 			var totalTime float64
 			var count int
 
@@ -308,11 +309,11 @@ func BenchmarkTwoStageAllConfigs(b *testing.B) {
 					)
 
 					// Log per-result
-					b.Logf("A=%-15s B=%-15s | Total=%.2f (A=%.2f B=%.2f) | Lat=%.2f | CO₂=%.2f | Err=%.2f",
-						res.A, res.B,
-						res.AvgTotalMs, res.AvgAms, res.AvgBms,
-						res.AvgLatency, res.AvgCO2, res.AvgErrors,
-					)
+					//b.Logf("A=%-15s B=%-15s | Total=%.2f (A=%.2f B=%.2f) | Lat=%.2f | CO₂=%.2f | Fairness=%.2f | Err=%.2f",
+					//	res.A, res.B,
+					//	res.AvgTotalMs, res.AvgAms, res.AvgBms,
+					//	res.AvgLatency, res.AvgCO2, res.DistributionIndex, res.AvgErrors,
+					//)
 
 					// ✅ Write to CSV
 					appendBenchmarkCSV(resultsFile, configLabel, res)
@@ -338,20 +339,48 @@ func runTwoStageOnce(
 	baseJobs []LatencyAwareResources,
 ) result {
 
-	// Convert data for scheduling only
+	// Convert data for scheduling
 	clusterSummariesA := algorithmA.ConvertResources(baseClusterSummaries)
 	clusterNodesB := make([]interface{}, len(baseClusterNodes))
 	for i := range baseClusterNodes {
 		clusterNodesB[i] = algorithmB.ConvertResources(baseClusterNodes[i])
 	}
+	nodeCapacityMap := make(map[string]float64)
+	nodeCarbonMap := make(map[string]float64)
+	totalSystemCapacity := 0.0 // 🆕 Accumulator for Total System Memory
+
+	// 1. Cluster Map
+	clusterCarbonMap := make(map[string]float64)
+	for _, summary := range baseClusterSummaries {
+		clusterCarbonMap[summary.Id] = summary.CarbonIntensity
+	}
+
+	// 2. Node Maps
+	for cIdx, cluster := range baseClusterNodes {
+		parentCarbon := clusterCarbonMap[baseClusterSummaries[cIdx].Id]
+
+		for _, node := range cluster {
+			nodeCapacityMap[node.Id] = node.AvailableMem
+
+			// 🆕 Add to total system capacity
+			totalSystemCapacity += node.AvailableMem
+
+			if node.CarbonIntensity > 0 {
+				nodeCarbonMap[node.Id] = node.CarbonIntensity
+			} else {
+				nodeCarbonMap[node.Id] = parentCarbon
+			}
+		}
+	}
 
 	var (
-		totalA, totalB   time.Duration
-		totalErrors      int
-		totalLatencySum  float64
-		totalDepCount    int
-		totalCO2Sum      float64
-		totalJobsSuccess int
+		totalA, totalB         time.Duration
+		totalErrors            int
+		totalLatencySum        float64
+		totalDepCount          int
+		totalNormalizedCO2     float64 // Renamed for clarity
+		totalJobsSuccess       int
+		totalDistributionIndex float64
 	)
 
 	for i := 0; i < b.N; i++ {
@@ -363,15 +392,13 @@ func runTwoStageOnce(
 			iterationErrors      int
 			iterLatencySum       float64
 			iterDepCount         int
-			iterCO2Sum           float64
 		)
 
 		jobToNode := make(map[string]string)
-		jobToCluster := make(map[string]string)
 
-		// --- Stage A + B scheduling ---
+		// --- Scheduling Loop ---
 		for _, baseJob := range baseJobs {
-			// ---------- Stage A ----------
+			// [Stage A Logic ...]
 			startA := time.Now()
 			clusterID, errA := algorithmA.Calculate(baseJob, clusterSummaryCopy)
 			iterTimeA += time.Since(startA)
@@ -379,10 +406,9 @@ func runTwoStageOnce(
 				iterationErrors++
 				continue
 			}
-
 			deductClusterResources(clusterSummaryCopy, clusterID, baseJob.AvailableMem, baseJob.AvailableCPU)
 
-			// ---------- Stage B ----------
+			// [Stage B Logic ...]
 			clusterIdx := getClusterIndex(clusterSummaryCopy, clusterID)
 			startB := time.Now()
 			nodeID, errB := algorithmB.Calculate(baseJob, clustersCopy[clusterIdx])
@@ -394,88 +420,140 @@ func runTwoStageOnce(
 
 			deductNodeResources(clustersCopy[clusterIdx], nodeID, baseJob.AvailableMem, baseJob.AvailableCPU)
 			jobToNode[baseJob.Id] = nodeID
-			jobToCluster[baseJob.Id] = clusterID
 			totalJobsSuccess++
-
-			// ---------- CO₂ score ----------
-			usedMem := baseJob.AvailableMem
-			totalMem := getTotalMemByID(baseClusterNodes, nodeID)
-			if totalMem == 0 {
-				totalMem = usedMem // fallback
-			}
-
-			carbonIntensity := getCarbonIntensityByID(baseClusterNodes, baseClusterSummaries, nodeID, clusterID)
-			if carbonIntensity > 0 {
-				ratio := usedMem / totalMem
-				iterCO2Sum += ratio * carbonIntensity
-			}
 		}
 
-		// ---------- Latency (with penalty for unmet dependencies) ----------
+		// 1. Get Sum of (Used Memory * Intensity)
+		iterAbsoluteCarbon := computeTotalSystemCarbon(clustersCopy, nodeCapacityMap, nodeCarbonMap)
+
+		// 2. Normalize by Total System Capacity
+		// Result unit: "Average Carbon Intensity per GB of Infrastructure"
+		if totalSystemCapacity > 0 {
+			totalNormalizedCO2 += (iterAbsoluteCarbon / totalSystemCapacity)
+		}
+
+		// ---------- Latency Calculation ----------
 		for _, job := range baseJobs {
 			srcNodeID, ok := jobToNode[job.Id]
 			if !ok {
-				continue // job not scheduled
+				continue
 			}
-
 			for depID := range job.Latency {
 				if depID == job.Id {
 					continue
 				}
-
 				depNodeID, ok := jobToNode[depID]
 				if !ok {
-					// dependency not scheduled → assign max latency penalty
 					iterLatencySum += 6
 					iterDepCount++
 					continue
 				}
-
-				lat := getBaseLatencyByID(baseClusterNodes, srcNodeID, depNodeID)
-				if lat > 0 {
-					iterLatencySum += lat
-				} else {
-					// no latency data between these nodes → assign max penalty
-					iterLatencySum += 6
+				lat := getLatencyAdaptive(baseClusterNodes, baseClusterSummaries, srcNodeID, depNodeID)
+				if lat < 0 {
+					lat = 6
 				}
+				iterLatencySum += lat
 				iterDepCount++
 			}
 		}
 
-		// Account for both double counting since latencies are symmetric
-		totalLatencySum /= 2
-		totalDepCount /= 2
-
-		// --- Aggregate iteration stats ---
+		// Accumulation
 		totalA += iterTimeA
 		totalB += iterTimeB
 		totalErrors += iterationErrors
 		totalLatencySum += iterLatencySum
 		totalDepCount += iterDepCount
-		totalCO2Sum += iterCO2Sum
+		totalDistributionIndex += computeDistributionIndex(baseClusterNodes, clustersCopy)
 	}
 
-	// --- Final averages ---
 	iterations := float64(b.N)
+
 	avgLatency := 0.0
 	if totalDepCount > 0 {
 		avgLatency = totalLatencySum / float64(totalDepCount)
 	}
-	avgCO2 := 0.0
-	if totalJobsSuccess > 0 {
-		avgCO2 = totalCO2Sum / float64(totalJobsSuccess)
-	}
+
+	// Calculate Final Average
+	avgCO2 := totalNormalizedCO2 / iterations
+
+	avgDistributionIndex := totalDistributionIndex / iterations
 
 	return result{
-		A:          algorithmA.Name(),
-		B:          algorithmB.Name(),
-		AvgTotalMs: float64(totalA+totalB) / iterations / 1e6,
-		AvgAms:     float64(totalA) / iterations / 1e6,
-		AvgBms:     float64(totalB) / iterations / 1e6,
-		AvgLatency: avgLatency,
-		AvgCO2:     avgCO2,
-		AvgErrors:  float64(totalErrors) / iterations,
+		A:                 algorithmA.Name(),
+		B:                 algorithmB.Name(),
+		AvgTotalMs:        float64(totalA+totalB) / iterations / 1e6,
+		AvgAms:            float64(totalA) / iterations / 1e6,
+		AvgBms:            float64(totalB) / iterations / 1e6,
+		AvgLatency:        avgLatency,
+		AvgCO2:            avgCO2,
+		AvgErrors:         float64(totalErrors) / iterations,
+		DistributionIndex: avgDistributionIndex,
 	}
+}
+
+// 🌍 Helper: Calculates Absolute Mass (Used * Intensity)
+func computeTotalSystemCarbon(
+	clusters []interface{},
+	capacityMap map[string]float64,
+	carbonMap map[string]float64,
+) float64 {
+	totalScore := 0.0
+
+	// Iterate over all clusters and nodes
+	for _, cObj := range clusters {
+		switch nodes := cObj.(type) {
+		case []worstMemoryFitLatencyAware.LatencyAwareResources:
+			for _, n := range nodes {
+				totalScore += calculateNodeScore(n.Id, n.AvailableMem, capacityMap, carbonMap)
+			}
+		case []bestMemoryFitLatencyAware.LatencyAwareResources:
+			for _, n := range nodes {
+				totalScore += calculateNodeScore(n.Id, n.AvailableMem, capacityMap, carbonMap)
+			}
+		// ... (Include other cases: worstLatency, bestLatency, lowestCarbon, randomFit) ...
+		case []worstLatencyFitLatencyAware.LatencyAwareResources:
+			for _, n := range nodes {
+				totalScore += calculateNodeScore(n.Id, n.AvailableMem, capacityMap, carbonMap)
+			}
+		case []bestLatencyFitLatencyAware.LatencyAwareResources:
+			for _, n := range nodes {
+				totalScore += calculateNodeScore(n.Id, n.AvailableMem, capacityMap, carbonMap)
+			}
+		case []lowestCarbonFitLatencyAware.LatencyAwareResources:
+			for _, n := range nodes {
+				totalScore += calculateNodeScore(n.Id, n.AvailableMem, capacityMap, carbonMap)
+			}
+		case []randomFitLatencyAware.LatencyAwareResources:
+			for _, n := range nodes {
+				totalScore += calculateNodeScore(n.Id, n.AvailableMem, capacityMap, carbonMap)
+			}
+		}
+	}
+	return totalScore
+}
+
+// 🌍 Helper: Calculates Used * Intensity
+func calculateNodeScore(
+	id string,
+	currentAvail float64,
+	capacityMap map[string]float64,
+	carbonMap map[string]float64,
+) float64 {
+	totalCap, ok := capacityMap[id]
+	if !ok || totalCap == 0 {
+		return 0
+	}
+
+	// 1. Calculate Absolute Memory Used
+	used := totalCap - currentAvail
+	if used <= 0 {
+		return 0
+	}
+
+	intensity := carbonMap[id]
+
+	// 2. Return Absolute Mass (to be summed later)
+	return used * intensity
 }
 
 // 5️⃣ Utility Helpers
@@ -693,6 +771,87 @@ func deductNodeResources(cluster interface{}, nodeID string, mem, cpu float64) {
 	}
 }
 
+// baseClusterNodes: [][]LatencyAwareResources  (original nodes before scheduling)
+// clustersCopy: []interface{}                  (typed slices after scheduling)
+//
+// Returns value in [0,1], where 1 = perfect balance.
+func computeDistributionIndex(
+	baseClusterNodes [][]LatencyAwareResources,
+	clustersCopy []interface{},
+) float64 {
+
+	var usages []float64
+
+	for cIdx := range clustersCopy {
+		baseNodes := baseClusterNodes[cIdx]
+
+		switch nodes := clustersCopy[cIdx].(type) {
+
+		case []worstMemoryFitLatencyAware.LatencyAwareResources:
+			for i, n := range nodes {
+				used := baseNodes[i].AvailableMem - n.AvailableMem
+				if used < 0 {
+					used = 0
+				}
+				usages = append(usages, used)
+			}
+
+		case []bestMemoryFitLatencyAware.LatencyAwareResources:
+			for i, n := range nodes {
+				used := baseNodes[i].AvailableMem - n.AvailableMem
+				if used < 0 {
+					used = 0
+				}
+				usages = append(usages, used)
+			}
+
+		case []worstLatencyFitLatencyAware.LatencyAwareResources:
+			for i, n := range nodes {
+				used := baseNodes[i].AvailableMem - n.AvailableMem
+				if used < 0 {
+					used = 0
+				}
+				usages = append(usages, used)
+			}
+
+		case []lowestCarbonFitLatencyAware.LatencyAwareResources:
+			for i, n := range nodes {
+				used := baseNodes[i].AvailableMem - n.AvailableMem
+				if used < 0 {
+					used = 0
+				}
+				usages = append(usages, used)
+			}
+
+		case []randomFitLatencyAware.LatencyAwareResources:
+			for i, n := range nodes {
+				used := baseNodes[i].AvailableMem - n.AvailableMem
+				if used < 0 {
+					used = 0
+				}
+				usages = append(usages, used)
+			}
+		}
+	}
+
+	if len(usages) == 0 {
+		return 0
+	}
+
+	var sum, sumSq float64
+	for _, u := range usages {
+		sum += u
+		sumSq += u * u
+	}
+
+	n := float64(len(usages))
+	if sumSq == 0 {
+		return 1 // perfectly fair (all zero usage)
+	}
+
+	return (sum * sum) / (n * sumSq)
+}
+
 // Looks up total memory capacity of a node by ID
 func getTotalMemByID(baseClusters [][]LatencyAwareResources, nodeID string) float64 {
 	for _, cluster := range baseClusters {
@@ -742,12 +901,68 @@ func getBaseLatencyByID(baseClusters [][]LatencyAwareResources, srcID, depID str
 	return 0
 }
 
+// Returns latency between two node IDs, using node-level latency if in same cluster,
+// and cluster-level latency if in different clusters.
+func getLatencyAdaptive(
+	baseClusters [][]LatencyAwareResources,
+	baseClusterSummaries []LatencyAwareResources,
+	srcID, depID string,
+) float64 {
+
+	// Parse cluster+node indexes directly from ID
+	srcC, srcN := parseClusterNodeID(srcID)
+	depC, depN := parseClusterNodeID(depID)
+
+	// If parsing failed → penalty
+	if srcC < 0 || depC < 0 || srcN < 0 || depN < 0 {
+		return 6
+	}
+
+	// Bounds check
+	if srcC >= len(baseClusters) || depC >= len(baseClusters) {
+		return 6
+	}
+	if srcN >= len(baseClusters[srcC]) || depN >= len(baseClusters[depC]) {
+		return 6
+	}
+
+	srcNode := baseClusters[srcC][srcN]
+
+	// --- SAME CLUSTER → use node-level latency ---
+	if srcC == depC {
+		if lat, ok := srcNode.Latency[depID]; ok {
+			return float64(lat)
+		}
+		return 6
+	}
+
+	// --- DIFFERENT CLUSTERS → use cluster-level latency ---
+	srcSummary := baseClusterSummaries[srcC]
+	depSummary := baseClusterSummaries[depC]
+
+	if lat, ok := srcSummary.Latency[depSummary.Id]; ok {
+		return float64(lat)
+	}
+
+	return 6
+}
+
+func parseClusterNodeID(id string) (int, int) {
+	// Expected format: cluster<NUM>-node<NUM>
+	var c, n int
+	_, err := fmt.Sscanf(id, "cluster%d-node%d", &c, &n)
+	if err != nil {
+		return -1, -1
+	}
+	return c - 1, n - 1
+}
+
 // appendBenchmarkCSV appends a single result to the global results CSV.
 func appendBenchmarkCSV(filename, config string, res result) {
-	line := fmt.Sprintf("%s,%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
+	line := fmt.Sprintf("%s,%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
 		config, res.A, res.B,
 		res.AvgTotalMs, res.AvgAms, res.AvgBms,
-		res.AvgLatency, res.AvgCO2, res.AvgErrors,
+		res.AvgLatency, res.AvgCO2, res.DistributionIndex, res.AvgErrors,
 	)
 	f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {

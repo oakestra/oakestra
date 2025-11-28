@@ -110,7 +110,7 @@ func (a *BestLatencyFitLatencyAware) Calculate(job LatencyAwareResources, candid
 
 	// todo revert to non-stable, only useful for testing
 	slices.SortStableFunc(filteredCandidates, a.cmpLatencyScore)
-	res := filteredCandidates[0]
+	res := filteredCandidates[len(filteredCandidates)-1]
 
 	// update deployments
 	if a.Deployments == nil {

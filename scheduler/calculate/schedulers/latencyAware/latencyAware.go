@@ -182,9 +182,9 @@ func GenerateClusteredNodes(clusters int, nodesPerCluster int, seed int64) ([][]
 	randomLatency := func() int {
 		p := rng.Float64()
 		switch {
-		case p < 0.10:
+		case p < 0.20:
 			return 1
-		case p < 0.60:
+		case p < 0.80:
 			return 2 + rng.Intn(2) // 2–3
 		case p < 0.9:
 			return 4
@@ -285,11 +285,9 @@ func GenerateClusteredNodes(clusters int, nodesPerCluster int, seed int64) ([][]
 			} else {
 				p := rng.Float64()
 				switch {
-				case p < 0.1:
-					lat = 3
-				case p < 0.6:
+				case p < 0.3:
 					lat = 4
-				case p < 0.9:
+				case p < 0.8:
 					lat = 5
 				default:
 					lat = 6
