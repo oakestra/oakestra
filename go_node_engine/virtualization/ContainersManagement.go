@@ -393,27 +393,27 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 
 			resourceList := make([]model.Resources, 0)
 
-				for _, container := range deployedContainers {
-					task, err := container.Task(r.ctx, nil)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+			for _, container := range deployedContainers {
+				task, err := container.Task(r.ctx, nil)
+				if err != nil {
+					logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
 
-						info, err := container.Info(r.ctx)
-						if err != nil {
-							logger.ErrorLogger().Printf("Unable to fetch container info: %v", err)
-							continue
-						}
-						// if container created less than 10 seconds ago, then skip removal
-						if time.Since(info.CreatedAt) < 10*time.Second {
-							logger.InfoLogger().Printf("Skipping container %s, it is still starting up", container.ID())
-							continue
-						}
-						err = r.removeContainer(container)
-						if err != nil {
-							return
-						}
+					info, err := container.Info(r.ctx)
+					if err != nil {
+						logger.ErrorLogger().Printf("Unable to fetch container info: %v", err)
 						continue
 					}
+					// if container created less than 10 seconds ago, then skip removal
+					if time.Since(info.CreatedAt) < 10*time.Second {
+						logger.InfoLogger().Printf("Skipping container %s, it is still starting up", container.ID())
+						continue
+					}
+					err = r.removeContainer(container)
+					if err != nil {
+						return
+					}
+					continue
+				}
 
 				cpuUsage, err := getTotalCpuUsageByPid(int32(task.Pid()))
 				if err != nil {
