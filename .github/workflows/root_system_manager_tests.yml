@@ -30,16 +30,16 @@ jobs:
         working-directory: resource-abstractor
         run: |
           docker build -t resource_abstractor:test .
-      
+
       - name: Run containers
         working-directory: root_orchestrator/
         run: |
-          docker compose up resource_abstractor -d
+          docker compose up root_resource_abstractor -d
 
       - name: Run test suite
         working-directory: root_orchestrator/system-manager-python
         run: |
-           coverage run -m pytest
+          coverage run -m pytest
 
       - name: Generate report
         working-directory: root_orchestrator/system-manager-python
