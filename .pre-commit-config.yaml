@@ -1,21 +1,6 @@
 repos:
--   repo: https://github.com/psf/black
-    rev: 23.12.1
-    hooks:
-    -   id: black
-        stages: [pre-push]
-        args: ['--check','--line-length=100']
-
--   repo: https://github.com/PyCQA/flake8
-    rev: 7.0.0
-    hooks:
-    -   id: flake8
-        stages: [pre-push]
-        args: [--config=setup.cfg]
-
--   repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-    -   id: isort
-        stages: [pre-push]
-        args: [--check-only, --profile=black]
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.14.2
+  hooks:
+    - id: ruff-check
+      stages: [pre-push]
