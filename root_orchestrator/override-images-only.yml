@@ -15,7 +15,7 @@ services:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
     pull_policy: always
 
-  redis:
+  root_redis:
     image: redis
     pull_policy: always
 
@@ -35,7 +35,7 @@ services:
     image: ghcr.io/oakestra/oakestra/scheduler:latest
     pull_policy: always
     
-  resource_abstractor:
+  root_resource_abstractor:
     image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
     pull_policy: always
     

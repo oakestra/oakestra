@@ -90,10 +90,10 @@ services:
       - jwt_generator
 
   # Redis for the Root Scheduler
-  redis:
+  root_redis:
     image: redis
-    hostname: redis
-    container_name: redis
+    hostname: root_redis
+    container_name: root_redis
     ports:
       - "6379:6379"
     command: redis-server --requirepass rootRedis
@@ -166,9 +166,9 @@ services:
       - MANAGER_PORT=10000
       - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
-      - REDIS_ADDR=redis://:rootRedis@redis:6379
+      - REDIS_ADDR=redis://:rootRedis@root_redis:6379
     depends_on:
-      - redis
+      - root_redis
       - root_resource_abstractor
     logging: *default-logging
 
