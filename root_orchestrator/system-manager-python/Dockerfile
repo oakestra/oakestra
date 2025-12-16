@@ -6,6 +6,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ git lib
 
 COPY requirements.txt /
 
+# Install appropiate requirements
+ARG LIB_BRANCH=develop
+ENV LIB_BRANCH=${LIB_BRANCH}
+
 RUN pip install -r requirements.txt --no-cache-dir && rm /requirements.txt
 
 COPY . /

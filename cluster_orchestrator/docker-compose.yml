@@ -82,7 +82,10 @@ services:
   # Cluster Manager
   cluster_manager:
     image: cluster_manager
-    build: cluster-manager/
+    build:
+      context: cluster-manager/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH}
     container_name: cluster_manager
     labels:
       logging: "cluster_promtail"

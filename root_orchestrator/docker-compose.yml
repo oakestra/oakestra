@@ -10,7 +10,10 @@ services:
   # System Manager REST API of Root Orchestrator
   system_manager:
     image: system_manager
-    build: system-manager-python/
+    build:
+      context: system-manager-python/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH}
     hostname: system_manager
     container_name: system_manager
     labels:

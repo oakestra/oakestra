@@ -11,8 +11,6 @@ from oakestra_utils.types.statuses import (
 from ext_requests.scheduler_requests import scheduler_request_deploy
 from clients import worker_management, job_management
 
-from ext_requests.cluster_scheduler_requests import scheduler_request_deploy
-
 SYSTEM_MANAGER_ADDR = (
     "http://" + os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_PORT")
 )

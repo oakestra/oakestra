@@ -71,20 +71,6 @@ swaggerui_blueprint = get_swaggerui_blueprint(
     config={"app_name": "Oakestra root orchestrator"},
 )
 app.register_blueprint(swaggerui_blueprint)
-# Register apis
-for bp in blueprints:
-    api.register_blueprint(bp)
-
-# Swagger docs
-SWAGGER_URL = "/api/docs"
-API_URL = "/docs/openapi.json"
-swaggerui_blueprint = get_swaggerui_blueprint(
-    SWAGGER_URL,
-    API_URL,
-    config={"app_name": "Oakestra root orchestrator"},
-)
-app.register_blueprint(swaggerui_blueprint)
-
 
 def background_job_send_aggregated_information_to_sm():
     app.logger.info("Set up Background Jobs...")
