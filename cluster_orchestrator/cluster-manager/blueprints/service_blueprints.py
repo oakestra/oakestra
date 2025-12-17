@@ -85,7 +85,14 @@ class SchedulingController(MethodView):
         job_id = id[0]
         instance_number = id[1]
         node_id = data.get("candidate_id")
-        print("Received scheduling result for job ", job_id, " instance ", instance_number, ". Result: ", node_id)
+        print(
+            "Received scheduling result for job ",
+            job_id,
+            " instance ",
+            instance_number,
+            ". Result: ",
+            node_id,
+        )
         if node_id is None:
             # scheduling failed
             status = data.get("status")
@@ -94,7 +101,9 @@ class SchedulingController(MethodView):
 
         # update job instance
         job_management.update_instance_node(job_id, int(instance_number), node_id)
-        job_management.update_status(job_id, int(instance_number), PositiveSchedulingStatus.NODE_SCHEDULED.value)
+        job_management.update_status(
+            job_id, int(instance_number), PositiveSchedulingStatus.NODE_SCHEDULED.value
+        )
 
         job = job_operations.get_job_by_id(job_id)
 

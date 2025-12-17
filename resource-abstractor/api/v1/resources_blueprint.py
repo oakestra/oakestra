@@ -40,16 +40,15 @@ class ResourceFilterSchema(Schema):
     candidate_name = fields.String()
     ip = fields.String()
 
+
 @resourcesblp.errorhandler(422)
 def handle_unprocessable_entity(err):
     details = {}
     if hasattr(err, "data") and err.data:
         details = err.data.get("messages", {})
 
-    return {
-        "message": "Invalid input",
-        "details": details
-    }, 422
+    return {"message": "Invalid input", "details": details}, 422
+
 
 @resourcesblp.route("/")
 class AllResourcesController(MethodView):

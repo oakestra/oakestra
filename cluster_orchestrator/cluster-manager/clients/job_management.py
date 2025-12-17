@@ -1,4 +1,3 @@
-
 from datetime import datetime, timedelta
 
 from ext_requests.scheduler_requests import scheduler_request_deploy
@@ -32,22 +31,37 @@ def mark_inactive_as_failed(time_interval):
         failed_instances = []
 
         for instance in job["instance_list"]:
-            job_status = (
-                    convert_to_status(instance.get("status", None))
-                    or LegacyStatus.LEGACY_0
-            )
+            job_status = convert_to_status(instance.get("status", None)) or LegacyStatus.LEGACY_0
 
             timestamp = instance.get("last_modified_timestamp", datetime.now().timestamp())
 
-            if timestamp < cutoff and job_status not in PositiveSchedulingStatus and job_status != DeploymentStatus.COMPLETED:
-                update_instance(job.get("_id"), instance.get("instance_number"), {"status": DeploymentStatus.FAILED.value, "status_detail": "No suitable worker found"})
+            if (
+                timestamp < cutoff
+                and job_status not in PositiveSchedulingStatus
+                and job_status != DeploymentStatus.COMPLETED
+            ):
+                update_instance(
+                    job.get("_id"),
+                    instance.get("instance_number"),
+                    {
+                        "status": DeploymentStatus.FAILED.value,
+                        "status_detail": "No suitable worker found",
+                    },
+                )
                 failed_instances.append(instance.get("instance_number"))
 
-
         if failed_instances:
-                job_operations.update_job(job.get("_id"), {"status": DeploymentStatus.FAILED.value, "status_detail": "Failed instance(s): " + ", ".join(str(x) for x in failed_instances)})
+            job_operations.update_job(
+                job.get("_id"),
+                {
+                    "status": DeploymentStatus.FAILED.value,
+                    "status_detail": "Failed instance(s): "
+                    + ", ".join(str(x) for x in failed_instances),
+                },
+            )
 
     return
+
 
 def aggregate_info(time_interval):
     mark_inactive_as_failed(time_interval)
@@ -63,11 +77,13 @@ def aggregate_info(time_interval):
         for job in jobs
     ]
 
+
 def create_new_job_instance(job: dict, instance_number: int):
     job_id = job.get("_id")
     if job_id is None or job_operations.get_job_by_id(job_id) is None:
         return job_operations.create_job(job)
     return job_operations.update_job_instance(job_id, instance_number, job)
+
 
 def update_deployed_instance_worker(job_name, instance_number, status, public_ip, worker_id):
     jobs = job_operations.get_jobs(job_name=job_name)
@@ -79,7 +95,8 @@ def update_deployed_instance_worker(job_name, instance_number, status, public_ip
     update_status(job_id, int(instance_number), status)
     update_instance(job_id, int(instance_number), {"publicip": public_ip})
 
-def update_status(job_id, instance_number, status, status_detail = None):
+
+def update_status(job_id, instance_number, status, status_detail=None):
     if status == DeploymentStatus.CREATED.value:
         return
 
@@ -100,13 +117,19 @@ def update_status(job_id, instance_number, status, status_detail = None):
 
     job_operations.update_job(job_id, job)
 
+
 def update_deployed_instance_job(job_name, instance_number, service, worker_id):
     jobs = job_operations.get_jobs(job_name=job_name)
     if not jobs:
         return None
 
     job_id = jobs[0].get("_id")
-    update_status(job_id, int(instance_number), DeploymentStatus.RUNNING.value, service.get("status_detail", None))
+    update_status(
+        job_id,
+        int(instance_number),
+        DeploymentStatus.RUNNING.value,
+        service.get("status_detail", None),
+    )
     data = {
         "cpu_percent": service.get("cpu_percent"),
         "memory_percent": service.get("memory_percent"),
@@ -121,9 +144,10 @@ def update_instance_node(job_id, instance_number, worker_id):
     data = {
         "host_ip": node.get("ip"),
         "host_port": 50011 if node.get("port", "") == "" else node.get("port"),
-        "worker_id": worker_id
+        "worker_id": worker_id,
     }
     return update_instance(job_id, instance_number, data)
+
 
 def update_instance(job_id, instance_number, data):
     job = job_operations.get_job_by_id(job_id)

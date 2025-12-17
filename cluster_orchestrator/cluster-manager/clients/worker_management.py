@@ -10,6 +10,7 @@ counters = {
     "gpu_percent": 0,
 }
 
+
 def default_aggregator(w, acc, key):
     val = w.get(key)
     if val is None:
@@ -23,6 +24,7 @@ def default_aggregator(w, acc, key):
         return acc
     acc.append(val)
     return acc
+
 
 def average_aggregator(w, acc, key, **kwargs):
     custom_counter = kwargs.get("custom_counter")
@@ -42,7 +44,6 @@ def average_aggregator(w, acc, key, **kwargs):
             increment = w.get(custom_counter)
     else:
         increment = 1
-
 
     if acc is None:
         acc = 0.0
@@ -104,12 +105,10 @@ def aggregate_workers(workers):
 
     return result
 
+
 def aggregate_info(time_interval):
     cutoff = datetime.now() - timedelta(seconds=time_interval)
-    query = {
-        "active": "True",
-        "last_modified_timestamp": {"$gte": cutoff}
-    }
+    query = {"active": "True", "last_modified_timestamp": {"$gte": cutoff}}
 
     workers = candidate_operations.get_candidates(params=query)
 
@@ -123,8 +122,7 @@ def aggregate_info(time_interval):
         aggregation_per_arch.setdefault(arch, []).append(w)
 
     result["aggregation_per_architecture"] = {
-        arch: aggregate_workers(workers)
-        for arch, workers in aggregation_per_arch.items()
+        arch: aggregate_workers(workers) for arch, workers in aggregation_per_arch.items()
     }
 
     return result

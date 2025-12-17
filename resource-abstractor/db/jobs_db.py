@@ -119,10 +119,6 @@ def create_job(job_data):
 def delete_job_instance(job_id, instance_id):
     return db.mongo_jobs.find_one_and_update(
         {"_id": ObjectId(job_id)},
-        {
-            "$pull": {
-                "instance_list": {"instance_number": int(instance_id)}
-            }
-        },
-        return_document=True
+        {"$pull": {"instance_list": {"instance_number": int(instance_id)}}},
+        return_document=True,
     )

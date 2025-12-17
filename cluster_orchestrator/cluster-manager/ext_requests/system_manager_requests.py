@@ -17,6 +17,7 @@ SYSTEM_MANAGER_ADDR = (
     "http://" + os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_PORT")
 )
 
+
 def send_aggregated_info_to_sm(my_id, time_interval):
     try:
         data = worker_management.aggregate_info(time_interval)

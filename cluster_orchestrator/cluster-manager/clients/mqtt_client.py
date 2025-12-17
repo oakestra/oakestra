@@ -62,10 +62,8 @@ def handle_mqtt_message(client, userdata, message):
                 # and service must be undeployed
                 if (
                     update_deployed_instance_job(
-                        service.get("job_name"),
-                        service.get("instance", 0),
-                        service,
-                        client_id)
+                        service.get("job_name"), service.get("instance", 0), service, client_id
+                    )
                     is None
                 ):
                     mqtt_publish_edge_delete(

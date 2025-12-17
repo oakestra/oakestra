@@ -40,9 +40,11 @@ def update_job_status(
         data["status_detail"] = status_detail
     return update_job(job_id, data)
 
+
 def update_job_instance(job_id, instance_number, data):
     request_address = f"{JOBS_API}/{job_id}/{instance_number}"
     return make_request(patch, request_address, json=data)
+
 
 def delete_job_instance(job_id, instance_number):
     request_address = f"{JOBS_API}/{job_id}/{instance_number}"
