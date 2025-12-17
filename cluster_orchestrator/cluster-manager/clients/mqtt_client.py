@@ -4,15 +4,9 @@ import re
 
 import paho.mqtt.client as paho_mqtt
 from oakestra_utils.types.statuses import convert_to_status
+from resource_abstractor_client import candidate_operations
 
-from resource_abstractor_client import (
-    candidate_operations
-)
-
-from clients.job_management import (
-    update_deployed_instance_job,
-    update_deployed_instance_worker
-)
+from clients.job_management import update_deployed_instance_job, update_deployed_instance_worker
 
 mqtt = None
 app = None

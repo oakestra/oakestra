@@ -1,16 +1,15 @@
-import time
 
-from resource_abstractor_client import job_operations, candidate_operations
 from datetime import datetime, timedelta
+
 from ext_requests.scheduler_requests import scheduler_request_deploy
 from oakestra_utils.types.statuses import (
     DeploymentStatus,
     LegacyStatus,
     NegativeSchedulingStatus,
     PositiveSchedulingStatus,
-    Status,
     convert_to_status,
 )
+from resource_abstractor_client import candidate_operations, job_operations
 
 
 def mark_inactive_as_failed(time_interval):

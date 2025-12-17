@@ -1,15 +1,18 @@
 import logging
 
 from bson import json_util
-from clients.mqtt_client import mqtt_publish_edge_deploy
 from clients import job_management
+from clients.job_management import deploy_job
+from clients.mqtt_client import mqtt_publish_edge_deploy
 from ext_requests.net_plugin_requests import network_notify_deployment
 from flask import Response, request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
-from oakestra_utils.types.statuses import NegativeSchedulingStatus, PositiveSchedulingStatus, convert_to_status
+from oakestra_utils.types.statuses import (
+    PositiveSchedulingStatus,
+    convert_to_status,
+)
 from resource_abstractor_client import job_operations
-from clients.job_management import deploy_job
 
 # ........ Functions for job management ...............#
 # ......................................................#

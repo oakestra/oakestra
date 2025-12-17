@@ -1,5 +1,6 @@
-from resource_abstractor_client import candidate_operations
 from datetime import datetime, timedelta
+
+from resource_abstractor_client import candidate_operations
 
 counters = {
     "cpu_percent": 0,

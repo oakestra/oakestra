@@ -1,15 +1,17 @@
 import os
 import threading
 import traceback
+
 import requests
+from clients import job_management, worker_management
 from clients.my_prometheus_client import prometheus_set_metrics
 from oakestra_utils.types.statuses import (
     DeploymentStatus,
     NegativeSchedulingStatus,
     convert_to_status,
 )
+
 from ext_requests.scheduler_requests import scheduler_request_deploy
-from clients import worker_management, job_management
 
 SYSTEM_MANAGER_ADDR = (
     "http://" + os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_PORT")

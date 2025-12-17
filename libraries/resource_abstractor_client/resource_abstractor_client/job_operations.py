@@ -2,7 +2,6 @@ from typing import Optional
 
 from oakestra_utils.types.statuses import Status
 from requests import delete, get, patch, put
-from bson import ObjectId
 
 from resource_abstractor_client.client_helper import make_request
 
