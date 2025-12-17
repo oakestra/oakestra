@@ -23,20 +23,18 @@ jobs:
 
       - name: Install dependencies
         working-directory: root_orchestrator/system-manager-python
-        env:
-          LIB_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           pip install -r requirements.txt --no-cache-dir
-      
+
       - name: Build Docker images
-        working-directory: root_orchestrator/resource-abstractor
+        working-directory: resource-abstractor
         run: |
           docker build -t resource_abstractor:test .
-      
+
       - name: Run containers
         working-directory: root_orchestrator/
         run: |
-          docker compose up resource_abstractor -d
+          docker compose up root_resource_abstractor -d
 
       - name: Run test suite
         working-directory: root_orchestrator/system-manager-python
