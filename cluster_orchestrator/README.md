@@ -75,6 +75,15 @@ HTTP scheduling answer from scheduler back to cluster manager. A list of workers
 
 N.b. if you're using docker compose with **sudo** don't forget to use the -E flag E.g., **sudo -E docker-compose etc..**. This will export the env variables.
 
+## Custom Library Dependency
+
+Per default, pip will build the python dependencies found `libraries/` (resource_abstractor_client and oakestra_utils_library) from the oakestra github
+repository, specifically from the develop branch. To override this, set the environment variable `LIB_BRANCH`.
+
+E.g. you have made changes to the resource_abstractor_client library and wish to test this locally. Push your changes to `XXX-example-library-rework` and set
+`LIB_BRANCH` to `XXX-example-library-rework`. Pip will then pull the library from your branch. Note that only pushed changes will have an impact on your local setup.
+
+
 ## Customize deployment
 
 It's possible to use the docker override functionality to exclude or customize the cluster orchestrator deployment.
