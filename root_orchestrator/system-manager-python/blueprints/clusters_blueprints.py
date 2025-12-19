@@ -53,7 +53,12 @@ cluster_info_schema = {
 @clustersbp.route("/")
 class ClustersController(MethodView):
     def get(self, *args, **kwargs):
-        clusters = list(map(map_cluster_attributes, candidate_operations.get_candidates()))
+        clusters = list(
+            map(
+                map_cluster_attributes,
+                candidate_operations.get_candidates(resources="last_modified_timestamp,active"),
+            )
+        )
         if clusters is None:
             return abort(500, "Getting clusters failed")
         return json_util.dumps(clusters)
@@ -63,7 +68,12 @@ class ClustersController(MethodView):
 class ActiveClustersController(MethodView):
     def get(self, *args, **kwargs):
         clusters = list(
-            map(map_cluster_attributes, candidate_operations.get_candidates(active=True))
+            map(
+                map_cluster_attributes,
+                candidate_operations.get_candidates(
+                    active=True, resources="last_modified_timestamp,active"
+                ),
+            )
         )
         if clusters is None:
             return abort(500, "Getting clusters failed")
@@ -107,4 +117,8 @@ class ClusterController(MethodView):
 def map_cluster_attributes(x):
     x["cluster_name"] = x["candidate_name"]
     x["cluster_location"] = x["candidate_location"]
+    x["aggregated_cpu_percent"] = x["cpu_percent"]
+    x["memory_in_mb"] = x["memory"]
+    x["total_cpu_cores"] = x["vcpus"]
+    x["total_gpu_cores"] = x["vgpus"]
     return x
