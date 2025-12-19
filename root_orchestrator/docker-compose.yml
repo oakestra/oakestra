@@ -54,7 +54,7 @@ services:
     expose:
       - "10007"
     volumes:
-      - 'mongodb_data:/mongodb'
+      - 'mongodb_data:/data/db'
     command: mongod --port 10007
 
   # cluster-level mongoDB
@@ -65,7 +65,7 @@ services:
     ports:
       - "10008:10008"
     volumes:
-      - 'mongodb_net_data:/mongodb'
+      - 'mongodb_net_data:/data/db'
     command: mongod --port 10008
 
   # Cluster Manager

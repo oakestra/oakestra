@@ -37,7 +37,7 @@ services:
     ports:
       - "10107:10107"
     volumes:
-      - 'mongodb_cluster_data:/mongodb'
+      - 'mongodb_cluster_data:/data/db'
     command: mongod --port 10107
 
   # cluster-level mongoDB
@@ -48,7 +48,7 @@ services:
     ports:
       - "10108:10108"
     volumes:
-      - 'mongodb_cluster_net_data:/mongodb'
+      - 'mongodb_cluster_net_data:/data/db'
     command: mongod --port 10108
 
 
