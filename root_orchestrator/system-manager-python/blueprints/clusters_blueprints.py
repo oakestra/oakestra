@@ -53,7 +53,7 @@ cluster_info_schema = {
 @clustersbp.route("/")
 class ClustersController(MethodView):
     def get(self, *args, **kwargs):
-        clusters = candidate_operations.get_candidates()
+        clusters = list(map(map_cluster_attributes, candidate_operations.get_candidates()))
         if clusters is None:
             return abort(500, "Getting clusters failed")
         return json_util.dumps(clusters)
@@ -62,7 +62,9 @@ class ClustersController(MethodView):
 @clustersbp.route("/active")
 class ActiveClustersController(MethodView):
     def get(self, *args, **kwargs):
-        clusters = candidate_operations.get_candidates(active=True)
+        clusters = list(
+            map(map_cluster_attributes, candidate_operations.get_candidates(active=True))
+            )
         if clusters is None:
             return abort(500, "Getting clusters failed")
         return json_util.dumps(clusters)
@@ -83,7 +85,8 @@ class ClusterController(MethodView):
         if updated_cluster is None:
             return abort(400, "Updating cluster failed")
 
-        # TODO(GB): fire an event to react to the cluster update, and move this logic somewhere else.
+        # TODO(GB): fire an event to react to the cluster update 
+        # and move this logic somewhere else.
         for j in jobs:
             result = update_job_status(
                 job_id=j.get("_id"),
@@ -97,3 +100,10 @@ class ClusterController(MethodView):
                 cluster_request_to_delete_job_by_ip(j.get("_id"), -1, addr)
 
         return "ok"
+
+
+# Map candidate attributes to cluster attributes for compatibility with ext tools
+def map_cluster_attributes(x):
+    x['cluster_name'] = x['candidate_name']
+    x['cluster_location'] = x['candidate_location']
+    return x
