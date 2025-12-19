@@ -103,6 +103,7 @@ class ClusterController(MethodView):
 
 
 # Map candidate attributes to cluster attributes for compatibility with ext tools
+# Deprecation note: this mapping should be removed when ext tools are updated to use
 def map_cluster_attributes(x):
     x['cluster_name'] = x['candidate_name']
     x['cluster_location'] = x['candidate_location']
