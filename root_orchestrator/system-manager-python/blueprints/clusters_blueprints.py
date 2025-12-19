@@ -64,7 +64,7 @@ class ActiveClustersController(MethodView):
     def get(self, *args, **kwargs):
         clusters = list(
             map(map_cluster_attributes, candidate_operations.get_candidates(active=True))
-            )
+        )
         if clusters is None:
             return abort(500, "Getting clusters failed")
         return json_util.dumps(clusters)
@@ -85,7 +85,7 @@ class ClusterController(MethodView):
         if updated_cluster is None:
             return abort(400, "Updating cluster failed")
 
-        # TODO(GB): fire an event to react to the cluster update 
+        # TODO(GB): fire an event to react to the cluster update
         # and move this logic somewhere else.
         for j in jobs:
             result = update_job_status(
@@ -105,6 +105,6 @@ class ClusterController(MethodView):
 # Map candidate attributes to cluster attributes for compatibility with ext tools
 # Deprecation note: this mapping should be removed when ext tools are updated to use
 def map_cluster_attributes(x):
-    x['cluster_name'] = x['candidate_name']
-    x['cluster_location'] = x['candidate_location']
+    x["cluster_name"] = x["candidate_name"]
+    x["cluster_location"] = x["candidate_location"]
     return x
