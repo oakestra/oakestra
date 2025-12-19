@@ -66,8 +66,10 @@ Configure the address used by the dashboard to reach your APIs by running:
 Then clone the repo and run:
 ```bash
 cd root_orchestrator/
-docker-compose up --build 
+LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) docker compose -f docker-compose.yml up --build -d 
 ```
+
+> Tip: we provide a set of compose override files for every need. Just add -f override-file-name.yml. Full documentation is available [here](https://www.oakestra.io/docs/manuals/advanced-cluster-setup/#compose-overrides).
 
 The following ports are exposed:
 
@@ -87,8 +89,9 @@ For each cluster, we need at least a machine running the clsuter orchestrator.
 ## Choose a unique name for your cluster
 export CLUSTER_NAME=My_Awesome_Cluster
 
-## Optional: Give a name or geo coordinates to the current location. Default location set to coordinates of your IP
-#export CLUSTER_LOCATION=My_Awesome_Apartment
+## Optional: Give a name or geo coordinates to the current location. This can either be a string or geo coordinates in the for of LATITUDE,LONGITUDE,RADIUS_IN_METER
+# E.g. CLUSTER_LOCATION=51.518776717233244,-0.12612153395857345,2000
+export CLUSTER_LOCATION=My_Awesome_Location
 
 ## IP address where this root component can be reached to access the APIs
 export SYSTEM_MANAGER_URL=<IP address>
@@ -98,10 +101,12 @@ export SYSTEM_MANAGER_URL=<IP address>
 
 If you wish yo build the cluster orchestrator yourself simply clone the repo and run:
 ```bash
-export CLUSTER_LOCATION=My_Awesome_Apartment #If building the code this is not optional anymore
+ #If building the code this is not optional anymore
 cd cluster_orchestrator/
-docker-compose up --build 
+LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) docker compose -f docker-compose.yml up --build -d 
 ```
+
+> Tip: we provide a set of compose override files for every need. Just add -f override-file-name.yml. Full documentation is available [here](https://www.oakestra.io/docs/manuals/advanced-cluster-setup/#compose-overrides).
 
 The following ports must be exposed:
 
@@ -123,5 +128,13 @@ cd go_node_engine/build
 ./install.sh $(dpkg --print-architecture)
 ```
 
-Then configure and install the [NetManager](github.com/oakestra/oakestra-net) and perform the startup as usual. 
+Configure and install the Node Network Manager, just follow the build guide in this [README](github.com/oakestra/oakestra-net) 
+
+Finally, start the node engine with the following command:
+
+```
+sudo NodeEngine -a <IP or URL of the cluster orchestrator, default 0.0.0.0> -d
+```
+
+
 
