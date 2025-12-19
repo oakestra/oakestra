@@ -71,6 +71,11 @@ HTTP scheduling answer from scheduler back to cluster manager. A list of workers
   - export CLUSTER_NAME=" < name of the cluster > "
   - export CLUSTER_LOCATION=" < location of the cluster > "
 
+>(optional) set the current branch for the system "libraries", otw it will default to develop.
+>```
+>export LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+>```
+
 - Use the docker-compose.yml with `docker-compose -f docker-compose.yml up --build` to start the cluster components.
 
 N.b. if you're using docker compose with **sudo** don't forget to use the -E flag E.g., **sudo -E docker-compose etc..**. This will export the env variables.

@@ -17,6 +17,11 @@ Export the environment variables with the public ip/URL where the root orchestra
 export SYSTEM_MANAGER_URL=<IP ADDRESS OF THE NODE HOSTING THE ROOT ORCHESTRATOR>
 ```
 
+>(optional) set the current branch for the system "libraries", otw it will default to develop.
+>```
+>export LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+>```
+
 Then set the docker-compose.yml with `docker-compose -f docker-compose.yml up --build` to start the root components.
 
 ## Custom Library Dependency

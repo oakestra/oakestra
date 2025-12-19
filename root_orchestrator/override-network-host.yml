@@ -34,7 +34,7 @@ services:
       - ROOT_MONGO_URL=0.0.0.0
 
   # Redis for the Root Scheduler
-  redis:
+  root_redis:
     network_mode: host
 
   # Observability Stack
@@ -60,10 +60,10 @@ services:
       - RESOURCE_ABSTRACTOR_URL=0.0.0.0
       - REDIS_ADDR=redis://:rootRedis@0.0.0.0:6379
 
-  resource_abstractor:
+  root_resource_abstractor:
     network_mode: host
     environment:
-      - ROOT_MONGO_URL=0.0.0.0
+      - MONGO_URL=0.0.0.0
 
   jwt_generator:
     network_mode: host

@@ -13,7 +13,7 @@ services:
     build:
       context: system-manager-python/
       args:
-        - LIB_BRANCH=${LIB_BRANCH}
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     hostname: system_manager
     container_name: system_manager
     labels:

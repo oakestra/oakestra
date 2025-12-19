@@ -85,7 +85,7 @@ services:
     build:
       context: cluster-manager/
       args:
-        - LIB_BRANCH=${LIB_BRANCH}
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     container_name: cluster_manager
     labels:
       logging: "cluster_promtail"
