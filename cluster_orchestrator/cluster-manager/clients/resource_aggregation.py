@@ -58,6 +58,7 @@ def average_aggregator(w, acc, key, **kwargs):
     acc += (float(val) * increment) / counters[counter_key]
     return acc
 
+
 # canonical resources are resources that are required by the system manager
 # this dict contains {resource_name: aggregation_scheme}
 # where aggregation scheme outlines how this resource should be aggregated.

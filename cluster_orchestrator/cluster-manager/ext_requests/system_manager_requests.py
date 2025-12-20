@@ -20,7 +20,7 @@ SYSTEM_MANAGER_ADDR = (
 
 def send_aggregated_info_to_sm(my_id, time_interval):
     try:
-        data = worker_management.aggregate_info(time_interval)
+        data = resource_aggregation.aggregate_info(time_interval)
         data.update({"jobs": job_management.aggregate_info(time_interval)})
         print("sending aggregated info to system manager: ", data)
         threading.Thread(group=None, target=send_aggregated_info, args=(my_id, data)).start()
