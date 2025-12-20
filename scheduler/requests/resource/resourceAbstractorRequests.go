@@ -30,7 +30,9 @@ func formatQuery(requestParameters map[string]string, interestedResources []stri
 	sb.WriteString("?")
 	if requestParams != "" {
 		sb.WriteString(requestParams)
-		sb.WriteString("&")
+		if resources != "" {
+			sb.WriteString("&")
+		}
 	}
 	if resources != "" {
 		sb.WriteString(resources)

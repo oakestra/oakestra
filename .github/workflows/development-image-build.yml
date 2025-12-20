@@ -115,5 +115,5 @@ jobs:
             tags: ${{ steps.meta.outputs.tags }}
             labels: ${{ steps.meta.outputs.labels }}
             build-args: |
-              LIB_BRANCH = ${{ github.head_ref || github.ref_name }}
+              LIB_BRANCH=${{ github.head_ref || github.ref_name }}
             

@@ -44,12 +44,6 @@ app.config["API_VERSION"] = "v1"
 app.config["OPENAPI_URL_PREFIX"] = "/docs"
 app.config["JWT_ALGORITHM"] = "RS256"
 
-app.config["OPENAPI_VERSION"] = "3.0.2"
-app.config["API_TITLE"] = "Oakestra root api"
-app.config["API_VERSION"] = "v1"
-app.config["OPENAPI_URL_PREFIX"] = "/docs"
-app.config["JWT_ALGORITHM"] = "RS256"
-
 socketioserver = SocketIO(app, logger=True, engineio_logger=True)
 api = Api(app, spec_kwargs={"x-internal-id": "1", "host": "oakestra.io"})
 cors = CORS(app, resources={r"/*": {"origins": "*"}})

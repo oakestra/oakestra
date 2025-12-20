@@ -10,7 +10,7 @@ RUN apt-get update -y &&\
 
 COPY requirements.txt /
 
-# Install appropiate requirements
+# Install appropriate requirements
 ARG LIB_BRANCH=develop
 ENV LIB_BRANCH=${LIB_BRANCH}
 
