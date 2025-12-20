@@ -3,7 +3,7 @@ import threading
 import traceback
 
 import requests
-from clients import job_management, worker_management
+from clients import job_management, resource_aggregation
 from clients.my_prometheus_client import prometheus_set_metrics
 from oakestra_utils.types.statuses import (
     DeploymentStatus,
