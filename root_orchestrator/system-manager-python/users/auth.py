@@ -13,6 +13,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 mail_user = os.environ.get("MAIL_USER", "")
 
+logger = logging.getLogger("system_manager")
+
 
 def user_register(content, organization_id):
     if len(content["name"]) > 0 and len(content["password"]) > 0:
@@ -189,6 +191,6 @@ def user_change_password_with_reset_request(reset_token, new_password):
 def get_user_roles_from_organization(organization, user_id):
     for member in organization["member"]:
         if member["user_id"] == user_id:
-            print(member["roles"])
+            logger.debug(member["roles"])
             return member["roles"]
     return []

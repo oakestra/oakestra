@@ -1,3 +1,5 @@
+import logging
+
 from bson import json_util
 from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from flask import request
@@ -7,6 +9,8 @@ from oakestra_utils.types.statuses import convert_to_status
 from resource_abstractor_client import candidate_operations
 from services.instance_management import update_job_status
 from utils.network import sanitize
+
+logger = logging.getLogger("system_manager")
 
 clustersbp = Blueprint("Clusters", "cluster management", url_prefix="/api/clusters")
 clusterinfo = Blueprint("Clusterinfo", "cluster informations", url_prefix="/api/information")
@@ -89,7 +93,7 @@ class ClusterController(MethodView):
         data = request.json
         cluster_id = kwargs["clusterid"]
         jobs = data.get("jobs")
-        print("Received cluster update for ", cluster_id, ": ", data)
+        logger.debug("Received cluster update for ", cluster_id, ": ", data)
         del data["jobs"]
         updated_cluster = candidate_operations.update_candidate_information(cluster_id, data)
         if updated_cluster is None:

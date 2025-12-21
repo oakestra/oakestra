@@ -76,7 +76,6 @@ class ApplicationController(MethodView):
 
     @jwt_required()
     def put(self, appid, *args, **kwargs):
-        print(request.get_json())
         try:
             current_user = get_jwt_identity()
             update_app(appid, current_user, request.get_json())

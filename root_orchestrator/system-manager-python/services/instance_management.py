@@ -11,6 +11,8 @@ from ext_requests.scheduler_requests import scheduler_request_deploy
 from oakestra_utils.types.statuses import PositiveSchedulingStatus, Status, convert_to_status
 from resource_abstractor_client import app_operations, candidate_operations, job_operations
 
+logger = logging.getLogger("system_manager")
+
 
 def update_job_status(
     job_id: str,
@@ -35,7 +37,7 @@ def update_job_status_and_instances(
     next_instance_progressive_number: int,
     instance_list: List[dict],
 ) -> None:
-    logging.info(
+    logger.info(
         f"Updating Job '{job_id}'s status to '{status}' and assigning a cluster for this job..."
     )
     updated_job = job_operations.update_job(
@@ -47,7 +49,7 @@ def update_job_status_and_instances(
         },
     )
     if updated_job is None:
-        logging.info(f"Updating job '{job_id}'s status to '{status}' failed")
+        logger.info(f"Updating job '{job_id}'s status to '{status}' failed")
 
 
 def request_scale_up_instance(microserviceid: str, username: str) -> None:
@@ -117,7 +119,6 @@ def instance_scale_up_scheduled_handler(job_id, cluster_id):
         return
 
     cluster = candidate_operations.get_candidate_by_id(cluster_id)
-    print("Found cluster: ", cluster)
     if cluster is None:
         return
 

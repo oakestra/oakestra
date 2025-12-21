@@ -1,5 +1,6 @@
 # ......... CREATE ADMIN USER ...............
 #############################################
+import logging
 from datetime import datetime
 
 from bson import ObjectId
@@ -13,6 +14,8 @@ from ext_requests.organization_db import (
     mongo_get_organization_by_name,
     mongo_get_roles_of_user_in_organization,
 )
+
+logger = logging.getLogger("system_manager")
 
 
 def create_admin():
@@ -44,7 +47,7 @@ def create_admin():
 
         organization = {"name": "root", "member": member}
         mongo_add_organization(organization)
-    db.app.logger.info("MONGODB - created root organization with admin")
+    logger.info("MONGODB - created root organization with admin")
 
 
 def mongo_save_user(data, organization_id):
@@ -106,7 +109,7 @@ def mongo_delete_user(username):
 
 
 def mongo_update_user(user_id, user):
-    print(user)
+    logger.debug(user)
     if "_id" in user:
         del user["_id"]
     db.mongo_users.find_one_and_update({"_id": ObjectId(user_id)}, {"$set": user})

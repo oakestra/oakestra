@@ -5,30 +5,27 @@ from resource_abstractor_client import candidate_operations, job_operations
 from services.cluster_management import find_cluster_of_job
 from utils.network import sanitize
 
+logger = logging.getLogger("system_manager")
+
 
 def cluster_request_status(cluster_id):
-    print("Status Request...")
     cluster = candidate_operations.get_candidate_by_id(cluster_id)
     try:
         cluster_addr = "http://" + cluster.get("ip") + ":" + str(cluster.get("port")) + "/status"
-        print(cluster_addr)
-        resp = requests.get(cluster_addr)
-        print(resp)
+        requests.get(cluster_addr)
     except requests.exceptions.RequestException:
-        print("Calling Cluster Orchestrator /status not successful.")
+        logger.error("Calling Cluster Orchestrator /status not successful.")
 
 
 def cluster_request_to_deploy(cluster_id, job_id, instance_number):
-    print("propagate to cluster...")
     cluster = candidate_operations.get_candidate_by_id(cluster_id)
     if cluster is None:
-        logging.error(f"Cluster with {cluster_id} not found.")
+        logger.error(f"Cluster with {cluster_id} not found.")
         return
 
     job = job_operations.get_job_by_id(job_id)
-    print("Sending job to cluster: ", job)
     if job is None:
-        logging.error(f"Job with {job_id} not found.")
+        logger.error(f"Job with {job_id} not found.")
         return
 
     try:
@@ -43,17 +40,15 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
             + str(instance_number)
         )
         job["_id"] = str(job["_id"])
-        resp = requests.post(cluster_addr, json=job)
-        print(resp)
+        requests.post(cluster_addr, json=job)
     except requests.exceptions.RequestException:
-        print("Calling Cluster Orchestrator /api/deploy not successful.")
+        logger.error("Calling Cluster Orchestrator /api/deploy not successful.")
 
 
 def cluster_request_to_delete_job(job_id, instance_number):
-    print("Requesting delete instance")
     cluster = find_cluster_of_job(job_id, int(instance_number))
     if cluster is None:
-        logging.error(f"Cluster for job {job_id} not found.")
+        logger.error(f"Cluster for job {job_id} not found.")
         return
 
     try:
@@ -67,21 +62,17 @@ def cluster_request_to_delete_job(job_id, instance_number):
             + "/"
             + str(instance_number)
         )
-        print("Requesting:", cluster_addr)
-        resp = requests.delete(cluster_addr)
-        print(resp)
+        requests.delete(cluster_addr)
     except Exception as e:
-        logging.error(e)
-        print(e)
-        print("Calling Cluster Orchestrator /api/service job not successful.")
+        logger.error(e)
+        logger.error("Calling Cluster Orchestrator /api/service job not successful.")
 
 
 def cluster_request_to_delete_job_by_ip(job_id, instance_number, ip):
-    print("Requesting delete instance")
     try:
         cluster = candidate_operations.get_candidate_by_ip(ip)
         if cluster is None:
-            logging.error(f"Cluster with {ip} not found")
+            logger.error(f"Cluster with {ip} not found")
             return
 
         cluster_addr = (
@@ -94,12 +85,10 @@ def cluster_request_to_delete_job_by_ip(job_id, instance_number, ip):
             + "/"
             + str(instance_number)
         )
-        print("Requesting:", cluster_addr)
-        resp = requests.delete(cluster_addr)
-        print(resp)
+        requests.delete(cluster_addr)
     except Exception as e:
-        logging.error(e)
-        print("Calling Cluster Orchestrator /api/service job by ip not successful.")
+        logger.error(e)
+        logger.error("Calling Cluster Orchestrator /api/service job by ip not successful.")
 
 
 def cluster_request_to_replicate_up(cluster_obj, job_obj, int_replicas):
@@ -111,11 +100,10 @@ def cluster_request_to_replicate_up(cluster_obj, job_obj, int_replicas):
         + "/api/replicate/"
     )
     try:
-        resp = requests.post(cluster_addr, json={"job": job_obj, "int_replicas": int_replicas})
-        print(resp)
+        requests.post(cluster_addr, json={"job": job_obj, "int_replicas": int_replicas})
         return 1
     except requests.exceptions.RequestException:
-        print("Calling Cluster Orchestrator /api/replicate not successful.")
+        logger.error("Calling Cluster Orchestrator /api/replicate not successful.")
 
 
 def cluster_request_to_replicate_down(cluster_obj, job_obj, int_replicas):
@@ -127,11 +115,10 @@ def cluster_request_to_replicate_down(cluster_obj, job_obj, int_replicas):
         + "/api/replicate/"
     )
     try:
-        resp = requests.post(cluster_addr, json={"job": job_obj, "int_replicas": int_replicas})
-        print(resp)
+        requests.post(cluster_addr, json={"job": job_obj, "int_replicas": int_replicas})
         return 1
     except requests.exceptions.RequestException:
-        print("Calling Cluster Orchestrator /api/replicate not successful.")
+        logger.error("Calling Cluster Orchestrator /api/replicate not successful.")
 
 
 def cluster_request_to_move_within_cluster(cluster_obj, job_id, node_from, node_to):
@@ -143,11 +130,10 @@ def cluster_request_to_move_within_cluster(cluster_obj, job_id, node_from, node_
         + "/api/move/"
     )
     try:
-        resp = requests.post(
+        requests.post(
             cluster_addr,
             json={"job": job_id, "node_from": node_from, "node_to": node_to},
         )
-        print(resp)
         return 1
     except requests.exceptions.RequestException:
-        print("Calling Cluster Orchestrator /api/move not successful.")
+        logger.error("Calling Cluster Orchestrator /api/move not successful.")

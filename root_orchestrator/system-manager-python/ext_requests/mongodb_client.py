@@ -1,3 +1,4 @@
+import logging
 import os
 
 from flask_pymongo import PyMongo
@@ -14,6 +15,8 @@ app = None
 
 CLUSTERS_FRESHNESS_INTERVAL = 45
 
+logger = logging.getLogger("system_manager")
+
 
 def mongo_init(flask_app):
     global app, mongo_users
@@ -24,5 +27,5 @@ def mongo_init(flask_app):
     mongo_users = PyMongo(app, uri=MONGO_ADDR_USERS).db["user"]
     mongo_organization = PyMongo(app, uri=MONGO_ADDR_USERS).db["organization"]
 
-    app.logger.info("MONGODB - init mongo")
-    app.logger.info(mongo_users)
+    logger.info("MONGODB - init mongo")
+    logger.info(mongo_users)

@@ -1,3 +1,4 @@
+import logging
 import os
 import socket
 import threading
@@ -30,6 +31,7 @@ from utils.network import get_ip_from_grpc_transport
 from werkzeug.utils import redirect, secure_filename
 
 my_logger = configure_logging()
+logger = logging.getLogger("system_manager")
 
 UPLOAD_FOLDER = "files"
 ALLOWED_EXTENSIONS = {"txt", "json", "yml"}
@@ -92,19 +94,19 @@ app.register_blueprint(swaggerui_blueprint)
 
 class ClusterRegistrationServicer(register_clusterServicer):
     def handle_init_greeting(self, request, context):
-        app.logger.info("gRPC - Cluster_Manager connected: {}".format(context.peer()))
+        logger.info("gRPC - Cluster_Manager connected: {}".format(context.peer()))
         return SC1Message(hello_cluster_manager="please send your cluster info")
 
     def handle_init_final(self, request, context):
-        app.logger.info(
+        logger.info(
             "gRPC - Received Cluster_Manager_to_System_Manager_1: {}".format(context.peer())
         )
-        app.logger.info(request)
+        logger.info(request)
         message = MessageToDict(request, preserving_proto_field_name=True)
-        app.logger.info("Message: {}, request {}".format(message, request))
+        logger.info("Message: {}, request {}".format(message, request))
         cluster_address = get_ip_from_grpc_transport(context.peer())
 
-        app.logger.info("Cluster address: {}".format(cluster_address))
+        logger.info("Cluster address: {}".format(cluster_address))
 
         cluster_data = {
             "ip": cluster_address,
@@ -114,10 +116,10 @@ class ClusterRegistrationServicer(register_clusterServicer):
             "candidate_name": message["cluster_name"],
         }
 
-        app.logger.info("Cluster data: {}".format(cluster_data))
+        logger.info("Cluster data: {}".format(cluster_data))
         cluster = candidate_operations.create_candidate(cluster_data)
         if cluster is None:
-            app.logger.error("Creating cluster failed")
+            logger.error("Creating cluster failed")
             return
 
         cid = str(cluster["_id"])
