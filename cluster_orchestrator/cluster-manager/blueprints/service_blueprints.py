@@ -14,6 +14,8 @@ from oakestra_utils.types.statuses import (
 )
 from resource_abstractor_client import job_operations
 
+logger = logging.getLogger("cluster_manager")
+
 # ........ Functions for job management ...............#
 # ......................................................#
 
@@ -40,13 +42,12 @@ class ServiceController(MethodView):
         content_type="application/json",
     )
     def post(self, job_id, instance_number):
-        print("Incoming Request /api/deploy with payload", request.json)
         job = request.json  # contains job_id and job_description
 
         try:
             deploy_job(job, instance_number)
         except Exception as e:
-            print(e)
+            logger.error(e)
             abort(500, "Failed to deploy service")
 
         return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
@@ -61,7 +62,7 @@ class ServiceController(MethodView):
         find service in db and ask corresponding worker to delete task,
         instance_number -1 undeploy all known instances
         """
-        print("Incoming Request /api/delete/ - to delete task...")
+        logger.info("Incoming Request /api/delete/ - to delete task...")
 
         try:
             job_management.delete_job_instance(job_id, instance_number, erase=True)
@@ -80,18 +81,18 @@ class SchedulingController(MethodView):
     )
     def post(self):
         data = request.get_json()
-        logging.log(logging.INFO, data)
+        logger.debug(data)
         id = data.get("job_id").split("/")
         job_id = id[0]
         instance_number = id[1]
         node_id = data.get("candidate_id")
-        print(
-            "Received scheduling result for job ",
-            job_id,
-            " instance ",
-            instance_number,
-            ". Result: ",
-            node_id,
+        logger.info(
+            "Received scheduling result for job "
+            + job_id
+            + " instance "
+            + instance_number
+            + ". Result: "
+            + node_id
         )
         if node_id is None:
             # scheduling failed
@@ -106,6 +107,11 @@ class SchedulingController(MethodView):
         )
 
         job = job_operations.get_job_by_id(job_id)
+        if job is None:
+            logger.error("Job " + job_id + " has been deleted")
+            return Response(
+                json_util.dumps({"status": "job_not_found"}), mimetype="application/json"
+            )
 
         # update network component
         network_notify_deployment(job_id, job)

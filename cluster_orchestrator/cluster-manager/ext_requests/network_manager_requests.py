@@ -1,6 +1,9 @@
+import logging
 import os
 
 import requests
+
+logger = logging.getLogger("cluster_manager")
 
 SERVICE_MANAGER_ADDR = (
     "http://"
@@ -18,7 +21,7 @@ def network_notify_deployment(job_id, job):
             json={"job_name": job["job_name"]},
         )
     except requests.exceptions.RequestException:
-        print("Calling Service Manager /api/net/deployment not successful.")
+        logger.error("Calling Service Manager /api/net/deployment not successful.")
 
 
 def network_notify_migration(job_id, job):

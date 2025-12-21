@@ -7,6 +7,8 @@ from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from resource_abstractor_client import candidate_operations
 
+logger = logging.getLogger("cluster_manager")
+
 # ........ Functions for job management ...............#
 # ......................................................#
 
@@ -26,15 +28,15 @@ class ServiceController(MethodView):
         content_type="application/json",
     )
     def post(self):
-        print("Incoming Request /api/node/register - to register node")
+        logger.debug("Incoming Request /api/node/register - to register node")
         data = request.json  # get POST body
         data.get("token")  # registration_token
         # TODO(GB): check and generate tokens
         data["candidate_name"] = data.get("host", "")
-        print("Candidate Name: ", data.get("candidate_name"))
+        logger.debug("Candidate Name: " + data.get("candidate_name"))
         worker = candidate_operations.create_candidate(data)
         if worker is None:
-            logging.error("Failed to register node")
+            logger.error("Failed to register node")
             abort(500, "Failed to register node")
 
         worker_id = str(worker["_id"])

@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 
@@ -8,12 +9,13 @@ from resource_abstractor_client import candidate_operations
 
 from clients.job_management import update_deployed_instance_job, update_deployed_instance_worker
 
+logger = logging.getLogger("cluster_manager")
+
 mqtt = None
-app = None
 
 
 def handle_connect(client, userdata, flags, rc):
-    app.logger.info("MQTT - Connected to MQTT Broker")
+    logger.info("MQTT - Connected to MQTT Broker")
     mqtt.subscribe("nodes/+/information")
     mqtt.subscribe("nodes/+/job")
     mqtt.subscribe("nodes/+/jobs/resources")
@@ -21,13 +23,13 @@ def handle_connect(client, userdata, flags, rc):
 
 def handle_logging(client, userdata, level, buf):
     if level == "MQTT_LOG_ERR":
-        app.logger.info("Error: {}".format(buf))
+        logger.info("Error: {}".format(buf))
 
 
 def handle_mqtt_message(client, userdata, message):
     data = dict(topic=message.topic, payload=message.payload.decode())
-    app.logger.info("MQTT - Received from worker: ")
-    app.logger.info(data)
+    logger.info("MQTT - Received from worker: ")
+    logger.info(data)
 
     topic = data["topic"]
 
@@ -73,14 +75,12 @@ def handle_mqtt_message(client, userdata, message):
                         service.get("virtualization"),
                     )
             except Exception as e:
-                app.logger.error("MQTT - unable to update service resources")
-                app.logger.error(e)
+                logger.error("MQTT - unable to update service resources")
+                logger.error(e)
 
 
 def mqtt_init(flask_app):
     global mqtt
-    global app
-    app = flask_app
     mqtt = paho_mqtt.Client()
     mqtt.on_connect = handle_connect
     mqtt.on_message = handle_mqtt_message
@@ -94,10 +94,10 @@ def mqtt_init(flask_app):
                 keyfile=os.environ.get("MQTT_CERT") + "/cluster.key",
                 keyfile_password=os.environ.get("CLUSTER_KEYFILE_PASSWORD"),
             )
-            app.logger.info("MQTT - TLS configured")
+            logger.info("MQTT - TLS configured")
         except FileNotFoundError as e:
-            app.logger.error("MQTT - Unable to load certificate files")
-            app.logger.error(e)
+            logger.error("MQTT - Unable to load certificate files")
+            logger.error(e)
 
     mqtt.connect(
         os.environ.get("MQTT_BROKER_URL").strip("[]"),
