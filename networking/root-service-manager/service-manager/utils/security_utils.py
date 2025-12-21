@@ -18,4 +18,3 @@ def jwt_auth_required():
         return decorator
 
     return wrapper
-

@@ -4,6 +4,8 @@ import time
 
 import requests
 
+logger = logging.getLogger("root_service_manager")
+
 JWT_GENERATOR_ADDR = (
     "http://"
     + os.environ.get("JWT_GENERATOR_URL", "localhost")
@@ -11,8 +13,8 @@ JWT_GENERATOR_ADDR = (
     + str(os.environ.get("JWT_GENERATOR_PORT", "10011"))
 )
 
+
 def get_public_key():
-    logger = logging.getLogger()
     logger.info("new job: asking root_scheduler...")
     request_addr = JWT_GENERATOR_ADDR + "/key"
     while True:

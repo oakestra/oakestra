@@ -7,7 +7,7 @@ from requests.packages.urllib3.util.retry import Retry
 
 NOTIFY_INTEREST_ENDPOINT = "/api/net/job/update"
 
-logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("root_service_manager")
 
 
 def notify_undeployment(cluster_addr, cluster_port, job_name, instancenum):

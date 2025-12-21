@@ -17,14 +17,10 @@ def _get_service_info_internal(job):
 
 
 def _convert_job_to_netinfo(job):
-    netinfo = _subdict(job, [
-        "_id",
-        "applicationID",
-        "app_ns",
-        "app_name",
-        "service_ns",
-        "service_name"
-    ])
+    netinfo = _subdict(
+        job,
+        ["_id", "applicationID", "app_ns", "app_name", "service_ns", "service_name"],
+    )
 
     service_job_id = job.get("_id")
     if service_job_id is not None:
@@ -32,21 +28,24 @@ def _convert_job_to_netinfo(job):
 
     service_ip_list = []
     for service_ip in job.get("service_ip_list", []):
-        service_ip_list.append(_subdict(service_ip, [
-            "Address",
-            "Address_v6",
-            "IpType"
-        ]))
+        service_ip_list.append(
+            _subdict(service_ip, ["Address", "Address_v6", "IpType"])
+        )
     netinfo["service_ip_list"] = service_ip_list
 
     instance_list = []
     for instance in job.get("instance_list", []):
-        instance_list.append(_subdict(instance, [
-            "cluster_id",
-            "instance_number",
-            "instance_ip",
-            "instance_ip_v6",
-        ]))
+        instance_list.append(
+            _subdict(
+                instance,
+                [
+                    "cluster_id",
+                    "instance_number",
+                    "instance_ip",
+                    "instance_ip_v6",
+                ],
+            )
+        )
     netinfo["instance_list"] = instance_list
 
     return netinfo
