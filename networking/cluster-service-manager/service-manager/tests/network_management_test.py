@@ -1,10 +1,7 @@
-import json
-import time
 from unittest.mock import MagicMock, patch
-from unittest import mock
 import sys
 from network import deployment
-from network.tablequery import resolution, interests
+from network.tablequery import interests
 from interfaces.mqtt_client import _tablequery_handler
 from interfaces import mqtt_client
 

@@ -9,6 +9,7 @@ import logging
 mqtt = None
 logger = logging.getLogger("cluster_service_manager")
 
+
 def handle_connect(client, userdata, flags, rc):
     global mqtt
     global app
@@ -23,12 +24,9 @@ def handle_mqtt_message(client, userdata, message):
 
     topic = data["topic"]
 
-    re_job_deployment_topic = re.search(
-        "^nodes/.*/net/service/deployed", topic)
-    re_job_undeployment_topic = re.search(
-        "^nodes/.*/net/service/undeployed", topic)
-    re_job_tablequery_topic = re.search(
-        "^nodes/.*/net/tablequery/request", topic)
+    re_job_deployment_topic = re.search("^nodes/.*/net/service/deployed", topic)
+    re_job_undeployment_topic = re.search("^nodes/.*/net/service/undeployed", topic)
+    re_job_tablequery_topic = re.search("^nodes/.*/net/tablequery/request", topic)
     re_job_subnet_topic = re.search("^nodes/.*/net/subnet", topic)
     re_job_interest_remove = re.search("^nodes/.*/net/interest/remove", topic)
 
@@ -76,7 +74,6 @@ def mqtt_init(flask_app):
             logger.error("MQTT - Unable to load certificate files")
             logger.error(e)
 
-
     mqtt.connect(
         os.environ.get("MQTT_BROKER_URL").strip("[]"),
         int(os.environ.get("MQTT_BROKER_PORT")),
@@ -86,19 +83,27 @@ def mqtt_init(flask_app):
 
 
 def _deployment_handler(client_id, payload):
-    appname = payload.get('appname')
-    status = payload.get('status')
-    nsIp = payload.get('nsip')
-    nsIPv6 = payload.get('nsipv6')
-    instance_number = payload.get('instance_number')
-    host_ip = payload.get('host_ip')
-    host_port = payload.get('host_port')
+    appname = payload.get("appname")
+    status = payload.get("status")
+    nsIp = payload.get("nsip")
+    nsIPv6 = payload.get("nsipv6")
+    instance_number = payload.get("instance_number")
+    host_ip = payload.get("host_ip")
+    host_port = payload.get("host_port")
     try:
-        deployment_status_report(appname, status, nsIp, nsIPv6, client_id, instance_number, host_ip, host_port)
+        deployment_status_report(
+            appname,
+            status,
+            nsIp,
+            nsIPv6,
+            client_id,
+            instance_number,
+            host_ip,
+            host_port,
+        )
     except Exception as e:
         traceback.print_exc()
         print(e)
-    
 
 
 def _undeployment_handler(client_id, payload):
@@ -124,8 +129,7 @@ def _tablequery_handler(client_id, payload):
     try:
         if sip is not None and sip != "":
             query_key = str(sip)
-            serviceName, instances, siplist = resolution.service_resolution_ip(
-                sip)
+            serviceName, instances, siplist = resolution.service_resolution_ip(sip)
         elif serviceName is not None and serviceName != "":
             query_key = str(serviceName)
             instances, siplist = resolution.service_resolution(serviceName)
@@ -157,10 +161,12 @@ def _subnet_handler(client_id, payload):
                 )
                 return
             mongo_find_node_by_id_and_update_subnetwork(client_id, addr[0], addr[1])
-            mqtt_publish_subnetwork_result(client_id, {"address": addr[0], "addressv6": addr[1]})
+            mqtt_publish_subnetwork_result(
+                client_id, {"address": addr[0], "addressv6": addr[1]}
+            )
         except Exception as e:
             logger.error(e)
-    elif method == 'DELETE':
+    elif method == "DELETE":
         # remove subnetwork from node
         pass
 

@@ -23,7 +23,7 @@ def root_service_manager_get_subnet():
             return [addr, addrv6]
         else:
             raise requests.exceptions.RequestException("No address found")
-    except requests.exceptions.RequestException as e:
+    except requests.exceptions.RequestException:
         logger.error("Calling System Manager /api/net/subnet not successful.")
 
 
@@ -49,8 +49,10 @@ def system_manager_notify_deployment_status(job, worker_id):
         requests.post(
             ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/net_deploy_status", json=data
         )
-    except requests.exceptions.RequestException as e:
-        logger.error("Calling System Manager /api/result/cluster_deploy not successful.")
+    except requests.exceptions.RequestException:
+        logger.error(
+            "Calling System Manager /api/result/cluster_deploy not successful."
+        )
 
 
 def root_table_query_ip(ip):
@@ -60,7 +62,7 @@ def root_table_query_ip(ip):
     )
     try:
         return requests.get(request_addr).json()
-    except requests.exceptions.RequestException as e:
+    except requests.exceptions.RequestException:
         logger.error("Calling System Manager /api/job/ip/../instances not successful.")
 
 
@@ -89,5 +91,5 @@ def root_remove_interest(job_name):
             # TODO try again later
             logger.error(result)
             pass
-    except requests.exceptions.RequestException as e:
+    except requests.exceptions.RequestException:
         logger.error("Calling System Manager /api/job/../instances not successful.")

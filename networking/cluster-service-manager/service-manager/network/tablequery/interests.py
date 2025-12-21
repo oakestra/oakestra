@@ -1,10 +1,9 @@
 from interfaces import mongodb_requests
 from interfaces import root_service_manager_requests
-from interfaces import mqtt_client
 from interfaces.mongodb_requests import mongo_remove_job
 
 
-def remove_interest(job_name,clientid):
+def remove_interest(job_name, clientid):
     """
     remove the interest for the service if no other worker node is interested
     """
