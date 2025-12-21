@@ -1,7 +1,7 @@
-import logging
 import requests
 import os
 import json
+import logging
 
 ROOT_SERVICE_MANAGER_ADDR = (
     "http://"
@@ -10,8 +10,11 @@ ROOT_SERVICE_MANAGER_ADDR = (
     + os.environ.get("ROOT_SERVICE_MANAGER_PORT", "5000")
 )
 
+logger = logging.getLogger("cluster_service_manager")
+
 
 def root_service_manager_get_subnet():
+    logger.info("get subnet - logging")
     try:
         response = requests.get(ROOT_SERVICE_MANAGER_ADDR + "/api/net/subnet")
         addr = json.loads(response.text).get("subnet_addr")
@@ -21,10 +24,11 @@ def root_service_manager_get_subnet():
         else:
             raise requests.exceptions.RequestException("No address found")
     except requests.exceptions.RequestException as e:
-        print("Calling System Manager /api/net/subnet not successful.")
+        logger.error("Calling System Manager /api/net/subnet not successful.")
 
 
 def system_manager_notify_deployment_status(job, worker_id):
+    logger.info("notify deployment status")
     data = {
         "job_id": str(job["_id"]),
         "instances": [],
@@ -41,12 +45,12 @@ def system_manager_notify_deployment_status(job, worker_id):
             }
             data["instances"].append(elem)
     try:
-        logging.debug(job)
+        logger.debug(job)
         requests.post(
             ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/net_deploy_status", json=data
         )
     except requests.exceptions.RequestException as e:
-        print("Calling System Manager /api/result/cluster_deploy not successful.")
+        logger.error("Calling System Manager /api/result/cluster_deploy not successful.")
 
 
 def root_table_query_ip(ip):
@@ -57,7 +61,7 @@ def root_table_query_ip(ip):
     try:
         return requests.get(request_addr).json()
     except requests.exceptions.RequestException as e:
-        print("Calling System Manager /api/job/ip/../instances not successful.")
+        logger.error("Calling System Manager /api/job/ip/../instances not successful.")
 
 
 def root_table_query_service_name(name):
@@ -69,8 +73,8 @@ def root_table_query_service_name(name):
         resp = requests.get(request_addr)
         return resp.json()
     except requests.exceptions.RequestException as e:
-        logging.error(e)
-        logging.error("Calling System Manager /api/job/../instances not successful.")
+        logger.error(e)
+        logger.error("Calling System Manager /api/job/../instances not successful.")
 
 
 def root_remove_interest(job_name):
@@ -79,11 +83,11 @@ def root_remove_interest(job_name):
         result = requests.delete(request_addr)
         if result.status_code == 404:
             # TODO fallback cluster re-register and re-register the interests
-            logging.error(result)
+            logger.error(result)
             pass
         if result.status_code != 200:
             # TODO try again later
-            logging.error(result)
+            logger.error(result)
             pass
     except requests.exceptions.RequestException as e:
-        print("Calling System Manager /api/job/../instances not successful.")
+        logger.error("Calling System Manager /api/job/../instances not successful.")

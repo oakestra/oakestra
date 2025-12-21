@@ -1,6 +1,7 @@
 import os
 from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
+import logging
 
 MONGO_URL = os.environ.get('CLUSTER_MONGO_URL')
 MONGO_PORT = os.environ.get('CLUSTER_MONGO_PORT')
@@ -10,8 +11,8 @@ MONGO_ADDR_JOBS = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/jobs
 
 mongo_nodes = None
 mongo_jobs = None
-app = None
 
+logger = logging.getLogger("cluster_service_manager")
 
 def mongo_init(flask_app):
     global app
@@ -25,7 +26,7 @@ def mongo_init(flask_app):
     #initialize jobs db
     mongo_jobs.db.jobs.drop()
 
-    app.logger.info("MONGODB - init mongo")
+    logger.info("MONGODB - init mongo")
 
 
 # ................. Worker Node Operations ...............#
@@ -33,7 +34,7 @@ def mongo_init(flask_app):
 
 def mongo_find_node_by_id_and_update_subnetwork(node_id, addr, addr_v6):
     global app, mongo_nodes
-    app.logger.info('MONGODB - update subnetwork of worker node {0} ...'.format(node_id))
+    logger.info('MONGODB - update subnetwork of worker node {0} ...'.format(node_id))
 
     mongo_nodes.db.nodes.find_one_and_update(
         {'_id': ObjectId(node_id)},
@@ -51,7 +52,7 @@ def mongo_find_node_by_id_and_update_subnetwork(node_id, addr, addr_v6):
 
 def mongo_insert_job(job):
     global mongo_jobs
-    app.logger.info("MONGODB - insert job...")
+    logger.info("MONGODB - insert job...")
     job_content = {
         '_id': ObjectId(job['_id']),
         'job_name': job['job_name'],
@@ -71,7 +72,7 @@ def mongo_insert_job(job):
             {'job_name': job['job_name']},
             {'$set': {'instance_list': []}}
         )
-    app.logger.info("MONGODB - job {} inserted".format(str(new_job.get('_id'))))
+    logger.info("MONGODB - job {} inserted".format(str(new_job.get('_id'))))
     return str(new_job.get('_id'))
 
 

@@ -1,5 +1,6 @@
 import os
 import socket
+import logging
 from flask import Flask, request
 from flask_socketio import SocketIO
 
@@ -21,9 +22,10 @@ socketio = SocketIO(
     cors_allowed_origins='*'
 )
 app.config['LOGGING_FILTERS'] = ['flask.logging.threaded']
-app.logger.addHandler(my_logger)
 mongo_init(app)
 mqtt_init(app)
+
+logger = logging.getLogger("cluster_service_manager")
 
 
 # ............. Deployment Endpoints ............#
@@ -38,9 +40,9 @@ def deploy_service():
                 }
     """
 
-    app.logger.info('Incoming Request /api/net/deployment')
+    logger.info('Incoming Request /api/net/deployment')
     req_json = request.json
-    app.logger.debug(req_json)
+    logger.debug(req_json)
     job_name = req_json['job_name']
 
     return create_service(job_name)
@@ -52,7 +54,7 @@ def delete_service(job_name):
        Remove a deployment and all its instances
     """
 
-    app.logger.info(
+    logger.info(
         'Incoming Request DELETE /api/net/deployment/%s', str(job_name)
     )
 
@@ -69,9 +71,9 @@ def task_update():
                 "type": "DEPLOYMENT" or "UNDEPLOYMENT"
             }
     """
-    app.logger.info('Incoming Request /api/net/job/update')
+    logger.info('Incoming Request /api/net/job/update')
     req_json = request.json
-    app.logger.debug(req_json)
+    logger.debug(req_json)
     return instance_updates(
         job_name=req_json.get('job_name'),
         instancenum=req_json.get('instance_number'),

@@ -7,20 +7,19 @@ import paho.mqtt.client as paho_mqtt
 import logging
 
 mqtt = None
-app = None
-
+logger = logging.getLogger("cluster_service_manager")
 
 def handle_connect(client, userdata, flags, rc):
     global mqtt
     global app
-    app.logger.info("MQTT - Connected to MQTT Broker")
+    logger.info("MQTT - Connected to MQTT Broker")
     mqtt.subscribe(topic="nodes/+/net/#", qos=1)
 
 
 def handle_mqtt_message(client, userdata, message):
     data = dict(topic=message.topic, payload=message.payload.decode())
-    logging.debug("MQTT - Received from worker: ")
-    logging.debug(data)
+    logger.debug("MQTT - Received from worker: ")
+    logger.debug(data)
 
     topic = data["topic"]
 
@@ -38,19 +37,19 @@ def handle_mqtt_message(client, userdata, message):
     payload = json.loads(data["payload"])
 
     if re_job_deployment_topic is not None:
-        print("JOB-DEPLOYMENT-UPDATE")
+        logger.debug("JOB-DEPLOYMENT-UPDATE")
         _deployment_handler(client_id, payload)
     if re_job_undeployment_topic is not None:
-        print("JOB-UNDEPLOYMENT-UPDATE")
+        logger.debug("JOB-UNDEPLOYMENT-UPDATE")
         _undeployment_handler(client_id, payload)
     if re_job_tablequery_topic is not None:
-        print("JOB-TABLEQUERY-REQUEST")
+        logger.debug("JOB-TABLEQUERY-REQUEST")
         _tablequery_handler(client_id, payload)
     if re_job_subnet_topic is not None:
-        print("JOB-SUBNET-REQUEST")
+        logger.debug("JOB-SUBNET-REQUEST")
         _subnet_handler(client_id, payload)
     if re_job_interest_remove is not None:
-        print("JOB-INTEREST-REMOVE")
+        logger.debug("JOB-INTEREST-REMOVE")
         _interest_remove_handler(client_id, payload)
 
 
@@ -72,10 +71,10 @@ def mqtt_init(flask_app):
                 keyfile=os.environ.get("MQTT_CERT") + "/cluster_net.key",
                 keyfile_password=os.environ.get("CLUSTER_SERVICE_KEYFILE_PASSWORD"),
             )
-            app.logger.info("MQTT - TLS configured")
+            logger.info("MQTT - TLS configured")
         except FileNotFoundError as e:
-            app.logger.error("MQTT - Unable to load certificate files")
-            app.logger.error(e)
+            logger.error("MQTT - Unable to load certificate files")
+            logger.error(e)
 
 
     mqtt.connect(
@@ -131,7 +130,7 @@ def _tablequery_handler(client_id, payload):
             query_key = str(serviceName)
             instances, siplist = resolution.service_resolution(serviceName)
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
         instances = []
         siplist = []
 
@@ -141,7 +140,7 @@ def _tablequery_handler(client_id, payload):
         "instance_list": resolution.format_instance_response(instances, siplist),
         "query_key": query_key,
     }
-    print("Tablequery Result: ", result)
+    logger.debug("Tablequery Result: ", result)
     mqtt_publish_tablequery_result(client_id, result)
 
 
@@ -152,7 +151,7 @@ def _subnet_handler(client_id, payload):
             # associate new subnetwork to the node
             addr = root_service_manager_get_subnet()
             if addr is None:
-                logging.error(
+                logger.error(
                     "Root service manager responded with an invalid subnetwork: "
                     + str(addr)
                 )
@@ -160,7 +159,7 @@ def _subnet_handler(client_id, payload):
             mongo_find_node_by_id_and_update_subnetwork(client_id, addr[0], addr[1])
             mqtt_publish_subnetwork_result(client_id, {"address": addr[0], "addressv6": addr[1]})
         except Exception as e:
-            logging.error(e)
+            logger.error(e)
     elif method == 'DELETE':
         # remove subnetwork from node
         pass

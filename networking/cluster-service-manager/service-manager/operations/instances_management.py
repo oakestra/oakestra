@@ -2,13 +2,13 @@ from threading import Thread
 
 from interfaces.mongodb_requests import mongo_update_job_instance
 from interfaces import mqtt_client, root_service_manager_requests, mongodb_requests
-import logging
 import traceback
 import copy
+import logging
 
+logger = logging.getLogger("cluster_service_manager")
 
 def instance_deployment(job_name, job):
-    print("Instance Deployment")
     if job_name is None:
         return "Invalid argument", 400
 
@@ -19,8 +19,8 @@ def instance_deployment(job_name, job):
         for instance in job.get('instance_list'):
                 mongo_update_job_instance(job.get('job_name'), instance)
     except Exception as e:
-        logging.error('Incoming Request /api/net/deployment failed service_resolution')
-        logging.debug(traceback.format_exc())
+        logger.error('Incoming Request /api/net/deployment failed service_resolution')
+        logger.debug(traceback.format_exc())
         print(traceback.format_exc())
         return "Service resolution failed", 500
 
