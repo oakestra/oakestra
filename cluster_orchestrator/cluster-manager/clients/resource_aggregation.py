@@ -16,6 +16,8 @@ def default_aggregator(w, acc, key):
     if val is None:
         return acc
     if isinstance(val, (int, float)):
+        if key.endswith("_percent") or key.endswith("_average"):
+            return average_aggregator(w, acc, key, custom_counter=key)
         return acc + val
     if acc is None:
         acc = []
@@ -25,39 +27,28 @@ def default_aggregator(w, acc, key):
     acc.append(val)
     return acc
 
-
 def average_aggregator(w, acc, key, **kwargs):
+    val = w.get(key)
+
+    # Skip zero values when averaging
+    if val is None or float(val) == 0:
+        return acc
+
     custom_counter = kwargs.get("custom_counter")
     counter_key = custom_counter if custom_counter is not None else key
 
     if counter_key not in counters:
         counters[counter_key] = 0
 
-    val = w.get(key, None)
-    if val is None:
-        return acc
-
-    if custom_counter is not None:
-        if w.get(custom_counter, None) is None:
-            increment = 0
-        else:
-            increment = w.get(custom_counter)
-    else:
-        increment = 1
+    counters[counter_key] += 1
+    n = counters[counter_key]
 
     if acc is None:
         acc = 0.0
 
-    if increment > 0:
-        counters[counter_key] += increment
+    acc += (float(val) - acc) / n
 
-    if counters[counter_key] == 0:
-        return acc
-
-    acc -= (acc * increment) / counters[counter_key]
-    acc += (float(val) * increment) / counters[counter_key]
     return acc
-
 
 # canonical resources are resources that are required by the system manager
 # this dict contains {resource_name: aggregation_scheme}
