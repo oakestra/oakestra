@@ -27,6 +27,7 @@ def default_aggregator(w, acc, key):
     acc.append(val)
     return acc
 
+
 def average_aggregator(w, acc, key, **kwargs):
     val = w.get(key)
 
@@ -49,6 +50,7 @@ def average_aggregator(w, acc, key, **kwargs):
     acc += (float(val) - acc) / n
 
     return acc
+
 
 # canonical resources are resources that are required by the system manager
 # this dict contains {resource_name: aggregation_scheme}
