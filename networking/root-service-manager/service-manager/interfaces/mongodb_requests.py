@@ -197,6 +197,23 @@ def mongo_get_service_address_from_cache():
         return entry["ipv4"]
     else:
         return None
+    
+def mongo_get_service_address_from_cache_not_deleting(x=1):
+    """
+    Returns the next 'x' available Service addresses from the free addresses cache 
+    without removing them.
+    @param x: int, max number of addresses to fetch
+    @return: list of int[4] in the shape [10,30,x,y]
+    """
+    global mongo_net
+    netdb = mongo_net.db.netcache
+
+    entries = netdb.find({'type': 'free_service_ip'}).limit(x)
+
+    if entries is not None:
+        return [entry["ipv4"] for entry in entries]
+    else:
+        return []
 
 
 def mongo_free_service_address_to_cache(address):
@@ -281,6 +298,23 @@ def mongo_get_service_address_from_cache_v6():
     else:
         return None
     
+def mongo_get_service_address_from_cache_not_deleting_v6(x=1):
+    """
+    Returns the next 'x' available Service addresses from the free addresses cache 
+    without removing them.
+    @param x: int, max number of addresses to fetch
+    @return: list of int[16] in the shape [253, 255, [0, 8], a, b, c, d, e, f, g, h, i, j, k, l, m]
+             equal to [fdff:[00, 08]00::]
+    """
+    global mongo_net
+    netdb = mongo_net.db.netcache
+
+    entries = netdb.find({'type': 'free_service_ipv6'}).limit(x)
+
+    if entries is not None:
+        return [entry["ipv6"] for entry in entries]
+    else:
+        return []
 
 def mongo_free_service_address_to_cache_v6(address):
     """
