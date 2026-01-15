@@ -3,12 +3,14 @@ import os
 from api.v1.marketplace_blueprint import marketplaceblp
 from db.mongodb_client import mongo_init
 from flask import Flask
+from flask_cors import CORS
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
 
 ADDON_MARKETPLACE_PORT = int(os.environ.get("ADDON_MARKETPLACE_PORT", 11102))
 
 app = Flask(__name__)
+CORS(app)
 
 app.config["OPENAPI_VERSION"] = "3.0.2"
 app.config["API_TITLE"] = "Addon Marketplace Api"

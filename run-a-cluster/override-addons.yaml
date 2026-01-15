@@ -73,9 +73,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - DASHBOARD_PORT=11103
-      - MARKETPLACE_URL=marketplace_manager
-      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
-      - ADDONS_ENGINE_URL=addons_manager
+      - MARKETPLACE_URL=${SYSTEM_MANAGER_URL}
+      - RESOURCE_ABSTRACTOR_URL=${SYSTEM_MANAGER_URL}
+      - ADDONS_ENGINE_URL=${SYSTEM_MANAGER_URL}
     depends_on:
       - marketplace_manager
       - addons_monitor

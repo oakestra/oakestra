@@ -3,12 +3,14 @@ import os
 from api.v1 import blueprints
 from db.mongodb_client import mongo_init
 from flask import Flask
+from flask_cors import CORS
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
 
 RESOURCE_ABSTRACTOR_PORT = os.environ.get("RESOURCE_ABSTRACTOR_PORT")
 
 app = Flask(__name__)
+CORS(app)
 
 app.config["OPENAPI_VERSION"] = "3.0.2"
 app.config["API_TITLE"] = "Resource Abstractor Api"
