@@ -1,0 +1,85 @@
+<div class="container">
+  <header>
+    <div class="header-content">
+      <div class="header-text">
+        <h1>🌳 {{ title }}</h1>
+        <p class="subtitle">Manage your addons, hooks, and custom resources</p>
+      </div>
+      
+      <!-- Configuration Gear Icon -->
+      <div class="config-menu">
+        <button class="gear-button" (click)="toggleConfigDropdown()" title="Configuration">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v6m0 6v6m5.2-13.2l-3.5 3.5m-3.5 3.5l-3.5 3.5m10.6 0l-3.5-3.5m-3.5-3.5l-3.5-3.5m13.2 5.2h-6m-6 0H1"/>
+          </svg>
+        </button>
+        
+        <!-- Dropdown Menu -->
+        <div class="config-dropdown" [class.show]="showConfigDropdown">
+          <div class="config-dropdown-content" (click)="$event.stopPropagation()">
+            <h3>⚙️ Configuration</h3>
+            
+            <div class="config-form">
+              <div class="form-group">
+                <label for="marketplaceUrl">Marketplace API URL:</label>
+                <input type="text" id="marketplaceUrl" [(ngModel)]="marketplaceUrl" (change)="onConfigChange()">
+              </div>
+              
+              <div class="form-group">
+                <label for="addonsEngineUrl">Addons Engine API URL:</label>
+                <input type="text" id="addonsEngineUrl" [(ngModel)]="addonsEngineUrl" (change)="onConfigChange()">
+              </div>
+              
+              <div class="form-group">
+                <label for="resourceAbstractorUrl">Resource Abstractor API URL:</label>
+                <input type="text" id="resourceAbstractorUrl" [(ngModel)]="resourceAbstractorUrl" (change)="onConfigChange()">
+              </div>
+
+              <div class="config-actions">
+                <button class="btn btn-small btn-secondary" (click)="resetToDefaults()">Reset to Defaults</button>
+                <button class="btn btn-small btn-primary" (click)="closeConfigDropdown()">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Backdrop for dropdown -->
+  <div class="dropdown-backdrop" *ngIf="showConfigDropdown" (click)="closeConfigDropdown()"></div>
+
+  <!-- Tab Navigation -->
+  <nav class="tabs">
+    <button class="tab-button" [class.active]="activeTab === 'marketplace'" (click)="switchTab('marketplace')">
+      📦 Marketplace
+    </button>
+    <button class="tab-button" [class.active]="activeTab === 'installed'" (click)="switchTab('installed')">
+      💾 Installed Addons
+    </button>
+    <button class="tab-button" [class.active]="activeTab === 'hooks'" (click)="switchTab('hooks')">
+      🪝 Hooks
+    </button>
+    <button class="tab-button" [class.active]="activeTab === 'custom-resources'" (click)="switchTab('custom-resources')">
+      🔧 Custom Resources
+    </button>
+  </nav>
+
+  <!-- Tab Content -->
+  <div class="tab-content" [class.active]="activeTab === 'marketplace'">
+    <app-marketplace *ngIf="activeTab === 'marketplace'"></app-marketplace>
+  </div>
+
+  <div class="tab-content" [class.active]="activeTab === 'installed'">
+    <app-installed-addons *ngIf="activeTab === 'installed'"></app-installed-addons>
+  </div>
+
+  <div class="tab-content" [class.active]="activeTab === 'hooks'">
+    <app-hooks *ngIf="activeTab === 'hooks'"></app-hooks>
+  </div>
+
+  <div class="tab-content" [class.active]="activeTab === 'custom-resources'">
+    <app-custom-resources *ngIf="activeTab === 'custom-resources'"></app-custom-resources>
+  </div>
+</div>

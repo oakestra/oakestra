@@ -1,0 +1,78 @@
+<div class="section-header">
+  <h2>Marketplace Addons</h2>
+  <button class="btn btn-primary" (click)="showAddForm()">+ Add New Addon</button>
+</div>
+
+<!-- Add Addon Form -->
+<div class="form-container" *ngIf="showForm">
+  <h3>Add Addon to Marketplace</h3>
+  <form (ngSubmit)="submitAddon()">
+    <div class="form-group">
+      <label for="addonName">Name *</label>
+      <input type="text" id="addonName" [(ngModel)]="newAddon.name" name="name" required>
+    </div>
+    <div class="form-group">
+      <label for="addonDescription">Description</label>
+      <textarea id="addonDescription" [(ngModel)]="newAddon.description" name="description" rows="3"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="addonVersion">Version</label>
+      <input type="text" id="addonVersion" [(ngModel)]="newAddon.version" name="version" placeholder="1.0.0">
+    </div>
+    <div class="form-group">
+      <label for="addonServices">Services (JSON) *</label>
+      <textarea id="addonServices" [(ngModel)]="servicesJson" name="services" rows="8" required></textarea>
+      <small>Enter a JSON array of service objects</small>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-success">Submit</button>
+      <button type="button" class="btn btn-secondary" (click)="cancelForm()">Cancel</button>
+    </div>
+  </form>
+</div>
+
+<!-- Loading State -->
+<div class="loading" *ngIf="loading">
+  <div class="spinner"></div>
+  <p>Loading marketplace addons...</p>
+</div>
+
+<!-- Error State -->
+<div class="empty-state" *ngIf="error">
+  <h3>⚠️ {{ error }}</h3>
+</div>
+
+<!-- Empty State -->
+<div class="empty-state" *ngIf="!loading && !error && addons.length === 0">
+  <h3>📦 No addons in marketplace</h3>
+  <p>Add your first addon to get started!</p>
+</div>
+
+<!-- Addons Grid -->
+<div class="addons-grid" *ngIf="!loading && !error && addons.length > 0">
+  <div class="addon-card" *ngFor="let addon of addons">
+    <h3>{{ addon.name }}</h3>
+    <p>{{ addon.description || 'No description provided' }}</p>
+    <div class="meta">
+      <p><strong>Version:</strong> {{ addon.version || 'N/A' }}</p>
+      <p><strong>Services:</strong> {{ addon.services?.length || 0 }}</p>
+      <p><strong>ID:</strong> <code>{{ addon._id }}</code></p>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary btn-small" (click)="viewDetails(addon)">View Details</button>
+      <button class="btn btn-success btn-small" (click)="installAddon(addon._id!)">Install</button>
+      <button class="btn btn-danger btn-small" (click)="deleteAddon(addon._id!)">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Details Modal -->
+<div class="modal" [class.show]="selectedAddon" (click)="closeDetails()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <span class="close" (click)="closeDetails()">&times;</span>
+    <h2>{{ selectedAddon?.name }}</h2>
+    <div>
+      <pre>{{ selectedAddon | json }}</pre>
+    </div>
+  </div>
+</div>

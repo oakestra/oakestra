@@ -1,0 +1,68 @@
+<div class="section-header">
+  <h2>Custom Resources Management</h2>
+  <button class="btn btn-primary" (click)="showAddForm()">+ Add Custom Resource</button>
+</div>
+
+<!-- Add Custom Resource Form -->
+<div class="form-container" *ngIf="showForm">
+  <h3>Add New Custom Resource Definition</h3>
+  <form (ngSubmit)="submitResource()">
+    <div class="form-group">
+      <label for="resourceType">Resource Type *</label>
+      <input type="text" id="resourceType" [(ngModel)]="newResource.resource_type" name="resourceType" 
+             placeholder="e.g., database, cache, queue" required>
+      <small>A unique identifier for this resource type</small>
+    </div>
+    <div class="form-group">
+      <label for="resourceSchema">JSON Schema *</label>
+      <textarea id="resourceSchema" [(ngModel)]="schemaJson" name="schema" rows="12" required></textarea>
+      <small>JSON Schema to validate instances of this resource type</small>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-success">Submit</button>
+      <button type="button" class="btn btn-secondary" (click)="cancelForm()">Cancel</button>
+    </div>
+  </form>
+</div>
+
+<!-- Loading State -->
+<div class="loading" *ngIf="loading">
+  <div class="spinner"></div>
+  <p>Loading custom resources...</p>
+</div>
+
+<!-- Error State -->
+<div class="empty-state" *ngIf="error">
+  <h3>⚠️ {{ error }}</h3>
+</div>
+
+<!-- Empty State -->
+<div class="empty-state" *ngIf="!loading && !error && resources.length === 0">
+  <h3>🔧 No custom resources</h3>
+  <p>Add your first custom resource definition to get started!</p>
+</div>
+
+<!-- Resources Grid -->
+<div class="addons-grid" *ngIf="!loading && !error && resources.length > 0">
+  <div class="addon-card" *ngFor="let resource of resources">
+    <h3>{{ resource.resource_type }}</h3>
+    <p><strong>Schema defined:</strong> {{ resource.schema ? 'Yes' : 'No' }}</p>
+    <div class="meta">
+      <p><strong>ID:</strong> <code>{{ resource._id }}</code></p>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary btn-small" (click)="viewDetails(resource)">View Details</button>
+    </div>
+  </div>
+</div>
+
+<!-- Details Modal -->
+<div class="modal" [class.show]="selectedResource" (click)="closeDetails()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <span class="close" (click)="closeDetails()">&times;</span>
+    <h2>{{ selectedResource?.resource_type }}</h2>
+    <div>
+      <pre>{{ selectedResource | json }}</pre>
+    </div>
+  </div>
+</div>

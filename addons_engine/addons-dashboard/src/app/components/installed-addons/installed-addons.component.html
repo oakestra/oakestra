@@ -1,0 +1,76 @@
+<div class="section-header">
+  <h2>Installed Addons</h2>
+  <button class="btn btn-primary" (click)="showInstallForm()">+ Install from Marketplace</button>
+</div>
+
+<!-- Install Form -->
+<div class="form-container" *ngIf="showForm">
+  <h3>Install Addon from Marketplace</h3>
+  <form (ngSubmit)="installAddon()">
+    <div class="form-group">
+      <label for="marketplaceId">Marketplace Addon ID *</label>
+      <input type="text" id="marketplaceId" [(ngModel)]="marketplaceId" name="marketplaceId" required>
+      <small>Or select from marketplace addons in the Marketplace tab</small>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-success">Install</button>
+      <button type="button" class="btn btn-secondary" (click)="cancelForm()">Cancel</button>
+    </div>
+  </form>
+</div>
+
+<!-- Filters -->
+<div class="filter-bar">
+  <label>Filter by status:</label>
+  <button class="filter-btn" [class.active]="statusFilter === 'all'" (click)="setFilter('all')">All</button>
+  <button class="filter-btn" [class.active]="statusFilter === 'INSTALLING'" (click)="setFilter('INSTALLING')">Installing</button>
+  <button class="filter-btn" [class.active]="statusFilter === 'RUNNING'" (click)="setFilter('RUNNING')">Running</button>
+  <button class="filter-btn" [class.active]="statusFilter === 'FAILED'" (click)="setFilter('FAILED')">Failed</button>
+  <button class="filter-btn" [class.active]="statusFilter === 'DISABLING'" (click)="setFilter('DISABLING')">Disabling</button>
+</div>
+
+<!-- Loading State -->
+<div class="loading" *ngIf="loading">
+  <div class="spinner"></div>
+  <p>Loading installed addons...</p>
+</div>
+
+<!-- Error State -->
+<div class="empty-state" *ngIf="error">
+  <h3>⚠️ {{ error }}</h3>
+</div>
+
+<!-- Empty State -->
+<div class="empty-state" *ngIf="!loading && !error && filteredAddons.length === 0">
+  <h3>💾 No installed addons</h3>
+  <p>Install addons from the marketplace to get started!</p>
+</div>
+
+<!-- Addons Grid -->
+<div class="addons-grid" *ngIf="!loading && !error && filteredAddons.length > 0">
+  <div class="addon-card" *ngFor="let addon of filteredAddons">
+    <h3>{{ addon.name || 'Unknown' }}</h3>
+    <span class="status" [ngClass]="getStatusClass(addon.status)">{{ addon.status }}</span>
+    <p>{{ addon.description || 'No description available' }}</p>
+    <div class="meta">
+      <p><strong>Marketplace ID:</strong> <code>{{ addon.marketplace_id || 'N/A' }}</code></p>
+      <p><strong>ID:</strong> <code>{{ addon._id }}</code></p>
+      <p *ngIf="addon.created_at"><strong>Installed:</strong> {{ addon.created_at | date:'short' }}</p>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary btn-small" (click)="viewDetails(addon)">View Details</button>
+      <button class="btn btn-danger btn-small" (click)="uninstallAddon(addon._id)">Uninstall</button>
+    </div>
+  </div>
+</div>
+
+<!-- Details Modal -->
+<div class="modal" [class.show]="selectedAddon" (click)="closeDetails()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <span class="close" (click)="closeDetails()">&times;</span>
+    <h2>{{ selectedAddon?.name }}</h2>
+    <div>
+      <pre>{{ selectedAddon | json }}</pre>
+    </div>
+  </div>
+</div>

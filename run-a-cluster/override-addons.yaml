@@ -9,9 +9,8 @@ x-logging:
 services:
 
   addons_manager:
-    image: addons_manager
+    image: ghcr.io/oakestra/oakestra/addons_manager:latest
     container_name: addons_manager
-    build: ../addons_engine/addons-manager/
     labels:
       logging: "promtail"
       logging_jobname: "containerlogs"
@@ -28,7 +27,7 @@ services:
     logging: *default-logging
 
   addons_monitor:
-    image: addons_monitor
+    image: ghcr.io/oakestra/oakestra/addons_monitor:latest
     container_name: addons_monitor
     build: ../addons_engine/addons-monitor/
     labels:
@@ -45,8 +44,7 @@ services:
     logging: *default-logging
 
   marketplace_manager:
-    image: marketplace_manager
-    build: ../addons_marketplace/marketplace-manager/
+    image: ghcr.io/oakestra/oakestra/marketplace_manager:latest
     container_name: marketplace_manager
     labels:
       logging: "promtail"
@@ -63,4 +61,27 @@ services:
       - ADDON_MARKETPLACE_MONGO_PORT=10007
     depends_on:
       - mongo_root
+    logging: *default-logging
+
+  addons_dashboard:
+    image: ghcr.io/oakestra/oakestra/addons_dashboard:latest
+    container_name: addons_dashboard
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DASHBOARD_PORT=11103
+      - MARKETPLACE_URL=marketplace_manager
+      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - ADDONS_ENGINE_URL=addons_manager
+    depends_on:
+      - marketplace_manager
+      - addons_monitor
+      - addons_manager
+    ports:
+      - 11103:11103
+    expose:
+      - "11103"
     logging: *default-logging

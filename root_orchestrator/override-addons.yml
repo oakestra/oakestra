@@ -63,3 +63,28 @@ services:
       - mongo_root
     logging: *default-logging
 
+  
+  addons_dashboard:
+    image: addons_dashboard
+    container_name: addons_dashboard
+    build: ../addons_engine/addons-dashboard/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DASHBOARD_PORT=11103
+      - MARKETPLACE_URL=marketplace_manager
+      - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
+      - ADDONS_ENGINE_URL=addons_manager
+    depends_on:
+      - marketplace_manager
+      - addons_monitor
+      - addons_manager
+    ports:
+      - 11103:11103
+    expose:
+      - "11103"
+    logging: *default-logging
+
