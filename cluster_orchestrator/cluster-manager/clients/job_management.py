@@ -68,7 +68,7 @@ def mark_inactive_as_failed(time_interval):
 
 def aggregate_info(time_interval):
     mark_inactive_as_failed(time_interval)
-    jobs = job_operations.get_jobs()
+    jobs = job_operations.get_jobs() or []
 
     return [
         {
