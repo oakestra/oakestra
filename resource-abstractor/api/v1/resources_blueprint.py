@@ -28,8 +28,8 @@ class ResourceSchema(Schema):
     aggregation_per_architecture = fields.Dict()
     memory_percent = fields.Float()
     gpu_percent = fields.Integer()
-    virtualization = fields.List(fields.String())
-    supported_addons = fields.List(fields.String())
+    virtualization = fields.List(fields.String(), allow_none=True)
+    supported_addons = fields.List(fields.String(), allow_none=True)
     architecture = fields.String()
     last_modified_timestamp = fields.Float()
 
