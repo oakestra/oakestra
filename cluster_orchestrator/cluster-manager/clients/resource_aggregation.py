@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta
 import logging
+
 from resource_abstractor_client import candidate_operations
 
 logger = logging.getLogger("cluster_manager")
