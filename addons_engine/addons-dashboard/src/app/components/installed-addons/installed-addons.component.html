@@ -23,10 +23,10 @@
 <div class="filter-bar">
   <label>Filter by status:</label>
   <button class="filter-btn" [class.active]="statusFilter === 'all'" (click)="setFilter('all')">All</button>
-  <button class="filter-btn" [class.active]="statusFilter === 'INSTALLING'" (click)="setFilter('INSTALLING')">Installing</button>
-  <button class="filter-btn" [class.active]="statusFilter === 'RUNNING'" (click)="setFilter('RUNNING')">Running</button>
-  <button class="filter-btn" [class.active]="statusFilter === 'FAILED'" (click)="setFilter('FAILED')">Failed</button>
-  <button class="filter-btn" [class.active]="statusFilter === 'DISABLING'" (click)="setFilter('DISABLING')">Disabling</button>
+  <button class="filter-btn" [class.active]="statusFilter === 'installing'" (click)="setFilter('installing')">Installing</button>
+  <button class="filter-btn" [class.active]="statusFilter === 'active'" (click)="setFilter('active')">Running</button>
+  <button class="filter-btn" [class.active]="statusFilter === 'failed'" (click)="setFilter('failed')">Failed</button>
+  <button class="filter-btn" [class.active]="statusFilter === 'disabling'" (click)="setFilter('disabling')">Disabling</button>
 </div>
 
 <!-- Loading State -->
@@ -49,17 +49,20 @@
 <!-- Addons Grid -->
 <div class="addons-grid" *ngIf="!loading && !error && filteredAddons.length > 0">
   <div class="addon-card" *ngFor="let addon of filteredAddons">
-    <h3>{{ addon.name || 'Unknown' }}</h3>
+    <h3>{{ addon.name  || 'Unknown' }}</h3>
     <span class="status" [ngClass]="getStatusClass(addon.status)">{{ addon.status }}</span>
     <p>{{ addon.description || 'No description available' }}</p>
     <div class="meta">
-      <p><strong>Marketplace ID:</strong> <code>{{ addon.marketplace_id || 'N/A' }}</code></p>
       <p><strong>ID:</strong> <code>{{ addon._id }}</code></p>
-      <p *ngIf="addon.created_at"><strong>Installed:</strong> {{ addon.created_at | date:'short' }}</p>
     </div>
     <div class="actions">
       <button class="btn btn-primary btn-small" (click)="viewDetails(addon)">View Details</button>
-      <button class="btn btn-danger btn-small" (click)="uninstallAddon(addon._id)">Uninstall</button>
+
+      @if (addon.status?.toString()?.toLowerCase()?.trim() === 'disabled') {
+        <button class="btn btn-danger btn-small" (click)="uninstallAddon(addon._id)">  Uninstall </button>
+      } @else {
+        <button class="btn btn-danger btn-small" (click)="uninstallAddon(addon._id)">  Disable </button>
+      }
     </div>
   </div>
 </div>

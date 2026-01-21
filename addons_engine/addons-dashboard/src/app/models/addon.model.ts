@@ -42,10 +42,10 @@ export interface InstalledAddon {
 }
 
 export enum AddonStatus {
-  INSTALLING = 'INSTALLING',
-  RUNNING = 'RUNNING',
-  FAILED = 'FAILED',
-  DISABLING = 'DISABLING'
+  INSTALLING = 'installing',
+  ACTIVE = 'active',
+  FAILED = 'failed',
+  DISABLING = 'disabling',
 }
 
 export interface Hook {

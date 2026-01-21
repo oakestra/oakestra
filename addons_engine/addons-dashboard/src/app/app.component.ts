@@ -34,8 +34,8 @@ export class AppComponent implements OnInit {
 
   constructor(public configService: ConfigService) {}
 
-  async ngOnInit(): Promise<void> {
-    await this.configService.loadConfig();
+  ngOnInit(): void {
+    // Config is already loaded via APP_INITIALIZER
     this.syncConfigValues();
   }
 
