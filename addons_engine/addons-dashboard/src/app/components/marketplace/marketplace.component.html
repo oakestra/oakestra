@@ -5,8 +5,32 @@
 
 <!-- Add Addon Form -->
 <div class="form-container" *ngIf="showForm">
-  <h3>Add Addon to Marketplace</h3>
-  <form (ngSubmit)="submitAddon()">
+  <div class="form-header">
+    <h3>Add Addon to Marketplace</h3>
+    <div class="mode-toggle">
+      <label class="toggle-switch">
+        <input type="checkbox" [(ngModel)]="useJsonMode">
+        <span class="slider"></span>
+      </label>
+      <span class="mode-label">{{ useJsonMode ? '📝 JSON Mode' : '📋 Manual Mode' }}</span>
+    </div>
+  </div>
+
+  <!-- JSON Mode -->
+  <form *ngIf="useJsonMode" (ngSubmit)="submitAddon()">
+    <div class="form-group">
+      <label for="addonJsonFull">Complete Addon JSON *</label>
+      <textarea id="addonJsonFull" [(ngModel)]="addonJson" name="addonJson" rows="20" required></textarea>
+      <small>Enter the complete addon JSON including name, services, volumes, networks, etc.</small>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-success">Submit</button>
+      <button type="button" class="btn btn-secondary" (click)="cancelForm()">Cancel</button>
+    </div>
+  </form>
+
+  <!-- Manual Mode -->
+  <form *ngIf="!useJsonMode" (ngSubmit)="submitAddon()">
     <div class="form-group">
       <label for="addonName">Name *</label>
       <input type="text" id="addonName" [(ngModel)]="newAddon.name" name="name" required>
@@ -16,13 +40,9 @@
       <textarea id="addonDescription" [(ngModel)]="newAddon.description" name="description" rows="3"></textarea>
     </div>
     <div class="form-group">
-      <label for="addonVersion">Version</label>
-      <input type="text" id="addonVersion" [(ngModel)]="newAddon.version" name="version" placeholder="1.0.0">
-    </div>
-    <div class="form-group">
       <label for="addonServices">Services (JSON) *</label>
-      <textarea id="addonServices" [(ngModel)]="servicesJson" name="services" rows="8" required></textarea>
-      <small>Enter a JSON array of service objects</small>
+      <textarea id="addonServices" [(ngModel)]="servicesJson" name="services" rows="12" required></textarea>
+      <small>Enter a JSON array of service objects with service_name, image, ports, environment, volumes, networks, etc.</small>
     </div>
     <div class="form-actions">
       <button type="submit" class="btn btn-success">Submit</button>
@@ -54,8 +74,7 @@
     <h3>{{ addon.name }}</h3>
     <p>{{ addon.description || 'No description provided' }}</p>
     <div class="meta">
-      <p><strong>Version:</strong> {{ addon.version || 'N/A' }}</p>
-      <p><strong>Services:</strong> {{ addon.services?.length || 0 }}</p>
+      <p><strong>Services:</strong> {{ addon.services.length || 0 }}</p>
       <p><strong>ID:</strong> <code>{{ addon._id }}</code></p>
     </div>
     <div class="actions">

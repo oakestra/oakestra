@@ -48,8 +48,28 @@ export class ResourceAbstractorService {
     return this.http.post<CustomResource>(`${this.baseUrl}/custom-resources`, resource);
   }
 
-  getResourcesByType(resourceType: string): Observable<any[]> {
-    return this.http.get<any[]>(`${this.baseUrl}/custom-resources/${resourceType}`);
+  deleteCustomResource(resourceType: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/custom-resources/${resourceType}`);
+  }
+
+  getResourcesByType(resourceType: string, filters?: { [key: string]: any }): Observable<any[]> {
+    let url = `${this.baseUrl}/custom-resources/${resourceType}`;
+    
+    // Add query parameters if filters are provided
+    if (filters && Object.keys(filters).length > 0) {
+      const params = new URLSearchParams();
+      Object.keys(filters).forEach(key => {
+        if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
+          params.append(key, String(filters[key]));
+        }
+      });
+      const queryString = params.toString();
+      if (queryString) {
+        url += `?${queryString}`;
+      }
+    }
+    
+    return this.http.get<any[]>(url);
   }
 
   createResourceInstance(resourceType: string, data: any): Observable<any> {

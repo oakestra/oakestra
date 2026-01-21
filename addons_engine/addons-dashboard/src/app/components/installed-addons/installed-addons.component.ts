@@ -47,7 +47,9 @@ export class InstalledAddonsComponent implements OnInit {
     if (this.statusFilter === 'all') {
       this.filteredAddons = this.addons;
     } else {
-      this.filteredAddons = this.addons.filter(addon => addon.status === this.statusFilter);
+      this.filteredAddons = this.addons.filter(addon => 
+        addon.status && addon.status.toString() === this.statusFilter
+      );
     }
   }
 

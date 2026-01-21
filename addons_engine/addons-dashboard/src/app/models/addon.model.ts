@@ -2,16 +2,33 @@ export interface MarketplaceAddon {
   _id?: string;
   name: string;
   description?: string;
-  version?: string;
   services: AddonService[];
+  volumes?: AddonVolume[];
+  networks?: AddonNetwork[];
 }
 
 export interface AddonService {
   service_name: string;
   image: string;
   command?: string;
-  ports?: string[];
+  ports?: { [key: string]: string };
   environment?: { [key: string]: string };
+  volumes?: string[];
+  labels?: { [key: string]: string };
+  networks?: string[];
+}
+
+export interface AddonVolume {
+  name: string;
+  driver?: string;
+  labels?: { [key: string]: string };
+  driver_opts?: { [key: string]: string };
+}
+
+export interface AddonNetwork {
+  name: string;
+  enable_ipv6?: boolean;
+  driver?: string;
 }
 
 export interface InstalledAddon {

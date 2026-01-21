@@ -38,7 +38,7 @@ body {
 header {
     margin-bottom: 30px;
     padding: 40px 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #667eea 0%, #4fa994 100%);
     border-radius: 12px;
     color: white;
     box-shadow: var(--shadow-lg);
@@ -650,4 +650,296 @@ header h1 {
     .config-inputs {
         grid-template-columns: 1fr;
     }
+}
+
+/* Custom Resources Component Styles */
+.view-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.tab-btn {
+    padding: 0.5rem 1.5rem;
+    border: 2px solid #ddd;
+    background: white;
+    color: #333;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.3s;
+}
+
+.tab-btn:hover {
+    background: #f5f5f5;
+    border-color: #4CAF50;
+}
+
+.tab-btn.active {
+    background: #4CAF50;
+    color: white;
+    border-color: #4CAF50;
+}
+
+.view-section {
+    margin-top: 2rem;
+}
+
+.section-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 1rem;
+}
+
+.instance-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: #f9f9f9;
+    border-radius: 8px;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.resource-type-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 250px;
+}
+
+.resource-type-selector label {
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.resource-type-selector select {
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 1rem;
+    flex: 1;
+    min-width: 200px;
+}
+
+.instance-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.instance-preview {
+    margin: 1rem 0;
+    padding: 0.5rem;
+    background: #f9f9f9;
+    border-radius: 5px;
+    font-size: 0.9rem;
+}
+
+.instance-preview p {
+    margin: 0.3rem 0;
+    word-break: break-word;
+}
+
+.btn-info {
+    background-color: #2196F3;
+    color: white;
+}
+
+.btn-info:hover {
+    background-color: #0b7dda;
+}
+
+.btn-warning {
+    background-color: #ff9800;
+    color: white;
+}
+
+.btn-warning:hover {
+    background-color: #e68900;
+}
+
+.btn-danger {
+    background-color: #f44336;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #da190b;
+}
+
+.filter-section {
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.filter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.filter-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #333;
+}
+
+.active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background: white;
+    border-radius: 5px;
+}
+
+.filter-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    background: #4CAF50;
+    color: white;
+    border-radius: 20px;
+    font-size: 0.9rem;
+}
+
+.filter-tag strong {
+    font-weight: 600;
+}
+
+.remove-filter {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 0.3rem;
+    line-height: 1;
+}
+
+.remove-filter:hover {
+    color: #ffcccc;
+}
+
+.filter-form {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.filter-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 0.6rem;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 0.95rem;
+}
+
+.filter-input:focus {
+    outline: none;
+    border-color: #4CAF50;
+}
+
+.filter-hint {
+    margin-top: 0.8rem;
+    margin-bottom: 0;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.filter-hint code {
+    background: white;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: monospace;
+    color: #d14;
+}
+
+/* Marketplace Form Header with Toggle */
+.form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.form-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.mode-label {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* Toggle Switch Styles */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.4s;
+    border-radius: 24px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.4s;
+    border-radius: 50%;
+}
+
+.toggle-switch input:checked + .slider {
+    background-color: var(--primary-color);
+}
+
+.toggle-switch input:focus + .slider {
+    box-shadow: 0 0 1px var(--primary-color);
+}
+
+.toggle-switch input:checked + .slider:before {
+    transform: translateX(26px);
 }

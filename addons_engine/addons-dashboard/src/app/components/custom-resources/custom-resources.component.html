@@ -1,68 +1,214 @@
 <div class="section-header">
   <h2>Custom Resources Management</h2>
-  <button class="btn btn-primary" (click)="showAddForm()">+ Add Custom Resource</button>
+  <div class="view-tabs">
+    <button 
+      class="tab-btn" 
+      [class.active]="viewMode === 'definitions'"
+      (click)="switchView('definitions')">
+      📋 Resource Definitions
+    </button>
+    <button 
+      class="tab-btn" 
+      [class.active]="viewMode === 'instances'"
+      (click)="switchView('instances')">
+      💾 Resource Instances
+    </button>
+  </div>
 </div>
 
-<!-- Add Custom Resource Form -->
-<div class="form-container" *ngIf="showForm">
-  <h3>Add New Custom Resource Definition</h3>
-  <form (ngSubmit)="submitResource()">
-    <div class="form-group">
-      <label for="resourceType">Resource Type *</label>
-      <input type="text" id="resourceType" [(ngModel)]="newResource.resource_type" name="resourceType" 
-             placeholder="e.g., database, cache, queue" required>
-      <small>A unique identifier for this resource type</small>
+<!-- ===== RESOURCE DEFINITIONS VIEW ===== -->
+<div class="view-section" *ngIf="viewMode === 'definitions'">
+  <div class="section-actions">
+    <button class="btn btn-primary" (click)="showCreateDefinitionForm()">+ Create Resource Definition</button>
+  </div>
+
+  <!-- Create Definition Form -->
+  <div class="form-container" *ngIf="showDefinitionForm === 'create'">
+    <h3>Create New Resource Definition</h3>
+    <form (ngSubmit)="submitDefinition()">
+      <div class="form-group">
+        <label for="resourceType">Resource Type *</label>
+        <input type="text" id="resourceType" [(ngModel)]="newDefinition.resource_type" name="resourceType" 
+               placeholder="e.g., database, cache, queue" required>
+        <small>A unique identifier for this resource type</small>
+      </div>
+      <div class="form-group">
+        <label for="resourceSchema">JSON Schema *</label>
+        <textarea id="resourceSchema" [(ngModel)]="schemaJson" name="schema" rows="12" required></textarea>
+        <small>JSON Schema to validate instances of this resource type</small>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-success">Create</button>
+        <button type="button" class="btn btn-secondary" (click)="cancelDefinitionForm()">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading" *ngIf="definitionsLoading">
+    <div class="spinner"></div>
+    <p>Loading resource definitions...</p>
+  </div>
+
+  <!-- Error State -->
+  <div class="empty-state" *ngIf="definitionsError">
+    <h3>⚠️ {{ definitionsError }}</h3>
+  </div>
+
+  <!-- Empty State -->
+  <div class="empty-state" *ngIf="!definitionsLoading && !definitionsError && definitions.length === 0">
+    <h3>🔧 No resource definitions</h3>
+    <p>Create your first custom resource definition to get started!</p>
+  </div>
+
+  <!-- Definitions Grid -->
+  <div class="addons-grid" *ngIf="!definitionsLoading && !definitionsError && definitions.length > 0">
+    <div class="addon-card" *ngFor="let definition of definitions">
+      <h3>{{ definition.resource_type }}</h3>
+      <p><strong>Schema defined:</strong> {{ definition.schema ? 'Yes' : 'No' }}</p>
+      <div class="meta">
+        <p><strong>ID:</strong> <code>{{ definition._id }}</code></p>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary btn-small" (click)="viewDefinitionDetails(definition)">View Schema</button>
+        <button class="btn btn-info btn-small" (click)="selectResourceType(definition.resource_type); switchView('instances')">View Instances</button>
+        <button class="btn btn-danger btn-small" (click)="deleteDefinition(definition)">Delete</button>
+      </div>
     </div>
-    <div class="form-group">
-      <label for="resourceSchema">JSON Schema *</label>
-      <textarea id="resourceSchema" [(ngModel)]="schemaJson" name="schema" rows="12" required></textarea>
-      <small>JSON Schema to validate instances of this resource type</small>
-    </div>
-    <div class="form-actions">
-      <button type="submit" class="btn btn-success">Submit</button>
-      <button type="button" class="btn btn-secondary" (click)="cancelForm()">Cancel</button>
-    </div>
-  </form>
-</div>
+  </div>
 
-<!-- Loading State -->
-<div class="loading" *ngIf="loading">
-  <div class="spinner"></div>
-  <p>Loading custom resources...</p>
-</div>
-
-<!-- Error State -->
-<div class="empty-state" *ngIf="error">
-  <h3>⚠️ {{ error }}</h3>
-</div>
-
-<!-- Empty State -->
-<div class="empty-state" *ngIf="!loading && !error && resources.length === 0">
-  <h3>🔧 No custom resources</h3>
-  <p>Add your first custom resource definition to get started!</p>
-</div>
-
-<!-- Resources Grid -->
-<div class="addons-grid" *ngIf="!loading && !error && resources.length > 0">
-  <div class="addon-card" *ngFor="let resource of resources">
-    <h3>{{ resource.resource_type }}</h3>
-    <p><strong>Schema defined:</strong> {{ resource.schema ? 'Yes' : 'No' }}</p>
-    <div class="meta">
-      <p><strong>ID:</strong> <code>{{ resource._id }}</code></p>
-    </div>
-    <div class="actions">
-      <button class="btn btn-primary btn-small" (click)="viewDetails(resource)">View Details</button>
+  <!-- Definition Details Modal -->
+  <div class="modal" [class.show]="selectedDefinition" (click)="closeDefinitionDetails()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <span class="close" (click)="closeDefinitionDetails()">&times;</span>
+      <h2>{{ selectedDefinition?.resource_type }}</h2>
+      <h3>Schema:</h3>
+      <pre>{{ selectedDefinition?.schema | json }}</pre>
     </div>
   </div>
 </div>
 
-<!-- Details Modal -->
-<div class="modal" [class.show]="selectedResource" (click)="closeDetails()">
-  <div class="modal-content" (click)="$event.stopPropagation()">
-    <span class="close" (click)="closeDetails()">&times;</span>
-    <h2>{{ selectedResource?.resource_type }}</h2>
-    <div>
-      <pre>{{ selectedResource | json }}</pre>
+<!-- ===== RESOURCE INSTANCES VIEW ===== -->
+<div class="view-section" *ngIf="viewMode === 'instances'">
+  <div class="instance-header">
+    <div class="resource-type-selector">
+      <label for="resourceTypeSelect">Resource Type:</label>
+      <select id="resourceTypeSelect" [(ngModel)]="selectedResourceType" (change)="loadInstances(selectedResourceType)">
+        <option value="">-- Select a resource type --</option>
+        <option *ngFor="let def of definitions" [value]="def.resource_type">{{ def.resource_type }}</option>
+      </select>
+    </div>
+    <div class="instance-actions" *ngIf="selectedResourceType">
+      <button class="btn btn-secondary btn-small" (click)="toggleFilters()">🔍 {{ showFilters ? 'Hide' : 'Show' }} Filters</button>
+      <button class="btn btn-secondary btn-small" (click)="refreshInstances()">🔄 Refresh</button>
+      <button class="btn btn-primary" (click)="showCreateInstanceForm()">+ Create Instance</button>
+    </div>
+  </div>
+
+  <!-- Filter Section -->
+  <div class="filter-section" *ngIf="selectedResourceType && showFilters">
+    <div class="filter-header">
+      <h3>Filter Resources</h3>
+      <button class="btn btn-secondary btn-small" *ngIf="hasActiveFilters()" (click)="clearFilters()">Clear All</button>
+    </div>
+    
+    <!-- Active Filters -->
+    <div class="active-filters" *ngIf="hasActiveFilters()">
+      <span class="filter-tag" *ngFor="let key of getActiveFilterKeys()">
+        <strong>{{ key }}</strong> = {{ activeFilters[key] }}
+        <button class="remove-filter" (click)="removeFilter(key)">&times;</button>
+      </span>
+    </div>
+
+    <!-- Add Filter Form -->
+    <div class="filter-form">
+      <input type="text" 
+             [(ngModel)]="filterField" 
+             placeholder="Field name (e.g., status, name, region)" 
+             class="filter-input">
+      <input type="text" 
+             [(ngModel)]="filterValue" 
+             placeholder="Value" 
+             class="filter-input"
+             (keyup.enter)="addFilter()">
+      <button class="btn btn-success btn-small" (click)="addFilter()">Add Filter</button>
+    </div>
+    
+    <p class="filter-hint">
+      💡 Tip: Use dot notation for nested fields (e.g., <code>config.region</code> = <code>us-east</code>)
+    </p>
+  </div>
+
+  <!-- Create/Edit Instance Form -->
+  <div class="form-container" *ngIf="showInstanceForm">
+    <h3>{{ showInstanceForm === 'create' ? 'Create' : 'Edit' }} {{ selectedResourceType }} Instance</h3>
+    <form (ngSubmit)="submitInstance()">
+      <div class="form-group">
+        <label for="instanceJson">Instance Data (JSON) *</label>
+        <textarea id="instanceJson" [(ngModel)]="instanceJson" name="instanceData" rows="12" required></textarea>
+        <small>JSON data conforming to the {{ selectedResourceType }} schema</small>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-success">{{ showInstanceForm === 'create' ? 'Create' : 'Update' }}</button>
+        <button type="button" class="btn btn-secondary" (click)="cancelInstanceForm()">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- No Resource Type Selected -->
+  <div class="empty-state" *ngIf="!selectedResourceType && definitions.length > 0">
+    <h3>👆 Select a resource type</h3>
+    <p>Choose a resource type from the dropdown above to manage its instances</p>
+  </div>
+
+  <div class="empty-state" *ngIf="!selectedResourceType && definitions.length === 0">
+    <h3>🔧 No resource definitions</h3>
+    <p>Create a resource definition first before managing instances</p>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading" *ngIf="instancesLoading && selectedResourceType">
+    <div class="spinner"></div>
+    <p>Loading {{ selectedResourceType }} instances...</p>
+  </div>
+
+  <!-- Error State -->
+  <div class="empty-state" *ngIf="instancesError && selectedResourceType">
+    <h3>⚠️ {{ instancesError }}</h3>
+  </div>
+
+  <!-- Empty State -->
+  <div class="empty-state" *ngIf="selectedResourceType && !instancesLoading && !instancesError && instances.length === 0">
+    <h3>📦 No {{ selectedResourceType }} instances</h3>
+    <p>Create your first {{ selectedResourceType }} instance to get started!</p>
+  </div>
+
+  <!-- Instances Grid -->
+  <div class="addons-grid" *ngIf="selectedResourceType && !instancesLoading && !instancesError && instances.length > 0">
+    <div class="addon-card" *ngFor="let instance of instances">
+      <h3>{{ instance.name || instance._id }}</h3>
+      <div class="instance-preview">
+        <p *ngFor="let key of getInstanceKeys(instance).slice(0, 3)">
+          <strong>{{ key }}:</strong> {{ formatValue(instance[key]) }}
+        </p>
+      </div>
+      <div class="meta">
+        <p><strong>ID:</strong> <code>{{ instance._id }}</code></p>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary btn-small" (click)="viewInstanceDetails(instance)">View</button>
+        <button class="btn btn-warning btn-small" (click)="showEditInstanceForm(instance)">Edit</button>
+        <button class="btn btn-danger btn-small" (click)="deleteInstance(instance)">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Instance Details Modal -->
+  <div class="modal" [class.show]="selectedInstance" (click)="closeInstanceDetails()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <span class="close" (click)="closeInstanceDetails()">&times;</span>
+      <h2>{{ selectedResourceType }} Instance</h2>
+      <pre>{{ selectedInstance | json }}</pre>
     </div>
   </div>
 </div>

@@ -18,13 +18,22 @@ export class MarketplaceComponent implements OnInit {
   error: string | null = null;
   showForm = false;
   selectedAddon: MarketplaceAddon | null = null;
+  
+  // Form mode toggle - start in JSON mode
+  useJsonMode = true;
 
   newAddon: MarketplaceAddon = {
     name: '',
     description: '',
-    version: '',
-    services: []
+    services: [],
+    volumes: [],
+    networks: []
   };
+  
+  // JSON mode
+  addonJson = '';
+  
+  // Manual mode - for services
   servicesJson = '';
 
   constructor(
@@ -53,26 +62,90 @@ export class MarketplaceComponent implements OnInit {
 
   showAddForm(): void {
     this.showForm = true;
-    this.servicesJson = '[\n  {\n    "service_name": "my-service",\n    "image": "alpine",\n    "command": "echo hello"\n  }\n]';
+    this.useJsonMode = true;
+    
+    // Default JSON templates - using template literals for proper multiline strings
+    this.servicesJson = `[
+  {
+    "service_name": "my-service",
+    "image": "alpine:latest",
+    "command": "echo hello",
+    "ports": {"8080": "80"},
+    "environment": {"KEY": "value"},
+    "volumes": ["volume1:/data"],
+    "networks": ["network1"]
+  }
+]`;
+    
+    this.addonJson = `{
+  "name": "my-addon",
+  "description": "My addon description",
+  "services": [
+    {
+      "service_name": "my-service",
+      "image": "alpine:latest",
+      "command": "echo hello",
+      "ports": {"8080": "80"},
+      "environment": {"KEY": "value"},
+      "volumes": ["volume1:/data"],
+      "networks": ["network1"]
+    }
+  ],
+  "volumes": [
+    {
+      "name": "volume1",
+      "driver": "local"
+    }
+  ],
+  "networks": [
+    {
+      "name": "network1",
+      "driver": "bridge",
+      "enable_ipv6": false
+    }
+  ]
+}`;
   }
 
   cancelForm(): void {
     this.showForm = false;
-    this.newAddon = { name: '', description: '', version: '', services: [] };
+    this.useJsonMode = true;
+    this.newAddon = { 
+      name: '', 
+      description: '', 
+      services: [],
+      volumes: [],
+      networks: []
+    };
     this.servicesJson = '';
+    this.addonJson = '';
   }
 
   submitAddon(): void {
     try {
-      this.newAddon.services = JSON.parse(this.servicesJson);
-      this.marketplaceService.createAddon(this.newAddon).subscribe({
-        next: () => {
-          alert('✅ Addon added to marketplace successfully!');
-          this.cancelForm();
-          this.loadAddons();
-        },
-        error: (err) => alert(`❌ Error: ${err.message}`)
-      });
+      if (this.useJsonMode) {
+        // JSON mode - parse entire addon object
+        const addonData = JSON.parse(this.addonJson);
+        this.marketplaceService.createAddon(addonData).subscribe({
+          next: () => {
+            alert('✅ Addon added to marketplace successfully!');
+            this.cancelForm();
+            this.loadAddons();
+          },
+          error: (err) => alert(`❌ Error: ${err.message}`)
+        });
+      } else {
+        // Manual mode - parse only services
+        this.newAddon.services = JSON.parse(this.servicesJson);
+        this.marketplaceService.createAddon(this.newAddon).subscribe({
+          next: () => {
+            alert('✅ Addon added to marketplace successfully!');
+            this.cancelForm();
+            this.loadAddons();
+          },
+          error: (err) => alert(`❌ Error: ${err.message}`)
+        });
+      }
     } catch (e: any) {
       alert(`❌ Invalid JSON: ${e.message}`);
     }
