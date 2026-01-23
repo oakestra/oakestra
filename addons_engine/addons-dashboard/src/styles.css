@@ -38,7 +38,7 @@ body {
 header {
     margin-bottom: 30px;
     padding: 40px 20px;
-    background: linear-gradient(135deg, #667eea 0%, #4fa994 100%);
+    background: linear-gradient(135deg, #4fa994 0%, #4fa994 100%);
     border-radius: 12px;
     color: white;
     box-shadow: var(--shadow-lg);
