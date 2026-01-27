@@ -228,9 +228,12 @@ services:
       - cluster_loki
     logging: *default-logging
 
-
 volumes:
   mongodb_cluster_data:
     driver: local
   mongodb_cluster_net_data:
     driver: local
+
+networks:
+  default:
+    name: oakestra
