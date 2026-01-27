@@ -1,3 +1,5 @@
+import logging
+
 from bson import ObjectId
 from db import candidates_db
 from db.candidates_helper import build_filter
@@ -8,6 +10,8 @@ from flask_smorest import Blueprint
 from marshmallow import INCLUDE, Schema, fields
 from services.hook_service import perform_create, perform_update, pre_post_hook
 from werkzeug import exceptions
+
+logger = logging.getLogger("resource_abstractor")
 
 resourcesblp = Blueprint("Resources", "resources", url_prefix="/api/v1/resources")
 
@@ -87,12 +91,16 @@ class AllResourcesController(MethodView):
     @resourcesblp.response(201, ResourceSchema, content_type="application/json")
     @pre_post_hook("resources")
     def post(self, data, **kwargs):
+        client_ip = request.remote_addr
+        logger.debug(f"POST /api/v1/resources - Client: {client_ip}, Data: {data}")
         return candidates_db.create_candidate(data)
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
     def put(self, data, **kwargs):
         resource_name = data.get("candidate_name")
+        client_ip = request.remote_addr
+        logger.debug(f"PUT /api/v1/resources - Client: {client_ip}, Data: {data}")
 
         candidate = candidates_db.find_candidate_by_name(resource_name)
         if candidate:
@@ -114,6 +122,8 @@ class ResourceController(MethodView):
         if candidate is None:
             raise exceptions.NotFound()
 
+        client_ip = request.remote_addr
+        logger.debug(f"GET /api/v1/resources/{resource_id} - Client: {client_ip}, Result: {candidate}")
         return candidate
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
@@ -121,11 +131,14 @@ class ResourceController(MethodView):
     @pre_post_hook("resources", with_param_id="resource_id")
     def patch(self, data, **kwargs):
         resource_id = kwargs.get("resource_id")
+        client_ip = request.remote_addr
+        logger.debug(f"PATCH /api/v1/resources/{resource_id} - Client: {client_ip}, Data: {data}")
 
         if not ObjectId.is_valid(resource_id):
             raise exceptions.NotFound
 
-        return candidates_db.update_candidate_information(resource_id, data)
+        result = candidates_db.update_candidate_information(resource_id, data)
+        return result
 
     @resourcesblp.response(204, ResourceSchema, content_type="application/json")
     @pre_post_hook("resources", with_param_id="resource_id")

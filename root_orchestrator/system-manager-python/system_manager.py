@@ -2,6 +2,7 @@ import logging
 import os
 import socket
 import threading
+import time
 from concurrent import futures
 from datetime import timedelta
 from pathlib import Path
@@ -185,15 +186,20 @@ def start_grpc_server():
     serve()
 
 
-grpc_thread = threading.Thread(target=start_grpc_server)
+grpc_thread = threading.Thread(target=start_grpc_server, daemon=True)
 grpc_thread.start()
 
 if __name__ == "__main__":
     import eventlet
 
-    flask_thread = threading.Thread(target=start_flask_server)
+    flask_thread = threading.Thread(target=start_flask_server, daemon=True)
 
     flask_thread.start()
 
-    flask_thread.join()
-    grpc_thread.join()
+    # Don't join threads - let them run as daemons
+    # Only join if we want to block indefinitely
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass

@@ -12,7 +12,7 @@ def cluster_request_status(cluster_id):
     cluster = candidate_operations.get_candidate_by_id(cluster_id)
     try:
         cluster_addr = "http://" + cluster.get("ip") + ":" + str(cluster.get("port")) + "/status"
-        requests.get(cluster_addr)
+        requests.get(cluster_addr, timeout=5)
     except requests.exceptions.RequestException:
         logger.error("Calling Cluster Orchestrator /status not successful.")
 
@@ -29,6 +29,7 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
         return
 
     try:
+        logger.debug(f"Preparing deploy request for job {job_id} instance {instance_number} to cluster {cluster}")
         cluster_addr = (
             "http://"
             + sanitize(cluster.get("ip"), request=True)
@@ -41,7 +42,7 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
         )
         job["_id"] = str(job["_id"])
         logger.info(f"Deploy request to {cluster_addr}")
-        requests.post(cluster_addr, json=job)
+        requests.post(cluster_addr, json=job, timeout=10)
     except Exception as e :
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} not successful: {e}")
 
@@ -64,7 +65,7 @@ def cluster_request_to_delete_job(job_id, instance_number):
             + str(instance_number)
         )
         logger.info(f"Delete request to {cluster_addr}")
-        requests.delete(cluster_addr)
+        requests.delete(cluster_addr, timeout=10)
     except Exception as e:
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} job not successful: {e}")
 
@@ -87,7 +88,7 @@ def cluster_request_to_delete_job_by_ip(job_id, instance_number, ip):
             + str(instance_number)
         )
         logger.info(f"Delete request to {cluster_addr}")
-        requests.delete(cluster_addr)
+        requests.delete(cluster_addr, timeout=10)
     except Exception as e:
         logger.error(e)
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} job by ip not successful.")
@@ -102,7 +103,7 @@ def cluster_request_to_replicate_up(cluster_obj, job_obj, int_replicas):
         + "/api/replicate/"
     )
     try:
-        requests.post(cluster_addr, json={"job": job_obj, "int_replicas": int_replicas})
+        requests.post(cluster_addr, json={"job": job_obj, "int_replicas": int_replicas}, timeout=10)
         return 1
     except requests.exceptions.RequestException:
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} /api/replicate not successful.")
@@ -117,7 +118,7 @@ def cluster_request_to_replicate_down(cluster_obj, job_obj, int_replicas):
         + "/api/replicate/"
     )
     try:
-        requests.post(cluster_addr, json={"job": job_obj, "int_replicas": int_replicas})
+        requests.post(cluster_addr, json={"job": job_obj, "int_replicas": int_replicas}, timeout=10)
         return 1
     except requests.exceptions.RequestException:
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} /api/replicate not successful.")
@@ -135,6 +136,7 @@ def cluster_request_to_move_within_cluster(cluster_obj, job_id, node_from, node_
         requests.post(
             cluster_addr,
             json={"job": job_id, "node_from": node_from, "node_to": node_to},
+            timeout=10,
         )
         return 1
     except requests.exceptions.RequestException:

@@ -17,7 +17,7 @@ def scheduler_request_deploy(job, job_id):
     request_addr = SCHUEDULER_ADDR + "/api/calculate/deploy"
     try:
         job["_id"] = str(job["_id"])
-        requests.post(request_addr, json=job)
+        requests.post(request_addr, json=job, timeout=10)
     except requests.exceptions.RequestException:
         logger.error("Calling Cloud Scheduler /api/calculate/deploy not successful.")
 
@@ -26,7 +26,7 @@ def scheduler_request_replicate(job, replicas):
     request_addr = SCHUEDULER_ADDR + "/api/calculate/replicate"
     try:
         job["_id"] = str(job["_id"])
-        requests.post(request_addr, json={"job": job, "replicas": replicas})
+        requests.post(request_addr, json={"job": job, "replicas": replicas}, timeout=10)
     except requests.exceptions.RequestException:
         logger.error("Calling Cloud Scheduler /api/calculate/replicate not successful.")
 
@@ -34,7 +34,7 @@ def scheduler_request_replicate(job, replicas):
 def scheduler_request_status():
     request_addr = SCHUEDULER_ADDR + "/status"
     try:
-        response = requests.get(request_addr)
+        response = requests.get(request_addr, timeout=5)
         return "Scheduler Request successfull.", response.status_code
     except requests.exceptions.RequestException:
         logger.error("Calling Cloud Scheduler /status not successful.")
