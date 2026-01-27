@@ -65,8 +65,9 @@ class ServiceController(MethodView):
         logger.info("Incoming Request /api/delete/ - to delete task...")
 
         try:
-            job_management.delete_job_instance(job_id, instance_number, erase=True)
-        except Exception:
+            job_management.delete_job_instance(job_id, int(instance_number), erase=True)
+        except Exception as e:
+            logger.error("Failed to delete service " + job_id + ": " + str(e))
             abort(500, "Failed to delete service")
 
         return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
