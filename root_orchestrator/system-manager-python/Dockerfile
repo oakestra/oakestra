@@ -26,7 +26,9 @@ ENV ROOT_SCHEDULER_PORT=7777
 ENV NET_PLUGIN_URL=localhost
 ENV NET_PLUGIN_PORT=10100
 
+ENV MY_PORT=10000
+
 EXPOSE 10000
 EXPOSE 50052
 
-CMD ["python", "system_manager.py"]
+CMD gunicorn --bind [::]:${MY_PORT} system_manager:app
