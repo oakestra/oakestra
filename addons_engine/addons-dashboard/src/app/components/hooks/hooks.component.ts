@@ -2,6 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ResourceAbstractorService } from '../../services/resource-abstractor.service';
+import { NotificationService } from '../../services/notification.service';
+import { ConfirmationService } from '../../services/confirmation.service';
 import { Hook, HookEvent } from '../../models/addon.model';
 
 @Component({
@@ -28,7 +30,11 @@ export class HooksComponent implements OnInit {
   availableEvents = Object.values(HookEvent);
   selectedEvents: { [key: string]: boolean } = {};
 
-  constructor(private resourceAbstractorService: ResourceAbstractorService) {}
+  constructor(
+    private resourceAbstractorService: ResourceAbstractorService,
+    private notificationService: NotificationService,
+    private confirmationService: ConfirmationService
+  ) {}
 
   ngOnInit(): void {
     this.loadHooks();
@@ -67,24 +73,32 @@ export class HooksComponent implements OnInit {
 
     this.resourceAbstractorService.createHook(this.newHook).subscribe({
       next: () => {
-        alert('✅ Hook added successfully!');
+        this.notificationService.success('Hook added successfully!');
         this.cancelForm();
         this.loadHooks();
       },
-      error: (err) => alert(`❌ Error: ${err.message}`)
+      error: (err) => this.notificationService.error(`Error: ${err.message}`)
     });
   }
 
-  deleteHook(id: string): void {
-    if (!confirm('Are you sure you want to delete this hook?')) {
+  async deleteHook(id: string): Promise<void> {
+    const confirmed = await this.confirmationService.confirm({
+      title: 'Delete Hook',
+      message: 'Are you sure you want to delete this hook?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) {
       return;
     }
+
     this.resourceAbstractorService.deleteHook(id).subscribe({
       next: () => {
-        alert('✅ Hook deleted successfully!');
+        this.notificationService.success('Hook deleted successfully!');
         this.loadHooks();
       },
-      error: (err) => alert(`❌ Error: ${err.message}`)
+      error: (err) => this.notificationService.error(`Error: ${err.message}`)
     });
   }
 

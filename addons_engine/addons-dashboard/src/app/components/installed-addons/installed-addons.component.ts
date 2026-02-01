@@ -2,6 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AddonsEngineService } from '../../services/addons-engine.service';
+import { NotificationService } from '../../services/notification.service';
+import { ConfirmationService } from '../../services/confirmation.service';
 import { InstalledAddon, AddonStatus } from '../../models/addon.model';
 
 @Component({
@@ -21,7 +23,11 @@ export class InstalledAddonsComponent implements OnInit {
   statusFilter = 'all';
   marketplaceId = '';
 
-  constructor(private addonsEngineService: AddonsEngineService) {}
+  constructor(
+    private addonsEngineService: AddonsEngineService,
+    private notificationService: NotificationService,
+    private confirmationService: ConfirmationService
+  ) {}
 
   ngOnInit(): void {
     this.loadAddons();
@@ -70,24 +76,32 @@ export class InstalledAddonsComponent implements OnInit {
   installAddon(): void {
     this.addonsEngineService.installAddon(this.marketplaceId).subscribe({
       next: () => {
-        alert('✅ Addon installation started!');
+        this.notificationService.success('Addon installation started!');
         this.cancelForm();
         setTimeout(() => this.loadAddons(), 1000);
       },
-      error: (err) => alert(`❌ Error: ${err.message}`)
+      error: (err) => this.notificationService.error(`Error: ${err.message}`)
     });
   }
 
-  uninstallAddon(id: string): void {
-    if (!confirm('Are you sure you want to uninstall this addon?')) {
+  async uninstallAddon(id: string): Promise<void> {
+    const confirmed = await this.confirmationService.confirm({
+      title: 'Uninstall Addon',
+      message: 'Are you sure you want to uninstall this addon?',
+      confirmText: 'Uninstall',
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) {
       return;
     }
+
     this.addonsEngineService.uninstallAddon(id).subscribe({
       next: () => {
-        alert('✅ Addon uninstallation started!');
+        this.notificationService.success('Addon uninstallation started!');
         setTimeout(() => this.loadAddons(), 1000);
       },
-      error: (err) => alert(`❌ Error: ${err.message}`)
+      error: (err) => this.notificationService.error(`Error: ${err.message}`)
     });
   }
 

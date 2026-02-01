@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MarketplaceService } from '../../services/marketplace.service';
 import { AddonsEngineService } from '../../services/addons-engine.service';
+import { NotificationService } from '../../services/notification.service';
+import { ConfirmationService } from '../../services/confirmation.service';
 import { MarketplaceAddon } from '../../models/addon.model';
 
 @Component({
@@ -38,7 +40,9 @@ export class MarketplaceComponent implements OnInit {
 
   constructor(
     private marketplaceService: MarketplaceService,
-    private addonsEngineService: AddonsEngineService
+    private addonsEngineService: AddonsEngineService,
+    private notificationService: NotificationService,
+    private confirmationService: ConfirmationService
   ) {}
 
   ngOnInit(): void {
@@ -128,48 +132,56 @@ export class MarketplaceComponent implements OnInit {
         const addonData = JSON.parse(this.addonJson);
         this.marketplaceService.createAddon(addonData).subscribe({
           next: () => {
-            alert('✅ Addon added to marketplace successfully!');
+            this.notificationService.success('Addon added to marketplace successfully!');
             this.cancelForm();
             this.loadAddons();
           },
-          error: (err) => alert(`❌ Error: ${err.message}`)
+          error: (err) => this.notificationService.error(`Error: ${err.message}`)
         });
       } else {
         // Manual mode - parse only services
         this.newAddon.services = JSON.parse(this.servicesJson);
         this.marketplaceService.createAddon(this.newAddon).subscribe({
           next: () => {
-            alert('✅ Addon added to marketplace successfully!');
+            this.notificationService.success('Addon added to marketplace successfully!');
             this.cancelForm();
             this.loadAddons();
           },
-          error: (err) => alert(`❌ Error: ${err.message}`)
+          error: (err) => this.notificationService.error(`Error: ${err.message}`)
         });
       }
     } catch (e: any) {
-      alert(`❌ Invalid JSON: ${e.message}`);
+      this.notificationService.error(`Invalid JSON: ${e.message}`);
     }
   }
 
-  deleteAddon(id: string): void {
-    if (!confirm('Are you sure you want to delete this addon from the marketplace?')) {
+  async deleteAddon(id: string): Promise<void> {
+    const confirmed = await this.confirmationService.confirm({
+      title: 'Delete Addon',
+      message: 'Are you sure you want to delete this addon from the marketplace?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) {
       return;
     }
+
     this.marketplaceService.deleteAddon(id).subscribe({
       next: () => {
-        alert('✅ Addon deleted successfully!');
+        this.notificationService.success('Addon deleted successfully!');
         this.loadAddons();
       },
-      error: (err) => alert(`❌ Error: ${err.message}`)
+      error: (err) => this.notificationService.error(`Error: ${err.message}`)
     });
   }
 
   installAddon(id: string): void {
     this.addonsEngineService.installAddon(id).subscribe({
       next: () => {
-        alert('✅ Addon installation started!');
+        this.notificationService.success('Addon installation started!');
       },
-      error: (err) => alert(`❌ Error: ${err.message}`)
+      error: (err) => this.notificationService.error(`Error: ${err.message}`)
     });
   }
 

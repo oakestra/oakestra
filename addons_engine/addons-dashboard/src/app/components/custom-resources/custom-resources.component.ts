@@ -2,6 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ResourceAbstractorService } from '../../services/resource-abstractor.service';
+import { NotificationService } from '../../services/notification.service';
+import { ConfirmationService } from '../../services/confirmation.service';
 import { CustomResource } from '../../models/addon.model';
 
 type ViewMode = 'definitions' | 'instances';
@@ -47,7 +49,11 @@ export class CustomResourcesComponent implements OnInit {
   filterValue: string = '';
   activeFilters: { [key: string]: string } = {};
 
-  constructor(private resourceAbstractorService: ResourceAbstractorService) {}
+  constructor(
+    private resourceAbstractorService: ResourceAbstractorService,
+    private notificationService: NotificationService,
+    private confirmationService: ConfirmationService
+  ) {}
 
   ngOnInit(): void {
     this.loadDefinitions();
@@ -101,14 +107,14 @@ export class CustomResourcesComponent implements OnInit {
       this.newDefinition.schema = JSON.parse(this.schemaJson);
       this.resourceAbstractorService.createCustomResource(this.newDefinition).subscribe({
         next: () => {
-          alert('✅ Resource definition created successfully!');
+          this.notificationService.success('Resource definition created successfully!');
           this.cancelDefinitionForm();
           this.loadDefinitions();
         },
-        error: (err) => alert(`❌ Error: ${err.message}`)
+        error: (err) => this.notificationService.error(`Error: ${err.message}`)
       });
     } catch (e: any) {
-      alert(`❌ Invalid JSON: ${e.message}`);
+      this.notificationService.error(`Invalid JSON: ${e.message}`);
     }
   }
 
@@ -120,16 +126,21 @@ export class CustomResourcesComponent implements OnInit {
     this.selectedDefinition = null;
   }
 
-  deleteDefinition(definition: CustomResource): void {
-    const confirmMessage = `Are you sure you want to delete the '${definition.resource_type}' resource definition?\n\n⚠️ WARNING: This will also delete ALL instances of this resource type!`;
-    
-    if (!confirm(confirmMessage)) {
+  async deleteDefinition(definition: CustomResource): Promise<void> {
+    const confirmed = await this.confirmationService.confirm({
+      title: 'Delete Resource Definition',
+      message: `Are you sure you want to delete the '${definition.resource_type}' resource definition?\n\n⚠️ WARNING: This will also delete ALL instances of this resource type!`,
+      confirmText: 'Delete All',
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) {
       return;
     }
 
     this.resourceAbstractorService.deleteCustomResource(definition.resource_type).subscribe({
       next: () => {
-        alert('✅ Resource definition and all instances deleted successfully!');
+        this.notificationService.success('Resource definition and all instances deleted successfully!');
         this.loadDefinitions();
         // Clear selected resource type if it was deleted
         if (this.selectedResourceType === definition.resource_type) {
@@ -137,7 +148,7 @@ export class CustomResourcesComponent implements OnInit {
           this.instances = [];
         }
       },
-      error: (err) => alert(`❌ Error: ${err.message}`)
+      error: (err) => this.notificationService.error(`Error: ${err.message}`)
     });
   }
 
@@ -189,11 +200,11 @@ export class CustomResourcesComponent implements OnInit {
       if (this.showInstanceForm === 'create') {
         this.resourceAbstractorService.createResourceInstance(this.selectedResourceType, data).subscribe({
           next: () => {
-            alert('✅ Resource instance created successfully!');
+            this.notificationService.success('Resource instance created successfully!');
             this.cancelInstanceForm();
             this.loadInstances(this.selectedResourceType);
           },
-          error: (err) => alert(`❌ Error: ${err.message}`)
+          error: (err) => this.notificationService.error(`Error: ${err.message}`)
         });
       } else if (this.showInstanceForm === 'edit') {
         // Remove _id from the data payload for updates
@@ -204,15 +215,15 @@ export class CustomResourcesComponent implements OnInit {
           updateData
         ).subscribe({
           next: () => {
-            alert('✅ Resource instance updated successfully!');
+            this.notificationService.success('Resource instance updated successfully!');
             this.cancelInstanceForm();
             this.loadInstances(this.selectedResourceType);
           },
-          error: (err) => alert(`❌ Error: ${err.message}`)
+          error: (err) => this.notificationService.error(`Error: ${err.message}`)
         });
       }
     } catch (e: any) {
-      alert(`❌ Invalid JSON: ${e.message}`);
+      this.notificationService.error(`Invalid JSON: ${e.message}`);
     }
   }
 
@@ -224,8 +235,15 @@ export class CustomResourcesComponent implements OnInit {
     this.selectedInstance = null;
   }
 
-  deleteInstance(instance: any): void {
-    if (!confirm(`Are you sure you want to delete this ${this.selectedResourceType} instance?`)) {
+  async deleteInstance(instance: any): Promise<void> {
+    const confirmed = await this.confirmationService.confirm({
+      title: 'Delete Resource Instance',
+      message: `Are you sure you want to delete this ${this.selectedResourceType} instance?\\n\\nThis action cannot be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -234,10 +252,10 @@ export class CustomResourcesComponent implements OnInit {
       instance._id
     ).subscribe({
       next: () => {
-        alert('✅ Resource instance deleted successfully!');
+        this.notificationService.success('Resource instance deleted successfully!');
         this.loadInstances(this.selectedResourceType);
       },
-      error: (err) => alert(`❌ Error: ${err.message}`)
+      error: (err) => this.notificationService.error(`Error: ${err.message}`)
     });
   }
 

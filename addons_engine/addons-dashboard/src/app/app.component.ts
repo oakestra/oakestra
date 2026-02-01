@@ -3,10 +3,13 @@ import { CommonModule } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ConfigService } from './services/config.service';
+import { ConfirmationService } from './services/confirmation.service';
 import { MarketplaceComponent } from './components/marketplace/marketplace.component';
 import { InstalledAddonsComponent } from './components/installed-addons/installed-addons.component';
 import { HooksComponent } from './components/hooks/hooks.component';
 import { CustomResourcesComponent } from './components/custom-resources/custom-resources.component';
+import { NotificationComponent } from './components/notification/notification.component';
+import { ConfirmationDialogComponent } from './components/confirmation-dialog/confirmation-dialog.component';
 
 @Component({
   selector: 'app-root',
@@ -18,7 +21,9 @@ import { CustomResourcesComponent } from './components/custom-resources/custom-r
     MarketplaceComponent,
     InstalledAddonsComponent,
     HooksComponent,
-    CustomResourcesComponent
+    CustomResourcesComponent,
+    NotificationComponent,
+    ConfirmationDialogComponent
   ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
@@ -32,7 +37,10 @@ export class AppComponent implements OnInit {
   addonsEngineUrl: string = '';
   resourceAbstractorUrl: string = '';
 
-  constructor(public configService: ConfigService) {}
+  constructor(
+    public configService: ConfigService,
+    private confirmationService: ConfirmationService
+  ) {}
 
   ngOnInit(): void {
     // Config is already loaded via APP_INITIALIZER
@@ -65,8 +73,15 @@ export class AppComponent implements OnInit {
     });
   }
 
-  resetToDefaults(): void {
-    if (confirm('Reset configuration to defaults? This will reload the page.')) {
+  async resetToDefaults(): Promise<void> {
+    const confirmed = await this.confirmationService.confirm({
+      title: 'Reset Configuration',
+      message: 'Reset configuration to defaults?\n\nThis will reload the page.',
+      confirmText: 'Reset',
+      cancelText: 'Cancel'
+    });
+
+    if (confirmed) {
       this.configService.resetToDefaults();
       window.location.reload();
     }
