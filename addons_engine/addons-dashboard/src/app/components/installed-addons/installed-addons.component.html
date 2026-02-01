@@ -58,7 +58,7 @@
     <div class="actions">
       <button class="btn btn-primary btn-small" (click)="viewDetails(addon)">View Details</button>
 
-      @if (addon.status?.toString()?.toLowerCase()?.trim() === 'disabled') {
+      @if (addon.status.toString().toLowerCase().trim() === 'disabled') {
         <button class="btn btn-danger btn-small" (click)="uninstallAddon(addon._id)">Uninstall</button>
       } @else {
         <button class="btn btn-warning btn-small" (click)="disableAddon(addon._id)">Disable</button>
