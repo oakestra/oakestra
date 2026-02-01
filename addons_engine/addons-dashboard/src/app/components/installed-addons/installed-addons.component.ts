@@ -84,6 +84,27 @@ export class InstalledAddonsComponent implements OnInit {
     });
   }
 
+  async disableAddon(id: string): Promise<void> {
+    const confirmed = await this.confirmationService.confirm({
+      title: 'Disable Addon',
+      message: 'Are you sure you want to disable this addon?\n\nYou can uninstall it later if needed.',
+      confirmText: 'Disable',
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    this.addonsEngineService.uninstallAddon(id).subscribe({
+      next: () => {
+        this.notificationService.success('Addon disabled successfully!');
+        setTimeout(() => this.loadAddons(), 1000);
+      },
+      error: (err) => this.notificationService.error(`Error: ${err.message}`)
+    });
+  }
+
   async uninstallAddon(id: string): Promise<void> {
     const confirmed = await this.confirmationService.confirm({
       title: 'Uninstall Addon',
@@ -98,7 +119,7 @@ export class InstalledAddonsComponent implements OnInit {
 
     this.addonsEngineService.uninstallAddon(id).subscribe({
       next: () => {
-        this.notificationService.success('Addon uninstallation started!');
+        this.notificationService.success('Addon uninstalled successfully!');
         setTimeout(() => this.loadAddons(), 1000);
       },
       error: (err) => this.notificationService.error(`Error: ${err.message}`)
