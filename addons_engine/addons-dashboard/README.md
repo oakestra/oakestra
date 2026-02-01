@@ -311,6 +311,7 @@ webapp/
 ├── package.json                 # Dependencies
 ├── Dockerfile                   # Docker build
 └── nginx.conf                   # nginx configuration
+``` 
 
 ## Development Tips
 
