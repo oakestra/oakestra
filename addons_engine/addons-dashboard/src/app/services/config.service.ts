@@ -47,9 +47,9 @@ export class ConfigService {
     localStorage.setItem(this.CONFIG_KEY, JSON.stringify(config));
   }
 
-  resetToDefaults(): void {
+  async resetToDefaults(): Promise<void> {
     localStorage.removeItem(this.CONFIG_KEY);
     this.initialized = false;
-    this.loadConfig();
+    await this.loadConfig();
   }
 }
