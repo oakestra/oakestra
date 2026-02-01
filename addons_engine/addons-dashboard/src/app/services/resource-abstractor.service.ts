@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { Hook, CustomResource } from '../models/addon.model';
 import { ConfigService } from './config.service';
@@ -53,23 +53,19 @@ export class ResourceAbstractorService {
   }
 
   getResourcesByType(resourceType: string, filters?: { [key: string]: any }): Observable<any[]> {
-    let url = `${this.baseUrl}/custom-resources/${resourceType}`;
-    
-    // Add query parameters if filters are provided
-    if (filters && Object.keys(filters).length > 0) {
-      const params = new URLSearchParams();
+    const url = `${this.baseUrl}/custom-resources/${resourceType}`;
+  
+    let params = new HttpParams();
+  
+    if (filters) {
       Object.keys(filters).forEach(key => {
         if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
-          params.append(key, String(filters[key]));
+          params = params.set(key, String(filters[key]));
         }
       });
-      const queryString = params.toString();
-      if (queryString) {
-        url += `?${queryString}`;
-      }
     }
-    
-    return this.http.get<any[]>(url);
+  
+    return this.http.get<any[]>(url, { params });
   }
 
   createResourceInstance(resourceType: string, data: any): Observable<any> {
