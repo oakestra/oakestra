@@ -1,0 +1,67 @@
+x-logging:
+  &default-logging
+  driver: "json-file"
+  options:
+    max-size: "1m"
+    max-file: "1"
+    tag: "{{.Name}}"
+    
+services:
+
+  cluster_addons_manager:
+    image: addons_manager
+    container_name: cluster_addons_manager
+    build: ../addons_engine/addons-manager/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    environment:
+      - ADDONS_MANAGER_PORT=11201
+      - ADDONS_ENGINE_MONGO_URL=cluster_mongo
+      - ADDONS_ENGINE_MONGO_PORT=10107
+      - MARKETPLACE_ADDR=${SYSTEM_MANAGER_URL}:11102
+    ports:
+      - 11201:11201
+    depends_on:
+      - mongo_cluster
+    logging: *default-logging
+
+  cluster_addons_monitor:
+    image: addons_monitor
+    container_name: cluster_addons_monitor
+    build: ../addons_engine/addons-monitor/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ADDONS_MANAGER_ADDR=http://cluster_addons_manager:11201
+    depends_on:
+      - cluster_addons_manager
+    logging: *default-logging
+
+  
+  addons_dashboard:
+    image: cluster_addons_dashboard
+    container_name: cluster_addons_dashboard
+    build: ../addons_engine/addons-dashboard/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DASHBOARD_PORT=11203
+      - MARKETPLACE_URL=${SYSTEM_MANAGER_URL}
+      - RESOURCE_ABSTRACTOR_URL=cluster_resource_abstractor
+      - ADDONS_ENGINE_URL=cluster_addons_manager
+    depends_on:
+      - cluster_addons_monitor
+      - cluster_addons_manager
+    ports:
+      - 11203:11203
+    expose:
+      - "11203"
+    logging: *default-logging
+

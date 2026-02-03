@@ -8,9 +8,9 @@ x-logging:
     
 services:
 
-  addons_manager:
+  root_addons_manager:
     image: addons_manager
-    container_name: addons_manager
+    container_name: root_addons_manager
     build: ../addons_engine/addons-manager/
     labels:
       logging: "promtail"
@@ -27,9 +27,9 @@ services:
       - marketplace_manager
     logging: *default-logging
 
-  addons_monitor:
+  root_addons_monitor:
     image: addons_monitor
-    container_name: addons_monitor
+    container_name: root_addons_monitor
     build: ../addons_engine/addons-monitor/
     labels:
       logging: "promtail"
@@ -37,9 +37,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - ADDONS_MANAGER_ADDR=http://addons_manager:11101
+      - ADDONS_MANAGER_ADDR=http://root_addons_manager:11101
     depends_on:
-      - addons_manager
+      - root_addons_manager
     logging: *default-logging
 
   marketplace_manager:
@@ -65,8 +65,8 @@ services:
 
   
   addons_dashboard:
-    image: addons_dashboard
-    container_name: addons_dashboard
+    image: root_addons_dashboard
+    container_name: root_addons_dashboard
     build: ../addons_engine/addons-dashboard/
     labels:
       logging: "promtail"
@@ -77,11 +77,11 @@ services:
       - DASHBOARD_PORT=11103
       - MARKETPLACE_URL=marketplace_manager
       - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
-      - ADDONS_ENGINE_URL=addons_manager
+      - ADDONS_ENGINE_URL=root_addons_manager
     depends_on:
       - marketplace_manager
-      - addons_monitor
-      - addons_manager
+      - root_addons_monitor
+      - root_addons_manager
     ports:
       - 11103:11103
     expose:
