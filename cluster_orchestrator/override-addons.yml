@@ -19,7 +19,7 @@ services:
       - ADDONS_MANAGER_PORT=11201
       - ADDONS_ENGINE_MONGO_URL=cluster_mongo
       - ADDONS_ENGINE_MONGO_PORT=10107
-      - MARKETPLACE_ADDR=${SYSTEM_MANAGER_URL}:11102
+      - MARKETPLACE_ADDR=http://${SYSTEM_MANAGER_URL}:11102
     ports:
       - 11201:11201
     depends_on:
