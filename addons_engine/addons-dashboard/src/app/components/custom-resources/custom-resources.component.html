@@ -19,6 +19,7 @@
 <!-- ===== RESOURCE DEFINITIONS VIEW ===== -->
 <div class="view-section" *ngIf="viewMode === 'definitions'">
   <div class="section-actions">
+    <app-refresh-button (refresh)="loadDefinitions()"></app-refresh-button>
     <button class="btn btn-primary" (click)="showCreateDefinitionForm()">+ Create Resource Definition</button>
   </div>
 
@@ -100,7 +101,7 @@
     </div>
     <div class="instance-actions" *ngIf="selectedResourceType">
       <button class="btn btn-secondary btn-small" (click)="toggleFilters()">🔍 {{ showFilters ? 'Hide' : 'Show' }} Filters</button>
-      <button class="btn btn-secondary btn-small" (click)="refreshInstances()">🔄 Refresh</button>
+      <app-refresh-button (refresh)="loadInstances(selectedResourceType)"></app-refresh-button>
       <button class="btn btn-primary" (click)="showCreateInstanceForm()">+ Create Instance</button>
     </div>
   </div>
