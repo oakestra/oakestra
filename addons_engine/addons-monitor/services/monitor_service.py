@@ -14,7 +14,7 @@ MAX_CONTAINER_RETRIES = int(os.environ.get("MAX_CONTAINER_RETRIES", 1))
 CONTAINER_POLL_INTERVAL = int(os.environ.get("CONTAINER_POLL_INTERVAL", 30))
 
 DEFAULT_PROJECT_NAME = os.environ.get("DEFAULT_PROJECT_NAME") or "root_orchestrator"
-DEFAULT_NETWORK = f"oakestra"
+DEFAULT_NETWORK = "oakestra"
 
 ADDONS_ID_LABEL = os.environ.get("ADDONS_ID_LABEL") or "oak.addon.id"
 ADDONS_SERVICE_NAME_LABEL = os.environ.get("ADDONS_SERVICE_NAME_LABEL") or "oak.service.name"
@@ -387,7 +387,7 @@ class AddonsMonitor:
                 {
                     "status": status,
                     "status_details": {"failed_services": failed_containers_names},
-                    "logs": logs
+                    "logs": logs,
                 },
             )
 

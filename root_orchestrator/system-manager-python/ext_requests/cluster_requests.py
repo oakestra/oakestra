@@ -29,7 +29,9 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
         return
 
     try:
-        logger.debug(f"Preparing deploy request for job {job_id} instance {instance_number} to cluster {cluster}")
+        logger.debug(
+            f"Preparing deploy request for job {job_id} instance {instance_number} to cluster {cluster}"
+        )
         cluster_addr = (
             "http://"
             + sanitize(cluster.get("ip"), request=True)
@@ -43,7 +45,7 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
         job["_id"] = str(job["_id"])
         logger.info(f"Deploy request to {cluster_addr}")
         requests.post(cluster_addr, json=job, timeout=10)
-    except Exception as e :
+    except Exception as e:
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} not successful: {e}")
 
 

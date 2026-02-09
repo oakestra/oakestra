@@ -55,9 +55,9 @@ def create_resource(resource_type, data):
 
 def update_resource(resource_type, id, data):
     collection = _get_collection(resource_type)
-    
+
     # Remove _id from data to avoid MongoDB immutable field error
-    update_data = {k: v for k, v in data.items() if k != '_id'}
+    update_data = {k: v for k, v in data.items() if k != "_id"}
 
     return collection.find_one_and_update(
         {"_id": ObjectId(id)}, {"$set": update_data}, return_document=True

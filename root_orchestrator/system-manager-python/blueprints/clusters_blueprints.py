@@ -98,7 +98,9 @@ class ClusterController(MethodView):
         # Prevent the IP address from being overwritten by cluster updates
         # The IP is set during initial registration and should not change
         if "ip" in data:
-            logger.warning(f"Cluster update attempted to change IP address, ignoring update to prevent corruption")
+            logger.warning(
+                "Cluster update attempted to change IP address, ignoring update to prevent corruption"
+            )
             del data["ip"]
         updated_cluster = candidate_operations.update_candidate_information(cluster_id, data)
         if updated_cluster is None:

@@ -81,6 +81,6 @@ class AddonController(MethodView):
                 abort(400, message="Failed to disable addon")
 
             return json.dumps(result, default=str), 200
-        
+
         addons_db.delete_addon_by_id(addon_id)
         return "", 204

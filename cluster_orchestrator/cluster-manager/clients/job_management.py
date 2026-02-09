@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta
 
 from ext_requests.scheduler_requests import scheduler_request_deploy
@@ -9,7 +10,6 @@ from oakestra_utils.types.statuses import (
     convert_to_status,
 )
 from resource_abstractor_client import candidate_operations, job_operations
-import logging
 
 logger = logging.getLogger("cluster_manager")
 
