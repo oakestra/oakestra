@@ -70,11 +70,8 @@ def update_job(job_id, job_data):
 
 def find_job_instance(job_id, instance_number):
     return db.mongo_jobs.find_one(
-        {
-            "_id": ObjectId(job_id),
-            "instance_list.instance_number": int(instance_number)
-        },
-        {"instance_list.$": 1}
+        {"_id": ObjectId(job_id), "instance_list.instance_number": int(instance_number)},
+        {"instance_list.$": 1},
     )
 
 
