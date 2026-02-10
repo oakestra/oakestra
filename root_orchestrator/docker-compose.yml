@@ -33,6 +33,7 @@ services:
       - jwt_generator
     environment:
       - ROOT_MONGO_URL=mongo
+      - LOG_LEVEL=INFO
       - ROOT_MONGO_PORT=10007
       - ROOT_SCHEDULER_URL=root_scheduler
       - ROOT_SCHEDULER_PORT=10004
@@ -57,7 +58,7 @@ services:
       - 'mongodb_data:/data/db'
     command: mongod --port 10007
 
-  # cluster-level mongoDB
+  # root-level network mongoDB
   mongo_rootnet:
     image: mongo:8.0
     container_name: mongo_net
@@ -68,7 +69,7 @@ services:
       - 'mongodb_net_data:/data/db'
     command: mongod --port 10008
 
-  # Cluster Manager
+  # Root Manager
   root_service_manager:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
     container_name: root_service_manager
@@ -206,6 +207,87 @@ services:
       - "10011:10011"
     environment:
       - JWT_GENERATOR_PORT=10011
+    logging: *default-logging
+
+  # Addons 
+  addons_manager:
+    image: addons_manager
+    container_name: addons_manager
+    build: ../addons_engine/addons-manager/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    environment:
+      - ADDONS_MANAGER_PORT=11101
+      - ADDONS_ENGINE_MONGO_URL=mongo
+      - ADDONS_ENGINE_MONGO_PORT=10007
+      - MARKETPLACE_ADDR=http://marketplace_manager:11102
+    ports:
+      - 11101:11101
+    depends_on:
+      - mongo_root
+      - marketplace_manager
+    logging: *default-logging
+
+  addons_monitor:
+    image: addons_monitor
+    container_name: addons_monitor
+    build: ../addons_engine/addons-monitor/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ADDONS_MANAGER_ADDR=http://addons_manager:11101
+    depends_on:
+      - addons_manager
+    logging: *default-logging
+  
+  addons_dashboard:
+    image: addons_dashboard
+    container_name: addons_dashboard
+    build: ../addons_engine/addons-dashboard/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DASHBOARD_PORT=11103
+      - MARKETPLACE_URL=marketplace_manager
+      - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
+      - ADDONS_ENGINE_URL=addons_manager
+    depends_on:
+      - marketplace_manager
+      - addons_monitor
+      - addons_manager
+    ports:
+      - 11103:11103
+    expose:
+      - "11103"
+    logging: *default-logging
+
+  # Marketplace
+  marketplace_manager:
+    image: marketplace_manager
+    build: ../addons_marketplace/marketplace-manager/
+    container_name: marketplace_manager
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - "11102"
+    ports:
+      - "11102:11102"
+    environment:
+      - ADDON_MARKETPLACE_PORT=11102
+      - ADDON_MARKETPLACE_MONGO_URL=mongo
+      - ADDON_MARKETPLACE_MONGO_PORT=10007
+    depends_on:
+      - mongo_root
     logging: *default-logging
 
 volumes:

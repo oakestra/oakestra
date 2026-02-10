@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 from bson import json_util
 from clients import job_management
@@ -45,9 +46,11 @@ class ServiceController(MethodView):
         job = request.json  # contains job_id and job_description
 
         try:
+            logger.info(f"Received deployment request for job {job_id} instance {instance_number}")
             deploy_job(job, instance_number)
         except Exception as e:
-            logger.error(e)
+            logger.error(f"Deployment Failed: {e}")
+            logger.error(f"{traceback.format_exc()}")
             abort(500, "Failed to deploy service")
 
         return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
@@ -67,7 +70,8 @@ class ServiceController(MethodView):
         try:
             job_management.delete_job_instance(job_id, int(instance_number), erase=True)
         except Exception as e:
-            logger.error("Failed to delete service " + job_id + ": " + str(e))
+            logger.error(f"Failed to delete service {job_id}: {e}")
+            logger.error(f"{traceback.format_exc()}")
             abort(500, "Failed to delete service")
 
         return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")

@@ -44,6 +44,7 @@ services:
       - ROOT_MONGO_PORT=10007
       - ROOT_SCHEDULER_URL=scheduler
       - ROOT_SCHEDULER_PORT=10004
+      - LOG_LEVEL=INFO
       - RESOURCE_ABSTRACTOR_URL=resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
@@ -282,6 +283,7 @@ services:
       - MY_PORT=10100
       - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - SYSTEM_MANAGER_PORT=10000
+      - LOG_LEVEL=INFO
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
       - CLUSTER_SERVICE_MANAGER_PORT=10110
       - CLUSTER_MONGO_URL=cluster_mongo
@@ -410,6 +412,86 @@ services:
       - '--server.enable-runtime-reload'
     depends_on:
       - loki
+    logging: *default-logging
+
+
+  # Addons 
+  addons_manager:
+    image: ghcr.io/oakestra/oakestra/addons_manager:latest
+    container_name: addons_manager
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    environment:
+      - ADDONS_MANAGER_PORT=11101
+      - ADDONS_ENGINE_MONGO_URL=mongo
+      - ADDONS_ENGINE_MONGO_PORT=10007
+      - MARKETPLACE_ADDR=http://marketplace_manager:11102
+    ports:
+      - 11101:11101
+    depends_on:
+      - mongo_root
+      - marketplace_manager
+    logging: *default-logging
+
+  addons_monitor:
+    image: ghcr.io/oakestra/oakestra/addons_monitor:latest
+    container_name: addons_monitor
+    build: ../addons_engine/addons-monitor/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: bash -c 'sleep 10; python addons_monitor.py'
+    environment:
+      - ADDONS_MANAGER_ADDR=http://addons_manager:11101
+      - CONTAINER_POLL_INTERVAL=5
+    depends_on:
+      - addons_manager
+    logging: *default-logging
+
+  marketplace_manager:
+    image: ghcr.io/oakestra/oakestra/marketplace_manager:latest
+    container_name: marketplace_manager
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - "11102"
+    ports:
+      - "11102:11102"
+    environment:
+      - ADDON_MARKETPLACE_PORT=11102
+      - ADDON_MARKETPLACE_MONGO_URL=mongo
+      - ADDON_MARKETPLACE_MONGO_PORT=10007
+    depends_on:
+      - mongo_root
+    logging: *default-logging
+
+  addons_dashboard:
+    image: ghcr.io/oakestra/oakestra/addons_dashboard:latest
+    container_name: addons_dashboard
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DASHBOARD_PORT=11103
+      - MARKETPLACE_URL=${SYSTEM_MANAGER_URL}
+      - RESOURCE_ABSTRACTOR_URL=${SYSTEM_MANAGER_URL}
+      - ADDONS_ENGINE_URL=${SYSTEM_MANAGER_URL}
+    depends_on:
+      - marketplace_manager
+      - addons_monitor
+      - addons_manager
+    ports:
+      - 11103:11103
+    expose:
+      - "11103"
     logging: *default-logging
 
 volumes:

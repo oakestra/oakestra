@@ -40,4 +40,6 @@ ENV MQTT_BROKER_URL=localhost
 ENV MQTT_BROKER_PORT=10003
 ENV MY_PORT=10100
 
+ENV LOG_LEVEL=INFO
+
 CMD gunicorn --bind [::]:${MY_PORT} cluster_manager:app

@@ -15,7 +15,7 @@ RUN pip install -r requirements.txt --no-cache-dir && rm /requirements.txt
 COPY . /
 
 # TRUE for verbose logging
-ENV FLASK_DEBUG=TRUE
+ENV FLASK_DEBUG=FALSE
 
 ENV ROOT_MONGO_URL=localhost
 ENV ROOT_MONGO_PORT=10007
@@ -26,7 +26,7 @@ ENV ROOT_SCHEDULER_PORT=7777
 ENV NET_PLUGIN_URL=localhost
 ENV NET_PLUGIN_PORT=10100
 
-ENV LOG_LEVEL=WARNING
+ENV LOG_LEVEL=INFO
 
 ENV MY_PORT=10000
 
