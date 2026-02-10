@@ -104,6 +104,7 @@ class ClusterController(MethodView):
             del data["ip"]
         updated_cluster = candidate_operations.update_candidate_information(cluster_id, data)
         if updated_cluster is None:
+            logger.error("Could not update cluster")
             return abort(400, "Updating cluster failed")
 
         # TODO(GB): fire an event to react to the cluster update
@@ -126,10 +127,11 @@ class ClusterController(MethodView):
 # Map candidate attributes to cluster attributes for compatibility with ext tools
 # Deprecation note: this mapping should be removed when ext tools are updated to use
 def map_cluster_attributes(x):
-    x["cluster_name"] = x["candidate_name"]
-    x["cluster_location"] = x["candidate_location"]
-    x["aggregated_cpu_percent"] = x["cpu_percent"]
-    x["memory_in_mb"] = x["memory"]
-    x["total_cpu_cores"] = x["vcpus"]
-    x["total_gpu_cores"] = x["vgpus"]
+    x["cluster_name"] = x.get("candidate_name", "Unknown Cluster")
+    x["cluster_location"] = x.get("candidate_location", "Unknown Location")
+
+    x["aggregated_cpu_percent"] = x.get("cpu_percent", 0)
+    x["memory_in_mb"] = x.get("memory", 0)
+    x["total_cpu_cores"] = x.get("vcpus", 0)
+    x["total_gpu_cores"] = x.get("vgpus", 0)
     return x

@@ -22,15 +22,6 @@ def scheduler_request_deploy(job, instance_number):
         logger.error("Calling scheduler", request_addr, "not successful.")
 
 
-def scheduler_request_replicate(job, replicas):
-    request_addr = SCHEDULER_ADDR + "/api/calculate/replicate"
-    try:
-        job["_id"] = str(job["_id"])
-        requests.post(request_addr, json={"job": job, "replicas": replicas})
-    except requests.exceptions.RequestException:
-        logger.error("Calling Cloud Scheduler /api/calculate/replicate not successful.")
-
-
 def scheduler_request_status():
     request_addr = SCHEDULER_ADDR + "/status"
     try:

@@ -94,6 +94,12 @@ def update_candidate_information(candidate_id, data):
 
     update_dict = update_timestamp(data)
 
+    # remove duplicate history values
+    if "cpu_history" in update_dict:
+        del update_dict["cpu_history"]
+    if "memory_history" in update_dict:
+        del update_dict["memory_history"]
+
     cpu_update = {
         "value": data.get("cpu_percent"),
         "timestamp": update_dict["last_modified_timestamp"],
