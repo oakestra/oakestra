@@ -93,7 +93,7 @@ class ClusterController(MethodView):
         data = request.json
         cluster_id = kwargs["clusterid"]
         jobs = data.get("jobs")
-        logger.debug(f"Received cluster update for {cluster_id}: {data}")
+        logger.info(f"Received cluster update for {cluster_id}: {data}")
         del data["jobs"]
         # Prevent the IP address from being overwritten by cluster updates
         # The IP is set during initial registration and should not change
