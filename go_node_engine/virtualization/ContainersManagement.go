@@ -6,7 +6,6 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
-	"go_node_engine/virtualization/internal/allruntimes"
 	virtrt "go_node_engine/virtualization/internal/runtime"
 	"iter"
 	"maps"
@@ -36,11 +35,11 @@ import (
 )
 
 func init() {
-	allruntimes.Register(string(model.CONTAINER_RUNTIME), newContainerdRuntime)
+	virtrt.Register(string(model.CONTAINER_RUNTIME), newContainerdRuntime)
 	plugins := findAdditionalRuntimePlugins()
 	if plugins != nil {
 		for additionalName := range findAdditionalRuntimePlugins() {
-			allruntimes.Register(additionalName, newContainerdRuntime)
+			virtrt.Register(additionalName, newContainerdRuntime)
 		}
 	}
 }

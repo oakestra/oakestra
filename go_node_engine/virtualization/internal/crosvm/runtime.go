@@ -7,7 +7,6 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/util/iotools"
 	"go_node_engine/util/taskid"
-	"go_node_engine/virtualization/internal/allruntimes"
 	"go_node_engine/virtualization/internal/crosvm/internal/image"
 	"go_node_engine/virtualization/internal/crosvm/internal/instance"
 	"go_node_engine/virtualization/internal/crosvm/internal/stats"
@@ -23,7 +22,7 @@ import (
 )
 
 func init() {
-	allruntimes.Register(string(model.CROSVM_RUNTIME), newRuntime)
+	virtrt.Register(string(model.CROSVM_RUNTIME), newRuntime)
 }
 
 var ErrNotDeployed = errors.New("specified instance is not deployed")

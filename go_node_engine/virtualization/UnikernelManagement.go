@@ -8,7 +8,6 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
-	"go_node_engine/virtualization/internal/allruntimes"
 	"go_node_engine/virtualization/internal/network"
 	virtrt "go_node_engine/virtualization/internal/runtime"
 	"io"
@@ -28,7 +27,7 @@ import (
 )
 
 func init() {
-	allruntimes.Register(string(model.UNIKERNEL_RUNTIME), newUnikernelQemuRuntime)
+	virtrt.Register(string(model.UNIKERNEL_RUNTIME), newUnikernelQemuRuntime)
 }
 
 type qemuDomain struct {

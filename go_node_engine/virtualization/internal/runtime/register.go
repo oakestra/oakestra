@@ -1,12 +1,11 @@
-package allruntimes
+package runtime
 
 import (
-	virtrt "go_node_engine/virtualization/internal/runtime"
 	"maps"
 	"sync"
 )
 
-type RuntimeInitializer func(info virtrt.RuntimeInfo) virtrt.Runtime
+type RuntimeInitializer func(info RuntimeInfo) Runtime
 
 var runtimeInitializers = make(map[string]RuntimeInitializer)
 var lock sync.RWMutex
