@@ -44,6 +44,7 @@ app.config["API_TITLE"] = "Oakestra root api"
 app.config["API_VERSION"] = "v1"
 app.config["OPENAPI_URL_PREFIX"] = "/docs"
 app.config["JWT_ALGORITHM"] = "RS256"
+app.logger = logger
 
 socketioserver = SocketIO(app, logger=True, engineio_logger=True)
 api = Api(app, spec_kwargs={"x-internal-id": "1", "host": "oakestra.io"})
@@ -152,12 +153,12 @@ def register_with_system_manager():
 # ........... FINISH - register to System Manager with gRPC.................#
 # ..........................................................................#
 
+start_http_server(10001)  # start prometheus server
+register_with_system_manager()  # register with system manager using gRPC
 
 if __name__ == "__main__":
-    start_http_server(10001)  # start prometheus server
     import eventlet
 
-    register_with_system_manager()  # register with system manager using gRPC
     eventlet.wsgi.server(
         eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger
     )  # see README for logging notes

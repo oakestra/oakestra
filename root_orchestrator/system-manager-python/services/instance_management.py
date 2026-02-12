@@ -127,6 +127,7 @@ def instance_scale_up_scheduled_handler(job_id, cluster_id):
         "instance_number": instance_number,
         "cluster_id": cluster_id,
         "cluster_location": cluster.get("candidate_location", "location-unknown"),
+        "status": PositiveSchedulingStatus.CLUSTER_SCHEDULED.value,
     }
     instance_list = job["instance_list"]
     instance_list.append(instance_info)

@@ -10,6 +10,7 @@ COPY . /
 # TRUE for verbose logging
 ENV FLASK_ENV=development
 ENV FLASK_DEBUG=TRUE
+ENV LOG_LEVEL=WARNING
 
 ENV MONGO_URL=localhost
 ENV MONGO_PORT=10007

@@ -1,0 +1,21 @@
+<div class="notification-container">
+  <div 
+    *ngFor="let notification of notificationService.getNotifications()"
+    class="notification"
+    [ngClass]="{
+      'notification-success': notification.type === NotificationType.success,
+      'notification-error': notification.type === NotificationType.error,
+      'notification-info': notification.type === NotificationType.info
+    }"
+    (click)="notificationService.remove(notification.id)"
+  >
+    <span class="notification-icon">
+      <ng-container [ngSwitch]="notification.type">
+        <span *ngSwitchCase="NotificationType.success">✓</span>
+        <span *ngSwitchCase="NotificationType.error">✕</span>
+        <span *ngSwitchCase="NotificationType.info">ℹ</span>
+      </ng-container>
+    </span>
+    <span class="notification-message">{{ notification.message }}</span>
+  </div>
+</div>

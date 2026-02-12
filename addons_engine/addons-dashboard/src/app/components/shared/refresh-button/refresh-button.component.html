@@ -1,0 +1,9 @@
+<button
+  class="btn-refresh"
+  [class.refreshing]="isRefreshing"
+  (click)="onRefresh()"
+  [disabled]="isRefreshing"
+  title="Refresh">
+  <span class="refresh-icon">🔄</span>
+  <span class="refresh-text">Refresh</span>
+</button>

@@ -1,5 +1,3 @@
-version: "3.3"
-
 services:
 
   # Remove Root service maanger to disable network capabilities
