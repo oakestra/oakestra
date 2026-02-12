@@ -186,6 +186,13 @@ func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
 	return nil
 }
 
+// chooseImageParts resolves the appropriate OCI image manifest from the
+// provided image source and returns its core components.
+//
+// If the top-level manifest is an OCI image manifest, it is used directly.
+// If the top-level manifest is an OCI image index (multi-architecture image),
+// the function selects the instance matching the current platform and system
+// context, then loads its manifest.
 func chooseImageParts(
 	ctx context.Context,
 	sys *types.SystemContext,
