@@ -8,7 +8,7 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
-	"go_node_engine/virtualization/internal/network"
+	"go_node_engine/virtualization/internal/networkutils"
 	virtrt "go_node_engine/virtualization/internal/runtime"
 	"io"
 	"io/fs"
@@ -639,7 +639,7 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 	if model.GetNodeInfo().Overlay {
 
 		//Get the default route for the namespace
-		ip, gw, mask, mac, err := network.DeleteDefaultIpGwMask(*q.NSname)
+		ip, gw, mask, mac, err := networkutils.DeleteDefaultIpGwMask(*q.NSname)
 		if err != nil {
 			logger.InfoLogger().Printf("Unable to get default route for namespace %s: %v", *q.NSname, err)
 			return "", []string{}, err

@@ -5,7 +5,7 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/requests"
 	"go_node_engine/util/taskid"
-	"go_node_engine/virtualization/internal/network"
+	"go_node_engine/virtualization/internal/networkutils"
 	"slices"
 )
 
@@ -25,7 +25,7 @@ func setupNetwork(service model.Service) (*networkConfig, error) {
 		return nil, err
 	}
 
-	mac, err := network.RetrieveTapMacInNamespace(taskid.GenerateForModel(&service))
+	mac, err := networkutils.RetrieveTapMacInNamespace(taskid.GenerateForModel(&service))
 	if err != nil {
 		return nil, err
 	}
