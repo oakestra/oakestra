@@ -6,6 +6,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ git lib
 
 COPY requirements.txt /
 
+# Install appropriate requirements
+ARG LIB_BRANCH=develop
+ENV LIB_BRANCH=${LIB_BRANCH}
+
 RUN pip install -r requirements.txt --no-cache-dir && rm /requirements.txt
 
 COPY . /
@@ -13,11 +17,11 @@ COPY . /
 # TRUE for verbose logging
 ENV FLASK_DEBUG=TRUE
 
-ENV CLOUD_MONGO_URL=localhost
-ENV CLOUD_MONGO_PORT=10007
+ENV ROOT_MONGO_URL=localhost
+ENV ROOT_MONGO_PORT=10007
 
-ENV CLOUD_SCHEDULER_URL=localhost
-ENV CLOUD_SCHEDULER_PORT=7777
+ENV ROOT_SCHEDULER_URL=localhost
+ENV ROOT_SCHEDULER_PORT=7777
 
 ENV NET_PLUGIN_URL=localhost
 ENV NET_PLUGIN_PORT=10100
@@ -26,4 +30,3 @@ EXPOSE 10000
 EXPOSE 50052
 
 CMD ["python", "system_manager.py"]
-

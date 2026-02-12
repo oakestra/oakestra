@@ -45,20 +45,20 @@ type Node struct {
 	Ip              string               `json:"ip"`
 	Port            string               `json:"port"`
 	SystemInfo      map[string]string    `json:"system_info"`
-	CpuUsage        float64              `json:"cpu"`
-	CpuCores        int                  `json:"free_cores"`
+	CpuUsage        float64              `json:"cpu_percent"`
+	CpuCores        int                  `json:"vcpus"`
 	CpuArch         string               `json:"architecture"`
-	MemoryUsed      float64              `json:"memory"`
-	MemoryMB        int                  `json:"memory_free_in_MB"`
+	MemoryUsed      float64              `json:"memory_percent"`
+	MemoryMB        int                  `json:"memory"`
 	DiskInfo        map[string]string    `json:"disk_info"`
 	NetworkInfo     map[string]string    `json:"network_info"`
 	GpuDriver       string               `json:"gpu_driver"`
 	GpuUsage        float64              `json:"gpu_usage"`
-	GpuCores        int                  `json:"gpu_cores"`
+	GpuCores        int                  `json:"vgpus"`
 	GpuTemp         float64              `json:"gpu_temp"`
-	GpuMemUsage     float64              `json:"gpu_mem_used"`
-	GpuTotMem       float64              `json:"gpu_tot_mem"`
-	Technology      []config.RuntimeType `json:"technology"`
+	GpuMemUsage     float64              `json:"vram_percent"`
+	GpuTotMem       float64              `json:"vram"`
+	Technology      []config.RuntimeType `json:"virtualization"`
 	SupportedAddons []AddonType          `json:"supported_addons"`
 	Overlay         bool
 	OverlaySocket   string

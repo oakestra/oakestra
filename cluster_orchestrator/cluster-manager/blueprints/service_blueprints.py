@@ -1,17 +1,20 @@
 import logging
 
-import services.service_operations as service_operations
 from bson import json_util
-from clients.mongodb_client import (
-    mongo_find_job_by_system_id,
-    mongo_update_job_status,
-)
+from clients import job_management
+from clients.job_management import deploy_job
 from clients.mqtt_client import mqtt_publish_edge_deploy
-from ext_requests.network_plugin_requests import network_notify_deployment
+from ext_requests.network_manager_requests import network_notify_deployment
 from flask import Response, request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
-from oakestra_utils.types.statuses import NegativeSchedulingStatus, PositiveSchedulingStatus
+from oakestra_utils.types.statuses import (
+    PositiveSchedulingStatus,
+    convert_to_status,
+)
+from resource_abstractor_client import job_operations
+
+logger = logging.getLogger("cluster_manager")
 
 # ........ Functions for job management ...............#
 # ......................................................#
@@ -31,20 +34,20 @@ schedulingblp = Blueprint(
 )
 
 
-@serviceblp.route("/<system_job_id>/<instance_number>")
+@serviceblp.route("/<job_id>/<instance_number>")
 class ServiceController(MethodView):
     @serviceblp.response(
         200,
         {"status": "ok"},
         content_type="application/json",
     )
-    def post(self, system_job_id, instance_number):
-        logging.info("Incoming Request /api/deploy")
+    def post(self, job_id, instance_number):
         job = request.json  # contains job_id and job_description
 
         try:
-            service_operations.deploy_service(job, system_job_id, instance_number)
-        except Exception:
+            deploy_job(job, instance_number)
+        except Exception as e:
+            logger.error(e)
             abort(500, "Failed to deploy service")
 
         return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
@@ -54,53 +57,65 @@ class ServiceController(MethodView):
         {"status": "ok"},
         content_type="application/json",
     )
-    def delete(self, system_job_id, instance_number):
+    def delete(self, job_id, instance_number):
         """
         find service in db and ask corresponding worker to delete task,
         instance_number -1 undeploy all known instances
         """
-        logging.info("Incoming Request /api/service/ - to delete task...")
+        logger.info("Incoming Request /api/delete/ - to delete task...")
 
         try:
-            service_operations.delete_service(system_job_id, instance_number)
+            job_management.delete_job_instance(job_id, instance_number, erase=True)
         except Exception:
             abort(500, "Failed to delete service")
 
         return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
 
 
-@schedulingblp.route("/<system_job_id>/<instance_number>")
+@schedulingblp.route("/deploy")
 class SchedulingController(MethodView):
     @serviceblp.response(
         200,
         {},
         content_type="application/json",
     )
-    def post(self, system_job_id, instance_number):
-        logging.info("Incoming Request /api/result - received cluster_scheduler result")
-        data = request.json  # get POST body
-        logging.info(data)
+    def post(self):
+        data = request.get_json()
+        logger.debug(data)
+        id = data.get("job_id").split("/")
+        job_id = id[0]
+        instance_number = id[1]
+        node_id = data.get("candidate_id")
+        logger.info(
+            "Received scheduling result for job "
+            + job_id
+            + " instance "
+            + instance_number
+            + ". Result: "
+            + node_id
+        )
+        if node_id is None:
+            # scheduling failed
+            status = data.get("status")
+            job_operations.update_job_status(job_id, convert_to_status(status))
+            return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
 
-        if data.get("found", False):
-            resulting_node_id = data.get("node").get("_id")
-            mongo_update_job_status(
-                system_job_id=system_job_id,
-                instance_number=instance_number,
-                node=data.get("node"),
-                status=PositiveSchedulingStatus.NODE_SCHEDULED,
+        # update job instance
+        job_management.update_instance_node(job_id, int(instance_number), node_id)
+        job_management.update_status(
+            job_id, int(instance_number), PositiveSchedulingStatus.NODE_SCHEDULED.value
+        )
+
+        job = job_operations.get_job_by_id(job_id)
+        if job is None:
+            logger.error("Job " + job_id + " has been deleted")
+            return Response(
+                json_util.dumps({"status": "job_not_found"}), mimetype="application/json"
             )
-            job = mongo_find_job_by_system_id(system_job_id)
 
-            # Inform network plugin about the deployment
-            network_notify_deployment(str(job["system_job_id"]), job)
+        # update network component
+        network_notify_deployment(job_id, job)
 
-            # Publish job
-            mqtt_publish_edge_deploy(resulting_node_id, job, instance_number)
-        else:
-            mongo_update_job_status(
-                instance_number=instance_number,
-                system_job_id=system_job_id,
-                node=None,
-                status=NegativeSchedulingStatus.NO_WORKER_CAPACITY,
-            )
+        # publish job
+        mqtt_publish_edge_deploy(node_id, job, instance_number)
         return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")

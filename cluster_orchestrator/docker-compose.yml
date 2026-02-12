@@ -37,7 +37,7 @@ services:
     ports:
       - "10107:10107"
     volumes:
-      - 'mongodb_cluster_data:/mongodb'
+      - 'mongodb_cluster_data:/data/db'
     command: mongod --port 10107
 
   # cluster-level mongoDB
@@ -48,7 +48,7 @@ services:
     ports:
       - "10108:10108"
     volumes:
-      - 'mongodb_cluster_net_data:/mongodb'
+      - 'mongodb_cluster_net_data:/data/db'
     command: mongod --port 10108
 
 
@@ -82,7 +82,10 @@ services:
   # Cluster Manager
   cluster_manager:
     image: cluster_manager
-    build: cluster-manager/
+    build:
+      context: cluster-manager/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     container_name: cluster_manager
     labels:
       logging: "cluster_promtail"
@@ -106,6 +109,8 @@ services:
       - CLUSTER_SCHEDULER_PORT=10105
       - MQTT_BROKER_URL=mqtt
       - MQTT_BROKER_PORT=10003
+      - RESOURCE_ABSTRACTOR_URL=cluster_resource_abstractor
+      - RESOURCE_ABSTRACTOR_PORT=11012
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
     depends_on:
@@ -115,12 +120,10 @@ services:
       - cluster_service_manager
     logging: *default-logging
 
-
-
   # Cluster Scheduler
   cluster_scheduler:
     image: cluster_scheduler
-    build: cluster-scheduler/
+    build: ../scheduler/
     container_name: cluster_scheduler
     labels:
       logging: "cluster_promtail"
@@ -131,14 +134,34 @@ services:
     ports:
       - "10105:10105"
     environment:
-      - MY_PORT=10105
-      - CLUSTER_MANAGER_URL=cluster_manager
-      - CLUSTER_MANAGER_PORT=10100
-      - CLUSTER_MONGO_URL=cluster_mongo
-      - CLUSTER_MONGO_PORT=10107
+      - API_PORT=10105
+      - MANAGER_URL=cluster_manager
+      - MANAGER_PORT=10100
+      - RESOURCE_ABSTRACTOR_URL=cluster_resource_abstractor
+      - RESOURCE_ABSTRACTOR_PORT=11012
       - REDIS_ADDR=redis://:clusterRedis@cluster_redis:6479
     depends_on:
       - cluster_redis
+      - cluster_resource_abstractor
+    logging: *default-logging
+
+  cluster_resource_abstractor:
+    image: resource_abstractor
+    build: ../resource-abstractor/
+    container_name: cluster_resource_abstractor
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    hostname: cluster_resource_abstractor
+    expose:
+      - "11012"
+    ports:
+      - "11012:11012"
+    environment:
+      - RESOURCE_ABSTRACTOR_PORT=11012
+      - MONGO_URL=cluster_mongo
+      - MONGO_PORT=10107
+    depends_on:
       - mongo_cluster
     logging: *default-logging
 

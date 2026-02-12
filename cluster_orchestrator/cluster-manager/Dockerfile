@@ -9,6 +9,11 @@ RUN apt-get update -y &&\
         git
 
 COPY requirements.txt /
+
+# Install appropriate requirements
+ARG LIB_BRANCH=develop
+ENV LIB_BRANCH=${LIB_BRANCH}
+
 RUN pip install --no-cache-dir -r requirements.txt 
 
 COPY . /

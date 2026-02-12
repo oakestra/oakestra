@@ -21,8 +21,8 @@ const (
 )
 
 type deploymentRequest struct {
-	JobId     string `json:"job_id"`
-	ClusterId string `json:"cluster_id"`
+	JobId       string `json:"job_id"`
+	CandidateId string `json:"candidate_id"`
 }
 
 type deploymentFailedRequest struct {
@@ -58,6 +58,7 @@ func Deploy(jobId string, result string, success bool) error {
 		return err
 	}
 
+	logger.DebugLogger().Printf("Deployment request %s to url %s", string(payload), url)
 	err = resp.Body.Close()
 	if err != nil {
 		return err
