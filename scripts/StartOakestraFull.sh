@@ -6,6 +6,15 @@ if [ -z "$OAKESTRA_BRANCH" ]; then
     OAKESTRA_BRANCH='main'
 fi
 
+# Function to check if OAKESTRA_VERSION is a tag (alpha-vX.Y.Z or vX.Y.Z)
+is_tag() {
+    if [[ "$1" =~ ^(alpha-)?v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 # Check if docker and docker compose installed 
 if [ ! -x "$(command -v docker)" ]; then
   echo "Docker is not installed. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/engine/install/"
@@ -131,13 +140,63 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
     fi
 fi
 
+# Handle OAKESTRA_VERSION if set
+BUILD_FLAG=''
+if [ ! -z "$OAKESTRA_VERSION" ]; then
+    if is_tag "$OAKESTRA_VERSION"; then
+        echo "🏷️  Using tag: $OAKESTRA_VERSION"
+        # Generate override file with specific tag
+        cat > override-version.yml << EOF
+services:
+  dashboard:
+    image: ghcr.io/oakestra/dashboard:$OAKESTRA_VERSION
+  system_manager:
+    image: ghcr.io/oakestra/oakestra/root-system-manager:$OAKESTRA_VERSION
+  root_service_manager:
+    image: ghcr.io/oakestra/oakestra-net/root-service-manager:$OAKESTRA_VERSION
+  root_resource_abstractor:
+    image: ghcr.io/oakestra/oakestra/resource-abstractor:$OAKESTRA_VERSION
+  root_scheduler:
+    image: ghcr.io/oakestra/oakestra/scheduler:$OAKESTRA_VERSION
+  jwt_generator:
+    image: ghcr.io/oakestra/oakestra/jwt-generator:$OAKESTRA_VERSION
+  cluster_service_manager:
+    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:$OAKESTRA_VERSION
+  cluster_manager:
+    image: ghcr.io/oakestra/oakestra/cluster-manager:$OAKESTRA_VERSION
+  cluster_scheduler:
+    image: ghcr.io/oakestra/oakestra/scheduler:$OAKESTRA_VERSION
+  cluster_resource_abstractor:
+    image: ghcr.io/oakestra/oakestra/resource-abstractor:$OAKESTRA_VERSION
+  addons_manager:
+    image: ghcr.io/oakestra/oakestra/addons_manager:$OAKESTRA_VERSION
+  addons_monitor:
+    image: ghcr.io/oakestra/oakestra/addons_monitor:$OAKESTRA_VERSION
+  marketplace_manager:
+    image: ghcr.io/oakestra/oakestra/marketplace_manager:$OAKESTRA_VERSION
+  addons_dashboard:
+    image: ghcr.io/oakestra/oakestra/addons_dashboard:$OAKESTRA_VERSION
+EOF
+        OAK_OVERRIDES="${OAK_OVERRIDES}-f override-version.yml "
+    else
+        echo "🌿 Using branch: $OAKESTRA_VERSION"
+        # Check if we're running in the repo directory with source code
+        if [ -d "../root_orchestrator" ] && [ -d "../cluster_orchestrator" ]; then
+            echo "📦 Building images from source..."
+            BUILD_FLAG='--build'
+        else
+            echo "⚠️  Warning: Source directories not found. Using latest images."
+        fi
+    fi
+fi
+
 if sudo docker ps -a | grep oakestra >/dev/null 2>&1; then
   echo 🚨 Oakestra containers are already running. Please stop them before starting a new 1-DOC cluster.
   echo 🪫 You can turn off the current cluster using: \$ docker compose -f ~/oakestra/1-DOC.yaml down
   exit 1
 fi
 
-command_exec="sudo -E docker compose -f 1-DOC.yaml ${OAK_OVERRIDES}up -d"
+command_exec="sudo -E docker compose -f 1-DOC.yaml ${OAK_OVERRIDES}${BUILD_FLAG} up -d"
 echo executing "$command_exec"
 
 eval "$command_exec"

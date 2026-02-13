@@ -6,6 +6,15 @@ if [ -z "$OAKESTRA_BRANCH" ]; then
     OAKESTRA_BRANCH='main'
 fi
 
+# Function to check if OAKESTRA_VERSION is a tag (alpha-vX.Y.Z or vX.Y.Z)
+is_tag() {
+    if [[ "$1" =~ ^(alpha-)?v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 if [ ! -z "$CLUSTER_LOCATION" ]; then
     cluster_location=$CLUSTER_LOCATION
 fi
@@ -156,13 +165,37 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
     fi
 fi
 
+# Handle OAKESTRA_VERSION if set
+BUILD_FLAG=''
+if [ ! -z "$OAKESTRA_VERSION" ]; then
+    if is_tag "$OAKESTRA_VERSION"; then
+        echo "🏷️  Using tag: $OAKESTRA_VERSION"
+        # Update the override-cluster-images-only.yml with specific tag
+        sed -i "s/:latest/:$OAKESTRA_VERSION/g" override-cluster-images-only.yml
+    else
+        echo "🌿 Using branch: $OAKESTRA_VERSION"
+        # Check if we're running in the repo directory with source code
+        if [ -d "../cluster_orchestrator" ]; then
+            echo "📦 Building images from source..."
+            BUILD_FLAG='--build'
+            # Don't use override-cluster-images-only.yml when building from source
+            OAK_OVERRIDES="${OAK_OVERRIDES//-f override-cluster-images-only.yml /}"
+        else
+            echo "⚠️  Warning: Source directory not found. Using latest images."
+        fi
+    fi
+else
+    # Default behavior: use override-cluster-images-only.yml with latest tags
+    OAK_OVERRIDES="${OAK_OVERRIDES}"
+fi
+
 if sudo docker ps -a | grep oakestra/cluster >/dev/null 2>&1; then
   echo 🚨 Oakestra cluster containers are already running. Please stop them before starting another cluster on this machine.
   echo 🪫 You can turn off the current cluster using: \$ docker compose -f ~/oakestra/cluster_orchestrator/cluster-orchestrator.yml down
   exit 1
 fi
 
-command_exec="sudo -E docker compose -f cluster-orchestrator.yml -f override-cluster-images-only.yml ${OAK_OVERRIDES}up -d"
+command_exec="sudo -E docker compose -f cluster-orchestrator.yml -f override-cluster-images-only.yml ${OAK_OVERRIDES}${BUILD_FLAG} up -d"
 echo executing "$command_exec"
 
 eval "$command_exec"
