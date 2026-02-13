@@ -210,14 +210,18 @@ fi
 if [ "$OAKESTRA_VERSION" != "main" ]; then
     if [[ ! "$OVERRIDE_FILES" == *"override-no-network.yml"* ]] && [[ ! "$OVERRIDE_FILES" == *"override-custom-service-manager-version.yml"* ]]; then
         echo "🕸️ Setting network to latest alpha release"
-        ALPHA_TAG=$(curl -s https://raw.githubusercontent.com/oakestra/oakestra-net/refs/heads/develop/version.txt)
+        if is_tag "$OAKESTRA_VERSION"; then
+            ALPHA_TAG=$(echo $OAKESTRA_VERSION | sed 's/alpha-//g')
+        else
+            ALPHA_TAG=$(curl -s https://raw.githubusercontent.com/oakestra/oakestra-net/refs/heads/develop/version.txt)
+        fi
         # Create override file with custom service manager version
         echo "services:
   root_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/root-service-manager:alpha-$ALPHA_TAG" > ~/.oakestra/root_orchestrator/override-custom-service-manager-version.yml
+    image: ghcr.io/oakestra/oakestra-net/root-service-manager:alpha-$ALPHA_TAG" > ~/.oakestra/cluster_orchestrator/override-custom-service-manager-version.yml
         OAK_OVERRIDES="${OAK_OVERRIDES}-f override-custom-service-manager-version.yml " 
 
-        OAK_OVERRIDES="${OAK_OVERRIDES}-f ~/.oakestra/root_orchestrator/override-custom-service-manager-version.yml "
+        OAK_OVERRIDES="${OAK_OVERRIDES}-f ~/.oakestra/cluster_orchestrator/override-custom-service-manager-version.yml "
     fi
 fi
 
