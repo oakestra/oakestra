@@ -4,8 +4,7 @@
 
 This script can be used to quickly setup a 1-DOC cluster
 
-- (optional) setup a repository branch e.g., `export OAKESTRA_BRANCH=develop`, default branch is `main`.
-- (optional) setup a specific version e.g., `export OAKESTRA_VERSION=alpha-v0.4.403` for a specific tag, or `export OAKESTRA_VERSION=develop` for a branch name. If using a tag format (alpha-vX.Y.Z or vX.Y.Z), the script will use images with that tag. If using a branch name and running from the repository directory, the script will build images from source. Default: uses latest images.
+- (optional) setup a repository branch e.g., `export OAKESTRA_VERSION=develop`, default branch is `main`. If using main or without setting it, the script uses the default release images. If using a tag format (alpha-vX.Y.Z or vX.Y.Z), the script will use images with that tag. If using a branch name and running from the repository directory, the script will build images from source. Default: uses latest images.
 - (optional) setup comma-separated list of custom override files for docker compose e.g., `export OVERRIDE_FILES=override-custom.yaml`
 - Download setup and startup the 1-DOC cluster managers simply running:
 ```
@@ -16,7 +15,6 @@ curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/St
 
 This script can be used to quickly setup a full Root Orchestrator
 
-- (optional) setup a repository branch e.g., `export OAKESTRA_BRANCH=develop`, default branch is `main`.
 - (optional) setup a specific version e.g., `export OAKESTRA_VERSION=alpha-v0.4.403` for a specific tag, or `export OAKESTRA_VERSION=develop` for a branch name. If using a tag format (alpha-vX.Y.Z or vX.Y.Z), the script will use images with that tag. If using a branch name and running from the repository directory, the script will build images from source. Default: uses latest images.
 - (optional) setup comma-separated list of custom override files for docker compose e.g., `export OVERRIDE_FILES=override-custom.yaml`
 - Download setup and startup the root orchestrator simply running:
@@ -28,7 +26,6 @@ curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/develop/scripts/St
 
 If you already have a 1-DOC setup or a standalone Root orchestrator you can use the following script to setup a new cluster on a machine that yet does not have a cluster orchestrator:
 
-- (optional) setup a repository branch e.g., `export OAKESTRA_BRANCH=develop`, default branch is `main`.
 - (optional) setup a specific version e.g., `export OAKESTRA_VERSION=alpha-v0.4.403` for a specific tag, or `export OAKESTRA_VERSION=develop` for a branch name. If using a tag format (alpha-vX.Y.Z or vX.Y.Z), the script will use images with that tag. If using a branch name and running from the repository directory, the script will build images from source. Default: uses latest images.
 - (optional) setup comma-separated list of custom override files for docker compose e.g., `export OVERRIDE_FILES=override-custom.yaml`
 - (optional) setup a custom cluster location e.g., `export CLUSTER_LOCATION=<latitude>,<longitude>,<radius>`, default location is automatically inferred from the public IP address of the machine. 
