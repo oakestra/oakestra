@@ -69,10 +69,24 @@ def update_job(job_id, job_data):
 
 
 def find_job_instance(job_id, instance_number):
-    return db.mongo_jobs.find_one(
-        {"_id": ObjectId(job_id), "instance_list.instance_number": int(instance_number)},
-        {"instance_list.$": 1},
-    )
+    pipeline = [
+        { "$match": { 
+            "_id": ObjectId(job_id), 
+            "instance_list.instance_number": int(instance_number) 
+        }},
+        { "$set": {
+            "instance_list": {
+                "$filter": {
+                    "input": "$instance_list",
+                    "as": "item",
+                    "cond": { "$eq": ["$$item.instance_number", int(instance_number)] }
+                }
+            }
+        }}
+    ]
+
+    cursor = db.mongo_jobs.aggregate(pipeline)
+    return next(cursor, None)
 
 
 # Append job_data["instance_list"][-1] to the instance list of the job with id job_id
