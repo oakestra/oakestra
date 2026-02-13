@@ -2,7 +2,7 @@
 
 #Oakestra version?
 if [ -z "$OAKESTRA_VERSION" ]; then
-    OAKESTRA_VERSION='latest'
+    OAKESTRA_VERSION='main'
 fi
 
 #Check if argument stop is passed, if yes, stop the cluster and exit
