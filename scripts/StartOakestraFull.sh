@@ -177,13 +177,13 @@ services:
   addons_dashboard:
     image: ghcr.io/oakestra/oakestra/addons_dashboard:$OAKESTRA_VERSION
 EOF
-        OAK_OVERRIDES="${OAK_OVERRIDES}-f override-version.yml "
+        OAK_OVERRIDES="${OAK_OVERRIDES} -f override-version.yml"
     else
         echo "🌿 Using branch: $OAKESTRA_VERSION"
         # Check if we're running in the repo directory with source code
         if [ -d "../root_orchestrator" ] && [ -d "../cluster_orchestrator" ]; then
             echo "📦 Building images from source..."
-            BUILD_FLAG='--build'
+            BUILD_FLAG=' --build'
         else
             echo "⚠️  Warning: Source directories not found. Using latest images."
         fi

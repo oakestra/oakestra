@@ -94,22 +94,21 @@ if [ ! -z "$OAKESTRA_VERSION" ]; then
     if is_tag "$OAKESTRA_VERSION"; then
         echo "🏷️  Using tag: $OAKESTRA_VERSION"
         # Update the override-root-images-only.yml with specific tag
-        sed -i "s/:latest/:$OAKESTRA_VERSION/g" override-root-images-only.yml
+        cp override-root-images-only.yml override-root-images-only.yml.bak
+        sed "s/:latest/:$OAKESTRA_VERSION/g" override-root-images-only.yml.bak > override-root-images-only.yml
+        rm override-root-images-only.yml.bak
     else
         echo "🌿 Using branch: $OAKESTRA_VERSION"
         # Check if we're running in the repo directory with source code
         if [ -d "../root_orchestrator" ]; then
             echo "📦 Building images from source..."
-            BUILD_FLAG='--build'
+            BUILD_FLAG=' --build'
             # Don't use override-root-images-only.yml when building from source
             OAK_OVERRIDES="${OAK_OVERRIDES//-f override-root-images-only.yml /}"
         else
             echo "⚠️  Warning: Source directory not found. Using latest images."
         fi
     fi
-else
-    # Default behavior: use override-root-images-only.yml with latest tags
-    OAK_OVERRIDES="${OAK_OVERRIDES}"
 fi
 
 if sudo docker ps -a | grep oakestra/root >/dev/null 2>&1; then

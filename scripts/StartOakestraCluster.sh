@@ -171,22 +171,21 @@ if [ ! -z "$OAKESTRA_VERSION" ]; then
     if is_tag "$OAKESTRA_VERSION"; then
         echo "🏷️  Using tag: $OAKESTRA_VERSION"
         # Update the override-cluster-images-only.yml with specific tag
-        sed -i "s/:latest/:$OAKESTRA_VERSION/g" override-cluster-images-only.yml
+        cp override-cluster-images-only.yml override-cluster-images-only.yml.bak
+        sed "s/:latest/:$OAKESTRA_VERSION/g" override-cluster-images-only.yml.bak > override-cluster-images-only.yml
+        rm override-cluster-images-only.yml.bak
     else
         echo "🌿 Using branch: $OAKESTRA_VERSION"
         # Check if we're running in the repo directory with source code
         if [ -d "../cluster_orchestrator" ]; then
             echo "📦 Building images from source..."
-            BUILD_FLAG='--build'
+            BUILD_FLAG=' --build'
             # Don't use override-cluster-images-only.yml when building from source
             OAK_OVERRIDES="${OAK_OVERRIDES//-f override-cluster-images-only.yml /}"
         else
             echo "⚠️  Warning: Source directory not found. Using latest images."
         fi
     fi
-else
-    # Default behavior: use override-cluster-images-only.yml with latest tags
-    OAK_OVERRIDES="${OAK_OVERRIDES}"
 fi
 
 if sudo docker ps -a | grep oakestra/cluster >/dev/null 2>&1; then
