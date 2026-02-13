@@ -36,7 +36,7 @@ services:
     depends_on:
       - mongo_root
       - root_scheduler
-      - resource_abstractor
+      - root_resource_abstractor
       - root_service_manager
       - jwt_generator
     environment:
@@ -45,7 +45,7 @@ services:
       - ROOT_SCHEDULER_URL=scheduler
       - ROOT_SCHEDULER_PORT=10004
       - LOG_LEVEL=INFO
-      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10099
@@ -174,14 +174,14 @@ services:
       - API_PORT=10004
       - SYSTEM_MANAGER_URL=system_manager
       - SYSTEM_MANAGER_PORT=10000
-      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - REDIS_ADDR=redis://:rootRedis@root_redis:6379
       - ROOT_MONGO_URL=mongo #adding this for consistency with version 0.4.300
       - ROOT_MONGO_PORT=10007 #adding this for consistency with version 0.4.300
     depends_on:
       - root_redis
-      - resource_abstractor
+      - root_resource_abstractor
     logging: *default-logging
 
 
