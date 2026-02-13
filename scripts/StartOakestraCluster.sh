@@ -190,6 +190,8 @@ if [ ! -z "$OAKESTRA_VERSION" ]; then
         # if main branch, use latest images, if not main branch, build from source
         if [ "$OAKESTRA_VERSION" != "main" ]; then
             echo "🛠️ Non-main branch specified without a tag. Building from version."
+            git checkout $OAKESTRA_VERSION
+            
             # Check remove / scripts from CURRENT_DIR if present to get to repo root
             cd $CURRENT_DIR
             if [[ "$CURRENT_DIR" == *"/scripts" ]]; then
