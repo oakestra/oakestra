@@ -1,11 +1,12 @@
 import utils.sla_validation as sla_validation
 
+
 def test_full_sla():
     sla = {
         "app_name": "app",
         "app_ns": "app",
         "microservice_name": "service",
-        "microservice_namespace": "service"
+        "microservice_namespace": "service",
     }
 
     assert sla_validation.valid_sla(sla) == True
@@ -29,27 +30,20 @@ def test_full_sla():
     sla["microservice_namespace"] = "servicfdfwefd"
     assert sla_validation.valid_sla(sla) == True
 
+
 def test_sla_missing_field():
-    sla = {
-        "app_name": "app",
-        "app_ns": "app",
-        "microservice_name": "service"
-    }
+    sla = {"app_name": "app", "app_ns": "app", "microservice_name": "service"}
 
     assert sla_validation.valid_sla(sla) == False
 
-    sla = {
-        "app_name": "app",
-        "app_ns": "app",
-        "microservice_namespace": "service"
-    }
+    sla = {"app_name": "app", "app_ns": "app", "microservice_namespace": "service"}
 
     assert sla_validation.valid_sla(sla) == False
 
     sla = {
         "app_name": "app",
         "microservice_name": "service",
-        "microservice_namespace": "service"
+        "microservice_namespace": "service",
     }
 
     assert sla_validation.valid_sla(sla) == False
@@ -57,7 +51,7 @@ def test_sla_missing_field():
     sla = {
         "app_ns": "app",
         "microservice_name": "service",
-        "microservice_namespace": "service"
+        "microservice_namespace": "service",
     }
 
     assert sla_validation.valid_sla(sla) == False

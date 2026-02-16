@@ -13,12 +13,10 @@ def register_cluster(cluster_port=None, cluster_address=None, cluster_id=None):
         cluster_id=cluster_id,
         cluster_port=cluster_port,
         cluster_address=cluster_address,
-        status=CLUSTER_STATUS_ACTIVE
+        status=CLUSTER_STATUS_ACTIVE,
     )
     return "cluster registered", 200
 
 
 def set_cluster_status(cluster_id, status):
     mongodb_requests.mongo_set_cluster_status(cluster_id, status)
-
-

@@ -2,9 +2,11 @@ from threading import Thread
 
 from interfaces.mongodb_requests import mongo_update_job_instance
 from interfaces import mqtt_client, root_service_manager_requests, mongodb_requests
-import logging
 import traceback
 import copy
+import logging
+
+logger = logging.getLogger("cluster_service_manager")
 
 
 def instance_deployment(job_name, job):
@@ -13,13 +15,13 @@ def instance_deployment(job_name, job):
 
     # table query the root to get the instances
     try:
-        job = root_service_manager_requests.cloud_table_query_service_name(job_name)
+        job = root_service_manager_requests.root_table_query_service_name(job_name)
         mongodb_requests.mongo_insert_job(copy.deepcopy(job))
-        for instance in job.get('instance_list'):
-            mongo_update_job_instance(job.get('job_name'), instance)
-    except Exception as e:
-        logging.error('Incoming Request /api/net/deployment failed service_resolution')
-        logging.debug(traceback.format_exc())
+        for instance in job.get("instance_list"):
+            mongo_update_job_instance(job.get("job_name"), instance)
+    except Exception:
+        logger.error("Incoming Request /api/net/deployment failed service_resolution")
+        logger.debug(traceback.format_exc())
         print(traceback.format_exc())
         return "Service resolution failed", 500
 
@@ -34,8 +36,10 @@ def instance_updates(job_name, instancenum, type):
         return "Invalid instancenum", 400
 
     if type == "DEPLOYMENT" or type == "UNDEPLOYMENT":
-        thread = Thread(target=_update_cache_and_workers,
-                        kwargs={'job_name': job_name, 'instancenum': instancenum, 'type': type})
+        thread = Thread(
+            target=_update_cache_and_workers,
+            kwargs={"job_name": job_name, "instancenum": instancenum, "type": type},
+        )
         thread.start()
         return "update notification received", 200
     else:
@@ -44,9 +48,13 @@ def instance_updates(job_name, instancenum, type):
 
 def _update_cache_and_workers(job_name, instancenum, type):
     if type == "DEPLOYMENT":
-        query_result = root_service_manager_requests.cloud_table_query_service_name(job_name)
+        query_result = root_service_manager_requests.root_table_query_service_name(
+            job_name
+        )
         mongodb_requests.mongo_update_job(query_result)
     else:
-        mongodb_requests.mongo_remove_job_instance(job_name=job_name, instance_number=instancenum)
+        mongodb_requests.mongo_remove_job_instance(
+            job_name=job_name, instance_number=instancenum
+        )
 
     mqtt_client.mqtt_notify_service_change(job_name=job_name, type=type)

@@ -28,7 +28,7 @@ class InstanceSchema(Schema):
 
 
 class ServiceNetinfoSchema(Schema):
-    system_job_id = fields.String(allow_none=True)
+    _id = fields.String(allow_none=True)
     applicationID = fields.String(allow_none=True)
     app_ns = fields.String(allow_none=True)
     app_name = fields.String(allow_none=True)

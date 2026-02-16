@@ -1,14 +1,14 @@
 import os
 from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
-from datetime import datetime
+import logging
 
-MONGO_URL = os.environ.get('CLOUD_MONGO_URL')
-MONGO_PORT = os.environ.get('CLOUD_MONGO_PORT')
+MONGO_URL = os.environ.get("ROOT_MONGO_URL")
+MONGO_PORT = os.environ.get("ROOT_MONGO_PORT")
 
-MONGO_ADDR_JOBS = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/jobs'
-MONGO_ADDR_NET = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/netcache'
-MONGO_ADDR_CLUSTER = 'mongodb://' + str(MONGO_URL) + ':' + str(MONGO_PORT) + '/cluster'
+MONGO_ADDR_JOBS = "mongodb://" + str(MONGO_URL) + ":" + str(MONGO_PORT) + "/jobs"
+MONGO_ADDR_NET = "mongodb://" + str(MONGO_URL) + ":" + str(MONGO_PORT) + "/netcache"
+MONGO_ADDR_CLUSTER = "mongodb://" + str(MONGO_URL) + ":" + str(MONGO_PORT) + "/cluster"
 
 mongo_jobs = None
 mongo_clusters = None
@@ -18,6 +18,8 @@ app = None
 
 CLUSTERS_FRESHNESS_INTERVAL = 45
 
+logger = logging.getLogger("root_service_manager")
+
 
 def mongo_init(flask_app):
     global app
@@ -25,7 +27,7 @@ def mongo_init(flask_app):
 
     app = flask_app
 
-    app.logger.info("Connecting to mongo...")
+    logger.info("Connecting to mongo...")
 
     # app.config["MONGO_URI"] = MONGO_ADDR
     try:
@@ -34,44 +36,47 @@ def mongo_init(flask_app):
         mongo_clusters = PyMongo(app, uri=MONGO_ADDR_CLUSTER)
     except Exception as e:
         app.logger.fatal(e)
-    app.logger.info("MONGODB - init mongo")
+    logger.info("MONGODB - init mongo")
 
 
 # ......... JOB OPERATIONS .........................
 ####################################################
 
+
 def mongo_insert_job(obj):
     global mongo_jobs
-    app.logger.info("MONGODB - insert job...")
-    deployment_descriptor = obj['deployment_descriptor']
+    logger.info("MONGODB - insert job...")
+    deployment_descriptor = obj["deployment_descriptor"]
     # jobname and details generation
-    job_name = deployment_descriptor['app_name'] \
-               + "." + deployment_descriptor['app_ns'] \
-               + "." + deployment_descriptor['service_name'] \
-               + "." + deployment_descriptor['service_ns']
+    job_name = (
+        deployment_descriptor["app_name"]
+        + "."
+        + deployment_descriptor["app_ns"]
+        + "."
+        + deployment_descriptor["service_name"]
+        + "."
+        + deployment_descriptor["service_ns"]
+    )
+
     job_content = {
-        'system_job_id': obj.get('system_job_id'),
-        'job_name': job_name,
-        'service_ip_list': obj.get('service_ip_list'),
-        'instance_list': [],
-        **deployment_descriptor  # The content of the input deployment descriptor
+        "_id": ObjectId(obj.get("_id")),
+        "job_name": job_name,
+        "service_ip_list": obj.get("service_ip_list"),
+        "instance_list": [],
+        **deployment_descriptor,  # The content of the input deployment descriptor
     }
-    if "_id" in job_content:
-        del job_content['_id']
+
     # job insertion
     new_job = mongo_jobs.db.jobs.find_one_and_update(
-        {'job_name': job_name},
-        {'$set': job_content},
-        upsert=True,
-        return_document=True
+        {"job_name": job_name}, {"$set": job_content}, upsert=True, return_document=True
     )
-    app.logger.info("MONGODB - job {} inserted".format(str(new_job.get('_id'))))
-    return str(new_job.get('_id'))
+    logger.info("MONGODB - job {} inserted".format(str(new_job.get("_id"))))
+    return str(new_job.get("_id"))
 
 
-def mongo_remove_job(system_job_id):
+def mongo_remove_job(_id):
     global mongo_jobs
-    return mongo_jobs.db.jobs.delete_one({"system_job_id": system_job_id})
+    return mongo_jobs.db.jobs.delete_one({"_id": ObjectId(_id)})
 
 
 def mongo_get_all_jobs():
@@ -81,12 +86,17 @@ def mongo_get_all_jobs():
 
 def mongo_get_job_status(job_id):
     global mongo_jobs
-    return mongo_jobs.db.jobs.find_one({'_id': ObjectId(job_id)}, {'status': 1})['status'] + '\n'
+    return (
+        mongo_jobs.db.jobs.find_one({"_id": ObjectId(job_id)}, {"status": 1})["status"]
+        + "\n"
+    )
 
 
 def mongo_update_job_status(job_id, status):
     global mongo_jobs
-    return mongo_jobs.db.jobs.update_one({'_id': ObjectId(job_id)}, {'$set': {'status': status}})
+    return mongo_jobs.db.jobs.update_one(
+        {"_id": ObjectId(job_id)}, {"$set": {"status": status}}
+    )
 
 
 def mongo_update_job_net_status(job_id, instances):
@@ -94,7 +104,7 @@ def mongo_update_job_net_status(job_id, instances):
     for instance in instances:
         mongo_update_job_instance(job_id, instance)
 
-    return mongo_jobs.db.jobs.find_one({'system_job_id': job_id})
+    return mongo_jobs.db.jobs.find_one({"_id": ObjectId(job_id)})
 
 
 def mongo_find_job_by_id(job_id):
@@ -104,83 +114,84 @@ def mongo_find_job_by_id(job_id):
 
 def mongo_find_job_by_systemid(sys_id):
     global mongo_jobs
-    return mongo_jobs.db.jobs.find_one({"system_job_id": sys_id})
+    return mongo_jobs.db.jobs.find_one({"_id": ObjectId(sys_id)})
 
 
 def mongo_find_job_by_name(job_name):
     global mongo_jobs
-    return mongo_jobs.db.jobs.find_one({'job_name': job_name})
+    return mongo_jobs.db.jobs.find_one({"job_name": job_name})
 
 
 def mongo_find_job_by_ip(ip):
     global mongo_jobs
     # Search by Service IP
-    job = mongo_jobs.db.jobs.find_one({'service_ip_list.Address': ip})
+    job = mongo_jobs.db.jobs.find_one({"service_ip_list.Address": ip})
     if job is None:
         # Search by Service IPv6
-        job = mongo_jobs.db.jobs.find_one({'service_ip_list.Address_v6': ip})
+        job = mongo_jobs.db.jobs.find_one({"service_ip_list.Address_v6": ip})
     if job is None:
         # Search by Instance IP
-        job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip': ip})
+        job = mongo_jobs.db.jobs.find_one({"instance_list.instance_ip": ip})
     if job is None:
         # Search by Instance IPv6
-        job = mongo_jobs.db.jobs.find_one({'instance_list.instance_ip_v6': ip})
+        job = mongo_jobs.db.jobs.find_one({"instance_list.instance_ip_v6": ip})
     return job
 
 
-def mongo_update_job_instance(system_job_id, instance):
+def mongo_update_job_instance(_id, instance):
     global mongo_jobs
-    print('Updating job instance')
     mongo_jobs.db.jobs.update_one(
         {
-            'system_job_id': system_job_id,
-            "instance_list": {'$elemMatch': {'instance_number': instance['instance_number']}}},
+            "_id": ObjectId(_id),
+            "instance_list": {
+                "$elemMatch": {"instance_number": instance["instance_number"]}
+            },
+        },
         {
-            '$set': {
-                "instance_list.$.namespace_ip": instance.get('namespace_ip'),
-                "instance_list.$.namespace_ip_v6": instance.get('namespace_ip_v6'),
-                "instance_list.$.host_ip": instance.get('host_ip'),
-                "instance_list.$.host_port": instance.get('host_port'),
+            "$set": {
+                "instance_list.$.namespace_ip": instance.get("namespace_ip"),
+                "instance_list.$.namespace_ip_v6": instance.get("namespace_ip_v6"),
+                "instance_list.$.host_ip": instance.get("host_ip"),
+                "instance_list.$.host_port": instance.get("host_port"),
             }
-        }
+        },
     )
 
 
-def mongo_create_job_instance(system_job_id, instance):
+def mongo_create_job_instance(_id, instance):
+    if isinstance(_id, str):
+        _id = ObjectId(_id)
+
     global mongo_jobs
-    print('Updating job instance')
     if not mongo_jobs.db.jobs.find_one(
-            {
-                "system_job_id": system_job_id,
-                "instance_list.instance_number": instance["instance_number"]
-            }):
+        {"_id": _id, "instance_list.instance_number": instance["instance_number"]}
+    ):
         mongo_jobs.db.jobs.update_one(
-            {'system_job_id': system_job_id},
-            {
-                '$push': {
-                    "instance_list": instance
-                }
-            }
+            {"_id": _id}, {"$push": {"instance_list": instance}}
         )
     else:
-        mongo_update_job_instance(system_job_id, instance)
+        mongo_update_job_instance(_id, instance)
 
 
-def mongo_update_clean_one_instance(system_job_id, instance_number):
+def mongo_update_clean_one_instance(_id, instance_number):
     """
     returns the replicas left
     """
     global mongo_jobs
     if instance_number == -1:
-        return mongo_jobs.db.jobs.update_one({'system_job_id': system_job_id},
-                                             {'$set': {'instance_list': []}})
+        return mongo_jobs.db.jobs.update_one(
+            {"_id": ObjectId(_id)}, {"$set": {"instance_list": []}}
+        )
     else:
-        return mongo_jobs.db.jobs.update_one({'system_job_id': system_job_id},
-                                             {'$pull': {'instance_list': {'instance_number': instance_number}}})
+        return mongo_jobs.db.jobs.update_one(
+            {"_id": ObjectId(_id)},
+            {"$pull": {"instance_list": {"instance_number": instance_number}}},
+        )
 
 
 # ........... SERVICE MANAGER OPERATIONS  ............
 ######################################################
+
 
 def mongo_get_service_address_from_cache():
     """
@@ -190,7 +201,7 @@ def mongo_get_service_address_from_cache():
     global mongo_net
     netdb = mongo_net.db.netcache
 
-    entry = netdb.find_one({'type': 'free_service_ip'})
+    entry = netdb.find_one({"type": "free_service_ip"})
 
     if entry is not None:
         netdb.delete_one({"_id": entry["_id"]})
@@ -228,10 +239,7 @@ def mongo_free_service_address_to_cache(address):
     for n in address:
         assert 0 <= n < 254
 
-    netcache.insert_one({
-        'type': 'free_service_ip',
-        'ipv4': address
-    })
+    netcache.insert_one({"type": "free_service_ip", "ipv4": address})
 
 
 def mongo_get_next_service_ip():
@@ -242,17 +250,14 @@ def mongo_get_next_service_ip():
     global mongo_net
     netcache = mongo_net.db.netcache
 
-    next_addr = netcache.find_one({'type': 'next_service_ip'})
+    next_addr = netcache.find_one({"type": "next_service_ip"})
 
     if next_addr is not None:
         return next_addr["ipv4"]
     else:
         ip4arr = [10, 30, 0, 0]
         netcache = mongo_net.db.netcache
-        id = netcache.insert_one({
-            'type': 'next_service_ip',
-            'ipv4': ip4arr
-        })
+        id = netcache.insert_one({"type": "next_service_ip", "ipv4": ip4arr})
         return ip4arr
 
 
@@ -271,7 +276,8 @@ def mongo_update_next_service_ip(address):
     assert address[0] == 10
     assert address[1] == 30
 
-    netcache.update_one({'type': 'next_service_ip'}, {'$set': {'ipv4': address}})
+    netcache.update_one({"type": "next_service_ip"}, {"$set": {"ipv4": address}})
+
 
 # ........... IPv6 ................................#
 ####################################################
@@ -280,6 +286,7 @@ def mongo_update_next_service_ip(address):
 ###############################
 
 # TODO rename functions and db entries to instance IP
+
 
 def mongo_get_service_address_from_cache_v6():
     """
@@ -290,13 +297,14 @@ def mongo_get_service_address_from_cache_v6():
     global mongo_net
     netdb = mongo_net.db.netcache
 
-    entry = netdb.find_one({'type': 'free_service_ipv6'})
+    entry = netdb.find_one({"type": "free_service_ipv6"})
 
     if entry is not None:
         netdb.delete_one({"_id": entry["_id"]})
         return entry["ipv6"]
     else:
         return None
+
     
 def mongo_get_service_address_from_cache_not_deleting_v6(x=1):
     """
@@ -316,6 +324,7 @@ def mongo_get_service_address_from_cache_not_deleting_v6(x=1):
     else:
         return []
 
+
 def mongo_free_service_address_to_cache_v6(address):
     """
     Add back an address to the cache
@@ -327,15 +336,12 @@ def mongo_free_service_address_to_cache_v6(address):
     assert len(address) == 16
     for n in address:
         assert 0 <= n < 256
-    
+
     assert address[0] == 253
     assert address[1] == 255
     assert address[2] == 0 or address[2] == 8
 
-    netcache.insert_one({
-        'type': 'free_service_ipv6',
-        'ipv6': address
-    })
+    netcache.insert_one({"type": "free_service_ipv6", "ipv6": address})
 
 
 def mongo_get_next_service_ip_v6():
@@ -346,24 +352,21 @@ def mongo_get_next_service_ip_v6():
     global mongo_net
     netcache = mongo_net.db.netcache
 
-    next_addr = netcache.find_one({'type': 'next_service_ipv6'})
+    next_addr = netcache.find_one({"type": "next_service_ipv6"})
 
     if next_addr is not None:
         return next_addr["ipv6"]
     else:
         ipv6arr = [253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         netcache = mongo_net.db.netcache
-        id = netcache.insert_one({
-            'type': 'next_service_ipv6',
-            'ipv6': ipv6arr
-        })
+        id = netcache.insert_one({"type": "next_service_ipv6", "ipv6": ipv6arr})
         return ipv6arr
 
 
 def mongo_update_next_service_ip_v6(address):
     """
     Update the value for the next service ip available
-    @param address: int[16] in the form [253, 255, [0, 8], a, b, c, d, e, f, g, h, i, j, k, l, m] 
+    @param address: int[16] in the form [253, 255, [0, 8], a, b, c, d, e, f, g, h, i, j, k, l, m]
         monotonically increasing with respect to the previous address
     """
     global mongo_net
@@ -378,11 +381,12 @@ def mongo_update_next_service_ip_v6(address):
     assert address[1] == 255
     assert address[2] == 0 or address[2] == 8
 
-    netcache.update_one({'type': 'next_service_ipv6'}, {'$set': {'ipv6': address}})
+    netcache.update_one({"type": "next_service_ipv6"}, {"$set": {"ipv6": address}})
 
 
 # ....... Round Robin IP ........#
 ##################################
+
 
 def mongo_get_rr_address_from_cache_v6():
     """
@@ -392,13 +396,14 @@ def mongo_get_rr_address_from_cache_v6():
     global mongo_net
     netdb = mongo_net.db.netcache
 
-    entry = netdb.find_one({'type': 'free_rr_ipv6'})
+    entry = netdb.find_one({"type": "free_rr_ipv6"})
 
     if entry is not None:
         netdb.delete_one({"_id": entry["_id"]})
         return entry["ipv6"]
     else:
         return None
+
 
 def mongo_free_rr_address_to_cache_v6(address):
     """
@@ -411,16 +416,13 @@ def mongo_free_rr_address_to_cache_v6(address):
     assert len(address) == 16
     for n in address:
         assert 0 <= n < 256
-    
+
     assert address[0] == 253
     assert address[1] == 255
     assert address[2] == 32
     assert 0 <= address[3] < 8
 
-    netcache.insert_one({
-        'type': 'free_rr_ipv6',
-        'ipv6': address
-    })
+    netcache.insert_one({"type": "free_rr_ipv6", "ipv6": address})
 
 
 def mongo_get_next_rr_ip_v6():
@@ -431,24 +433,21 @@ def mongo_get_next_rr_ip_v6():
     global mongo_net
     netcache = mongo_net.db.netcache
 
-    next_addr = netcache.find_one({'type': 'next_rr_ipv6'})
+    next_addr = netcache.find_one({"type": "next_rr_ipv6"})
 
     if next_addr is not None:
         return next_addr["ipv6"]
     else:
         ipv6arr = [253, 255, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         netcache = mongo_net.db.netcache
-        id = netcache.insert_one({
-            'type': 'next_rr_ipv6',
-            'ipv6': ipv6arr
-        })
+        id = netcache.insert_one({"type": "next_rr_ipv6", "ipv6": ipv6arr})
         return ipv6arr
 
 
 def mongo_update_next_rr_ip_v6(address):
     """
     Update the value for the next Round Robin ip available
-    @param address: int[16] in the form [253, 255, 32, a, b, c, d, e, f, g, h, i, j, k, l, m] 
+    @param address: int[16] in the form [253, 255, 32, a, b, c, d, e, f, g, h, i, j, k, l, m]
         monotonically increasing with respect to the previous address
     """
     global mongo_net
@@ -464,11 +463,12 @@ def mongo_update_next_rr_ip_v6(address):
     assert address[2] == 32
     assert 0 <= address[3] < 8
 
-    netcache.update_one({'type': 'next_rr_ipv6'}, {'$set': {'ipv6': address}})
-    
+    netcache.update_one({"type": "next_rr_ipv6"}, {"$set": {"ipv6": address}})
+
 
 # ....... Subnet v4 ........#
 #############################
+
 
 def mongo_get_next_subnet_ip():
     """
@@ -478,17 +478,14 @@ def mongo_get_next_subnet_ip():
     global mongo_net
     netcache = mongo_net.db.netcache
 
-    next_addr = netcache.find_one({'type': 'next_subnet_ip'})
+    next_addr = netcache.find_one({"type": "next_subnet_ip"})
 
     if next_addr is not None:
         return next_addr["ipv4"]
     else:
         ip4arr = [10, 18, 0, 0]
         netcache = mongo_net.db.netcache
-        id = netcache.insert_one({
-            'type': 'next_subnet_ip',
-            'ipv4': ip4arr
-        })
+        id = netcache.insert_one({"type": "next_subnet_ip", "ipv4": ip4arr})
         return ip4arr
 
 
@@ -507,7 +504,7 @@ def mongo_update_next_subnet_ip(address):
     assert address[0] == 10
     assert 17 < address[1] < 30
 
-    netcache.update_one({'type': 'next_subnet_ip'}, {'$set': {'ipv4': address}})
+    netcache.update_one({"type": "next_subnet_ip"}, {"$set": {"ipv4": address}})
 
 
 def mongo_get_subnet_address_from_cache():
@@ -518,7 +515,7 @@ def mongo_get_subnet_address_from_cache():
     global mongo_net
     netcache = mongo_net.db.netcache
 
-    entry = netcache.find_one({'type': 'free_subnet_ip'})
+    entry = netcache.find_one({"type": "free_subnet_ip"})
 
     if entry is not None:
         netcache.delete_one({"_id": entry["_id"]})
@@ -539,34 +536,29 @@ def mongo_free_subnet_address_to_cache(address):
     for n in address:
         assert 0 <= n < 256
 
-    netcache.insert_one({
-        'type': 'free_subnet_ip',
-        'ipv4': address
-    })
+    netcache.insert_one({"type": "free_subnet_ip", "ipv4": address})
 
 
 # ....... Subnet v6 ........#
 #############################
 
+
 def mongo_get_next_subnet_ip_v6():
     """
     Returns the next available subnetwork ip address from the addressing space fc00::/7
-    @return: int[16] in the shape [25[2-3], a, b, c, d, e, f, g, h, i, j, k, l, m, n, 0] 
+    @return: int[16] in the shape [25[2-3], a, b, c, d, e, f, g, h, i, j, k, l, m, n, 0]
     """
     global mongo_net
     netcache = mongo_net.db.netcache
 
-    next_addr = netcache.find_one({'type': 'next_subnet_ipv6'})
+    next_addr = netcache.find_one({"type": "next_subnet_ipv6"})
 
     if next_addr is not None:
         return next_addr["ipv6"]
     else:
         ipv6arr = [252, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         netcache = mongo_net.db.netcache
-        id = netcache.insert_one({
-            'type': 'next_subnet_ipv6',
-            'ipv6': ipv6arr
-        })
+        id = netcache.insert_one({"type": "next_subnet_ipv6", "ipv6": ipv6arr})
         return ipv6arr
 
 
@@ -578,13 +570,13 @@ def mongo_update_next_subnet_ip_v6(address):
     """
     global mongo_net
     netcache = mongo_net.db.netcache
-    
+
     # sanity check for the address
     assert len(address) == 16
     for n in address:
         assert 0 <= n < 256
     assert 252 <= address[0] <= 253
-    netcache.update_one({'type': 'next_subnet_ipv6'}, {'$set': {'ipv6': address}})
+    netcache.update_one({"type": "next_subnet_ipv6"}, {"$set": {"ipv6": address}})
 
 
 def mongo_get_subnet_address_from_cache_v6():
@@ -595,7 +587,7 @@ def mongo_get_subnet_address_from_cache_v6():
     global mongo_net
     netcache = mongo_net.db.netcache
 
-    entry = netcache.find_one({'type': 'free_subnet_ipv6'})
+    entry = netcache.find_one({"type": "free_subnet_ipv6"})
 
     if entry is not None:
         netcache.delete_one({"_id": entry["_id"]})
@@ -616,37 +608,36 @@ def mongo_free_subnet_address_to_cache_v6(address):
     for n in address:
         assert 0 <= n < 256
 
-    netcache.insert_one({
-        'type': 'free_subnet_ipv6',
-        'ipv6': address
-    })
+    netcache.insert_one({"type": "free_subnet_ipv6", "ipv6": address})
+
 
 # ......... CLUSTER OPERATIONS ....................#
 ####################################################
+
 
 def mongo_cluster_add(cluster_id, cluster_port, cluster_address, status):
     global mongo_clusters
 
     mongo_clusters.db.cluster.find_one_and_update(
         {"cluster_id": cluster_id},
-        {'$set':
-            {
+        {
+            "$set": {
                 "cluster_port": cluster_port,
                 "cluster_address": cluster_address,
                 "status": status,
-                "cluster_id": cluster_id
+                "cluster_id": cluster_id,
             }
-        }, upsert=True)
+        },
+        upsert=True,
+    )
 
 
 def mongo_set_cluster_status(cluster_id, cluster_status):
     global mongo_clusters
 
     job = mongo_clusters.db.cluster.find_one_and_update(
-        {"cluster_id": cluster_id},
-        {'$set':
-             {"status": cluster_status}
-         })
+        {"cluster_id": cluster_id}, {"$set": {"status": cluster_status}}
+    )
 
 
 def mongo_cluster_remove(cluster_id):
@@ -662,6 +653,7 @@ def mongo_get_cluster_by_ip(cluster_ip):
 # .......... INTERESTS OPERATIONS .........#
 ###########################################
 
+
 def mongo_get_cluster_interested_to_job(job_name):
     global mongo_clusters
     return mongo_clusters.db.cluster.find({"interests": job_name})
@@ -669,29 +661,27 @@ def mongo_get_cluster_interested_to_job(job_name):
 
 def mongo_register_cluster_job_interest(cluster_id, job_name):
     global mongo_clusters
-    interests = mongo_clusters.db.cluster.find_one({"cluster_id": cluster_id}).get("interests")
+    interests = mongo_clusters.db.cluster.find_one({"cluster_id": cluster_id}).get(
+        "interests"
+    )
     if interests is None:
         interests = []
     if job_name in interests:
         return
     interests.append(job_name)
     mongo_clusters.db.cluster.find_one_and_update(
-        {"cluster_id": cluster_id},
-        {'$set': {
-            "interests": interests
-        }}
+        {"cluster_id": cluster_id}, {"$set": {"interests": interests}}
     )
 
 
 def mongo_remove_cluster_job_interest(cluster_id, job_name):
     global mongo_clusters
-    interests = mongo_clusters.db.cluster.find_one({"cluster_id": cluster_id}).get("interests")
+    interests = mongo_clusters.db.cluster.find_one({"cluster_id": cluster_id}).get(
+        "interests"
+    )
     if interests is not None:
         if job_name in interests:
             interests.remove(job_name)
             mongo_clusters.db.cluster.find_one_and_update(
-                {"cluster_id": cluster_id},
-                {'$set': {
-                    "interests": interests
-                }}
-    )
+                {"cluster_id": cluster_id}, {"$set": {"interests": interests}}
+            )

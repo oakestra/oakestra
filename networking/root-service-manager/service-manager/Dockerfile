@@ -27,8 +27,8 @@ COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/pytho
 
 # Set environment variables
 ENV FLASK_DEBUG=FALSE
-ENV CLOUD_MONGO_URL=localhost
-ENV CLOUD_MONGO_PORT=10107
+ENV ROOT_MONGO_URL=localhost
+ENV ROOT_MONGO_PORT=10107
 ENV MY_PORT=10100
 ENV SYSTEM_MANAGER_URL=system_manager
 ENV SYSTEM_MANAGER_PORT=10000

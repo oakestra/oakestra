@@ -33,15 +33,15 @@ def service_resolution(service_name):
 
     # if no results, ask the root orc
     if job is None:
-        job = root_service_manager_requests.cloud_table_query_service_name(service_name)
-        instances = job['instance_list']
-        siplist = job['service_ip_list']
+        job = root_service_manager_requests.root_table_query_service_name(service_name)
+        instances = job["instance_list"]
+        siplist = job["service_ip_list"]
         mongodb_requests.mongo_insert_job(copy.deepcopy(job))
         for instance in instances:
-            mongo_update_job_instance(job['job_name'], instance)
+            mongo_update_job_instance(job["job_name"], instance)
     else:
-        instances = job['instance_list']
-        siplist = job['service_ip_list']
+        instances = job["instance_list"]
+        siplist = job["service_ip_list"]
 
     return instances, siplist
 
@@ -72,19 +72,21 @@ def service_resolution_ip(ip_string):
 
     # if no results, ask the root orc
     if job is None:
-        job = root_service_manager_requests.cloud_table_query_ip(ip_string)
+        job = root_service_manager_requests.root_table_query_ip(ip_string)
         mongodb_requests.mongo_insert_job(copy.deepcopy(job))
-        for instance in job.get('instance_list'):
-            mongo_update_job_instance(job['job_name'], instance)
-    return job.get("job_name"), job.get('instance_list'), job.get('service_ip_list')
+        for instance in job.get("instance_list"):
+            mongo_update_job_instance(job["job_name"], instance)
+    return job.get("job_name"), job.get("instance_list"), job.get("service_ip_list")
 
 
 def format_instance_response(instance_list, sip_list):
     for elem in instance_list:
-        elem['service_ip'] = copy.deepcopy(sip_list)
-        elem['service_ip'].append({
-            "IpType": "instance_ip",
-            "Address": elem['instance_ip'],
-            "Address_v6": elem['instance_ip_v6']
-        })
+        elem["service_ip"] = copy.deepcopy(sip_list)
+        elem["service_ip"].append(
+            {
+                "IpType": "instance_ip",
+                "Address": elem["instance_ip"],
+                "Address_v6": elem["instance_ip_v6"],
+            }
+        )
     return instance_list
