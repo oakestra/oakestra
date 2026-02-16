@@ -24,7 +24,7 @@ jobs:
     name: Add GitHub Issues to Notion
     steps:
       - name: Add GitHub Issues to Notion
-        uses: tryfabric/notion-github-action@v1
+        uses: oakestra/notion-github-action@v1
         with:
           notion-token: ${{ secrets.NOTION_TOKEN }}
           notion-db: ${{ secrets.NOTION_DATABASE }}
