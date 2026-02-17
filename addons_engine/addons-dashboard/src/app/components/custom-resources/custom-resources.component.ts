@@ -5,6 +5,7 @@ import { ResourceAbstractorService } from '../../services/resource-abstractor.se
 import { NotificationService } from '../../services/notification.service';
 import { ConfirmationService } from '../../services/confirmation.service';
 import { CustomResource } from '../../models/addon.model';
+import { RefreshButtonComponent } from '../shared/refresh-button/refresh-button.component';
 
 type ViewMode = 'definitions' | 'instances';
 type FormMode = 'create' | 'edit' | null;
@@ -12,17 +13,16 @@ type FormMode = 'create' | 'edit' | null;
 @Component({
   selector: 'app-custom-resources',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RefreshButtonComponent],
   templateUrl: './custom-resources.component.html',
   styleUrls: ['./custom-resources.component.css']
 })
 export class CustomResourcesComponent implements OnInit {
   // Expose Object to template
   Object = Object;
-  
   // View control
   viewMode: ViewMode = 'definitions';
-  
+
   // Resource Definitions
   definitions: CustomResource[] = [];
   definitionsLoading = false;
@@ -257,12 +257,6 @@ export class CustomResourcesComponent implements OnInit {
       },
       error: (err) => this.notificationService.error(`Error: ${err.message}`)
     });
-  }
-
-  refreshInstances(): void {
-    if (this.selectedResourceType) {
-      this.loadInstances(this.selectedResourceType);
-    }
   }
 
   // Helper methods for template

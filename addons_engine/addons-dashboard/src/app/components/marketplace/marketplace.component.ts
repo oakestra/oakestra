@@ -8,11 +8,12 @@ import { ConfirmationService } from '../../services/confirmation.service';
 import { MarketplaceAddon, AddonService, AddonVolume, AddonNetwork } from '../../models/addon.model';
 import { KeyValueInputComponent } from '../shared/key-value-input/key-value-input.component';
 import { SimpleListInputComponent } from '../shared/simple-list-input/simple-list-input.component';
+import { RefreshButtonComponent } from '../shared/refresh-button/refresh-button.component';
 
 @Component({
   selector: 'app-marketplace',
   standalone: true,
-  imports: [CommonModule, FormsModule, KeyValueInputComponent, SimpleListInputComponent],
+  imports: [CommonModule, FormsModule, KeyValueInputComponent, SimpleListInputComponent, RefreshButtonComponent],
   templateUrl: './marketplace.component.html',
   styleUrls: ['./marketplace.component.scss']
 })
@@ -649,10 +650,5 @@ export class MarketplaceComponent implements OnInit {
       })) || []
     };
     return JSON.stringify(formatted, null, 2);
-  }
-
-  refreshAddons(): void {
-    this.notificationService.info('Refreshing marketplace...');
-    this.loadAddons();
   }
 }

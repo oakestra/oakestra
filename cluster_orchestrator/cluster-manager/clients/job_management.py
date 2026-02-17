@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta
 
 from ext_requests.scheduler_requests import scheduler_request_deploy
@@ -9,7 +10,6 @@ from oakestra_utils.types.statuses import (
     convert_to_status,
 )
 from resource_abstractor_client import candidate_operations, job_operations
-import logging
 
 logger = logging.getLogger("cluster_manager")
 
@@ -83,9 +83,13 @@ def aggregate_info(time_interval):
 
 def create_new_job_instance(job: dict, instance_number: int):
     job_id = job.get("_id")
+    updated_job = None
     if job_id is None or job_operations.get_job_by_id(job_id) is None:
-        return job_operations.create_job(job)
-    return job_operations.update_job_instance(job_id, instance_number, job)
+        updated_job = job_operations.create_job(job)
+    else:
+        updated_job = job_operations.append_job_instance(job_id, instance_number, job)
+    logger.debug(f"Created new job instance: {updated_job}")
+    return updated_job
 
 
 def update_deployed_instance_worker(job_name, instance_number, status, public_ip, worker_id):

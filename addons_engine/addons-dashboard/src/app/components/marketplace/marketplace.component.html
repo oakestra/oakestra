@@ -1,8 +1,11 @@
 <div class="section-header">
   <h2>Marketplace Addons</h2>
-  <button class="btn" [ngClass]="showForm ? 'btn-secondary' : 'btn-primary'" (click)="showForm ? cancelForm() : showAddForm()">
-    {{ showForm ? 'Cancel' : '+ Add New Addon' }}
-  </button>
+  <div class="header-actions">
+    <app-refresh-button (refresh)="loadAddons()"></app-refresh-button>
+    <button class="btn" [ngClass]="showForm ? 'btn-secondary' : 'btn-primary'" (click)="showForm ? cancelForm() : showAddForm()">
+      {{ showForm ? 'Cancel' : '+ Add New Addon' }}
+    </button>
+  </div>
 </div>
 
 <!-- Add Addon Form -->

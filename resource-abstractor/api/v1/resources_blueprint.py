@@ -123,7 +123,9 @@ class ResourceController(MethodView):
             raise exceptions.NotFound()
 
         client_ip = request.remote_addr
-        logger.debug(f"GET /api/v1/resources/{resource_id} - Client: {client_ip}, Result: {candidate}")
+        logger.debug(
+            f"GET /api/v1/resources/{resource_id} - Client: {client_ip}, Result: {candidate}"
+        )
         return candidate
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")

@@ -263,6 +263,12 @@ header h1 {
     color: var(--text-primary);
 }
 
+.header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
 /* Buttons */
 .btn {
     padding: 10px 20px;
@@ -318,6 +324,18 @@ header h1 {
 .btn-small {
     padding: 6px 12px;
     font-size: 0.875rem;
+}
+
+.btn-icon {
+    padding: 10px 15px;
+    background-color: var(--secondary-color);
+    color: white;
+    font-size: 1.2rem;
+    min-width: auto;
+}
+
+.btn-icon:hover {
+    background-color: #4b5563;
 }
 
 /* Forms */
@@ -688,6 +706,8 @@ header h1 {
 .section-actions {
     display: flex;
     justify-content: flex-end;
+    gap: 10px;
+    align-items: center;
     margin-bottom: 1rem;
 }
 

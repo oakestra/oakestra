@@ -5,11 +5,12 @@ import { AddonsEngineService } from '../../services/addons-engine.service';
 import { NotificationService } from '../../services/notification.service';
 import { ConfirmationService } from '../../services/confirmation.service';
 import { InstalledAddon, AddonStatus } from '../../models/addon.model';
+import { RefreshButtonComponent } from '../shared/refresh-button/refresh-button.component';
 
 @Component({
   selector: 'app-installed-addons',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RefreshButtonComponent],
   templateUrl: './installed-addons.component.html',
   styleUrls: ['./installed-addons.component.css']
 })

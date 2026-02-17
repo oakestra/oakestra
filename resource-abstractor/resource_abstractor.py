@@ -16,9 +16,7 @@ log_level = getattr(logging, log_level_str, logging.DEBUG)
 logging.basicConfig(
     level=log_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger("resource_abstractor")
 logger.setLevel(log_level)
@@ -34,15 +32,18 @@ app = Flask(__name__)
 app.logger.setLevel(log_level)
 
 # Configure CORS with explicit settings
-CORS(app, resources={
-    r"/api/*": {
-        "origins": "*",
-        "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "expose_headers": ["Content-Type"],
-        "supports_credentials": False
-    }
-})
+CORS(
+    app,
+    resources={
+        r"/api/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Type"],
+            "supports_credentials": False,
+        }
+    },
+)
 
 # Disable strict slashes to prevent redirects
 app.url_map.strict_slashes = False

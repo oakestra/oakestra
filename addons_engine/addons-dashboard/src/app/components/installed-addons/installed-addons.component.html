@@ -1,6 +1,9 @@
 <div class="section-header">
   <h2>Installed Addons</h2>
-  <button class="btn btn-primary" (click)="showInstallForm()">+ Install from Marketplace</button>
+  <div class="header-actions">
+    <app-refresh-button (refresh)="loadAddons()"></app-refresh-button>
+    <button class="btn btn-primary" (click)="showInstallForm()">+ Install from Marketplace</button>
+  </div>
 </div>
 
 <!-- Install Form -->

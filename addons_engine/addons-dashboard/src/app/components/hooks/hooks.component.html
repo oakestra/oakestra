@@ -1,6 +1,9 @@
 <div class="section-header">
   <h2>Hooks Management</h2>
-  <button class="btn btn-primary" (click)="showAddForm()">+ Add Hook</button>
+  <div class="header-actions">
+    <app-refresh-button (refresh)="loadHooks()"></app-refresh-button>
+    <button class="btn btn-primary" (click)="showAddForm()">+ Add Hook</button>
+  </div>
 </div>
 
 <!-- Add Hook Form -->

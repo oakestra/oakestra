@@ -5,11 +5,12 @@ import { ResourceAbstractorService } from '../../services/resource-abstractor.se
 import { NotificationService } from '../../services/notification.service';
 import { ConfirmationService } from '../../services/confirmation.service';
 import { Hook, HookEvent } from '../../models/addon.model';
+import { RefreshButtonComponent } from '../shared/refresh-button/refresh-button.component';
 
 @Component({
   selector: 'app-hooks',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RefreshButtonComponent],
   templateUrl: './hooks.component.html',
   styleUrls: ['./hooks.component.css']
 })

@@ -12,15 +12,18 @@ ADDONS_MANAGER_PORT = int(os.environ.get("ADDONS_MANAGER_PORT", 11101))
 app = Flask(__name__)
 
 # Configure CORS with explicit settings
-CORS(app, resources={
-    r"/api/*": {
-        "origins": "*",
-        "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "expose_headers": ["Content-Type"],
-        "supports_credentials": False
-    }
-})
+CORS(
+    app,
+    resources={
+        r"/api/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Type"],
+            "supports_credentials": False,
+        }
+    },
+)
 
 # Disable strict slashes to prevent redirects
 app.url_map.strict_slashes = False

@@ -1,0 +1,20 @@
+services:
+  addons_manager:
+    deploy:
+      mode: replicated
+      replicas: 0
+
+  addons_monitor:
+    deploy:
+      mode: replicated
+      replicas: 0
+
+  marketplace_manager:
+    deploy:
+      mode: replicated
+      replicas: 0
+
+  addons_dashboard:
+    deploy:
+      mode: replicated
+      replicas: 0

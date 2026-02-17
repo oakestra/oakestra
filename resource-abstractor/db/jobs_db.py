@@ -68,6 +68,30 @@ def update_job(job_id, job_data):
     )
 
 
+def find_job_instance(job_id, instance_number):
+    return db.mongo_jobs.find_one(
+        {"_id": ObjectId(job_id), "instance_list.instance_number": int(instance_number)},
+        {"instance_list.$": 1},
+    )
+
+
+# Append job_data["instance_list"][-1] to the instance list of the job with id job_id
+def append_job_instance(job_id, instance_number, job_data):
+    if find_job_instance(job_id, instance_number) is not None:
+        return None
+
+    instance_list = job_data.get("instance_list", [])
+    if len(instance_list) == 0:
+        return None
+    instance_info = instance_list[-1]
+
+    return db.mongo_jobs.find_one_and_update(
+        {"_id": ObjectId(job_id)},
+        {"$push": {"instance_list": instance_info}},
+        return_document=True,
+    )
+
+
 def update_job_instance(job_id, instance_number, job_data):
     job_data.pop("_id", None)
 
