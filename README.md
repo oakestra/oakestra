@@ -110,7 +110,8 @@ If these variables are not set, the startup script will ask with a prompt.
 
 If you wish to build the cluster orchestrator yourself simply clone the repo and run:
 ```bash
-OAKESTRA_VERSION=develop ./scripts/StartOakestraCluster.sh 
+OAKESTRA_VERSION=develop
+./scripts/StartOakestraCluster.sh 
 ```
 
 > Tip: The `OAK_VERSION` variable can be set to a branch or a specific version. A branch triggers a custom build, while a specific version (E.g., v0.4.401) uses the release images for that version. Check [cluster-orchestrator/README.md](/cluster_orchestrator/README.md) for further details.
