@@ -149,6 +149,12 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
 fi
 
 # Handle OAKESTRA_VERSION if set
+if [ "$OAKESTRA_VERSION" == "develop" ]; then
+    # for Oakestra develop, use latest alpha images built from develop branch
+    OAKESTRA_VERSION=alpha-$(curl -s https://raw.githubusercontent.com/oakestra/oakestra/refs/heads/develop/version.txt)
+    echo "Using develop branch, setting OAKESTRA_VERSION to $OAKESTRA_VERSION"
+fi
+
 if [ ! -z "$OAKESTRA_VERSION" ]; then
     if is_tag "$OAKESTRA_VERSION"; then
         echo "🏷️  Using tag: $OAKESTRA_VERSION"
@@ -158,7 +164,7 @@ if [ ! -z "$OAKESTRA_VERSION" ]; then
         rm 1-DOC.yaml.bak 
     else
         if [ "$OAKESTRA_VERSION" != "main" ]; then
-          echo "Error: Full 1 Node Oakestra deployment only supports tagged releases or main branch. Please specify a valid tag (e.g., v0.4.401 or alpha-v0.4.403)."
+          echo "Error: Full 1 Node Oakestra deployment only supports tagged releases, develop or main branch. Please specify a valid tag (e.g., v0.4.401 or alpha-v0.4.403)."
           exit 1
         fi
     fi
