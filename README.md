@@ -65,7 +65,8 @@ Configure the a custom address used by the dashboard to reach your APIs. By defa
 
 Then clone the repo and run:
 ```bash
-OAKESTRA_VERSION=develop ./scripts/StartOakestraRoot.sh 
+OAKESTRA_VERSION=develop
+./scripts/StartOakestraRoot.sh 
 ```
 
 > Tip: The `OAK_VERSION` variable can be set to a branch or a specific version. A branch triggers a custom build, while a specific version (E.g., v0.4.401) uses the release images for that version. Check [root-orchestrator/README.md](/root_orchestrator/README.md) for further details.
