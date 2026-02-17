@@ -99,6 +99,7 @@ services:
       - "10101:10101"
     environment:
       - MY_PORT=10100
+      - LOG_LEVEL=INFO
       - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
@@ -228,9 +229,12 @@ services:
       - cluster_loki
     logging: *default-logging
 
-
 volumes:
   mongodb_cluster_data:
     driver: local
   mongodb_cluster_net_data:
     driver: local
+
+networks:
+  default:
+    name: oakestra

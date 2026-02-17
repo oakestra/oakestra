@@ -90,6 +90,34 @@ class JobController(MethodView):
 
 @jobsblp.route("/<job_id>/<instance_id>")
 class JobInstanceController(MethodView):
+    @jobsblp.arguments(JobFilterSchema, location="query")
+    def get(self, query, **kwargs):
+        job_id = kwargs.get("job_id")
+        instance_id = kwargs.get("instance_id")
+        if ObjectId.is_valid(job_id) is False:
+            raise exceptions.BadRequest()
+
+        result = jobs_db.find_job_instance(job_id, instance_id)
+        if result is None:
+            raise exceptions.NotFound()
+
+        return json.dumps(result, default=str)
+
+    @pre_post_hook("jobs", with_param_id="job_id")
+    def put(self, *args, **kwargs):
+        job_id = kwargs.get("job_id")
+        instance_id = kwargs.get("instance_id")
+        data = request.json
+
+        if ObjectId.is_valid(job_id) is False:
+            raise exceptions.BadRequest()
+
+        result = jobs_db.append_job_instance(job_id, instance_id, data)
+        if result is None:
+            raise exceptions.BadRequest("Instance already exists")
+
+        return json.dumps(result, default=str)
+
     @pre_post_hook("jobs", with_param_id="job_id")
     def patch(self, data, *args, **kwargs):
         data = request.json

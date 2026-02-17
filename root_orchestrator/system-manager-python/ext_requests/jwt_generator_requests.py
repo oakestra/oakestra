@@ -36,7 +36,7 @@ def create_access_token(
     if additional_headers is not None:
         obj["additional_headers"] = additional_headers
 
-    r = requests.post(request_addr, json=obj)
+    r = requests.post(request_addr, json=obj, timeout=10)
     r.raise_for_status()
     return r.json()["access_token"]
 
@@ -59,18 +59,18 @@ def create_refresh_token(
     if additional_headers is not None:
         obj["additional_headers"] = additional_headers
 
-    r = requests.post(request_addr, json=obj)
+    r = requests.post(request_addr, json=obj, timeout=10)
     r.raise_for_status()
     return r.json()["refresh_token"]
 
 
 def get_public_key():
     logger = logging.getLogger()
-    logger.info("new job: asking scheduler...")
+    logger.info("Requesting JWT public key...")
     request_addr = JWT_GENERATOR_ADDR + "/key"
     while True:
         try:
-            r = requests.get(request_addr)
+            r = requests.get(request_addr, timeout=5)
             r.raise_for_status()
             body = r.json()
             return body["public_key"]

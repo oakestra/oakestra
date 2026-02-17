@@ -29,9 +29,44 @@ class CustomResourceController(MethodView):
         return custom_resources_db.create_custom_resource(data)
 
 
+@customblp.route("/<resource_type>")
+class CustomResourceDefinitionController(MethodView):
+    def delete(self, *args, **kwargs):
+        """
+        Delete a custom resource definition and all its instances.
+        This is a cascading delete operation.
+        """
+        resource_type = kwargs.get("resource_type")
+
+        meta_data = custom_resources_db.find_custom_resource_by_type(resource_type)
+        if meta_data is None:
+            abort(404, message="Custom Resource definition not found")
+
+        # Delete all instances of this resource type
+        custom_resources_db.delete_all_resources(resource_type)
+
+        # Delete the resource definition
+        custom_resources_db.delete_custom_resource_by_type(resource_type)
+
+        return json.dumps(
+            {"message": f"Resource type '{resource_type}' and all its instances deleted"},
+            default=str,
+        )
+
+
 @customblp.route("/<resource>")
 class ResourcesController(MethodView):
     def get(self, *args, **kwargs):
+        """
+        Get all resources of a specific type with optional filtering.
+
+        Query parameters are passed as MongoDB filter criteria:
+        - Simple equality: ?field=value
+        - Multiple conditions: ?field1=value1&field2=value2
+        - Nested fields: ?parent.child=value
+
+        Example: GET /api/v1/custom-resources/database?status=active&region=us-east
+        """
         resource_type = kwargs.get("resource")
         filter = request.args.to_dict()
 

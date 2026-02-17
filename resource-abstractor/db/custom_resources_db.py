@@ -56,8 +56,11 @@ def create_resource(resource_type, data):
 def update_resource(resource_type, id, data):
     collection = _get_collection(resource_type)
 
+    # Remove _id from data to avoid MongoDB immutable field error
+    update_data = {k: v for k, v in data.items() if k != "_id"}
+
     return collection.find_one_and_update(
-        {"_id": ObjectId(id)}, {"$set": data}, return_document=True
+        {"_id": ObjectId(id)}, {"$set": update_data}, return_document=True
     )
 
 
@@ -65,3 +68,10 @@ def delete_resource(resource_type, id):
     collection = _get_collection(resource_type)
 
     return collection.find_one_and_delete({"_id": ObjectId(id)})
+
+
+def delete_all_resources(resource_type):
+    """Delete all instances of a specific resource type."""
+    collection = _get_collection(resource_type)
+    result = collection.delete_many({})
+    return result.deleted_count

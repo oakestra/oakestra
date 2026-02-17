@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta
 
 from ext_requests.scheduler_requests import scheduler_request_deploy
@@ -9,6 +10,8 @@ from oakestra_utils.types.statuses import (
     convert_to_status,
 )
 from resource_abstractor_client import candidate_operations, job_operations
+
+logger = logging.getLogger("cluster_manager")
 
 
 def mark_inactive_as_failed(time_interval):
@@ -80,9 +83,13 @@ def aggregate_info(time_interval):
 
 def create_new_job_instance(job: dict, instance_number: int):
     job_id = job.get("_id")
+    updated_job = None
     if job_id is None or job_operations.get_job_by_id(job_id) is None:
-        return job_operations.create_job(job)
-    return job_operations.update_job_instance(job_id, instance_number, job)
+        updated_job = job_operations.create_job(job)
+    else:
+        updated_job = job_operations.append_job_instance(job_id, instance_number, job)
+    logger.debug(f"Created new job instance: {updated_job}")
+    return updated_job
 
 
 def update_deployed_instance_worker(job_name, instance_number, status, public_ip, worker_id):
@@ -204,22 +211,33 @@ def delete_job_instance(job_id: int, instance_number: int, erase: bool = True):
     # send instance undeployment to node
     job = job_operations.get_job_by_id(job_id)
     instance_list = job.get("instance_list")
-    for instance in instance_list:
-        if int(instance["instance_number"]) == instance_number:
-            worker_id = instance.get("worker_id")
-            mqtt_publish_edge_delete(
-                worker_id,
-                job.get("job_name"),
-                instance["instance_number"],
-                job.get("virtualization", "docker"),
-            )
 
-    # remove from db if erase is true
-    if erase:
-        job_operations.delete_job_instance(job_id, instance_number)
-        if len(instance_list) <= 1:
-            job_operations.delete_job(job_id)
-            return job
+    deleted_job = 0
+    for instance in instance_list:
+        if int(instance["instance_number"]) == instance_number or instance_number == -1:
+            logger.info(f"Deleting instance {instance['instance_number']} of job {job_id}")
+            deleted_job += 1
+            worker_id = instance.get("worker_id", None)
+
+            if worker_id is not None:
+                mqtt_publish_edge_delete(
+                    worker_id,
+                    job.get("job_name"),
+                    instance["instance_number"],
+                    job.get("virtualization", "docker"),
+                )
+
+            # remove from db if erase is true
+            if erase:
+                job_operations.delete_job_instance(job_id, instance["instance_number"])
+                logger.info(
+                    f"Deleted instance {instance['instance_number']} of job {job_id} from DB"
+                )
+
+    if len(instance_list) <= deleted_job:
+        job_operations.delete_job(job_id)
+        logger.info(f"Deleted job {job_id} from DB as all instances were removed")
+        return {}
 
     job = job_operations.get_job_by_id(job_id)
     return job

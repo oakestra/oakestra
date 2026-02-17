@@ -22,8 +22,8 @@ def net_inform_service_deploy(job, job_id):
     request_addr = NET_PLUGIN_ADDR + "/api/net/service/deploy"
     logger.debug(request_addr)
 
-    logger.debug("Inform service deploy with id ", job_id)
-    r = requests.post(request_addr, json={"deployment_descriptor": job, "_id": job_id})
+    logger.debug(f"Inform service deploy with id {job_id}")
+    r = requests.post(request_addr, json={"deployment_descriptor": job, "_id": job_id}, timeout=10)
     r.raise_for_status()
 
 
@@ -36,7 +36,7 @@ def net_inform_service_undeploy(job_id):
     logger.debug(request_addr)
 
     try:
-        r = requests.delete(request_addr)
+        r = requests.delete(request_addr, timeout=10)
         r.raise_for_status()
     except requests.exceptions.ConnectionError:
         logger.error("Calling network plugin " + request_addr + " Connection error.")
@@ -61,6 +61,7 @@ def net_inform_instance_deploy(job_id, instance_number, cluster_id):
             "cluster_id": cluster_id,
             "_id": job_id,
         },
+        timeout=10,
     )
     r.raise_for_status()
 
@@ -73,7 +74,7 @@ def net_inform_instance_undeploy(job_id, instance):
     request_addr = NET_PLUGIN_ADDR + "/api/net/" + str(job_id) + "/" + str(instance)
     logger.debug(request_addr)
     try:
-        r = requests.delete(request_addr)
+        r = requests.delete(request_addr, timeout=10)
         r.raise_for_status()
     except requests.exceptions.ConnectionError:
         logger.error("Calling network plugin " + request_addr + " Connection error.")
@@ -97,6 +98,7 @@ def net_register_cluster(cluster_id, cluster_address, cluster_port):
                 "cluster_address": cluster_address,
                 "cluster_port": cluster_port,
             },
+            timeout=10,
         )
         logger.debug(r)
         r.raise_for_status()

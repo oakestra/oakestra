@@ -107,6 +107,7 @@ def perform_update(entity_name, fn, *args):
 # put currently is not supported
 api_hooks_map = {
     "post": (process_pre_create, process_post_create),
+    "put": (process_pre_create, process_post_create),
     "patch": (process_pre_update, process_post_update),
     "delete": (None, process_post_delete),
 }
@@ -122,7 +123,6 @@ def pre_post_hook(name=None, with_param_id=None):
             if method_name not in api_hooks_map.keys():
                 raise ValueError(f"Method {method_name} not supported")
 
-            # incase this was wrapped by @arguments
             data = args[1] if len(args) > 1 else request.json
 
             pre_fn = api_hooks_map[method_name][0]

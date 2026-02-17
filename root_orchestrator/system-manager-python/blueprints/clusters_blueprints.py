@@ -93,8 +93,15 @@ class ClusterController(MethodView):
         data = request.json
         cluster_id = kwargs["clusterid"]
         jobs = data.get("jobs")
-        logger.debug("Received cluster update for %s: %s", cluster_id, data)
+        logger.info(f"Received cluster update for {cluster_id}: {data}")
         del data["jobs"]
+        # Prevent the IP address from being overwritten by cluster updates
+        # The IP is set during initial registration and should not change
+        if "ip" in data:
+            logger.warning(
+                "Cluster update attempted to change IP address, ignoring update to prevent corruption"
+            )
+            del data["ip"]
         updated_cluster = candidate_operations.update_candidate_information(cluster_id, data)
         if updated_cluster is None:
             logger.error("Could not update cluster")

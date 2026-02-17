@@ -27,14 +27,13 @@ func formatQuery(requestParameters map[string]string, interestedResources []stri
 	resources := formatInterestedResources(interestedResources)
 
 	var sb strings.Builder
-	sb.WriteString("?")
+	sb.WriteString("?active=true")
 	if requestParams != "" {
+		sb.WriteString("&")
 		sb.WriteString(requestParams)
-		if resources != "" {
-			sb.WriteString("&")
-		}
 	}
 	if resources != "" {
+		sb.WriteString("&")
 		sb.WriteString(resources)
 		return sb.String()
 	}

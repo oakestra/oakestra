@@ -1,0 +1,487 @@
+<div class="section-header">
+  <h2>Marketplace Addons</h2>
+  <div class="header-actions">
+    <app-refresh-button (refresh)="loadAddons()"></app-refresh-button>
+    <button class="btn" [ngClass]="showForm ? 'btn-secondary' : 'btn-primary'" (click)="showForm ? cancelForm() : showAddForm()">
+      {{ showForm ? 'Cancel' : '+ Add New Addon' }}
+    </button>
+  </div>
+</div>
+
+<!-- Add Addon Form -->
+<div class="form-container" *ngIf="showForm">
+  <div class="form-header">
+    <h3>Add Addon to Marketplace</h3>
+    <div class="mode-toggle">
+      <label class="toggle-switch">
+        <input type="checkbox" [(ngModel)]="useJsonMode">
+        <span class="slider"></span>
+      </label>
+      <span class="mode-label">{{ useJsonMode ? '📝 JSON Mode' : '📋 Manual Mode' }}</span>
+    </div>
+  </div>
+
+  <!-- JSON Mode -->
+  <form *ngIf="useJsonMode" (ngSubmit)="submitAddon()">
+    <div class="form-group">
+      <label for="addonJsonFull">Complete Addon JSON *</label>
+      <textarea id="addonJsonFull" [(ngModel)]="addonJson" name="addonJson" rows="20" required></textarea>
+      <small>Enter the complete addon JSON including name, services, volumes, networks, etc.</small>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-success">Submit</button>
+    </div>
+  </form>
+
+  <!-- Manual Mode -->
+  <form *ngIf="!useJsonMode" (ngSubmit)="submitAddon()">
+    <div class="form-group">
+      <label for="addonName">Addon Name *</label>
+      <input type="text" id="addonName" [(ngModel)]="newAddon.name" name="name" required>
+    </div>
+    <div class="form-group">
+      <label for="addonDescription">Description *</label>
+      <textarea id="addonDescription" [(ngModel)]="newAddon.description" name="description" rows="3"></textarea>
+    </div>
+
+    <!-- Services Section -->
+    <div class="section-divider">
+      <h4>🔧 Services ({{ newAddon.services.length }})</h4>
+    </div>
+
+    <!-- Added Services List -->
+    <div class="items-list" *ngIf="newAddon.services.length > 0">
+      <div class="item-card" *ngFor="let service of newAddon.services; let i = index">
+        <div class="item-header">
+          <strong>{{ service.service_name }}</strong>
+          <div>
+            <button type="button" class="btn-icon" *ngIf="editingServiceIndex !== i" (click)="editServiceFromAddon(i)" title="Edit service">
+              ✏️
+            </button>
+            <button type="button" class="btn-icon" *ngIf="editingServiceIndex === i" (click)="cancelServiceEdit()" title="Cancel edit">
+              ↩️
+            </button>
+            <button type="button" class="btn-icon btn-danger" (click)="removeServiceFromAddon(i)" title="Delete service">
+              🗑️
+            </button>
+          </div>
+        </div>
+        <div class="item-details">
+          <p><strong>Image:</strong> {{ service.image }}</p>
+          <p *ngIf="service.command"><strong>Command:</strong> {{ service.command }}</p>
+          <p *ngIf="service.ports && getObjectKeys(service.ports).length > 0">
+            <strong>Ports:</strong> {{ formatPorts(service.ports) }}
+          </p>
+        </div>
+
+        <!-- Edit Form Below Item -->
+        <div class="nested-form" *ngIf="editingServiceIndex === i">
+          <h5>Edit Service</h5>
+      <div class="form-group">
+        <label for="serviceName">Service Name *</label>
+        <input type="text" id="serviceName" [(ngModel)]="currentService.service_name" name="serviceName" placeholder="e.g., my-service">
+      </div>
+      <div class="form-group">
+        <label for="serviceImage">Image *</label>
+        <input type="text" id="serviceImage" [(ngModel)]="currentService.image" name="serviceImage" placeholder="e.g., nginx:latest">
+        <small class="help-text">Make sure the Docker image exists and is accessible</small>
+      </div>
+      <div class="form-group">
+        <label for="serviceCommand">Command (optional)</label>
+        <input type="text" id="serviceCommand" [(ngModel)]="currentService.command" name="serviceCommand" placeholder="e.g., echo hello">
+      </div>
+
+      <!-- Ports -->
+      <div class="form-group">
+        <label>Ports</label>
+        <app-key-value-input
+          [items]="getObjectAsArray(currentService.ports)"
+          separator=":"
+          keyPlaceholder="Host port (e.g., 8080)"
+          valuePlaceholder="Container port (e.g., 80)"
+          addLabel="Add Port"
+          emptyMessage="No ports configured"
+          (add)="addPortToCurrentService($event)"
+          (remove)="removePortFromCurrentService($event)">
+        </app-key-value-input>
+      </div>
+
+      <!-- Environment Variables -->
+      <div class="form-group">
+        <label>Environment Variables</label>
+        <app-key-value-input
+          [items]="getObjectAsArray(currentService.environment)"
+          separator="="
+          keyPlaceholder="Variable name"
+          valuePlaceholder="Value"
+          addLabel="Add Env"
+          emptyMessage="No environment variables"
+          (add)="addEnvToCurrentService($event)"
+          (remove)="removeEnvFromCurrentService($event)">
+        </app-key-value-input>
+      </div>
+
+      <!-- Volume Mounts -->
+      <div class="form-group">
+        <label>Volume Mounts</label>
+        <app-simple-list-input
+          [items]="currentService.volumes || []"
+          placeholder="e.g., volume1:/data or /host/path:/container/path"
+          addLabel="Add Mount"
+          emptyMessage="No volume mounts"
+          (add)="addVolumeMountToCurrentService($event)"
+          (remove)="removeVolumeMountFromCurrentService($event)">
+        </app-simple-list-input>
+      </div>
+
+      <!-- Networks -->
+      <div class="form-group">
+        <label>Networks</label>
+        <app-simple-list-input
+          [items]="currentService.networks || []"
+          placeholder="e.g., my-network"
+          addLabel="Add Network"
+          emptyMessage="No networks configured"
+          (add)="addNetworkToCurrentService($event)"
+          (remove)="removeNetworkFromCurrentService($event)">
+        </app-simple-list-input>
+      </div>
+
+      <!-- Labels -->
+      <div class="form-group">
+        <label>Labels</label>
+        <app-key-value-input
+          [items]="getObjectAsArray(currentService.labels)"
+          separator="="
+          keyPlaceholder="Label key"
+          valuePlaceholder="Label value"
+          addLabel="Add Label"
+          emptyMessage="No labels configured"
+          (add)="addLabelToCurrentService($event)"
+          (remove)="removeLabelFromCurrentService($event)">
+        </app-key-value-input>
+      </div>
+
+      <button type="button" class="btn btn-success" (click)="addServiceToAddon()">✓ Update Service</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add New Service Button & Form -->
+    <button type="button" class="btn btn-primary" *ngIf="!showServiceForm && editingServiceIndex === -1" (click)="showAddServiceForm()">+ Add New Service</button>
+    
+    <div class="nested-form" *ngIf="showServiceForm">
+      <div class="form-header-inline">
+        <h5>Add New Service</h5>
+        <button type="button" class="btn btn-secondary btn-sm" (click)="hideAddServiceForm()">Cancel</button>
+      </div>
+      <div class="form-group">
+        <label for="serviceNameAdd">Service Name *</label>
+        <input type="text" id="serviceNameAdd" [(ngModel)]="currentService.service_name" name="serviceNameAdd" placeholder="e.g., my-service">
+      </div>
+      <div class="form-group">
+        <label for="serviceImageAdd">Image *</label>
+        <input type="text" id="serviceImageAdd" [(ngModel)]="currentService.image" name="serviceImageAdd" placeholder="e.g., nginx:latest">
+        <small class="help-text">Make sure the Docker image exists and is accessible</small>
+      </div>
+      <div class="form-group">
+        <label for="serviceCommandAdd">Command (optional)</label>
+        <input type="text" id="serviceCommandAdd" [(ngModel)]="currentService.command" name="serviceCommandAdd" placeholder="e.g., echo hello">
+      </div>
+
+      <!-- Ports -->
+      <div class="form-group">
+        <label>Ports</label>
+        <app-key-value-input
+          [items]="getObjectAsArray(currentService.ports)"
+          separator=":"
+          keyPlaceholder="Host port (e.g., 8080)"
+          valuePlaceholder="Container port (e.g., 80)"
+          addLabel="Add Port"
+          emptyMessage="No ports configured"
+          (add)="addPortToCurrentService($event)"
+          (remove)="removePortFromCurrentService($event)">
+        </app-key-value-input>
+      </div>
+
+      <!-- Environment Variables -->
+      <div class="form-group">
+        <label>Environment Variables</label>
+        <app-key-value-input
+          [items]="getObjectAsArray(currentService.environment)"
+          separator="="
+          keyPlaceholder="Variable name"
+          valuePlaceholder="Value"
+          addLabel="Add Env"
+          emptyMessage="No environment variables"
+          (add)="addEnvToCurrentService($event)"
+          (remove)="removeEnvFromCurrentService($event)">
+        </app-key-value-input>
+      </div>
+
+      <!-- Volume Mounts -->
+      <div class="form-group">
+        <label>Volume Mounts</label>
+        <app-simple-list-input
+          [items]="currentService.volumes || []"
+          placeholder="e.g., volume1:/data or /host/path:/container/path"
+          addLabel="Add Mount"
+          emptyMessage="No volume mounts"
+          (add)="addVolumeMountToCurrentService($event)"
+          (remove)="removeVolumeMountFromCurrentService($event)">
+        </app-simple-list-input>
+      </div>
+
+      <!-- Networks -->
+      <div class="form-group">
+        <label>Networks</label>
+        <app-simple-list-input
+          [items]="currentService.networks || []"
+          placeholder="e.g., my-network"
+          addLabel="Add Network"
+          emptyMessage="No networks configured"
+          (add)="addNetworkToCurrentService($event)"
+          (remove)="removeNetworkFromCurrentService($event)">
+        </app-simple-list-input>
+      </div>
+
+      <!-- Labels -->
+      <div class="form-group">
+        <label>Labels</label>
+        <app-key-value-input
+          [items]="getObjectAsArray(currentService.labels)"
+          separator="="
+          keyPlaceholder="Label key"
+          valuePlaceholder="Label value"
+          addLabel="Add Label"
+          emptyMessage="No labels configured"
+          (add)="addLabelToCurrentService($event)"
+          (remove)="removeLabelFromCurrentService($event)">
+        </app-key-value-input>
+      </div>
+
+      <button type="button" class="btn btn-success" (click)="addServiceToAddon()">✓ Add Service to Addon</button>
+    </div>
+
+    <!-- Volumes Section -->
+    <div class="section-divider">
+      <h4>💾 Volumes ({{ newAddon.volumes?.length || 0 }})</h4>
+    </div>
+
+    <!-- Added Volumes List -->
+    <div class="items-list" *ngIf="newAddon.volumes && newAddon.volumes.length > 0">
+      <div class="item-card" *ngFor="let volume of newAddon.volumes; let i = index">
+        <div class="item-header">
+          <strong>{{ volume.name }}</strong>
+          <div>
+            <button type="button" class="btn-icon" *ngIf="editingVolumeIndex !== i" (click)="editVolumeFromAddon(i)" title="Edit volume">
+              ✏️
+            </button>
+            <button type="button" class="btn-icon" *ngIf="editingVolumeIndex === i" (click)="cancelVolumeEdit()" title="Cancel edit">
+              ↩️
+            </button>
+            <button type="button" class="btn-icon btn-danger" (click)="removeVolumeFromAddon(i)" title="Delete volume">
+              🗑️
+            </button>
+          </div>
+        </div>
+        <div class="item-details">
+          <p><strong>Driver:</strong> {{ volume.driver || 'local' }}</p>
+          <p *ngIf="volume.driver_opts && getObjectKeys(volume.driver_opts).length > 0">
+            <strong>Options:</strong> {{ formatDriverOpts(volume.driver_opts) }}
+          </p>
+        </div>
+
+        <!-- Edit Form Below Item -->
+        <div class="nested-form" *ngIf="editingVolumeIndex === i">
+          <h5>Edit Volume</h5>
+      <div class="form-group">
+        <label for="volumeName">Volume Name *</label>
+        <input type="text" id="volumeName" [(ngModel)]="currentVolume.name" name="volumeName" placeholder="e.g., data-volume">
+      </div>
+      <div class="form-group">
+        <label for="volumeDriver">Driver</label>
+        <input type="text" id="volumeDriver" [(ngModel)]="currentVolume.driver" name="volumeDriver" placeholder="e.g., local">
+      </div>
+
+      <!-- Driver Options -->
+      <div class="form-group">
+        <label>Driver Options</label>
+        <app-key-value-input
+          [items]="getObjectAsArray(currentVolume.driver_opts)"
+          separator="="
+          keyPlaceholder="Option key"
+          valuePlaceholder="Option value"
+          addLabel="Add Option"
+          emptyMessage="No driver options"
+          (add)="addDriverOptToCurrentVolume($event)"
+          (remove)="removeDriverOptFromCurrentVolume($event)">
+        </app-key-value-input>
+      </div>
+
+      <button type="button" class="btn btn-success" (click)="addVolumeToAddon()">✓ Update Volume</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add New Volume Button & Form -->
+    <button type="button" class="btn btn-primary" *ngIf="!showVolumeForm && editingVolumeIndex === -1" (click)="showAddVolumeForm()">+ Add New Volume</button>
+    
+    <div class="nested-form" *ngIf="showVolumeForm">
+      <div class="form-header-inline">
+        <h5>Add New Volume</h5>
+        <button type="button" class="btn btn-secondary btn-sm" (click)="hideAddVolumeForm()">Cancel</button>
+      </div>
+      <div class="form-group">
+        <label for="volumeNameAdd">Volume Name *</label>
+        <input type="text" id="volumeNameAdd" [(ngModel)]="currentVolume.name" name="volumeNameAdd" placeholder="e.g., data-volume">
+      </div>
+      <div class="form-group">
+        <label for="volumeDriverAdd">Driver</label>
+        <input type="text" id="volumeDriverAdd" [(ngModel)]="currentVolume.driver" name="volumeDriverAdd" placeholder="e.g., local">
+      </div>
+
+      <!-- Driver Options -->
+      <div class="form-group">
+        <label>Driver Options</label>
+        <app-key-value-input
+          [items]="getObjectAsArray(currentVolume.driver_opts)"
+          separator="="
+          keyPlaceholder="Option key"
+          valuePlaceholder="Option value"
+          addLabel="Add Option"
+          emptyMessage="No driver options"
+          (add)="addDriverOptToCurrentVolume($event)"
+          (remove)="removeDriverOptFromCurrentVolume($event)">
+        </app-key-value-input>
+      </div>
+
+      <button type="button" class="btn btn-success" (click)="addVolumeToAddon()">✓ Add Volume to Addon</button>
+    </div>
+
+    <!-- Networks Section -->
+    <div class="section-divider">
+      <h4>🌐 Networks ({{ newAddon.networks?.length || 0 }})</h4>
+    </div>
+
+    <!-- Added Networks List -->
+    <div class="items-list" *ngIf="newAddon.networks && newAddon.networks.length > 0">
+      <div class="item-card" *ngFor="let network of newAddon.networks; let i = index">
+        <div class="item-header">
+          <strong>{{ network.name }}</strong>
+          <div>
+            <button type="button" class="btn-icon" *ngIf="editingNetworkIndex !== i" (click)="editNetworkFromAddon(i)" title="Edit network">
+              ✏️
+            </button>
+            <button type="button" class="btn-icon" *ngIf="editingNetworkIndex === i" (click)="cancelNetworkEdit()" title="Cancel edit">
+              ↩️
+            </button>
+            <button type="button" class="btn-icon btn-danger" (click)="removeNetworkFromAddon(i)" title="Delete network">
+              🗑️
+            </button>
+          </div>
+        </div>
+        <div class="item-details">
+          <p><strong>Driver:</strong> {{ network.driver || 'bridge' }}</p>
+          <p><strong>IPv6:</strong> {{ network.enable_ipv6 ? 'Enabled' : 'Disabled' }}</p>
+        </div>
+
+        <!-- Edit Form Below Item -->
+        <div class="nested-form" *ngIf="editingNetworkIndex === i">
+          <h5>Edit Network</h5>
+      <div class="form-group">
+        <label for="networkName">Network Name *</label>
+        <input type="text" id="networkName" [(ngModel)]="currentNetwork.name" name="networkName" placeholder="e.g., my-network">
+      </div>
+      <div class="form-group">
+        <label for="networkDriver">Driver</label>
+        <input type="text" id="networkDriver" [(ngModel)]="currentNetwork.driver" name="networkDriver" placeholder="e.g., bridge">
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" [(ngModel)]="currentNetwork.enable_ipv6" name="enableIpv6">
+          Enable IPv6
+        </label>
+      </div>
+
+      <button type="button" class="btn btn-success" (click)="addNetworkToAddon()">✓ Update Network</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add New Network Button & Form -->
+    <button type="button" class="btn btn-primary" *ngIf="!showNetworkForm && editingNetworkIndex === -1" (click)="showAddNetworkForm()">+ Add New Network</button>
+    
+    <div class="nested-form" *ngIf="showNetworkForm">
+      <div class="form-header-inline">
+        <h5>Add New Network</h5>
+        <button type="button" class="btn btn-secondary btn-sm" (click)="hideAddNetworkForm()">Cancel</button>
+      </div>
+      <div class="form-group">
+        <label for="networkNameAdd">Network Name *</label>
+        <input type="text" id="networkNameAdd" [(ngModel)]="currentNetwork.name" name="networkNameAdd" placeholder="e.g., my-network">
+      </div>
+      <div class="form-group">
+        <label for="networkDriverAdd">Driver</label>
+        <input type="text" id="networkDriverAdd" [(ngModel)]="currentNetwork.driver" name="networkDriverAdd" placeholder="e.g., bridge">
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" [(ngModel)]="currentNetwork.enable_ipv6" name="enableIpv6Add">
+          Enable IPv6
+        </label>
+      </div>
+
+      <button type="button" class="btn btn-success" (click)="addNetworkToAddon()">✓ Add Network to Addon</button>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-success">Submit Addon</button>
+    </div>
+  </form>
+</div>
+
+<!-- Loading State -->
+<div class="loading" *ngIf="loading">
+  <div class="spinner"></div>
+  <p>Loading marketplace addons...</p>
+</div>
+
+<!-- Error State -->
+<div class="empty-state" *ngIf="error">
+  <h3>⚠️ {{ error }}</h3>
+</div>
+
+<!-- Empty State -->
+<div class="empty-state" *ngIf="!loading && !error && addons.length === 0">
+  <h3>📦 No addons in marketplace</h3>
+  <p>Add your first addon to get started!</p>
+</div>
+
+<!-- Addons Grid -->
+<div class="addons-grid" *ngIf="!loading && !error && addons.length > 0">
+  <div class="addon-card" *ngFor="let addon of addons">
+    <h3>{{ addon.name }}</h3>
+    <p>{{ addon.description || 'No description provided' }}</p>
+    <div class="meta">
+      <p><strong>Services:</strong> {{ addon.services.length || 0 }}</p>
+      <p><strong>ID:</strong> <code>{{ addon._id }}</code></p>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary btn-small" (click)="viewDetails(addon)">View Details</button>
+      <button class="btn btn-success btn-small" (click)="installAddon(addon._id!)">Install</button>
+      <button class="btn btn-danger btn-small" (click)="deleteAddon(addon._id!)">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Details Modal -->
+<div class="modal" [class.show]="selectedAddon" (click)="closeDetails()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <span class="close" (click)="closeDetails()">&times;</span>
+    <h2>{{ selectedAddon?.name }}</h2>
+    <div>
+      <pre>{{ selectedAddon ? getFormattedAddonJson(selectedAddon) : '' }}</pre>
+    </div>
+  </div>
+</div>
