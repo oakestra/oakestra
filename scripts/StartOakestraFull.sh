@@ -8,7 +8,7 @@ fi
 #Check if argument stop is passed, if yes, stop the cluster and exit
 if [ "$1" == "stop" ]; then
     echo Stopping Oakestra Root Orchestrator...
-    docker compose -f ~/oakestra/1-DOC.yaml down 
+    docker compose -f ~/.oakestra/1-DOC.yaml down 
     exit 0
 fi
 
@@ -187,4 +187,4 @@ echo
 echo 🖥️ Oakestra dashboard available at http://$SYSTEM_MANAGER_URL
 echo 📊 Grafana dashboard available at http://$SYSTEM_MANAGER_URL:3000
 echo 📈 You can access the APIs at http://$SYSTEM_MANAGER_URL:10000/api/docs
-echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/oakestra/1-DOC.yaml down
+echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/.oakestra/1-DOC.yaml down
