@@ -42,7 +42,7 @@ services:
     environment:
       - ROOT_MONGO_URL=mongo
       - ROOT_MONGO_PORT=10007
-      - ROOT_SCHEDULER_URL=scheduler
+      - ROOT_SCHEDULER_URL=root_scheduler
       - ROOT_SCHEDULER_PORT=10004
       - LOG_LEVEL=INFO
       - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
@@ -172,13 +172,11 @@ services:
       - "10004"
     environment:
       - API_PORT=10004
-      - SYSTEM_MANAGER_URL=system_manager
-      - SYSTEM_MANAGER_PORT=10000
+      - MANAGER_URL=system_manager
+      - MANAGER_PORT=10000
       - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - REDIS_ADDR=redis://:rootRedis@root_redis:6379
-      - ROOT_MONGO_URL=mongo #adding this for consistency with version 0.4.300
-      - ROOT_MONGO_PORT=10007 #adding this for consistency with version 0.4.300
     depends_on:
       - root_redis
       - root_resource_abstractor
