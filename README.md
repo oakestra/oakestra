@@ -65,7 +65,7 @@ Configure the a custom address used by the dashboard to reach your APIs. By defa
 
 Then clone the repo and run:
 ```bash
-OAKESTRA_VERSION=develop
+export OAKESTRA_VERSION=develop
 ./scripts/StartOakestraRoot.sh 
 ```
 
@@ -110,7 +110,7 @@ If these variables are not set, the startup script will ask with a prompt.
 
 If you wish to build the cluster orchestrator yourself simply clone the repo and run:
 ```bash
-OAKESTRA_VERSION=develop
+export OAKESTRA_VERSION=develop
 ./scripts/StartOakestraCluster.sh 
 ```
 
