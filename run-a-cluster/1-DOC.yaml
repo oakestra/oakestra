@@ -327,7 +327,7 @@ services:
     logging: *default-logging
 
   cluster_resource_abstractor:
-    image: resource_abstractor
+    image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
     pull_policy: always
     container_name: cluster_resource_abstractor
     labels:
