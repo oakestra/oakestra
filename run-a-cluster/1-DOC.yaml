@@ -137,8 +137,8 @@ services:
       - "11011:11011"
     environment:
       - RESOURCE_ABSTRACTOR_PORT=11011
-      - MONGO_URL=mongo
-      - MONGO_PORT=10007
+      - ROOT_MONGO_URL=mongo
+      - ROOT_MONGO_PORT=10007
     depends_on:
       - mongo_root
     logging: *default-logging
@@ -281,9 +281,9 @@ services:
       logging_jobname: "clusterlogs"
     environment:
       - MY_PORT=10100
+      - LOG_LEVEL=INFO
       - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - SYSTEM_MANAGER_PORT=10000
-      - LOG_LEVEL=INFO
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
       - CLUSTER_SERVICE_MANAGER_PORT=10110
       - CLUSTER_MONGO_URL=cluster_mongo
@@ -292,6 +292,8 @@ services:
       - CLUSTER_SCHEDULER_PORT=10105
       - MQTT_BROKER_URL=mqtt
       - MQTT_BROKER_PORT=10003
+      - RESOURCE_ABSTRACTOR_URL=cluster_resource_abstractor
+      - RESOURCE_ABSTRACTOR_PORT=11012
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
     depends_on:
@@ -316,10 +318,10 @@ services:
       - "10105"
     environment:
       - API_PORT=10105
-      - CLUSTER_MANAGER_URL=cluster_manager
-      - CLUSTER_MANAGER_PORT=10100
-      - CLUSTER_MONGO_URL=cluster_mongo
-      - CLUSTER_MONGO_PORT=10107
+      - MANAGER_URL=cluster_manager
+      - MANAGER_PORT=10100
+      - RESOURCE_ABSTRACTOR_URL=cluster_resource_abstractor
+      - RESOURCE_ABSTRACTOR_PORT=11012
       - REDIS_ADDR=redis://:clusterRedis@cluster_redis:6479
     depends_on:
       - cluster_redis
