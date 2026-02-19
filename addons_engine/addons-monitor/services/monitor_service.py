@@ -230,17 +230,21 @@ class AddonsMonitor:
 
     def get_addon_containers(self, addon_id, runner_engine):
         # Scope by addon id label and name prefix
-        return runner_engine.get_containers(filters={
-            "label": [f"{ADDONS_ID_LABEL}={addon_id}"],
-            "name": [f"{ORCHESTRATION_PLANE}-"],
-        })
+        return runner_engine.get_containers(
+            filters={
+                "label": [f"{ADDONS_ID_LABEL}={addon_id}"],
+                "name": [f"{ORCHESTRATION_PLANE}-"],
+            }
+        )
 
     def get_oak_addon_containers(self, runner_engine):
         # Get all addon containers by id label scoped to orchestration plane
-        return runner_engine.get_containers(filters={
-            "label": [ADDONS_ID_LABEL],
-            "name": [f"{ORCHESTRATION_PLANE}-"],
-        })
+        return runner_engine.get_containers(
+            filters={
+                "label": [ADDONS_ID_LABEL],
+                "name": [f"{ORCHESTRATION_PLANE}-"],
+            }
+        )
 
     def _handle_failed_container(self, container, addon_id, exit_code):
         curr_retries = self._retry_counts[addon_id].get(container.id, 0)
@@ -370,12 +374,14 @@ class AddonsMonitor:
                         {
                             "status": str(AddonStatusEnum.FAILED),
                             "status_details": {
-                                "failed_services": [service.get("service_name") for service in expected_services]
+                                "failed_services": [
+                                    service.get("service_name") for service in expected_services
+                                ]
                             },
                         },
                     )
                 except Exception as e:
-                    logging.error(f"Failed to update addon status to failed", exc_info=e)
+                    logging.error("Failed to update addon status to failed", exc_info=e)
                 continue
 
             for container in addon_containers:
@@ -420,7 +426,7 @@ class AddonsMonitor:
                 {
                     "status": status,
                     "status_details": {"failed_services": failed_containers_names},
-                    "logs": "\n----------------\n".join(failed_container_logs)
+                    "logs": "\n----------------\n".join(failed_container_logs),
                 },
             )
 

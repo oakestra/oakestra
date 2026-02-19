@@ -1,7 +1,7 @@
 import logging
+import os
 import signal
 import sys
-import os
 
 from services.monitor_service import addons_monitor
 from utils.cleanup_handler import handle_shutdown
@@ -13,20 +13,20 @@ def signal_handler(sig, frame):
 
     sys.exit(0)
 
+
 def configure_logging():
-    debug = os.environ.get('FLASK_DEBUG', 'False')
+    debug = os.environ.get("FLASK_DEBUG", "False")
 
     log_level = logging.WARNING
     if debug != "False":
         log_level = logging.DEBUG
-    
+
     logging.basicConfig(
         level=log_level,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout)
-        ]
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
     )
+
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
