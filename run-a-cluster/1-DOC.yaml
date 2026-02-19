@@ -35,16 +35,17 @@ services:
       - "50052:50052"
     depends_on:
       - mongo_root
-      - cloud_scheduler
-      - resource_abstractor
+      - root_scheduler
+      - root_resource_abstractor
       - root_service_manager
       - jwt_generator
     environment:
-      - CLOUD_MONGO_URL=mongo
-      - CLOUD_MONGO_PORT=10007
-      - CLOUD_SCHEDULER_URL=cloud_scheduler
-      - CLOUD_SCHEDULER_PORT=10004
-      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - ROOT_MONGO_URL=mongo
+      - ROOT_MONGO_PORT=10007
+      - ROOT_SCHEDULER_URL=root_scheduler
+      - ROOT_SCHEDULER_PORT=10004
+      - LOG_LEVEL=INFO
+      - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10099
@@ -102,8 +103,8 @@ services:
       - MY_PORT=10099
       - SYSTEM_MANAGER_URL=system_manager
       - SYSTEM_MANAGER_PORT=10000
-      - CLOUD_MONGO_URL=mongo_net
-      - CLOUD_MONGO_PORT=10008
+      - ROOT_MONGO_URL=mongo_net
+      - ROOT_MONGO_PORT=10008
       - JWT_GENERATOR_URL=jwt_generator
       - JWT_GENERATOR_PORT=10011
     depends_on:
@@ -112,21 +113,21 @@ services:
     logging: *default-logging
 
 
-  # Redis for the Cloud Scheduler
-  redis:
+  # Redis for the Root Scheduler
+  root_redis:
     image: redis
     pull_policy: always
-    hostname: redis
-    container_name: redis
+    hostname: root_redis
+    container_name: root_redis
     expose:
       - "6379"
-    command: redis-server --requirepass cloudRedis
+    command: redis-server --requirepass rootRedis
 
-  resource_abstractor:
-    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:latest
+  root_resource_abstractor:
+    image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
     pull_policy: always
-    container_name: resource_abstractor
-    hostname: resource_abstractor
+    container_name: root_resource_abstractor
+    hostname: root_resource_abstractor
     labels:
       logging: "promtail"
       logging_jobname: "rootlogs"
@@ -136,8 +137,8 @@ services:
       - "11011:11011"
     environment:
       - RESOURCE_ABSTRACTOR_PORT=11011
-      - CLOUD_MONGO_URL=mongo
-      - CLOUD_MONGO_PORT=10007
+      - MONGO_URL=mongo
+      - MONGO_PORT=10007
     depends_on:
       - mongo_root
     logging: *default-logging
@@ -158,29 +159,27 @@ services:
     logging: *default-logging
 
 
-  # Cloud Scheduler
-  cloud_scheduler:
+  # Root Scheduler
+  root_scheduler:
     image: ghcr.io/oakestra/oakestra/scheduler:latest
     pull_policy: always
-    container_name: cloud_scheduler
-    hostname: cloud_scheduler
+    container_name: root_scheduler
+    hostname: root_scheduler
     labels:
       logging: "promtail"
       logging_jobname: "rootlogs"
     expose:
       - "10004"
     environment:
-      - MY_PORT=10004
-      - SYSTEM_MANAGER_URL=system_manager
-      - SYSTEM_MANAGER_PORT=10000
-      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - API_PORT=10004
+      - MANAGER_URL=system_manager
+      - MANAGER_PORT=10000
+      - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
-      - REDIS_ADDR=redis://:cloudRedis@redis:6379
-      - CLOUD_MONGO_URL=mongo #adding this for consistency with version 0.4.300
-      - CLOUD_MONGO_PORT=10007 #adding this for consistency with version 0.4.300
+      - REDIS_ADDR=redis://:rootRedis@root_redis:6379
     depends_on:
-      - redis
-      - resource_abstractor
+      - root_redis
+      - root_resource_abstractor
     logging: *default-logging
 
 
@@ -280,6 +279,7 @@ services:
       logging_jobname: "clusterlogs"
     environment:
       - MY_PORT=10100
+      - LOG_LEVEL=INFO
       - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
@@ -290,6 +290,8 @@ services:
       - CLUSTER_SCHEDULER_PORT=10105
       - MQTT_BROKER_URL=mqtt
       - MQTT_BROKER_PORT=10003
+      - RESOURCE_ABSTRACTOR_URL=cluster_resource_abstractor
+      - RESOURCE_ABSTRACTOR_PORT=11012
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
     depends_on:
@@ -303,7 +305,7 @@ services:
 
   # Cluster Scheduler
   cluster_scheduler:
-    image: ghcr.io/oakestra/oakestra/cluster-scheduler:latest
+    image: ghcr.io/oakestra/oakestra/scheduler:latest
     pull_policy: always
     container_name: cluster_scheduler
     hostname: cluster_scheduler
@@ -313,14 +315,34 @@ services:
     expose:
       - "10105"
     environment:
-      - MY_PORT=10105
-      - CLUSTER_MANAGER_URL=cluster_manager
-      - CLUSTER_MANAGER_PORT=10100
-      - CLUSTER_MONGO_URL=cluster_mongo
-      - CLUSTER_MONGO_PORT=10107
+      - API_PORT=10105
+      - MANAGER_URL=cluster_manager
+      - MANAGER_PORT=10100
+      - RESOURCE_ABSTRACTOR_URL=cluster_resource_abstractor
+      - RESOURCE_ABSTRACTOR_PORT=11012
       - REDIS_ADDR=redis://:clusterRedis@cluster_redis:6479
     depends_on:
       - cluster_redis
+      - cluster_resource_abstractor
+    logging: *default-logging
+
+  cluster_resource_abstractor:
+    image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
+    pull_policy: always
+    container_name: cluster_resource_abstractor
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    hostname: cluster_resource_abstractor
+    expose:
+      - "11012"
+    ports:
+      - "11012:11012"
+    environment:
+      - RESOURCE_ABSTRACTOR_PORT=11012
+      - MONGO_URL=cluster_mongo
+      - MONGO_PORT=10107
+    depends_on:
       - mongo_cluster
     logging: *default-logging
 
@@ -390,6 +412,86 @@ services:
       - '--server.enable-runtime-reload'
     depends_on:
       - loki
+    logging: *default-logging
+
+
+  # Addons 
+  addons_manager:
+    image: ghcr.io/oakestra/oakestra/addons_manager:latest
+    container_name: addons_manager
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    environment:
+      - ADDONS_MANAGER_PORT=11101
+      - ADDONS_ENGINE_MONGO_URL=mongo
+      - ADDONS_ENGINE_MONGO_PORT=10007
+      - MARKETPLACE_ADDR=http://marketplace_manager:11102
+    ports:
+      - 11101:11101
+    depends_on:
+      - mongo_root
+      - marketplace_manager
+    logging: *default-logging
+
+  addons_monitor:
+    image: ghcr.io/oakestra/oakestra/addons_monitor:latest
+    container_name: addons_monitor
+    build: ../addons_engine/addons-monitor/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: bash -c 'sleep 10; python addons_monitor.py'
+    environment:
+      - ADDONS_MANAGER_ADDR=http://addons_manager:11101
+      - CONTAINER_POLL_INTERVAL=5
+    depends_on:
+      - addons_manager
+    logging: *default-logging
+
+  marketplace_manager:
+    image: ghcr.io/oakestra/oakestra/marketplace_manager:latest
+    container_name: marketplace_manager
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - "11102"
+    ports:
+      - "11102:11102"
+    environment:
+      - ADDON_MARKETPLACE_PORT=11102
+      - ADDON_MARKETPLACE_MONGO_URL=mongo
+      - ADDON_MARKETPLACE_MONGO_PORT=10007
+    depends_on:
+      - mongo_root
+    logging: *default-logging
+
+  addons_dashboard:
+    image: ghcr.io/oakestra/oakestra/addons_dashboard:latest
+    container_name: addons_dashboard
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DASHBOARD_PORT=11103
+      - MARKETPLACE_URL=${SYSTEM_MANAGER_URL}
+      - RESOURCE_ABSTRACTOR_URL=${SYSTEM_MANAGER_URL}
+      - ADDONS_ENGINE_URL=${SYSTEM_MANAGER_URL}
+    depends_on:
+      - marketplace_manager
+      - addons_monitor
+      - addons_manager
+    ports:
+      - 11103:11103
+    expose:
+      - "11103"
     logging: *default-logging
 
 volumes:

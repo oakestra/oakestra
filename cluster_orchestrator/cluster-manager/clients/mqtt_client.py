@@ -1,22 +1,21 @@
 import json
+import logging
 import os
 import re
 
 import paho.mqtt.client as paho_mqtt
 from oakestra_utils.types.statuses import convert_to_status
+from resource_abstractor_client import candidate_operations
 
-from clients.mongodb_client import (
-    mongo_find_node_by_id_and_update_cpu_mem,
-    mongo_update_job_deployed,
-    mongo_update_service_resources,
-)
+from clients.job_management import update_deployed_instance_job, update_deployed_instance_worker
+
+logger = logging.getLogger("cluster_manager")
 
 mqtt = None
-app = None
 
 
 def handle_connect(client, userdata, flags, rc):
-    app.logger.info("MQTT - Connected to MQTT Broker")
+    logger.info("MQTT - Connected to MQTT Broker")
     mqtt.subscribe("nodes/+/information")
     mqtt.subscribe("nodes/+/job")
     mqtt.subscribe("nodes/+/jobs/resources")
@@ -24,13 +23,13 @@ def handle_connect(client, userdata, flags, rc):
 
 def handle_logging(client, userdata, level, buf):
     if level == "MQTT_LOG_ERR":
-        app.logger.info("Error: {}".format(buf))
+        logger.info("Error: {}".format(buf))
 
 
 def handle_mqtt_message(client, userdata, message):
     data = dict(topic=message.topic, payload=message.payload.decode())
-    app.logger.info("MQTT - Received from worker: ")
-    app.logger.info(data)
+    logger.info("MQTT - Received from worker: ")
+    logger.info(data)
 
     topic = data["topic"]
 
@@ -44,18 +43,19 @@ def handle_mqtt_message(client, userdata, message):
 
     # if topic starts with nodes and ends with information
     if re_nodes_information_topic is not None:
-        updated = mongo_find_node_by_id_and_update_cpu_mem(client_id, payload)
+        payload = {k: v for k, v in payload.items() if v is not None}
+        updated = candidate_operations.update_candidate_information(client_id, payload)
         if updated is None:
             mqtt.publish(
                 "nodes/" + client_id + "/control/error",
                 json.dumps({"message": "Node not registered to the cluster"}),
             )
     if re_job_deployment_topic is not None:
-        sname = payload.get("sname")
+        job_name = payload.get("sname")
         status = convert_to_status(payload.get("status"))
         instance = payload.get("instance")
         publicip = payload.get("publicip", "--")
-        mongo_update_job_deployed(sname, instance, status, publicip, client_id)
+        update_deployed_instance_worker(job_name, instance, status.value, publicip, client_id)
     if re_job_resources_topic is not None:
         services = payload.get("services")
         for service in services:
@@ -63,11 +63,8 @@ def handle_mqtt_message(client, userdata, message):
                 # If unable to update then worker has outdated information
                 # and service must be undeployed
                 if (
-                    mongo_update_service_resources(
-                        service.get("job_name"),
-                        service,
-                        client_id,
-                        service.get("instance"),
+                    update_deployed_instance_job(
+                        service.get("job_name"), service.get("instance", 0), service, client_id
                     )
                     is None
                 ):
@@ -78,14 +75,12 @@ def handle_mqtt_message(client, userdata, message):
                         service.get("virtualization"),
                     )
             except Exception as e:
-                app.logger.error("MQTT - unable to update service resources")
-                app.logger.error(e)
+                logger.error("MQTT - unable to update service resources")
+                logger.error(e)
 
 
 def mqtt_init(flask_app):
     global mqtt
-    global app
-    app = flask_app
     mqtt = paho_mqtt.Client()
     mqtt.on_connect = handle_connect
     mqtt.on_message = handle_mqtt_message
@@ -99,10 +94,10 @@ def mqtt_init(flask_app):
                 keyfile=os.environ.get("MQTT_CERT") + "/cluster.key",
                 keyfile_password=os.environ.get("CLUSTER_KEYFILE_PASSWORD"),
             )
-            app.logger.info("MQTT - TLS configured")
+            logger.info("MQTT - TLS configured")
         except FileNotFoundError as e:
-            app.logger.error("MQTT - Unable to load certificate files")
-            app.logger.error(e)
+            logger.error("MQTT - Unable to load certificate files")
+            logger.error(e)
 
     mqtt.connect(
         os.environ.get("MQTT_BROKER_URL").strip("[]"),

@@ -1,0 +1,5 @@
+{
+  "marketplaceUrl": "${MARKETPLACE_FULL_URL}",
+  "addonsEngineUrl": "${ADDONS_ENGINE_FULL_URL}",
+  "resourceAbstractorUrl": "${RESOURCE_ABSTRACTOR_FULL_URL}"
+}

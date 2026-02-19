@@ -1,0 +1,42 @@
+<div class="key-value-container">
+  <!-- Items List -->
+  <div class="key-value-list" *ngIf="items.length > 0">
+    <div class="key-value-item" *ngFor="let item of items">
+      <span class="key-value-text">{{ item.key }} {{ separator }} {{ item.value }}</span>
+      <button 
+        type="button" 
+        class="btn-icon btn-danger" 
+        (click)="onRemove(item.key)"
+        title="Remove">
+        ×
+      </button>
+    </div>
+  </div>
+
+  <!-- Empty State -->
+  <div class="empty-state" *ngIf="items.length === 0">
+    <small>{{ emptyMessage }}</small>
+  </div>
+
+  <!-- Input Form -->
+  <div class="key-value-input">
+    <input 
+      type="text" 
+      [(ngModel)]="newKey" 
+      [placeholder]="keyPlaceholder"
+      (keypress)="onKeyPress($event)">
+    <span class="separator">{{ separator }}</span>
+    <input 
+      type="text" 
+      [(ngModel)]="newValue" 
+      [placeholder]="valuePlaceholder"
+      (keypress)="onKeyPress($event)">
+    <button 
+      type="button" 
+      class="btn btn-sm btn-primary" 
+      (click)="onAdd()"
+      [disabled]="!newKey.trim() || !newValue.trim()">
+      + {{ addLabel }}
+    </button>
+  </div>
+</div>

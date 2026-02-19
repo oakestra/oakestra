@@ -14,7 +14,7 @@ MAX_CONTAINER_RETRIES = int(os.environ.get("MAX_CONTAINER_RETRIES", 1))
 CONTAINER_POLL_INTERVAL = int(os.environ.get("CONTAINER_POLL_INTERVAL", 30))
 
 DEFAULT_PROJECT_NAME = os.environ.get("DEFAULT_PROJECT_NAME") or "root_orchestrator"
-DEFAULT_NETWORK = f"{DEFAULT_PROJECT_NAME}_default"
+DEFAULT_NETWORK = "oakestra"
 
 ADDONS_ID_LABEL = os.environ.get("ADDONS_ID_LABEL") or "oak.addon.id"
 ADDONS_SERVICE_NAME_LABEL = os.environ.get("ADDONS_SERVICE_NAME_LABEL") or "oak.service.name"
@@ -371,12 +371,23 @@ class AddonsMonitor:
             container.name for container in containers if container.id in failed_containers
         ]
 
+        failed_container_logs = []
+        logs = ""
+        for container_id in failed_containers:
+            try:
+                container = runner_engine.get_container(container_id)
+                logs = runner_engine.get_container_logs(container, tail=100)
+                failed_container_logs.append(f"Logs for container '{container.name}':\n{logs}")
+            except Exception as e:
+                logging.error(f"Failed to get logs for container '{container_id}'", exc_info=e)
+
         try:
             self.update_addon(
                 addon_id,
                 {
                     "status": status,
                     "status_details": {"failed_services": failed_containers_names},
+                    "logs": logs,
                 },
             )
 

@@ -10,7 +10,10 @@ services:
   # System Manager REST API of Root Orchestrator
   system_manager:
     image: system_manager
-    build: system-manager-python/
+    build:
+      context: system-manager-python/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     hostname: system_manager
     container_name: system_manager
     labels:
@@ -24,16 +27,17 @@ services:
       - "50052:50052"
     depends_on:
       - mongo_root
-      - cloud_scheduler
-      - resource_abstractor
+      - root_scheduler
+      - root_resource_abstractor
       - root_service_manager
       - jwt_generator
     environment:
-      - CLOUD_MONGO_URL=mongo
-      - CLOUD_MONGO_PORT=10007
-      - CLOUD_SCHEDULER_URL=cloud_scheduler
-      - CLOUD_SCHEDULER_PORT=10004
-      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - ROOT_MONGO_URL=mongo
+      - LOG_LEVEL=INFO
+      - ROOT_MONGO_PORT=10007
+      - ROOT_SCHEDULER_URL=root_scheduler
+      - ROOT_SCHEDULER_PORT=10004
+      - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
       - NET_PLUGIN_PORT=10099
@@ -51,10 +55,10 @@ services:
     expose:
       - "10007"
     volumes:
-      - 'mongodb_data:/mongodb'
+      - 'mongodb_data:/data/db'
     command: mongod --port 10007
 
-  # cluster-level mongoDB
+  # root-level network mongoDB
   mongo_rootnet:
     image: mongo:8.0
     container_name: mongo_net
@@ -62,10 +66,10 @@ services:
     ports:
       - "10008:10008"
     volumes:
-      - 'mongodb_net_data:/mongodb'
+      - 'mongodb_net_data:/data/db'
     command: mongod --port 10008
 
-  # Cluster Manager
+  # Root Manager
   root_service_manager:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
     container_name: root_service_manager
@@ -81,22 +85,22 @@ services:
       - MY_PORT=10099
       - SYSTEM_MANAGER_URL=system_manager
       - SYSTEM_MANAGER_PORT=10000
-      - CLOUD_MONGO_URL=mongo_net
-      - CLOUD_MONGO_PORT=10008
+      - ROOT_MONGO_URL=mongo_net
+      - ROOT_MONGO_PORT=10008
       - JWT_GENERATOR_URL=jwt_generator
       - JWT_GENERATOR_PORT=10011
     depends_on:
       - mongo_rootnet
       - jwt_generator
 
-  # Redis for the Cloud Scheduler
-  redis:
+  # Redis for the Root Scheduler
+  root_redis:
     image: redis
-    hostname: redis
-    container_name: redis
+    hostname: root_redis
+    container_name: root_redis
     ports:
       - "6379:6379"
-    command: redis-server --requirepass cloudRedis
+    command: redis-server --requirepass rootRedis
 
   # Observability Stack
   grafana:
@@ -147,15 +151,15 @@ services:
     environment:
       - API_ADDRESS=${SYSTEM_MANAGER_URL}:10000
 
-  # Cloud Scheduler
-  cloud_scheduler:
-    image: cloud_scheduler
+  # Root Scheduler
+  root_scheduler:
+    image: root_scheduler
     build: ../scheduler/
-    container_name: cloud_scheduler
+    container_name: root_scheduler
     labels:
       logging: "promtail"
       logging_jobname: "containerlogs"
-    hostname: cloud_scheduler
+    hostname: root_scheduler
     expose:
       - "10004"
     ports:
@@ -164,30 +168,30 @@ services:
       - API_PORT=10004
       - MANAGER_URL=system_manager
       - MANAGER_PORT=10000
-      - RESOURCE_ABSTRACTOR_URL=resource_abstractor
+      - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
-      - REDIS_ADDR=redis://:cloudRedis@redis:6379
+      - REDIS_ADDR=redis://:rootRedis@root_redis:6379
     depends_on:
-      - redis
-      - resource_abstractor
+      - root_redis
+      - root_resource_abstractor
     logging: *default-logging
 
-  resource_abstractor:
+  root_resource_abstractor:
     image: resource_abstractor
-    build: resource-abstractor/
-    container_name: resource_abstractor
+    build: ../resource-abstractor/
+    container_name: root_resource_abstractor
     labels:
       logging: "promtail"
       logging_jobname: "containerlogs"
-    hostname: resource_abstractor
+    hostname: root_resource_abstractor
     expose:
       - "11011"
     ports:
       - "11011:11011"
     environment:
       - RESOURCE_ABSTRACTOR_PORT=11011
-      - CLOUD_MONGO_URL=mongo
-      - CLOUD_MONGO_PORT=10007
+      - MONGO_URL=mongo
+      - MONGO_PORT=10007
     depends_on:
       - mongo_root
     logging: *default-logging
@@ -203,6 +207,87 @@ services:
       - "10011:10011"
     environment:
       - JWT_GENERATOR_PORT=10011
+    logging: *default-logging
+
+  # Addons 
+  addons_manager:
+    image: addons_manager
+    container_name: addons_manager
+    build: ../addons_engine/addons-manager/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    environment:
+      - ADDONS_MANAGER_PORT=11101
+      - ADDONS_ENGINE_MONGO_URL=mongo
+      - ADDONS_ENGINE_MONGO_PORT=10007
+      - MARKETPLACE_ADDR=http://marketplace_manager:11102
+    ports:
+      - 11101:11101
+    depends_on:
+      - mongo_root
+      - marketplace_manager
+    logging: *default-logging
+
+  addons_monitor:
+    image: addons_monitor
+    container_name: addons_monitor
+    build: ../addons_engine/addons-monitor/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ADDONS_MANAGER_ADDR=http://addons_manager:11101
+    depends_on:
+      - addons_manager
+    logging: *default-logging
+  
+  addons_dashboard:
+    image: addons_dashboard
+    container_name: addons_dashboard
+    build: ../addons_engine/addons-dashboard/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DASHBOARD_PORT=11103
+      - MARKETPLACE_URL=marketplace_manager
+      - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
+      - ADDONS_ENGINE_URL=addons_manager
+    depends_on:
+      - marketplace_manager
+      - addons_monitor
+      - addons_manager
+    ports:
+      - 11103:11103
+    expose:
+      - "11103"
+    logging: *default-logging
+
+  # Marketplace
+  marketplace_manager:
+    image: marketplace_manager
+    build: ../addons_marketplace/marketplace-manager/
+    container_name: marketplace_manager
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - "11102"
+    ports:
+      - "11102:11102"
+    environment:
+      - ADDON_MARKETPLACE_PORT=11102
+      - ADDON_MARKETPLACE_MONGO_URL=mongo
+      - ADDON_MARKETPLACE_MONGO_PORT=10007
+    depends_on:
+      - mongo_root
     logging: *default-logging
 
 volumes:

@@ -20,6 +20,7 @@ flask_swagger_ui
 mongomock==4.1.2
 grpcio~=1.60.0
 protobuf~=4.25.2
-git+https://github.com/oakestra/oakestra.git@develop#subdirectory=libraries/resource_abstractor_client
-git+https://github.com/oakestra/oakestra.git@develop#subdirectory=libraries/oakestra_utils_library
+git+https://github.com/oakestra/oakestra.git@${LIB_BRANCH}#subdirectory=libraries/resource_abstractor_client
+git+https://github.com/oakestra/oakestra.git@${LIB_BRANCH}#subdirectory=libraries/oakestra_utils_library
 cryptography==44.0.1
+gunicorn==22.0.0

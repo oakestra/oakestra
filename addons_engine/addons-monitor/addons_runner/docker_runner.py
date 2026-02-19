@@ -41,6 +41,12 @@ class DockerRunner:
         except Exception:
             return None
 
+    def get_container_logs(self, container, tail=100):
+        try:
+            return container.logs(tail=tail).decode("utf-8")
+        except Exception:
+            return None
+
     def stop_container(self, container):
         container.stop()
         container.remove()

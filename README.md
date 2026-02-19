@@ -58,23 +58,31 @@ Build and run your own Root Orchestrator
 
 On a Linux machine first, install Docker and Docker compose v2. 
 
-Configure the address used by the dashboard to reach your APIs by running:
+Configure the a custom address used by the dashboard to reach your APIs. By default it uses the current public IP of the machine where you run the root. 
 
-`export SYSTEM_MANAGER_URL=<Address of current machine>`
+(optional )`export SYSTEM_MANAGER_URL=<Address of current machine>`
 
 
 Then clone the repo and run:
 ```bash
-cd root_orchestrator/
-docker-compose up --build 
+export OAKESTRA_VERSION=develop
+./scripts/StartOakestraRoot.sh 
 ```
+
+> Tip: The `OAK_VERSION` variable can be set to a branch or a specific version. A branch triggers a custom build, while a specific version (E.g., v0.4.401) uses the release images for that version. Check [root-orchestrator/README.md](/root_orchestrator/README.md) for further details.
+> Tip: we provide a set of compose override files for every need. Full documentation is available [here](https://www.oakestra.io/docs/manuals/advanced-cluster-setup/#compose-overrides) and the available override files are stored in `/root-orchestrator/override-*.yaml`. To add an override export the overrides file variable `OVERRIDE_FILES`. E.g., `export OAK_OVERRIDES=override-no-dashboard.yml,override-no-network.yml`. 
 
 The following ports are exposed:
 
 - Port 80/TCP - Dashboard 
-- Port 10000/TCP - System Manager (It also needs to be accessible from the Cluster Orchestrator)
+- Port 10000/TCP - System Manager (Public port, but it also needs to be accessible from the Cluster Orchestrator)
 - Port 50052/TCP - System Manager (Needs to be exposed to the Clusters for cluster registration.)
-- Port 10099/TCP - Service Manager (This port can be exposed only to the Clusters)
+- Port 10099/TCP - Service Manager (This port should be exposed only to the Clusters)
+- Port 11103/TCP - Marketplace and addons manager (This port should be available only to the admin)
+
+#### ✅ Everything ok? 
+Check the oakestra components using: `docker ps`
+
 ### Cluster Orchestrator
 
 For each cluster, we need at least a machine running the clsuter orchestrator. 
@@ -83,25 +91,31 @@ For each cluster, we need at least a machine running the clsuter orchestrator.
 - Install Docker and Docker compose v2.
 - Export the required parameters:
 
+
+#### Optional
 ```bash
 ## Choose a unique name for your cluster
 export CLUSTER_NAME=My_Awesome_Cluster
 
-## Optional: Give a name or geo coordinates to the current location. Default location set to coordinates of your IP
-#export CLUSTER_LOCATION=My_Awesome_Apartment
+## Optional: Give a name or geo coordinates to the current location. This can either be a string or geo coordinates in the for of LATITUDE,LONGITUDE,RADIUS_IN_METER
+# E.g. CLUSTER_LOCATION=51.518776717233244,-0.12612153395857345,2000
+export CLUSTER_LOCATION=My_Awesome_Location
 
 ## IP address where this root component can be reached to access the APIs
 export SYSTEM_MANAGER_URL=<IP address>
 # Note: Use a non-loopback interface IP (e.g. any of your real interfaces that have internet access).
 # "0.0.0.0" leads to server issues
 ```
+If these variables are not set, the startup script will ask with a prompt.
 
-If you wish yo build the cluster orchestrator yourself simply clone the repo and run:
+If you wish to build the cluster orchestrator yourself simply clone the repo and run:
 ```bash
-export CLUSTER_LOCATION=My_Awesome_Apartment #If building the code this is not optional anymore
-cd cluster_orchestrator/
-docker-compose up --build 
+export OAKESTRA_VERSION=develop
+./scripts/StartOakestraCluster.sh 
 ```
+
+> Tip: The `OAK_VERSION` variable can be set to a branch or a specific version. A branch triggers a custom build, while a specific version (E.g., v0.4.401) uses the release images for that version. Check [cluster-orchestrator/README.md](/cluster_orchestrator/README.md) for further details.
+> Tip: we provide a set of compose override files for every need. Full documentation is available [here](https://www.oakestra.io/docs/manuals/advanced-cluster-setup/#compose-overrides) and the available override files are stored in `/cluster-orchestrator/override-*.yaml`. 
 
 The following ports must be exposed:
 
@@ -123,5 +137,13 @@ cd go_node_engine/build
 ./install.sh $(dpkg --print-architecture)
 ```
 
-Then configure and install the [NetManager](github.com/oakestra/oakestra-net) and perform the startup as usual. 
+Configure and install the Node Network Manager, just follow the build guide in this [README](github.com/oakestra/oakestra-net) 
+
+Finally, start the node engine with the following command:
+
+```
+sudo NodeEngine -a <IP or URL of the cluster orchestrator, default 0.0.0.0> -d
+```
+
+
 

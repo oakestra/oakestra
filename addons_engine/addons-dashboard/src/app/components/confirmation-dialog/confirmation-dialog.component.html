@@ -1,0 +1,18 @@
+<div class="confirmation-overlay" *ngIf="currentDialog" (click)="cancel()">
+  <div class="confirmation-dialog" (click)="$event.stopPropagation()">
+    <div class="confirmation-header">
+      <h3>{{ currentDialog.title }}</h3>
+    </div>
+    <div class="confirmation-body">
+      <p [innerHTML]="formatMessage(currentDialog.message)"></p>
+    </div>
+    <div class="confirmation-actions">
+      <button class="btn btn-secondary" (click)="cancel()">
+        {{ currentDialog.cancelText || 'Cancel' }}
+      </button>
+      <button class="btn btn-danger" (click)="confirm()">
+        {{ currentDialog.confirmText || 'Confirm' }}
+      </button>
+    </div>
+  </div>
+</div>

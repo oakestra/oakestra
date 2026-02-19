@@ -15,7 +15,7 @@ services:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
     pull_policy: always
 
-  redis:
+  root_redis:
     image: redis
     pull_policy: always
 
@@ -31,11 +31,27 @@ services:
     image: grafana/promtail:2.9.2
     pull_policy: always
     
-  cloud_scheduler:
-    image: ghcr.io/oakestra/oakestra/cloud-scheduler:latest
+  root_scheduler:
+    image: ghcr.io/oakestra/oakestra/scheduler:latest
     pull_policy: always
     
-  resource_abstractor:
-    image: ghcr.io/oakestra/oakestra/root-resource-abstractor:latest
+  root_resource_abstractor:
+    image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
+    pull_policy: always
+
+  addons_manager:
+    image: ghcr.io/oakestra/oakestra/addons_manager:latest
+    pull_policy: always
+
+  addons_monitor:
+    image: ghcr.io/oakestra/oakestra/addons_monitor:latest
+    pull_policy: always
+
+  marketplace_manager:
+    image: ghcr.io/oakestra/oakestra/marketplace_manager:latest
+    pull_policy: always
+
+  addons_dashboard:
+    image: ghcr.io/oakestra/oakestra/addons_dashboard:latest
     pull_policy: always
     

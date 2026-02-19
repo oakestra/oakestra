@@ -14,4 +14,6 @@ protobuf~=4.25.2
 flask-smorest==0.39.0
 flask-cors
 flask-swagger-ui
-git+https://github.com/oakestra/oakestra.git@develop#subdirectory=libraries/oakestra_utils_library
+gunicorn==22.0.0
+git+https://github.com/oakestra/oakestra.git@${LIB_BRANCH}#subdirectory=libraries/oakestra_utils_library
+git+https://github.com/oakestra/oakestra.git@${LIB_BRANCH}#subdirectory=libraries/resource_abstractor_client

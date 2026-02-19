@@ -157,7 +157,7 @@ level=INFO ts=1651254607.000176 service=system_manager file=wsgi.py file_no=639 
 
 ## Next step \#note
 - Refactor log lines of each service
-  - Currently only logging features for `cloud_scheduler`, `system_manager`, `cluster_manager`
+  - Currently only logging features for `root_scheduler`, `system_manager`, `cluster_manager`
   - Test if the defined format is suitable for each relevant information extraction
     - *e.g. Incoming/Outgoing HTTP req, internal cluster updates, deployment descriptor, etc* 
 - Where a logging module is not set up, integrate it and review all the service log lines

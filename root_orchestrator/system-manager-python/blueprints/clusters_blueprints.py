@@ -1,12 +1,16 @@
+import logging
+
 from bson import json_util
 from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from oakestra_utils.types.statuses import convert_to_status
-from resource_abstractor_client import cluster_operations
+from resource_abstractor_client import candidate_operations
 from services.instance_management import update_job_status
 from utils.network import sanitize
+
+logger = logging.getLogger("system_manager")
 
 clustersbp = Blueprint("Clusters", "cluster management", url_prefix="/api/clusters")
 clusterinfo = Blueprint("Clusterinfo", "cluster informations", url_prefix="/api/information")
@@ -29,7 +33,7 @@ cluster_info_schema = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "system_job_id": {"type": "string"},
+                    "_id": {"type": "string"},
                     "status": {"type": "string"},
                     "instance_list": {
                         "type": "array",
@@ -53,7 +57,12 @@ cluster_info_schema = {
 @clustersbp.route("/")
 class ClustersController(MethodView):
     def get(self, *args, **kwargs):
-        clusters = cluster_operations.get_resources()
+        clusters = list(
+            map(
+                map_cluster_attributes,
+                candidate_operations.get_candidates(resources="last_modified_timestamp,active"),
+            )
+        )
         if clusters is None:
             return abort(500, "Getting clusters failed")
         return json_util.dumps(clusters)
@@ -62,7 +71,14 @@ class ClustersController(MethodView):
 @clustersbp.route("/active")
 class ActiveClustersController(MethodView):
     def get(self, *args, **kwargs):
-        clusters = cluster_operations.get_resources(active=True)
+        clusters = list(
+            map(
+                map_cluster_attributes,
+                candidate_operations.get_candidates(
+                    active=True, resources="last_modified_timestamp,active"
+                ),
+            )
+        )
         if clusters is None:
             return abort(500, "Getting clusters failed")
         return json_util.dumps(clusters)
@@ -76,15 +92,26 @@ class ClusterController(MethodView):
     def post(self, *args, **kwargs):
         data = request.json
         cluster_id = kwargs["clusterid"]
-        updated_cluster = cluster_operations.update_cluster_information(cluster_id, data)
+        jobs = data.get("jobs")
+        logger.info(f"Received cluster update for {cluster_id}: {data}")
+        del data["jobs"]
+        # Prevent the IP address from being overwritten by cluster updates
+        # The IP is set during initial registration and should not change
+        if "ip" in data:
+            logger.warning(
+                "Cluster update attempted to change IP address, ignoring update to prevent corruption"
+            )
+            del data["ip"]
+        updated_cluster = candidate_operations.update_candidate_information(cluster_id, data)
         if updated_cluster is None:
+            logger.error("Could not update cluster")
             return abort(400, "Updating cluster failed")
 
-        # TODO(GB): fire an event to react to the cluster update, and move this logic somewhere else.
-        jobs = data.get("jobs")
+        # TODO(GB): fire an event to react to the cluster update
+        # and move this logic somewhere else.
         for j in jobs:
             result = update_job_status(
-                job_id=j.get("system_job_id"),
+                job_id=j.get("_id"),
                 status=convert_to_status(j.get("status")),
                 status_detail=j.get("status_detail"),
                 instances=j.get("instance_list"),
@@ -92,6 +119,19 @@ class ClusterController(MethodView):
             if result is None:
                 # cluster has outdated jobs, ask to undeploy
                 addr = sanitize(request.remote_addr)
-                cluster_request_to_delete_job_by_ip(j.get("system_job_id"), -1, addr)
+                cluster_request_to_delete_job_by_ip(j.get("_id"), -1, addr)
 
         return "ok"
+
+
+# Map candidate attributes to cluster attributes for compatibility with ext tools
+# Deprecation note: this mapping should be removed when ext tools are updated to use
+def map_cluster_attributes(x):
+    x["cluster_name"] = x.get("candidate_name", "Unknown Cluster")
+    x["cluster_location"] = x.get("candidate_location", "Unknown Location")
+
+    x["aggregated_cpu_percent"] = x.get("cpu_percent", 0)
+    x["memory_in_mb"] = x.get("memory", 0)
+    x["total_cpu_cores"] = x.get("vcpus", 0)
+    x["total_gpu_cores"] = x.get("vgpus", 0)
+    return x

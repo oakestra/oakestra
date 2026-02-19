@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,7 +14,7 @@ import (
 
 const TaskTypeScheduler = "schedule:job"
 
-var API_PORT = os.Getenv("API_PORT")
+var Port = os.Getenv("API_PORT")
 
 var RedisAddr = os.Getenv("REDIS_ADDR")
 var asynqClient *asynq.Client
@@ -38,7 +39,7 @@ func StartApiServer() {
 	router.POST("/api/calculate/deploy", calculate)
 
 	// start listening
-	if err := router.Run(":10004"); err != nil {
+	if err := router.Run(fmt.Sprintf(":%v", Port)); err != nil {
 		log.Fatal(err)
 	}
 }

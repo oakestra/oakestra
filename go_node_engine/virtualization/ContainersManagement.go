@@ -196,6 +196,8 @@ func (r *ContainerRuntime) Undeploy(service string, instance int) error {
 	c, err := r.getContainerByTaskID(genTaskID(service, instance))
 	if err == nil {
 		_ = r.removeContainer(c)
+	} else {
+		logger.ErrorLogger().Printf("Unable to undeploy service %s instance %d, error: %v", service, instance, err)
 	}
 	return err
 }
@@ -402,15 +404,14 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						logger.ErrorLogger().Printf("Unable to fetch container info: %v", err)
 						continue
 					}
+          
 					// if container created less than 10 seconds ago, then skip removal
 					if time.Since(info.CreatedAt) < 10*time.Second {
 						logger.InfoLogger().Printf("Skipping container %s, it is still starting up", container.ID())
 						continue
 					}
-					err = r.removeContainer(container)
-					if err != nil {
-						return
-					}
+          
+					_ = r.removeContainer(container)
 					continue
 				}
 
@@ -529,7 +530,10 @@ func (r *ContainerRuntime) getContainerMemoryUsage(containerID string, pid int) 
 			return sysInfo.Memory, nil
 		}
 	}
-	return float64(mem.MemUsageInBytes), nil
+	if model.GetNodeInfo().MemoryMB == 0 {
+		return 100, nil
+	}
+	return float64(mem.MemUsageInBytes) / float64(model.GetNodeInfo().MemoryMB*1024*1024), nil
 }
 
 func withCustomResolvConf(src string) func(context.Context, oci.Client, *containers.Container, *oci.Spec) error {

@@ -1,4 +1,4 @@
-# Cloud-components
+# Root-components
 
 By design, the centralized Root Orchestrator contains
 
@@ -17,13 +17,26 @@ Export the environment variables with the public ip/URL where the root orchestra
 export SYSTEM_MANAGER_URL=<IP ADDRESS OF THE NODE HOSTING THE ROOT ORCHESTRATOR>
 ```
 
-Then se the docker-compose.yml with `docker-compose -f docker-compose.yml up --build` to start the root components.
+>(optional) set the current branch for the system "libraries", otw it will default to develop.
+>```
+>export LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+>```
+
+Then set the docker-compose.yml with `docker-compose -f docker-compose.yml up --build` to start the root components.
+
+## Custom Library Dependency
+
+Per default, pip will build the python dependencies found `libraries/` (resource_abstractor_client and oakestra_utils_library) from the oakestra github
+repository, specifically from the develop branch. To override this, set the environment variable `LIB_BRANCH`.
+
+E.g. you have made changes to the resource_abstractor_client library and wish to test this locally. Push your changes to `XXX-example-library-rework` and set
+`LIB_BRANCH` to `XXX-example-library-rework`. Pip will then pull the library from your branch. Note that only pushed changes will have an impact on your local setup.
 
 ## Customize deployment
 
-It's possible to use the docker ovveride functionality to exclude or customize the root orchestrator deployment.
+It's possible to use the docker override functionality to exclude or customize the root orchestrator deployment.
 
-E.g.: Do not deploy the dahboard:
+E.g.: Do not deploy the dashboard:
 
 `docker-compose -f docker-compose.yml -f override-no-dashboard.yml up --build`
 
@@ -34,7 +47,7 @@ E.g.: Exclude network component:
 E.g.: Customize network component version
 
 - open and edit `override-custom-serivce-manager.yml` with the correct container image
-- run the orchestrator with the ovverride file: `docker-compose -f docker-compose.yml -f override-custom-service-manager.yml up --build`
+- run the orchestrator with the override file: `docker-compose -f docker-compose.yml -f override-custom-service-manager.yml up --build`
 
 E.g.: Use local development network component
 

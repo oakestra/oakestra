@@ -16,9 +16,13 @@ services:
     pull_policy: always
 
   cluster_scheduler:
-    image: ghcr.io/oakestra/oakestra/cluster-scheduler:latest
+    image: ghcr.io/oakestra/oakestra/scheduler:latest
     pull_policy: always
 
+  cluster_resource_abstractor:
+    image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
+    pull_policy: always
+    
   cluster_redis:
     image: redis
     pull_policy: always

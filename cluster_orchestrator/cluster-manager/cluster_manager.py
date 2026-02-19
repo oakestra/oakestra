@@ -1,17 +1,16 @@
 import json
+import logging
 import os
 import socket
 
 import grpc
 from apscheduler.schedulers.background import BackgroundScheduler
 from blueprints import blueprints
-from clients.mongodb_client import (
-    mongo_init,
-)
 from clients.mqtt_client import mqtt_init
 from clients.my_prometheus_client import prometheus_init_gauge_metrics
+from cm_logging import configure_logging
 from ext_requests.system_manager_requests import (
-    re_deploy_dead_services_routine,
+    re_deploy_dead_jobs_routine,
     send_aggregated_info_to_sm,
 )
 from flask import Flask
@@ -19,11 +18,9 @@ from flask_cors import CORS
 from flask_smorest import Api
 from flask_socketio import SocketIO
 from flask_swagger_ui import get_swaggerui_blueprint
-from logs.cm_logging import configure_logging
 from prometheus_client import start_http_server
 from proto.clusterRegistration_pb2 import CS1Message, CS2Message, KeyValue, SC1Message, SC2Message
 from proto.clusterRegistration_pb2_grpc import register_clusterStub
-from services.analyzing_workers import looking_for_dead_workers
 
 MY_PORT = os.environ.get("MY_PORT")
 
@@ -39,7 +36,7 @@ SYSTEM_MANAGER_ADDR = (
 GRPC_REQUEST_TIMEOUT = 120
 
 my_logger = configure_logging()
-
+logger = logging.getLogger("cluster_manager")
 app = Flask(__name__)
 
 app.config["OPENAPI_VERSION"] = "3.0.2"
@@ -47,12 +44,12 @@ app.config["API_TITLE"] = "Oakestra root api"
 app.config["API_VERSION"] = "v1"
 app.config["OPENAPI_URL_PREFIX"] = "/docs"
 app.config["JWT_ALGORITHM"] = "RS256"
+app.logger = logger
 
 socketioserver = SocketIO(app, logger=True, engineio_logger=True)
 api = Api(app, spec_kwargs={"x-internal-id": "1", "host": "oakestra.io"})
 cors = CORS(app, resources={r"/*": {"origins": "*"}})
 
-mongo_init(app)
 mqtt_init(app)
 
 BACKGROUND_JOB_INTERVAL = 15
@@ -73,7 +70,7 @@ app.register_blueprint(swaggerui_blueprint)
 
 
 def background_job_send_aggregated_information_to_sm():
-    app.logger.info("Set up Background Jobs...")
+    logger.info("Set up Background Jobs...")
     scheduler = BackgroundScheduler()
     # job_send_info
     scheduler.add_job(
@@ -85,15 +82,8 @@ def background_job_send_aggregated_information_to_sm():
             "time_interval": 2 * BACKGROUND_JOB_INTERVAL,
         },
     )
-    # job_dead_nodes
-    scheduler.add_job(
-        looking_for_dead_workers,
-        "interval",
-        seconds=BACKGROUND_JOB_INTERVAL,
-        kwargs={"interval": 2 * BACKGROUND_JOB_INTERVAL},
-    )
     # job_re_deploy_dead_jobs
-    scheduler.add_job(re_deploy_dead_services_routine, "interval", seconds=BACKGROUND_JOB_INTERVAL)
+    scheduler.add_job(re_deploy_dead_jobs_routine, "interval", seconds=BACKGROUND_JOB_INTERVAL)
 
     scheduler.start()
 
@@ -118,13 +108,13 @@ def register_with_system_manager():
             response: SC1Message = stub.handle_init_greeting(
                 message, wait_for_ready=True, timeout=GRPC_REQUEST_TIMEOUT
             )
-            app.logger.info(
+            logger.info(
                 "Received greeting message from System Manager: "
                 + str(response.hello_cluster_manager)
             )
 
         except grpc.RpcError as e:
-            app.logger.error(f"Error sending CS1 to System Manager: {e}")
+            logger.error(f"Error sending CS1 to System Manager: {e}")
 
         try:
             # Send cluster details (CS2Message)
@@ -142,33 +132,33 @@ def register_with_system_manager():
                 message, wait_for_ready=True, timeout=GRPC_REQUEST_TIMEOUT
             )
 
-            app.logger.info(f"Cluster ID received: {response.id}")
+            logger.info(f"Cluster ID received: {response.id}")
 
         except grpc.RpcError as e:
-            app.logger.error(f"Error sending CS2 to System Manager: {e}")
+            logger.error(f"Error sending CS2 to System Manager: {e}")
 
         global MY_ASSIGNED_CLUSTER_ID
         if response:
             if response.id is not None:
                 MY_ASSIGNED_CLUSTER_ID = response.id
-                app.logger.info("Received ID. Go ahead with Background Jobs")
+                logger.info("Received ID. Go ahead with Background Jobs")
                 prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID, app.logger)
                 background_job_send_aggregated_information_to_sm()
             else:
-                app.logger.error("No ID received.")
+                logger.error("No ID received.")
         else:
-            app.logger.error("No response received from System Manager.")
+            logger.error("No response received from System Manager.")
 
 
 # ........... FINISH - register to System Manager with gRPC.................#
 # ..........................................................................#
 
+start_http_server(10001)  # start prometheus server
+register_with_system_manager()  # register with system manager using gRPC
 
 if __name__ == "__main__":
-    start_http_server(10001)  # start prometheus server
     import eventlet
 
-    register_with_system_manager()  # register with system manager using gRPC
     eventlet.wsgi.server(
         eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger
     )  # see README for logging notes

@@ -6,6 +6,8 @@ from sla.versioned_sla_parser import SLAFormatError, parse_sla_json
 
 from services.instance_management import request_scale_down_instance
 
+logger = logging.getLogger("system_manager")
+
 
 def insert_job(microservice):
     logging.log(logging.INFO, "MONGODB - insert job...")
@@ -28,10 +30,10 @@ def insert_job(microservice):
     # job insertion
     new_job = job_operations.create_job(job_content)
     if new_job is None:
-        logging.error(f"job not inserted - {job_name}")
+        logger.error(f"job not inserted - {job_name}")
         return None
 
-    logging.info("job {} inserted".format(str(new_job.get("_id"))))
+    logger.info("job {} inserted".format(str(new_job.get("_id"))))
     return str(new_job.get("_id"))
 
 
@@ -91,7 +93,7 @@ def create_services_of_app(username, data, force=False):
 
 
 def delete_job(job_id):
-    logging.info("delete job...")
+    logger.info("delete job...")
     job_operations.delete_job(job_id)
 
 

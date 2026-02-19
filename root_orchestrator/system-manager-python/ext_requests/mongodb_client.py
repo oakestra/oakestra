@@ -1,9 +1,10 @@
+import logging
 import os
 
 from flask_pymongo import PyMongo
 
-MONGO_URL = os.environ.get("CLOUD_MONGO_URL", "localhost")
-MONGO_PORT = os.environ.get("CLOUD_MONGO_PORT", 10007)
+MONGO_URL = os.environ.get("ROOT_MONGO_URL", "localhost")
+MONGO_PORT = os.environ.get("ROOT_MONGO_PORT", 10007)
 
 MONGO_ADDR_USERS = f"mongodb://{MONGO_URL}:{MONGO_PORT}/users"
 
@@ -13,6 +14,8 @@ mongo_organization = None
 app = None
 
 CLUSTERS_FRESHNESS_INTERVAL = 45
+
+logger = logging.getLogger("system_manager")
 
 
 def mongo_init(flask_app):
@@ -24,5 +27,5 @@ def mongo_init(flask_app):
     mongo_users = PyMongo(app, uri=MONGO_ADDR_USERS).db["user"]
     mongo_organization = PyMongo(app, uri=MONGO_ADDR_USERS).db["organization"]
 
-    app.logger.info("MONGODB - init mongo")
-    app.logger.info(mongo_users)
+    logger.info("MONGODB - init mongo")
+    logger.info(mongo_users)
