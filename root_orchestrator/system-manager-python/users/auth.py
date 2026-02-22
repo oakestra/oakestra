@@ -3,6 +3,7 @@ import logging
 import os
 from datetime import datetime
 
+import ext_requests.user_db
 from ext_requests import organization_db, user_db
 from flask import abort, jsonify
 from mail import mail
