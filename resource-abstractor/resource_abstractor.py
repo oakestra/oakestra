@@ -8,6 +8,8 @@ from flask import Flask
 from flask_cors import CORS
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
+from flask.json import JSONEncoder
+from bson import ObjectId
 
 # Configure logging with environment variable, default to DEBUG
 log_level_str = os.environ.get("LOG_LEVEL", "DEBUG").upper()
@@ -28,7 +30,16 @@ logging.getLogger("pymongo.serverSelection").setLevel(logging.WARNING)
 
 RESOURCE_ABSTRACTOR_PORT = os.environ.get("RESOURCE_ABSTRACTOR_PORT")
 
+
+
+class MongoJSONEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        return super().default(obj)
+
 app = Flask(__name__)
+app.json_encoder = MongoJSONEncoder
 app.logger.setLevel(log_level)
 
 # Configure CORS with explicit settings
