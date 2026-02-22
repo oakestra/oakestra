@@ -105,7 +105,7 @@ def mongo_get_user_by_organization_id(organization_id):
 def mongo_delete_user(username):
     user = db.mongo_users.find_one_and_delete({"name": username})
     mongo_delete_all_role_entrys_of_user(str(user["_id"]))
-    return db.mongo_users.find()
+    return list(db.mongo_users.find())
 
 
 def mongo_update_user(user_id, user):

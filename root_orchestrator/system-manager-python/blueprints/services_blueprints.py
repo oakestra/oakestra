@@ -1,8 +1,7 @@
 import logging
 
 import sla.schema
-from bson import json_util
-from flask import request
+from flask import jsonify, request
 from flask.views import MethodView
 from flask_restful import Resource
 from flask_smorest import Blueprint, abort
@@ -47,9 +46,7 @@ class ServiceController(MethodView):
         job = service_management.get_service(serviceid, username)
 
         if job is not None:
-            # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
-            job = {**job, "_id": {"$oid": str(job["_id"])}}
-            return json_util.dumps(job)
+            return jsonify(job)
         else:
             return abort(404, "not found")
 
@@ -114,7 +111,7 @@ class ServiceControllerPost(MethodView):
                 result, status = service_management.create_services_of_app(username, data)
                 if status != 200:
                     abort(status, result)
-                return result
+                return jsonify(result)
             except Exception as e:
                 logging.log(logging.ERROR, e)
                 abort(400, {"message": "The given SLA was not formatted correctly"})
@@ -136,10 +133,7 @@ class MultipleServicesControllerUser(Resource):
         if status != 200:
             abort(status, result)
 
-        # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
-        for i in range(len(result)):
-            result[i]["_id"] = {"$oid": result[i]["_id"]}
-        return json_util.dumps(result)
+        return result
 
 
 @servicesblp.route("/")
@@ -156,7 +150,4 @@ class MultipleServicesController(Resource):
         if code != 200:
             abort(code, result)
 
-        # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
-        for i in range(len(result)):
-            result[i]["_id"] = {"$oid": result[i]["_id"]}
-        return json_util.dumps(result)
+        return result
