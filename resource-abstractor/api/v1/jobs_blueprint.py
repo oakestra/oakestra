@@ -3,7 +3,7 @@ import json
 from bson.objectid import ObjectId
 from db import jobs_db
 from db.jobs_helper import build_filter
-from flask import request
+from flask import request, jsonify
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
@@ -32,12 +32,12 @@ class AllJobsController(MethodView):
         params = request.args.get("params")
         if params:
             filter = params
-        return json.dumps(list(jobs_db.find_jobs(filter)), default=str)
+        return jsonify(list(jobs_db.find_jobs(filter)))
 
     @pre_post_hook("jobs")
     def post(self, data, *args, **kwargs):
         result = jobs_db.create_job(data)
-        return json.dumps(result, default=str)
+        return jsonify(result)
 
     def put(self, *args, **kwargs):
         job_data = request.json
@@ -55,7 +55,7 @@ class AllJobsController(MethodView):
         else:
             res = perform_create("job", jobs_db.create_job, job_data)
 
-        return json.dumps(res, default=str)
+        return jsonify(res)
 
 
 @jobsblp.route("/<job_id>")
@@ -71,21 +71,21 @@ class JobController(MethodView):
         if job is None:
             raise exceptions.NotFound()
 
-        return json.dumps(job, default=str)
+        return jsonify(job)
 
     @pre_post_hook("jobs", with_param_id="job_id")
     def patch(self, data, *args, **kwargs):
         job_id = kwargs.get("job_id")
         result = jobs_db.update_job(job_id, data)
 
-        return json.dumps(result, default=str)
+        return jsonify(result)
 
     @pre_post_hook("jobs", with_param_id="job_id")
     def delete(self, *args, **kwargs):
         job_id = kwargs.get("job_id")
         result = jobs_db.delete_job(job_id)
 
-        return json.dumps(result, default=str)
+        return jsonify(result)
 
 
 @jobsblp.route("/<job_id>/<instance_id>")
@@ -101,7 +101,7 @@ class JobInstanceController(MethodView):
         if result is None:
             raise exceptions.NotFound()
 
-        return json.dumps(result, default=str)
+        return jsonify(result)
 
     @pre_post_hook("jobs", with_param_id="job_id")
     def put(self, *args, **kwargs):
@@ -116,7 +116,7 @@ class JobInstanceController(MethodView):
         if result is None:
             raise exceptions.BadRequest("Instance already exists")
 
-        return json.dumps(result, default=str)
+        return jsonify(result)
 
     @pre_post_hook("jobs", with_param_id="job_id")
     def patch(self, data, *args, **kwargs):
@@ -130,7 +130,7 @@ class JobInstanceController(MethodView):
         if result is None:
             raise exceptions.NotFound()
 
-        return json.dumps(result, default=str)
+        return jsonify(result)
 
     @pre_post_hook("jobs", with_param_id="job_id")
     def delete(self, data=None, *args, **kwargs):
@@ -143,4 +143,4 @@ class JobInstanceController(MethodView):
         if result is None:
             raise exceptions.NotFound()
 
-        return json.dumps(result, default=str)
+        return jsonify(result)

@@ -6,10 +6,14 @@ from api.v1.apps_blueprint import applicationsblp
 from bson import ObjectId
 from flask import Flask
 
+from utils.json_encoder import MongoJSONEncoder
+
+
 
 class BlueprintTestCase(unittest.TestCase):
     def setUp(self):
         self.app = Flask(__name__)
+        self.app.json_encoder = MongoJSONEncoder
         self.app.register_blueprint(applicationsblp)
         self.client = self.app.test_client()
 

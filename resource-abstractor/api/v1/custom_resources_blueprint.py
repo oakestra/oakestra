@@ -2,7 +2,7 @@ import json
 
 import jsonschema
 from db import custom_resources_db
-from flask import request
+from flask import request, jsonify
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from marshmallow import INCLUDE, Schema, fields
@@ -48,10 +48,7 @@ class CustomResourceDefinitionController(MethodView):
         # Delete the resource definition
         custom_resources_db.delete_custom_resource_by_type(resource_type)
 
-        return json.dumps(
-            {"message": f"Resource type '{resource_type}' and all its instances deleted"},
-            default=str,
-        )
+        return jsonify({"message": f"Resource type '{resource_type}' and all its instances deleted"})
 
 
 @customblp.route("/<resource>")
@@ -76,7 +73,7 @@ class ResourcesController(MethodView):
 
         result = list(custom_resources_db.find_resources(resource_type, filter))
 
-        return json.dumps(result, default=str)
+        return jsonify(result)
 
     @customblp.arguments(Schema(unknown=INCLUDE), location="json")
     @pre_post_hook()
@@ -94,7 +91,7 @@ class ResourcesController(MethodView):
 
         result = custom_resources_db.create_resource(resource_type, data)
 
-        return json.dumps(result, default=str)
+        return jsonify(result)
 
 
 @customblp.route("/<resource>/<resource_id>")
@@ -109,7 +106,7 @@ class ResourceController(MethodView):
 
         result = custom_resources_db.find_resource_by_id(resource_type, resource_id)
 
-        return json.dumps(result, default=str)
+        return jsonify(result)
 
     @customblp.arguments(Schema(unknown=INCLUDE), location="json")
     @pre_post_hook(with_param_id="resource_id")
@@ -128,7 +125,7 @@ class ResourceController(MethodView):
 
         result = custom_resources_db.update_resource(resource_type, resource_id, data)
 
-        return json.dumps(result, default=str)
+        return jsonify(result)
 
     @pre_post_hook(with_param_id="resource_id")
     def delete(self, *args, **kwargs):
@@ -141,4 +138,4 @@ class ResourceController(MethodView):
 
         custom_resources_db.delete_resource(resource_type, resource_id)
 
-        return json.dumps({"_id": resource_id}, default=str)
+        return jsonify({"_id": resource_id})
