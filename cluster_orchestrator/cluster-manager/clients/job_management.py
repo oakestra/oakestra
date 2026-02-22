@@ -121,8 +121,7 @@ def update_status(job_id, instance_number, status, status_detail=None):
     # Update job-level status, but only set RUNNING once all instances are running
     if status != DeploymentStatus.RUNNING.value:
         job["status"] = status
-    elif all(i["status"] == DeploymentStatus.RUNNING.value
-             for i in job.get("instance_list", [])):
+    elif all(i["status"] == DeploymentStatus.RUNNING.value for i in job.get("instance_list", [])):
         job["status"] = status
 
     job_operations.update_job(job_id, job)
