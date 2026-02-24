@@ -193,6 +193,24 @@ def mongo_update_job_deployed(
     return mongo_jobs.db.jobs.find_one_and_update(
         {"job_name": job_name},
         {"$set": {"status": status, "instance_list": instance_list}},
+        returnNewDocument=False,
+    )
+
+
+def mongo_update_job_address(job_name, node_id, instance_number, host_ip, host_port):
+    global mongo_jobs
+    return mongo_jobs.db.jobs.find_one_and_update(
+        {
+            "job_name": job_name,
+            "instance_list.instance_number": int(instance_number),
+        },
+        {
+            "$set": {
+                "instance_list.$.host_ip": host_ip,
+                "instance_list.$.host_port": int(host_port),
+                "instance_list.$.worker_id": node_id,
+            }
+        },
         return_document=True,
     )
 

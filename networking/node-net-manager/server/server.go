@@ -39,23 +39,19 @@ type DeployResponse struct {
 
 func update() {
 	for {
-		select {
-		case <-time.After(IP_UPDATE_TIMER):
-			func() {
-				defaultLink := network.GetOutboundIP()
-				if model.NetConfig.NodePublicAddress != defaultLink.String() {
-					logger.InfoLogger().Printf("Updating NodePublicAddress from %s to %s", model.NetConfig.NodePublicAddress, defaultLink.String())
-					defer func() { model.NetConfig.NodePublicAddress = defaultLink.String() }()
-					// update service in the cluster
-					//for each service instance in the worker, update the public address
-					for _, si := range Env.GetTableEntriesOnNode() {
-						err := mqtt.NotifyDeploymentStatus(si.Appname, "DEPLOYED", si.Instancenumber, si.Nsip.String(), si.Nsipv6.String(), defaultLink.String(), model.NetConfig.NodePublicPort)
-						if err != nil {
-							logger.ErrorLogger().Println("[ERROR]:", err)
-						}
-					}
+		time.Sleep(IP_UPDATE_TIMER)
+		defaultLink := network.GetOutboundIP()
+		if model.NetConfig.NodePublicAddress != defaultLink.String() {
+			logger.InfoLogger().Printf("Updating NodePublicAddress from %s to %s", model.NetConfig.NodePublicAddress, defaultLink.String())
+			// update service in the cluster
+			//for each service instance in the worker, update the public address
+			for _, si := range Env.GetTableEntriesOnNode() {
+				err := mqtt.NotifyAddressChange(si.Appname, si.Instancenumber, defaultLink.String(), model.NetConfig.NodePublicPort)
+				if err != nil {
+					logger.ErrorLogger().Println("[ERROR]:", err)
 				}
-			}()
+			}
+			model.NetConfig.NodePublicAddress = defaultLink.String()
 		}
 	}
 }
