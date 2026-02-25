@@ -8,7 +8,6 @@ import (
 	"go_node_engine/requests"
 	"os"
 	"os/exec"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,6 +35,7 @@ type ContainerRuntime struct {
 	killQueue       map[string]*chan bool
 	channelLock     *sync.RWMutex
 	ctx             context.Context
+	wg              sync.WaitGroup
 }
 
 var runtime = ContainerRuntime{
@@ -60,6 +60,9 @@ const CGROUPV2_BASE_MEM = "/sys/fs/cgroup/" + NAMESPACE
 
 // Containerd config path
 const CONTAINERD_CONFIG_PATH = "/etc/containerd/config.toml"
+
+// Max container cleanup duration
+const CLEANUP_TIMEOUT = 5 * time.Second
 
 // GetContainerdRuntime returns the container runtime client
 func GetContainerdRuntime() Runtime {
@@ -107,19 +110,33 @@ func checkAdditionalRuntimePlugins() {
 // StopContainerdClient stops the container runtime client
 func (r *ContainerRuntime) Stop() {
 	r.channelLock.Lock()
-	taskIDs := reflect.ValueOf(r.killQueue).MapKeys()
+	taskIDs := make([]string, 0, len(r.killQueue))
+	for id := range r.killQueue {
+		taskIDs = append(taskIDs, id)
+	}
 	r.channelLock.Unlock()
 
 	for _, taskid := range taskIDs {
-		err := r.Undeploy(extractSnameFromTaskID(taskid.String()), extractInstanceNumberFromTaskID(taskid.String()))
+		err := r.Undeploy(extractSnameFromTaskID(taskid), extractInstanceNumberFromTaskID(taskid))
 		if err != nil {
-			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", taskid.String(), err)
+			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", taskid, err)
 		}
+	}
+	waitDone := make(chan struct{})
+	go func() {
+		r.wg.Wait()
+		close(waitDone)
+	}()
+	select {
+	case <-waitDone:
+		logger.InfoLogger().Printf("All containers stopped cleanly")
+	case <-time.After(CLEANUP_TIMEOUT):
+		logger.ErrorLogger().Printf("Timed out waiting for containers to stop, forcing cleanup")
+		r.forceContainerCleanup()
 	}
 	if err := r.containerClient.Close(); err != nil {
 		logger.ErrorLogger().Printf("Unable to close containerd client: %v", err)
 	}
-
 }
 
 // Deploy deploys a service
@@ -161,21 +178,31 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 		}
 	}
 
+	taskid := genTaskID(service.Sname, service.Instance)
 	startupChannel := make(chan bool)
 	errorChannel := make(chan error)
+	killChannel := make(chan bool, 1)
 
-	_, err = r.getContainerByTaskID(genTaskID(service.Sname, service.Instance))
-	if err == nil {
+	r.channelLock.Lock()
+	_, alreadyDeployed := r.killQueue[taskid]
+	if !alreadyDeployed {
+		r.killQueue[taskid] = &killChannel
+	}
+	r.channelLock.Unlock()
+
+	if alreadyDeployed {
 		return fmt.Errorf("task already deployed")
 	}
 
 	// create startup routine which will accompany the container through its lifetime
+	r.wg.Add(1)
 	go r.containerCreationRoutine(
 		r.ctx,
 		image,
 		service,
 		startupChannel,
 		errorChannel,
+		&killChannel,
 		statusChangeNotificationHandler,
 	)
 
@@ -189,13 +216,16 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 
 // Undeploy undeploys a service
 func (r *ContainerRuntime) Undeploy(service string, instance int) error {
-	c, err := r.getContainerByTaskID(genTaskID(service, instance))
-	if err == nil {
-		_ = r.removeContainer(c)
-	} else {
-		logger.ErrorLogger().Printf("Unable to undeploy service %s instance %d, error: %v", service, instance, err)
+	taskid := genTaskID(service, instance)
+	r.channelLock.RLock()
+	ch, found := r.killQueue[taskid]
+	r.channelLock.RUnlock()
+	if found && ch != nil {
+		*ch <- true
+		return nil
 	}
-	return err
+	logger.ErrorLogger().Printf("Unable to undeploy service %s instance %d: not found", service, instance)
+	return fmt.Errorf("service not found")
 }
 
 func (r *ContainerRuntime) containerCreationRoutine(
@@ -204,8 +234,11 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	service model.Service,
 	startup chan bool,
 	errorchan chan error,
+	killChannel *chan bool,
 	statusChangeNotificationHandler func(service model.Service),
 ) {
+
+	defer r.wg.Done()
 
 	taskid := genTaskID(service.Sname, service.Instance)
 	hostname := fmt.Sprintf("instance-%d", service.Instance)
@@ -215,7 +248,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		errorchan <- err
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
-		r.killQueue[taskid] = nil
+		delete(r.killQueue, taskid)
 	}
 
 	// Container options
@@ -334,7 +367,23 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	startup <- true
 
 	// wait for manual task kill or task finish
-	exitStatus := <-exitStatusC
+	var exitStatus containerd.ExitStatus
+	select {
+	case exitStatus = <-exitStatusC:
+		// natural exit, fall through to cleanup below
+	case <-*killChannel:
+		// kill requested
+		service.Status = model.SERVICE_DEAD
+		if model.GetNodeInfo().Overlay {
+			_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
+		}
+		r.channelLock.Lock()
+		delete(r.killQueue, taskid)
+		r.channelLock.Unlock()
+		_ = r.removeContainer(container)
+		statusChangeNotificationHandler(service)
+		return
+	}
 
 	if exitStatus.ExitCode() == 0 && service.OneShot {
 		service.Status = model.SERVICE_COMPLETED
@@ -347,6 +396,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
 	}
 
+	r.channelLock.Lock()
+	delete(r.killQueue, taskid)
+	r.channelLock.Unlock()
 	_ = r.removeContainer(container)
 	statusChangeNotificationHandler(service)
 }
