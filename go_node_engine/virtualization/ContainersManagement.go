@@ -666,16 +666,3 @@ func extractInstanceNumberFromTaskID(taskid string) int {
 func genTaskID(sname string, instancenumber int) string {
 	return fmt.Sprintf("%s.instance.%d", sname, instancenumber)
 }
-
-func (r *ContainerRuntime) getContainerByTaskID(taskid string) (containerd.Container, error) {
-	containers, err := r.containerClient.Containers(r.ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, c := range containers {
-		if c.ID() == taskid {
-			return c, err
-		}
-	}
-	return nil, fmt.Errorf("container not found")
-}
