@@ -82,6 +82,22 @@ services:
   
   cluster_promtail:
     network_mode: host
+  
+  cluster_addons_manager:
+    network_mode: host
+    environment:
+      - ADDONS_ENGINE_MONGO_URL=0.0.0.0
+  
+  cluster_addons_monitor:
+    network_mode: host
+    environment:
+      - ADDONS_MANAGER_ADDR=http://0.0.0.0:11201
+  
+  cluster_addons_dashboard:
+    network_mode: host
+    environment:
+      - RESOURCE_ABSTRACTOR_URL=0.0.0.0
+      - ADDONS_ENGINE_URL=0.0.0.0
 
 
 volumes:
