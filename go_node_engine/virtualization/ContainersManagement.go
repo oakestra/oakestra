@@ -404,13 +404,13 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						logger.ErrorLogger().Printf("Unable to fetch container info: %v", err)
 						continue
 					}
-          
+
 					// if container created less than 10 seconds ago, then skip removal
 					if time.Since(info.CreatedAt) < 10*time.Second {
 						logger.InfoLogger().Printf("Skipping container %s, it is still starting up", container.ID())
 						continue
 					}
-          
+
 					_ = r.removeContainer(container)
 					continue
 				}
