@@ -78,6 +78,27 @@
             "preLaunchTask": "prep-debug-cluster-scheduler-env",
         },
         {
+            "name": "Debug Root Manager",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/root_orchestrator/system-manager-python/system_manager.py",
+            "console": "integratedTerminal",
+            "env": {
+                "ROOT_MONGO_URL": "0.0.0.0",
+                "LOG_LEVEL": "INFO",
+                "ROOT_MONGO_PORT": "10007",
+                "ROOT_SCHEDULER_URL": "0.0.0.0",
+                "ROOT_SCHEDULER_PORT": "10004",
+                "RESOURCE_ABSTRACTOR_URL": "0.0.0.0",
+                "RESOURCE_ABSTRACTOR_PORT": "11011",
+                "NET_PLUGIN_URL": "0.0.0.0",
+                "NET_PLUGIN_PORT": "10099",
+                "JWT_GENERATOR_URL": "0.0.0.0",
+                "JWT_GENERATOR_PORT": "10011"
+            },
+            "preLaunchTask": "prep-debug-root-manager-env",
+        },
+        {
             "name": "Cleanup Dev Environment",
             "type": "debugpy",
             "request": "launch",

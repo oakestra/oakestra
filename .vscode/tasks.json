@@ -52,6 +52,12 @@
             "problemMatcher": []
         },
         {
+            "label": "remove-root-manager",
+            "type": "shell",
+            "command": "docker container rm -f system_manager",
+            "problemMatcher": []
+        },
+        {
             "label": "remove-cluster-scheduler",
             "type": "shell",
             "command": "docker container rm -f cluster_scheduler",
@@ -83,9 +89,24 @@
             "dependsOrder": "sequence",
         },
         {
+            "label": "prep-debug-root-manager-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "remove-root-manager",
+                "install-root-manager-dependencies"
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
             "label": "install-cluster-manager-dependencies",
             "type": "shell",
             "command": "LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) pip install -r ${workspaceRoot}/cluster_orchestrator/cluster-manager/requirements.txt" ,
+            "problemMatcher": []
+        },
+        {
+            "label": "install-root-manager-dependencies",
+            "type": "shell",
+            "command": "LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) pip install -r ${workspaceRoot}/root_orchestrator/system-manager-python/requirements.txt" ,
             "problemMatcher": []
         },
         {
