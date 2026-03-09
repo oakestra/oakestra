@@ -18,6 +18,7 @@ require (
 
 require (
 	dario.cat/mergo v1.0.1 // indirect
+	github.com/container-storage-interface/spec v1.12.0 // indirect
 	github.com/containerd/cgroups/v3 v3.0.5 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect

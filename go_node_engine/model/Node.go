@@ -60,11 +60,13 @@ type Node struct {
 	GpuTotMem       float64              `json:"vram"`
 	Technology      []config.RuntimeType `json:"virtualization"`
 	SupportedAddons []AddonType          `json:"supported_addons"`
-	Overlay         bool
-	OverlaySocket   string
-	LogDirectory    string
-	NetManagerPort  int
-	ClusterAddress  string
+	// CSIDrivers lists the CSI plugins that have been successfully probed on this node.
+	CSIDrivers     []config.CSIDriverType `json:"csi_drivers"`
+	Overlay        bool
+	OverlaySocket  string
+	LogDirectory   string
+	NetManagerPort int
+	ClusterAddress string
 }
 
 var once sync.Once
@@ -81,6 +83,7 @@ func GetNodeInfo() *Node {
 			Port:            getPort(),
 			Technology:      make([]config.RuntimeType, 0),
 			SupportedAddons: make([]AddonType, 0),
+			CSIDrivers:      make([]config.CSIDriverType, 0),
 			Overlay:         false,
 			OverlaySocket:   "/etc/netmanager/netmanager.sock",
 		}
@@ -313,6 +316,26 @@ func (n *Node) AddSupportedAddons(ext AddonType) {
 // GetSupportedAddonsList returns the list of supported addons
 func (n *Node) GetSupportedAddonsList() []AddonType {
 	return n.SupportedAddons
+}
+
+// AddCSIDriver registers a CSI driver as available on this node.
+func (n *Node) AddCSIDriver(driver config.CSIDriverType) {
+	n.CSIDrivers = append(n.CSIDrivers, driver)
+}
+
+// GetCSIDrivers returns the list of CSI drivers available on this node.
+func (n *Node) GetCSIDrivers() []config.CSIDriverType {
+	return n.CSIDrivers
+}
+
+// HasCSIDriver reports whether the node has a specific CSI driver registered.
+func (n *Node) HasCSIDriver(driverName string) bool {
+	for _, d := range n.CSIDrivers {
+		if d.Name == driverName {
+			return true
+		}
+	}
+	return false
 }
 
 func getGpuDriver() string {

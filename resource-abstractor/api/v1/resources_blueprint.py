@@ -34,6 +34,7 @@ class ResourceSchema(Schema):
     gpu_percent = fields.Integer()
     virtualization = fields.List(fields.String(), allow_none=True)
     supported_addons = fields.List(fields.String(), allow_none=True)
+    csi_drivers = fields.List(fields.Raw(), allow_none=True)
     architecture = fields.String()
     last_modified_timestamp = fields.Float()
 

@@ -30,6 +30,19 @@ sla_schema = {
                                     "pattern": "^[a-zA-Z0-9]{1,30}$",
                                 },
                                 "virtualization": {"type": "string"},
+                                "volumes": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "volume_id": {"type": "string"},
+                                            "csi_driver": {"type": "string"},
+                                            "mount_path": {"type": "string"},
+                                            "config": {"type": "object"},
+                                        },
+                                        "required": ["volume_id", "csi_driver"],
+                                    },
+                                },
                                 "memory": {"type": "integer"},
                                 "vcpus": {"type": "integer"},
                                 "vgpus": {"type": "integer"},

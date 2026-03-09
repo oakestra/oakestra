@@ -4,6 +4,7 @@ import (
 	"go_node_engine/addons"
 	"go_node_engine/cmd"
 	"go_node_engine/config"
+	"go_node_engine/csi"
 	"go_node_engine/jobs"
 	"go_node_engine/logger"
 	"go_node_engine/model"
@@ -43,6 +44,16 @@ func main() {
 			defer rt.Stop()
 		}
 	}
+
+	// Initialize and probe CSI plugins listed in the node configuration.
+	// Successfully probed plugins are registered and advertised to the cluster.
+	csiReg := csi.GetRegistry()
+	csiReg.InitFromConfig(configs)
+	for _, driver := range csiReg.List() {
+		model.GetNodeInfo().AddCSIDriver(driver)
+		logger.InfoLogger().Printf("CSI driver available: %s (%s)", driver.Name, driver.Endpoint)
+	}
+	defer csiReg.StopAll()
 
 	//Startup Addons
 	for _, addon := range configs.Addons {

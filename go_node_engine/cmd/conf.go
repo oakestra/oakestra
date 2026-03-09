@@ -35,6 +35,10 @@ func init() {
 	configCmd.AddCommand(setAddonCmd)
 	setAddonCmd.AddCommand(enableBuilder)
 	setAddonCmd.AddCommand(enableFlops)
+
+	configCmd.AddCommand(setCsiCmd)
+	setCsiCmd.AddCommand(addCsiDriverCmd)
+	setCsiCmd.AddCommand(removeCsiDriverCmd)
 }
 
 var (
@@ -174,6 +178,34 @@ var (
 		Short: "Disallow networking over the public IP address",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setPublicIp(false)
+		},
+	}
+
+	// --- CSI DRIVERS
+	setCsiCmd = &cobra.Command{
+		Use:   "csi",
+		Short: "Manage CSI driver registrations",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return showCsiDrivers()
+		},
+	}
+	addCsiDriverCmd = &cobra.Command{
+		Use:   "add <name> <endpoint>",
+		Short: "Register a CSI driver (adds or updates the entry by name)",
+		Long: "Register a CSI Node plugin. <name> is the driver identifier" +
+			" (e.g. csi.oakestra.io/hostpath) and <endpoint> is the UNIX" +
+			" socket path (e.g. unix:///var/lib/oakestra/csi/hostpath.sock).",
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return addCsiDriver(args[0], args[1])
+		},
+	}
+	removeCsiDriverCmd = &cobra.Command{
+		Use:   "remove <name>",
+		Short: "Unregister a CSI driver by name",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return removeCsiDriver(args[0])
 		},
 	}
 
@@ -454,4 +486,81 @@ func setMqttAuth() error {
 	}
 
 	return configManager.Write(clusterConf)
+}
+
+func showCsiDrivers() error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Registered CSI Drivers:")
+	if len(clusterConf.CSIDrivers) == 0 {
+		fmt.Println("  No CSI drivers configured.")
+		return nil
+	}
+	for _, d := range clusterConf.CSIDrivers {
+		fmt.Printf("  - %s\n      endpoint: %s\n", d.Name, d.Endpoint)
+	}
+	return nil
+}
+
+func addCsiDriver(name, endpoint string) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+
+	// Update existing entry if the name is already present.
+	for i, d := range clusterConf.CSIDrivers {
+		if d.Name == name {
+			clusterConf.CSIDrivers[i].Endpoint = endpoint
+			if err := configManager.Write(clusterConf); err != nil {
+				return err
+			}
+			fmt.Printf("CSI driver %q updated (endpoint: %s)\n", name, endpoint)
+			return nil
+		}
+	}
+
+	clusterConf.CSIDrivers = append(clusterConf.CSIDrivers, config.CSIDriverType{
+		Name:     name,
+		Endpoint: endpoint,
+	})
+	if err := configManager.Write(clusterConf); err != nil {
+		return err
+	}
+	fmt.Printf("CSI driver %q added (endpoint: %s)\n", name, endpoint)
+	return nil
+}
+
+func removeCsiDriver(name string) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+
+	filtered := clusterConf.CSIDrivers[:0]
+	found := false
+	for _, d := range clusterConf.CSIDrivers {
+		if d.Name == name {
+			found = true
+			continue
+		}
+		filtered = append(filtered, d)
+	}
+
+	if !found {
+		return fmt.Errorf("CSI driver %q not found in configuration", name)
+	}
+
+	clusterConf.CSIDrivers = filtered
+	if err := configManager.Write(clusterConf); err != nil {
+		return err
+	}
+	fmt.Printf("CSI driver %q removed\n", name)
+	return nil
 }
