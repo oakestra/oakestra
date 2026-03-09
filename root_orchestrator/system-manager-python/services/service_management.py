@@ -68,13 +68,11 @@ def create_services_of_app(username, data, force=False):
 
         # Insert job into app's services list
         # TODO(ME): what should be done if updating job or application fails?
-        service_with_id = dict(service)
-        service_with_id["microserviceID"] = last_service_id
         job_operations.update_job(last_service_id, {"microserviceID": last_service_id})
         add_service_to_app(app_id, last_service_id, username)
         try:
             # Inform network plugin about the new service
-            net_inform_service_deploy(service_with_id, str(last_service_id))
+            net_inform_service_deploy(service, str(last_service_id))
             deployed_services.append({"service_name": service["service_name"], "status": 200})
         except Exception as e:
             logger.error(f"net_inform_service_deploy failed for service '{service['service_name']}': {e}")
