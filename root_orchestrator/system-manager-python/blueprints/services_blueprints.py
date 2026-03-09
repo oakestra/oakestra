@@ -61,11 +61,11 @@ class ServiceController(MethodView):
         try:
             username = get_jwt_auth_identity()
             if service_management.delete_service(username, serviceid):
-                return {"message": "Job deleted"}
+                return jsonify({"message": "Job deleted"})
             else:
                 abort(500, "Job not deleted")
         except ConnectionError as e:
-            abort(500, e)
+            abort(500, str(e))
 
     @serviceblp.arguments(
         schema=sla.schema.sla_schema, location="json", validate=False, unknown=True
@@ -133,7 +133,7 @@ class MultipleServicesControllerUser(Resource):
         if status != 200:
             abort(status, result)
 
-        return result
+        return jsonify(result)
 
 
 @servicesblp.route("/")
@@ -150,4 +150,4 @@ class MultipleServicesController(Resource):
         if code != 200:
             abort(code, result)
 
-        return result
+        return jsonify(result)

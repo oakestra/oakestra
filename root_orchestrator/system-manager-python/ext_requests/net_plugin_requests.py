@@ -23,7 +23,10 @@ def net_inform_service_deploy(job, job_id):
     logger.debug(request_addr)
 
     logger.debug(f"Inform service deploy with id {job_id}")
-    r = requests.post(request_addr, json={"deployment_descriptor": job, "_id": job_id}, timeout=10)
+    payload = {"deployment_descriptor": job, "system_job_id": job_id}
+    logger.info(f"net_inform_service_deploy payload: {payload}")
+    r = requests.post(request_addr, json=payload, timeout=10)
+    logger.info(f"net_inform_service_deploy response: {r.status_code} {r.text}")
     r.raise_for_status()
 
 
@@ -59,7 +62,7 @@ def net_inform_instance_deploy(job_id, instance_number, cluster_id):
         json={
             "instance_number": instance_number,
             "cluster_id": cluster_id,
-            "_id": job_id,
+            "system_job_id": job_id,
         },
         timeout=10,
     )
