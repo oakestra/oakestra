@@ -73,8 +73,17 @@ services:
     network_mode: host
     environment:
       - ADDONS_ENGINE_MONGO_URL=0.0.0.0
-      - ADDONS_ENGINE_MONGO_PORT=10007
       - MARKETPLACE_ADDR=http://0.0.0.0:11102
+
+  marketplace_manager:
+    network_mode: host
+    environment:
+      - ADDON_MARKETPLACE_MONGO_URL=0.0.0.0
+
+  addons_monitor:
+    network_mode: host
+    environment:
+      - ADDONS_MANAGER_ADDR=http://0.0.0.0:11101
 
 volumes:
   mongodb_data:
