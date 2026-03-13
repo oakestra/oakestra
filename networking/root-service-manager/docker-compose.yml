@@ -27,8 +27,8 @@ services:
       - MY_PORT=10099
       - SYSTEM_MANAGER_URL=system_manager
       - SYSTEM_MANAGER_PORT=10000
-      - CLOUD_MONGO_URL=mongo_net
-      - CLOUD_MONGO_PORT=10008
+      - ROOT_MONGO_URL=mongo_net
+      - ROOT_MONGO_PORT=10008
     depends_on:
       - mongo_rootnet
 

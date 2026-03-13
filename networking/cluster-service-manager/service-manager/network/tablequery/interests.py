@@ -1,16 +1,15 @@
 from interfaces import mongodb_requests
 from interfaces import root_service_manager_requests
-from interfaces import mqtt_client
 from interfaces.mongodb_requests import mongo_remove_job
 
 
-def remove_interest(job_name,clientid):
+def remove_interest(job_name, clientid):
     """
     remove the interest for the service if no other worker node is interested
     """
     mongodb_requests.mongo_remove_interest(job_name, clientid)
     if not is_job_relevant_for_the_cluster(job_name):
-        root_service_manager_requests.cloud_remove_interest(job_name)
+        root_service_manager_requests.root_remove_interest(job_name)
         mongo_remove_job(job_name)
 
 

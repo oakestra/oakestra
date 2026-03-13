@@ -28,7 +28,7 @@ class InstanceSchema(Schema):
 
 
 class ServiceNetinfoSchema(Schema):
-    system_job_id = fields.String(allow_none=True)
+    _id = fields.String(allow_none=True)
     applicationID = fields.String(allow_none=True)
     app_ns = fields.String(allow_none=True)
     app_name = fields.String(allow_none=True)
@@ -38,6 +38,33 @@ class ServiceNetinfoSchema(Schema):
     service_ip_list = fields.Nested(ServiceIpSchema, many=True)
     instance_list = fields.Nested(InstanceSchema, many=True)
 
+class IPQueryArgsSchema(Schema):
+    v = fields.String(
+        required=False
+    )
+
+class AvailableServiceIPsSchema(Schema):
+    available_service_ips = fields.Nested(ServiceIpSchema, many=True)
+
+@netinfoblp.route("/available-ip/<x>", methods=["GET"])
+@netinfoblp.route("/available-ip/", methods=["GET"])
+@netinfoblp.arguments(IPQueryArgsSchema, location="query")
+@netinfoblp.response(200, AvailableServiceIPsSchema, content_type="application/json")
+@jwt_auth_required()
+def get_available_service_ip(query_args, x=1):
+    """
+    Get the next x available service IP addresses without reserving them. If x is not asigned, returns a single available IP. 
+    Its IP version can be specified via query parameter "v" -> "4" for IPv4, "6" for IPv6, or omit for both.
+    """
+    version_param = query_args.get("v")
+    if version_param == "4":
+        version = "v4"
+    elif version_param == "6":
+        version = "v6"
+    else:
+        version = None
+
+    return netinfo_management.get_next_x_available_service_ips(int(x),version=version)
 
 @netinfoblp.route("/<service_name>", methods=["GET"])
 @netinfoblp.response(200, ServiceNetinfoSchema, content_type="application/json")
