@@ -32,6 +32,7 @@ services:
     environment:
       - SYSTEM_MANAGER_URL=0.0.0.0
       - ROOT_MONGO_URL=0.0.0.0
+      - JWT_GENERATOR_URL=0.0.0.0
 
   # Redis for the Root Scheduler
   root_redis:
@@ -56,7 +57,7 @@ services:
   root_scheduler:
     network_mode: host
     environment:
-      - SYSTEM_MANAGER_URL=0.0.0.0
+      - MANAGER_URL=0.0.0.0
       - RESOURCE_ABSTRACTOR_URL=0.0.0.0
       - REDIS_ADDR=redis://:rootRedis@0.0.0.0:6379
 
@@ -67,6 +68,22 @@ services:
 
   jwt_generator:
     network_mode: host
+
+  addons_manager:
+    network_mode: host
+    environment:
+      - ADDONS_ENGINE_MONGO_URL=0.0.0.0
+      - MARKETPLACE_ADDR=http://0.0.0.0:11102
+
+  marketplace_manager:
+    network_mode: host
+    environment:
+      - ADDON_MARKETPLACE_MONGO_URL=0.0.0.0
+
+  addons_monitor:
+    network_mode: host
+    environment:
+      - ADDONS_MANAGER_ADDR=http://0.0.0.0:11101
 
 volumes:
   mongodb_data:
