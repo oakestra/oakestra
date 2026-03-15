@@ -9,7 +9,6 @@ from flask import Flask
 from utils.json_encoder import MongoJSONEncoder
 
 
-
 class BlueprintTestCase(unittest.TestCase):
     def setUp(self):
         self.app = Flask(__name__)

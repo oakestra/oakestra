@@ -88,13 +88,13 @@ class OrganizationController(MethodView):
             new_org = request.get_json()
             new_id = add_organization(new_org)
             new_org["_id"] = new_id
-            
+
             response_org = {
                 "_id": new_id,
                 "name": new_org.get("name"),
-                "member": new_org.get("member", [])
+                "member": new_org.get("member", []),
             }
             logger.info(f"Organization created with ID: {new_id}")
-            return response_org 
+            return response_org
         except ConnectionError as e:
             abort(404, {"message": e})

@@ -53,7 +53,6 @@ cluster_info_schema = {
 }
 
 
-
 @clustersbp.route("/")
 class ClustersController(MethodView):
     def get(self, *args, **kwargs):
@@ -63,7 +62,7 @@ class ClustersController(MethodView):
                 candidate_operations.get_candidates(resources="last_modified_timestamp,active"),
             )
         )
-        
+
         for c in clusters:
             if "_id" in c:
                 c["_id"] = str(c["_id"])
@@ -87,7 +86,6 @@ class ActiveClustersController(MethodView):
         )
         if clusters is None:
             return abort(500, "Getting clusters failed")
-        
 
         return jsonify(clusters)
 

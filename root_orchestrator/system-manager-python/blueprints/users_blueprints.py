@@ -85,7 +85,9 @@ class AllOrganizationUserController(MethodView):
     def get(self, organization_id, *args, **kwargs):
         users = user_get_all_from_Organization(organization_id)
         logger = logging.getLogger("system_manager")
-        logger.info("All users in ALLUSERCONTROLLER with organization_id %s: %s", organization_id, users)
+        logger.info(
+            "All users in ALLUSERCONTROLLER with organization_id %s: %s", organization_id, users
+        )
 
         for u in users:
             if "_id" in u:
@@ -114,10 +116,14 @@ class UserResetPasswordController(MethodView):
         expiry_date = datetime.now() + expires
         reset_token = secrets.token_urlsafe()
 
-        return jsonify(user_create_password_reset_request(username, domain, reset_token, expiry_date))
+        return jsonify(
+            user_create_password_reset_request(username, domain, reset_token, expiry_date)
+        )
 
     def put(self, *args, **kwargs):
         content = request.get_json()
         if content is None:
             return jsonify({"error": "Missing or invalid JSON body"}), 400
-        return jsonify(user_change_password_with_reset_request(content["token"], content["password"]))
+        return jsonify(
+            user_change_password_with_reset_request(content["token"], content["password"])
+        )

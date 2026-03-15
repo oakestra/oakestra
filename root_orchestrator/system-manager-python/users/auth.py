@@ -17,7 +17,11 @@ logger = logging.getLogger("system_manager")
 
 
 def user_register(content, organization_id):
-    logger.info("Registering user with name: %s in organization with id: %s", content["name"], organization_id)
+    logger.info(
+        "Registering user with name: %s in organization with id: %s",
+        content["name"],
+        organization_id,
+    )
     if len(content["name"]) > 0 and len(content["password"]) > 0:
         existing_user = user_db.mongo_get_user_by_name(content["name"])
         logger.info("Existing user: %s", existing_user)
@@ -30,7 +34,7 @@ def user_register(content, organization_id):
         if "_id" in content:
             del content["_id"]
         user = user_db.mongo_save_user(content, organization_id)
-        logger.info("User with _id %s created with _id: %s", user["_id"],  user)
+        logger.info("User with _id %s created with _id: %s", user["_id"], user)
         content["password"] = password
 
         if mail_user != "":

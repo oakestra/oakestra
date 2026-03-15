@@ -48,7 +48,9 @@ class CustomResourceDefinitionController(MethodView):
         # Delete the resource definition
         custom_resources_db.delete_custom_resource_by_type(resource_type)
 
-        return jsonify({"message": f"Resource type '{resource_type}' and all its instances deleted"})
+        return jsonify(
+            {"message": f"Resource type '{resource_type}' and all its instances deleted"}
+        )
 
 
 @customblp.route("/<resource>")

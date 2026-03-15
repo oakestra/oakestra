@@ -171,7 +171,7 @@ def upload_file():
             filename = secure_filename(file.filename)
             file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
             response = {"path": str(Path(filename).absolute())}
-            return response 
+            return response
     return """
     <!doctype html>
     <h1>Not a valid request</h1>
