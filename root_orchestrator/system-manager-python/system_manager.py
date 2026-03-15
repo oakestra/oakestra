@@ -27,11 +27,9 @@ from proto.clusterRegistration_pb2_grpc import (
 )
 from resource_abstractor_client import candidate_operations
 from sm_logging import configure_logging
+from utils.json_encoder import MongoJSONEncoder
 from utils.network import get_ip_from_grpc_transport
 from werkzeug.utils import redirect, secure_filename
-
-
-from utils.json_encoder import MongoJSONEncoder
 
 my_logger = configure_logging()
 logger = logging.getLogger("system_manager")

@@ -1,5 +1,5 @@
-from flask.json import JSONEncoder
 from bson import ObjectId
+from flask.json import JSONEncoder
 
 
 class MongoJSONEncoder(JSONEncoder):

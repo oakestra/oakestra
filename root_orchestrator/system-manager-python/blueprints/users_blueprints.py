@@ -1,8 +1,8 @@
-from asyncio.log import logger
+import logging
 import secrets
 from datetime import datetime
-import logging
-from flask import current_app, request, jsonify
+
+from flask import current_app, jsonify, request
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from roles.securityUtils import (
