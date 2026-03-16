@@ -1,8 +1,6 @@
-import json
-
 import jsonschema
 from db import custom_resources_db
-from flask import request, jsonify
+from flask import jsonify, request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from marshmallow import INCLUDE, Schema, fields

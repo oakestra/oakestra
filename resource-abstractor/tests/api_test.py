@@ -5,7 +5,6 @@ from unittest.mock import patch
 from api.v1.apps_blueprint import applicationsblp
 from bson import ObjectId
 from flask import Flask
-
 from utils.json_encoder import MongoJSONEncoder
 
 

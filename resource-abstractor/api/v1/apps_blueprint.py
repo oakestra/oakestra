@@ -1,9 +1,9 @@
 from db import jobs_db as apps_db
+from flask import jsonify
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
 from services.hook_service import pre_post_hook
-from flask import jsonify
 
 applicationsblp = Blueprint(
     "Applications operations",

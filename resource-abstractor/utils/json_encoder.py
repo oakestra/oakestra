@@ -1,5 +1,5 @@
-from flask.json import JSONEncoder
 from bson import ObjectId
+from flask.json import JSONEncoder
 
 
 # To handle ObjectId serialization in JSON responses

@@ -1,9 +1,7 @@
-import json
-
 from bson.objectid import ObjectId
 from db import jobs_db
 from db.jobs_helper import build_filter
-from flask import request, jsonify
+from flask import jsonify, request
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
