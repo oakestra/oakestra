@@ -82,7 +82,11 @@ class DockerRunner:
         service["labels"]["com.docker.compose.service"] = service["service_name"]
 
         # Prefix orchestration plane to deploy same container at root and cluster
-        container_name = f"{ORCHESTRATION_PLANE}-{service['service_name']}"
+        prefix = f"{ORCHESTRATION_PLANE}_"
+        service_name = service["service_name"]
+        container_name = (
+            service_name if service_name.startswith(prefix) else f"{prefix}{service_name}"
+        )
         one_network = service["networks"][0]
         image = service.get("image")
 

@@ -55,6 +55,10 @@ class AddonsMonitor:
     def get_exit_code(self, container):
         return container.attrs["State"]["ExitCode"]
 
+    def _get_container_name(self, service_name):
+        prefix = f"{ORCHESTRATION_PLANE}_"
+        return service_name if service_name.startswith(prefix) else f"{prefix}{service_name}"
+
     def get_addons_from_manager(self, filters={}):
         try:
             response = requests.get(f"{ADDONS_MANAGER_API}", params=filters)
@@ -156,7 +160,7 @@ class AddonsMonitor:
         services_to_run = []
 
         for service in services:
-            container_name = f"{ORCHESTRATION_PLANE}-{service.get('service_name')}"
+            container_name = self._get_container_name(service.get("service_name"))
             similar_container = runner_engine.get_container(container_name)
 
             if (
@@ -208,7 +212,7 @@ class AddonsMonitor:
 
     def stop_addon_services(self, services, runner_engine):
         for service in services:
-            container_name = f"{ORCHESTRATION_PLANE}-{service.get('service_name')}"
+            container_name = self._get_container_name(service.get("service_name"))
             container = runner_engine.get_container(container_name)
             if container:
                 runner_engine.stop_container(container)
@@ -233,7 +237,7 @@ class AddonsMonitor:
         return runner_engine.get_containers(
             filters={
                 "label": [f"{ADDONS_ID_LABEL}={addon_id}"],
-                "name": [f"{ORCHESTRATION_PLANE}-"],
+                "name": [f"{ORCHESTRATION_PLANE}_"],
             }
         )
 
@@ -242,7 +246,7 @@ class AddonsMonitor:
         return runner_engine.get_containers(
             filters={
                 "label": [ADDONS_ID_LABEL],
-                "name": [f"{ORCHESTRATION_PLANE}-"],
+                "name": [f"{ORCHESTRATION_PLANE}_"],
             }
         )
 
