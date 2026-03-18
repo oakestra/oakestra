@@ -82,7 +82,6 @@ class AllOrganizationUserController(MethodView):
     def get(self, organization_id, *args, **kwargs):
         users = user_get_all_from_Organization(organization_id)
 
-
         for u in users:
             if "_id" in u:
                 u["_id"] = str(u["_id"])
