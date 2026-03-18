@@ -63,13 +63,9 @@ class UserRegisterController(Resource):
     @jwt_required()
     @require_role(Role.ADMIN)
     def post(self, *args, **kwargs):
-        logger.info("POST /api/auth/register called")
         content = request.get_json()
-        logger.info(f"Register content: {content}")
         organization_id = get_jwt_organization()
-        logger.info(f"Organization ID: {organization_id}")
         resp, status = user_register(content, organization_id)
-        logger.info(f"user_register response: {resp}")
         return jsonify(resp), status
 
 

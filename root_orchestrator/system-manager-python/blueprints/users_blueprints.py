@@ -1,4 +1,3 @@
-import logging
 import secrets
 from datetime import datetime
 
@@ -69,8 +68,6 @@ class AllUserController(MethodView):
     @require_role(Role.ADMIN)
     def get(self, *args, **kwargs):
         users = user_get_all()
-        logger = logging.getLogger("system_manager")
-        logger.info("All users in ALLUSERCONTROLLER %s", users)
 
         for u in users:
             if "_id" in u:
@@ -84,10 +81,7 @@ class AllOrganizationUserController(MethodView):
     @require_role(Role.ADMIN)
     def get(self, organization_id, *args, **kwargs):
         users = user_get_all_from_Organization(organization_id)
-        logger = logging.getLogger("system_manager")
-        logger.info(
-            "All users in ALLUSERCONTROLLER with organization_id %s: %s", organization_id, users
-        )
+
 
         for u in users:
             if "_id" in u:
