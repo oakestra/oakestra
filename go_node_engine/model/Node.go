@@ -119,6 +119,7 @@ func GetDynamicInfo() Node {
 		GpuUsage:    node.GpuUsage,
 		GpuTotMem:   node.GpuTotMem,
 		GpuMemUsage: node.GpuMemUsage,
+		GpuCores:    node.GpuCores,
 	}
 }
 
@@ -138,7 +139,7 @@ func (n *Node) updateDynamicInfo() {
 
 	// GPU Info
 	n.GpuDriver = getGpuDriver()
-	n.GpuTotMem = getTotGpuMemFreeMB()
+	n.GpuTotMem = getTotGpuMem()
 	n.GpuMemUsage = getGpuMemUsage()
 	n.GpuUsage = getGpuUsage()
 	n.GpuCores = getGpuCores()

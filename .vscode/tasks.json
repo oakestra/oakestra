@@ -4,7 +4,7 @@
         {
             "label": "root-orchestrator-up",
             "type": "shell",
-            "command": "SYSTEM_MANAGER_URL=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml -f ${workspaceRoot}/root_orchestrator/override-network-host.yml up --build -d && sleep 1",
+            "command": "SYSTEM_MANAGER_URL=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml -f ${workspaceRoot}/root_orchestrator/override-custom-service-manager-version.yml -f ${workspaceRoot}/root_orchestrator/override-network-host.yml up --build -d && sleep 1",
             "options": {
                 "env": {
                     "COMPOSE_BAKE":"true",
@@ -19,7 +19,7 @@
         {
             "label": "cluster-orchestrator-up",
             "type": "shell",
-            "command": "SYSTEM_MANAGER_URL=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml -f ${workspaceRoot}/cluster_orchestrator/override-network-host.yml up --build -d",
+            "command": "SYSTEM_MANAGER_URL=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml -f ${workspaceRoot}/cluster_orchestrator/override-custom-service-manager-version.yml -f ${workspaceRoot}/cluster_orchestrator/override-network-host.yml up --build -d",
             "options": {
                 "env": {
                     "CLUSTER_LOCATION": "48.13023160559729,11.583724427641824,100",
