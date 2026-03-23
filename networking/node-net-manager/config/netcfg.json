@@ -5,6 +5,7 @@
   "ClusterMqttPort": "10003",
   "DefaultInterface": "",
   "Debug": false,
+  "PublicIPNetworking": false,
   "MqttCert": "",
   "MqttKey": ""
 }

@@ -137,6 +137,18 @@ func (t *TableManager) SearchByNsIP(ip net.IP) (TableEntry, bool) {
 	return TableEntry{}, false
 }
 
+func (t *TableManager) SearchByNodeIp(ip net.IP) []TableEntry {
+	result := make([]TableEntry, 0)
+	t.rwlock.RLock()
+	defer t.rwlock.RUnlock()
+	for _, tableElement := range t.translationTable {
+		if tableElement.Nodeip.Equal(ip) || tableElement.Nodeip.Equal(ip) {
+			result = append(result, tableElement)
+		}
+	}
+	return result
+}
+
 func (t *TableManager) SearchByJobName(jobname string) []TableEntry {
 	t.rwlock.Lock()
 	defer t.rwlock.Unlock()

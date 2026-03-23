@@ -26,6 +26,7 @@ def handle_mqtt_message(client, userdata, message):
 
     re_job_deployment_topic = re.search("^nodes/.*/net/service/deployed", topic)
     re_job_undeployment_topic = re.search("^nodes/.*/net/service/undeployed", topic)
+    re_job_address_topic = re.search("^nodes/.*/net/service/address-changed", topic)
     re_job_tablequery_topic = re.search("^nodes/.*/net/tablequery/request", topic)
     re_job_subnet_topic = re.search("^nodes/.*/net/subnet", topic)
     re_job_interest_remove = re.search("^nodes/.*/net/interest/remove", topic)
@@ -40,6 +41,9 @@ def handle_mqtt_message(client, userdata, message):
     if re_job_undeployment_topic is not None:
         logger.debug("JOB-UNDEPLOYMENT-UPDATE")
         _undeployment_handler(client_id, payload)
+    if re_job_address_topic is not None:
+        logger.debug("JOB-ADDRESS-UPDATE")
+        _address_handler(client_id, payload)
     if re_job_tablequery_topic is not None:
         logger.debug("JOB-TABLEQUERY-REQUEST")
         _tablequery_handler(client_id, payload)
@@ -109,6 +113,24 @@ def _deployment_handler(client_id, payload):
 def _undeployment_handler(client_id, payload):
     # TODO
     pass
+
+
+def _address_handler(client_id, payload):
+    appname = payload.get("appname")
+    instance_number = payload.get("instance_number")
+    host_ip = payload.get("host_ip")
+    host_port = payload.get("host_port")
+    try:
+        deployment_address_update(
+            appname,
+            client_id,
+            instance_number,
+            host_ip,
+            host_port,
+        )
+    except Exception as e:
+        traceback.print_exc()
+        print(e)
 
 
 def _interest_remove_handler(client_id, payload):
