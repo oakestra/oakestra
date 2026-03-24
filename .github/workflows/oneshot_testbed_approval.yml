@@ -21,7 +21,7 @@ jobs:
           uses: lewagon/wait-on-check-action@v1.3.4
           with:
               ref: develop
-              check-name: 'Trigger Testbed Oneshot Execution'
+              check-name: Trigger Testbed Oneshot Execution ${{ github.event.pull_request.head.ref }}
               repo-token: ${{ secrets.GITHUB_TOKEN }}
               wait-interval: 20
               allowed-conclusions: success

@@ -13,7 +13,7 @@ on:
 
 jobs:
   trigger-awx-job:
-    name: Trigger Testbed Oneshot Execution
+    name: Trigger Testbed Oneshot Execution ${{ github.event.workflow_run.head_branch }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -27,7 +27,7 @@ jobs:
         run: npm install
         working-directory: ./.github/actions/awx-deploy
 
-      - name: Testbed Oneshot Execution
+      - name: Testbed Oneshot Execution ${{ github.event.workflow_run.head_branch }}
         uses: ./.github/actions/awx-deploy
         with:
           AWX_URL: ${{ secrets.TOWER_HOST }}

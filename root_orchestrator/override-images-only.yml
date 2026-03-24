@@ -54,4 +54,8 @@ services:
   root_addons_dashboard:
     image: ghcr.io/oakestra/oakestra/addons_dashboard:latest
     pull_policy: always
+
+  jwt_generator:
+    image: ghcr.io/oakestra/oakestra/jwt-generator:latest
+    pull_policy: always
     
