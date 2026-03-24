@@ -67,6 +67,29 @@ services:
 
   jwt_generator:
     network_mode: host
+  
+  root_addons_manager:
+    network_mode: host
+    environment:
+      - ADDONS_ENGINE_MONGO_URL=0.0.0.0
+      - MARKETPLACE_ADDR=http://0.0.0.0:11102
+  
+  root_addons_monitor:
+    network_mode: host
+    environment:
+      - ADDONS_MANAGER_ADDR=http://0.0.0.0:11101
+  
+  root_addons_dashboard:
+    network_mode: host
+    environment:
+      - MARKETPLACE_URL=0.0.0.0
+      - RESOURCE_ABSTRACTOR_URL=0.0.0.0
+      - ADDONS_ENGINE_URL=0.0.0.0
+  
+  marketplace_manager:
+    network_mode: host
+    environment:
+      - ADDON_MARKETPLACE_MONGO_URL=0.0.0.0
 
 volumes:
   mongodb_data:

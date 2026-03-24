@@ -1,20 +1,15 @@
 services:
-  root_addons_manager:
+  cluster_addons_manager:
     deploy:
       mode: replicated
       replicas: 0
 
-  root_addons_monitor:
+  cluster_addons_monitor:
     deploy:
       mode: replicated
       replicas: 0
 
-  marketplace_manager:
-    deploy:
-      mode: replicated
-      replicas: 0
-
-  root_addons_dashboard:
+  cluster_addons_dashboard:
     deploy:
       mode: replicated
       replicas: 0
