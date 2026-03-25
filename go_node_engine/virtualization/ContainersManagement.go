@@ -479,84 +479,82 @@ func getTotalCpuUsageByPid(pid int32) (float64, error) {
 
 func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
 	//start container monitoring service
-	startContainerMonitoring.Do(func() {
-		if r.containerClient == nil {
-			return
+	if r.containerClient == nil {
+		return
+	}
+
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for range ticker.C {
+		deployedContainers, err := r.containerClient.Containers(r.ctx)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 		}
 
-		ticker := time.NewTicker(every)
-		defer ticker.Stop()
-		for range ticker.C {
-			deployedContainers, err := r.containerClient.Containers(r.ctx)
+		resourceList := make([]model.Resources, 0)
+
+		for _, container := range deployedContainers {
+			task, err := container.Task(r.ctx, nil)
 			if err != nil {
-				logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
-			}
+				logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
 
-			resourceList := make([]model.Resources, 0)
-
-			for _, container := range deployedContainers {
-				task, err := container.Task(r.ctx, nil)
+				info, err := container.Info(r.ctx)
 				if err != nil {
-					logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
-
-					info, err := container.Info(r.ctx)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container info: %v", err)
-						continue
-					}
-
-					// if container created less than 10 seconds ago, then skip removal
-					if time.Since(info.CreatedAt) < 10*time.Second {
-						logger.InfoLogger().Printf("Skipping container %s, it is still starting up", container.ID())
-						continue
-					}
-
-					_ = r.removeContainer(container)
+					logger.ErrorLogger().Printf("Unable to fetch container info: %v", err)
 					continue
 				}
 
-				cpuUsage, err := getTotalCpuUsageByPid(int32(task.Pid()))
-				if err != nil {
-					sysInfo, err := pidusage.GetStat(int(task.Pid()))
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
-						continue
-					}
-					cpuUsage = sysInfo.CPU / float64(model.GetNodeInfo().CpuCores)
-				}
-
-				memUsage, err := r.getContainerMemoryUsage(container.ID(), int(task.Pid()))
-				if err != nil {
-					logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
-					memUsage = 0
-				}
-
-				containerMetadata, err := container.Info(r.ctx)
-				if err != nil {
-					logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
+				// if container created less than 10 seconds ago, then skip removal
+				if time.Since(info.CreatedAt) < 10*time.Second {
+					logger.InfoLogger().Printf("Skipping container %s, it is still starting up", container.ID())
 					continue
 				}
 
-				currentsnapshotter := r.containerClient.SnapshotService(containerMetadata.Snapshotter)
-				usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
-				if err != nil {
-					logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
-				}
-
-				resourceList = append(resourceList, model.Resources{
-					Cpu:      fmt.Sprintf("%f", cpuUsage),
-					Memory:   fmt.Sprintf("%f", memUsage),
-					Disk:     fmt.Sprintf("%d", usage.Size),
-					Sname:    extractSnameFromTaskID(container.ID()),
-					Runtime:  string(model.CONTAINER_RUNTIME),
-					Logs:     getLogs(container.ID()),
-					Instance: extractInstanceNumberFromTaskID(container.ID()),
-				})
+				_ = r.removeContainer(container)
+				continue
 			}
-			//NOTIFY WITH THE CURRENT CONTAINERS STATUS
-			notifyHandler(resourceList)
+
+			cpuUsage, err := getTotalCpuUsageByPid(int32(task.Pid()))
+			if err != nil {
+				sysInfo, err := pidusage.GetStat(int(task.Pid()))
+				if err != nil {
+					logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
+					continue
+				}
+				cpuUsage = sysInfo.CPU / float64(model.GetNodeInfo().CpuCores)
+			}
+
+			memUsage, err := r.getContainerMemoryUsage(container.ID(), int(task.Pid()))
+			if err != nil {
+				logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
+				memUsage = 0
+			}
+
+			containerMetadata, err := container.Info(r.ctx)
+			if err != nil {
+				logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
+				continue
+			}
+
+			currentsnapshotter := r.containerClient.SnapshotService(containerMetadata.Snapshotter)
+			usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
+			if err != nil {
+				logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
+			}
+
+			resourceList = append(resourceList, model.Resources{
+				Cpu:      fmt.Sprintf("%f", cpuUsage),
+				Memory:   fmt.Sprintf("%f", memUsage),
+				Disk:     fmt.Sprintf("%d", usage.Size),
+				Sname:    extractSnameFromTaskID(container.ID()),
+				Runtime:  string(model.CONTAINER_RUNTIME),
+				Logs:     getLogs(container.ID()),
+				Instance: extractInstanceNumberFromTaskID(container.ID()),
+			})
 		}
-	})
+		//NOTIFY WITH THE CURRENT CONTAINERS STATUS
+		notifyHandler(resourceList)
+	}
 }
 
 func (r *ContainerRuntime) forceContainerCleanup() {
@@ -777,7 +775,7 @@ func selectBestGPUs(requested int) ([]int, error) {
 	// Cap requested GPUs to available GPUs
 	numGPUs := requested
 	if numGPUs > totalGPUs {
-		logger.WarningLogger().Printf("Requested %d GPUs but only %d available, using %d", requested, totalGPUs, totalGPUs)
+		logger.WarnLogger().Printf("Requested %d GPUs but only %d available, using %d", requested, totalGPUs, totalGPUs)
 		numGPUs = totalGPUs
 	}
 
@@ -787,25 +785,25 @@ func selectBestGPUs(requested int) ([]int, error) {
 		// Query free memory (memory.free) and total memory (memory.total)
 		freeMemStr, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.free")
 		if err != nil {
-			logger.WarningLogger().Printf("Failed to query free memory for GPU %d: %v", i, err)
+			logger.WarnLogger().Printf("Failed to query free memory for GPU %d: %v", i, err)
 			continue
 		}
 
 		totalMemStr, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.total")
 		if err != nil {
-			logger.WarningLogger().Printf("Failed to query total memory for GPU %d: %v", i, err)
+			logger.WarnLogger().Printf("Failed to query total memory for GPU %d: %v", i, err)
 			continue
 		}
 
 		freeMem, err := strconv.ParseInt(freeMemStr, 10, 64)
 		if err != nil {
-			logger.WarningLogger().Printf("Failed to parse free memory for GPU %d: %v", i, err)
+			logger.WarnLogger().Printf("Failed to parse free memory for GPU %d: %v", i, err)
 			continue
 		}
 
 		totalMem, err := strconv.ParseInt(totalMemStr, 10, 64)
 		if err != nil {
-			logger.WarningLogger().Printf("Failed to parse total memory for GPU %d: %v", i, err)
+			logger.WarnLogger().Printf("Failed to parse total memory for GPU %d: %v", i, err)
 			continue
 		}
 
