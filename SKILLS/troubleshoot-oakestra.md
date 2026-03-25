@@ -782,3 +782,159 @@ For bugs requiring escalation, direct the user to open an issue at:
 **https://github.com/oakestra/oakestra/issues**
 
 Include the full diagnosis report as the issue body.
+
+---
+
+## STEP 17: Troubleshoot Worker CSI Plugin
+
+This step helps diagnose issues with the Container Storage Interface (CSI) plugin on a worker node, specifically for the `hostpath` provider.
+
+### 17.1 Check CSI Plugin Registration
+
+Verify that the `hostpath` CSI plugin is registered with the NodeEngine.
+
+**Command:**
+```bash
+sudo NodeEngine config csi list
+```
+
+**Expected Output:**
+The output should list the `csi.oakestra.io/hostpath` plugin with its socket.
+```
+┌──────────────────────────┬──────────────────────────────────────────┐
+│ DRIVER                   │ SOCKET                                   │
+├──────────────────────────┼──────────────────────────────────────────┤
+│ csi.oakestra.io/hostpath │ unix:///var/lib/oakestra/csi/hostpath.sock │
+└──────────────────────────┴──────────────────────────────────────────┘
+```
+
+**What it means:**
+- **If the plugin is listed:** The NodeEngine knows about the CSI plugin.
+- **If the plugin is NOT listed:** The NodeEngine has not registered the plugin.
+    - **Fix:** Register the plugin using the command from the `csi/hostpath/README.md`:
+      ```bash
+      sudo NodeEngine config csi add csi.oakestra.io/hostpath unix:///var/lib/oakestra/csi/hostpath.sock
+      ```
+      Then restart the NodeEngine.
+
+### 17.2 Check CSI Plugin Container
+
+The CSI plugin runs as a Docker container. Check if it's running correctly.
+
+**Command:**
+```bash
+docker ps --filter "name=oakestra-hostpath-csi"
+```
+
+**Expected Output:**
+The `oakestra-hostpath-csi` container should be listed and in the `Up` status.
+
+**What it means:**
+- **If the container is `Up`:** The plugin container is running.
+- **If the container is not running or restarting:** There is a problem with the container itself.
+    - **Fix:**
+        1. Check the container logs: `docker logs oakestra-hostpath-csi`
+        2. Ensure the container was started with the correct parameters as specified in `csi/hostpath/README.md`. It needs to be `--privileged` and have the correct volume mounts.
+
+### 17.3 Check Mount Propagation
+
+The volume mounts for the CSI plugin **must** have `rshared` propagation. This is a common point of failure.
+
+**Command:**
+```bash
+docker inspect oakestra-hostpath-csi --format '{{json .HostConfig.Mounts}}' | python3 -m json.tool
+```
+
+**Expected Output:**
+Look for `"Propagation": "rshared"` on the CSI-related mounts.
+```json
+[
+    {
+        "Type": "bind",
+        "Source": "/var/lib/oakestra/csi",
+        "Target": "/var/lib/oakestra/csi",
+        "BindOptions": {
+            "Propagation": "rshared"
+        }
+    },
+    {
+        "Type": "bind",
+        "Source": "/mnt/oakestra/hostpath",
+        "Target": "/mnt/oakestra/hostpath",
+        "BindOptions": {
+            "Propagation": "rshared"
+        }
+    }
+]
+```
+
+**What it means:**
+- **If `rshared` is present:** Mount propagation is likely correct.
+- **If `rshared` is missing or different:** Mounts created by the CSI plugin will not be visible to other containers.
+    - **Fix:** Stop and remove the `oakestra-hostpath-csi` container and restart it, ensuring the volume mounts have the `:rshared` flag (e.g., `-v /var/lib/oakestra/csi:/var/lib/oakestra/csi:rshared`).
+
+### 17.4 Check for CSI Socket File
+
+The NodeEngine communicates with the CSI plugin over a Unix socket. Check if the socket file exists.
+
+**Command:**
+```bash
+sudo ls -l /var/lib/oakestra/csi/hostpath.sock
+```
+
+**Expected Output:**
+A socket file should be present.
+```
+srw-rw-rw- 1 root root 0 Mar 25 10:00 /var/lib/oakestra/csi/hostpath.sock
+```
+
+**What it means:**
+- **If the socket exists:** The CSI plugin container has created the socket.
+- **If the socket does NOT exist:**
+    - The CSI plugin container may not be running or may have failed to start. Check its logs (`docker logs oakestra-hostpath-csi`).
+    - The volume mount `/var/lib/oakestra/csi` might be incorrect.
+
+### 17.5 Check NodeEngine Logs for CSI Errors
+
+Inspect the NodeEngine logs for any errors related to CSI.
+
+**Command:**
+```bash
+sudo NodeEngine logs | grep -i "csi"
+```
+
+**Look for errors like:**
+- `connection error`
+- `plugin not found`
+- `failed to probe`
+- `NodePublishVolume failed`
+
+**What it means:**
+These logs can point to connectivity issues with the socket, permission problems, or failures during the volume mounting process.
+
+### 17.6 Check CSI Plugin Logs
+
+Inspect the logs from the CSI plugin container itself.
+
+**Command:**
+```bash
+docker logs oakestra-hostpath-csi
+```
+
+**Look for errors like:**
+- `permission denied` when trying to mount.
+- `path not found` for the source host path.
+- Errors from the gRPC server.
+
+**What it means:**
+These are low-level logs from the plugin. `permission denied` often means the container is not running with `--privileged`. `path not found` means the host directory you want to mount is not available inside the CSI plugin container.
+
+### 17.7 Summary of Common CSI Issues and Fixes
+
+| Symptom | Likely Cause | Fix |
+|---|---|---|
+| Volume is empty inside application container. | Mount propagation is not `rshared`. | Re-create CSI container with `:rshared` on volume mounts. |
+| `NodeEngine` logs show "plugin not found" or "failed to probe". | CSI container not running, or socket path mismatch. | Start the CSI container. Verify socket path in `NodeEngine` config matches the `-endpoint` of the CSI container. |
+| CSI container logs show "permission denied". | Container is not privileged. | Re-create CSI container with the `--privileged` flag. |
+| CSI container logs show "path not found". | The source host path is not mounted into the CSI container. | Add another `-v /path/on/host:/path/on/host` mount to the CSI container's `docker run` command. |
+| Application deployment fails with "volume not available". | CSI plugin is not registered or not running. | Follow steps 17.1 and 17.2. |
