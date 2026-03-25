@@ -1,10 +1,10 @@
 services:
-  addons_manager:
+  root_addons_manager:
     deploy:
       mode: replicated
       replicas: 0
 
-  addons_monitor:
+  root_addons_monitor:
     deploy:
       mode: replicated
       replicas: 0
@@ -14,7 +14,7 @@ services:
       mode: replicated
       replicas: 0
 
-  addons_dashboard:
+  root_addons_dashboard:
     deploy:
       mode: replicated
       replicas: 0

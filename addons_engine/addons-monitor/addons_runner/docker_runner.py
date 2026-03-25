@@ -1,6 +1,9 @@
 import logging
+import os
 
 import docker
+
+ORCHESTRATION_PLANE = os.environ.get("ORCHESTRATION_PLANE") or "root"
 
 # from addons_runner.generic_runner import IRunner
 
@@ -33,7 +36,7 @@ class DockerRunner:
         return container.labels.get(key)
 
     def get_containers(self, filters={}):
-        return self._client.containers.list(filters=filters, all=all)
+        return self._client.containers.list(filters=filters, all=True)
 
     def get_container(self, container_name):
         try:
@@ -78,12 +81,18 @@ class DockerRunner:
         service["labels"]["com.docker.compose.project"] = project_name
         service["labels"]["com.docker.compose.service"] = service["service_name"]
 
+        # Prefix orchestration plane to deploy same container at root and cluster
+        prefix = f"{ORCHESTRATION_PLANE}_"
+        service_name = service["service_name"]
+        container_name = (
+            service_name if service_name.startswith(prefix) else f"{prefix}{service_name}"
+        )
         one_network = service["networks"][0]
         image = service.get("image")
 
         created_container = self._client.containers.run(
             image,
-            name=service["service_name"],
+            name=container_name,
             command=service.get("command", []),
             network=one_network,
             ports=service.get("ports", {}),

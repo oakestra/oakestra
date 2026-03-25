@@ -67,6 +67,7 @@ func PerformSchedulingRequest[T interfaces.ResourceList](job T, algorithm interf
 		return err
 	}
 
+	logger.InfoLogger().Printf("Scheduled job %s to candidate %s", job.GetId(), placementCandidate.GetId())
 	err = manager.Deploy(job.GetId(), placementCandidate.GetId(), true)
 
 	return err

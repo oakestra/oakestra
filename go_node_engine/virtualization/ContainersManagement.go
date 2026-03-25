@@ -8,14 +8,18 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/model/gpu"
 	"go_node_engine/requests"
+	virtrt "go_node_engine/virtualization/internal/runtime"
+	"iter"
+	"maps"
 	"os"
 	"os/exec"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	containerdcfg "github.com/containerd/containerd/v2/cmd/containerd/server/config"
 
 	"github.com/containerd/containerd"
 	runcoptions "github.com/containerd/containerd/api/types/runc/options"
@@ -26,35 +30,40 @@ import (
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/containerd/plugin"
 	docker_remote "github.com/containerd/containerd/remotes/docker"
-	containerdcfg "github.com/containerd/containerd/v2/cmd/containerd/server/config"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/shirou/gopsutil/docker"
 	"github.com/shirou/gopsutil/process"
 	"github.com/struCoder/pidusage"
 )
 
+func init() {
+	virtrt.Register(string(model.CONTAINER_RUNTIME), newContainerdRuntime)
+	plugins := findAdditionalRuntimePlugins()
+	if plugins != nil {
+		for additionalName := range findAdditionalRuntimePlugins() {
+			virtrt.Register(additionalName, newContainerdRuntime)
+		}
+	}
+}
+
 // ContainerRuntime is the struct that describes the container runtime
 type ContainerRuntime struct {
 	containerClient *containerd.Client
 	killQueue       map[string]*chan bool
-	channelLock     *sync.RWMutex
+	// Lock specific for the container runtime interactions.
+	// Only one interaction at a time as we have no guarantee the runtime will handle more.
+	channelLock *sync.RWMutex
 	// mountedVolumes tracks CSI-mounted volumes per task (keyed by taskID).
 	// Protected by channelLock.
 	mountedVolumes map[string][]csi.MountedVolume
 	ctx            context.Context
+	wg             sync.WaitGroup
 }
 
 var runtime = ContainerRuntime{
-	// Lock specific for the container runtime interactions.
-	// Only one interaction at a time as we have no guarantee the runtime will handle more.
 	channelLock:    &sync.RWMutex{},
 	mountedVolumes: make(map[string][]csi.MountedVolume),
 }
-
-var containerdSingletonCLient sync.Once
-var startContainerMonitoring sync.Once
-
-var containerdConfig containerdcfg.Config
 
 // NAMESPACE is the namespace of the runtime
 const NAMESPACE = "oakestra"
@@ -68,34 +77,36 @@ const CGROUPV2_BASE_MEM = "/sys/fs/cgroup/" + NAMESPACE
 // Containerd config path
 const CONTAINERD_CONFIG_PATH = "/etc/containerd/config.toml"
 
+// Max container cleanup duration
+const CLEANUP_TIMEOUT = 5 * time.Second
+
 // GetContainerdRuntime returns the container runtime client
-func GetContainerdRuntime() Runtime {
-	containerdSingletonCLient.Do(func() {
-		client, err := containerd.New("/run/containerd/containerd.sock")
-		if err != nil {
-			logger.ErrorLogger().Fatalf("Unable to start the container engine: %v\n", err)
-		}
-		runtime.containerClient = client
-		runtime.killQueue = make(map[string]*chan bool)
-		runtime.mountedVolumes = make(map[string][]csi.MountedVolume)
-		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
-		runtime.forceContainerCleanup()
-		// register default runtime name
-		model.GetNodeInfo().AddSupportedTechnology(model.CONTAINER_RUNTIME)
+func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
+	client, err := containerd.New("/run/containerd/containerd.sock")
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to start the container engine: %v\n", err)
+		return &ContainerRuntime{}
+	}
 
-		//fetch containerd runtime configuration
-		checkAdditionalRuntimePlugins()
+	runtime := ContainerRuntime{
+		channelLock: &sync.RWMutex{},
+	}
+	runtime.containerClient = client
+	runtime.killQueue = make(map[string]*chan bool)
+	runtime.mountedVolumes = make(map[string][]csi.MountedVolume)
+	runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
+	runtime.forceContainerCleanup()
 
-	})
 	return &runtime
 }
 
 // checks the containerd config file for additional runtimes and registers them
-func checkAdditionalRuntimePlugins() {
+func findAdditionalRuntimePlugins() iter.Seq[string] {
+	var containerdConfig containerdcfg.Config
 	err := containerdcfg.LoadConfig(context.Background(), CONTAINERD_CONFIG_PATH, &containerdConfig)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to load containerd config file: %v", err)
-		return
+		return nil
 	}
 	for _, ctd := range containerdConfig.Plugins {
 		ctd, ok := ctd.(map[string]interface{})["containerd"].(map[string]interface{})
@@ -104,30 +115,44 @@ func checkAdditionalRuntimePlugins() {
 			if ok {
 				for runtimeName := range runtimes {
 					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", runtimeName, CONTAINERD_CONFIG_PATH)
-					model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(runtimeName))
-					registerRuntimeLink(runtimeName, GetContainerdRuntime)
 				}
+				return maps.Keys(runtimes)
 			}
 		}
 	}
+	return nil
 }
 
 // StopContainerdClient stops the container runtime client
 func (r *ContainerRuntime) Stop() {
 	r.channelLock.Lock()
-	taskIDs := reflect.ValueOf(r.killQueue).MapKeys()
+	taskIDs := make([]string, 0, len(r.killQueue))
+	for id := range r.killQueue {
+		taskIDs = append(taskIDs, id)
+	}
 	r.channelLock.Unlock()
 
 	for _, taskid := range taskIDs {
-		err := r.Undeploy(extractSnameFromTaskID(taskid.String()), extractInstanceNumberFromTaskID(taskid.String()))
+		err := r.Undeploy(extractSnameFromTaskID(taskid), extractInstanceNumberFromTaskID(taskid))
 		if err != nil {
-			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", taskid.String(), err)
+			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", taskid, err)
 		}
+	}
+	waitDone := make(chan struct{})
+	go func() {
+		r.wg.Wait()
+		close(waitDone)
+	}()
+	select {
+	case <-waitDone:
+		logger.InfoLogger().Printf("All containers stopped cleanly")
+	case <-time.After(CLEANUP_TIMEOUT):
+		logger.ErrorLogger().Printf("Timed out waiting for containers to stop, forcing cleanup")
+		r.forceContainerCleanup()
 	}
 	if err := r.containerClient.Close(); err != nil {
 		logger.ErrorLogger().Printf("Unable to close containerd client: %v", err)
 	}
-
 }
 
 // Deploy deploys a service
@@ -169,21 +194,31 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 		}
 	}
 
+	taskid := genTaskID(service.Sname, service.Instance)
 	startupChannel := make(chan bool)
 	errorChannel := make(chan error)
+	killChannel := make(chan bool, 1)
 
-	_, err = r.getContainerByTaskID(genTaskID(service.Sname, service.Instance))
-	if err == nil {
+	r.channelLock.Lock()
+	_, alreadyDeployed := r.killQueue[taskid]
+	if !alreadyDeployed {
+		r.killQueue[taskid] = &killChannel
+	}
+	r.channelLock.Unlock()
+
+	if alreadyDeployed {
 		return fmt.Errorf("task already deployed")
 	}
 
 	// create startup routine which will accompany the container through its lifetime
+	r.wg.Add(1)
 	go r.containerCreationRoutine(
 		r.ctx,
 		image,
 		service,
 		startupChannel,
 		errorChannel,
+		&killChannel,
 		statusChangeNotificationHandler,
 	)
 
@@ -197,13 +232,16 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 
 // Undeploy undeploys a service
 func (r *ContainerRuntime) Undeploy(service string, instance int) error {
-	c, err := r.getContainerByTaskID(genTaskID(service, instance))
-	if err == nil {
-		_ = r.removeContainer(c)
-	} else {
-		logger.ErrorLogger().Printf("Unable to undeploy service %s instance %d, error: %v", service, instance, err)
+	taskid := genTaskID(service, instance)
+	r.channelLock.RLock()
+	ch, found := r.killQueue[taskid]
+	r.channelLock.RUnlock()
+	if found && ch != nil {
+		*ch <- true
+		return nil
 	}
-	return err
+	logger.ErrorLogger().Printf("Unable to undeploy service %s instance %d: not found", service, instance)
+	return fmt.Errorf("service not found")
 }
 
 func (r *ContainerRuntime) containerCreationRoutine(
@@ -212,8 +250,11 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	service model.Service,
 	startup chan bool,
 	errorchan chan error,
+	killChannel *chan bool,
 	statusChangeNotificationHandler func(service model.Service),
 ) {
+
+	defer r.wg.Done()
 
 	taskid := genTaskID(service.Sname, service.Instance)
 	hostname := fmt.Sprintf("instance-%d", service.Instance)
@@ -223,7 +264,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		errorchan <- err
 		r.channelLock.Lock()
 		defer r.channelLock.Unlock()
-		r.killQueue[taskid] = nil
+		delete(r.killQueue, taskid)
 	}
 
 	// Container options
@@ -367,7 +408,23 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	startup <- true
 
 	// wait for manual task kill or task finish
-	exitStatus := <-exitStatusC
+	var exitStatus containerd.ExitStatus
+	select {
+	case exitStatus = <-exitStatusC:
+		// natural exit, fall through to cleanup below
+	case <-*killChannel:
+		// kill requested
+		service.Status = model.SERVICE_DEAD
+		if model.GetNodeInfo().Overlay {
+			_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
+		}
+		r.channelLock.Lock()
+		delete(r.killQueue, taskid)
+		r.channelLock.Unlock()
+		_ = r.removeContainer(container)
+		statusChangeNotificationHandler(service)
+		return
+	}
 
 	if exitStatus.ExitCode() == 0 && service.OneShot {
 		service.Status = model.SERVICE_COMPLETED
@@ -380,6 +437,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
 	}
 
+	r.channelLock.Lock()
+	delete(r.killQueue, taskid)
+	r.channelLock.Unlock()
 	_ = r.removeContainer(container)
 
 	// CSI teardown: unpublish + unstage volumes after the container has been removed.
@@ -420,6 +480,10 @@ func getTotalCpuUsageByPid(pid int32) (float64, error) {
 func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
 	//start container monitoring service
 	startContainerMonitoring.Do(func() {
+		if r.containerClient == nil {
+			return
+		}
+
 		ticker := time.NewTicker(every)
 		defer ticker.Stop()
 		for range ticker.C {
@@ -440,15 +504,14 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 						logger.ErrorLogger().Printf("Unable to fetch container info: %v", err)
 						continue
 					}
+
 					// if container created less than 10 seconds ago, then skip removal
 					if time.Since(info.CreatedAt) < 10*time.Second {
 						logger.InfoLogger().Printf("Skipping container %s, it is still starting up", container.ID())
 						continue
 					}
-					err = r.removeContainer(container)
-					if err != nil {
-						return
-					}
+
+					_ = r.removeContainer(container)
 					continue
 				}
 
@@ -508,7 +571,7 @@ func (r *ContainerRuntime) forceContainerCleanup() {
 
 func (r *ContainerRuntime) removeContainer(container containerd.Container) error {
 	if container == nil {
-		logger.WarningLogger().Printf("Container is nil, nothing to remove")
+		logger.WarnLogger().Printf("Container is nil, nothing to remove")
 		return nil
 	}
 
@@ -533,11 +596,11 @@ func (r *ContainerRuntime) removeContainer(container containerd.Container) error
 		if currentsnapshotter != nil {
 			err = currentsnapshotter.Remove(r.ctx, containerMetadata.SnapshotKey)
 			if err != nil {
-				logger.WarningLogger().Printf("Unable to remove snapshotter %s: %v", containerMetadata.Snapshotter, err)
+				logger.WarnLogger().Printf("Unable to remove snapshotter %s: %v", containerMetadata.Snapshotter, err)
 			}
 			err = currentsnapshotter.Close()
 			if err != nil {
-				logger.WarningLogger().Printf("Unable to close snapshotter %s: %v", containerMetadata.Snapshotter, err)
+				logger.WarnLogger().Printf("Unable to close snapshotter %s: %v", containerMetadata.Snapshotter, err)
 			}
 		}
 	}

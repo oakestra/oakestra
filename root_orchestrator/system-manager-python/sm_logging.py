@@ -8,7 +8,6 @@ def configure_logging():
     # Get log level from environment variable, default to DEBUG
     log_level_str = os.environ.get("LOG_LEVEL", "DEBUG").upper()
     log_level = getattr(logging, log_level_str, logging.DEBUG)
-
     format_str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     formatter = logging.Formatter(format_str)
     my_filename = "sm.log"

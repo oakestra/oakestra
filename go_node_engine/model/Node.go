@@ -22,15 +22,16 @@ import (
 
 type RuntimeType = config.RuntimeType
 
-// AddonType is the type of addon that the node supports
-var (
+const (
 	CONTAINER_RUNTIME config.RuntimeType = config.CONTAINER_RUNTIME
 	UNIKERNEL_RUNTIME config.RuntimeType = config.UNIKERNEL_RUNTIME
+	CROSVM_RUNTIME    config.RuntimeType = config.CROSVM_RUNTIME
 )
 
 const SlowUpdateFactor = 60 // For updating certain Node parameters at a lower frequency
 var SlowUpdateCounter = 0
 
+// AddonType is the type of addon that the node supports
 type AddonType string
 
 const (
@@ -40,9 +41,10 @@ const (
 
 // Node is the struct that describes the node
 type Node struct {
-	Id              string               `json:"id"`
-	Host            string               `json:"host"`
-	Ip              string               `json:"ip"`
+	Id   string `json:"id"`
+	Host string `json:"host"`
+	Ip   string `json:"ip"`
+	// semicolon separated list, check network-manager for specific syntax
 	Port            string               `json:"port"`
 	SystemInfo      map[string]string    `json:"system_info"`
 	CpuUsage        float64              `json:"cpu_percent"`

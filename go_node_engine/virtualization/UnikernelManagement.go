@@ -8,6 +8,8 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
+	"go_node_engine/virtualization/internal/networkutils"
+	virtrt "go_node_engine/virtualization/internal/runtime"
 	"io"
 	"io/fs"
 	"net"
@@ -16,17 +18,17 @@ import (
 	"os/exec"
 	"reflect"
 	rt "runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/digitalocean/go-qemu/qmp"
 	"github.com/struCoder/pidusage"
-	"github.com/vishvananda/netlink"
-	"github.com/vishvananda/netns"
-	"golang.org/x/sys/unix"
 )
+
+func init() {
+	virtrt.Register(string(model.UNIKERNEL_RUNTIME), newUnikernelQemuRuntime)
+}
 
 type qemuDomain struct {
 	Name        string
@@ -43,44 +45,40 @@ type UnikernelRuntime struct {
 	channelLock *sync.RWMutex
 }
 
-var ukruntime = UnikernelRuntime{
-	channelLock: &sync.RWMutex{},
-}
+func newUnikernelQemuRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
+	var command string
+	var err error
 
-var ukSyncOnce sync.Once
+	//Check which version of qemu is required for kvm support (local arch)
+	if rt.GOARCH == "amd64" {
+		command = "qemu-system-x86_64"
+	} else {
+		command = "qemu-system-aarch64"
+	}
 
-func GetUnikernelQemuRuntime() Runtime {
-	ukSyncOnce.Do(func() {
-		var command string
-		var err error
+	ukruntime := UnikernelRuntime{
+		channelLock: &sync.RWMutex{},
+	}
 
-		//Check which version of qemu is required for kvm support (local arch)
-		if rt.GOARCH == "amd64" {
-			command = "qemu-system-x86_64"
-		} else {
-			command = "qemu-system-aarch64"
-		}
+	path, err := exec.LookPath(command)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to find qemu executable(%s): %v\n", command, err)
+		ukruntime.qemuPath = ""
+	}
+	ukruntime.qemuPath = path
+	logger.InfoLogger().Printf("Using qemu at %s\n", path)
+	ukruntime.killQueue = make(map[string]*chan bool)
+	ukruntime.qemuDomains = make(map[string]*qemuDomain)
+	err = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to create kernel directory: %v", err)
+	}
 
-		path, err := exec.LookPath(command)
-		if err != nil {
-			logger.ErrorLogger().Fatalf("Unable to find qemu executable(%s): %v\n", command, err)
-			ukruntime.qemuPath = ""
-		}
-		ukruntime.qemuPath = path
-		logger.InfoLogger().Printf("Using qemu at %s\n", path)
-		ukruntime.killQueue = make(map[string]*chan bool)
-		ukruntime.qemuDomains = make(map[string]*qemuDomain)
-		err = os.MkdirAll("/tmp/node_engine/kernel/tmp/", 0755)
-		if err != nil {
-			logger.ErrorLogger().Printf("Unable to create kernel directory: %v", err)
-		}
+	err = os.MkdirAll("/tmp/node_engine/inst/", 0755)
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to create instance directory: %v", err)
+	}
 
-		err = os.MkdirAll("/tmp/node_engine/inst/", 0755)
-		if err != nil {
-			logger.ErrorLogger().Printf("Unable to create instance directory: %v", err)
-		}
-		model.GetNodeInfo().AddSupportedTechnology(model.UNIKERNEL_RUNTIME)
-	})
 	return &ukruntime
 }
 
@@ -160,7 +158,7 @@ type QemuStopResult struct {
 	}
 }
 
-var path = "/tmp/node_engine/kernel/"
+var kernel_path = "/tmp/node_engine/kernel/"
 var inst_path = "/tmp/node_engine/inst/"
 
 /*
@@ -171,8 +169,8 @@ Return:
 func GetKernelImage(kernel string, name string, sname string) *string {
 
 	//filename := strings.ReplaceAll(kernel, "/", "_")
-	kernel_tar := path + sname + ".tar.gz"
-	kernel_location := path + sname + "/"
+	kernel_tar := kernel_path + sname + ".tar.gz"
+	kernel_location := kernel_path + sname + "/"
 	instance_path := inst_path + name
 	kernel_local := kernel_location + "kernel"
 
@@ -401,7 +399,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 		revert(fmt.Errorf("Unable to create kernel path"), hostname)
 		return
 	}
-	qemuConfig.Kernel = path + service.Sname + "/kernel"
+	qemuConfig.Kernel = kernel_path + service.Sname + "/kernel"
 
 	qemuConfig.Instancepath = *kernelPath
 
@@ -641,7 +639,7 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 	if model.GetNodeInfo().Overlay {
 
 		//Get the default route for the namespace
-		ip, gw, mask, mac, fd, err := deleteDefaultIpGwMask(*q.NSname)
+		ip, gw, mask, mac, err := networkutils.DeleteDefaultIpGwMask(*q.NSname)
 		if err != nil {
 			logger.InfoLogger().Printf("Unable to get default route for namespace %s: %v", *q.NSname, err)
 			return "", []string{}, err
@@ -650,7 +648,7 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 		//Network
 		if model.GetNodeInfo().Overlay {
 			//Network backend fixed at tap0 and virbr0 created inside the namespace "tap,id=n0,fd=" + strconv.Itoa(devFd),
-			args = append(args, "-netdev", "tap,id=tap0,vhost=on,fd="+strconv.Itoa(fd))
+			args = append(args, "-netdev", "tap,id=tap0,vhost=on")
 			//Network device
 			args = append(args, "-device", "virtio-net-pci,id=nic1,addr=0x0a,netdev=tap0,mac="+mac)
 		}
@@ -708,105 +706,4 @@ func (q *QemuConfiguration) GenerateArgs(r *UnikernelRuntime) (string, []string,
 	}
 
 	return command, args, nil
-}
-
-// delete and returns the defaultIp Gateway and Netmask of a given namespace
-func deleteDefaultIpGwMask(namespace string) (string, string, string, string, int, error) {
-	defaultRouteFilter := &netlink.Route{Dst: nil}
-	ip, gw, mask, mac := "", "", "", ""
-	fd := -1
-
-	err := execInsideNsByName(namespace, func() error {
-
-		routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, defaultRouteFilter, netlink.RT_FILTER_DST)
-		if err != nil {
-			return err
-		}
-		if n := len(routes); n > 1 {
-			return err
-		}
-		if len(routes) == 0 {
-			return err
-		}
-		route := &routes[0]
-
-		routeIdx := route.LinkIndex
-		routelink, err := netlink.LinkByIndex(routeIdx)
-		if err != nil {
-			return err
-		}
-
-		macvtap, err := netlink.LinkByName("tap0")
-		if err != nil {
-			return err
-		}
-
-		addrs, err := netlink.AddrList(routelink, netlink.FAMILY_V4)
-		if err != nil {
-			return err
-		}
-		if len(addrs) == 0 {
-			return errors.New("No IP address found")
-		}
-
-		fd, err = getTapFd()
-		if err != nil {
-			return err
-		}
-
-		ip = addrs[0].IP.String()
-		gw = route.Gw.String()
-		mac = macvtap.Attrs().HardwareAddr.String()
-		mask = net.IP(addrs[0].Mask).String()
-
-		if err = netlink.AddrDel(routelink, &addrs[0]); err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	return ip, gw, mask, mac, fd, err
-}
-
-// defaultRoute returns the default route for the current namespace.
-func getTapFd() (int, error) {
-	var fd int
-
-	tapdev, err := netlink.LinkByName("tap0")
-	if err != nil {
-		return -1, err
-	}
-	fd, err = unix.Open("/dev/tap"+strconv.Itoa(tapdev.Attrs().Index), unix.O_RDWR, 0)
-	if err != nil {
-		return -1, err
-	}
-
-	return fd, nil
-}
-
-// Execute function inside a namespace based on Ns name
-func execInsideNsByName(Nsname string, function func() error) error {
-	var containerNs netns.NsHandle
-
-	rt.LockOSThread()
-	defer rt.UnlockOSThread()
-
-	stdNetns, err := netns.Get()
-	if err == nil {
-		defer func() {
-			_ = stdNetns.Close()
-		}()
-		containerNs, err = netns.GetFromName(Nsname)
-		if err == nil {
-			defer func() {
-				_ = netns.Set(stdNetns)
-			}()
-			err = netns.Set(containerNs)
-			if err == nil {
-				err = function()
-			}
-		}
-	}
-	return err
 }
