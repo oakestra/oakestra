@@ -98,13 +98,13 @@
         {
             "label": "install-cluster-manager-dependencies",
             "type": "shell",
-            "command": "LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) pip install -r ${workspaceRoot}/cluster_orchestrator/cluster-manager/requirements.txt" ,
+            "command": "LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) ${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/cluster_orchestrator/cluster-manager/requirements.txt && ${command:python.interpreterPath} -m pip install ${workspaceRoot}/libraries/oakestra_utils_library ${workspaceRoot}/libraries/resource_abstractor_client" ,
             "problemMatcher": []
         },
         {
             "label": "install-root-manager-dependencies",
             "type": "shell",
-            "command": "LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) pip install -r ${workspaceRoot}/root_orchestrator/system-manager-python/requirements.txt" ,
+            "command": "LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) ${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/root_orchestrator/system-manager-python/requirements.txt && ${command:python.interpreterPath} -m pip install ${workspaceRoot}/libraries/oakestra_utils_library ${workspaceRoot}/libraries/resource_abstractor_client" ,
             "problemMatcher": []
         },
         {
