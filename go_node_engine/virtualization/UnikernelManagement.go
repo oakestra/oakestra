@@ -103,8 +103,8 @@ func (r *UnikernelRuntime) Stop() {
 func (r *UnikernelRuntime) Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error {
 
 	killChannel := make(chan bool, 1)
-	startupChannel := make(chan bool, 0)
-	errorChannel := make(chan error, 0)
+	startupChannel := make(chan bool)
+	errorChannel := make(chan error)
 
 	r.channelLock.RLock()
 	el, servicefound := r.killQueue[genTaskID(service.Sname, service.Instance)]
@@ -114,12 +114,12 @@ func (r *UnikernelRuntime) Deploy(service model.Service, statusChangeNotificatio
 		r.killQueue[genTaskID(service.Sname, service.Instance)] = &killChannel
 		r.channelLock.Unlock()
 	} else {
-		return errors.New("Service already deployed")
+		return errors.New("service already deployed")
 	}
 	logger.InfoLogger().Println("Start Unikernel creation")
 	go r.VirtualMachineCreationRoutine(service, &killChannel, startupChannel, errorChannel, statusChangeNotificationHandler)
 
-	if <-startupChannel != true {
+	if !<-startupChannel {
 		return <-errorChannel
 	}
 
@@ -138,7 +138,7 @@ func (r *UnikernelRuntime) Undeploy(service string, instance int) error {
 		*r.killQueue[hostname] <- true
 		select {
 		case res := <-*r.killQueue[hostname]:
-			if res == false {
+			if !res {
 				logger.ErrorLogger().Printf("Unable to stop VM %s", hostname)
 			}
 		case <-time.After(5 * time.Second):
@@ -149,7 +149,7 @@ func (r *UnikernelRuntime) Undeploy(service string, instance int) error {
 		return nil
 	}
 
-	return errors.New("Service not found")
+	return errors.New("service not found")
 }
 
 type QemuStopResult struct {
@@ -250,7 +250,7 @@ func GetKernelImage(kernel string, name string, sname string) *string {
 		}
 		tardata := tar.NewReader(exdata)
 
-		for true {
+		for {
 			header, err := tardata.Next()
 
 			if err != nil {
@@ -369,7 +369,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	qemuConfig.Name = hostname
 	qemuConfig.NSname = &hostname
 
-	var kernelImage string = ""
+	var kernelImage = ""
 
 	revert := func(err error, instance string) {
 		startup <- false
@@ -396,7 +396,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	kernelPath := GetKernelImage(kernelImage, hostname, service.Sname)
 	if kernelPath == nil {
 		logger.InfoLogger().Println("Failed to get Kernel image")
-		revert(fmt.Errorf("Unable to create kernel path"), hostname)
+		revert(fmt.Errorf("unable to create kernel path"), hostname)
 		return
 	}
 	qemuConfig.Kernel = kernel_path + service.Sname + "/kernel"
@@ -572,32 +572,29 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 
 func (r *UnikernelRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
 
-	for true {
-		select {
-		case <-time.After(every):
-			resourceList := make([]model.Resources, 0)
-			for _, domain := range r.qemuDomains {
-				//Get CPU and memory stats based on pid
-				sysInfo, err := pidusage.GetStat(domain.qemuProcess.Pid)
-				if err != nil {
-					logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
-					continue
-				}
-				resourceList = append(resourceList, model.Resources{
-					Cpu:      fmt.Sprintf("%f", sysInfo.CPU),
-					Memory:   fmt.Sprintf("%f", sysInfo.Memory),
-					Disk:     fmt.Sprintf("%d", 0),
-					Sname:    domain.Sname,
-					Logs:     getLogs(domain.Name),
-					Runtime:  string(model.UNIKERNEL_RUNTIME),
-					Instance: domain.Instance,
-				})
-
+	for {
+		<-time.After(every)
+		resourceList := make([]model.Resources, 0)
+		for _, domain := range r.qemuDomains {
+			//Get CPU and memory stats based on pid
+			sysInfo, err := pidusage.GetStat(domain.qemuProcess.Pid)
+			if err != nil {
+				logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
+				continue
 			}
-			notifyHandler(resourceList)
-		}
-	}
+			resourceList = append(resourceList, model.Resources{
+				Cpu:      fmt.Sprintf("%f", sysInfo.CPU),
+				Memory:   fmt.Sprintf("%f", sysInfo.Memory),
+				Disk:     fmt.Sprintf("%d", 0),
+				Sname:    domain.Sname,
+				Logs:     getLogs(domain.Name),
+				Runtime:  string(model.UNIKERNEL_RUNTIME),
+				Instance: domain.Instance,
+			})
 
+		}
+		notifyHandler(resourceList)
+	}
 }
 
 type QemuConfiguration struct {

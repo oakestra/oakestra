@@ -33,6 +33,7 @@ type ConfFile struct {
 	KeyFile         string           `json:"mqtt_key_file"`
 	Addons          []Addon          `json:"addons"`
 	Virtualizations []Virtualization `json:"virtualizations"`
+	CSIDrivers      []CSIDriverType  `json:"csi_drivers"`
 }
 
 type Addon struct {
@@ -46,6 +47,16 @@ type Virtualization struct {
 	Runtime string   `json:"virutalizaiton_runtime"`
 	Active  bool     `json:"virutalizaiton_active"`
 	Config  []string `json:"virutalizaiton_config"`
+}
+
+// CSIDriverType describes a locally available CSI plugin endpoint.
+// The Endpoint must point to the plugin's UNIX domain socket, typically
+// provided via the CSI_ENDPOINT environment variable or a per-plugin config.
+type CSIDriverType struct {
+	// Name is the CSI driver name returned by GetPluginInfo (e.g. "nfs.csi.k8s.io")
+	Name string `json:"csi_driver_name"`
+	// Endpoint is the UNIX domain socket path for this CSI plugin (e.g. "/var/lib/kubelet/plugins/nfs.csi.k8s.io/csi.sock")
+	Endpoint string `json:"csi_driver_endpoint"`
 }
 
 type ConfFileManager interface {

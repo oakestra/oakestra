@@ -51,7 +51,7 @@ func attachOutputToExitError(err error, stdoutBuf *tailbuf.TailBuffer, stderrBuf
 	extendedErrBuilder := strings.Builder{}
 
 	if stdoutBuf != nil {
-		extendedErrBuilder.WriteString(fmt.Sprintf("\nstdout tail (max %d bytes):", stdoutBuf.Capacity()))
+		fmt.Fprintf(&extendedErrBuilder, "\nstdout tail (max %d bytes):", stdoutBuf.Capacity())
 
 		stdoutBuilder := strings.Builder{}
 		_, _ = stdoutBuf.WriteToSkippingUntil(&stdoutBuilder, tailbuf.IsValidUTF8Start)
@@ -65,7 +65,7 @@ func attachOutputToExitError(err error, stdoutBuf *tailbuf.TailBuffer, stderrBuf
 	}
 
 	if stderrBuf != nil {
-		extendedErrBuilder.WriteString(fmt.Sprintf("\nstderr tail (max %d bytes):", stderrBuf.Capacity()))
+		fmt.Fprintf(&extendedErrBuilder, "\nstderr tail (max %d bytes):", stderrBuf.Capacity())
 
 		stderrBuilder := strings.Builder{}
 		_, _ = stderrBuf.WriteToSkippingUntil(&stderrBuilder, tailbuf.IsValidUTF8Start)

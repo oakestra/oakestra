@@ -140,7 +140,7 @@ def update_job_instance(job_id, instance_number, job_data):
                 "instance_list.$.disk": job_data.get("disk"),
                 "instance_list.$.status": job_data.get("status"),
                 "instance_list.$.status_detail": job_data.get(
-                    "status_detail", "No extra information"
+                    "status_detail", job_data.get("status_detail", "No extra information")
                 ),
                 "instance_list.$.logs": job_data.get("logs", ""),
                 "instance_list.$.worker_id": job_data.get("worker_id"),

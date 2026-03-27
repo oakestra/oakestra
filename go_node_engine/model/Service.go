@@ -1,27 +1,38 @@
 package model
 
+// VolumeRequest describes a CSI volume that must be mounted for this service.
+type VolumeRequest struct {
+	// VolumeID is a unique user-defined identifier for the volume claim
+	VolumeID string `json:"volume_id"`
+	// CSIDriver is the CSI driver name (must match an available CSIDriverType on the node)
+	CSIDriver string `json:"csi_driver"`
+	// MountPath is the absolute path inside the container where the volume will be bind-mounted
+	MountPath string `json:"mount_path"`
+	// Config holds driver-specific parameters that are forwarded verbatim to the CSI plugin
+	Config map[string]string `json:"config"`
+}
+
 // Service is the struct that describes the service
 type Service struct {
-	JobID        string   `json:"_id"`
-	Sname        string   `json:"job_name"`
-	Instance     int      `json:"instance_number"`
-	Image        string   `json:"image"`
-	Commands     []string `json:"cmd"`
-	Env          []string `json:"environment"`
-	Ports        string   `json:"port"`
-	Status       string   `json:"status"`
-	Runtime      string   `json:"virtualization"`
-	Platform     string   `json:"platform"`
-	StatusDetail string   `json:"status_detail"`
-	Vtpus        int      `json:"vtpus"`
-	Vgpus        int      `json:"vgpus"`
-	Vcpus        int      `json:"vcpus"`
-	// Memory is the amount of memory allocated to each instance in MiB
-	Memory int `json:"memory"`
-	// Storage is the disk size of the instances in MiB
-	Storage         int      `json:"storage"`
-	UnikernelImages []string `json:"vm_images"`
-	Architectures   []string `json:"arch"`
+	JobID           string          `json:"_id"`
+	Sname           string          `json:"job_name"`
+	Instance        int             `json:"instance_number"`
+	Image           string          `json:"image"`
+	Commands        []string        `json:"cmd"`
+	Env             []string        `json:"environment"`
+	Ports           string          `json:"port"`
+	Status          string          `json:"status"`
+	Runtime         string          `json:"virtualization"`
+	Platform        string          `json:"platform"`
+	StatusDetail    string          `json:"status_detail"`
+	Vtpus           int             `json:"vtpus"`
+	Vgpus           int             `json:"vgpus"`
+	Vcpus           int             `json:"vcpus"`
+	Memory          int             `json:"memory"`
+	UnikernelImages []string        `json:"vm_images"`
+	Architectures   []string        `json:"arch"`
+	Volumes         []VolumeRequest `json:"volumes"`
+	Storage         int             `json:"storage"`
 	Pid             int
 	OneShot         bool `json:"one_shot"`
 	Privileged      bool `json:"privileged"`

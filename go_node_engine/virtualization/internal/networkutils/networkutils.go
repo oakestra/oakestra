@@ -57,7 +57,7 @@ func DeleteDefaultIpGwMask(namespace string) (string, string, string, string, er
 			return err
 		}
 		if len(addrs) == 0 {
-			return errors.New("No IP address found")
+			return errors.New("no IP address found")
 		}
 
 		ip = addrs[0].IP.String()
