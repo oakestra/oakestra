@@ -60,11 +60,6 @@ type ContainerRuntime struct {
 	wg             sync.WaitGroup
 }
 
-var runtime = ContainerRuntime{
-	channelLock:    &sync.RWMutex{},
-	mountedVolumes: make(map[string][]csi.MountedVolume),
-}
-
 // NAMESPACE is the namespace of the runtime
 const NAMESPACE = "oakestra"
 
@@ -96,6 +91,7 @@ func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
 	runtime.mountedVolumes = make(map[string][]csi.MountedVolume)
 	runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
 	runtime.forceContainerCleanup()
+	runtime.mountedVolumes = make(map[string][]csi.MountedVolume)
 
 	return &runtime
 }
@@ -739,6 +735,8 @@ func genTaskID(sname string, instancenumber int) string {
 	return fmt.Sprintf("%s.instance.%d", sname, instancenumber)
 }
 
+// getContainerByTaskID returns the containerd.Container associated with the given task ID (which is in the format sname.instance.instanceNumber).
+/*
 func (r *ContainerRuntime) getContainerByTaskID(taskid string) (containerd.Container, error) {
 	containers, err := r.containerClient.Containers(r.ctx)
 	if err != nil {
@@ -751,6 +749,7 @@ func (r *ContainerRuntime) getContainerByTaskID(taskid string) (containerd.Conta
 	}
 	return nil, fmt.Errorf("container not found")
 }
+*/
 
 // gpuInfo holds GPU device information for sorting
 type gpuInfo struct {

@@ -313,10 +313,7 @@ func showVirtualization() error {
 }
 
 func setUnikernel(trigger string) error {
-	active := false
-	if trigger == "on" || trigger == "enable" || trigger == "true" {
-		active = true
-	}
+	active := trigger == "on" || trigger == "enable" || trigger == "true"
 
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
@@ -382,10 +379,7 @@ func setBuilder(trigger string) error {
 		logger.ErrorLogger().Fatalf("Unable to find qemu-user-static apt package for multi-platform image-builder: %v\n", err)
 	}
 
-	active := false
-	if trigger == "on" || trigger == "enable" || trigger == "true" {
-		active = true
-	}
+	active := trigger == "on" || trigger == "enable" || trigger == "true"
 
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
@@ -415,10 +409,7 @@ func setBuilder(trigger string) error {
 }
 
 func setFLOps(trigger string) error {
-	active := false
-	if trigger == "on" || trigger == "enable" || trigger == "true" {
-		active = true
-	}
+	active := trigger == "on" || trigger == "enable" || trigger == "true"
 
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()

@@ -394,7 +394,7 @@ func (i *Instance) waitForExit(cmd *exec.Cmd, startNum uint32) {
 		var err *exec.ExitError
 		if errors.As(runErr, &err) {
 			msgBuilder := strings.Builder{}
-			msgBuilder.WriteString(fmt.Sprintf("instance %q exited with error code %d, standard error excerpt:", i.id, err.ExitCode()))
+			fmt.Fprintf(&msgBuilder, "instance %q exited with error code %d, standard error excerpt:", i.id, err.ExitCode())
 
 			stderrBuilder := strings.Builder{}
 			_, _ = i.outputBuffer.WriteToSkippingUntil(&stderrBuilder, tailbuf.IsValidUTF8Start)

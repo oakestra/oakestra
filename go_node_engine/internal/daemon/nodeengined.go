@@ -119,10 +119,8 @@ func main() {
 	// catch SIGETRM or SIGINTERRUPT
 	termination := make(chan os.Signal, 1)
 	signal.Notify(termination, syscall.SIGTERM, syscall.SIGINT)
-	select {
-	case ossignal := <-termination:
-		logger.InfoLogger().Printf("Terminating the NodeEngine, signal:%v", ossignal)
-	}
+	ossignal := <-termination
+	logger.InfoLogger().Printf("Terminating the NodeEngine, signal:%v", ossignal)
 }
 
 func clusterHandshake() requests.HandshakeAnswer {

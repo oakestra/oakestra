@@ -436,6 +436,7 @@ func getTotGpuMem() float64 {
 	return totMem
 }
 
+/*
 func getTotGpuMemFreeMB() float64 {
 	n, err := gpu.NvsmiDeviceCount()
 	if err != nil || n == 0 {
@@ -456,6 +457,7 @@ func getTotGpuMemFreeMB() float64 {
 	}
 	return totMem
 }
+*/
 
 func getGpuTemp() float64 {
 	n, err := gpu.NvsmiDeviceCount()

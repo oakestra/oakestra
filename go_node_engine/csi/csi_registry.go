@@ -35,7 +35,7 @@ type Plugin struct {
 }
 
 // identityRPCClient returns the cached CSI Identity service client.
-func (p *Plugin) identityRPCClient() csipb.IdentityClient { return p.identity }
+//func (p *Plugin) identityRPCClient() csipb.IdentityClient { return p.identity }
 
 // nodeRPCClient returns the cached CSI Node service client.
 func (p *Plugin) nodeRPCClient() csipb.NodeClient { return p.nodeClient }
@@ -102,14 +102,14 @@ func (r *Registry) Register(cfg config.CSIDriverType) error {
 	// Identity: Probe
 	_, err = p.identity.Probe(ctx, &csipb.ProbeRequest{})
 	if err != nil {
-		conn.Close()
-		return fmt.Errorf("Probe failed: %w", err)
+		_ = conn.Close()
+		return fmt.Errorf("probe failed: %w", err)
 	}
 
 	// Identity: GetPluginInfo
 	info, err := p.identity.GetPluginInfo(ctx, &csipb.GetPluginInfoRequest{})
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("GetPluginInfo failed: %w", err)
 	}
 	p.DriverName = info.GetName()
@@ -125,7 +125,7 @@ func (r *Registry) Register(cfg config.CSIDriverType) error {
 	// Node: GetCapabilities
 	capsResp, err := p.nodeClient.NodeGetCapabilities(ctx, &csipb.NodeGetCapabilitiesRequest{})
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("NodeGetCapabilities failed: %w", err)
 	}
 	for _, cap := range capsResp.GetCapabilities() {

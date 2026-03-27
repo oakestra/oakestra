@@ -31,7 +31,7 @@ func getLogs(serviceID string) string {
 		return ""
 	}
 
-	var start int64 = 0
+	var start int64
 	if stat.Size()-LOG_SIZE < 0 {
 		start = 0
 	} else {
