@@ -53,9 +53,10 @@ def handle_mqtt_message(client, userdata, message):
     if re_job_deployment_topic is not None:
         job_name = payload.get("sname")
         status = convert_to_status(payload.get("status"))
+        status_detail = payload.get("status_detail", None)
         instance = payload.get("instance")
         publicip = payload.get("publicip", "--")
-        update_deployed_instance_worker(job_name, instance, status.value, publicip, client_id)
+        update_deployed_instance_worker(job_name, instance, status.value, status_detail, publicip)
     if re_job_resources_topic is not None:
         services = payload.get("services")
         for service in services:

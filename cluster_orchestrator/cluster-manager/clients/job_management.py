@@ -92,14 +92,14 @@ def create_new_job_instance(job: dict, instance_number: int):
     return updated_job
 
 
-def update_deployed_instance_worker(job_name, instance_number, status, public_ip, worker_id):
+def update_deployed_instance_worker(job_name, instance_number, status, status_detail, public_ip):
     jobs = job_operations.get_jobs(job_name=job_name)
     if not jobs:
         return
 
     job_id = jobs[0].get("_id")
 
-    update_status(job_id, int(instance_number), status)
+    update_status(job_id, int(instance_number), status, status_detail)
     update_instance(job_id, int(instance_number), {"publicip": public_ip})
 
 

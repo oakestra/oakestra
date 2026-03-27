@@ -254,8 +254,10 @@ func (r *ContainerRuntime) containerCreationRoutine(
 
 	taskid := genTaskID(service.Sname, service.Instance)
 	hostname := fmt.Sprintf("instance-%d", service.Instance)
+	service.StatusDetail = "Container is starting up"
 
 	revert := func(err error) {
+		service.StatusDetail = fmt.Sprintf("Container failed to start: %v", err)
 		startup <- false
 		errorchan <- err
 		r.channelLock.Lock()
