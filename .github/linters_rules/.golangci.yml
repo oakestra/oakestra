@@ -7,7 +7,6 @@ run:
 output:
   print-issued-lines: false
   print-linter-name: true
-  uniq-by-line: false
   sort-results: true
 
 linters:
