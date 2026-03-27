@@ -34,10 +34,7 @@ func main() {
 		log.Fatalf("[hostpath] mkdir %s: %v", stateDir, err)
 	}
 
-	mountTracker, err := NewMountTracker(filepath.Join(stateDir, "mounts.json"))
-	if err != nil {
-		log.Fatalf("[hostpath] Failed to initialize mount tracker: %v", err)
-	}
+	mountTracker := NewMountTracker(filepath.Join(stateDir, "mounts.json"))
 
 	// Clean up any orphaned mounts from previous runs/crashes
 	mountTracker.CleanupOrphanedMounts()

@@ -13,7 +13,9 @@ func isMountPoint(path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	// Normalize the path (remove trailing slash for comparison)
 	path = strings.TrimRight(path, "/")

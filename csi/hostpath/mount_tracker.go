@@ -28,7 +28,7 @@ type MountTracker struct {
 }
 
 // NewMountTracker creates a new mount tracker that persists to statePath.
-func NewMountTracker(statePath string) (*MountTracker, error) {
+func NewMountTracker(statePath string) *MountTracker {
 	mt := &MountTracker{
 		statePath: statePath,
 		mounts:    make(map[string]*MountRecord),
@@ -47,7 +47,7 @@ func NewMountTracker(statePath string) (*MountTracker, error) {
 	mt.cleanupWg.Add(1)
 	go mt.cleanupWorker()
 
-	return mt, nil
+	return mt
 }
 
 // IsMounted checks if a target path is currently tracked as mounted.
