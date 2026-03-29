@@ -1,0 +1,10 @@
+prefix=/opt/oakestra
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: crosvm_control
+Description: Provides parts of crosvm as a library to communicate with running crosvm instances.
+Version: 1.0.0
+Requires.private: virglrenderer >= 1.1.1, gbm >= 18.0.0
+Cflags: -I${includedir}
+Libs: -L${libdir} -lcrosvm_control

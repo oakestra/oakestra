@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"go_node_engine/model"
 	"net"
@@ -64,7 +63,7 @@ func AttachNetworkToTask(pid int, servicename string, instance int, portMappings
 		return err
 	}
 	if response.StatusCode != 200 {
-		return errors.New(fmt.Sprintf("NetManager deploy failed, status code: %d", response.StatusCode))
+		return fmt.Errorf("NetManager deploy failed, status code: %d", response.StatusCode)
 	}
 	return nil
 }
@@ -90,7 +89,7 @@ func DetachNetworkFromTask(servicename string, instance int) error {
 		return err
 	}
 	if response.StatusCode != 200 {
-		return errors.New(fmt.Sprintf("NetManager undeploy failed, status code: %d", response.StatusCode))
+		return fmt.Errorf("NetManager undeploy failed, status code: %d", response.StatusCode)
 	}
 	return nil
 }
@@ -128,7 +127,7 @@ func RegisterSelfToNetworkComponent() error {
 		return err
 	}
 	if response.StatusCode != 200 {
-		return errors.New(fmt.Sprintf("NetManager registration failed, status code: %d", response.StatusCode))
+		return fmt.Errorf("NetManager registration failed, status code: %d", response.StatusCode)
 	}
 	return nil
 }
@@ -159,7 +158,7 @@ func CreateNetworkNamespaceForUnikernel(servicename string, instance int, portMa
 		return err
 	}
 	if response.StatusCode != 200 {
-		return errors.New(fmt.Sprintf("NetManager deploy failed, status code: %d", response.StatusCode))
+		return fmt.Errorf("NetManager deploy failed, status code: %d", response.StatusCode)
 	}
 	return nil
 }
@@ -185,7 +184,7 @@ func DeleteNamespaceForUnikernel(servicename string, instance int) error {
 		return err
 	}
 	if response.StatusCode != 200 {
-		return errors.New(fmt.Sprintf("NetManager undeploy failed, status code: %d", response.StatusCode))
+		return fmt.Errorf("NetManager undeploy failed, status code: %d", response.StatusCode)
 	}
 	return nil
 }

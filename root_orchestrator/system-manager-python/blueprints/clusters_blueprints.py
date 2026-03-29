@@ -24,6 +24,7 @@ cluster_info_schema = {
         "cumulative_memory_in_mb": {"type": "string"},
         "number_of_nodes": {"type": "string"},
         "virtualization": {"type": "array", "items": {"type": "string"}},
+        "csi_drivers": {"type": "array", "items": {"type": "string"}},
         "more": {"type": "object"},
         "worker_groups": {"type": "string"},
         "supported_addons": {"type": "array", "items": {"type": "string"}},

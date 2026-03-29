@@ -53,7 +53,14 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 }
 
 // InitMqtt initializes the mqtt client by connecting to the broker, setting the client ID and the topics
-func InitMqtt(clientid string, brokerurl string, brokerport string, certFile string, keyFile string) {
+func InitMqtt(
+	clientid string,
+	brokerurl string,
+	brokerport string,
+	certFile string,
+	keyFile string,
+	runtimeManager *virtualization.RuntimeManager,
+) {
 
 	if clientID != "" {
 		logger.InfoLogger().Printf("Mqtt already initialized no need for any further initialization")
@@ -66,8 +73,8 @@ func InitMqtt(clientid string, brokerurl string, brokerport string, certFile str
 	//platform's assigned client ID
 	clientID = clientid
 
-	TOPICS[fmt.Sprintf("nodes/%s/control/deploy", clientID)] = deployHandler
-	TOPICS[fmt.Sprintf("nodes/%s/control/delete", clientID)] = deleteHandler
+	TOPICS[fmt.Sprintf("nodes/%s/control/deploy", clientID)] = withRuntimeManager(deployHandler, runtimeManager)
+	TOPICS[fmt.Sprintf("nodes/%s/control/delete", clientID)] = withRuntimeManager(deleteHandler, runtimeManager)
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%s", brokerUrl, brokerPort))
@@ -108,7 +115,16 @@ func publishToBroker(topic string, payload string) {
 	}
 }
 
-func deployHandler(client mqtt.Client, msg mqtt.Message) {
+func withRuntimeManager(
+	handler func(mqtt.Client, mqtt.Message, *virtualization.RuntimeManager),
+	runtimeManager *virtualization.RuntimeManager,
+) func(mqtt.Client, mqtt.Message) {
+	return func(client mqtt.Client, msg mqtt.Message) {
+		handler(client, msg, runtimeManager)
+	}
+}
+
+func deployHandler(client mqtt.Client, msg mqtt.Message, runtimeManager *virtualization.RuntimeManager) {
 	logger.InfoLogger().Printf("Received deployment request with payload: %s", string(msg.Payload()))
 	service := model.Service{}
 	err := json.Unmarshal(msg.Payload(), &service)
@@ -119,7 +135,7 @@ func deployHandler(client mqtt.Client, msg mqtt.Message) {
 	}
 	//handle deployment in background
 	go func() {
-		runtime := virtualization.GetRuntime(model.RuntimeType(service.Runtime))
+		runtime := runtimeManager.GetRuntime(model.RuntimeType(service.Runtime))
 		err = runtime.Deploy(service, ReportServiceStatus)
 		service.Status = model.SERVICE_CREATED
 		if err != nil {
@@ -130,7 +146,8 @@ func deployHandler(client mqtt.Client, msg mqtt.Message) {
 		ReportServiceStatus(service)
 	}()
 }
-func deleteHandler(client mqtt.Client, msg mqtt.Message) {
+
+func deleteHandler(client mqtt.Client, msg mqtt.Message, runtimeManager *virtualization.RuntimeManager) {
 	logger.InfoLogger().Printf("Received undeployment request with payload: %s", string(msg.Payload()))
 	service := model.Service{}
 	err := json.Unmarshal(msg.Payload(), &service)
@@ -139,7 +156,7 @@ func deleteHandler(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 	go func() {
-		runtime := virtualization.GetRuntime(model.RuntimeType(service.Runtime))
+		runtime := runtimeManager.GetRuntime(model.RuntimeType(service.Runtime))
 		err = runtime.Undeploy(service.Sname, service.Instance)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to undeploy application: %s", err.Error())

@@ -3,15 +3,23 @@ package virtualization
 import (
 	"context"
 	"fmt"
+	"go_node_engine/csi"
 	"go_node_engine/logger"
 	"go_node_engine/model"
+	"go_node_engine/model/gpu"
 	"go_node_engine/requests"
+	virtrt "go_node_engine/virtualization/internal/runtime"
+	"iter"
+	"maps"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	containerdcfg "github.com/containerd/containerd/v2/cmd/containerd/server/config"
 
 	"github.com/containerd/containerd"
 	runcoptions "github.com/containerd/containerd/api/types/runc/options"
@@ -22,32 +30,35 @@ import (
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/containerd/plugin"
 	docker_remote "github.com/containerd/containerd/remotes/docker"
-	containerdcfg "github.com/containerd/containerd/v2/cmd/containerd/server/config"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/shirou/gopsutil/docker"
 	"github.com/shirou/gopsutil/process"
 	"github.com/struCoder/pidusage"
 )
 
+func init() {
+	virtrt.Register(string(model.CONTAINER_RUNTIME), newContainerdRuntime)
+	plugins := findAdditionalRuntimePlugins()
+	if plugins != nil {
+		for additionalName := range findAdditionalRuntimePlugins() {
+			virtrt.Register(additionalName, newContainerdRuntime)
+		}
+	}
+}
+
 // ContainerRuntime is the struct that describes the container runtime
 type ContainerRuntime struct {
 	containerClient *containerd.Client
 	killQueue       map[string]*chan bool
-	channelLock     *sync.RWMutex
-	ctx             context.Context
-	wg              sync.WaitGroup
-}
-
-var runtime = ContainerRuntime{
 	// Lock specific for the container runtime interactions.
 	// Only one interaction at a time as we have no guarantee the runtime will handle more.
-	channelLock: &sync.RWMutex{},
+	channelLock *sync.RWMutex
+	// mountedVolumes tracks CSI-mounted volumes per task (keyed by taskID).
+	// Protected by channelLock.
+	mountedVolumes map[string][]csi.MountedVolume
+	ctx            context.Context
+	wg             sync.WaitGroup
 }
-
-var containerdSingletonCLient sync.Once
-var startContainerMonitoring sync.Once
-
-var containerdConfig containerdcfg.Config
 
 // NAMESPACE is the namespace of the runtime
 const NAMESPACE = "oakestra"
@@ -65,32 +76,33 @@ const CONTAINERD_CONFIG_PATH = "/etc/containerd/config.toml"
 const CLEANUP_TIMEOUT = 5 * time.Second
 
 // GetContainerdRuntime returns the container runtime client
-func GetContainerdRuntime() Runtime {
-	containerdSingletonCLient.Do(func() {
-		client, err := containerd.New("/run/containerd/containerd.sock")
-		if err != nil {
-			logger.ErrorLogger().Fatalf("Unable to start the container engine: %v\n", err)
-		}
-		runtime.containerClient = client
-		runtime.killQueue = make(map[string]*chan bool)
-		runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
-		runtime.forceContainerCleanup()
-		// register default runtime name
-		model.GetNodeInfo().AddSupportedTechnology(model.CONTAINER_RUNTIME)
+func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
+	client, err := containerd.New("/run/containerd/containerd.sock")
+	if err != nil {
+		logger.ErrorLogger().Printf("Unable to start the container engine: %v\n", err)
+		return &ContainerRuntime{}
+	}
 
-		//fetch containerd runtime configuration
-		checkAdditionalRuntimePlugins()
+	runtime := ContainerRuntime{
+		channelLock: &sync.RWMutex{},
+	}
+	runtime.containerClient = client
+	runtime.killQueue = make(map[string]*chan bool)
+	runtime.mountedVolumes = make(map[string][]csi.MountedVolume)
+	runtime.ctx = namespaces.WithNamespace(context.Background(), NAMESPACE)
+	runtime.forceContainerCleanup()
+	runtime.mountedVolumes = make(map[string][]csi.MountedVolume)
 
-	})
 	return &runtime
 }
 
 // checks the containerd config file for additional runtimes and registers them
-func checkAdditionalRuntimePlugins() {
+func findAdditionalRuntimePlugins() iter.Seq[string] {
+	var containerdConfig containerdcfg.Config
 	err := containerdcfg.LoadConfig(context.Background(), CONTAINERD_CONFIG_PATH, &containerdConfig)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to load containerd config file: %v", err)
-		return
+		return nil
 	}
 	for _, ctd := range containerdConfig.Plugins {
 		ctd, ok := ctd.(map[string]interface{})["containerd"].(map[string]interface{})
@@ -99,12 +111,12 @@ func checkAdditionalRuntimePlugins() {
 			if ok {
 				for runtimeName := range runtimes {
 					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", runtimeName, CONTAINERD_CONFIG_PATH)
-					model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(runtimeName))
-					registerRuntimeLink(runtimeName, GetContainerdRuntime)
 				}
+				return maps.Keys(runtimes)
 			}
 		}
 	}
+	return nil
 }
 
 // StopContainerdClient stops the container runtime client
@@ -242,8 +254,10 @@ func (r *ContainerRuntime) containerCreationRoutine(
 
 	taskid := genTaskID(service.Sname, service.Instance)
 	hostname := fmt.Sprintf("instance-%d", service.Instance)
+	service.StatusDetail = "Container is starting up"
 
 	revert := func(err error) {
+		service.StatusDetail = fmt.Sprintf("Container failed to start: %v", err)
 		startup <- false
 		errorchan <- err
 		r.channelLock.Lock()
@@ -287,8 +301,33 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 	// ---- add GPU if needed
 	if service.Vgpus > 0 {
-		specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(0), nvidia.WithAllCapabilities))
-		logger.InfoLogger().Printf("NVIDIA - Adding GPU driver")
+		gpuDevices, err := selectBestGPUs(service.Vgpus)
+		if err != nil {
+			logger.ErrorLogger().Printf("Failed to select GPUs: %v", err)
+			// Fallback to GPU 0 if selection fails
+			specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(0), nvidia.WithAllCapabilities))
+			logger.InfoLogger().Printf("NVIDIA - Adding GPU 0 (fallback)")
+		} else {
+			specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(gpuDevices...), nvidia.WithAllCapabilities))
+			logger.InfoLogger().Printf("NVIDIA - Adding GPU(s): %v", gpuDevices)
+		}
+	}
+	// ---- mount CSI volumes (stage + publish) and add bind mounts to OCI spec
+	var mountedVolumes []csi.MountedVolume
+	if len(service.Volumes) > 0 {
+		var mountErr error
+		mountedVolumes, mountErr = csi.MountVolumes(service)
+		if mountErr != nil {
+			// Partial mounts are cleaned up before aborting.
+			csi.UnmountVolumes(mountedVolumes)
+			revert(mountErr)
+			return
+		}
+		specOpts = append(specOpts, withCSIVolumeMounts(mountedVolumes))
+		// Store mounted volumes so they can be cleaned up when the container stops.
+		r.channelLock.Lock()
+		r.mountedVolumes[taskid] = mountedVolumes
+		r.channelLock.Unlock()
 	}
 	// ---- add resolve file with default google dns
 	resolvconfFile, err := getResolveConfFile()
@@ -400,6 +439,15 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	delete(r.killQueue, taskid)
 	r.channelLock.Unlock()
 	_ = r.removeContainer(container)
+
+	// CSI teardown: unpublish + unstage volumes after the container has been removed.
+	r.channelLock.Lock()
+	mv, hasMounts := r.mountedVolumes[taskid]
+	delete(r.mountedVolumes, taskid)
+	r.channelLock.Unlock()
+	if hasMounts {
+		csi.UnmountVolumes(mv)
+	}
 	statusChangeNotificationHandler(service)
 }
 
@@ -429,82 +477,82 @@ func getTotalCpuUsageByPid(pid int32) (float64, error) {
 
 func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
 	//start container monitoring service
-	startContainerMonitoring.Do(func() {
-		for {
-			select {
-			case <-time.After(every):
-				deployedContainers, err := r.containerClient.Containers(r.ctx)
-				if err != nil {
-					logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
-				}
+	if r.containerClient == nil {
+		return
+	}
 
-				resourceList := make([]model.Resources, 0)
-
-				for _, container := range deployedContainers {
-					task, err := container.Task(r.ctx, nil)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
-
-						info, err := container.Info(r.ctx)
-						if err != nil {
-							logger.ErrorLogger().Printf("Unable to fetch container info: %v", err)
-							continue
-						}
-						// if container created less than 10 seconds ago, then skip removal
-						if time.Since(info.CreatedAt) < 10*time.Second {
-							logger.InfoLogger().Printf("Skipping container %s, it is still starting up", container.ID())
-							continue
-						}
-						err = r.removeContainer(container)
-						if err != nil {
-							return
-						}
-						continue
-					}
-
-					cpuUsage, err := getTotalCpuUsageByPid(int32(task.Pid()))
-					if err != nil {
-						sysInfo, err := pidusage.GetStat(int(task.Pid()))
-						if err != nil {
-							logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
-							continue
-						}
-						cpuUsage = sysInfo.CPU / float64(model.GetNodeInfo().CpuCores)
-					}
-
-					memUsage, err := r.getContainerMemoryUsage(container.ID(), int(task.Pid()))
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
-						memUsage = 0
-					}
-
-					containerMetadata, err := container.Info(r.ctx)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
-						continue
-					}
-
-					currentsnapshotter := r.containerClient.SnapshotService(containerMetadata.Snapshotter)
-					usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
-					if err != nil {
-						logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
-					}
-
-					resourceList = append(resourceList, model.Resources{
-						Cpu:      fmt.Sprintf("%f", cpuUsage),
-						Memory:   fmt.Sprintf("%f", memUsage),
-						Disk:     fmt.Sprintf("%d", usage.Size),
-						Sname:    extractSnameFromTaskID(container.ID()),
-						Runtime:  string(model.CONTAINER_RUNTIME),
-						Logs:     getLogs(container.ID()),
-						Instance: extractInstanceNumberFromTaskID(container.ID()),
-					})
-				}
-				//NOTIFY WITH THE CURRENT CONTAINERS STATUS
-				notifyHandler(resourceList)
-			}
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for range ticker.C {
+		deployedContainers, err := r.containerClient.Containers(r.ctx)
+		if err != nil {
+			logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
 		}
-	})
+
+		resourceList := make([]model.Resources, 0)
+
+		for _, container := range deployedContainers {
+			task, err := container.Task(r.ctx, nil)
+			if err != nil {
+				logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+
+				info, err := container.Info(r.ctx)
+				if err != nil {
+					logger.ErrorLogger().Printf("Unable to fetch container info: %v", err)
+					continue
+				}
+
+				// if container created less than 10 seconds ago, then skip removal
+				if time.Since(info.CreatedAt) < 10*time.Second {
+					logger.InfoLogger().Printf("Skipping container %s, it is still starting up", container.ID())
+					continue
+				}
+
+				_ = r.removeContainer(container)
+				continue
+			}
+
+			cpuUsage, err := getTotalCpuUsageByPid(int32(task.Pid()))
+			if err != nil {
+				sysInfo, err := pidusage.GetStat(int(task.Pid()))
+				if err != nil {
+					logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
+					continue
+				}
+				cpuUsage = sysInfo.CPU / float64(model.GetNodeInfo().CpuCores)
+			}
+
+			memUsage, err := r.getContainerMemoryUsage(container.ID(), int(task.Pid()))
+			if err != nil {
+				logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
+				memUsage = 0
+			}
+
+			containerMetadata, err := container.Info(r.ctx)
+			if err != nil {
+				logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
+				continue
+			}
+
+			currentsnapshotter := r.containerClient.SnapshotService(containerMetadata.Snapshotter)
+			usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
+			if err != nil {
+				logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
+			}
+
+			resourceList = append(resourceList, model.Resources{
+				Cpu:      fmt.Sprintf("%f", cpuUsage),
+				Memory:   fmt.Sprintf("%f", memUsage),
+				Disk:     fmt.Sprintf("%d", usage.Size),
+				Sname:    extractSnameFromTaskID(container.ID()),
+				Runtime:  string(model.CONTAINER_RUNTIME),
+				Logs:     getLogs(container.ID()),
+				Instance: extractInstanceNumberFromTaskID(container.ID()),
+			})
+		}
+		//NOTIFY WITH THE CURRENT CONTAINERS STATUS
+		notifyHandler(resourceList)
+	}
 }
 
 func (r *ContainerRuntime) forceContainerCleanup() {
@@ -519,7 +567,7 @@ func (r *ContainerRuntime) forceContainerCleanup() {
 
 func (r *ContainerRuntime) removeContainer(container containerd.Container) error {
 	if container == nil {
-		logger.WarningLogger().Printf("Container is nil, nothing to remove")
+		logger.WarnLogger().Printf("Container is nil, nothing to remove")
 		return nil
 	}
 
@@ -544,11 +592,11 @@ func (r *ContainerRuntime) removeContainer(container containerd.Container) error
 		if currentsnapshotter != nil {
 			err = currentsnapshotter.Remove(r.ctx, containerMetadata.SnapshotKey)
 			if err != nil {
-				logger.WarningLogger().Printf("Unable to remove snapshotter %s: %v", containerMetadata.Snapshotter, err)
+				logger.WarnLogger().Printf("Unable to remove snapshotter %s: %v", containerMetadata.Snapshotter, err)
 			}
 			err = currentsnapshotter.Close()
 			if err != nil {
-				logger.WarningLogger().Printf("Unable to close snapshotter %s: %v", containerMetadata.Snapshotter, err)
+				logger.WarnLogger().Printf("Unable to close snapshotter %s: %v", containerMetadata.Snapshotter, err)
 			}
 		}
 	}
@@ -592,6 +640,28 @@ func withCustomResolvConf(src string) func(context.Context, oci.Client, *contain
 			Source:      src,
 			Options:     []string{"rbind", "ro"},
 		})
+		return nil
+	}
+}
+
+// withCSIVolumeMounts returns an OCI SpecOpt that bind-mounts each CSI-published
+// volume into the container at the path specified by MountedVolume.MountPath.
+// If MountPath is empty the volume is mounted at /mnt/csi/<volumeID>.
+func withCSIVolumeMounts(mounts []csi.MountedVolume) func(context.Context, oci.Client, *containers.Container, *oci.Spec) error {
+	return func(_ context.Context, _ oci.Client, _ *containers.Container, s *oci.Spec) error {
+		for _, mv := range mounts {
+			dest := mv.MountPath
+			if dest == "" {
+				dest = "/mnt/csi/" + mv.VolumeID
+			}
+			s.Mounts = append(s.Mounts, specs.Mount{
+				Destination: dest,
+				Type:        "bind",
+				Source:      mv.TargetPath,
+				Options:     []string{"rbind", "rw"},
+			})
+			logger.InfoLogger().Printf("CSI volume %s bind-mounted %s -> %s", mv.VolumeID, mv.TargetPath, dest)
+		}
 		return nil
 	}
 }
@@ -665,4 +735,102 @@ func extractInstanceNumberFromTaskID(taskid string) int {
 
 func genTaskID(sname string, instancenumber int) string {
 	return fmt.Sprintf("%s.instance.%d", sname, instancenumber)
+}
+
+// getContainerByTaskID returns the containerd.Container associated with the given task ID (which is in the format sname.instance.instanceNumber).
+/*
+func (r *ContainerRuntime) getContainerByTaskID(taskid string) (containerd.Container, error) {
+	containers, err := r.containerClient.Containers(r.ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range containers {
+		if c.ID() == taskid {
+			return c, err
+		}
+	}
+	return nil, fmt.Errorf("container not found")
+}
+*/
+
+// gpuInfo holds GPU device information for sorting
+type gpuInfo struct {
+	index       int
+	freeMemory  int64 // in MiB
+	totalMemory int64 // in MiB
+}
+
+// selectBestGPUs selects up to 'requested' GPUs based on available memory.
+// Returns GPU indices sorted by most available memory first.
+func selectBestGPUs(requested int) ([]int, error) {
+	// Get total number of available GPUs
+	totalGPUs, err := gpu.NvsmiDeviceCount()
+	if err != nil {
+		return nil, fmt.Errorf("failed to query GPU count: %w", err)
+	}
+
+	if totalGPUs == 0 {
+		return nil, fmt.Errorf("no GPUs available")
+	}
+
+	// Cap requested GPUs to available GPUs
+	numGPUs := requested
+	if numGPUs > totalGPUs {
+		logger.WarnLogger().Printf("Requested %d GPUs but only %d available, using %d", requested, totalGPUs, totalGPUs)
+		numGPUs = totalGPUs
+	}
+
+	// Query memory info for all GPUs
+	gpuList := make([]gpuInfo, 0, totalGPUs)
+	for i := 0; i < totalGPUs; i++ {
+		// Query free memory (memory.free) and total memory (memory.total)
+		freeMemStr, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.free")
+		if err != nil {
+			logger.WarnLogger().Printf("Failed to query free memory for GPU %d: %v", i, err)
+			continue
+		}
+
+		totalMemStr, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.total")
+		if err != nil {
+			logger.WarnLogger().Printf("Failed to query total memory for GPU %d: %v", i, err)
+			continue
+		}
+
+		freeMem, err := strconv.ParseInt(freeMemStr, 10, 64)
+		if err != nil {
+			logger.WarnLogger().Printf("Failed to parse free memory for GPU %d: %v", i, err)
+			continue
+		}
+
+		totalMem, err := strconv.ParseInt(totalMemStr, 10, 64)
+		if err != nil {
+			logger.WarnLogger().Printf("Failed to parse total memory for GPU %d: %v", i, err)
+			continue
+		}
+
+		gpuList = append(gpuList, gpuInfo{
+			index:       i,
+			freeMemory:  freeMem,
+			totalMemory: totalMem,
+		})
+
+		logger.InfoLogger().Printf("GPU %d: %d MiB free / %d MiB total", i, freeMem, totalMem)
+	}
+
+	if len(gpuList) == 0 {
+		return nil, fmt.Errorf("failed to query memory for any GPU")
+	}
+
+	// Sort GPUs by free memory (descending - most free memory first)
+	sort.Slice(gpuList, func(i, j int) bool {
+		return gpuList[i].freeMemory > gpuList[j].freeMemory
+	})
+
+	// Select top N GPUs
+	selected := make([]int, 0, numGPUs)
+	for i := 0; i < numGPUs && i < len(gpuList); i++ {
+		selected = append(selected, gpuList[i].index)
+	}
+
+	return selected, nil
 }

@@ -17,6 +17,4 @@ ENV ADDONS_ENGINE_MONGO_PORT=10007
 
 ENV MARKETPLACE_ADDR=http://localhost:11102
 
-EXPOSE 11101
-
 CMD ["python", "addons_manager.py"]

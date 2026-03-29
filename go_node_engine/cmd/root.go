@@ -75,7 +75,7 @@ func nodeEngineDaemonManager() error {
 		}
 	}
 
-	if clusterSSL != false {
+	if clusterSSL {
 		// set SSL cluster handshake
 		err := configSSL(clusterSSL)
 		if err != nil {
