@@ -165,7 +165,8 @@ def _subnet_handler(client_id, payload):
                 client_id, {"address": addr[0], "addressv6": addr[1]}
             )
         except Exception as e:
-            logger.error(e)
+            logger.error(f"Error in _subnet_handler: {str(e)}")
+            logger.debug(e, exc_info=True)
     elif method == "DELETE":
         # remove subnetwork from node
         pass

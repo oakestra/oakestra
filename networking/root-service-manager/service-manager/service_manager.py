@@ -156,7 +156,7 @@ def new_service_deployment():
 
     return service_management.deploy_request(
         deployment_descriptor=data.get("deployment_descriptor"),
-        _id=data.get("system_job_id"),
+        _id=data.get("_id"),
     )
 
 
@@ -186,7 +186,7 @@ def new_instance_deployment():
     data = request.json
 
     return instances_management.deploy_request(
-        sys_job_id=data.get("system_job_id"),
+        sys_job_id=data.get("_id"),
         instance_number=data.get("instance_number"),
         cluster_id=data.get("cluster_id"),
     )

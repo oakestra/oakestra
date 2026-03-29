@@ -17,14 +17,18 @@ def root_service_manager_get_subnet():
     logger.info("get subnet - logging")
     try:
         response = requests.get(ROOT_SERVICE_MANAGER_ADDR + "/api/net/subnet")
-        addr = json.loads(response.text).get("subnet_addr")
-        addrv6 = json.loads(response.text).get("subnet_addr_v6")
-        if len(addr) > 0 and len(addrv6) > 0:
+        response.raise_for_status()
+        parsed = response.json()
+        addr = parsed.get("subnet_addr")
+        addrv6 = parsed.get("subnet_addr_v6")
+        logger.debug(f"Received subnet: {addr}, subnet_v6: {addrv6}")
+        if addr and addrv6 and len(addr) > 0 and len(addrv6) > 0:
             return [addr, addrv6]
         else:
+            logger.error(f"Invalid subnet response: addr={addr}, addrv6={addrv6}")
             raise requests.exceptions.RequestException("No address found")
-    except requests.exceptions.RequestException:
-        logger.error("Calling System Manager /api/net/subnet not successful.")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Calling System Manager /api/net/subnet not successful: {str(e)}")
 
 
 def system_manager_notify_deployment_status(job, worker_id):
