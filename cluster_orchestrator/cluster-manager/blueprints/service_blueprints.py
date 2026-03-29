@@ -101,8 +101,8 @@ class SchedulingController(MethodView):
         )
         if node_id is None:
             # scheduling failed
-            status = data.get("status")
-            job_operations.update_job_status(job_id, convert_to_status(status))
+            status = convert_to_status(data.get("status"))
+            job_operations.update_job_status(job_id, status)
             return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
 
         # update job instance

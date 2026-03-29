@@ -22,15 +22,16 @@ import (
 
 type RuntimeType = config.RuntimeType
 
-// AddonType is the type of addon that the node supports
-var (
+const (
 	CONTAINER_RUNTIME config.RuntimeType = config.CONTAINER_RUNTIME
 	UNIKERNEL_RUNTIME config.RuntimeType = config.UNIKERNEL_RUNTIME
+	CROSVM_RUNTIME    config.RuntimeType = config.CROSVM_RUNTIME
 )
 
 const SlowUpdateFactor = 60 // For updating certain Node parameters at a lower frequency
 var SlowUpdateCounter = 0
 
+// AddonType is the type of addon that the node supports
 type AddonType string
 
 const (
@@ -40,9 +41,10 @@ const (
 
 // Node is the struct that describes the node
 type Node struct {
-	Id              string               `json:"id"`
-	Host            string               `json:"host"`
-	Ip              string               `json:"ip"`
+	Id   string `json:"id"`
+	Host string `json:"host"`
+	Ip   string `json:"ip"`
+	// semicolon separated list, check network-manager for specific syntax
 	Port            string               `json:"port"`
 	SystemInfo      map[string]string    `json:"system_info"`
 	CpuUsage        float64              `json:"cpu_percent"`
@@ -60,11 +62,13 @@ type Node struct {
 	GpuTotMem       float64              `json:"vram"`
 	Technology      []config.RuntimeType `json:"virtualization"`
 	SupportedAddons []AddonType          `json:"supported_addons"`
-	Overlay         bool
-	OverlaySocket   string
-	LogDirectory    string
-	NetManagerPort  int
-	ClusterAddress  string
+	// CSIDrivers lists the CSI plugins that have been successfully probed on this node.
+	CSIDrivers     []config.CSIDriverType `json:"csi_drivers"`
+	Overlay        bool
+	OverlaySocket  string
+	LogDirectory   string
+	NetManagerPort int
+	ClusterAddress string
 }
 
 var once sync.Once
@@ -81,6 +85,7 @@ func GetNodeInfo() *Node {
 			Port:            getPort(),
 			Technology:      make([]config.RuntimeType, 0),
 			SupportedAddons: make([]AddonType, 0),
+			CSIDrivers:      make([]config.CSIDriverType, 0),
 			Overlay:         false,
 			OverlaySocket:   "/etc/netmanager/netmanager.sock",
 		}
@@ -116,6 +121,7 @@ func GetDynamicInfo() Node {
 		GpuUsage:    node.GpuUsage,
 		GpuTotMem:   node.GpuTotMem,
 		GpuMemUsage: node.GpuMemUsage,
+		GpuCores:    node.GpuCores,
 	}
 }
 
@@ -135,7 +141,7 @@ func (n *Node) updateDynamicInfo() {
 
 	// GPU Info
 	n.GpuDriver = getGpuDriver()
-	n.GpuTotMem = getTotGpuMemFreeMB()
+	n.GpuTotMem = getTotGpuMem()
 	n.GpuMemUsage = getGpuMemUsage()
 	n.GpuUsage = getGpuUsage()
 	n.GpuCores = getGpuCores()
@@ -315,6 +321,26 @@ func (n *Node) GetSupportedAddonsList() []AddonType {
 	return n.SupportedAddons
 }
 
+// AddCSIDriver registers a CSI driver as available on this node.
+func (n *Node) AddCSIDriver(driver config.CSIDriverType) {
+	n.CSIDrivers = append(n.CSIDrivers, driver)
+}
+
+// GetCSIDrivers returns the list of CSI drivers available on this node.
+func (n *Node) GetCSIDrivers() []config.CSIDriverType {
+	return n.CSIDrivers
+}
+
+// HasCSIDriver reports whether the node has a specific CSI driver registered.
+func (n *Node) HasCSIDriver(driverName string) bool {
+	for _, d := range n.CSIDrivers {
+		if d.Name == driverName {
+			return true
+		}
+	}
+	return false
+}
+
 func getGpuDriver() string {
 	n, err := gpu.NvsmiDeviceCount()
 	if err != nil {
@@ -410,6 +436,7 @@ func getTotGpuMem() float64 {
 	return totMem
 }
 
+/*
 func getTotGpuMemFreeMB() float64 {
 	n, err := gpu.NvsmiDeviceCount()
 	if err != nil || n == 0 {
@@ -430,6 +457,7 @@ func getTotGpuMemFreeMB() float64 {
 	}
 	return totMem
 }
+*/
 
 func getGpuTemp() float64 {
 	n, err := gpu.NvsmiDeviceCount()

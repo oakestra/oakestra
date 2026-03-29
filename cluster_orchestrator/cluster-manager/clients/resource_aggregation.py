@@ -59,6 +59,30 @@ def average_aggregator(w, acc, key, **kwargs):
     return acc
 
 
+def csi_drivers_aggregator(w, acc=None):
+    """Merge csi_drivers from a worker into a deduplicated list of driver names.
+
+    Node Engine advertises drivers as objects: {csi_driver_name, csi_driver_endpoint}.
+    After aggregation, the cluster reports a flat list of name strings to the root.
+    """
+    val = w.get("csi_drivers")
+    if val is None:
+        return acc
+    if acc is None:
+        acc = []
+    if isinstance(val, list):
+        for item in val:
+            if isinstance(item, dict):
+                name = item.get("csi_driver_name")
+            elif isinstance(item, str):
+                name = item
+            else:
+                continue
+            if name and name not in acc:
+                acc.append(name)
+    return acc
+
+
 # canonical resources are resources that are required by the system manager
 # this dict contains {resource_name: aggregation_scheme}
 # where aggregation scheme outlines how this resource should be aggregated.
@@ -77,6 +101,7 @@ canonical_resources = {
     "memory": lambda w, acc=0: default_aggregator(w, acc, "memory"),
     "virtualization": lambda w, acc=None: default_aggregator(w, acc, "virtualization"),
     "supported_addons": lambda w, acc=None: default_aggregator(w, acc, "supported_addons"),
+    "csi_drivers": lambda w, acc=None: csi_drivers_aggregator(w, acc),
     "active_nodes": lambda w, acc=0: acc if (w is None or w == {}) else acc + 1,
 }
 

@@ -4,6 +4,7 @@ import (
 	"go_node_engine/addons"
 	"go_node_engine/cmd"
 	"go_node_engine/config"
+	"go_node_engine/csi"
 	"go_node_engine/jobs"
 	"go_node_engine/logger"
 	"go_node_engine/model"
@@ -16,6 +17,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/containers/storage/pkg/reexec"
 )
 
 const MONITORING_CYCLE = time.Second * 2
@@ -23,6 +26,13 @@ const MONITORING_CYCLE = time.Second * 2
 var configs config.ConfFile
 
 func main() {
+	// The OCI libraries support performing certain container-related tasks in a sandboxed child process.
+	// For this to work, binaries using these libraries must use the reexec.Init() hook before doing anything else.
+	// This way, the library can take over execution in the mentioned child processes and will return true in that case.
+	if reexec.Init() {
+		return
+	}
+
 	configManager := config.GetConfFileManager()
 	var err error
 	configs, err = configManager.Get()
@@ -36,13 +46,27 @@ func main() {
 	// set cluster address
 	model.GetNodeInfo().SetClusterAddress(configs.ClusterAddress)
 
-	//Set Virtualization Runtimes
+	// Initialize virtualization runtimes
+	runtimeManager, err := virtualization.NewRuntimeManager()
+	if err != nil {
+		logger.ErrorLogger().Fatal(err)
+	}
 	for _, virt := range configs.Virtualizations {
 		if virt.Active {
-			rt := virtualization.GetRuntime(model.RuntimeType(virt.Runtime))
+			rt := runtimeManager.GetRuntime(model.RuntimeType(virt.Runtime))
 			defer rt.Stop()
 		}
 	}
+
+	// Initialize and probe CSI plugins listed in the node configuration.
+	// Successfully probed plugins are registered and advertised to the cluster.
+	csiReg := csi.GetRegistry()
+	csiReg.InitFromConfig(configs)
+	for _, driver := range csiReg.List() {
+		model.GetNodeInfo().AddCSIDriver(driver)
+		logger.InfoLogger().Printf("CSI driver available: %s (%s)", driver.Name, driver.Endpoint)
+	}
+	defer csiReg.StopAll()
 
 	//Startup Addons
 	for _, addon := range configs.Addons {
@@ -85,20 +109,18 @@ func main() {
 	}
 
 	// binding the node MQTT client
-	mqtt.InitMqtt(handshakeResult.NodeId, configs.ClusterAddress, handshakeResult.MqttPort, configs.CertFile, configs.KeyFile)
+	mqtt.InitMqtt(handshakeResult.NodeId, configs.ClusterAddress, handshakeResult.MqttPort, configs.CertFile, configs.KeyFile, runtimeManager)
 
 	// starting node status background job.
 	jobs.NodeStatusUpdater(MONITORING_CYCLE, mqtt.ReportNodeInformation)
 	// starting container resources background monitor.
-	jobs.StartServicesMonitoring(MONITORING_CYCLE, mqtt.ReportServiceResources)
+	jobs.StartServicesMonitoring(runtimeManager, MONITORING_CYCLE, mqtt.ReportServiceResources)
 
 	// catch SIGETRM or SIGINTERRUPT
 	termination := make(chan os.Signal, 1)
 	signal.Notify(termination, syscall.SIGTERM, syscall.SIGINT)
-	select {
-	case ossignal := <-termination:
-		logger.InfoLogger().Printf("Terminating the NodeEngine, signal:%v", ossignal)
-	}
+	ossignal := <-termination
+	logger.InfoLogger().Printf("Terminating the NodeEngine, signal:%v", ossignal)
 }
 
 func clusterHandshake() requests.HandshakeAnswer {

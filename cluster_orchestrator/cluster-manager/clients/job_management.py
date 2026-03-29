@@ -92,14 +92,14 @@ def create_new_job_instance(job: dict, instance_number: int):
     return updated_job
 
 
-def update_deployed_instance_worker(job_name, instance_number, status, public_ip, worker_id):
+def update_deployed_instance_worker(job_name, instance_number, status, status_detail, public_ip):
     jobs = job_operations.get_jobs(job_name=job_name)
     if not jobs:
         return
 
     job_id = jobs[0].get("_id")
 
-    update_status(job_id, int(instance_number), status)
+    update_status(job_id, int(instance_number), status, status_detail)
     update_instance(job_id, int(instance_number), {"publicip": public_ip})
 
 
@@ -111,16 +111,18 @@ def update_status(job_id, instance_number, status, status_detail=None):
     if job is None:
         return
 
-    # don't update job to running
-    if status != DeploymentStatus.RUNNING.value:
-        job["status"] = status
-
     if job.get("instance_list") is not None:
         for instance in job.get("instance_list"):
             if instance["instance_number"] == instance_number:
                 instance["status"] = status
                 if status_detail is not None:
                     instance["status_detail"] = status_detail
+
+    # Update job-level status, but only set RUNNING once all instances are running
+    if status != DeploymentStatus.RUNNING.value:
+        job["status"] = status
+    elif all(i["status"] == DeploymentStatus.RUNNING.value for i in job.get("instance_list", [])):
+        job["status"] = status
 
     job_operations.update_job(job_id, job)
 
@@ -234,7 +236,7 @@ def delete_job_instance(job_id: int, instance_number: int, erase: bool = True):
                     f"Deleted instance {instance['instance_number']} of job {job_id} from DB"
                 )
 
-    if len(instance_list) <= deleted_job:
+    if erase and len(instance_list) <= deleted_job:
         job_operations.delete_job(job_id)
         logger.info(f"Deleted job {job_id} from DB as all instances were removed")
         return {}

@@ -27,6 +27,7 @@ CANONICAL_RESOURCES = [
     "candidate_name",
     "cpu_history",
     "memory_history",
+    "csi_drivers",
 ]
 
 

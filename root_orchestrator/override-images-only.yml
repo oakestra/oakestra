@@ -39,11 +39,11 @@ services:
     image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
     pull_policy: always
 
-  addons_manager:
+  root_addons_manager:
     image: ghcr.io/oakestra/oakestra/addons_manager:latest
     pull_policy: always
 
-  addons_monitor:
+  root_addons_monitor:
     image: ghcr.io/oakestra/oakestra/addons_monitor:latest
     pull_policy: always
 
@@ -51,7 +51,11 @@ services:
     image: ghcr.io/oakestra/oakestra/marketplace_manager:latest
     pull_policy: always
 
-  addons_dashboard:
+  root_addons_dashboard:
     image: ghcr.io/oakestra/oakestra/addons_dashboard:latest
+    pull_policy: always
+
+  jwt_generator:
+    image: ghcr.io/oakestra/oakestra/jwt-generator:latest
     pull_policy: always
     
