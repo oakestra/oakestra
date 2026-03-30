@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import socket
 
 import grpc
@@ -9,6 +8,15 @@ from blueprints import blueprints
 from clients.mqtt_client import mqtt_init
 from clients.my_prometheus_client import prometheus_init_gauge_metrics
 from cm_logging import configure_logging
+from config import (
+    GRPC_REQUEST_TIMEOUT,
+    MY_ASSIGNED_CLUSTER_ID,
+    MY_CHOSEN_CLUSTER_NAME,
+    MY_CLUSTER_LOCATION,
+    MY_PORT,
+    NETWORK_COMPONENT_PORT,
+    SYSTEM_MANAGER_ADDR,
+)
 from ext_requests.system_manager_requests import (
     re_deploy_dead_jobs_routine,
     send_aggregated_info_to_sm,
@@ -21,19 +29,6 @@ from flask_swagger_ui import get_swaggerui_blueprint
 from prometheus_client import start_http_server
 from proto.clusterRegistration_pb2 import CS1Message, CS2Message, KeyValue, SC1Message, SC2Message
 from proto.clusterRegistration_pb2_grpc import register_clusterStub
-
-MY_PORT = os.environ.get("MY_PORT")
-
-MY_CHOSEN_CLUSTER_NAME = os.environ.get("CLUSTER_NAME")
-MY_CLUSTER_LOCATION = os.environ.get("CLUSTER_LOCATION")
-NETWORK_COMPONENT_PORT = os.environ.get("CLUSTER_SERVICE_MANAGER_PORT")
-MY_ASSIGNED_CLUSTER_ID = None
-
-
-SYSTEM_MANAGER_ADDR = (
-    os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_GRPC_PORT")
-)
-GRPC_REQUEST_TIMEOUT = 120
 
 my_logger = configure_logging()
 logger = logging.getLogger("cluster_manager")
