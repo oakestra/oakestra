@@ -233,9 +233,11 @@ func (n *nodeServer) NodeGetVolumeStats(
 		return nil, status.Errorf(codes.Internal, "statfs %q: %v", volumePath, err)
 	}
 
-	total := int64(stat.Blocks) * stat.Bsize     //nolint:unconvert
-	avail := int64(stat.Bavail) * stat.Bsize     //nolint:unconvert
-	used := total - int64(stat.Bfree)*stat.Bsize //nolint:unconvert
+	bsize := int64(stat.Bsize)
+
+	total := int64(stat.Blocks) * bsize
+	avail := int64(stat.Bavail) * bsize
+	used := total - int64(stat.Bfree)*bsize
 
 	return &csipb.NodeGetVolumeStatsResponse{
 		Usage: []*csipb.VolumeUsage{
