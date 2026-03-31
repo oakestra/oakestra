@@ -1,7 +1,7 @@
 import logging
 
+import config
 from bson import json_util
-from config import MY_ASSIGNED_CLUSTER_ID, MY_CHOSEN_CLUSTER_NAME
 from flask import Response
 from flask.views import MethodView
 from flask_smorest import Blueprint
@@ -25,10 +25,9 @@ class ClusterStatusController(MethodView):
     )
     def get(self):
         logger.debug("Incoming Request GET /api/cluster/status")
-        connected = MY_ASSIGNED_CLUSTER_ID is not None
         response = {
-            "cluster_name": MY_CHOSEN_CLUSTER_NAME,
-            "cluster_id": MY_ASSIGNED_CLUSTER_ID,
-            "connected_to_root": connected,
+            "cluster_name": config.MY_CHOSEN_CLUSTER_NAME,
+            "cluster_id": config.MY_ASSIGNED_CLUSTER_ID,
+            "connected_to_root": config.MY_ASSIGNED_CLUSTER_ID is not None,
         }
         return Response(json_util.dumps(response), mimetype="application/json")

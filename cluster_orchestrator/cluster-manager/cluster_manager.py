@@ -2,21 +2,13 @@ import json
 import logging
 import socket
 
+import config
 import grpc
 from apscheduler.schedulers.background import BackgroundScheduler
 from blueprints import blueprints
 from clients.mqtt_client import mqtt_init
 from clients.my_prometheus_client import prometheus_init_gauge_metrics
 from cm_logging import configure_logging
-from config import (
-    GRPC_REQUEST_TIMEOUT,
-    MY_ASSIGNED_CLUSTER_ID,
-    MY_CHOSEN_CLUSTER_NAME,
-    MY_CLUSTER_LOCATION,
-    MY_PORT,
-    NETWORK_COMPONENT_PORT,
-    SYSTEM_MANAGER_ADDR,
-)
 from ext_requests.system_manager_requests import (
     re_deploy_dead_jobs_routine,
     send_aggregated_info_to_sm,
@@ -73,7 +65,7 @@ def background_job_send_aggregated_information_to_sm():
         "interval",
         seconds=BACKGROUND_JOB_INTERVAL,
         kwargs={
-            "my_id": MY_ASSIGNED_CLUSTER_ID,
+            "my_id": config.MY_ASSIGNED_CLUSTER_ID,
             "time_interval": 2 * BACKGROUND_JOB_INTERVAL,
         },
     )
@@ -91,17 +83,20 @@ def register_with_system_manager():
     """Registers this cluster manager with the system manager using gRPC."""
 
     response = None
-    with grpc.insecure_channel(SYSTEM_MANAGER_ADDR) as channel:
+    with grpc.insecure_channel(config.SYSTEM_MANAGER_ADDR) as channel:
         stub = register_clusterStub(channel)
 
         try:
             # Send initial greeting (CS1Message)
             message = CS1Message()
             message.hello_service_manager = json.dumps(
-                {"cluster_name": MY_CHOSEN_CLUSTER_NAME, "location": MY_CLUSTER_LOCATION}
+                {
+                    "cluster_name": config.MY_CHOSEN_CLUSTER_NAME,
+                    "location": config.MY_CLUSTER_LOCATION,
+                }
             )
             response: SC1Message = stub.handle_init_greeting(
-                message, wait_for_ready=True, timeout=GRPC_REQUEST_TIMEOUT
+                message, wait_for_ready=True, timeout=config.GRPC_REQUEST_TIMEOUT
             )
             logger.info(
                 "Received greeting message from System Manager: "
@@ -114,17 +109,17 @@ def register_with_system_manager():
         try:
             # Send cluster details (CS2Message)
             message = CS2Message()
-            message.manager_port = int(MY_PORT)
-            message.network_component_port = int(NETWORK_COMPONENT_PORT)
-            message.cluster_name = MY_CHOSEN_CLUSTER_NAME
-            message.cluster_location = MY_CLUSTER_LOCATION
+            message.manager_port = int(config.MY_PORT)
+            message.network_component_port = int(config.NETWORK_COMPONENT_PORT)
+            message.cluster_name = config.MY_CHOSEN_CLUSTER_NAME
+            message.cluster_location = config.MY_CLUSTER_LOCATION
 
             # Add additional key-value pairs to SC2Message
             key_value_message = KeyValue()
             message.cluster_info.append(key_value_message)
 
             response: SC2Message = stub.handle_init_final(
-                message, wait_for_ready=True, timeout=GRPC_REQUEST_TIMEOUT
+                message, wait_for_ready=True, timeout=config.GRPC_REQUEST_TIMEOUT
             )
 
             logger.info(f"Cluster ID received: {response.id}")
@@ -132,12 +127,11 @@ def register_with_system_manager():
         except grpc.RpcError as e:
             logger.error(f"Error sending CS2 to System Manager: {e}")
 
-        global MY_ASSIGNED_CLUSTER_ID
         if response:
             if response.id is not None:
-                MY_ASSIGNED_CLUSTER_ID = response.id
+                config.MY_ASSIGNED_CLUSTER_ID = response.id
                 logger.info("Received ID. Go ahead with Background Jobs")
-                prometheus_init_gauge_metrics(MY_ASSIGNED_CLUSTER_ID, app.logger)
+                prometheus_init_gauge_metrics(config.MY_ASSIGNED_CLUSTER_ID, app.logger)
                 background_job_send_aggregated_information_to_sm()
             else:
                 logger.error("No ID received.")
@@ -155,5 +149,5 @@ if __name__ == "__main__":
     import eventlet
 
     eventlet.wsgi.server(
-        eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger
+        eventlet.listen(("::", int(config.MY_PORT)), family=socket.AF_INET6), app, log=my_logger
     )  # see README for logging notes
