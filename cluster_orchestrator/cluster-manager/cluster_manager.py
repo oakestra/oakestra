@@ -2,13 +2,13 @@ import json
 import logging
 import socket
 
+import config
 import grpc
 from apscheduler.schedulers.background import BackgroundScheduler
 from blueprints import blueprints
 from clients.mqtt_client import mqtt_init
 from clients.my_prometheus_client import prometheus_init_gauge_metrics
 from cm_logging import configure_logging
-import config
 from ext_requests.system_manager_requests import (
     re_deploy_dead_jobs_routine,
     send_aggregated_info_to_sm,

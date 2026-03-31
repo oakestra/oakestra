@@ -1,11 +1,10 @@
 import logging
 
+import config
 from bson import json_util
 from flask import Response
 from flask.views import MethodView
 from flask_smorest import Blueprint
-
-import config
 
 logger = logging.getLogger("cluster_manager")
 
