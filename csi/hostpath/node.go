@@ -233,7 +233,7 @@ func (n *nodeServer) NodeGetVolumeStats(
 		return nil, status.Errorf(codes.Internal, "statfs %q: %v", volumePath, err)
 	}
 
-	bsize := int64(stat.Bsize)
+	bsize := int64(stat.Bsize) //nolint:unconvert
 
 	total := int64(stat.Blocks) * bsize
 	avail := int64(stat.Bavail) * bsize
