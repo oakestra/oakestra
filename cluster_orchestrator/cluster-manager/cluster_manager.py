@@ -92,7 +92,7 @@ def register_with_system_manager():
             message.hello_service_manager = json.dumps(
                 {
                     "cluster_name": config.MY_CHOSEN_CLUSTER_NAME,
-                    "location": config.MY_CLUSTER_LOCATION
+                    "location": config.MY_CLUSTER_LOCATION,
                 }
             )
             response: SC1Message = stub.handle_init_greeting(
