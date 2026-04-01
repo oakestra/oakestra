@@ -7,7 +7,7 @@ click~=8.2.0
 dnspython~=2.7.0
 eventlet~=0.39.1
 Flask~=3.1.1
-Flask-PyMongo~=2.3.0
+Flask-PyMongo~=3.0.1
 Flask-SocketIO~=5.5.1
 greenlet~=3.2.2
 importlib-metadata~=8.7.0
@@ -15,6 +15,7 @@ itsdangerous~=2.2.0
 Jinja2~=3.1.6
 MarkupSafe~=3.0.2
 paho-mqtt==2.1.0
+pymongo==4.12.1
 python-engineio==4.12.1
 python-socketio==5.13.0
 pytz==2025.2

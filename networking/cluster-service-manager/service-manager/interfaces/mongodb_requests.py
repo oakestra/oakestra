@@ -193,7 +193,7 @@ def mongo_update_job_deployed(
     return mongo_jobs.db.jobs.find_one_and_update(
         {"job_name": job_name},
         {"$set": {"status": status, "instance_list": instance_list}},
-        returnNewDocument=False,
+        return_document=False,
     )
 
 
