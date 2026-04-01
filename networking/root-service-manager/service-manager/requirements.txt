@@ -12,7 +12,7 @@ dnspython==2.7.0
 eventlet==0.39.1
 Flask==3.1.1
 Flask-JWT-Extended==4.7.1
-Flask-PyMongo==3.0.1
+Flask-PyMongo~=2.3.0
 flask-smorest==0.46.1
 Flask-SocketIO==5.5.1
 flask-swagger-ui==4.11.1
@@ -27,7 +27,6 @@ packaging==25.0
 prometheus_client==0.21.1
 pycparser==2.22
 PyJWT==2.10.1
-pymongo==4.12.1
 python-engineio==4.12.1
 python-socketio==5.13.0
 PyYAML==6.0.2
