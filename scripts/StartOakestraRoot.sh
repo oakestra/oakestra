@@ -135,7 +135,7 @@ fi
 
 # If non-main branch and no override provided, update custom version of service manager to prevent potential issues with network policies in non-main branches
 if [ "$OAKESTRA_VERSION" != "main" ]; then
-    if [[ ! "$OVERRIDE_FILES" == *"override-no-network.yml"* ]] && [[ ! "$OVERRIDE_FILES" == *"override-custom-service-manager-version.yml"* ]]; then
+    if [[ ! "$OVERRIDE_FILES" == *"override-no-network.yml"* ]] && [[ ! "$OVERRIDE_FILES" == *"override-custom-service-manager-version.yml"* ]] && [[ ! "$OVERRIDE_FILES" == *"override-local-service-manager.yml"* ]]; then
         echo "🕸️ Setting network to latest alpha release"
         if is_tag "$OAKESTRA_VERSION"; then
             ALPHA_TAG=$(echo $OAKESTRA_VERSION | sed 's/alpha-//g')
