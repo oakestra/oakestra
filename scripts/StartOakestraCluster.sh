@@ -228,9 +228,13 @@ if [ "$OAKESTRA_VERSION" != "main" ]; then
 fi
 
 if sudo docker ps -a | grep oakestra/cluster >/dev/null 2>&1; then
-  echo 🚨 Oakestra cluster containers are already running. Please stop them before starting another cluster on this machine.
-  echo 🪫 You can turn off the current cluster using: \$ docker compose -f ~/.oakestra/cluster_orchestrator/cluster-orchestrator.yml down
-  exit 1
+    echo 🚨 Detected some Oakestra cluster containers already running. It is recommended to stop them before starting a new cluster.
+    echo Do you wish to continue anyway? \(y/n\)
+    read answer
+    if [ "$answer" != "y" ]; then
+      echo Exiting without starting Oakestra Cluster.
+      exit 0
+    fi
 fi
 
 command_exec="LIB_BRANCH=${OAKESTRA_VERSION} sudo -E docker compose -f ${COMPOSE_FILE} ${OAK_OVERRIDES} up ${BUILD_FLAG} -d"

@@ -171,9 +171,13 @@ if [ ! -z "$OAKESTRA_VERSION" ]; then
 fi
 
 if sudo docker ps -a | grep oakestra >/dev/null 2>&1; then
-  echo 🚨 Oakestra containers are already running. Please stop them before starting a new 1-DOC cluster.
-  echo 🪫 You can turn off the current cluster using: \$ docker compose -f ~/.oakestra/1-DOC.yaml down
-  exit 1
+  echo 🚨 Detected some Oakestra containers already running. It is recommended to stop them before starting a new 1-DOC cluster.
+  echo Do you wish to continue anyway? \(y/n\)
+  read answer
+  if [ "$answer" != "y" ]; then
+    echo Exiting without starting Oakestra 1-DOC.
+    exit 0
+  fi
 fi
 
 command_exec="sudo -E docker compose -f 1-DOC.yaml ${OAK_OVERRIDES} up -d"
