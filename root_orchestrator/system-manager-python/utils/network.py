@@ -1,4 +1,5 @@
 import socket
+import ipaddress
 from urllib.parse import unquote
 
 
@@ -37,18 +38,40 @@ def sanitize(address, request=False):
     return address
 
 
-def get_ip_from_grpc_transport(transport):
-    """Extracts the IP address from the gRPC transport string."""
-    transport_parts = transport.split(":")  # grpc format is protocol:ip:port
-    l3_protocol = transport_parts[0]
-    transport_port = transport_parts[len(transport_parts) - 1]
-    url = unquote(transport)
-    cluster_ip = ""
+def _extract_first_ip_from_xff(xff_value):
+    """Extract first valid IP from X-Forwarded-For value."""
+    if not xff_value:
+        return None
 
-    if l3_protocol == "ipv4":
-        cluster_ip = transport_parts[1]
-    elif l3_protocol == "ipv6":
-        cluster_ip = url.replace("ipv6:", "")
-        cluster_ip = cluster_ip.replace(":" + transport_port, "")
+    for candidate in xff_value.split(","):
+        value = candidate.strip().strip('"')
+        if not value:
+            continue
+        try:
+            return str(ipaddress.ip_address(value))
+        except ValueError:
+            continue
+    return None
+
+
+def get_ip_from_grpc_transport(transport, metadata=None):
+    """Extracts caller IP from gRPC metadata/peer transport."""
+
+    metadata = metadata or {}
+    # If handshake is proxied use x-forwad-for fields
+    cluster_ip = _extract_first_ip_from_xff(metadata.get("x-forwarded-for"))
+
+    if not cluster_ip:
+        transport_parts = transport.split(":")  # grpc format is protocol:ip:port
+        l3_protocol = transport_parts[0]
+        transport_port = transport_parts[len(transport_parts) - 1]
+        url = unquote(transport)
+        cluster_ip = ""
+
+        if l3_protocol == "ipv4":
+            cluster_ip = transport_parts[1]
+        elif l3_protocol == "ipv6":
+            cluster_ip = url.replace("ipv6:", "")
+            cluster_ip = cluster_ip.replace(":" + transport_port, "")
 
     return sanitize(cluster_ip)

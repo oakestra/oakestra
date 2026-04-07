@@ -1,0 +1,208 @@
+_format_version: "3.0"
+
+services:
+  # External gRPC entrypoint for cluster registration.
+  - name: system_manager_grpc_external
+    url: grpc://system_manager:50052
+    routes:
+      - name: cluster-registration-external
+        protocols:
+          - grpc
+          - grpcs
+        paths:
+          - /clusterRegistration.register_cluster
+    plugins:
+      - name: request-transformer
+        config:
+          append:
+            headers:
+              - "x-forwarded-for:$(headers[\"x-forwarded-for\"])"
+
+  # Public API surface for end users.
+  - name: system_manager_public
+    url: http://system_manager:10000
+    routes:
+      - name: sm-auth-login
+        paths:
+          - /api/auth/login
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+      - name: sm-auth-refresh
+        paths:
+          - /api/auth/refresh
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+      - name: sm-applications-public
+        paths:
+          - /api/application
+          - /api/application/
+        methods: [GET, POST, PATCH, DELETE, OPTIONS]
+        strip_path: false
+
+      - name: sm-applications-by-user
+        paths:
+          - "~/^/api/applications/[^/]+$"
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      - name: sm-permission-public
+        paths:
+          - /api/permission
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      - name: sm-clusters-public
+        paths:
+          - /api/clusters
+          - /api/clusters/
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      - name: sm-service-public
+        paths:
+          - /api/service
+        strip_path: false
+
+      - name: sm-services-by-app
+        paths:
+          - "~/^/api/services/[^/]+$"
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      - name: sm-services-list-public
+        paths:
+          - /api/services/
+          - /api/services
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      - name: sm-user-self
+        paths:
+          - "~/^/api/user/[^/]+$"
+        methods: [GET, POST, OPTIONS]
+        strip_path: false
+
+      - name: sm-user-reset
+        paths:
+          - /api/user/
+        methods: [POST, PUT, OPTIONS]
+        strip_path: false
+
+      - name: sm-docs-public
+        paths:
+          - /api/docs
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      - name: sm-information-base-public
+        paths:
+          - /api/information
+          - /api/information/
+        methods: [GET, POST, OPTIONS]
+        strip_path: false
+
+      - name: sm-information-by-cluster-public
+        paths:
+          - "~/^/api/information/[^/]+$"
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+  # Public root service manager endpoint.
+  - name: root_service_manager_public
+    url: http://root_service_manager:10099
+    routes:
+      - name: rsm-netinfo-public
+        paths:
+          - /api/pubnet/service/netinfo
+          - /api/pubnet/service/netinfo/
+        methods: [GET, OPTIONS]
+        strip_path: false
+      - name: rsm-subnet-public
+        paths:
+          - /api/net/subnet
+          - /api/net/subnet/
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+  # Explicitly block admin-only endpoints on the external gateway.
+  - name: system_manager_admin_block
+    url: http://system_manager:10000
+    routes:
+      - name: sm-block-clusters
+        paths:
+          - /api/clusters
+        methods: [POST, PUT, PATCH, DELETE]
+        strip_path: false
+      - name: sm-block-organization
+        paths:
+          - /api/organization
+        strip_path: false
+      - name: sm-block-register
+        paths:
+          - /api/auth/register
+        methods: [POST, OPTIONS]
+        strip_path: false
+      - name: sm-block-all-users
+        paths:
+          - /api/users
+        strip_path: false
+      - name: sm-block-admin-user-methods
+        paths:
+          - "~/^/api/user/[^/]+$"
+        methods: [PUT, DELETE]
+        strip_path: false
+      - name: sm-block-admin-applications
+        paths:
+          - "~/^/api/applications/?$"
+        methods: [GET]
+        strip_path: false
+      # Fallback deny: any API path not matched by explicit allowlist stays blocked.
+      - name: sm-block-api-fallback
+        paths:
+          - /api
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        strip_path: false
+      - name: sm-block-grafana
+        paths:
+          - /grafana
+          - /grafana/
+        methods: [GET, HEAD, OPTIONS]
+        strip_path: false
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 403
+          message: "Admin endpoints are not exposed on the external gateway"
+
+  - name: dashboard_public
+    url: http://dashboard_external:80
+    routes:
+      - name: dashboard-public-routes
+        paths:
+          - "~/^$"
+          - /
+        methods: [GET, HEAD, OPTIONS]
+        strip_path: false
+
+plugins:
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      headers:
+        - Authorization
+        - Content-Type
+        - Accept
+      exposed_headers:
+        - Authorization
+      credentials: false
+      max_age: 3600

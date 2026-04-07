@@ -106,7 +106,8 @@ class ClusterRegistrationServicer(register_clusterServicer):
         logger.info(request)
         message = MessageToDict(request, preserving_proto_field_name=True)
         logger.info("Message: {}, request {}".format(message, request))
-        cluster_address = get_ip_from_grpc_transport(context.peer())
+        metadata = dict(context.invocation_metadata() or [])
+        cluster_address = get_ip_from_grpc_transport(context.peer(), metadata)
 
         logger.info("Cluster address: {}".format(cluster_address))
 

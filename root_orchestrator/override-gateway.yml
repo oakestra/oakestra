@@ -1,0 +1,222 @@
+services:
+
+  # Reset port mappins so that services are only reachable
+  # * from within the docker network
+  # * via the gateways
+
+  system_manager:
+    ports: !reset []
+
+  mongo_root:
+    ports: !reset []
+
+  mongo_rootnet:
+    ports: !reset []
+
+  root_service_manager:
+    ports: !reset []
+
+  root_redis:
+    ports: !reset []
+
+  grafana:
+    environment:
+      - GF_SERVER_ROOT_URL=http://localhost:8000/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_SERVER_ENFORCE_DOMAIN=false
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SECURITY_CSRF_TRUSTED_ORIGINS=localhost:8000
+      - GF_SECURITY_CSRF_ADDITIONAL_HEADERS=X-Forwarded-Host
+    ports: !reset []
+
+  loki:
+    ports: !reset []
+
+  dashboard:
+    image: dashboard
+    build: ../../dashboard
+    environment:
+      - API_ADDRESS=localhost:8000
+      - GRAFANA_ADDRESS=localhost:8000/grafana
+    ports: !reset []
+
+  dashboard_external:
+    image: dashboard
+    build: ../../dashboard
+    environment:
+      - API_ADDRESS=localhost:8888
+      - GRAFANA_ADDRESS=localhost:8888/grafana
+    ports: !reset []
+
+  root_scheduler:
+    ports: !reset []
+
+  root_resource_abstractor:
+    ports: !reset []
+
+  jwt_generator:
+    ports: !reset []
+
+  root_addons_manager:
+    ports: !reset []
+
+  root_addons_dashboard:
+    environment:
+      - BASE_HREF=root-addons-dashboard
+    ports: !reset []
+
+  marketplace_manager:
+    ports: !reset []
+
+  kong_db_external:
+    image: postgres:16
+    container_name: kong_db_external
+    hostname: kong_db_external
+    environment:
+      - POSTGRES_USER=kong
+      - POSTGRES_PASSWORD=kong
+      - POSTGRES_DB=kong
+    volumes:
+      - kong_db_external_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "kong"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  kong_db_internal:
+    image: postgres:16
+    container_name: kong_db_internal
+    hostname: kong_db_internal
+    environment:
+      - POSTGRES_USER=kong
+      - POSTGRES_PASSWORD=kong
+      - POSTGRES_DB=kong
+    volumes:
+      - kong_db_internal_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "kong"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  kong_bootstrap_external:
+    image: kong:3.6
+    container_name: kong_bootstrap_external
+    command: kong migrations bootstrap
+    environment:
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=kong_db_external
+      - KONG_PG_USER=kong
+      - KONG_PG_PASSWORD=kong
+      - KONG_PG_DATABASE=kong
+    depends_on:
+      kong_db_external:
+        condition: service_healthy
+    restart: on-failure
+
+  kong_bootstrap_internal:
+    image: kong:3.6
+    container_name: kong_bootstrap_internal
+    command: kong migrations bootstrap
+    environment:
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=kong_db_internal
+      - KONG_PG_USER=kong
+      - KONG_PG_PASSWORD=kong
+      - KONG_PG_DATABASE=kong
+    depends_on:
+      kong_db_internal:
+        condition: service_healthy
+    restart: on-failure
+
+  # External Gateway
+  kong_external:
+    image: kong:3.6
+    container_name: kong_external
+    hostname: kong_external
+    environment:
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=kong_db_external
+      - KONG_PG_USER=kong
+      - KONG_PG_PASSWORD=kong
+      - KONG_PG_DATABASE=kong
+      - KONG_PROXY_LISTEN=0.0.0.0:8000 http2, 0.0.0.0:8443 ssl http2
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001    # Admin API — internal only
+      - KONG_SSL_CERT=/certs/server.crt
+      - KONG_SSL_CERT_KEY=/certs/server.key
+      - KONG_LOG_LEVEL=info
+    volumes:
+      - ./config/certs:/certs:ro
+    ports:
+      - "8888:8000"   # HTTP (redirect to HTTPS in a real-request-transformer plugin)
+      - "443:8443"    # HTTPS — public
+    expose:
+      - "8001"        # Admin API — reachable inside Docker network only
+    depends_on:
+      kong_db_external:
+        condition: service_healthy
+      kong_bootstrap_external:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  # Internal Gateway
+  kong_internal:
+    image: kong:3.6
+    container_name: kong_internal
+    hostname: kong_internal
+    environment:
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=kong_db_internal
+      - KONG_PG_USER=kong
+      - KONG_PG_PASSWORD=kong
+      - KONG_PG_DATABASE=kong
+      - KONG_PROXY_LISTEN=0.0.0.0:8000 http2
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001
+      - KONG_LOG_LEVEL=info
+    ports:
+      - "127.0.0.1:8000:8000"
+    expose:
+      - "8001"
+    depends_on:
+      kong_db_internal:
+        condition: service_healthy
+      kong_bootstrap_internal:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  # Initial config
+  kong_init:
+    image: kong/deck:v1.56.0
+    container_name: kong_init
+    volumes:
+      - ./config/kong/init-gateway.sh:/init-gateway.sh:ro
+      - ./config/kong/external.yaml:/external.yaml:ro
+      - ./config/kong/internal.yaml:/internal.yaml:ro
+    entrypoint: ["sh", "/init-gateway.sh"]
+    depends_on:
+      kong_external:
+        condition: service_healthy
+      kong_internal:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  kong_db_external_data:
+    driver: local
+  kong_db_internal_data:
+    driver: local

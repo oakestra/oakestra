@@ -1,0 +1,128 @@
+_format_version: "3.0"
+
+# Internal Gateway mapping - only traffic from localhost permitted
+services:
+
+  # System Manager (admin + user API)
+  - name: system_manager_api
+    url: http://system_manager:10000
+    routes:
+      - name: system-manager-routes
+        paths:
+          - /system_manager/api/
+          - /api/
+          - /api/docs
+        strip_path: false
+  
+  - name: system_manager_grpc
+    url: grpc://system_manager:50052
+    routes:
+      - name: cluster_registration
+        protocols:
+          - grpc
+        paths:
+          - /clusterRegistration.register_cluster
+
+  # Root networking plugin
+  - name: root_service_manager_api
+    url: http://root_service_manager:10099
+    routes:
+      - name: root-service-manager-routes
+        paths:
+          - /api/pubnet/service/netinfo
+          - /api/net/subnet
+        strip_path: false
+
+  # Root scheduler callbacks
+  - name: root_scheduler_api
+    url: http://root_scheduler:10004
+    routes:
+      - name: root-scheduler-routes
+        paths:
+          - /api/calculate/deploy
+        strip_path: false
+
+  # Root resource abstractor
+  - name: root_resource_abstractor_api
+    url: http://root_resource_abstractor:11011
+    routes:
+      - name: root-resource-abstractor-routes
+        paths:
+          - /api/v1/applications
+          - /api/v1/custom-resources
+          - /api/v1/hook
+          - /api/v1/jobs
+          - /api/v1/resources
+        strip_path: false
+
+  # JWT key and token operations
+  - name: jwt_generator_api
+    url: http://jwt_generator:10011
+    routes:
+      - name: jwt-generator-routes
+        paths:
+          - /create
+          - /refresh
+          - /key
+          - /health
+        strip_path: false
+
+  # Root addons manager
+  - name: root_addons_manager_api
+    url: http://root_addons_manager:11101
+    routes:
+      - name: root-addons-manager-routes
+        paths:
+          - /api/v1/addons
+          - /api/v1/addons/
+        strip_path: false
+
+  # Addons marketplace
+  - name: marketplace_manager_api
+    url: http://marketplace_manager:11102
+    routes:
+      - name: marketplace-manager-routes
+        paths:
+          - /api/v1/marketplace/addons
+        strip_path: false
+  
+  - name: grafana
+    url: http://grafana:3000
+    routes:
+      - name: grafana-routes
+        paths:
+          - /grafana
+        strip_path: false
+    plugins:
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "X-Forwarded-Proto:http"
+              - "X-Forwarded-Host:localhost:8000"
+
+  - name: loki
+    url: http://loki:3100
+    routes:
+      - name: loki-routes
+        paths:
+          - /loki
+        strip_path: false
+
+  - name: dashboard
+    url: http://dashboard:80
+    routes:
+      - name: dashboard-routes
+        paths:
+          - /
+        strip_path: false
+
+  - name: root_addons_dashboard
+    url: http://root_addons_dashboard:11103
+    routes:
+      - name: root-addons-dashboard-routes
+        paths:
+          - /root-addons-dashboard
+        strip_path: true
+
+plugins: []

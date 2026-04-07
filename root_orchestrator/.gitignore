@@ -2,3 +2,8 @@
 system-manager-javascript/
 system-manager-quart/
 
+# SSL certificates — never commit real certs
+config/certs/*.crt
+config/certs/*.key
+config/certs/*.pem
+
