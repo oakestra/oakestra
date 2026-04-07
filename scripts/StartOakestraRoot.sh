@@ -135,7 +135,7 @@ fi
 
 # If non-main branch and no override provided, update custom version of service manager to prevent potential issues with network policies in non-main branches
 if [ "$OAKESTRA_VERSION" != "main" ]; then
-    if [[ ! "$OVERRIDE_FILES" == *"override-no-network.yml"* ]] && [[ ! "$OVERRIDE_FILES" == *"override-custom-service-manager-version.yml"* ]]; then
+    if [[ ! "$OVERRIDE_FILES" == *"override-no-network.yml"* ]] && [[ ! "$OVERRIDE_FILES" == *"override-custom-service-manager-version.yml"* ]] && [[ ! "$OVERRIDE_FILES" == *"override-local-service-manager.yml"* ]]; then
         echo "🕸️ Setting network to latest alpha release"
         if is_tag "$OAKESTRA_VERSION"; then
             ALPHA_TAG=$(echo $OAKESTRA_VERSION | sed 's/alpha-//g')
@@ -153,9 +153,13 @@ if [ "$OAKESTRA_VERSION" != "main" ]; then
 fi
 
 if sudo docker ps -a | grep oakestra/root >/dev/null 2>&1; then
-  echo 🚨 Oakestra root containers are already running. Please stop them before starting the root orchestrator.
-  echo 🪫 You can turn off the current root using: \$ docker compose -f ~/.oakestra/root_orchestrator/root-orchestrator.yml down
-  exit 1
+    echo 🚨 Detected some Oakestra Root containers already running. It is recommended to stop them before starting a new Root orchestrator.
+    echo Do you wish to continue anyway? \(y/n\)
+    read answer
+    if [ "$answer" != "y" ]; then
+      echo Exiting without starting Oakestra Root Orchestrator.
+      exit 0
+    fi
 fi
 
 command_exec="LIB_BRANCH=${OAKESTRA_VERSION} sudo -E docker compose -f ${COMPOSE_FILE} ${OAK_OVERRIDES} up ${BUILD_FLAG} -d"
