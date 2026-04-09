@@ -125,6 +125,18 @@ services:
           - /api/net/subnet/
         methods: [GET, OPTIONS]
         strip_path: false
+      - name: rsm-service-public
+        paths:
+          - /api/net/service
+          - /api/net/service/
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        strip_path: false
+      - name: rsm-interest-public
+        paths:
+          - /api/net/interest
+          - /api/net/interest/
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        strip_path: false
 
   # Explicitly block admin-only endpoints on the external gateway.
   - name: system_manager_admin_block
