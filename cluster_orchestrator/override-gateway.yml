@@ -1,0 +1,12 @@
+services:
+
+  cluster_manager:
+    environment:
+      - SYSTEM_MANAGER_PORT=${SYSTEM_MANAGER_GATEWAY_HTTP_PORT:-8888}
+      - SYSTEM_MANAGER_GRPC_PORT=${SYSTEM_MANAGER_GATEWAY_GRPC_PORT:-8888}
+      - CLUSTER_IP=${CLUSTER_IP}
+  
+  cluster_service_manager:
+    environment:
+      - ROOT_SERVICE_MANAGER_PORT=8888
+      - CLUSTER_IP=${CLUSTER_IP}
