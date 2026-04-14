@@ -23,7 +23,8 @@ message CS2Message {
   int32 network_component_port = 2;
   string cluster_name = 3;
   repeated KeyValue cluster_info = 4;
-  string candidate_location = 5;
+  string cluster_location = 5;
+  string cluster_ip = 6;
 }
 
 message KeyValue {

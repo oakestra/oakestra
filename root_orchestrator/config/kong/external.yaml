@@ -78,6 +78,12 @@ services:
         methods: [GET, OPTIONS]
         strip_path: false
 
+      - name: sm-user-public-prefix
+        paths:
+          - /api/user
+        methods: [GET, OPTIONS]
+        strip_path: false
+
       - name: sm-user-self
         paths:
           - "~/^/api/user/[^/]+$"
@@ -86,7 +92,7 @@ services:
 
       - name: sm-user-reset
         paths:
-          - /api/user/
+          - "~/^/api/user/?$"
         methods: [POST, PUT, OPTIONS]
         strip_path: false
 
@@ -107,6 +113,13 @@ services:
         paths:
           - "~/^/api/information/[^/]+$"
         methods: [POST, OPTIONS]
+        strip_path: false
+
+      - name: sm-organization-public
+        paths:
+          - /api/organization
+          - /api/organization/
+        methods: [GET, OPTIONS]
         strip_path: false
 
   # Public root service manager endpoint.
@@ -150,6 +163,8 @@ services:
       - name: sm-block-organization
         paths:
           - /api/organization
+          - /api/organization/
+        methods: [POST, PUT, PATCH, DELETE]
         strip_path: false
       - name: sm-block-register
         paths:

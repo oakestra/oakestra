@@ -24,6 +24,7 @@ message CS2Message {
   string cluster_name = 3;
   repeated KeyValue cluster_info = 4;
   string cluster_location = 5;
+  string cluster_ip = 6;
 }
 
 message KeyValue {

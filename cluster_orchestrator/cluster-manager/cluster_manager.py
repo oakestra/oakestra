@@ -113,6 +113,7 @@ def register_with_system_manager():
             message.network_component_port = int(config.NETWORK_COMPONENT_PORT)
             message.cluster_name = config.MY_CHOSEN_CLUSTER_NAME
             message.cluster_location = config.MY_CLUSTER_LOCATION
+            message.cluster_ip = config.MY_CLUSTER_IP
 
             # Add additional key-value pairs to SC2Message
             key_value_message = KeyValue()
@@ -128,7 +129,7 @@ def register_with_system_manager():
             logger.error(f"Error sending CS2 to System Manager: {e}")
 
         if response:
-            if response.id is not None:
+            if response.id:
                 config.MY_ASSIGNED_CLUSTER_ID = response.id
                 logger.info("Received ID. Go ahead with Background Jobs")
                 prometheus_init_gauge_metrics(config.MY_ASSIGNED_CLUSTER_ID, app.logger)
