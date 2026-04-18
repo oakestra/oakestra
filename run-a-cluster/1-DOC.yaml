@@ -198,8 +198,7 @@ services:
       - /mosquitto/data
       - /mosquitto/log
     healthcheck:
-      test: [ "CMD-SHELL", "timeout -t 5 mosquitto_sub -t '$$SYS/#' -C 1 | grep -v Error || exit 1" ]
-      interval: 10s
+      test: [ "CMD-SHELL", "mosquitto_sub -p 10003 -t '$$SYS/#' -C 1 -W 3 || exit 1" ]      interval: 10s
       timeout: 10s
       retries: 6
 
