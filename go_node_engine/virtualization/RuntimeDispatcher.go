@@ -1,13 +1,14 @@
 package virtualization
 
 import (
+	"sync"
+
 	"go_node_engine/model"
 	"go_node_engine/util/iotools"
 
 	// make sure crosvm runtime is initialized, as it is not in the virtualization module
 	_ "go_node_engine/virtualization/internal/crosvm"
 	virtrt "go_node_engine/virtualization/internal/runtime"
-	"sync"
 )
 
 type RuntimeManager struct {
@@ -42,8 +43,6 @@ func NewRuntimeManager() (*RuntimeManager, error) {
 		onceInitializers[name] = sync.OnceValue(func() virtrt.Runtime {
 			return initializer(info)
 		})
-		// maybe this shouldn't be global state
-		model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(name))
 	}
 
 	return &RuntimeManager{

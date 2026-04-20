@@ -55,6 +55,7 @@ func main() {
 		if virt.Active {
 			rt := runtimeManager.GetRuntime(model.RuntimeType(virt.Runtime))
 			defer rt.Stop()
+			model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(virt.Runtime))
 		}
 	}
 

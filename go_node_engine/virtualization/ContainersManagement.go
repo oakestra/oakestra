@@ -19,8 +19,6 @@ import (
 	"sync"
 	"time"
 
-	containerdcfg "github.com/containerd/containerd/v2/cmd/containerd/server/config"
-
 	"github.com/containerd/containerd"
 	runcoptions "github.com/containerd/containerd/api/types/runc/options"
 	"github.com/containerd/containerd/cio"
@@ -31,6 +29,7 @@ import (
 	"github.com/containerd/containerd/plugin"
 	docker_remote "github.com/containerd/containerd/remotes/docker"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	toml "github.com/pelletier/go-toml/v2"
 	"github.com/shirou/gopsutil/docker"
 	"github.com/shirou/gopsutil/process"
 	"github.com/struCoder/pidusage"
@@ -93,15 +92,28 @@ func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
 	runtime.forceContainerCleanup()
 	runtime.mountedVolumes = make(map[string][]csi.MountedVolume)
 
+	// Advertise sub-runtimes discovered from the containerd config (e.g. runc).
+	for name := range findAdditionalRuntimePlugins() {
+		model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(name))
+	}
+
 	return &runtime
 }
 
-// checks the containerd config file for additional runtimes and registers them
+// checks the containerd config file for additional runtimes and registers them.
+// Parses TOML directly: containerd's v2 LoadConfig rejects legacy short-form
+// disabled_plugins entries (e.g. "cri") that ship with Docker's containerd.
 func findAdditionalRuntimePlugins() iter.Seq[string] {
-	var containerdConfig containerdcfg.Config
-	err := containerdcfg.LoadConfig(context.Background(), CONTAINERD_CONFIG_PATH, &containerdConfig)
+	data, err := os.ReadFile(CONTAINERD_CONFIG_PATH)
 	if err != nil {
-		logger.ErrorLogger().Printf("Unable to load containerd config file: %v", err)
+		logger.ErrorLogger().Printf("Unable to read containerd config file: %v", err)
+		return nil
+	}
+	var containerdConfig struct {
+		Plugins map[string]interface{} `toml:"plugins"`
+	}
+	if err := toml.Unmarshal(data, &containerdConfig); err != nil {
+		logger.ErrorLogger().Printf("Unable to parse containerd config file: %v", err)
 		return nil
 	}
 	for _, ctd := range containerdConfig.Plugins {
