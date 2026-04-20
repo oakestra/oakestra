@@ -60,7 +60,7 @@ def get_cluster_token(cluster_name):
     
     Returns:
         The token document, or None if not found
-    """
+    """ 
     collection = mongodb_client.mongo_cluster_tokens
     if collection is None:
         logger.error("Cluster tokens database not initialized")

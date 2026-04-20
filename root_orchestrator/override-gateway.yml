@@ -46,8 +46,8 @@ services:
     image: dashboard
     build: ../../dashboard
     environment:
-      - API_ADDRESS=localhost:8888
-      - GRAFANA_ADDRESS=localhost:8888/grafana
+      - API_ADDRESS=localhost:80
+      - GRAFANA_ADDRESS=localhost:80/grafana
     ports: !reset []
 
   root_scheduler:
@@ -153,7 +153,7 @@ services:
     volumes:
       - ./config/certs:/certs:ro
     ports:
-      - "8888:8000"   # HTTP (redirect to HTTPS in a real-request-transformer plugin)
+      - "80:8000"     # HTTP (redirect to HTTPS in a real-request-transformer plugin)
       - "443:8443"    # HTTPS — public
     expose:
       - "8001"        # Admin API — reachable inside Docker network only

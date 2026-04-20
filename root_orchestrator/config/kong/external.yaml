@@ -11,12 +11,6 @@ services:
           - grpcs
         paths:
           - /clusterRegistration.register_cluster
-    plugins:
-      - name: request-transformer
-        config:
-          append:
-            headers:
-              - "x-forwarded-for:$(headers[\"x-forwarded-for\"])"
 
   # Public API surface for end users.
   - name: system_manager_public
