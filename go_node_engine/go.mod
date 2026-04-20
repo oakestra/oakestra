@@ -6,7 +6,6 @@ require (
 	github.com/container-storage-interface/spec v1.12.0
 	github.com/containerd/containerd v1.7.27
 	github.com/containerd/containerd/api v1.9.0
-	github.com/containerd/containerd/v2 v2.1.0
 	github.com/containers/image/v5 v5.35.0
 	github.com/containers/storage v1.58.0
 	github.com/digitalocean/go-qemu v0.0.0-20250212194115-ee9b0668d242
@@ -15,6 +14,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/opencontainers/runtime-spec v1.2.1
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/prometheus/procfs v0.16.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/spf13/afero v1.14.0
@@ -28,7 +28,6 @@ require (
 )
 
 require (
-	dario.cat/mergo v1.0.1 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6 // indirect
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect
 	github.com/BurntSushi/toml v1.5.0 // indirect
@@ -41,7 +40,6 @@ require (
 	github.com/containerd/fifo v1.1.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/platforms v1.0.0-rc.1 // indirect
-	github.com/containerd/plugin v1.0.0 // indirect
 	github.com/containerd/ttrpc v1.2.7 // indirect
 	github.com/containerd/typeurl/v2 v2.2.3 // indirect
 	github.com/containers/libtrust v0.0.0-20230121012942-c1716e8a8d01 // indirect
@@ -78,8 +76,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/selinux v1.12.0 // indirect
-	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/prometheus/client_golang v1.22.0 // indirect
 	github.com/sirupsen/logrus v1.9.4-0.20230606125235-dd1b4c2e81af // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/tklauser/go-sysconf v0.3.10 // indirect
