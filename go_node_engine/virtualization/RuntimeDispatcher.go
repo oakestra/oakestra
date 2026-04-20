@@ -1,13 +1,14 @@
 package virtualization
 
 import (
+	"sync"
+
 	"go_node_engine/model"
 	"go_node_engine/util/iotools"
 
 	// make sure crosvm runtime is initialized, as it is not in the virtualization module
 	_ "go_node_engine/virtualization/internal/crosvm"
 	virtrt "go_node_engine/virtualization/internal/runtime"
-	"sync"
 )
 
 type RuntimeManager struct {
@@ -57,4 +58,3 @@ func (m *RuntimeManager) GetRuntime(runtime model.RuntimeType) virtrt.RuntimeInt
 func (m *RuntimeManager) GetRuntimeMonitoring(runtime model.RuntimeType) virtrt.RuntimeMonitoring {
 	return m.initializers[string(runtime)]()
 }
-
