@@ -12,7 +12,11 @@ services:
           - /system_manager/api/
           - /api/
           - /api/docs
+          - /docs
+          - /docs/
+          - /docs/openapi.json
         strip_path: false
+        preserve_host: true
   
   - name: system_manager_grpc
     url: grpc://system_manager:50052

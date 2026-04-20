@@ -1,5 +1,5 @@
 from blueprints.applications_blueprints import applicationblp, applicationsblp
-from blueprints.authentication_blueprints import loginbp
+from blueprints.authentication_blueprints import loginbp, tokenbp
 from blueprints.authorization_blueprints import permissionbp
 from blueprints.clusters_blueprints import clusterinfo, clustersbp
 from blueprints.deployment_blueprints import deploybp
@@ -13,6 +13,7 @@ blueprints = [
     servicesblp,
     permissionbp,
     loginbp,
+    tokenbp,
     deploybp,
     applicationblp,
     applicationsblp,

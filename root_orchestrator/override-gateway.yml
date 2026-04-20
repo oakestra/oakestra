@@ -5,6 +5,8 @@ services:
   # * via the gateways
 
   system_manager:
+    environment:
+      - REQUIRE_CLUSTER_AUTHENTICATION=True
     ports: !reset []
 
   mongo_root:

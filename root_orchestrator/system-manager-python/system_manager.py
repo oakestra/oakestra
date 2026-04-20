@@ -30,6 +30,7 @@ from resource_abstractor_client import candidate_operations
 from sm_logging import configure_logging
 from utils.network import get_ip_from_grpc_transport
 from werkzeug.utils import redirect, secure_filename
+from roles.securityUtils import verify_cluster_token
 
 my_logger = configure_logging()
 logger = logging.getLogger("system_manager")
@@ -42,7 +43,7 @@ app = Flask(__name__)
 app.config["OPENAPI_VERSION"] = "3.0.2"
 app.config["API_TITLE"] = "Oakestra root api"
 app.config["API_VERSION"] = "v1"
-app.config["OPENAPI_URL_PREFIX"] = "/docs"
+app.config["OPENAPI_URL_PREFIX"] = "/api/docs"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["JWT_ALGORITHM"] = "RS256"
 app.config["JWT_PUBLIC_KEY"] = get_public_key()
@@ -81,7 +82,7 @@ api.spec.options["security"] = [{"bearerAuth": []}]
 
 # Swagger docs
 SWAGGER_URL = "/api/docs"
-API_URL = "/docs/openapi.json"
+API_URL = "/api/docs/openapi.json"
 swaggerui_blueprint = get_swaggerui_blueprint(
     SWAGGER_URL,
     API_URL,
@@ -116,13 +117,20 @@ class ClusterRegistrationServicer(register_clusterServicer):
             "port": str(message["manager_port"]),
             "candidate_location": message["cluster_location"],
             "candidate_name": message["cluster_name"],
+            "token": message.get("token", "")
         }
+
+        if os.environ.get("REQUIRE_CLUSTER_AUTHENTICATION", False):
+            if not verify_cluster_token(cluster_data["candidate_name"], cluster_data["token"]):
+                logger.warning(f"Invalid token provided for {cluster_data['candidate_name']}")
+                context.abort(grpc.StatusCode.UNAUTHENTICATED, "invalid cluster token")
+                return
 
         logger.info("Cluster data: {}".format(cluster_data))
         cluster = candidate_operations.create_candidate(cluster_data)
         if cluster is None:
             logger.error("Creating cluster failed")
-            return
+            context.abort(grpc.StatusCode.INTERNAL, "failed to create cluster candidate")
 
         cid = str(cluster["_id"])
 
