@@ -26,6 +26,8 @@ async function triggerAWX() {
     const extraVars = {
       oak_repo_branch: pullRequestBranch,
       oak_repo_commit: pullRequestCommit,
+      oak_branch: pullRequestBranch, //compatibility with oak custom workflow
+      oak_commit: pullRequestCommit, //compatibility with oak custom workflow
       pr_fork_user: pullRequestUser
     };
 

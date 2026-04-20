@@ -67,11 +67,19 @@ class AddonController(MethodView):
         return json.dumps(result, default=str), 200
 
     def delete(self, addon_id, *args, **kwargs):
-        result = addons_db.update_addon(
-            addon_id, {"status": str(addons_service.AddonStatusEnum.DISABLING)}
-        )
+        addon = addons_db.find_addon_by_id(addon_id)
 
-        if result is None:
-            abort(400, message="Failed to disable addon")
+        if addon is None:
+            abort(404, message="Addon not found")
 
-        return json.dumps(result, default=str), 200
+        if addon.get("status") != str(addons_service.AddonStatusEnum.DISABLED):
+            result = addons_db.update_addon(
+                addon_id, {"status": str(addons_service.AddonStatusEnum.DISABLING)}
+            )
+
+            if result is None:
+                abort(400, message="Failed to disable addon")
+
+            return json.dumps(result, default=str), 200
+        addons_db.delete_addon_by_id(addon_id)
+        return "", 204

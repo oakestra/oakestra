@@ -1,10 +1,27 @@
 #!/bin/bash
+
+#Oakestra version?
+if [ -z "$OAKESTRA_VERSION" ]; then
+    OAKESTRA_VERSION='main'
+fi
+
+#Check if argument stop is passed, if yes, stop the cluster and exit
+if [ "$1" == "stop" ]; then
+    echo Stopping Oakestra Root Orchestrator...
+    docker compose -f ~/.oakestra/1-DOC.yaml down 
+    exit 0
+fi
+
 echo 🌳 Running Oakestra 1-DOC 
 
-#Oakestra branch?
-if [ -z "$OAKESTRA_BRANCH" ]; then
-    OAKESTRA_BRANCH='main'
-fi
+# Function to check if OAKESTRA_VERSION is a tag (alpha-vX.Y.Z or vX.Y.Z)
+is_tag() {
+    if [[ "$1" =~ ^(alpha-)?v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
 
 # Check if docker and docker compose installed 
 if [ ! -x "$(command -v docker)" ]; then
@@ -96,16 +113,16 @@ if [ "$2" != "custom" ]; then
     export CLUSTER_NAME=default_cluster
 fi
 
-rm -rf ~/oakestra 2> /dev/null
-mkdir ~/oakestra 2> /dev/null
+rm -rf ~/.oakestra 2> /dev/null
+mkdir ~/.oakestra 2> /dev/null
 
-cd ~/oakestra 
+cd ~/.oakestra 
 
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
-curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/1-DOC.yaml > 1-DOC.yaml
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_VERSION/scripts/utils/downloadConfigFiles.sh > downloadConfigFiles.sh
+curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_VERSION/run-a-cluster/1-DOC.yaml > 1-DOC.yaml
 
 chmod +x downloadConfigFiles.sh
-./downloadConfigFiles.sh run-a-cluster $OAKESTRA_BRANCH
+./downloadConfigFiles.sh run-a-cluster $OAKESTRA_VERSION
 
 if [ $? -ne 0 ]; then
         echo "Error: Failed to retrieve config files"
@@ -121,7 +138,7 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
     for element in $OVERRIDE_FILES
     do
         echo "Download override: $element"
-        curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_BRANCH/run-a-cluster/$element > $element
+        curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_VERSION/run-a-cluster/$element > $element
         OAK_OVERRIDES="${OAK_OVERRIDES}-f ${element} " 
     done
     IFS= 
@@ -131,13 +148,39 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
     fi
 fi
 
-if sudo docker ps -a | grep oakestra >/dev/null 2>&1; then
-  echo 🚨 Oakestra containers are already running. Please stop them before starting a new 1-DOC cluster.
-  echo 🪫 You can turn off the current cluster using: \$ docker compose -f ~/oakestra/1-DOC.yaml down
-  exit 1
+# Handle OAKESTRA_VERSION if set
+if [ "$OAKESTRA_VERSION" == "develop" ]; then
+    # for Oakestra develop, use latest alpha images built from develop branch
+    OAKESTRA_VERSION=alpha-$(curl -s https://raw.githubusercontent.com/oakestra/oakestra/refs/heads/develop/version.txt)
+    echo "Using develop branch, setting OAKESTRA_VERSION to $OAKESTRA_VERSION"
 fi
 
-command_exec="sudo -E docker compose -f 1-DOC.yaml ${OAK_OVERRIDES}up -d"
+if [ ! -z "$OAKESTRA_VERSION" ]; then
+    if is_tag "$OAKESTRA_VERSION"; then
+        echo "🏷️  Using tag: $OAKESTRA_VERSION"
+        # Generate override file with specific tag
+        cp 1-DOC.yaml 1-DOC.yaml.bak
+        sed "s/:latest/:$OAKESTRA_VERSION/g" 1-DOC.yaml.bak > 1-DOC.yaml
+        rm 1-DOC.yaml.bak 
+    else
+        if [ "$OAKESTRA_VERSION" != "main" ]; then
+          echo "Error: Full 1 Node Oakestra deployment only supports tagged releases, develop or main branch. Please specify a valid tag (e.g., v0.4.401 or alpha-v0.4.403)."
+          exit 1
+        fi
+    fi
+fi
+
+if sudo docker ps -a | grep oakestra >/dev/null 2>&1; then
+  echo 🚨 Detected some Oakestra containers already running. It is recommended to stop them before starting a new 1-DOC cluster.
+  echo Do you wish to continue anyway? \(y/n\)
+  read answer
+  if [ "$answer" != "y" ]; then
+    echo Exiting without starting Oakestra 1-DOC.
+    exit 0
+  fi
+fi
+
+command_exec="sudo -E docker compose -f 1-DOC.yaml ${OAK_OVERRIDES} up -d"
 echo executing "$command_exec"
 
 eval "$command_exec"
@@ -148,4 +191,4 @@ echo
 echo 🖥️ Oakestra dashboard available at http://$SYSTEM_MANAGER_URL
 echo 📊 Grafana dashboard available at http://$SYSTEM_MANAGER_URL:3000
 echo 📈 You can access the APIs at http://$SYSTEM_MANAGER_URL:10000/api/docs
-echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/oakestra/1-DOC.yaml down
+echo 🪫 You can turn off the cluster using: \$ docker compose -f ~/.oakestra/1-DOC.yaml down

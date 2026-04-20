@@ -1,4 +1,5 @@
-from blueprints.jwt_wrapper import BlueprintExt
+import logging
+
 from bson import json_util
 from flask import request
 from flask.views import MethodView
@@ -13,6 +14,11 @@ from roles.securityUtils import (
     require_role,
 )
 from users.auth import user_login, user_register, user_token_refresh
+
+from blueprints.jwt_wrapper import BlueprintExt
+
+logger = logging.getLogger("system_manager")
+
 
 loginbp = BlueprintExt("Login", "auth", url_prefix="/api/auth")
 
@@ -43,7 +49,7 @@ class UserLoginController(MethodView):
     @loginbp.arguments(schema=login_schema, location="json", validate=False, unknown=True)
     def post(self, *args, **kwargs):
         content = request.get_json()
-        print(content)
+        logger.debug(content)
         if content is None:
             abort(403, {"message": "No credentials provided"})
         resp = user_login(content)

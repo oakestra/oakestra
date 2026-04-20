@@ -1,6 +1,7 @@
 # ........ Functions for organization management ...............#
 # ......................................................#
-from blueprints.schema_wrapper import SchemaWrapper
+import logging
+
 from bson import json_util
 from flask import request
 from flask.views import MethodView
@@ -13,6 +14,11 @@ from organizations.organization_management import (
     update_organization,
 )
 from roles.securityUtils import Role, require_role
+
+from blueprints.schema_wrapper import SchemaWrapper
+
+logger = logging.getLogger("system_manager")
+
 
 organizationblp = Blueprint(
     "Organization operations",
@@ -65,7 +71,7 @@ class OrganizationController(MethodView):
         try:
             return json_util.dumps(get_all_organizations())
         except Exception as e:
-            print(e)
+            logger.error(e)
             return abort(404, {"message": e})
 
     @organizationblp.response(

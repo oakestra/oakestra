@@ -2,15 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"go_node_engine/config"
 	"go_node_engine/logger"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path"
-	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -26,15 +23,10 @@ var (
 
 		},
 	}
-	clusterAddress   string
-	clusterPort      int
-	netmanagerPort   int
-	overlayNetwork   string
-	unikernelSupport bool
-	detatched        bool
-	logDirectory     string
-	certFile         string
-	keyFile          string
+	clusterAddress string
+	clusterPort    int
+	clusterSSL     bool
+	detatched      bool
 	// Addons
 	imageBuilder        bool
 	flopsLearnerSupport bool
@@ -51,15 +43,9 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&clusterAddress, "clusterAddr", "a", "localhost", "Address of the cluster orchestrator without port")
+	rootCmd.Flags().StringVarP(&clusterAddress, "clusterAddr", "a", "", "Custom address of the cluster orchestrator without port")
 	rootCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Port of the cluster orchestrator")
-	rootCmd.Flags().IntVarP(&netmanagerPort, "netmanagerPort", "n", 0, "Port of the NetManager component (deprecated).")
-	rootCmd.Flags().StringVarP(&overlayNetwork, "overlayNetwork", "o", "default", "Options: default,disabled,custom:<path>. <path> points to the overlay component socket.")
-	rootCmd.Flags().BoolVarP(&unikernelSupport, "unikernel", "u", false, "Enable Unikernel support. [qemu/kvm required]")
-	rootCmd.Flags().StringVarP(&logDirectory, "logs", "l", config.DEFAULT_LOG_DIR, "Directory for application's logs")
 	rootCmd.Flags().BoolVarP(&detatched, "detatch", "d", false, "Run the NodeEngine in the background (daemon mode)")
-	rootCmd.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
-	rootCmd.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
 	// Addons
 	rootCmd.Flags().BoolVar(&imageBuilder, "image-builder", false, "Checks if the host has QEMU (apt's qemu-user-static) installed for building multi-platform images.")
 	rootCmd.Flags().BoolVar(&flopsLearnerSupport, "flops-learner", false, "Enables the ML-data-server sidecar for data collection for FLOps learners.")
@@ -73,16 +59,25 @@ func nodeEngineDaemonManager() error {
 		}
 	}
 
-	if clusterAddress != "localhost" {
-		// read cluster configuration if not present or new value set
-		err := configCluster(clusterAddress)
+	if clusterAddress != "" {
+		// set new cluster address if users selected a custom one
+		err := configAddress(clusterAddress)
 		if err != nil {
 			return err
 		}
 	}
 
-	if logDirectory != config.DEFAULT_LOG_DIR {
-		err := configLogs(logDirectory)
+	if clusterPort != 10100 {
+		// set new cluster port if users selected a custom one
+		err := configPort(clusterPort)
+		if err != nil {
+			return err
+		}
+	}
+
+	if clusterSSL {
+		// set SSL cluster handshake
+		err := configSSL(clusterSSL)
 		if err != nil {
 			return err
 		}
@@ -93,31 +88,6 @@ func nodeEngineDaemonManager() error {
 		err := setMqttAuth()
 		if err != nil {
 			return err
-		}
-	}
-
-	switch overlayNetwork {
-	case config.DEFAULT_CNI:
-		err := setNetwork(config.DEFAULT_CNI)
-		if err != nil {
-			return err
-		}
-		// try to start the netmanager service if present
-		cmd := exec.Command("systemctl", "start", "netmanager")
-		_ = cmd.Run()
-	case DISABLE_NETWORK:
-		err := setNetwork(config.DEFAULT_CNI)
-		if err != nil {
-			return err
-		}
-	default:
-		if strings.Contains(overlayNetwork, "custom:") {
-			err := setNetwork(overlayNetwork)
-			if err != nil {
-				return err
-			}
-		} else {
-			log.Fatalf("Invalid overlay network: %s \n Use NodeEngine -h to check the available options. \n", overlayNetwork)
 		}
 	}
 

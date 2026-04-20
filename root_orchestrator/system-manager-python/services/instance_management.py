@@ -9,7 +9,9 @@ from ext_requests.net_plugin_requests import (
 )
 from ext_requests.scheduler_requests import scheduler_request_deploy
 from oakestra_utils.types.statuses import PositiveSchedulingStatus, Status, convert_to_status
-from resource_abstractor_client import app_operations, cluster_operations, job_operations
+from resource_abstractor_client import app_operations, candidate_operations, job_operations
+
+logger = logging.getLogger("system_manager")
 
 
 def update_job_status(
@@ -35,8 +37,8 @@ def update_job_status_and_instances(
     next_instance_progressive_number: int,
     instance_list: List[dict],
 ) -> None:
-    logging.info(
-        f"Updating Job '{job_id}'s status to '{status}' " "and assigning a cluster for this job..."
+    logger.info(
+        f"Updating Job '{job_id}'s status to '{status}' and assigning a cluster for this job..."
     )
     updated_job = job_operations.update_job(
         job_id,
@@ -47,7 +49,7 @@ def update_job_status_and_instances(
         },
     )
     if updated_job is None:
-        logging.info(f"Updating job '{job_id}'s status to '{status}' failed")
+        logger.info(f"Updating job '{job_id}'s status to '{status}' failed")
 
 
 def request_scale_up_instance(microserviceid: str, username: str) -> None:
@@ -95,6 +97,7 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
 
     if microserviceid in application["microservices"]:
         instances = service.get("instance_list")
+
         if len(instances) > 0:
             for instance in instances:
                 if which_one == instance["instance_number"] or which_one == -1:
@@ -115,7 +118,7 @@ def instance_scale_up_scheduled_handler(job_id, cluster_id):
     if job is None:
         return
 
-    cluster = cluster_operations.get_resource_by_id(cluster_id)
+    cluster = candidate_operations.get_candidate_by_id(cluster_id)
     if cluster is None:
         return
 
@@ -123,7 +126,8 @@ def instance_scale_up_scheduled_handler(job_id, cluster_id):
     instance_info = {
         "instance_number": instance_number,
         "cluster_id": cluster_id,
-        "cluster_location": cluster.get("cluster_location", "location-unknown"),
+        "cluster_location": cluster.get("candidate_location", "location-unknown"),
+        "status": PositiveSchedulingStatus.CLUSTER_SCHEDULED.value,
     }
     instance_list = job["instance_list"]
     instance_list.append(instance_info)

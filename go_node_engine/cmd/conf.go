@@ -19,16 +19,27 @@ func init() {
 	configCmd.AddCommand(setVirtualizationCmd)
 	configCmd.AddCommand(defaultConfigCmd)
 	configCmd.AddCommand(setCni)
+	configCmd.AddCommand(visibility)
 	configCmd.AddCommand(setAuth)
 	setAuth.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
 	setAuth.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
 	setVirtualizationCmd.AddCommand(enableUnikernel)
+	setVirtualizationCmd.AddCommand(enableCrosvm)
+	setCni.AddCommand(explainNetManager)
 	setCni.AddCommand(enableNetwork)
 	setCni.AddCommand(disableNetwork)
+	setCni.AddCommand(enableManualNetwork)
+	visibility.AddCommand(publicIP)
+	visibility.AddCommand(privateIP)
 	addClusterCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Custom port of the cluster orchestrator")
+	addClusterCmd.Flags().BoolVarP(&clusterSSL, "clusterSSL", "s", false, "Perform cluster orchestrator handshake over HTTPS")
 	configCmd.AddCommand(setAddonCmd)
 	setAddonCmd.AddCommand(enableBuilder)
 	setAddonCmd.AddCommand(enableFlops)
+
+	configCmd.AddCommand(setCsiCmd)
+	setCsiCmd.AddCommand(addCsiDriverCmd)
+	setCsiCmd.AddCommand(removeCsiDriverCmd)
 }
 
 var (
@@ -84,6 +95,16 @@ var (
 			return setUnikernel(args[0])
 		},
 	}
+	enableCrosvm = &cobra.Command{
+		Use:   "crosvm [on/off]",
+		Short: "[on/off] Enable/Disable crosvm VM support",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return errors.New("crosvm command needs exactly one parameter: [on/off]")
+			}
+			return setCrosvm(args[0])
+		},
+	}
 
 	// --- ADDONS
 	setAddonCmd = &cobra.Command{
@@ -118,14 +139,29 @@ var (
 
 	// --- NETWORKING
 	setCni = &cobra.Command{
-		Use:   "network [on/off]",
-		Short: "Enable/Disable networking support",
+		Use:   "network [auto/custom/off]",
+		Short: "Configure networking support",
+	}
+	explainNetManager = &cobra.Command{
+		Use:   "[auto/custom/off]",
+		Short: "Enable/disable automatic networking support",
 	}
 	enableNetwork = &cobra.Command{
-		Use:   "on",
-		Short: "Enable overlay network support (Requires NetManager daemon running)",
+		Use:   "auto",
+		Short: "Enable auto overlay network startup",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return setNetwork(config.DEFAULT_CNI)
+			return setNetwork(config.AUTO_OAK_NETWORK)
+		},
+	}
+	enableManualNetwork = &cobra.Command{
+		Use:   "manual [socket path]",
+		Short: "Manually pre-configured overlay network client. Default socket: /etc/netmanager/netmanager.sock (useful for debug and testing of custom overlay networks)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			socketPath := "custom:/etc/netmanager/netmanager.sock"
+			if len(args) == 1 {
+				socketPath = "custom:" + args[0]
+			}
+			return setNetwork(socketPath)
 		},
 	}
 	disableNetwork = &cobra.Command{
@@ -136,8 +172,58 @@ var (
 		},
 	}
 
+	// --- VISIBILITY
+	visibility = &cobra.Command{
+		Use:   "visibility [public/private]",
+		Short: "Use public or private IP",
+	}
+	publicIP = &cobra.Command{
+		Use:   "public",
+		Short: "Allow networking over the public IP address",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setPublicIp(true)
+		},
+	}
+	privateIP = &cobra.Command{
+		Use:   "private",
+		Short: "Disallow networking over the public IP address",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setPublicIp(false)
+		},
+	}
+
+	// --- CSI DRIVERS
+	setCsiCmd = &cobra.Command{
+		Use:   "csi",
+		Short: "Manage CSI driver registrations",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return showCsiDrivers()
+		},
+	}
+	addCsiDriverCmd = &cobra.Command{
+		Use:   "add <name> <endpoint>",
+		Short: "Register a CSI driver (adds or updates the entry by name)",
+		Long: "Register a CSI Node plugin. <name> is the driver identifier" +
+			" (e.g. csi.oakestra.io/hostpath) and <endpoint> is the UNIX" +
+			" socket path (e.g. unix:///var/lib/oakestra/csi/hostpath.sock).",
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return addCsiDriver(args[0], args[1])
+		},
+	}
+	removeCsiDriverCmd = &cobra.Command{
+		Use:   "remove <name>",
+		Short: "Unregister a CSI driver by name",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return removeCsiDriver(args[0])
+		},
+	}
+
 	// --- MQTT AUTH
-	setAuth = &cobra.Command{
+	certFile string
+	keyFile  string
+	setAuth  = &cobra.Command{
 		Use:   "auth",
 		Short: "Set Mqtt Authentication",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -161,7 +247,38 @@ func configCluster(address string) error {
 
 	clusterConf.ClusterAddress = address
 	clusterConf.ClusterPort = clusterPort
+	clusterConf.ClusterSSL = clusterSSL
 
+	return configManager.Write(clusterConf)
+}
+
+func configAddress(address string) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+	clusterConf.ClusterAddress = address
+	return configManager.Write(clusterConf)
+}
+
+func configPort(port int) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+	clusterConf.ClusterPort = port
+	return configManager.Write(clusterConf)
+}
+
+func configSSL(encrypt bool) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+	clusterConf.ClusterSSL = encrypt
 	return configManager.Write(clusterConf)
 }
 
@@ -207,10 +324,7 @@ func showVirtualization() error {
 }
 
 func setUnikernel(trigger string) error {
-	active := false
-	if trigger == "on" || trigger == "enable" || trigger == "true" {
-		active = true
-	}
+	active := trigger == "on" || trigger == "enable" || trigger == "true"
 
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
@@ -235,6 +349,36 @@ func setUnikernel(trigger string) error {
 			Config:  []string{},
 		}
 		clusterConf.Virtualizations = append(clusterConf.Virtualizations, UnikernelVirt)
+	}
+
+	return configManager.Write(clusterConf)
+}
+
+func setCrosvm(trigger string) error {
+	active := trigger == "on" || trigger == "enable" || trigger == "true"
+
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+
+	updated := false
+	for i, virt := range clusterConf.Virtualizations {
+		if virt.Runtime == string(model.CROSVM_RUNTIME) {
+			updated = true
+			virt.Active = active
+			clusterConf.Virtualizations[i] = virt
+		}
+	}
+
+	if !updated {
+		clusterConf.Virtualizations = append(clusterConf.Virtualizations, config.Virtualization{
+			Name:    "crosvm",
+			Runtime: string(model.CROSVM_RUNTIME),
+			Active:  active,
+			Config:  []string{},
+		})
 	}
 
 	return configManager.Write(clusterConf)
@@ -276,10 +420,7 @@ func setBuilder(trigger string) error {
 		logger.ErrorLogger().Fatalf("Unable to find qemu-user-static apt package for multi-platform image-builder: %v\n", err)
 	}
 
-	active := false
-	if trigger == "on" || trigger == "enable" || trigger == "true" {
-		active = true
-	}
+	active := trigger == "on" || trigger == "enable" || trigger == "true"
 
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
@@ -309,10 +450,7 @@ func setBuilder(trigger string) error {
 }
 
 func setFLOps(trigger string) error {
-	active := false
-	if trigger == "on" || trigger == "enable" || trigger == "true" {
-		active = true
-	}
+	active := trigger == "on" || trigger == "enable" || trigger == "true"
 
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
@@ -353,6 +491,17 @@ func setNetwork(cniName string) error {
 	return configManager.Write(clusterConf)
 }
 
+func setPublicIp(public bool) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+	clusterConf.PublicIp = public
+
+	return configManager.Write(clusterConf)
+}
+
 func setMqttAuth() error {
 
 	configManager := config.GetConfFileManager()
@@ -369,4 +518,81 @@ func setMqttAuth() error {
 	}
 
 	return configManager.Write(clusterConf)
+}
+
+func showCsiDrivers() error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Registered CSI Drivers:")
+	if len(clusterConf.CSIDrivers) == 0 {
+		fmt.Println("  No CSI drivers configured.")
+		return nil
+	}
+	for _, d := range clusterConf.CSIDrivers {
+		fmt.Printf("  - %s\n      endpoint: %s\n", d.Name, d.Endpoint)
+	}
+	return nil
+}
+
+func addCsiDriver(name, endpoint string) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+
+	// Update existing entry if the name is already present.
+	for i, d := range clusterConf.CSIDrivers {
+		if d.Name == name {
+			clusterConf.CSIDrivers[i].Endpoint = endpoint
+			if err := configManager.Write(clusterConf); err != nil {
+				return err
+			}
+			fmt.Printf("CSI driver %q updated (endpoint: %s)\n", name, endpoint)
+			return nil
+		}
+	}
+
+	clusterConf.CSIDrivers = append(clusterConf.CSIDrivers, config.CSIDriverType{
+		Name:     name,
+		Endpoint: endpoint,
+	})
+	if err := configManager.Write(clusterConf); err != nil {
+		return err
+	}
+	fmt.Printf("CSI driver %q added (endpoint: %s)\n", name, endpoint)
+	return nil
+}
+
+func removeCsiDriver(name string) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+
+	filtered := clusterConf.CSIDrivers[:0]
+	found := false
+	for _, d := range clusterConf.CSIDrivers {
+		if d.Name == name {
+			found = true
+			continue
+		}
+		filtered = append(filtered, d)
+	}
+
+	if !found {
+		return fmt.Errorf("CSI driver %q not found in configuration", name)
+	}
+
+	clusterConf.CSIDrivers = filtered
+	if err := configManager.Write(clusterConf); err != nil {
+		return err
+	}
+	fmt.Printf("CSI driver %q removed\n", name)
+	return nil
 }

@@ -1,0 +1,127 @@
+import json
+import logging
+import os
+import re
+
+import paho.mqtt.client as paho_mqtt
+from oakestra_utils.types.statuses import convert_to_status
+from resource_abstractor_client import candidate_operations
+
+from clients.job_management import update_deployed_instance_job, update_deployed_instance_worker
+
+logger = logging.getLogger("cluster_manager")
+
+mqtt = None
+
+
+def handle_connect(client, userdata, flags, rc):
+    logger.info("MQTT - Connected to MQTT Broker")
+    mqtt.subscribe("nodes/+/information")
+    mqtt.subscribe("nodes/+/job")
+    mqtt.subscribe("nodes/+/jobs/resources")
+
+
+def handle_logging(client, userdata, level, buf):
+    if level == "MQTT_LOG_ERR":
+        logger.info("Error: {}".format(buf))
+
+
+def handle_mqtt_message(client, userdata, message):
+    data = dict(topic=message.topic, payload=message.payload.decode())
+    logger.info("MQTT - Received from worker: ")
+    logger.info(data)
+
+    topic = data["topic"]
+
+    re_nodes_information_topic = re.search("^nodes/.*/information$", topic)
+    re_job_deployment_topic = re.search("^nodes/.*/job$", topic)
+    re_job_resources_topic = re.search("^nodes/.*/jobs/resources$", topic)
+
+    topic_split = topic.split("/")
+    client_id = topic_split[1]
+    payload = json.loads(data["payload"])
+
+    # if topic starts with nodes and ends with information
+    if re_nodes_information_topic is not None:
+        payload = {k: v for k, v in payload.items() if v is not None}
+        updated = candidate_operations.update_candidate_information(client_id, payload)
+        if updated is None:
+            mqtt.publish(
+                "nodes/" + client_id + "/control/error",
+                json.dumps({"message": "Node not registered to the cluster"}),
+            )
+    if re_job_deployment_topic is not None:
+        job_name = payload.get("sname")
+        status = convert_to_status(payload.get("status"))
+        status_detail = payload.get("status_detail", None)
+        instance = payload.get("instance")
+        publicip = payload.get("publicip", "--")
+        update_deployed_instance_worker(job_name, instance, status.value, status_detail, publicip)
+    if re_job_resources_topic is not None:
+        services = payload.get("services")
+        for service in services:
+            try:
+                # If unable to update then worker has outdated information
+                # and service must be undeployed
+                if (
+                    update_deployed_instance_job(
+                        service.get("job_name"), service.get("instance", 0), service, client_id
+                    )
+                    is None
+                ):
+                    mqtt_publish_edge_delete(
+                        client_id,
+                        service.get("job_name"),
+                        service.get("instance"),
+                        service.get("virtualization"),
+                    )
+            except Exception as e:
+                logger.error("MQTT - unable to update service resources")
+                logger.error(e)
+
+
+def mqtt_init(flask_app):
+    global mqtt
+    mqtt = paho_mqtt.Client()
+    mqtt.on_connect = handle_connect
+    mqtt.on_message = handle_mqtt_message
+    mqtt.reconnect_delay_set(min_delay=1, max_delay=120)
+    mqtt.max_queued_messages_set(1000)
+    if "MQTT_CERT" in os.environ:
+        try:
+            mqtt.tls_set(
+                ca_certs=os.environ.get("MQTT_CERT") + "/ca.crt",
+                certfile=os.environ.get("MQTT_CERT") + "/cluster.crt",
+                keyfile=os.environ.get("MQTT_CERT") + "/cluster.key",
+                keyfile_password=os.environ.get("CLUSTER_KEYFILE_PASSWORD"),
+            )
+            logger.info("MQTT - TLS configured")
+        except FileNotFoundError as e:
+            logger.error("MQTT - Unable to load certificate files")
+            logger.error(e)
+
+    mqtt.connect(
+        os.environ.get("MQTT_BROKER_URL").strip("[]"),
+        int(os.environ.get("MQTT_BROKER_PORT")),
+        keepalive=5,
+    )
+    mqtt.loop_start()
+
+
+def mqtt_publish_edge_deploy(worker_id, job, instance_number):
+    topic = "nodes/" + worker_id + "/control/deploy"
+    data = job
+    data["instance_number"] = int(instance_number)
+    job_id = str(job.get("_id"))  # serialize ObjectId to string
+    job.__setitem__("_id", job_id)
+    mqtt.publish(topic, json.dumps(data))  # MQTT cannot send JSON, dump it to String here
+
+
+def mqtt_publish_edge_delete(worker_id, job_name, instance_number, runtime="docker"):
+    topic = "nodes/" + worker_id + "/control/delete"
+    data = {
+        "job_name": job_name,
+        "virtualization": runtime,
+        "instance_number": int(instance_number),
+    }
+    mqtt.publish(topic, json.dumps(data))

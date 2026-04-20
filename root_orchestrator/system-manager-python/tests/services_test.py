@@ -4,6 +4,7 @@ import sys
 from unittest.mock import ANY, MagicMock, Mock, patch
 
 from resource_abstractor_client import app_operations, job_operations
+
 from tests.utils import get_first_app, get_full_random_sla_app
 
 sys.modules["ext_requests.net_plugin_requests"] = Mock()
@@ -177,7 +178,7 @@ def test_delete_service():
         assert job_operations.get_job_by_id(service_to_be_deleted) is None
 
 
-# TODO Commented it out until a proper update)service is implemented
+# TODO(ME): Commented it out until a proper update service is implemented
 # def test_update_service(resource_abstractor):
 #     with patch(
 #         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",

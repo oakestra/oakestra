@@ -1,0 +1,122 @@
+{
+    // Runs local 
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Node Engine",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/go_node_engine/internal/daemon/nodeengined.go",
+            "console": "integratedTerminal",
+            "asRoot": true,
+            "args": ["-a", "0.0.0.0",],
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin" 
+            },
+            "preLaunchTask": "prep-debug-node-engine-env",        },
+        {
+            "name": "Debug Node Engine With Custom Cluster",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/go_node_engine/internal/daemon/nodeengined.go",
+            "console": "integratedTerminal",
+            "asRoot": true,
+            "args": ["-a","${input:enterClusterIp}"],
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin" 
+            }
+        },
+        {
+            "name": "Debug Cluster Manager",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${command:python.interpreterPath}",
+            "program": "${workspaceRoot}/cluster_orchestrator/cluster-manager/cluster_manager.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin",
+                "PYTHONPATH": "${workspaceRoot}/libraries/oakestra_utils_library:${workspaceRoot}/libraries/resource_abstractor_client:${env:PYTHONPATH}",
+                "FLASK_ENV": "development",
+                "FLASK_DEBUG": "True",
+                "MQTT_BROKER_URL": "0.0.0.0",
+                "MQTT_BROKER_PORT": "10003",
+                "CLUSTER_MONGO_URL": "0.0.0.0",
+                "CLUSTER_MONGO_PORT": "10107",
+                "SYSTEM_MANAGER_PORT": "10000",
+                "CLUSTER_SCHEDULER_URL": "0.0.0.0",
+                "CLUSTER_SCHEDULER_PORT": "10105",
+                "CLUSTER_SERVICE_MANAGER_ADDR": "0.0.0.0",
+                "CLUSTER_SERVICE_MANAGER_PORT": "10110",
+                "SYSTEM_MANAGER_URL": "0.0.0.0",
+                "CLUSTER_LOCATION": "48.13023160559729,11.583724427641824,100",
+                "CLUSTER_NAME": "debug_cluster",
+                "RESOURCE_ABSTRACTOR_URL": "0.0.0.0",
+                "RESOURCE_ABSTRACTOR_PORT": "11012",
+                "MY_PORT": "10100",
+                "SYSTEM_MANAGER_GRPC_PORT": "50052",
+            },
+            "preLaunchTask": "prep-debug-cluster-manager-env",
+        },
+        {
+            "name": "Debug Cluster Scheduler",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/scheduler/cmd",
+            "console": "integratedTerminal",
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin",
+                "API_PORT":"10105",
+                "MANAGER_URL":"0.0.0.0",
+                "MANAGER_PORT":"10100",
+                "CLUSTER_MONGO_URL":"0.0.0.0",
+                "CLUSTER_MONGO_PORT":"10107",
+                "RESOURCE_ABSTRACTOR_URL":"0.0.0.0",
+                "RESOURCE_ABSTRACTOR_PORT":"11012",
+                "REDIS_ADDR":"redis://:clusterRedis@0.0.0.0:6479"
+            },
+            "preLaunchTask": "prep-debug-cluster-scheduler-env",
+        },
+        {
+            "name": "Debug Root Manager",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${command:python.interpreterPath}",
+            "program": "${workspaceRoot}/root_orchestrator/system-manager-python/system_manager.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}/libraries/oakestra_utils_library:${workspaceRoot}/libraries/resource_abstractor_client:${env:PYTHONPATH}",
+                "ROOT_MONGO_URL": "0.0.0.0",
+                "LOG_LEVEL": "INFO",
+                "ROOT_MONGO_PORT": "10007",
+                "ROOT_SCHEDULER_URL": "0.0.0.0",
+                "ROOT_SCHEDULER_PORT": "10004",
+                "RESOURCE_ABSTRACTOR_URL": "0.0.0.0",
+                "RESOURCE_ABSTRACTOR_PORT": "11011",
+                "NET_PLUGIN_URL": "0.0.0.0",
+                "NET_PLUGIN_PORT": "10099",
+                "JWT_GENERATOR_URL": "0.0.0.0",
+                "JWT_GENERATOR_PORT": "10011"
+            },
+            "preLaunchTask": "prep-debug-root-manager-env",
+        },
+        {
+            "name": "Cleanup Dev Environment",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/cluster_orchestrator/cluster-manager/logs/cm_logging.py",
+            "console": "integratedTerminal",
+            "preLaunchTask": "cleanup-debug-env",
+        }
+    ],
+    "inputs": [
+        {
+          "id": "enterClusterIp",
+          "type": "promptString",
+          "description": "Cluster Orchestrator IP",
+          "default": "0.0.0.0"
+        }
+      ]
+}

@@ -2,6 +2,7 @@ from typing import Optional
 
 from oakestra_utils.types.statuses import Status
 from requests import delete, get, patch, put
+
 from resource_abstractor_client.client_helper import make_request
 
 JOBS_API = "/api/v1/jobs"
@@ -18,6 +19,16 @@ def get_jobs_of_application(application_id):
 def get_job_by_id(job_id, filter={}):
     request_address = f"{JOBS_API}/{job_id}"
     return make_request(get, request_address, params=filter)
+
+
+def get_job_instance(job_id, instance_number, filter={}):
+    request_address = f"{JOBS_API}/{job_id}/{instance_number}"
+    return make_request(get, request_address, params=filter)
+
+
+def append_job_instance(job_id, instance_number, instance_data):
+    request_address = f"{JOBS_API}/{job_id}/{instance_number}"
+    return make_request(put, request_address, json=instance_data)
 
 
 def create_job(data):
@@ -43,6 +54,11 @@ def update_job_status(
 def update_job_instance(job_id, instance_number, data):
     request_address = f"{JOBS_API}/{job_id}/{instance_number}"
     return make_request(patch, request_address, json=data)
+
+
+def delete_job_instance(job_id, instance_number):
+    request_address = f"{JOBS_API}/{job_id}/{instance_number}"
+    return make_request(delete, request_address)
 
 
 def delete_job(job_id):

@@ -1,9 +1,12 @@
+import logging
 import os
 import smtplib
 from email.message import EmailMessage
 
 gmail_user = os.environ.get("MAIL_USER", "")
 gmail_password = os.environ.get("MAIL_PASSWORD", "")
+
+logger = logging.getLogger("system_manager")
 
 
 class MailFactory:
@@ -20,14 +23,14 @@ class MailFactory:
             msg = self.create_message()
             msg["From"] = gmail_user
             msg["To"] = self.user["email"]
-            print(self.user["email"])
+            logger.info(self.user["email"])
 
             server.send_message(msg)
             server.quit()
-            print("Email sent!")
+            logger.info("Email sent!")
         except Exception as e:
-            print(e)
-            print("Something went wrong while sending email...")
+            logger.info(e)
+            logger.info("Something went wrong while sending email...")
 
     def create_message(self) -> EmailMessage:
         pass

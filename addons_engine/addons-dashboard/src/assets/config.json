@@ -1,0 +1,5 @@
+{
+  "marketplaceUrl": "http://localhost:11102",
+  "addonsEngineUrl": "http://localhost:11101",
+  "resourceAbstractorUrl": "http://localhost:10000"
+}

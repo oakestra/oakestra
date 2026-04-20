@@ -23,7 +23,7 @@ services:
       - /mosquitto/data
       - /mosquitto/log
     healthcheck:
-      test: [ "CMD-SHELL", "timeout -t 5 mosquitto_sub -t '$$SYS/#' -C 1 | grep -v Error || exit 1" ]
+      test: [ "CMD-SHELL", "mosquitto_sub -p 10003 -t '$$SYS/#' -C 1 -W 3 || exit 1" ]
       interval: 10s
       timeout: 10s
       retries: 6
@@ -37,7 +37,7 @@ services:
     ports:
       - "10107:10107"
     volumes:
-      - 'mongodb_cluster_data:/mongodb'
+      - 'mongodb_cluster_data:/data/db'
     command: mongod --port 10107
 
   # cluster-level mongoDB
@@ -48,7 +48,7 @@ services:
     ports:
       - "10108:10108"
     volumes:
-      - 'mongodb_cluster_net_data:/mongodb'
+      - 'mongodb_cluster_net_data:/data/db'
     command: mongod --port 10108
 
 
@@ -82,7 +82,10 @@ services:
   # Cluster Manager
   cluster_manager:
     image: cluster_manager
-    build: cluster-manager/
+    build:
+      context: cluster-manager/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     container_name: cluster_manager
     labels:
       logging: "cluster_promtail"
@@ -96,6 +99,7 @@ services:
       - "10101:10101"
     environment:
       - MY_PORT=10100
+      - LOG_LEVEL=INFO
       - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
@@ -106,6 +110,8 @@ services:
       - CLUSTER_SCHEDULER_PORT=10105
       - MQTT_BROKER_URL=mqtt
       - MQTT_BROKER_PORT=10003
+      - RESOURCE_ABSTRACTOR_URL=cluster_resource_abstractor
+      - RESOURCE_ABSTRACTOR_PORT=11012
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
     depends_on:
@@ -115,12 +121,10 @@ services:
       - cluster_service_manager
     logging: *default-logging
 
-
-
   # Cluster Scheduler
   cluster_scheduler:
     image: cluster_scheduler
-    build: cluster-scheduler/
+    build: ../scheduler/
     container_name: cluster_scheduler
     labels:
       logging: "cluster_promtail"
@@ -131,14 +135,34 @@ services:
     ports:
       - "10105:10105"
     environment:
-      - MY_PORT=10105
-      - CLUSTER_MANAGER_URL=cluster_manager
-      - CLUSTER_MANAGER_PORT=10100
-      - CLUSTER_MONGO_URL=cluster_mongo
-      - CLUSTER_MONGO_PORT=10107
+      - API_PORT=10105
+      - MANAGER_URL=cluster_manager
+      - MANAGER_PORT=10100
+      - RESOURCE_ABSTRACTOR_URL=cluster_resource_abstractor
+      - RESOURCE_ABSTRACTOR_PORT=11012
       - REDIS_ADDR=redis://:clusterRedis@cluster_redis:6479
     depends_on:
       - cluster_redis
+      - cluster_resource_abstractor
+    logging: *default-logging
+
+  cluster_resource_abstractor:
+    image: resource_abstractor
+    build: ../resource-abstractor/
+    container_name: cluster_resource_abstractor
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    hostname: cluster_resource_abstractor
+    expose:
+      - "11012"
+    ports:
+      - "11012:11012"
+    environment:
+      - RESOURCE_ABSTRACTOR_PORT=11012
+      - MONGO_URL=cluster_mongo
+      - MONGO_PORT=10107
+    depends_on:
       - mongo_cluster
     logging: *default-logging
 
@@ -205,6 +229,65 @@ services:
       - cluster_loki
     logging: *default-logging
 
+    # Addons
+  cluster_addons_manager:
+    image: addons_manager
+    container_name: cluster_addons_manager
+    build: ../addons_engine/addons-manager/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    environment:
+      - ADDONS_MANAGER_PORT=11201
+      - ADDONS_ENGINE_MONGO_URL=cluster_mongo
+      - ADDONS_ENGINE_MONGO_PORT=10107
+      - MARKETPLACE_ADDR=http://${SYSTEM_MANAGER_URL}:11102
+    ports:
+      - 11201:11201
+    depends_on:
+      - mongo_cluster
+    logging: *default-logging
+
+  cluster_addons_monitor:
+    image: addons_monitor
+    container_name: cluster_addons_monitor
+    build: ../addons_engine/addons-monitor/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ADDONS_MANAGER_ADDR=http://cluster_addons_manager:11201
+      - ORCHESTRATION_PLANE=cluster
+      - DEFAULT_PROJECT_NAME=cluster_orchestrator
+    depends_on:
+      - cluster_addons_manager
+    logging: *default-logging
+
+  
+  cluster_addons_dashboard:
+    image: addons_dashboard
+    container_name: cluster_addons_dashboard
+    build: ../addons_engine/addons-dashboard/
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DASHBOARD_PORT=11203
+      - MARKETPLACE_URL=${SYSTEM_MANAGER_URL}
+      - RESOURCE_ABSTRACTOR_URL=cluster_resource_abstractor
+      - ADDONS_ENGINE_URL=cluster_addons_manager
+    depends_on:
+      - cluster_addons_monitor
+      - cluster_addons_manager
+    ports:
+      - 11203:11203
+    expose:
+      - "11203"
+    logging: *default-logging
 
 volumes:
   mongodb_cluster_data:

@@ -1,38 +1,60 @@
 package virtualization
 
 import (
+	"sync"
+
 	"go_node_engine/model"
-	"time"
+	"go_node_engine/util/iotools"
+
+	// make sure crosvm runtime is initialized, as it is not in the virtualization module
+	_ "go_node_engine/virtualization/internal/crosvm"
+	virtrt "go_node_engine/virtualization/internal/runtime"
 )
 
-type RuntimeInterface interface {
-	Deploy(service model.Service, statusChangeNotificationHandler func(service model.Service)) error
-	Undeploy(sname string, instance int) error
-	Stop()
+type RuntimeManager struct {
+	info         virtrt.RuntimeInfo
+	initializers map[string]func() virtrt.Runtime
 }
 
-type RuntimeMonitoring interface {
-	ResourceMonitoring(every time.Duration, notifyHandler func(res []model.Resources))
+func NewRuntimeManager() (*RuntimeManager, error) {
+	runtimeDirPath, err := iotools.CreateOakestraRuntimeDir()
+	if err != nil {
+		return nil, err
+	}
+
+	stateDirPath, err := iotools.CreateOakestraStateDir()
+	if err != nil {
+		return nil, err
+	}
+
+	cacheDirPath, err := iotools.CreateOakestraCacheDir()
+	if err != nil {
+		return nil, err
+	}
+
+	info := virtrt.RuntimeInfo{
+		RuntimeDirPath: runtimeDirPath,
+		StateDirPath:   stateDirPath,
+		CacheDirPath:   cacheDirPath,
+	}
+
+	onceInitializers := make(map[string]func() virtrt.Runtime)
+	for name, initializer := range virtrt.GetInitializers() {
+		onceInitializers[name] = sync.OnceValue(func() virtrt.Runtime {
+			return initializer(info)
+		})
+	}
+
+	return &RuntimeManager{
+		info:         info,
+		initializers: onceInitializers,
+	}, nil
 }
 
-type RuntimeType string
-
-func GetRuntime(runtime model.RuntimeType) RuntimeInterface {
-	if runtime == model.CONTAINER_RUNTIME {
-		return GetContainerdClient()
-	}
-	if runtime == model.UNIKERNEL_RUNTIME {
-		return GetUnikernelRuntime()
-	}
-	return nil
+func (m *RuntimeManager) GetRuntime(runtime model.RuntimeType) virtrt.RuntimeInterface {
+	return m.initializers[string(runtime)]()
 }
 
-func GetRuntimeMonitoring(runtime model.RuntimeType) RuntimeMonitoring {
-	if runtime == model.CONTAINER_RUNTIME {
-		return GetContainerdClient()
-	}
-	if runtime == model.UNIKERNEL_RUNTIME {
-		return GetUnikernelRuntime()
-	}
-	return nil
+func (m *RuntimeManager) GetRuntimeMonitoring(runtime model.RuntimeType) virtrt.RuntimeMonitoring {
+	return m.initializers[string(runtime)]()
 }

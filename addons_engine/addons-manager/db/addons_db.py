@@ -1,5 +1,6 @@
-import db.mongodb_client as db
 from bson.objectid import ObjectId
+
+import db.mongodb_client as db
 
 
 def find_addons(filter={}):
@@ -33,3 +34,7 @@ def update_addon(addon_id, addon_data):
         {"$set": addon_data},
         return_document=True,
     )
+
+
+def delete_addon_by_id(addon_id):
+    return db.mongo_addons.find_one_and_delete({"_id": ObjectId(addon_id)})

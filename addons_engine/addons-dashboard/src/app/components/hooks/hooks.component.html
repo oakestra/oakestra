@@ -1,0 +1,90 @@
+<div class="section-header">
+  <h2>Hooks Management</h2>
+  <div class="header-actions">
+    <app-refresh-button (refresh)="loadHooks()"></app-refresh-button>
+    <button class="btn btn-primary" (click)="showAddForm()">+ Add Hook</button>
+  </div>
+</div>
+
+<!-- Add Hook Form -->
+<div class="form-container" *ngIf="showForm">
+  <h3>Add New Hook</h3>
+  <form (ngSubmit)="submitHook()">
+    <div class="form-group">
+      <label for="hookName">Hook Name *</label>
+      <input type="text" id="hookName" [(ngModel)]="newHook.hook_name" name="hookName" required>
+    </div>
+    <div class="form-group">
+      <label for="entity">Entity *</label>
+      <input type="text" id="entity" [(ngModel)]="newHook.entity" name="entity" 
+             placeholder="e.g., application, service" required>
+      <small>The entity type this hook applies to</small>
+    </div>
+    <div class="form-group">
+      <label for="webhookUrl">Webhook URL *</label>
+      <input type="text" id="webhookUrl" [(ngModel)]="newHook.webhook_url" name="webhookUrl" 
+             placeholder="http://example.com/hook" required>
+    </div>
+    <div class="form-group">
+      <label>Events *</label>
+      <div class="checkbox-group">
+        <div *ngFor="let event of availableEvents">
+          <label>
+            <input type="checkbox" [(ngModel)]="selectedEvents[event]" [name]="'event_' + event">
+            {{ event }}
+          </label>
+        </div>
+      </div>
+      <small>Select one or more events that will trigger this hook</small>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-success">Submit</button>
+      <button type="button" class="btn btn-secondary" (click)="cancelForm()">Cancel</button>
+    </div>
+  </form>
+</div>
+
+<!-- Loading State -->
+<div class="loading" *ngIf="loading">
+  <div class="spinner"></div>
+  <p>Loading hooks...</p>
+</div>
+
+<!-- Error State -->
+<div class="empty-state" *ngIf="error">
+  <h3>⚠️ {{ error }}</h3>
+</div>
+
+<!-- Empty State -->
+<div class="empty-state" *ngIf="!loading && !error && hooks.length === 0">
+  <h3>🪝 No hooks configured</h3>
+  <p>Add your first hook to get started!</p>
+</div>
+
+<!-- Hooks Grid -->
+<div class="addons-grid" *ngIf="!loading && !error && hooks.length > 0">
+  <div class="addon-card" *ngFor="let hook of hooks">
+    <h3>{{ hook.hook_name }}</h3>
+    <p><strong>Entity:</strong> {{ hook.entity }}</p>
+    <p><strong>Webhook URL:</strong> <code>{{ hook.webhook_url }}</code></p>
+    <p><strong>Events:</strong> {{ hook.events.join(', ') }}</p>
+    <div class="meta">
+      <p><strong>ID:</strong> <code>{{ hook._id }}</code></p>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary btn-small" (click)="viewDetails(hook)">View Details</button>
+      <button class="btn btn-danger btn-small" (click)="deleteHook(hook._id!)">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Details Modal -->
+<div class="modal" [class.show]="selectedHook" (click)="closeDetails()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <span class="close" (click)="closeDetails()">&times;</span>
+    <h2>{{ selectedHook?.hook_name }}</h2>
+    <div>
+      <pre>{{ selectedHook | json }}</pre>
+    </div>
+  </div>
+</div>

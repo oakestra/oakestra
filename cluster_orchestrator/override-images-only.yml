@@ -16,9 +16,13 @@ services:
     pull_policy: always
 
   cluster_scheduler:
-    image: ghcr.io/oakestra/oakestra/cluster-scheduler:latest
+    image: ghcr.io/oakestra/oakestra/scheduler:latest
     pull_policy: always
 
+  cluster_resource_abstractor:
+    image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
+    pull_policy: always
+    
   cluster_redis:
     image: redis
     pull_policy: always
@@ -33,4 +37,16 @@ services:
 
   cluster_loki:
     image: grafana/loki:2.9.2
+    pull_policy: always
+
+  cluster_addons_manager:
+    image: ghcr.io/oakestra/oakestra/addons_manager:latest
+    pull_policy: always
+
+  cluster_addons_monitor:
+    image: ghcr.io/oakestra/oakestra/addons_monitor:latest
+    pull_policy: always
+  
+  cluster_addons_dashboard:
+    image: ghcr.io/oakestra/oakestra/addons_dashboard:latest
     pull_policy: always

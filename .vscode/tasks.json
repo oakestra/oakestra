@@ -1,0 +1,130 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "root-orchestrator-up",
+            "type": "shell",
+            "command": "SYSTEM_MANAGER_URL=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml -f ${workspaceRoot}/root_orchestrator/override-custom-service-manager-version.yml -f ${workspaceRoot}/root_orchestrator/override-network-host.yml up --build -d && sleep 1",
+            "options": {
+                "env": {
+                    "COMPOSE_BAKE":"true",
+                }
+            }
+        },
+        {
+            "label": "root-orchestrator-down",
+            "type": "shell",
+            "command": "docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml down",
+        },
+        {
+            "label": "cluster-orchestrator-up",
+            "type": "shell",
+            "command": "SYSTEM_MANAGER_URL=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml -f ${workspaceRoot}/cluster_orchestrator/override-custom-service-manager-version.yml -f ${workspaceRoot}/cluster_orchestrator/override-network-host.yml up --build -d",
+            "options": {
+                "env": {
+                    "CLUSTER_LOCATION": "48.13023160559729,11.583724427641824,100",
+                    "CLUSTER_NAME": "debug_cluster",
+                    "COMPOSE_BAKE":"true",
+                }
+            }
+        },
+        {
+            "label": "cluster-orchestrator-down",
+            "type": "shell",
+            "command": "docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml down",
+        },
+        {
+            "label": "remove-volumes",
+            "type": "shell",
+            "command": "docker volume rm -f $(docker volume ls -q) > /dev/null 2>&1 ; exit 0",
+        },
+        {
+            "label": "remove-containers",
+            "type": "shell",
+            "command": "docker rm -f $(docker ps -a -q) > /dev/null 2>&1 ; exit 0",
+        },
+        {
+            "label": "remove-cluster-manager",
+            "type": "shell",
+            "command": "docker container rm -f cluster_manager",
+            "problemMatcher": []
+        },
+        {
+            "label": "remove-root-manager",
+            "type": "shell",
+            "command": "docker container rm -f system_manager",
+            "problemMatcher": []
+        },
+        {
+            "label": "remove-cluster-scheduler",
+            "type": "shell",
+            "command": "docker container rm -f cluster_scheduler",
+            "problemMatcher": []
+        },
+        {
+            "label": "set-default-cluster-to-node-engine",
+            "type": "shell",
+            "command": "cd ${workspaceRoot}/go_node_engine/build && ./build.sh && ./install.sh $(dpkg --print-architecture) && sudo NodeEngine config cluster 0.0.0.0",
+            "problemMatcher": []
+        },
+        {
+            "label": "prep-debug-node-engine-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "cluster-orchestrator-up",
+                "set-default-cluster-to-node-engine",
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
+            "label": "prep-debug-cluster-manager-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "cluster-orchestrator-up",
+                "remove-cluster-manager",
+                "install-cluster-manager-dependencies"
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
+            "label": "prep-debug-root-manager-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "remove-root-manager",
+                "install-root-manager-dependencies"
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
+            "label": "install-cluster-manager-dependencies",
+            "type": "shell",
+            "command": "LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) ${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/cluster_orchestrator/cluster-manager/requirements.txt && ${command:python.interpreterPath} -m pip install ${workspaceRoot}/libraries/oakestra_utils_library ${workspaceRoot}/libraries/resource_abstractor_client" ,
+            "problemMatcher": []
+        },
+        {
+            "label": "install-root-manager-dependencies",
+            "type": "shell",
+            "command": "LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) ${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/root_orchestrator/system-manager-python/requirements.txt && ${command:python.interpreterPath} -m pip install ${workspaceRoot}/libraries/oakestra_utils_library ${workspaceRoot}/libraries/resource_abstractor_client" ,
+            "problemMatcher": []
+        },
+        {
+            "label": "prep-debug-cluster-scheduler-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "cluster-orchestrator-up",
+                "remove-cluster-scheduler"
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
+            "label": "cleanup-debug-env",
+            "type": "shell",
+            "dependsOn": [
+                "root-orchestrator-down",
+                "cluster-orchestrator-down",
+                "remove-containers",
+                "remove-volumes"
+            ]
+        }
+    ]
+}

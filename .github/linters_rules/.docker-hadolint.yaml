@@ -3,4 +3,7 @@ ignored:
   - DL3008 # Pin versions in apt get install
   - DL3009 # Delete the apt-get lists after installing something
   - DL3015 # Avoid additional packages by specifying --no-install-recommends
+  - DL3018 # Pin versions in apk add
   - DL3025 # Use arguments JSON notation for CMD and ENTRYPOINT arguments
+  - DL3059 # Multiple consecutive `RUN` instructions. Consider consolidation.
+  - SC1091 # Script executed as part of a command not found by shellcheck lint

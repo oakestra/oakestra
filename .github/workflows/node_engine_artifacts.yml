@@ -15,16 +15,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Use Go 1.22.0
+      - name: Use Go 1.23.0
         uses: actions/setup-go@v5
         with:
-          go-version: 1.22.0
+          go-version: 1.23.0
 
       - name: Build NodeEngine ({{ matrix.architecture }})
         run: |
           cd go_node_engine
-          env GOOS=linux GOARCH=${{ matrix.architecture }}  go build -ldflags="-X 'go_node_engine/cmd.Version=${{ github.ref_name }}'" -o ../NodeEngine NodeEngine.go
-          env GOOS=linux GOARCH=${{ matrix.architecture }}  go build -o ../nodeengined pkg/nodeengined.go
+          env GOOS=linux GOARCH=${{ matrix.architecture }} CGO_ENABLED=0  go build -ldflags="-X 'go_node_engine/cmd.Version=${{ github.ref_name }}'" -o ../NodeEngine NodeEngine.go
+          env GOOS=linux GOARCH=${{ matrix.architecture }} CGO_ENABLED=0 go build -o ../nodeengined internal/daemon/nodeengined.go
 
       - name: Package Artifacts
         run: |

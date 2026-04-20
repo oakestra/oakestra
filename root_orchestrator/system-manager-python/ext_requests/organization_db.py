@@ -1,12 +1,17 @@
-import ext_requests.mongodb_client as db
+import logging
+
 from bson import ObjectId
+
+import ext_requests.mongodb_client as db
+
+logger = logging.getLogger("system_manager")
 
 
 def mongo_add_organization(organization):
-    db.app.logger.info("MONGODB - insert organization...")
+    logger.info("MONGODB - insert organization...")
     new_orga = db.mongo_organization.insert_one(organization)
     inserted_id = new_orga.inserted_id
-    db.app.logger.info("MONGODB - organization {} inserted".format(str(inserted_id)))
+    logger.info("MONGODB - organization {} inserted".format(str(inserted_id)))
     return str(inserted_id)
 
 
@@ -15,7 +20,7 @@ def mongo_get_all_organizations():
 
 
 def mongo_update_organizations(organization_id, organization):
-    db.app.logger.info("MONGODB - update organization...")
+    logger.info("MONGODB - update organization...")
     organization = db.mongo_organization.find_one_and_update(
         {"_id": ObjectId(organization_id)},
         {
@@ -26,20 +31,20 @@ def mongo_update_organizations(organization_id, organization):
         },
         return_document=True,
     )
-    db.app.logger.info("MONGODB - organization updated")
+    logger.info("MONGODB - organization updated")
     return organization
 
 
 def mongo_delete_organization(organization_id):
-    db.app.logger.info("MONGODB - delete organization...")
+    logger.info("MONGODB - delete organization...")
     db.mongo_organization.find_one_and_delete({"_id": ObjectId(organization_id)})
-    db.app.logger.info("MONGODB - organization deleted")
+    logger.info("MONGODB - organization deleted")
     return db.mongo_organization.find()
 
 
 def mongo_get_organization_by_name(organization_name):
     organization = db.mongo_organization.find_one({"name": organization_name})
-    print(organization)
+    logger.debug(organization)
     if organization is None:
         return None
     return organization

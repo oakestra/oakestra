@@ -904,13 +904,13 @@
               "uid": "Loki"
             },
             "editorMode": "code",
-            "expr": "{job=\"containerlogs\", container_name=\"cloud_scheduler\"} |~ `(?i)$searchable_pattern`",
+            "expr": "{job=\"containerlogs\", container_name=\"root_scheduler\"} |~ `(?i)$searchable_pattern`",
             "hide": false,
             "queryType": "range",
             "refId": "A"
           }
         ],
-        "title": "Cloud Scheduler Logs: filtered by \"$searchable_pattern\"",
+        "title": "Root Scheduler Logs: filtered by \"$searchable_pattern\"",
         "type": "logs"
       }
     ],
@@ -947,13 +947,13 @@
           "current": {
             "selected": true,
             "text": [
-              "cloud_scheduler",
+              "root_scheduler",
               "resource_abstractor",
               "root_service_manager",
               "system_manager"
             ],
             "value": [
-              "cloud_scheduler",
+              "root_scheduler",
               "resource_abstractor",
               "root_service_manager",
               "system_manager"

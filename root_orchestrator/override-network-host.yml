@@ -1,0 +1,103 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "1m"
+    max-file: "1"
+    tag: "{{.Name}}"
+
+services:
+
+  # System Manager REST API of Root Orchestrator
+  system_manager:
+    network_mode: host
+    environment:
+      - ROOT_MONGO_URL=0.0.0.0
+      - ROOT_SCHEDULER_URL=0.0.0.0
+      - RESOURCE_ABSTRACTOR_URL=0.0.0.0
+      - NET_PLUGIN_URL=0.0.0.0
+      - JWT_GENERATOR_URL=0.0.0.0
+    logging: *default-logging
+
+  # MongoDB in Root Orchestrator
+  mongo_root:
+    network_mode: host
+
+  # cluster-level mongoDB
+  mongo_rootnet:
+    network_mode: host
+
+  # Cluster Manager
+  root_service_manager:
+    network_mode: host
+    environment:
+      - SYSTEM_MANAGER_URL=0.0.0.0
+      - ROOT_MONGO_URL=0.0.0.0
+      - JWT_GENERATOR_URL=0.0.0.0
+
+  # Redis for the Root Scheduler
+  root_redis:
+    network_mode: host
+
+  # Observability Stack
+  grafana:
+    network_mode: host
+
+  loki:
+    network_mode: host
+    #logging:
+    #  driver: none
+
+  promtail:
+    network_mode: host
+
+  dashboard:
+    network_mode: host
+
+  # Root Scheduler
+  root_scheduler:
+    network_mode: host
+    environment:
+      - MANAGER_URL=0.0.0.0
+      - RESOURCE_ABSTRACTOR_URL=0.0.0.0
+      - REDIS_ADDR=redis://:rootRedis@0.0.0.0:6379
+
+  root_resource_abstractor:
+    network_mode: host
+    environment:
+      - MONGO_URL=0.0.0.0
+
+  jwt_generator:
+    network_mode: host
+  
+  root_addons_manager:
+    network_mode: host
+    environment:
+      - ADDONS_ENGINE_MONGO_URL=0.0.0.0
+      - MARKETPLACE_ADDR=http://0.0.0.0:11102
+  
+  root_addons_monitor:
+    network_mode: host
+    environment:
+      - ADDONS_MANAGER_ADDR=http://0.0.0.0:11101
+  
+  root_addons_dashboard:
+    network_mode: host
+    environment:
+      - MARKETPLACE_URL=0.0.0.0
+      - RESOURCE_ABSTRACTOR_URL=0.0.0.0
+      - ADDONS_ENGINE_URL=0.0.0.0
+  
+  marketplace_manager:
+    network_mode: host
+    environment:
+      - ADDON_MARKETPLACE_MONGO_URL=0.0.0.0
+
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_net_data:
+    driver: local
+
+networks:
+  default:
+    name: oakestra

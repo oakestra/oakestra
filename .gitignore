@@ -73,3 +73,9 @@ ENV/
 .DS_Store
 
 .env
+
+# NodeEngine build artifacts 
+NodeEngine_*
+nodeengined_*
+NetManager*
+netmanager*

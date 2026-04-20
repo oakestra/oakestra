@@ -2,7 +2,7 @@
 ---
     name: Super-Linter Codestyles Checks
     
-    on: [push, pull_request]
+    on: pull_request
     
     permissions: { }
     
@@ -23,7 +23,7 @@
               fetch-depth: 0
     
           - name: Super-linter
-            uses: super-linter/super-linter/slim@v6.5.0 
+            uses: super-linter/super-linter/slim@v7.3.0
             env:
               MULTI_STATUS: false
               LOG_LEVEL: INFO
@@ -32,12 +32,10 @@
               VALIDATE_ALL_CODEBASE: false
               # FILTER_REGEX_EXCLUDE: .github/* #Exclude files from being linted
               LINTER_RULES_PATH: .github/linters_rules
-              VALIDATE_PYTHON_BLACK: true
-              PYTHON_BLACK_CONFIG_FILE: setup.cfg
-              VALIDATE_PYTHON_FLAKE8: true
-              PYTHON_FLAKE8_CONFIG_FILE: .flake8
-              VALIDATE_PYTHON_ISORT: true
-              PYTHON_ISORT_CONFIG_FILE: .isort.cfg
+              # ruff is supported by super-linter as a linter but not yet as a formatter
+              # thus we use a dedicated ruff action for python linting & formatting
+              #VALIDATE_PYTHON_RUFF: true
+              #PYTHON_RUFF_CONFIG_FILE: .ruff.toml
               # Validate Go files and Go modules - https://github.com/golangci/golangci-lint
               VALIDATE_GO_MODULES: true
               # Validate Dockerfiles with hadolint - https://github.com/hadolint/hadolint?tab=readme-ov-file#configure

@@ -3,12 +3,30 @@ import os
 from api.v1.addons_api import addonsblp
 from db.mongodb_client import mongo_init
 from flask import Flask
+from flask_cors import CORS
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
 
 ADDONS_MANAGER_PORT = int(os.environ.get("ADDONS_MANAGER_PORT", 11101))
 
 app = Flask(__name__)
+
+# Configure CORS with explicit settings
+CORS(
+    app,
+    resources={
+        r"/api/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Type"],
+            "supports_credentials": False,
+        }
+    },
+)
+
+# Disable strict slashes to prevent redirects
+app.url_map.strict_slashes = False
 
 app.config["OPENAPI_VERSION"] = "3.0.2"
 app.config["API_TITLE"] = "Addon Manager Api"

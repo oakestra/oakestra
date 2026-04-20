@@ -24,6 +24,7 @@ class LegacyStatus(Status):
 
 class SchedulingStatus(Status):
     "Represents the state before a service gets deployed"
+
     pass
 
 

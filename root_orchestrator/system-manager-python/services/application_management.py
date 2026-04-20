@@ -2,8 +2,11 @@ import logging
 import traceback
 
 from resource_abstractor_client import app_operations
-from services.service_management import create_services_of_app, delete_service
 from sla.versioned_sla_parser import SLAFormatError, parse_sla_json
+
+from services.service_management import create_services_of_app, delete_service
+
+logger = logging.getLogger("system_manager")
 
 
 def get_user_apps(userid):
@@ -57,7 +60,7 @@ def register_app(applications, userid):
                         delete_app(app_id, userid)
                         return result, status
                 except Exception:
-                    print(traceback.format_exc())
+                    logger.error(traceback.format_exc())
                     delete_app(app_id, userid)
                     return {"message": "error during the registration of the microservices"}, 500
 
@@ -65,7 +68,7 @@ def register_app(applications, userid):
 
 
 def update_app(appid, userid, fields):
-    # TODO: fields validation before update
+    # TODO(GB): fields validation before update
     app_data = {
         "application_name": fields.get("application_name"),
         "application_namespace": fields.get("application_namespace"),

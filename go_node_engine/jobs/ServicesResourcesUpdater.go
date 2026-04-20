@@ -7,9 +7,16 @@ import (
 )
 
 // StartServicesMonitoring starts the monitoring of the services
-func StartServicesMonitoring(every time.Duration, notifyHandler func(res []model.Resources)) {
+func StartServicesMonitoring(
+	runtimeManager *virtualization.RuntimeManager,
+	every time.Duration,
+	notifyHandler func(res []model.Resources),
+) {
 	node := model.GetNodeInfo()
-	for _, runtime := range node.Technology {
-		go virtualization.GetRuntimeMonitoring(runtime).ResourceMonitoring(every, notifyHandler)
+	for _, runtimeName := range node.Technology {
+		runtimeMonitoring := runtimeManager.GetRuntimeMonitoring(runtimeName)
+		if runtimeMonitoring != nil {
+			go runtimeMonitoring.ResourceMonitoring(every, notifyHandler)
+		}
 	}
 }

@@ -1,0 +1,107 @@
+
+x-logging:
+  &default-logging
+  driver: "json-file"
+  options:
+    max-size: "1m"
+    max-file: "1"
+    tag: "{{.Name}}"
+
+services:
+
+  # MQTT 
+  mqtt:
+    network_mode: host
+
+      
+  # cluster-level mongoDB
+  mongo_cluster:
+    network_mode: host
+
+  # cluster-level mongoDB
+  mongo_clusternet:
+    network_mode: host
+
+  # resource abstractor for the cluster
+  cluster_resource_abstractor:
+    network_mode: host
+    environment:
+      - MONGO_URL=0.0.0.0
+
+
+  # Cluster Manager
+  cluster_service_manager:
+    network_mode: host
+    environment:
+      - MQTT_BROKER_URL=0.0.0.0
+      - SYSTEM_MANAGER_URL=0.0.0.0
+      - CLUSTER_MONGO_URL=0.0.0.0
+      - ROOT_SERVICE_MANAGER_URL=0.0.0.0
+
+  # Cluster Manager
+  cluster_manager:
+    network_mode: host
+    environment:
+      - CLUSTER_SERVICE_MANAGER_ADDR=0.0.0.0
+      - CLUSTER_MONGO_URL=0.0.0.0
+      - RESOURCE_ABSTRACTOR_URL=0.0.0.0
+      - CLUSTER_SCHEDULER_URL=0.0.0.0
+      - MQTT_BROKER_URL=0.0.0.0
+
+
+
+  # Cluster Scheduler
+  cluster_scheduler:
+    network_mode: host
+    environment:
+      - MANAGER_URL=0.0.0.0
+      - RESOURCE_ABSTRACTOR_URL=0.0.0.0
+      - REDIS_ADDR=redis://:clusterRedis@0.0.0.0:6479
+    depends_on:
+      - cluster_redis
+      - mongo_cluster
+    logging: *default-logging
+
+
+  # Redis for the Cluster Scheduler as Job Queue
+  cluster_redis:
+    network_mode: host
+
+
+  prometheus:
+    network_mode: host
+
+
+  # Observability stack (Grafana, Loki, Promtail)
+  cluster_grafana:
+    network_mode: host
+
+  cluster_loki:
+    network_mode: host
+
+  
+  cluster_promtail:
+    network_mode: host
+  
+  cluster_addons_manager:
+    network_mode: host
+    environment:
+      - ADDONS_ENGINE_MONGO_URL=0.0.0.0
+  
+  cluster_addons_monitor:
+    network_mode: host
+    environment:
+      - ADDONS_MANAGER_ADDR=http://0.0.0.0:11201
+  
+  cluster_addons_dashboard:
+    network_mode: host
+    environment:
+      - RESOURCE_ABSTRACTOR_URL=0.0.0.0
+      - ADDONS_ENGINE_URL=0.0.0.0
+
+
+volumes:
+  mongodb_cluster_data:
+    driver: local
+  mongodb_cluster_net_data:
+    driver: local

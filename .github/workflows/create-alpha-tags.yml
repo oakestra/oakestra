@@ -5,16 +5,16 @@ on:
     branches:
       - develop
 
+permissions:
+  contents: write
+
 jobs:
   create_tag:
     runs-on: ubuntu-latest
 
     steps:
-
     - name: Checkout code
-      uses: actions/checkout@v2
-      with:
-        token: ${{ secrets.PACKAGES_TOKEN }}
+      uses: actions/checkout@v4
 
     - name: Get tag version
       id: tag_version

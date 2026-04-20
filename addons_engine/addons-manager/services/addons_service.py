@@ -11,7 +11,7 @@ MARKETPLACE_API = f"{MARKETPLACE_ADDR}/api/v1/marketplace/addons"
 addons_service = None
 
 
-# TODO: reuse this enum in addons_monitor
+# TODO(ME): reuse this enum in addons_monitor
 class AddonStatusEnum(Enum):
     INSTALLING = "installing"
     DISABLING = "disabling"
@@ -49,6 +49,8 @@ def install_addon(addon):
         logging.error(f"Addon-{marketplace_id} has no services")
         return None
 
+    addon["name"] = marketplace_addon.get("name")
+    addon["description"] = marketplace_addon.get("description", "")
     addon["services"] = services
     addon["volumes"] = marketplace_addon.get("volumes", [])
     addon["networks"] = marketplace_addon.get("networks", [])

@@ -1,0 +1,15 @@
+services:
+  cluster_addons_manager:
+    deploy:
+      mode: replicated
+      replicas: 0
+
+  cluster_addons_monitor:
+    deploy:
+      mode: replicated
+      replicas: 0
+
+  cluster_addons_dashboard:
+    deploy:
+      mode: replicated
+      replicas: 0
