@@ -24,6 +24,7 @@ func init() {
 	setAuth.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
 	setAuth.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
 	setVirtualizationCmd.AddCommand(enableUnikernel)
+	setVirtualizationCmd.AddCommand(enableCrosvm)
 	setCni.AddCommand(explainNetManager)
 	setCni.AddCommand(enableNetwork)
 	setCni.AddCommand(disableNetwork)
@@ -92,6 +93,16 @@ var (
 				return errors.New("unikernel command needs exactly one parameter: [on/off]")
 			}
 			return setUnikernel(args[0])
+		},
+	}
+	enableCrosvm = &cobra.Command{
+		Use:   "crosvm [on/off]",
+		Short: "[on/off] Enable/Disable crosvm VM support",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return errors.New("crosvm command needs exactly one parameter: [on/off]")
+			}
+			return setCrosvm(args[0])
 		},
 	}
 
@@ -338,6 +349,36 @@ func setUnikernel(trigger string) error {
 			Config:  []string{},
 		}
 		clusterConf.Virtualizations = append(clusterConf.Virtualizations, UnikernelVirt)
+	}
+
+	return configManager.Write(clusterConf)
+}
+
+func setCrosvm(trigger string) error {
+	active := trigger == "on" || trigger == "enable" || trigger == "true"
+
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+
+	updated := false
+	for i, virt := range clusterConf.Virtualizations {
+		if virt.Runtime == string(model.CROSVM_RUNTIME) {
+			updated = true
+			virt.Active = active
+			clusterConf.Virtualizations[i] = virt
+		}
+	}
+
+	if !updated {
+		clusterConf.Virtualizations = append(clusterConf.Virtualizations, config.Virtualization{
+			Name:    "crosvm",
+			Runtime: string(model.CROSVM_RUNTIME),
+			Active:  active,
+			Config:  []string{},
+		})
 	}
 
 	return configManager.Write(clusterConf)

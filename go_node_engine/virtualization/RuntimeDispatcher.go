@@ -42,8 +42,6 @@ func NewRuntimeManager() (*RuntimeManager, error) {
 		onceInitializers[name] = sync.OnceValue(func() virtrt.Runtime {
 			return initializer(info)
 		})
-		// maybe this shouldn't be global state
-		model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(name))
 	}
 
 	return &RuntimeManager{
@@ -59,3 +57,4 @@ func (m *RuntimeManager) GetRuntime(runtime model.RuntimeType) virtrt.RuntimeInt
 func (m *RuntimeManager) GetRuntimeMonitoring(runtime model.RuntimeType) virtrt.RuntimeMonitoring {
 	return m.initializers[string(runtime)]()
 }
+

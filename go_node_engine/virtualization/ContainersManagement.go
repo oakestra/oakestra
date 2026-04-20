@@ -92,6 +92,11 @@ func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
 	runtime.forceContainerCleanup()
 	runtime.mountedVolumes = make(map[string][]csi.MountedVolume)
 
+	// Advertise sub-runtimes discovered from the containerd config (e.g. runc).
+	for name := range findAdditionalRuntimePlugins() {
+		model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(name))
+	}
+
 	return &runtime
 }
 
