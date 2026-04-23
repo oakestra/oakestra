@@ -18,4 +18,6 @@ ENV RESOURCE_ABSTRACTOR_PORT=11011
 
 ENV REDIS_ADDR=redis://:rootRedis@redis:6379
 
+ENV DEBUG=False
+
 ENTRYPOINT ["./scheduler"]
