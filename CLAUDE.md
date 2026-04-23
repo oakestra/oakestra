@@ -4,7 +4,7 @@
 
 Oakestra is a **lightweight orchestration platform for edge computing**. Unlike Kubernetes or K3s, which were designed for cloud-grade machines, Oakestra targets heterogeneous, resource-constrained edge devices. The entire root + cluster stack runs in ~1 GB RAM. A worker node needs only 100 MB RAM and 50 MB disk.
 
-The platform orchestrates containerised workloads (Docker, containerd) and unikernels across a two-level hierarchy: **root → clusters → workers**. Applications are described via SLA (Service Level Agreement) JSON documents that encode resource constraints, placement preferences, and networking requirements. The scheduler places each microservice on the best-fit worker using a pluggable algorithm (default: `rootBestCpuMemFit`).
+The platform orchestrates containerised workloads (Docker, containerd) and unikernels across a two-level hierarchy: **root → clusters → workers**. Applications are described via SLA (Service Level Agreement) JSON documents that encode resource constraints, placement preferences, and networking requirements. The scheduler places each microservice on the best-fit worker using a pluggable algorithm (default: `bestCpuMemFit`).
 
 Current develop version: see `version.txt`.
 

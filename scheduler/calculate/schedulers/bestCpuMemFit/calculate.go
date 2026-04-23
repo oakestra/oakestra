@@ -1,12 +1,15 @@
-package rootBestCpuMemFit
+package bestCpuMemFit
 
 import (
 	"encoding/json"
 	"errors"
+	"os"
 	"scheduler/calculate/schedulers/interfaces"
 	"scheduler/logger"
 	"slices"
 )
+
+var Plane = os.Getenv("ORCHESTRATION_PLANE")
 
 type CpuMemConstraints struct {
 	interfaces.GenericConstraints
@@ -45,8 +48,13 @@ func (r CpuMemResources) ResourceConstraints() map[string]string {
 	for _, constraint := range r.Constraints {
 		logger.DebugLogger().Printf("Constraint: %+v", constraint)
 		if constraint.Type == "direct" {
-			constraints["cluster_name"] = constraint.Cluster
-			constraints["node_name"] = constraint.Node
+			var c string
+			if Plane == "cluster" {
+				c = constraint.Node
+			} else {
+				c = constraint.Cluster
+			}
+			constraints["candidate_name"] = c
 		}
 	}
 	return constraints

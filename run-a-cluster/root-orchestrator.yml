@@ -171,6 +171,7 @@ services:
     ports:
       - "10004:10004"
     environment:
+      - ORCHESTRATION_PLANE=root
       - MY_PORT=10004
       - SYSTEM_MANAGER_URL=system_manager
       - SYSTEM_MANAGER_PORT=10000
