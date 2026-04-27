@@ -1,13 +1,212 @@
 services:
 
+  # Reset port mappings so that services are only reachable:
+  # * from within the docker network
+  # * via the gateways
+
+  mqtt:
+    ports: !reset []
+
+  mongo_cluster:
+    ports: !reset []
+
+  mongo_clusternet:
+    ports: !reset []
+
   cluster_manager:
     environment:
-      - SYSTEM_MANAGER_PORT=${SYSTEM_MANAGER_GATEWAY_HTTP_PORT:-8888}
-      - SYSTEM_MANAGER_GRPC_PORT=${SYSTEM_MANAGER_GATEWAY_GRPC_PORT:-8888}
+      - SYSTEM_MANAGER_PORT=${SYSTEM_MANAGER_GATEWAY_HTTP_PORT:-80}
+      - SYSTEM_MANAGER_GRPC_PORT=${SYSTEM_MANAGER_GATEWAY_GRPC_PORT:-80}
       - CLUSTER_IP=${CLUSTER_IP}
       - CLUSTER_AUTHENTICATION_TOKEN=${CLUSTER_AUTHENTICATION_TOKEN}
+    ports: !reset []
 
   cluster_service_manager:
     environment:
-      - ROOT_SERVICE_MANAGER_PORT=8888
+      - ROOT_SERVICE_MANAGER_PORT=80
       - CLUSTER_IP=${CLUSTER_IP}
+    ports: !reset []
+
+  cluster_scheduler:
+    ports: !reset []
+
+  cluster_resource_abstractor:
+    ports: !reset []
+
+  cluster_redis:
+    ports: !reset []
+
+  prometheus:
+    ports: !reset []
+
+  cluster_grafana:
+    environment:
+      - GF_SERVER_ROOT_URL=http://localhost:8888/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_SERVER_ENFORCE_DOMAIN=false
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SECURITY_CSRF_TRUSTED_ORIGINS=localhost:8888
+      - GF_SECURITY_CSRF_ADDITIONAL_HEADERS=X-Forwarded-Host
+    ports: !reset []
+
+  cluster_loki:
+    ports: !reset []
+
+  cluster_addons_manager:
+    environment:
+      - MARKETPLACE_ADDR=http://${SYSTEM_MANAGER_URL}:80
+    ports: !reset []
+
+  cluster_addons_dashboard:
+    environment:
+      - BASE_HREF=cluster-addons-dashboard
+    ports: !reset []
+
+  cluster_kong_db_external:
+    image: postgres:16
+    container_name: cluster_kong_db_external
+    hostname: cluster_kong_db_external
+    environment:
+      - POSTGRES_USER=kong
+      - POSTGRES_PASSWORD=kong
+      - POSTGRES_DB=kong
+    volumes:
+      - cluster_kong_db_external_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "kong"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  cluster_kong_db_internal:
+    image: postgres:16
+    container_name: cluster_kong_db_internal
+    hostname: cluster_kong_db_internal
+    environment:
+      - POSTGRES_USER=kong
+      - POSTGRES_PASSWORD=kong
+      - POSTGRES_DB=kong
+    volumes:
+      - cluster_kong_db_internal_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "kong"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  cluster_kong_bootstrap_external:
+    image: kong:3.6
+    container_name: cluster_kong_bootstrap_external
+    command: kong migrations bootstrap
+    environment:
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=cluster_kong_db_external
+      - KONG_PG_USER=kong
+      - KONG_PG_PASSWORD=kong
+      - KONG_PG_DATABASE=kong
+    depends_on:
+      cluster_kong_db_external:
+        condition: service_healthy
+    restart: on-failure
+
+  cluster_kong_bootstrap_internal:
+    image: kong:3.6
+    container_name: cluster_kong_bootstrap_internal
+    command: kong migrations bootstrap
+    environment:
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=cluster_kong_db_internal
+      - KONG_PG_USER=kong
+      - KONG_PG_PASSWORD=kong
+      - KONG_PG_DATABASE=kong
+    depends_on:
+      cluster_kong_db_internal:
+        condition: service_healthy
+    restart: on-failure
+
+  # External gateway
+  cluster_kong_external:
+    image: kong:3.6
+    container_name: cluster_kong_external
+    hostname: cluster_kong_external
+    environment:
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=cluster_kong_db_external
+      - KONG_PG_USER=kong
+      - KONG_PG_PASSWORD=kong
+      - KONG_PG_DATABASE=kong
+      - KONG_PROXY_LISTEN=0.0.0.0:8000 http2, 0.0.0.0:8443 ssl http2
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001
+      - KONG_LOG_LEVEL=info
+    ports:
+      - "8080:8000"
+      - "8443:8443"
+    expose:
+      - "8001"
+    depends_on:
+      cluster_kong_db_external:
+        condition: service_healthy
+      cluster_kong_bootstrap_external:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  # Internal gateway
+  cluster_kong_internal:
+    image: kong:3.6
+    container_name: cluster_kong_internal
+    hostname: cluster_kong_internal
+    environment:
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=cluster_kong_db_internal
+      - KONG_PG_USER=kong
+      - KONG_PG_PASSWORD=kong
+      - KONG_PG_DATABASE=kong
+      - KONG_PROXY_LISTEN=0.0.0.0:8000 http2
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001
+      - KONG_LOG_LEVEL=info
+    ports:
+      - "127.0.0.1:8888:8000"
+    expose:
+      - "8001"
+    depends_on:
+      cluster_kong_db_internal:
+        condition: service_healthy
+      cluster_kong_bootstrap_internal:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  # Initial config
+  cluster_kong_init:
+    image: kong/deck:v1.56.0
+    container_name: cluster_kong_init
+    volumes:
+      - ./config/kong/init-gateway.sh:/init-gateway.sh:ro
+      - ./config/kong/external.yaml:/external.yaml:ro
+      - ./config/kong/internal.yaml:/internal.yaml:ro
+    entrypoint: ["sh", "/init-gateway.sh"]
+    depends_on:
+      cluster_kong_external:
+        condition: service_healthy
+      cluster_kong_internal:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  cluster_kong_db_external_data:
+    driver: local
+  cluster_kong_db_internal_data:
+    driver: local

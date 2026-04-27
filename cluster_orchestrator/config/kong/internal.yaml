@@ -1,0 +1,107 @@
+_format_version: "3.0"
+
+# Internal gateway mapping - only traffic from localhost permitted
+services:
+  # Cluster Manager API
+  - name: cluster_manager_api
+    url: http://cluster_manager:10100
+    routes:
+      - name: cluster-manager-routes
+        paths:
+          - /cluster_manager/api/
+          - /api/
+          - /api/docs
+          - /docs
+          - /docs/
+          - /docs/openapi.json
+        strip_path: false
+        preserve_host: true
+
+  # Cluster networking plugin
+  - name: cluster_service_manager_api
+    url: http://cluster_service_manager:10110
+    routes:
+      - name: cluster-service-manager-routes
+        paths:
+          - /api/pubnet/service/netinfo
+          - /api/net/subnet
+          - /api/net/deployment
+          - /api/net/service
+          - /api/net/service/
+          - /api/net/interest
+          - /api/net/interest/
+        strip_path: false
+
+  # Cluster scheduler callbacks
+  - name: cluster_scheduler_api
+    url: http://cluster_scheduler:10105
+    routes:
+      - name: cluster-scheduler-routes
+        paths:
+          - /api/calculate/deploy
+        strip_path: false
+
+  # Cluster resource abstractor
+  - name: cluster_resource_abstractor_api
+    url: http://cluster_resource_abstractor:11012
+    routes:
+      - name: cluster-resource-abstractor-routes
+        paths:
+          - /api/v1/applications
+          - /api/v1/custom-resources
+          - /api/v1/hook
+          - /api/v1/jobs
+          - /api/v1/resources
+        strip_path: false
+
+  # Cluster addons manager
+  - name: cluster_addons_manager_api
+    url: http://cluster_addons_manager:11201
+    routes:
+      - name: cluster-addons-manager-routes
+        paths:
+          - /api/v1/addons
+          - /api/v1/addons/
+        strip_path: false
+
+  # Addons marketplace (served by root marketplace_manager)
+  - name: marketplace_manager_api
+    url: http://marketplace_manager:11102
+    routes:
+      - name: marketplace-manager-routes
+        paths:
+          - /api/v1/marketplace/addons
+        strip_path: false
+
+  - name: cluster_grafana
+    url: http://cluster_grafana:3000
+    routes:
+      - name: cluster-grafana-routes
+        paths:
+          - /grafana
+        strip_path: false
+    plugins:
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "X-Forwarded-Proto:http"
+              - "X-Forwarded-Host:localhost:8888"
+
+  - name: cluster_loki
+    url: http://cluster_loki:3100
+    routes:
+      - name: cluster-loki-routes
+        paths:
+          - /loki
+        strip_path: false
+
+  - name: cluster_addons_dashboard
+    url: http://cluster_addons_dashboard:11203
+    routes:
+      - name: cluster-addons-dashboard-routes
+        paths:
+          - /cluster-addons-dashboard
+        strip_path: true
+
+plugins: []

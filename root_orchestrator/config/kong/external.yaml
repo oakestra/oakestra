@@ -145,6 +145,17 @@ services:
         methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
         strip_path: false
 
+  # Public addons marketplace endpoint.
+  - name: marketplace_manager_public
+    url: http://marketplace_manager:11102
+    routes:
+      - name: marketplace-addons-public
+        paths:
+          - /api/v1/marketplace/addons
+          - /api/v1/marketplace/addons/
+        methods: [GET, OPTIONS]
+        strip_path: false
+
   # Explicitly block admin-only endpoints on the external gateway.
   - name: system_manager_admin_block
     url: http://system_manager:10000

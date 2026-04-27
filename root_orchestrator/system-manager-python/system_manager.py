@@ -120,7 +120,7 @@ class ClusterRegistrationServicer(register_clusterServicer):
             "token": message.get("token", "")
         }
 
-        if os.environ.get("REQUIRE_CLUSTER_AUTHENTICATION", False):
+        if os.environ.get("CLUSTER_AUTHENTICATION", False):
             if not verify_cluster_token(cluster_data["candidate_name"], cluster_data["token"]):
                 logger.warning(f"Invalid token provided for {cluster_data['candidate_name']}")
                 context.abort(grpc.StatusCode.UNAUTHENTICATED, "invalid cluster token")
