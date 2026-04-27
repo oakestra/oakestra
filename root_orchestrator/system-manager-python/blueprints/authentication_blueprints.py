@@ -1,7 +1,6 @@
 import logging
 
-from bson import json_util
-from flask import request
+from flask import jsonify, request
 from flask.views import MethodView
 from flask_jwt_extended import jwt_required
 from flask_restful import Resource
@@ -66,7 +65,8 @@ class UserRegisterController(Resource):
     def post(self, *args, **kwargs):
         content = request.get_json()
         organization_id = get_jwt_organization()
-        return json_util.dumps(user_register(content, organization_id))
+        resp, status = user_register(content, organization_id)
+        return jsonify(resp), status
 
 
 @loginbp.route("/refresh")

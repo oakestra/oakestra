@@ -108,6 +108,12 @@
             "problemMatcher": []
         },
         {
+            "label": "install-root-manager-dependencies",
+            "type": "shell",
+            "command": "LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) pip install -r ${workspaceRoot}/root_orchestrator/system-manager-python/requirements.txt" ,
+            "problemMatcher": []
+        },
+        {
             "label": "prep-debug-cluster-scheduler-env",
             "dependsOn": [
                 "root-orchestrator-up",
