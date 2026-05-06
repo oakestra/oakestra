@@ -109,7 +109,7 @@ def register_with_system_manager():
         try:
             # Send cluster details (CS2Message)
             message = CS2Message()
-            message.manager_port = int(config.MY_PORT)
+            message.manager_port = int(config.MY_CLUSTER_PORT)
             message.network_component_port = int(config.NETWORK_COMPONENT_PORT)
             message.cluster_name = config.MY_CHOSEN_CLUSTER_NAME
             message.cluster_location = config.MY_CLUSTER_LOCATION

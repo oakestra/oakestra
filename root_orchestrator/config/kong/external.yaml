@@ -138,6 +138,18 @@ services:
           - /api/net/service/
         methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
         strip_path: false
+      - name: rsm-service-deploy-status-public
+        paths:
+          - /api/net/service/net_deploy_status
+          - /api/net/service/net_deploy_status/
+        methods: [GET, POST, OPTIONS]
+        strip_path: false
+      - name: rsm-job-update-public
+        paths:
+          - /api/net/job/update
+          - /api/net/job/update/
+        methods: [POST, OPTIONS]
+        strip_path: false
       - name: rsm-interest-public
         paths:
           - /api/net/interest

@@ -14,12 +14,14 @@ services:
       - name: cm-node-register
         paths:
           - /api/node/register
+          - /api/node/register/
         methods: [POST, OPTIONS]
         strip_path: false
 
       - name: cm-service-instance
         paths:
-          - "~/^/api/service/[^/]+/[^/]+$"
+          - /api/service
+          - /api/service/
         methods: [POST, DELETE, OPTIONS]
         strip_path: false
 
@@ -36,6 +38,30 @@ services:
           - /docs/
           - /docs/openapi.json
         methods: [GET, OPTIONS]
+        strip_path: false
+
+  # Public cluster service manager API surface.
+  - name: cluster_service_manager_public
+    url: http://cluster_service_manager:10110
+    routes:
+      - name: csm-job-update
+        paths:
+          - /api/net/job/update
+          - /api/net/job/update/
+        methods: [POST, OPTIONS]
+        strip_path: false
+        
+      - name: csm-deploy-service
+        paths:
+          - /api/net/deployment
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+      - name: csm-delete-service
+        paths:
+          - /api/net/deployment
+          - /api/net/deployment/
+        methods: [DELETE, OPTIONS]
         strip_path: false
 
   # Fallback deny: any API path not matched by explicit allowlist stays blocked.

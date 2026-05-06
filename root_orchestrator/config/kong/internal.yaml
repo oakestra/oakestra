@@ -10,7 +10,19 @@ services:
       - name: system-manager-routes
         paths:
           - /system_manager/api/
-          - /api/
+          - /api/auth
+          - /api/auth/
+          - /api/application
+          - /api/application/
+          - /api/permission
+          - /api/clusters
+          - /api/clusters/
+          - /api/service
+          - /api/service/
+          - /api/services
+          - /api/services/
+          - /api/user
+          - /api/user/
           - /api/docs
           - /docs
           - /docs/
@@ -35,6 +47,12 @@ services:
         paths:
           - /api/pubnet/service/netinfo
           - /api/net/subnet
+          - /api/net/service
+          - /api/net/service/
+          - /api/net/service/net_deploy_status
+          - /api/net/service/net_deploy_status/
+          - /api/net/job/update
+          - /api/net/job/update/
         strip_path: false
 
   # Root scheduler callbacks

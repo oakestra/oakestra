@@ -5,7 +5,6 @@ services:
   # * via the gateways
 
   mqtt:
-    ports: !reset []
 
   mongo_cluster:
     ports: !reset []
@@ -17,7 +16,9 @@ services:
     environment:
       - SYSTEM_MANAGER_PORT=${SYSTEM_MANAGER_GATEWAY_HTTP_PORT:-80}
       - SYSTEM_MANAGER_GRPC_PORT=${SYSTEM_MANAGER_GATEWAY_GRPC_PORT:-80}
+      - CLUSTER_SERVICE_MANAGER_GATEWAY_PORT=8080
       - CLUSTER_IP=${CLUSTER_IP}
+      - CLUSTER_PORT=8080
       - CLUSTER_AUTHENTICATION_TOKEN=${CLUSTER_AUTHENTICATION_TOKEN}
     ports: !reset []
 

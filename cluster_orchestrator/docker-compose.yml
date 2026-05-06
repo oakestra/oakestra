@@ -115,6 +115,7 @@ services:
       - RESOURCE_ABSTRACTOR_PORT=11012
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
+      - CLUSTER_PORT=10100
     depends_on:
       - mongo_cluster
       - mqtt

@@ -25,11 +25,23 @@ services:
         paths:
           - /api/pubnet/service/netinfo
           - /api/net/subnet
-          - /api/net/deployment
           - /api/net/service
           - /api/net/service/
           - /api/net/interest
           - /api/net/interest/
+        strip_path: false
+
+      - name: cluster-service-manager-deploy-service
+        paths:
+          - /api/net/deployment
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+      - name: cluster-service-manager-delete-service
+        paths:
+          - /api/net/deployment
+          - /api/net/deployment/
+        methods: [DELETE, OPTIONS]
         strip_path: false
 
   # Cluster scheduler callbacks
