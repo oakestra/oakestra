@@ -165,6 +165,36 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 
 ---
 
+## Regenerating gRPC proto stubs
+
+The cluster registration handshake uses [`clusterRegistration.proto`](root_orchestrator/system-manager-python/proto/clusterRegistration.proto), with an identical copy in [`cluster_orchestrator/cluster-manager/proto/`](cluster_orchestrator/cluster-manager/proto/clusterRegistration.proto). Both must stay in sync — when you edit one, edit the other and regenerate the `_pb2.py` / `_pb2.pyi` / `_pb2_grpc.py` files on **both** sides.
+
+The system_manager and cluster_manager containers pin `protobuf~=4.25.2`. You **must** regenerate with `grpcio-tools` from the matching 1.60 line — newer grpcio-tools emit a `from google.protobuf import runtime_version` import that doesn't exist in protobuf 4.25, and the container fails to boot with `ImportError: cannot import name 'runtime_version'`.
+
+Run `protoc` from the **parent directory** with `-I.` and the proto file path as `proto/...` — this makes the generated `_pb2_grpc.py` use a package-qualified `from proto import clusterRegistration_pb2 as ...`. If you run it from inside `proto/` with `-Iproto`, you get a bare `import clusterRegistration_pb2` which fails at runtime (`proto/` isn't on `sys.path`; only the parent is, since both containers run `gunicorn` / `cluster_manager.py` from `/`).
+
+```bash
+pip install 'grpcio-tools~=1.60.0'
+
+# Root — run from system-manager-python/, NOT from proto/
+cd root_orchestrator/system-manager-python
+python -m grpc_tools.protoc -I. \
+  --python_out=. --pyi_out=. --grpc_python_out=. \
+  proto/clusterRegistration.proto
+
+# Cluster — run from cluster-manager/, NOT from proto/
+cd cluster_orchestrator/cluster-manager
+python -m grpc_tools.protoc -I. \
+  --python_out=. --pyi_out=. --grpc_python_out=. \
+  proto/clusterRegistration.proto
+```
+
+Sanity-check the regenerated files:
+- `_pb2.py` header should say `# Protobuf Python Version: 4.25.0` and must NOT contain `runtime_version`.
+- `_pb2_grpc.py` should import as `from proto import clusterRegistration_pb2 as ...` (package-qualified), not `import clusterRegistration_pb2`.
+
+---
+
 ## Design Principles (keep these in mind when contributing)
 
 1. **Lightweight first.** The whole orchestrator stack targets ~1 GB RAM. Avoid pulling in heavy dependencies or adding services without strong justification.
