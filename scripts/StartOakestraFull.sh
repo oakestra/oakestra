@@ -185,7 +185,7 @@ if [ ! -z "$OAKESTRA_VERSION" ]; then
         rm 1-DOC.yaml.bak 
     else
         if [ "$OAKESTRA_VERSION" != "main" ]; then
-          echo "Error: Full 1 Node Oakestra deployment only supports tagged releases, develop or main branch. Please specify a valid tag (e.g., v0.4.401 or alpha-v0.4.403)."
+          echo "Error: Full 1 Node Oakestra deployment only supports tagged releases, develop or main branch. Please specify a valid tag (e.g., v0.4.410 or alpha-v0.4.411)."
           exit 1
         fi
     fi
