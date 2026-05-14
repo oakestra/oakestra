@@ -62,9 +62,6 @@ def get_service_instances(name=None, ip=None, cluster_ip=None, cluster_name=None
     if cluster is None:
         return "Invalid cluster address, is the cluster registered?", 400
 
-    if cluster.get("cluster_name") != cluster_name:
-        return "Cluster address and name do not match", 401
-
     job = tablequery.service_resolution(name=name, ip=ip)
 
     if job is None:
