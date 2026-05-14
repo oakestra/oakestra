@@ -107,8 +107,7 @@ def register_with_system_manager():
             greeting, wait_for_ready=True, timeout=config.GRPC_REQUEST_TIMEOUT
         )
         logger.info(
-            "Received greeting message from System Manager: "
-            + str(sc1.hello_cluster_manager)
+            "Received greeting message from System Manager: " + str(sc1.hello_cluster_manager)
         )
 
         # Send cluster details (CS2Message)
