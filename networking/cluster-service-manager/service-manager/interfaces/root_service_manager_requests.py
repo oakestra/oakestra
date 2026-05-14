@@ -13,6 +13,13 @@ ROOT_SERVICE_MANAGER_ADDR = (
 logger = logging.getLogger("cluster_service_manager")
 
 
+def _cluster_identity_params():
+    return {
+        "cluster_address": os.environ.get("CLUSTER_ADDRESS", ""),
+        "cluster_name": os.environ.get("CLUSTER_NAME", ""),
+    }
+
+
 def root_service_manager_get_subnet():
     logger.info("get subnet - logging")
     try:
@@ -61,7 +68,7 @@ def root_table_query_ip(ip):
         ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/ip/" + str(job_ip) + "/instances"
     )
     try:
-        return requests.get(request_addr).json()
+        return requests.get(request_addr, params=_cluster_identity_params()).json()
     except requests.exceptions.RequestException:
         logger.error("Calling System Manager /api/job/ip/../instances not successful.")
 
@@ -72,7 +79,7 @@ def root_table_query_service_name(name):
         ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/" + str(job_name) + "/instances"
     )
     try:
-        resp = requests.get(request_addr)
+        resp = requests.get(request_addr, params=_cluster_identity_params())
         return resp.json()
     except requests.exceptions.RequestException as e:
         logger.error(e)

@@ -52,8 +52,8 @@ def undeploy_request(sys_job_id=None, instance_number=None):
     return "Instance not found", 400
 
 
-def get_service_instances(name=None, ip=None, cluster_ip=None):
-    if cluster_ip is None:
+def get_service_instances(name=None, ip=None, cluster_ip=None, cluster_name=None):
+    if cluster_ip is None or cluster_name is None:
         return "Invalid address", 400
 
     cluster_ip = sanitize(cluster_ip)
@@ -61,6 +61,9 @@ def get_service_instances(name=None, ip=None, cluster_ip=None):
 
     if cluster is None:
         return "Invalid cluster address, is the cluster registered?", 400
+
+    if cluster.get("cluster_id") != cluster_name:
+        return "Cluster address and name do not match", 401
 
     job = tablequery.service_resolution(name=name, ip=ip)
 
