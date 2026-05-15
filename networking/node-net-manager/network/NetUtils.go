@@ -95,7 +95,7 @@ func defaultRoute() (*netlink.Link, error) {
 	}
 
 	if len(routes) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("no default route found")
 	}
 
 	if n := len(routes); n > 1 {
