@@ -29,11 +29,10 @@ type ProxyCache struct {
 	rwlock                sync.RWMutex
 }
 
-func NewProxyCache() ProxyCache {
-	cache := ProxyCache{
-		cache:                 make([]ConversionList, 65535),
+func NewProxyCache() *ProxyCache {
+	cache := &ProxyCache{
+		cache:                 make([]ConversionList, 65536),
 		conversionListMaxSize: 10,
-		rwlock:                sync.RWMutex{},
 	}
 	cache.runEvictionJob(30*time.Second, 1*time.Minute)
 	return cache

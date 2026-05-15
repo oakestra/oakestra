@@ -84,7 +84,7 @@ func HandleRequests(port int) {
 
 var (
 	Env   env.Environment
-	Proxy proxy.GoProxyTunnel
+	Proxy *proxy.GoProxyTunnel
 )
 
 /*
@@ -107,6 +107,7 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	err := json.Unmarshal(reqBody, &requestStruct)
 	if err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
+		return
 	}
 	log.Println(requestStruct)
 

@@ -49,7 +49,7 @@ type GoProxyTunnel struct {
 	ProxyIpSubnetwork   net.IPNet
 	ProxyIPv6Subnetwork net.IPNet
 	localIP             net.IP
-	proxycache          ProxyCache
+	proxycache          *ProxyCache
 	TunnelPort          int
 	bufferPort          int
 	udpwrite            sync.RWMutex
