@@ -4,6 +4,7 @@ import (
 	"NetManager/logger"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,7 +19,7 @@ type ConversionEntry struct {
 
 type ConversionList struct {
 	nextEntry      int
-	lastUsed       int64
+	lastUsed       atomic.Int64
 	conversionList []ConversionEntry
 }
 
@@ -56,11 +57,12 @@ func (cache *ProxyCache) evictOldEntries(timeout time.Duration) {
 	now := time.Now().Unix()
 	timeoutSeconds := int64(timeout.Seconds())
 	evictedCount := 0
-	for i, elem := range cache.cache {
-		// An entry is considered old if it has not been used for the timeout period.
-		if elem.lastUsed != 0 && (now-elem.lastUsed) > timeoutSeconds {
-			// To evict the entry, we just reset it to its zero value.
-			cache.cache[i] = ConversionList{}
+	for i := range cache.cache {
+		lastUsed := cache.cache[i].lastUsed.Load()
+		if lastUsed != 0 && (now-lastUsed) > timeoutSeconds {
+			cache.cache[i].lastUsed.Store(0)
+			cache.cache[i].nextEntry = 0
+			cache.cache[i].conversionList = nil
 			evictedCount++
 		}
 	}
@@ -71,8 +73,8 @@ func (cache *ProxyCache) evictOldEntries(timeout time.Duration) {
 
 // RetrieveByServiceIP Retrieve proxy proxycache entry based on source ip and source port and destination ServiceIP
 func (cache *ProxyCache) RetrieveByServiceIP(srcip net.IP, instanceIP net.IP, srcport int, dstServiceIp net.IP, dstport int) (ConversionEntry, bool) {
-	cache.rwlock.Lock()
-	defer cache.rwlock.Unlock()
+	cache.rwlock.RLock()
+	defer cache.rwlock.RUnlock()
 
 	elem := &cache.cache[srcport]
 	if elem.conversionList != nil {
@@ -81,7 +83,7 @@ func (cache *ProxyCache) RetrieveByServiceIP(srcip net.IP, instanceIP net.IP, sr
 				cacheEntry.dstServiceIp.Equal(dstServiceIp) &&
 				cacheEntry.srcip.Equal(srcip) &&
 				cacheEntry.srcInstanceIp.Equal(instanceIP) {
-				elem.lastUsed = time.Now().Unix()
+				elem.lastUsed.Store(time.Now().Unix())
 				return cacheEntry, true
 			}
 		}
@@ -91,14 +93,14 @@ func (cache *ProxyCache) RetrieveByServiceIP(srcip net.IP, instanceIP net.IP, sr
 
 // RetrieveByInstanceIp Retrieve proxy proxycache entry based on source ip and source port and destination ip
 func (cache *ProxyCache) RetrieveByInstanceIp(srcip net.IP, srcport int, dstport int) (ConversionEntry, bool) {
-	cache.rwlock.Lock()
-	defer cache.rwlock.Unlock()
+	cache.rwlock.RLock()
+	defer cache.rwlock.RUnlock()
 
 	elem := &cache.cache[srcport]
 	if elem.conversionList != nil {
 		for _, entry := range elem.conversionList {
 			if entry.dstport == dstport && entry.srcip.Equal(srcip) {
-				elem.lastUsed = time.Now().Unix()
+				elem.lastUsed.Store(time.Now().Unix())
 				return entry, true
 			}
 		}
@@ -122,7 +124,7 @@ func (cache *ProxyCache) Add(entry ConversionEntry) {
 
 func (cache *ProxyCache) addToConversionList(entry ConversionEntry) {
 	elem := &cache.cache[entry.srcport]
-	elem.lastUsed = time.Now().Unix()
+	elem.lastUsed.Store(time.Now().Unix())
 	alreadyExist := false
 	alreadyExistPosition := 0
 	//check if used port is already in proxycache
