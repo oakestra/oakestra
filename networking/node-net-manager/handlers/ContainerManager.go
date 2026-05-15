@@ -74,6 +74,7 @@ func (m *ContainerManager) containerDeploy(writer http.ResponseWriter, request *
 	err := json.Unmarshal(reqBody, &deployTask)
 	if err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
+		return
 	}
 	deployTask.Runtime = env.CONTAINER_RUNTIME
 	deployTask.PublicAddr = m.Configuration.NodePublicAddress
@@ -134,6 +135,7 @@ func (m *ContainerManager) containerUndeploy(writer http.ResponseWriter, request
 	err := json.Unmarshal(reqBody, &requestStruct)
 	if err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	log.Println(requestStruct)
