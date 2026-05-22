@@ -9,12 +9,10 @@ RUN apt-get update -y &&\
         git
 
 COPY requirements.txt /
+COPY --from=libs oakestra_utils_library /libs/oakestra_utils_library
+COPY --from=libs resource_abstractor_client /libs/resource_abstractor_client
 
-# Install appropriate requirements
-ARG LIB_BRANCH=develop
-ENV LIB_BRANCH=${LIB_BRANCH}
-
-RUN pip install --no-cache-dir -r requirements.txt 
+RUN pip install --no-cache-dir -r requirements.txt /libs/oakestra_utils_library /libs/resource_abstractor_client
 
 COPY . /
 

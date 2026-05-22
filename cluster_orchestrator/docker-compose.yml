@@ -84,8 +84,8 @@ services:
     image: cluster_manager
     build:
       context: cluster-manager/
-      args:
-        - LIB_BRANCH=${LIB_BRANCH:-develop}
+      additional_contexts:
+        libs: ../libraries
     container_name: cluster_manager
     labels:
       logging: "cluster_promtail"

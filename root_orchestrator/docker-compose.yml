@@ -12,8 +12,8 @@ services:
     image: system_manager
     build:
       context: system-manager-python/
-      args:
-        - LIB_BRANCH=${LIB_BRANCH:-develop}
+      additional_contexts:
+        libs: ../libraries
     hostname: system_manager
     container_name: system_manager
     labels:
