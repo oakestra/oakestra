@@ -35,9 +35,8 @@ func formatQuery(requestParameters map[string]string, interestedResources []stri
 	if resources != "" {
 		sb.WriteString("&")
 		sb.WriteString(resources)
-		return sb.String()
 	}
-	return sb.String()[:sb.Len()-1]
+	return sb.String()
 }
 
 func formatRequestParameters(r map[string]string) string {
@@ -45,14 +44,13 @@ func formatRequestParameters(r map[string]string) string {
 		return ""
 	}
 	var sb strings.Builder
-	sb.WriteString("?")
 	for k, v := range r {
 		if v == "" {
 			continue
 		}
 		sb.WriteString(fmt.Sprintf("%s=%s&", k, v))
 	}
-	return sb.String()[:sb.Len()-1]
+	return strings.TrimSuffix(sb.String(), "&")
 }
 
 func formatInterestedResources(interestedResources []string) string {
@@ -65,7 +63,7 @@ func formatInterestedResources(interestedResources []string) string {
 		sb.WriteString(",")
 	}
 
-	return sb.String()[:sb.Len()-1]
+	return strings.TrimSuffix(sb.String(), ",")
 }
 
 func AvailableResources[T interfaces.ResourceList](data *[]T, requestParameters map[string]string, interestedResources []string) error {

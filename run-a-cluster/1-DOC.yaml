@@ -40,6 +40,7 @@ services:
       - root_service_manager
       - jwt_generator
     environment:
+      - ORCHESTRATION_PLANE=root
       - ROOT_MONGO_URL=mongo
       - ROOT_MONGO_PORT=10007
       - ROOT_SCHEDULER_URL=root_scheduler
@@ -315,6 +316,7 @@ services:
     expose:
       - "10105"
     environment:
+      - ORCHESTRATION_PLANE=cluster
       - API_PORT=10105
       - MANAGER_URL=cluster_manager
       - MANAGER_PORT=10100

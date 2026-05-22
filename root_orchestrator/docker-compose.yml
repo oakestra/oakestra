@@ -165,6 +165,7 @@ services:
     ports:
       - "10004:10004"
     environment:
+      - ORCHESTRATION_PLANE=root
       - API_PORT=10004
       - MANAGER_URL=system_manager
       - MANAGER_PORT=10000

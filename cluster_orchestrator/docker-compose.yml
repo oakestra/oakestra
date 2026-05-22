@@ -135,6 +135,7 @@ services:
     ports:
       - "10105:10105"
     environment:
+      - ORCHESTRATION_PLANE=cluster
       - API_PORT=10105
       - MANAGER_URL=cluster_manager
       - MANAGER_PORT=10100

@@ -173,7 +173,7 @@ fi
 if sudo docker ps -a | grep oakestra >/dev/null 2>&1; then
   echo 🚨 Detected some Oakestra containers already running. It is recommended to stop them before starting a new 1-DOC cluster.
   echo Do you wish to continue anyway? \(y/n\)
-  read answer
+  read answer < /dev/tty
   if [ "$answer" != "y" ]; then
     echo Exiting without starting Oakestra 1-DOC.
     exit 0
