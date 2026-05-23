@@ -5,8 +5,10 @@ services:
   # * via the gateways
 
   system_manager:
+    volumes:
+      - ${ROOT_CERT_PATH:-./config/certs}:/certs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - CLUSTER_AUTHENTICATION=True
     ports: !reset []
 
   mongo_root:
@@ -145,15 +147,17 @@ services:
       - KONG_PG_USER=kong
       - KONG_PG_PASSWORD=kong
       - KONG_PG_DATABASE=kong
-      - KONG_PROXY_LISTEN=0.0.0.0:8000 http2, 0.0.0.0:8443 ssl http2
+      - KONG_PROXY_LISTEN=0.0.0.0:8443 ssl http2
       - KONG_ADMIN_LISTEN=0.0.0.0:8001    # Admin API — internal only
       - KONG_SSL_CERT=/certs/server.crt
       - KONG_SSL_CERT_KEY=/certs/server.key
+      - KONG_NGINX_PROXY_SSL_CLIENT_CERTIFICATE=/certs/ca.crt
+      - KONG_NGINX_PROXY_SSL_VERIFY_CLIENT=on
+      - KONG_NGINX_PROXY_SSL_VERIFY_DEPTH=1
       - KONG_LOG_LEVEL=info
     volumes:
       - ./config/certs:/certs:ro
     ports:
-      - "80:8000"     # HTTP (redirect to HTTPS in a real-request-transformer plugin)
       - "443:8443"    # HTTPS — public
     expose:
       - "8001"        # Admin API — reachable inside Docker network only
@@ -206,6 +210,7 @@ services:
     image: kong/deck:v1.56.0
     container_name: kong_init
     volumes:
+      - ./config/certs:/certs:ro
       - ./config/kong/init-gateway.sh:/init-gateway.sh:ro
       - ./config/kong/external.yaml:/external.yaml:ro
       - ./config/kong/internal.yaml:/internal.yaml:ro

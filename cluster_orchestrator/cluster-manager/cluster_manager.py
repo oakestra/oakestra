@@ -114,7 +114,6 @@ def register_with_system_manager():
             message.cluster_name = config.MY_CHOSEN_CLUSTER_NAME
             message.cluster_location = config.MY_CLUSTER_LOCATION
             message.cluster_ip = config.MY_CLUSTER_IP
-            message.token = config.MY_TOKEN
 
             # Add additional key-value pairs to SC2Message
             key_value_message = KeyValue()
@@ -127,9 +126,6 @@ def register_with_system_manager():
             logger.info(f"Cluster ID received: {response.id}")
 
         except grpc.RpcError as e:
-            if e.code() == grpc.StatusCode.UNAUTHENTICATED:
-                logger.error("Cluster token rejected by System Manager")
-                return
             logger.error(f"Error sending CS2 to System Manager: {e}")
 
         if response:

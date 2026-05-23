@@ -43,6 +43,9 @@ services:
       - NET_PLUGIN_PORT=10099
       - JWT_GENERATOR_URL=jwt_generator
       - JWT_GENERATOR_PORT=10011
+      - CERT_PATH=${CERT_PATH:-/certs}
+    volumes:
+      - ./config/certs:${CERT_PATH:-/certs}
     logging: *default-logging
 
   # MongoDB in Root Orchestrator

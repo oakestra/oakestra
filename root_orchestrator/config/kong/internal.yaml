@@ -12,6 +12,12 @@ services:
           - /system_manager/api/
           - /api/auth
           - /api/auth/
+          - /api/certs
+          - /api/certs/
+          - /api/certs/reset
+          - /api/certs/ca.crt
+          - /api/certs/sign
+          - /api/certs/generate-client
           - /api/application
           - /api/application/
           - /api/permission

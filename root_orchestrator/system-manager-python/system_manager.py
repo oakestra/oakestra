@@ -30,7 +30,6 @@ from resource_abstractor_client import candidate_operations
 from sm_logging import configure_logging
 from utils.network import get_ip_from_grpc_transport
 from werkzeug.utils import redirect, secure_filename
-from roles.securityUtils import verify_cluster_token
 
 my_logger = configure_logging()
 logger = logging.getLogger("system_manager")
@@ -117,24 +116,7 @@ class ClusterRegistrationServicer(register_clusterServicer):
             "port": str(message["manager_port"]),
             "candidate_location": message["cluster_location"],
             "candidate_name": message["cluster_name"],
-            "token": message.get("token", "")
         }
-
-        cluster_auth_value = str(os.environ.get("CLUSTER_AUTHENTICATION", "False")).strip()
-        if cluster_auth_value not in ("True", "False"):
-            logger.warning(
-                "Invalid CLUSTER_AUTHENTICATION value '%s'. Expected 'True' or 'False'. "
-                "Defaulting to 'False'.",
-                cluster_auth_value,
-            )
-            cluster_auth_value = "False"
-
-        cluster_auth_enabled = cluster_auth_value == "True"
-        if cluster_auth_enabled:
-            if not verify_cluster_token(cluster_data["candidate_name"], cluster_data["token"]):
-                logger.warning(f"Invalid token provided for {cluster_data['candidate_name']}")
-                context.abort(grpc.StatusCode.UNAUTHENTICATED, "invalid cluster token")
-                return
 
         logger.info("Cluster data: {}".format(cluster_data))
         cluster = candidate_operations.create_candidate(cluster_data)

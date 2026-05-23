@@ -109,6 +109,12 @@ services:
         methods: [POST, OPTIONS]
         strip_path: false
 
+      - name: sm-ca-cert-public
+        paths:
+          - /api/certs/ca.crt
+        methods: [GET, OPTIONS]
+        strip_path: false
+
       - name: sm-organization-public
         paths:
           - /api/organization
@@ -172,12 +178,6 @@ services:
   - name: system_manager_admin_block
     url: http://system_manager:10000
     routes:
-      - name: sm-block-cluster-token
-        paths:
-          - /api/token/cluster
-          - /api/token/cluster/
-        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
-        strip_path: false
       - name: sm-block-clusters
         paths:
           - /api/clusters

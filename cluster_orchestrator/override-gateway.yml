@@ -19,7 +19,6 @@ services:
       - CLUSTER_SERVICE_MANAGER_GATEWAY_PORT=8080
       - CLUSTER_IP=${CLUSTER_IP}
       - CLUSTER_PORT=8080
-      - CLUSTER_AUTHENTICATION_TOKEN=${CLUSTER_AUTHENTICATION_TOKEN}
     ports: !reset []
 
   cluster_service_manager:
