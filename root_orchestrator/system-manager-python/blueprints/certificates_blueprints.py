@@ -169,6 +169,15 @@ create_ca_schema = {
     },
 }
 
+renew_server_schema = {
+    "type": "object",
+    "properties": {
+        "common_name": {"type": "string"},
+        "alt_names": {"type": "array", "items": {"type": "string"}},
+        "valid_days": {"type": "integer", "minimum": 1},
+    },
+}
+
 sign_csr_schema = {
     "type": "object",
     "properties": {
@@ -235,6 +244,44 @@ class CertificateAuthorityResetController(Resource):
                 "CA and server certificate material ready, Kong gateway updated and reloaded"
                 if kong_updated and reload_ok
                 else "CA and server certificate material ready, but some Kong steps failed"
+            ),
+        }
+
+
+@certbp.route("/renew-server")
+class CertificateServerRenewController(Resource):
+    @certbp.arguments(schema=renew_server_schema, location="json", validate=False, unknown=True)
+    @jwt_required()
+    @require_role(Role.ADMIN)
+    def post(self, *args, **kwargs):
+        if not get_ca_cert_path().exists():
+            abort(409, {"message": "CA material not initialized — call /reset first"})
+
+        content = request.get_json(silent=True) or {}
+        server_common_name = content.get("common_name") or "localhost"
+        server_alt_names = content.get("alt_names") or [server_common_name]
+
+        server_created = regenerate_server_files(
+            common_name=server_common_name,
+            alt_names=server_alt_names,
+            valid_days=int(content.get("valid_days") or 365),
+        )
+
+        kong_updated, kong_message = _update_kong_certificate()
+        reload_ok, reload_message = _reload_kong_nginx()
+
+        return {
+            "created": server_created,
+            "server_cert": str(get_server_cert_path()),
+            "server_key": str(get_server_key_path()),
+            "kong_updated": kong_updated,
+            "kong_status": kong_message,
+            "kong_reloaded": reload_ok,
+            "kong_reload_status": reload_message,
+            "message": (
+                "Server certificate renewed, Kong gateway updated and reloaded"
+                if kong_updated and reload_ok
+                else "Server certificate renewed, but some Kong steps failed"
             ),
         }
 

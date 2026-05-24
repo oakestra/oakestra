@@ -48,8 +48,9 @@ services:
     image: dashboard
     build: ../../dashboard
     environment:
-      - API_ADDRESS=localhost:80
-      - GRAFANA_ADDRESS=localhost:80/grafana
+      - API_ADDRESS=localhost
+      - GRAFANA_ADDRESS=localhost/grafana
+      - HTTPS_ENABLED=true
     ports: !reset []
 
   root_scheduler:
