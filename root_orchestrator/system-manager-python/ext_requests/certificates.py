@@ -160,6 +160,7 @@ def generate_key_and_signed_cert(
     common_name: str,
     alt_names: list[str],
     valid_days: int,
+    extended_key_usages: list = None,
 ) -> tuple[str, str]:
     """Generate an RSA private key and a certificate signed by the CA.
 
@@ -185,6 +186,11 @@ def generate_key_and_signed_cert(
                 san_list.append(x509.DNSName(name))
         csr_builder = csr_builder.add_extension(x509.SubjectAlternativeName(san_list), critical=False)
 
+    if extended_key_usages:
+        csr_builder = csr_builder.add_extension(
+            x509.ExtendedKeyUsage(extended_key_usages), critical=False
+        )
+
     csr = csr_builder.sign(private_key, hashes.SHA256())
 
     # Sign CSR using CA material via existing sign function
@@ -206,10 +212,15 @@ def regenerate_server_files(
     valid_days: int,
 ) -> bool:
     """Force-generate a new server key+cert signed by the current CA, overwriting any existing material."""
+    # serverAuth + clientAuth so the same cert can be presented when root calls clusters back.
     private_pem, cert_pem = generate_key_and_signed_cert(
         common_name=common_name,
         alt_names=alt_names,
         valid_days=valid_days,
+        extended_key_usages=[
+            x509.oid.ExtendedKeyUsageOID.SERVER_AUTH,
+            x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH,
+        ],
     )
 
     get_server_key_path().write_text(private_pem)

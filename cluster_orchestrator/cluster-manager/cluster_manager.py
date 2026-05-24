@@ -79,11 +79,36 @@ def background_job_send_aggregated_information_to_sm():
 # ........................................................................#
 
 
+def _build_grpc_channel():
+    """Open the gRPC channel to system_manager.
+
+    If mTLS is enabled and the cert bundle is present, the channel is wrapped in
+    TLS with client-cert authentication. Otherwise falls back to insecure (today's
+    behaviour for the no-gateway compose path).
+    """
+    if config.mtls_enabled():
+        with open(config.ROOT_CA_FILE, "rb") as f:
+            ca_bytes = f.read()
+        with open(config.CLUSTER_KEY_FILE, "rb") as f:
+            key_bytes = f.read()
+        with open(config.CLUSTER_CERT_FILE, "rb") as f:
+            cert_bytes = f.read()
+        creds = grpc.ssl_channel_credentials(
+            root_certificates=ca_bytes,
+            private_key=key_bytes,
+            certificate_chain=cert_bytes,
+        )
+        logger.info("Opening secure gRPC channel to system_manager (mTLS)")
+        return grpc.secure_channel(config.SYSTEM_MANAGER_ADDR, creds)
+    logger.info("Opening insecure gRPC channel to system_manager")
+    return grpc.insecure_channel(config.SYSTEM_MANAGER_ADDR)
+
+
 def register_with_system_manager():
     """Registers this cluster manager with the system manager using gRPC."""
 
     response = None
-    with grpc.insecure_channel(config.SYSTEM_MANAGER_ADDR) as channel:
+    with _build_grpc_channel() as channel:
         stub = register_clusterStub(channel)
 
         try:

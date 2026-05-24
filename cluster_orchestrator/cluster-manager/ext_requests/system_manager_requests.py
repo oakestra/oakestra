@@ -3,6 +3,7 @@ import os
 import threading
 import traceback
 
+import config
 import requests
 from clients import job_management, resource_aggregation
 from clients.my_prometheus_client import prometheus_set_metrics
@@ -17,9 +18,29 @@ from ext_requests.scheduler_requests import scheduler_request_deploy
 
 logger = logging.getLogger("cluster_manager")
 
+
+def _scheme() -> str:
+    return "https" if config.mtls_enabled() else "http"
+
+
 SYSTEM_MANAGER_ADDR = (
-    "http://" + os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_PORT")
+    _scheme()
+    + "://"
+    + os.environ.get("SYSTEM_MANAGER_URL")
+    + ":"
+    + os.environ.get("SYSTEM_MANAGER_PORT")
 )
+
+
+def _build_session() -> requests.Session:
+    session = requests.Session()
+    if config.mtls_enabled():
+        session.cert = (config.CLUSTER_CERT_FILE, config.CLUSTER_KEY_FILE)
+        session.verify = config.ROOT_CA_FILE
+    return session
+
+
+_session = _build_session()
 
 
 def send_aggregated_info_to_sm(my_id, time_interval):
@@ -59,7 +80,7 @@ def re_deploy_dead_jobs_routine():
 
 def send_aggregated_info(my_id, data):
     try:
-        requests.post(SYSTEM_MANAGER_ADDR + "/api/information/" + str(my_id), json=data)
+        _session.post(SYSTEM_MANAGER_ADDR + "/api/information/" + str(my_id), json=data)
     except requests.exceptions.RequestException:
         logger.error("Calling System Manager /api/information not successful.")
 
@@ -83,6 +104,6 @@ def trigger_undeploy_and_re_deploy(service, instance):
 def cloud_request_incr_node(my_id):
     request_addr = SYSTEM_MANAGER_ADDR + "/api/cluster/" + str(my_id) + "/incr_node"
     try:
-        requests.get(request_addr)
+        _session.get(request_addr)
     except requests.exceptions.RequestException:
         logger.error("Calling System Manager /api/cluster/../incr_node not successful.")

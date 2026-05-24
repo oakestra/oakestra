@@ -21,6 +21,10 @@ services:
           - /api/certs/renew-server
           - /api/application
           - /api/application/
+          - /api/applications
+          - /api/applications/
+          - /api/organization
+          - /api/organization/
           - /api/permission
           - /api/clusters
           - /api/clusters/
@@ -30,6 +34,8 @@ services:
           - /api/services/
           - /api/user
           - /api/user/
+          - /api/users
+          - /api/users/
           - /api/docs
           - /docs
           - /docs/
