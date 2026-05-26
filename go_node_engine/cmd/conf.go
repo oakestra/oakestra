@@ -31,8 +31,6 @@ func init() {
 	setCni.AddCommand(enableManualNetwork)
 	visibility.AddCommand(publicIP)
 	visibility.AddCommand(privateIP)
-	visibility.AddCommand(autoIP)
-	visibility.AddCommand(noPublicIP)
 	visibility.AddCommand(predefinedPublicIP)
 	addClusterCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Custom port of the cluster orchestrator")
 	addClusterCmd.Flags().BoolVarP(&clusterSSL, "clusterSSL", "s", false, "Perform cluster orchestrator handshake over HTTPS")
@@ -190,20 +188,6 @@ var (
 	privateIP = &cobra.Command{
 		Use:   "private",
 		Short: "Disable public IP visibility (legacy alias for false)",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return setPublicIp(config.PUBLIC_IP_FALSE)
-		},
-	}
-	autoIP = &cobra.Command{
-		Use:   "auto",
-		Short: "Use automatic public IP detection",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return setPublicIp(config.PUBLIC_IP_AUTO)
-		},
-	}
-	noPublicIP = &cobra.Command{
-		Use:   "false",
-		Short: "Disable public IP visibility",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setPublicIp(config.PUBLIC_IP_FALSE)
 		},
