@@ -53,16 +53,28 @@ func ParsePublicIPMode(mode string) PublicIPMode {
 	}
 }
 
+func (m PublicIPMode) normalized() string {
+	return strings.TrimSpace(strings.ToLower(string(m)))
+}
+
 func (m PublicIPMode) IsDisabled() bool {
-	return ParsePublicIPMode(string(m)) == PUBLIC_IP_FALSE
+	normalized := m.normalized()
+	return normalized == "" || normalized == string(PUBLIC_IP_FALSE)
 }
 
 func (m PublicIPMode) IsAuto() bool {
-	return ParsePublicIPMode(string(m)) == PUBLIC_IP_AUTO
+	normalized := m.normalized()
+	return normalized == string(PUBLIC_IP_AUTO) || normalized == "true"
 }
 
 func (m PublicIPMode) Value() string {
-	return string(ParsePublicIPMode(string(m)))
+	if m.IsDisabled() {
+		return string(PUBLIC_IP_FALSE)
+	}
+	if m.IsAuto() {
+		return string(PUBLIC_IP_AUTO)
+	}
+	return strings.TrimSpace(string(m))
 }
 
 func (m PublicIPMode) MarshalJSON() ([]byte, error) {
@@ -86,7 +98,7 @@ func (m *PublicIPMode) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	return fmt.Errorf("invalid public_ip mode")
+	return fmt.Errorf("invalid public_ip mode: expected boolean or string, got %q", string(data))
 }
 
 type Addon struct {
