@@ -8,7 +8,6 @@ from flask_smorest import Blueprint, abort
 from oakestra_utils.types.statuses import convert_to_status
 from resource_abstractor_client import candidate_operations
 from services.instance_management import update_job_status
-from utils.network import sanitize
 
 logger = logging.getLogger("system_manager")
 
