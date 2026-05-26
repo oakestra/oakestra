@@ -10,6 +10,11 @@ services:
         paths:
           - /cluster_manager/api/
           - /api/
+          - /api/certs
+          - /api/certs/
+          - /api/certs/ca.crt
+          - /api/certs/generate-worker
+          - /api/certs/sign
           - /api/docs
           - /docs
           - /docs/

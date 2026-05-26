@@ -237,17 +237,27 @@ if sudo docker ps -a | grep oakestra/cluster >/dev/null 2>&1; then
     fi
 fi
 
-# When override-gateway.yml is in use, cluster↔root traffic is mTLS.
-# Validate that the cert bundle (ca.crt, cluster.crt, cluster.key) is present.
+# When override-gateway.yml is in use, cluster↔root and worker↔cluster traffic is mTLS.
+# Validate that the full cert bundle is present:
+#   ca.crt           — root CA (trust anchor for both directions)
+#   cluster.crt/key  — cluster server identity (signed by root CA)
+#   cluster_ca.crt   — cluster intermediate CA cert (signed by root CA)
+#   cluster_ca.key   — cluster intermediate CA private key (signs worker certs)
 if [[ "$OVERRIDE_FILES" == *"override-gateway.yml"* ]]; then
     if [ -z "$CLUSTER_CERT_PATH" ]; then
         echo ❌❌❌ CLUSTER_CERT_PATH is required when override-gateway.yml is enabled.
         exit 1
     fi
-    for f in ca.crt cluster.crt cluster.key; do
+    for f in ca.crt cluster.crt cluster.key cluster_ca.crt cluster_ca.key; do
         if [ ! -f "$CLUSTER_CERT_PATH/$f" ]; then
             echo ❌❌❌ Missing $CLUSTER_CERT_PATH/$f
             exit 1
+        fi
+    done
+    for f in cluster.key cluster_ca.key; do
+        perms=$(stat -c '%a' "$CLUSTER_CERT_PATH/$f" 2>/dev/null || stat -f '%A' "$CLUSTER_CERT_PATH/$f")
+        if [ "$perms" != "600" ] && [ "$perms" != "400" ]; then
+            echo "⚠️  $CLUSTER_CERT_PATH/$f has permissions $perms (recommend 600)"
         fi
     done
     export CLUSTER_CERT_PATH

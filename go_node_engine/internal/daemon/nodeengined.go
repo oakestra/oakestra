@@ -110,7 +110,7 @@ func main() {
 	}
 
 	// binding the node MQTT client
-	mqtt.InitMqtt(handshakeResult.NodeId, configs.ClusterAddress, handshakeResult.MqttPort, configs.CertFile, configs.KeyFile, runtimeManager)
+	mqtt.InitMqtt(handshakeResult.NodeId, configs.ClusterAddress, handshakeResult.MqttPort, configs.WorkerCertFile, configs.WorkerKeyFile, configs.ClusterCaFile, runtimeManager)
 
 	// starting node status background job.
 	jobs.NodeStatusUpdater(MONITORING_CYCLE, mqtt.ReportNodeInformation)

@@ -19,6 +19,7 @@ from ext_requests.certificates import (
     regenerate_server_files,
     sign_csr_pem,
     generate_key_and_signed_cert,
+    generate_intermediate_ca,
 )
 
 logger = logging.getLogger("system_manager")
@@ -199,6 +200,17 @@ generate_client_schema = {
 }
 
 
+generate_cluster_schema = {
+    "type": "object",
+    "properties": {
+        "common_name": {"type": "string"},
+        "alt_names": {"type": "array", "items": {"type": "string"}},
+        "valid_days": {"type": "integer", "minimum": 1},
+    },
+    "required": ["common_name"],
+}
+
+
 @certbp.route("/reset")
 class CertificateAuthorityResetController(Resource):
     @certbp.arguments(schema=create_ca_schema, location="json", validate=False, unknown=True)
@@ -335,7 +347,10 @@ class CertificateClientGenerateController(Resource):
         if not common_name:
             abort(400, {"message": "common_name is required"})
 
-        alt_names = content.get("alt_names") or None
+        alt_names = list(content.get("alt_names") or [])
+        for name in (common_name, "mqtt", "localhost"):
+            if name not in alt_names:
+                alt_names.append(name)
         valid_days = int(content.get("valid_days") or 365)
 
         try:
@@ -348,3 +363,35 @@ class CertificateClientGenerateController(Resource):
             abort(400, {"message": f"Certificate generation failed: {str(e)}"})
 
         return {"private_key": private_pem, "certificate": cert_pem}
+
+
+@certbp.route("/generate-cluster")
+class CertificateClusterGenerateController(Resource):
+    @certbp.arguments(schema=generate_cluster_schema, location="json", validate=False, unknown=True)
+    @jwt_required()
+    @require_role(Role.ADMIN)
+    def post(self, *args, **kwargs):
+        content = request.get_json(silent=True) or {}
+        common_name = content.get("common_name")
+        if not common_name:
+            abort(400, {"message": "common_name is required"})
+
+        alt_names = content.get("alt_names") or None
+        valid_days = int(content.get("valid_days") or 1825)
+
+        try:
+            private_pem, cert_pem = generate_intermediate_ca(
+                common_name=common_name, alt_names=alt_names, valid_days=valid_days
+            )
+        except FileNotFoundError:
+            abort(409, {"message": "Root CA material not initialized"})
+        except ValueError as e:
+            abort(400, {"message": f"Intermediate CA generation failed: {str(e)}"})
+
+        root_ca = get_ca_cert_path().read_text()
+
+        return {
+            "private_key": private_pem,
+            "certificate": cert_pem,
+            "root_ca": root_ca,
+        }

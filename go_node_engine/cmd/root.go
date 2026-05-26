@@ -83,9 +83,9 @@ func nodeEngineDaemonManager() error {
 		}
 	}
 
-	if certFile != "" || keyFile != "" {
-		// set Mqtt auth parameters
-		err := setMqttAuth()
+	if workerCertFile != "" || workerKeyFile != "" || clusterCaFile != "" {
+		// set worker mTLS material
+		err := setWorkerAuth()
 		if err != nil {
 			return err
 		}

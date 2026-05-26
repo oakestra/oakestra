@@ -29,8 +29,9 @@ type ConfFile struct {
 	OverlayNetwork  string           `json:"overlay_network"`
 	PublicIp        bool             `json:"public_ip"`
 	NetPort         int              `json:"overlay_network_port"`
-	CertFile        string           `json:"mqtt_cert_file"`
-	KeyFile         string           `json:"mqtt_key_file"`
+	WorkerCertFile  string           `json:"worker_cert_file"`
+	WorkerKeyFile   string           `json:"worker_key_file"`
+	ClusterCaFile   string           `json:"cluster_ca_file"`
 	Addons          []Addon          `json:"addons"`
 	Virtualizations []Virtualization `json:"virtualizations"`
 	CSIDrivers      []CSIDriverType  `json:"csi_drivers"`

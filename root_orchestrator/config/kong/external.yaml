@@ -30,13 +30,13 @@ services:
 
       - name: sm-applications-public
         paths:
-          - "~/^/api/application(/.*)?$"
-        methods: [GET, POST, PATCH, DELETE, OPTIONS]
+          - /api/application
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
         strip_path: false
 
       - name: sm-applications-by-user
         paths:
-          - "~/^/api/applications/[^/]+$"
+          - /api/applications/
         methods: [GET, OPTIONS]
         strip_path: false
 
@@ -61,26 +61,14 @@ services:
 
       - name: sm-services-by-app
         paths:
-          - "~/^/api/services/[^/]+$"
+          - /api/services/
         methods: [GET, OPTIONS]
         strip_path: false
 
-      - name: sm-user-public-prefix
+      - name: sm-user-public
         paths:
-          - "~/^/api/user(/.*)?$"
-        methods: [GET, OPTIONS]
-        strip_path: false
-
-      - name: sm-user-self
-        paths:
-          - "~/^/api/user/[^/]+$"
-        methods: [GET, POST, OPTIONS]
-        strip_path: false
-
-      - name: sm-user-reset
-        paths:
-          - "~/^/api/user/?$"
-        methods: [POST, PUT, OPTIONS]
+          - /api/user
+        methods: [GET, POST, PUT, OPTIONS]
         strip_path: false
 
       - name: sm-docs-public
@@ -89,17 +77,10 @@ services:
         methods: [GET, OPTIONS]
         strip_path: false
 
-      - name: sm-information-base-public
+      - name: sm-information-public
         paths:
           - /api/information
-          - /api/information/
         methods: [GET, POST, OPTIONS]
-        strip_path: false
-
-      - name: sm-information-by-cluster-public
-        paths:
-          - "~/^/api/information/[^/]+$"
-        methods: [POST, OPTIONS]
         strip_path: false
 
       - name: sm-ca-cert-public
@@ -164,23 +145,6 @@ services:
   - name: system_manager_admin_block
     url: http://system_manager:10000
     routes:
-      - name: sm-block-clusters
-        paths:
-          - /api/clusters
-        methods: [POST, PUT, PATCH, DELETE]
-        strip_path: false
-      - name: sm-block-organization
-        paths:
-          - /api/organization
-          - /api/organization/
-        methods: [GET, POST, PUT, PATCH, DELETE]
-        strip_path: false
-      - name: sm-block-services-list
-        paths:
-          - /api/services
-          - /api/services/
-        methods: [GET]
-        strip_path: false
       - name: sm-block-register
         paths:
           - /api/auth/register
@@ -190,17 +154,7 @@ services:
         paths:
           - /api/users
         strip_path: false
-      - name: sm-block-admin-user-methods
-        paths:
-          - "~/^/api/user/[^/]+$"
-        methods: [PUT, DELETE]
-        strip_path: false
-      - name: sm-block-admin-applications
-        paths:
-          - "~/^/api/applications/?$"
-        methods: [GET]
-        strip_path: false
-      # Fallback deny: any API path not matched by explicit allowlist stays blocked.
+      # Fallback deny: any API path not matched by the explicit prefix allowlist above stays blocked.
       - name: sm-block-api-fallback
         paths:
           - /api

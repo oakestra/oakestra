@@ -40,6 +40,12 @@ services:
         methods: [GET, OPTIONS]
         strip_path: false
 
+      - name: cm-ca-cert-public
+        paths:
+          - /api/certs/ca.crt
+        methods: [GET, OPTIONS]
+        strip_path: false
+
   # Public cluster service manager API surface.
   - name: cluster_service_manager_public
     url: http://cluster_service_manager:10110

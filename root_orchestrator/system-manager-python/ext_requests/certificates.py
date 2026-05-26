@@ -206,6 +206,78 @@ def generate_key_and_signed_cert(
     return private_pem, cert_pem
 
 
+def generate_intermediate_ca(
+    common_name: str,
+    alt_names: list[str],
+    valid_days: int,
+) -> tuple[str, str]:
+    """Generate an RSA private key and an intermediate CA certificate signed by the root CA.
+
+    The intermediate cert has CA:TRUE with path_length=0 (cannot itself sign further CAs)
+    and KeyUsage(keyCertSign, cRLSign). No ExtendedKeyUsage is set on the intermediate so
+    it can issue both serverAuth and clientAuth leaves.
+
+    Returns (private_key_pem, certificate_pem).
+    """
+    ca_cert, ca_key = load_ca_material()
+
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=DEFAULT_KEY_SIZE)
+    now = datetime.now(timezone.utc)
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
+
+    builder = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(ca_cert.subject)
+        .public_key(private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=1))
+        .not_valid_after(now + timedelta(days=valid_days))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=False,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=True,
+                crl_sign=True,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(private_key.public_key()),
+            critical=False,
+        )
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_cert.public_key()),
+            critical=False,
+        )
+    )
+
+    if alt_names:
+        san_list = []
+        for name in alt_names:
+            try:
+                san_list.append(x509.IPAddress(ipaddress.ip_address(name)))
+            except ValueError:
+                san_list.append(x509.DNSName(name))
+        builder = builder.add_extension(x509.SubjectAlternativeName(san_list), critical=False)
+
+    certificate = builder.sign(private_key=ca_key, algorithm=hashes.SHA256())
+
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
+    cert_pem = certificate.public_bytes(serialization.Encoding.PEM).decode("utf-8")
+    return private_pem, cert_pem
+
+
 def regenerate_server_files(
     common_name: str,
     alt_names: list[str],

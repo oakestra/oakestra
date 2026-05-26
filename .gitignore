@@ -79,3 +79,8 @@ NodeEngine_*
 nodeengined_*
 NetManager*
 netmanager*
+
+# Certificates (default paths)
+root_orchestrator/config/certs
+cluster_orchestrator/certs
+go_node_engine/certs

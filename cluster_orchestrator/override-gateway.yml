@@ -5,6 +5,18 @@ services:
   # * via the gateways
 
   mqtt:
+    volumes:
+      - ${CLUSTER_CERT_PATH:-./certs}:/certs:ro
+      - ./mosquitto/mosquitto-tls.conf:/mosquitto/config/mosquitto.conf
+    ports: !override
+      - "8883:8883"
+    expose:
+      - "8883"
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -p 8883 --cafile /certs/ca.crt --cert /certs/cluster.crt --key /certs/cluster.key -t '$$SYS/#' -C 1 -W 3 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
 
   mongo_cluster:
     ports: !reset []
@@ -25,6 +37,10 @@ services:
       - CLUSTER_CERT_FILE=/certs/cluster.crt
       - CLUSTER_KEY_FILE=/certs/cluster.key
       - ROOT_CA_FILE=/certs/ca.crt
+      - CLUSTER_CA_CERT_FILE=/certs/cluster_ca.crt
+      - CLUSTER_CA_KEY_FILE=/certs/cluster_ca.key
+      - MQTT_CERT=/certs
+      - MQTT_BROKER_PORT=8883
     ports: !reset []
 
   cluster_service_manager:
@@ -37,6 +53,8 @@ services:
       - CLUSTER_CERT_FILE=/certs/cluster.crt
       - CLUSTER_KEY_FILE=/certs/cluster.key
       - ROOT_CA_FILE=/certs/ca.crt
+      - MQTT_CERT=/certs
+      - MQTT_BROKER_PORT=8883
     ports: !reset []
 
   cluster_scheduler:
@@ -155,7 +173,7 @@ services:
       - KONG_SSL_CERT_KEY=/certs/cluster.key
       - KONG_NGINX_PROXY_SSL_CLIENT_CERTIFICATE=/certs/ca.crt
       - KONG_NGINX_PROXY_SSL_VERIFY_CLIENT=on
-      - KONG_NGINX_PROXY_SSL_VERIFY_DEPTH=1
+      - KONG_NGINX_PROXY_SSL_VERIFY_DEPTH=2
       - KONG_LOG_LEVEL=info
     volumes:
       - ${CLUSTER_CERT_PATH:-./certs}:/certs:ro

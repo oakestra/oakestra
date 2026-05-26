@@ -28,3 +28,15 @@ def mtls_enabled() -> bool:
         path and os.path.isfile(path)
         for path in (CLUSTER_CERT_FILE, CLUSTER_KEY_FILE, ROOT_CA_FILE)
     )
+
+
+# Intermediate CA material. Cluster CA must be signed against root CA
+CLUSTER_CA_CERT_FILE = os.environ.get("CLUSTER_CA_CERT_FILE")
+CLUSTER_CA_KEY_FILE = os.environ.get("CLUSTER_CA_KEY_FILE")
+
+
+def cluster_ca_enabled() -> bool:
+    return all(
+        path and os.path.isfile(path)
+        for path in (CLUSTER_CA_CERT_FILE, CLUSTER_CA_KEY_FILE, ROOT_CA_FILE)
+    )
