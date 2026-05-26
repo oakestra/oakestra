@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"go_node_engine/logger"
 	"os"
+	"strings"
 )
 
 var DEFAULT_LOG_DIR = "/tmp"
 var AUTO_OAK_NETWORK = "default"
+var PUBLIC_IP_FALSE = PublicIPMode("false")
+var PUBLIC_IP_AUTO = PublicIPMode("auto")
 
 // RuntimeType is the type of runtime that the node executes
 type RuntimeType string
@@ -27,13 +30,63 @@ type ConfFile struct {
 	ClusterPort     int              `json:"cluster_port"`
 	AppLogs         string           `json:"app_logs"`
 	OverlayNetwork  string           `json:"overlay_network"`
-	PublicIp        bool             `json:"public_ip"`
+	PublicIp        PublicIPMode     `json:"public_ip"`
 	NetPort         int              `json:"overlay_network_port"`
 	CertFile        string           `json:"mqtt_cert_file"`
 	KeyFile         string           `json:"mqtt_key_file"`
 	Addons          []Addon          `json:"addons"`
 	Virtualizations []Virtualization `json:"virtualizations"`
 	CSIDrivers      []CSIDriverType  `json:"csi_drivers"`
+}
+
+type PublicIPMode string
+
+func ParsePublicIPMode(mode string) PublicIPMode {
+	normalized := strings.TrimSpace(strings.ToLower(mode))
+	switch normalized {
+	case "", string(PUBLIC_IP_FALSE):
+		return PUBLIC_IP_FALSE
+	case string(PUBLIC_IP_AUTO), "true":
+		return PUBLIC_IP_AUTO
+	default:
+		return PublicIPMode(strings.TrimSpace(mode))
+	}
+}
+
+func (m PublicIPMode) IsDisabled() bool {
+	return ParsePublicIPMode(string(m)) == PUBLIC_IP_FALSE
+}
+
+func (m PublicIPMode) IsAuto() bool {
+	return ParsePublicIPMode(string(m)) == PUBLIC_IP_AUTO
+}
+
+func (m PublicIPMode) Value() string {
+	return string(ParsePublicIPMode(string(m)))
+}
+
+func (m PublicIPMode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m.Value())
+}
+
+func (m *PublicIPMode) UnmarshalJSON(data []byte) error {
+	var boolMode bool
+	if err := json.Unmarshal(data, &boolMode); err == nil {
+		if boolMode {
+			*m = PUBLIC_IP_AUTO
+			return nil
+		}
+		*m = PUBLIC_IP_FALSE
+		return nil
+	}
+
+	var stringMode string
+	if err := json.Unmarshal(data, &stringMode); err == nil {
+		*m = ParsePublicIPMode(stringMode)
+		return nil
+	}
+
+	return fmt.Errorf("invalid public_ip mode")
 }
 
 type Addon struct {
@@ -168,7 +221,7 @@ func GenDefaultConfig() ConfFile {
 		ClusterSSL:     false,
 		AppLogs:        DEFAULT_LOG_DIR,
 		OverlayNetwork: AUTO_OAK_NETWORK,
-		PublicIp:       false,
+		PublicIp:       PUBLIC_IP_FALSE,
 		NetPort:        0,
 		Virtualizations: []Virtualization{
 			{

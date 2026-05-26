@@ -160,7 +160,7 @@ func getIp() string {
 	if err != nil {
 		logger.ErrorLogger().Fatal(err)
 	}
-	if conf.PublicIp {
+	if conf.PublicIp.IsAuto() {
 
 		// Only get public IP every nth update cycle to prevent API overload
 		if SlowUpdateCounter != 0 {
@@ -172,6 +172,10 @@ func getIp() string {
 		req, err := http.Get("https://ifconfig.co")
 		if err != nil {
 			logger.ErrorLogger().Printf("%v", err.Error())
+			return getPrivateIp()
+		}
+		if req.Body == nil {
+			return getPrivateIp()
 		}
 		defer func(Body io.ReadCloser) {
 			err := Body.Close()
@@ -182,12 +186,28 @@ func getIp() string {
 
 		body, err := io.ReadAll(req.Body)
 		if err != nil {
-			return err.Error()
+			logger.ErrorLogger().Printf("%v", err.Error())
+			return getPrivateIp()
 		}
 
-		return string(body[:len(body)-1])
+		publicIp := string(body)
+		if len(publicIp) > 0 && publicIp[len(publicIp)-1] == '\n' {
+			publicIp = publicIp[:len(publicIp)-1]
+		}
+		if publicIp == "" {
+			return getPrivateIp()
+		}
+		return publicIp
 	}
 
+	if !conf.PublicIp.IsDisabled() {
+		return conf.PublicIp.Value()
+	}
+
+	return getPrivateIp()
+}
+
+func getPrivateIp() string {
 	addresses, err := net.InterfaceAddrs()
 	if err != nil {
 		return ""
