@@ -16,8 +16,7 @@ ROOT_CA_FILE = os.environ.get("ROOT_CA_FILE")
 
 def _mtls_enabled() -> bool:
     return all(
-        path and os.path.isfile(path)
-        for path in (ROOT_CERT_FILE, ROOT_KEY_FILE, ROOT_CA_FILE)
+        path and os.path.isfile(path) for path in (ROOT_CERT_FILE, ROOT_KEY_FILE, ROOT_CA_FILE)
     )
 
 
@@ -35,11 +34,7 @@ _session = _build_session()
 def _cluster_base(cluster) -> str:
     scheme = "https" if _mtls_enabled() else "http"
     return (
-        scheme
-        + "://"
-        + sanitize(cluster.get("ip"), request=True)
-        + ":"
-        + str(cluster.get("port"))
+        scheme + "://" + sanitize(cluster.get("ip"), request=True) + ":" + str(cluster.get("port"))
     )
 
 
@@ -68,11 +63,7 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
             f"Preparing deploy request for job {job} instance {instance_number} to cluster {cluster}"
         )
         cluster_addr = (
-            _cluster_base(cluster)
-            + "/api/service/"
-            + str(job_id)
-            + "/"
-            + str(instance_number)
+            _cluster_base(cluster) + "/api/service/" + str(job_id) + "/" + str(instance_number)
         )
         job["_id"] = str(job["_id"])
         logger.info(f"Deploy request to {cluster_addr}")
@@ -89,11 +80,7 @@ def cluster_request_to_delete_job(job_id, instance_number):
 
     try:
         cluster_addr = (
-            _cluster_base(cluster)
-            + "/api/service/"
-            + str(job_id)
-            + "/"
-            + str(instance_number)
+            _cluster_base(cluster) + "/api/service/" + str(job_id) + "/" + str(instance_number)
         )
         logger.info(f"Delete request to {cluster_addr}")
         _session.delete(cluster_addr, timeout=10)
@@ -109,11 +96,7 @@ def cluster_request_to_delete_job_by_ip(job_id, instance_number, ip):
             return
 
         cluster_addr = (
-            _cluster_base(cluster)
-            + "/api/service/"
-            + str(job_id)
-            + "/"
-            + str(instance_number)
+            _cluster_base(cluster) + "/api/service/" + str(job_id) + "/" + str(instance_number)
         )
         logger.info(f"Delete request to {cluster_addr}")
         _session.delete(cluster_addr, timeout=10)

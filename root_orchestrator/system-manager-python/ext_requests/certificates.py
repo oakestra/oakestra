@@ -107,22 +107,22 @@ def load_ca_material():
 def _normalize_pem(pem_data: str, expected_type: str) -> str:
     """Normalize and validate PEM format. Raises ValueError if invalid."""
     pem_str = pem_data.strip() if isinstance(pem_data, str) else pem_data.decode("utf-8").strip()
-    
+
     begin_marker = f"-----BEGIN {expected_type}-----"
     end_marker = f"-----END {expected_type}-----"
-    
+
     if begin_marker not in pem_str or end_marker not in pem_str:
         raise ValueError(
             f"Invalid PEM format. Expected {expected_type}. "
             f"PEM must contain '{begin_marker}' and '{end_marker}' markers."
         )
-    
+
     return pem_str
 
 
 def sign_csr_pem(csr_pem: str, valid_days: int) -> str:
     ca_cert, ca_key = load_ca_material()
-    
+
     try:
         normalized_csr = _normalize_pem(csr_pem, "CERTIFICATE REQUEST")
         csr = x509.load_pem_x509_csr(normalized_csr.encode("utf-8"))
@@ -183,7 +183,9 @@ def generate_key_and_signed_cert(
                 san_list.append(x509.IPAddress(ipaddress.ip_address(name)))
             except ValueError:
                 san_list.append(x509.DNSName(name))
-        csr_builder = csr_builder.add_extension(x509.SubjectAlternativeName(san_list), critical=False)
+        csr_builder = csr_builder.add_extension(
+            x509.SubjectAlternativeName(san_list), critical=False
+        )
 
     if extended_key_usages:
         csr_builder = csr_builder.add_extension(
@@ -309,4 +311,6 @@ def ensure_server_files(
     """Generate server key+cert only if either is missing. Returns True if generated, False if already present."""
     if get_server_key_path().is_file() and get_server_cert_path().is_file():
         return False
-    return regenerate_server_files(common_name=common_name, alt_names=alt_names, valid_days=valid_days)
+    return regenerate_server_files(
+        common_name=common_name, alt_names=alt_names, valid_days=valid_days
+    )

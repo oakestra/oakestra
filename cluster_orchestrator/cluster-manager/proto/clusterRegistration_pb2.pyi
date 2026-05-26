@@ -23,7 +23,15 @@ class SC1Message(_message.Message):
     def __init__(self, hello_cluster_manager: _Optional[str] = ...) -> None: ...
 
 class CS2Message(_message.Message):
-    __slots__ = ("manager_port", "network_component_port", "cluster_name", "cluster_info", "cluster_location", "cluster_ip", "token")
+    __slots__ = (
+        "manager_port",
+        "network_component_port",
+        "cluster_name",
+        "cluster_info",
+        "cluster_location",
+        "cluster_ip",
+        "token",
+    )
     MANAGER_PORT_FIELD_NUMBER: _ClassVar[int]
     NETWORK_COMPONENT_PORT_FIELD_NUMBER: _ClassVar[int]
     CLUSTER_NAME_FIELD_NUMBER: _ClassVar[int]
@@ -38,7 +46,16 @@ class CS2Message(_message.Message):
     cluster_location: str
     cluster_ip: str
     token: str
-    def __init__(self, manager_port: _Optional[int] = ..., network_component_port: _Optional[int] = ..., cluster_name: _Optional[str] = ..., cluster_info: _Optional[_Iterable[_Union[KeyValue, _Mapping]]] = ..., cluster_location: _Optional[str] = ..., cluster_ip: _Optional[str] = ..., token: _Optional[str] = ...) -> None: ...
+    def __init__(
+        self,
+        manager_port: _Optional[int] = ...,
+        network_component_port: _Optional[int] = ...,
+        cluster_name: _Optional[str] = ...,
+        cluster_info: _Optional[_Iterable[_Union[KeyValue, _Mapping]]] = ...,
+        cluster_location: _Optional[str] = ...,
+        cluster_ip: _Optional[str] = ...,
+        token: _Optional[str] = ...,
+    ) -> None: ...
 
 class KeyValue(_message.Message):
     __slots__ = ("key", "value")

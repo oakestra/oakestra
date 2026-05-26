@@ -59,7 +59,9 @@ def _sign_with_intermediate(builder, intermediate_key):
     return builder.sign(private_key=intermediate_key, algorithm=hashes.SHA256())
 
 
-def generate_worker_cert(common_name: str, alt_names=None, valid_days: int = 365) -> tuple[str, str]:
+def generate_worker_cert(
+    common_name: str, alt_names=None, valid_days: int = 365
+) -> tuple[str, str]:
     """Generate an RSA private key and a worker leaf certificate signed by the cluster intermediate CA.
 
     Returns (private_key_pem, fullchain_pem) where fullchain is leaf || intermediate.

@@ -36,6 +36,7 @@ def _reload_kong_nginx() -> tuple[bool, str]:
     """Send kong reload (nginx SIGHUP) so the updated cert files are picked up without a restart."""
     try:
         import docker
+
         client = docker.from_env()
         container = client.containers.get(KONG_CONTAINER_NAME)
         result = container.exec_run("kong reload")
@@ -52,18 +53,18 @@ def _reload_kong_nginx() -> tuple[bool, str]:
 
 def _update_kong_cert_key(cert_id: str, cert_data: str, key_data: str = None) -> tuple[bool, str]:
     """Update or create a certificate in Kong via Admin API.
-    
+
     Returns: (success: bool, message: str)
     """
     try:
         payload = {"cert": cert_data}
         if key_data:
             payload["key"] = key_data
-        
+
         # Try to update existing
         url = f"{KONG_ADMIN_URL}/certificates/{cert_id}"
         response = requests.put(url, data=payload, timeout=10)
-        
+
         if response.status_code == 200:
             return True, f"Certificate {cert_id} updated"
         elif response.status_code == 404:
@@ -74,7 +75,10 @@ def _update_kong_cert_key(cert_id: str, cert_data: str, key_data: str = None) ->
             if response.status_code in (200, 201):
                 return True, f"Certificate {cert_id} created"
             else:
-                return False, f"Failed to create {cert_id}: {response.status_code} - {response.text}"
+                return (
+                    False,
+                    f"Failed to create {cert_id}: {response.status_code} - {response.text}",
+                )
         else:
             return False, f"Failed to update {cert_id}: {response.status_code} - {response.text}"
     except Exception as e:
@@ -83,7 +87,7 @@ def _update_kong_cert_key(cert_id: str, cert_data: str, key_data: str = None) ->
 
 def _update_kong_ca(ca_data: str, old_ca_data: str = None) -> tuple[bool, str]:
     """Update a CA in Kong via Admin API.
-    
+
     Returns: (success: bool, message: str)
     """
     try:
@@ -108,13 +112,14 @@ def _update_kong_ca(ca_data: str, old_ca_data: str = None) -> tuple[bool, str]:
         return False, f"Failed to update CA: {response.status_code} - {response.text}"
     except Exception as e:
         import traceback
+
         logger.error(f"Error updating CA: {traceback.format_exc()}")
         return False, f"Error updating CA: {str(e)}"
 
 
 def _update_kong_certificate(old_ca_data: str = None) -> tuple[bool, str]:
     """Update Kong external gateway server and CA certificates via Admin API.
-    
+
     Returns: (success: bool, message: str)
     """
     try:
@@ -122,14 +127,14 @@ def _update_kong_certificate(old_ca_data: str = None) -> tuple[bool, str]:
         cert_path = get_server_cert_path()
         key_path = get_server_key_path()
         ca_path = get_ca_cert_path()
-        
+
         if not cert_path.exists() or not key_path.exists() or not ca_path.exists():
             return False, "Certificate, key, or CA files not found"
-        
+
         cert_data = cert_path.read_text()
         key_data = key_path.read_text()
         ca_data = ca_path.read_text()
-        
+
         # Update server certificate with key
         server_success, server_msg = _update_kong_cert_key(KONG_CERT_NAME, cert_data, key_data)
         if not server_success:
@@ -137,7 +142,7 @@ def _update_kong_certificate(old_ca_data: str = None) -> tuple[bool, str]:
             return False, f"Server certificate update failed: {server_msg}"
 
         logger.info(f"Server certificate: {server_msg}")
-        
+
         # Update CA certificate
         ca_success, ca_msg = _update_kong_ca(ca_data, old_ca_data)
         if not ca_success:
@@ -146,7 +151,7 @@ def _update_kong_certificate(old_ca_data: str = None) -> tuple[bool, str]:
 
         logger.info(f"CA certificate: {ca_msg}")
         return True, f"Server and CA certificates updated. {ca_msg}"
-    
+
     except requests.exceptions.ConnectionError:
         logger.error("Cannot connect to Kong Admin API")
         return False, "Cannot connect to Kong Admin API"
@@ -156,6 +161,7 @@ def _update_kong_certificate(old_ca_data: str = None) -> tuple[bool, str]:
     except Exception as e:
         logger.error(f"Error updating Kong certificates: {str(e)}")
         return False, f"Error updating Kong certificates: {str(e)}"
+
 
 # --------- ROUTES ---------
 
@@ -218,7 +224,7 @@ class CertificateAuthorityResetController(Resource):
     @require_role(Role.ADMIN)
     def post(self, *args, **kwargs):
         content = request.get_json(silent=True) or {}
-        
+
         # Generate new CA
         old_ca_data = None
         if get_ca_cert_path().exists():
