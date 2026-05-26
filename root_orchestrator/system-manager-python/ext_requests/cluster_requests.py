@@ -72,11 +72,11 @@ def cluster_request_to_delete_job(job_id, instance_number):
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} job not successful: {e}")
 
 
-def cluster_request_to_delete_job_by_ip(job_id, instance_number, ip):
+def cluster_request_to_delete_job_by_ip(job_id, instance_number, cluster_id):
     try:
-        cluster = candidate_operations.get_candidate_by_ip(ip)
+        cluster = candidate_operations.get_candidate_by_id(cluster_id)
         if cluster is None:
-            logger.error(f"Cluster with {ip} not found")
+            logger.error(f"Cluster with {cluster_id} not found")
             return
 
         cluster_addr = (
