@@ -68,10 +68,11 @@ func (m PublicIPMode) IsAuto() bool {
 }
 
 func (m PublicIPMode) Value() string {
-	if m.IsDisabled() {
+	normalized := m.normalized()
+	if normalized == "" || normalized == string(PUBLIC_IP_FALSE) {
 		return string(PUBLIC_IP_FALSE)
 	}
-	if m.IsAuto() {
+	if normalized == string(PUBLIC_IP_AUTO) || normalized == "true" {
 		return string(PUBLIC_IP_AUTO)
 	}
 	return strings.TrimSpace(string(m))

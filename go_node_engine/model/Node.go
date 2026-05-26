@@ -11,6 +11,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/shirou/gopsutil/cpu"
@@ -190,10 +191,7 @@ func getIp() string {
 			return getPrivateIp()
 		}
 
-		publicIp := string(body)
-		if len(publicIp) > 0 && publicIp[len(publicIp)-1] == '\n' {
-			publicIp = publicIp[:len(publicIp)-1]
-		}
+		publicIp := strings.TrimSpace(string(body))
 		// Fallback when parsed IP is empty (e.g. endpoint returned only whitespace/newline).
 		if publicIp == "" {
 			return getPrivateIp()
