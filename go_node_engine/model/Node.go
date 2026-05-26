@@ -194,7 +194,7 @@ func getIp() string {
 		if len(publicIp) > 0 && publicIp[len(publicIp)-1] == '\n' {
 			publicIp = publicIp[:len(publicIp)-1]
 		}
-		// Fallback when the endpoint returns an empty body.
+		// Fallback when parsed IP is empty (e.g. endpoint returned only whitespace/newline).
 		if publicIp == "" {
 			return getPrivateIp()
 		}

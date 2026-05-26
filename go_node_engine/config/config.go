@@ -98,7 +98,7 @@ func (m *PublicIPMode) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	return fmt.Errorf("invalid public_ip mode: expected boolean or string, got %q", string(data))
+	return fmt.Errorf("invalid public_ip mode: expected boolean or string, got %s", data)
 }
 
 type Addon struct {

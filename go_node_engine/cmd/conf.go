@@ -522,7 +522,7 @@ func setPublicIp(mode config.PublicIPMode) error {
 	if err != nil {
 		return err
 	}
-	clusterConf.PublicIp = config.ParsePublicIPMode(string(mode))
+	clusterConf.PublicIp = mode
 
 	return configManager.Write(clusterConf)
 }
