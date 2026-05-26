@@ -1,7 +1,19 @@
 import logging
 import os
-import requests
 
+import requests
+from ext_requests.certificates import (
+    KONG_CA_CERT_UUID,
+    ensure_ca_files,
+    generate_intermediate_ca,
+    generate_key_and_signed_cert,
+    get_ca_cert_path,
+    get_server_cert_path,
+    get_server_key_path,
+    regenerate_ca_files,
+    regenerate_server_files,
+    sign_csr_pem,
+)
 from flask import request, send_file
 from flask_jwt_extended import jwt_required
 from flask_restful import Resource
@@ -9,18 +21,6 @@ from flask_smorest import abort
 from roles.securityUtils import Role, require_role
 
 from blueprints.jwt_wrapper import BlueprintExt
-from ext_requests.certificates import (
-    KONG_CA_CERT_UUID,
-    ensure_ca_files,
-    get_ca_cert_path,
-    get_server_cert_path,
-    get_server_key_path,
-    regenerate_ca_files,
-    regenerate_server_files,
-    sign_csr_pem,
-    generate_key_and_signed_cert,
-    generate_intermediate_ca,
-)
 
 logger = logging.getLogger("system_manager")
 

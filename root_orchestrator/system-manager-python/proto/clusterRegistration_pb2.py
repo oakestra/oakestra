@@ -7,6 +7,7 @@ from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
+
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
@@ -19,7 +20,7 @@ DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1fproto/clusterR
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'proto.clusterRegistration_pb2', _globals)
-if _descriptor._USE_C_DESCRIPTORS == False:
+if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._options = None
   _globals['_CS1MESSAGE']._serialized_start=56
   _globals['_CS1MESSAGE']._serialized_end=99

@@ -8,7 +8,6 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtensionOID, NameOID
 
-
 DEFAULT_CERT_PATH = "/certs"
 DEFAULT_CA_COMMON_NAME = "Oakestra Root CA"
 DEFAULT_CA_VALID_DAYS = 365

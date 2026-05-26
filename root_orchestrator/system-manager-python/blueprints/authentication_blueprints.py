@@ -8,7 +8,6 @@ from flask_restful import Resource
 from flask_smorest import abort
 from roles.securityUtils import (
     Role,
-    create_jwt_auth_access_token,
     get_jwt_auth_identity,
     get_jwt_organization,
     refresh_token_required,
