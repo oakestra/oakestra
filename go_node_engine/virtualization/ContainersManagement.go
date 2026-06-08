@@ -37,11 +37,8 @@ import (
 
 func init() {
 	virtrt.Register(string(model.CONTAINER_RUNTIME), newContainerdRuntime)
-	plugins := findAdditionalRuntimePlugins()
-	if plugins != nil {
-		for additionalName := range findAdditionalRuntimePlugins() {
-			virtrt.Register(additionalName, newContainerdRuntime)
-		}
+	for additionalName := range findAdditionalRuntimePlugins() {
+		virtrt.Register(additionalName, newContainerdRuntime)
 	}
 }
 
@@ -93,28 +90,40 @@ func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
 	runtime.mountedVolumes = make(map[string][]csi.MountedVolume)
 
 	// Advertise sub-runtimes discovered from the containerd config (e.g. runc).
+	found := false
 	for name := range findAdditionalRuntimePlugins() {
 		model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(name))
+		found = true
+	}
+	if !found {
+		logger.WarnLogger().Printf("No additional OCI runtimes found in containerd config %s", CONTAINERD_CONFIG_PATH)
 	}
 
 	return &runtime
 }
 
-// checks the containerd config file for additional runtimes and registers them.
 // Parses TOML directly: containerd's v2 LoadConfig rejects legacy short-form
 // disabled_plugins entries (e.g. "cri") that ship with Docker's containerd.
 func findAdditionalRuntimePlugins() iter.Seq[string] {
-	data, err := os.ReadFile(CONTAINERD_CONFIG_PATH)
+	return findAdditionalRuntimePluginsAt(CONTAINERD_CONFIG_PATH)
+}
+
+// checks the containerd config file for additional runtimes and registers them.
+// Parses TOML directly: containerd's v2 LoadConfig rejects legacy short-form
+// disabled_plugins entries (e.g. "cri") that ship with Docker's containerd.
+func findAdditionalRuntimePluginsAt(config_path string) iter.Seq[string] {
+	empty := func(yield func(string) bool) {}
+	data, err := os.ReadFile(config_path)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to read containerd config file: %v", err)
-		return nil
+		return empty
 	}
 	var containerdConfig struct {
 		Plugins map[string]interface{} `toml:"plugins"`
 	}
 	if err := toml.Unmarshal(data, &containerdConfig); err != nil {
 		logger.ErrorLogger().Printf("Unable to parse containerd config file: %v", err)
-		return nil
+		return empty
 	}
 	for _, ctd := range containerdConfig.Plugins {
 		ctd, ok := ctd.(map[string]interface{})["containerd"].(map[string]interface{})
@@ -122,13 +131,14 @@ func findAdditionalRuntimePlugins() iter.Seq[string] {
 			runtimes, ok := ctd["runtimes"].(map[string]interface{})
 			if ok {
 				for runtimeName := range runtimes {
-					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", runtimeName, CONTAINERD_CONFIG_PATH)
+					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", runtimeName, config_path)
 				}
 				return maps.Keys(runtimes)
 			}
 		}
 	}
-	return nil
+	logger.WarnLogger().Printf("No OCI runtimes found in containerd config %s", config_path)
+	return empty
 }
 
 // StopContainerdClient stops the container runtime client
