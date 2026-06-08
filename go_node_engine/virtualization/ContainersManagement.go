@@ -108,7 +108,7 @@ func findAdditionalRuntimePlugins() iter.Seq[string] {
 	return findAdditionalRuntimePluginsAt(CONTAINERD_CONFIG_PATH)
 }
 
-// checks the containerd config file for additional runtimes and registers them.
+// checks the containerd config file for additional runtimes and yields them.
 // Parses TOML directly: containerd's v2 LoadConfig rejects legacy short-form
 // disabled_plugins entries (e.g. "cri") that ship with Docker's containerd.
 func findAdditionalRuntimePluginsAt(config_path string) iter.Seq[string] {
