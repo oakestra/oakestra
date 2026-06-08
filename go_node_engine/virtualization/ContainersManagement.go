@@ -113,18 +113,18 @@ func findAdditionalRuntimePlugins() iter.Seq[string] {
 // Parses TOML directly: containerd's v2 LoadConfig rejects legacy short-form
 // disabled_plugins entries (e.g. "cri") that ship with Docker's containerd.
 func findAdditionalRuntimePluginsAt(configPath string) iter.Seq[string] {
-	empty := func(yield func(string) bool) {}
+	emptyIterator := func(yield func(string) bool) {}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to read containerd config file: %v", err)
-		return empty
+		return emptyIterator
 	}
 	var containerdConfig struct {
 		Plugins map[string]interface{} `toml:"plugins"`
 	}
 	if err := toml.Unmarshal(data, &containerdConfig); err != nil {
 		logger.ErrorLogger().Printf("Unable to parse containerd config file: %v", err)
-		return empty
+		return emptyIterator
 	}
 	for _, ctd := range containerdConfig.Plugins {
 		ctd, ok := ctd.(map[string]interface{})["containerd"].(map[string]interface{})
@@ -139,7 +139,7 @@ func findAdditionalRuntimePluginsAt(configPath string) iter.Seq[string] {
 		}
 	}
 	logger.WarnLogger().Printf("No OCI runtimes found in containerd config %s", configPath)
-	return empty
+	return emptyIterator
 }
 
 // StopContainerdClient stops the container runtime client
