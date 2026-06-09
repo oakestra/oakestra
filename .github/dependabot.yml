@@ -1,0 +1,174 @@
+version: 2
+updates:
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      actions-official:
+        patterns:
+          - "actions/*"
+      docker-actions:
+        patterns:
+          - "docker/*"
+      third-party-actions:
+        patterns:
+          - "*"
+
+  # Go - NodeEngine (worker binary)
+  - package-ecosystem: "gomod"
+    directory: "/go_node_engine"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      containerd:
+        patterns:
+          - "github.com/containerd/*"
+      containers-oci:
+        patterns:
+          - "github.com/containers/*"
+          - "github.com/opencontainers/*"
+      other:
+        patterns:
+          - "*"
+
+  # Go - Scheduler (shared root + cluster binary)
+  - package-ecosystem: "gomod"
+    directory: "/scheduler"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      all-scheduler-deps:
+        patterns:
+          - "*"
+
+  # Go - CSI hostpath driver
+  - package-ecosystem: "gomod"
+    directory: "/csi/hostpath"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      all-csi-deps:
+        patterns:
+          - "*"
+
+  # Python - system-manager (root API)
+  - package-ecosystem: "pip"
+    directory: "/root_orchestrator/system-manager-python"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      all-deps:
+        patterns:
+          - "*"
+
+  # Python - cluster-manager
+  - package-ecosystem: "pip"
+    directory: "/cluster_orchestrator/cluster-manager"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      all-deps:
+        patterns:
+          - "*"
+
+  # Python - resource-abstractor
+  - package-ecosystem: "pip"
+    directory: "/resource-abstractor"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      all-deps:
+        patterns:
+          - "*"
+
+  # Python - addons-manager
+  - package-ecosystem: "pip"
+    directory: "/addons_engine/addons-manager"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      all-deps:
+        patterns:
+          - "*"
+
+  # Python - addons-monitor
+  - package-ecosystem: "pip"
+    directory: "/addons_engine/addons-monitor"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      all-deps:
+        patterns:
+          - "*"
+
+  # Python - marketplace-manager
+  - package-ecosystem: "pip"
+    directory: "/addons_marketplace/marketplace-manager"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      all-deps:
+        patterns:
+          - "*"
+
+  # Python - jwt-generator
+  - package-ecosystem: "pip"
+    directory: "/root_orchestrator/jwt-generator"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      all-deps:
+        patterns:
+          - "*"
+
+  # npm - addons-dashboard (Angular SPA)
+  - package-ecosystem: "npm"
+    directory: "/addons_engine/addons-dashboard"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      angular:
+        patterns:
+          - "@angular/*"
+          - "@angular-devkit/*"
+      other-npm-deps:
+        patterns:
+          - "*"
