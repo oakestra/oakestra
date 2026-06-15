@@ -81,8 +81,7 @@ def auth_config_for_image(image, docker_config_path=None):
     with the registry's own 401, which is the right signal for an operator.
     """
     path = os.path.expanduser(
-        docker_config_path
-        or os.environ.get("DOCKER_CONFIG_PATH", DEFAULT_DOCKER_CONFIG_PATH)
+        docker_config_path or os.environ.get("DOCKER_CONFIG_PATH", DEFAULT_DOCKER_CONFIG_PATH)
     )
     cfg = _read_docker_config(path)
     if not isinstance(cfg, dict):
