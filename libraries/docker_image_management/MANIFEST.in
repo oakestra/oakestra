@@ -1,2 +1,0 @@
-graft docker_image_management
-global-include *.py

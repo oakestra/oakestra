@@ -3,7 +3,6 @@ import threading
 
 import docker
 from db import marketplace_db
-from docker_image_management import pull_image
 
 
 def verify_addon(addon_id, addon):
@@ -15,7 +14,7 @@ def verify_addon(addon_id, addon):
         try:
             # TODO(ME): validate image instead of pulling it.
             logging.info(f"Pulling image: {image}")
-            pulled_image = pull_image(client, image)
+            pulled_image = client.images.pull(image)
             image_id = pulled_image.id
             logging.info(f"Image pulled: {pulled_image}")
 
