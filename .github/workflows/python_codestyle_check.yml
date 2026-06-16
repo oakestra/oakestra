@@ -7,4 +7,4 @@ permissions:
 
 jobs:
   style-check:
-    uses: oakestra/.github/.github/workflows/python-codestyle.yml@main
+    uses: oakestra/.github/.github/workflows/python-codestyle.yml@v1

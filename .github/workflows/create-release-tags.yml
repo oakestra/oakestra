@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   create_tag:
-    uses: oakestra/.github/.github/workflows/create-tag.yml@main
+    uses: oakestra/.github/.github/workflows/create-tag.yml@v1
     with:
       force: true
     secrets: inherit

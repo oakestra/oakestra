@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    uses: oakestra/.github/.github/workflows/docker-build-push.yml@main
+    uses: oakestra/.github/.github/workflows/docker-build-push.yml@v1
     with:
       image_name: jwt-generator
       context: ./root_orchestrator/jwt-generator/

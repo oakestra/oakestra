@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build-addons-manager:
-    uses: oakestra/.github/.github/workflows/docker-build-push.yml@main
+    uses: oakestra/.github/.github/workflows/docker-build-push.yml@v1
     with:
       image_name: addons_manager
       context: ./addons_engine/addons-manager/
@@ -22,7 +22,7 @@ jobs:
     secrets: inherit
 
   build-addons-monitor:
-    uses: oakestra/.github/.github/workflows/docker-build-push.yml@main
+    uses: oakestra/.github/.github/workflows/docker-build-push.yml@v1
     with:
       image_name: addons_monitor
       context: ./addons_engine/addons-monitor/
@@ -31,7 +31,7 @@ jobs:
     secrets: inherit
 
   build-marketplace-manager:
-    uses: oakestra/.github/.github/workflows/docker-build-push.yml@main
+    uses: oakestra/.github/.github/workflows/docker-build-push.yml@v1
     with:
       image_name: marketplace_manager
       context: ./addons_marketplace/marketplace-manager/
@@ -40,7 +40,7 @@ jobs:
     secrets: inherit
 
   build-addons-dashboard:
-    uses: oakestra/.github/.github/workflows/docker-build-push.yml@main
+    uses: oakestra/.github/.github/workflows/docker-build-push.yml@v1
     with:
       image_name: addons_dashboard
       context: ./addons_engine/addons-dashboard/
