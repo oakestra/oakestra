@@ -2,16 +2,9 @@ name: Python Codestyle Check (ruff)
 
 on: pull_request
 
+permissions:
+  contents: read
+
 jobs:
   style-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Run ruff formating check
-        uses: astral-sh/ruff-action@v3
-        with:
-          args: format --check
-      - name: Run ruff linting check
-        uses: astral-sh/ruff-action@v3
-        with:
-          args: check
+    uses: oakestra/.github/.github/workflows/python-codestyle.yml@main

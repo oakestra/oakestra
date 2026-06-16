@@ -7,26 +7,10 @@ on:
 
 permissions:
   contents: write
-  
+
 jobs:
   create_tag:
-    runs-on: ubuntu-latest
-
-    steps:
-
-    - name: Checkout code
-      uses: actions/checkout@v6
-      with:
-        token: ${{ secrets.PACKAGES_TOKEN }}
-      
-
-    - name: Get tag version
-      id: tag_version
-      run: |
-        echo "::set-output name=tag::$(cat version.txt)"
-
-    - name: Create tag
-      run: |
-        version=$(cat version.txt)
-        git tag $version
-        git push origin $version --force
+    uses: oakestra/.github/.github/workflows/create-tag.yml@main
+    with:
+      force: true
+    secrets: inherit
