@@ -14,10 +14,14 @@ logger = logging.getLogger("cluster_service_manager")
 
 
 def _cluster_identity_params():
-    return {
-        "cluster_address": os.environ.get("CLUSTER_ADDRESS", ""),
-        "cluster_name": os.environ.get("CLUSTER_NAME", ""),
-    }
+    params = {}
+    cluster_address = os.environ.get("CLUSTER_ADDRESS")
+    cluster_name = os.environ.get("CLUSTER_NAME")
+    if cluster_address:
+        params["cluster_address"] = cluster_address
+    if cluster_name:
+        params["cluster_name"] = cluster_name
+    return params
 
 
 def root_service_manager_get_subnet():
