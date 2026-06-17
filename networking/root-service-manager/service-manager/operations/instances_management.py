@@ -52,8 +52,8 @@ def undeploy_request(sys_job_id=None, instance_number=None):
     return "Instance not found", 400
 
 
-def get_service_instances(name=None, ip=None, cluster_ip=None):
-    if cluster_ip is None:
+def get_service_instances(name=None, ip=None, cluster_ip=None, cluster_name=None):
+    if cluster_ip is None or cluster_name is None:
         return "Invalid address", 400
 
     cluster_ip = sanitize(cluster_ip)
