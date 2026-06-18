@@ -96,7 +96,7 @@ func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
 		found = true
 	}
 	if !found {
-		logger.WarnLogger().Printf("No additional OCI runtimes found in containerd config %s", CONTAINERD_CONFIG_PATH)
+		logger.WarnLogger().Printf("No additional OCI runtimes found in containerd config %s. This worker will use the default runc runtime.", CONTAINERD_CONFIG_PATH)
 	}
 
 	return &runtime
@@ -138,7 +138,7 @@ func findAdditionalRuntimePluginsAt(configPath string) iter.Seq[string] {
 			}
 		}
 	}
-	logger.WarnLogger().Printf("No OCI runtimes found in containerd config %s", configPath)
+	logger.WarnLogger().Printf("No OCI runtimes found in containerd config %s. This worker will use the default runc runtime.", configPath)
 	return emptyIterator
 }
 
