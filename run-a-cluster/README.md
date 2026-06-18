@@ -5,7 +5,7 @@ It's possible to use specific versions (tags or branches) by setting the `OAKEST
 ### Using a specific tag (e.g., alpha version):
 
 ```bash
-export OAKESTRA_VERSION=alpha-v0.4.403
+export OAKESTRA_VERSION=alpha-v0.4.411
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/main/scripts/StartOakestraFull.sh | sh -
 ```
 

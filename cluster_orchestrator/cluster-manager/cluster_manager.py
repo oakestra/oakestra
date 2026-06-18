@@ -1,6 +1,9 @@
 import json
 import logging
+import os
 import socket
+import threading
+import time
 
 import config
 import grpc
@@ -82,68 +85,76 @@ def background_job_send_aggregated_information_to_sm():
 def register_with_system_manager():
     """Registers this cluster manager with the system manager using gRPC."""
 
-    response = None
+    if not config.MY_CLUSTER_ADDRESS:
+        raise RuntimeError(
+            "CLUSTER_ADDRESS env var is not set. The root orchestrator needs the "
+            "reachable IP of this cluster manager. Set CLUSTER_ADDRESS to the "
+            "IP/hostname the root can use to reach this host."
+        )
+
     with grpc.insecure_channel(config.SYSTEM_MANAGER_ADDR) as channel:
         stub = register_clusterStub(channel)
 
-        try:
-            # Send initial greeting (CS1Message)
-            message = CS1Message()
-            message.hello_service_manager = json.dumps(
-                {
-                    "cluster_name": config.MY_CHOSEN_CLUSTER_NAME,
-                    "location": config.MY_CLUSTER_LOCATION,
-                }
-            )
-            response: SC1Message = stub.handle_init_greeting(
-                message, wait_for_ready=True, timeout=config.GRPC_REQUEST_TIMEOUT
-            )
-            logger.info(
-                "Received greeting message from System Manager: "
-                + str(response.hello_cluster_manager)
-            )
+        # Send initial greeting (CS1Message)
+        greeting = CS1Message()
+        greeting.hello_service_manager = json.dumps(
+            {
+                "cluster_name": config.MY_CHOSEN_CLUSTER_NAME,
+                "location": config.MY_CLUSTER_LOCATION,
+            }
+        )
+        sc1: SC1Message = stub.handle_init_greeting(
+            greeting, wait_for_ready=True, timeout=config.GRPC_REQUEST_TIMEOUT
+        )
+        logger.info(
+            "Received greeting message from System Manager: " + str(sc1.hello_cluster_manager)
+        )
 
-        except grpc.RpcError as e:
-            logger.error(f"Error sending CS1 to System Manager: {e}")
+        # Send cluster details (CS2Message)
+        details = CS2Message()
+        details.manager_port = int(config.MY_PORT)
+        details.network_component_port = int(config.NETWORK_COMPONENT_PORT)
+        details.cluster_name = config.MY_CHOSEN_CLUSTER_NAME
+        details.cluster_location = config.MY_CLUSTER_LOCATION
+        details.cluster_address = config.MY_CLUSTER_ADDRESS
+        details.cluster_info.append(KeyValue())
 
-        try:
-            # Send cluster details (CS2Message)
-            message = CS2Message()
-            message.manager_port = int(config.MY_PORT)
-            message.network_component_port = int(config.NETWORK_COMPONENT_PORT)
-            message.cluster_name = config.MY_CHOSEN_CLUSTER_NAME
-            message.cluster_location = config.MY_CLUSTER_LOCATION
+        sc2: SC2Message = stub.handle_init_final(
+            details, wait_for_ready=True, timeout=config.GRPC_REQUEST_TIMEOUT
+        )
 
-            # Add additional key-value pairs to SC2Message
-            key_value_message = KeyValue()
-            message.cluster_info.append(key_value_message)
+        if not sc2.id:
+            raise RuntimeError("Registration failed: no cluster id returned by root")
 
-            response: SC2Message = stub.handle_init_final(
-                message, wait_for_ready=True, timeout=config.GRPC_REQUEST_TIMEOUT
-            )
-
-            logger.info(f"Cluster ID received: {response.id}")
-
-        except grpc.RpcError as e:
-            logger.error(f"Error sending CS2 to System Manager: {e}")
-
-        if response:
-            if response.id is not None:
-                config.MY_ASSIGNED_CLUSTER_ID = response.id
-                logger.info("Received ID. Go ahead with Background Jobs")
-                prometheus_init_gauge_metrics(config.MY_ASSIGNED_CLUSTER_ID, app.logger)
-                background_job_send_aggregated_information_to_sm()
-            else:
-                logger.error("No ID received.")
-        else:
-            logger.error("No response received from System Manager.")
+        config.MY_ASSIGNED_CLUSTER_ID = sc2.id
+        logger.info(f"Cluster ID received: {sc2.id}. Go ahead with Background Jobs")
+        prometheus_init_gauge_metrics(config.MY_ASSIGNED_CLUSTER_ID, app.logger)
+        background_job_send_aggregated_information_to_sm()
 
 
 # ........... FINISH - register to System Manager with gRPC.................#
 # ..........................................................................#
 
 start_http_server(10001)  # start prometheus server
-register_with_system_manager()  # register with system manager using gRPC
+
+
+def _register_in_background():
+    # The root probes GET /api/cluster/status on this cluster_manager during
+    # registration. That probe can only succeed once gunicorn's worker has
+    # entered its accept loop, which doesn't happen until load_wsgi (i.e. this
+    # module's top-level import) returns. So we MUST NOT block the import on
+    # the gRPC call — otherwise the root's probe deadlocks against our own
+    # startup. Give gunicorn a moment to start serving, then register. On
+    # failure, exit the worker so gunicorn respawns it and tries again.
+    time.sleep(2)
+    try:
+        register_with_system_manager()
+    except Exception:
+        logger.exception("Cluster registration failed; exiting worker for restart")
+        os._exit(1)
+
+
+threading.Thread(target=_register_in_background, daemon=True).start()
 
 if __name__ == "__main__":
     import eventlet

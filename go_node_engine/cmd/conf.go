@@ -180,14 +180,14 @@ var (
 	}
 	publicIP = &cobra.Command{
 		Use:   "public",
-		Short: "Use automatic public IP detection (legacy alias for auto)",
+		Short: "Use automatic public IP detection",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setPublicIp(config.PUBLIC_IP_AUTO)
 		},
 	}
 	privateIP = &cobra.Command{
 		Use:   "private",
-		Short: "Disable public IP visibility (legacy alias for false)",
+		Short: "Disable public IP visibility",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setPublicIp(config.PUBLIC_IP_FALSE)
 		},

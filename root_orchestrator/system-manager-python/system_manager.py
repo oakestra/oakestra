@@ -8,6 +8,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import grpc
+import requests
 from blueprints import blueprints
 from bson import json_util
 from ext_requests.jwt_generator_requests import get_public_key
@@ -28,7 +29,7 @@ from proto.clusterRegistration_pb2_grpc import (
 )
 from resource_abstractor_client import candidate_operations
 from sm_logging import configure_logging
-from utils.network import get_ip_from_grpc_transport
+from utils.network import add_brackets_if_ipv6
 from werkzeug.utils import redirect, secure_filename
 
 my_logger = configure_logging()
@@ -94,6 +95,41 @@ app.register_blueprint(swaggerui_blueprint)
 # ......................................................#
 
 
+CLUSTER_REACHABILITY_TIMEOUT = 3
+CLUSTER_REACHABILITY_TOTAL_WINDOW = 30  # seconds
+
+
+def _is_cluster_reachable(cluster_address, cluster_port):
+    """Probe GET /api/cluster/status on the cluster_manager.
+
+    Returns True only if the cluster is reachable and responds with HTTP 2xx.
+    The cluster MUST be reachable at the address it advertised, otherwise the
+    root has no way to dispatch jobs to it.
+
+    Retries for up to CLUSTER_REACHABILITY_TOTAL_WINDOW seconds because the
+    cluster_manager's gunicorn worker may still be inside load_wsgi when the
+    gRPC handshake reaches the root (the registration call happens at module
+    import time, before the worker enters the accept loop).
+    """
+    url = "http://{}:{}/api/cluster/status".format(
+        add_brackets_if_ipv6(cluster_address), cluster_port
+    )
+    deadline = time.monotonic() + CLUSTER_REACHABILITY_TOTAL_WINDOW
+    last_exc = None
+    while True:
+        try:
+            resp = requests.get(url, timeout=CLUSTER_REACHABILITY_TIMEOUT)
+            resp.raise_for_status()
+            return True
+        except requests.RequestException as exc:
+            last_exc = exc
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(2)
+    logger.error("Cluster reachability probe failed for {}: {}".format(url, last_exc))
+    return False
+
+
 class ClusterRegistrationServicer(register_clusterServicer):
     def handle_init_greeting(self, request, context):
         logger.info("gRPC - Cluster_Manager connected: {}".format(context.peer()))
@@ -106,14 +142,36 @@ class ClusterRegistrationServicer(register_clusterServicer):
         logger.info(request)
         message = MessageToDict(request, preserving_proto_field_name=True)
         logger.info("Message: {}, request {}".format(message, request))
-        cluster_address = get_ip_from_grpc_transport(context.peer())
 
-        logger.info("Cluster address: {}".format(cluster_address))
+        cluster_address = message.get("cluster_address", "").strip()
+        if not cluster_address:
+            logger.error(
+                "Cluster did not advertise a cluster_address; refusing registration. "
+                "Set CLUSTER_ADDRESS on the cluster_manager."
+            )
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "cluster_address is required",
+            )
+
+        cluster_port = str(message["manager_port"])
+        logger.info("Cluster address: {} port: {}".format(cluster_address, cluster_port))
+
+        if not _is_cluster_reachable(cluster_address, cluster_port):
+            logger.error(
+                "Cluster {} is not reachable at {}:{} — refusing registration".format(
+                    message.get("cluster_name"), cluster_address, cluster_port
+                )
+            )
+            context.abort(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                "cluster not reachable at {}:{}".format(cluster_address, cluster_port),
+            )
 
         cluster_data = {
             "ip": cluster_address,
             "clusterinfo": message["cluster_info"][0],
-            "port": str(message["manager_port"]),
+            "port": cluster_port,
             "candidate_location": message["cluster_location"],
             "candidate_name": message["cluster_name"],
         }
@@ -122,7 +180,7 @@ class ClusterRegistrationServicer(register_clusterServicer):
         cluster = candidate_operations.create_candidate(cluster_data)
         if cluster is None:
             logger.error("Creating cluster failed")
-            return
+            context.abort(grpc.StatusCode.INTERNAL, "failed to persist cluster")
 
         cid = str(cluster["_id"])
 
