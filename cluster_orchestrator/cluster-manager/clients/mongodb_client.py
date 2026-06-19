@@ -1,520 +1,198 @@
-import os
-from collections import defaultdict
-from datetime import datetime
-from typing import Optional
+"""MongoDB client for cluster manager.
 
-import pymongo
-import pymongo.response
-from bson.objectid import ObjectId
-from flask_pymongo import PyMongo
-from oakestra_utils.types.statuses import (
-    DeploymentStatus,
-    LegacyStatus,
-    NegativeSchedulingStatus,
-    PositiveSchedulingStatus,
-    Status,
-    convert_to_status,
-)
+Provides typed query methods for nodes, jobs, and migrations.
+"""
+
 import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-MONGO_URL = os.environ.get("CLUSTER_MONGO_URL")
-MONGO_PORT = os.environ.get("CLUSTER_MONGO_PORT")
+from pymongo import MongoClient, errors
+from pymongo.database import Database
 
-MONGO_ADDR_NODES = "mongodb://" + str(MONGO_URL) + ":" + str(MONGO_PORT) + "/nodes"
-MONGO_ADDR_JOBS = "mongodb://" + str(MONGO_URL) + ":" + str(MONGO_PORT) + "/jobs"
+logger = logging.getLogger(__name__)
 
-mongo_nodes = None
-mongo_jobs = None
-app = None
-
-
-def mongo_init(flask_app):
-    global app
-    global mongo_nodes, mongo_jobs
-
-    app = flask_app
-
-    mongo_nodes = PyMongo(app, uri=MONGO_ADDR_NODES)
-    mongo_jobs = PyMongo(app, uri=MONGO_ADDR_JOBS)
-
-    app.logger.info("MONGODB - init mongo")
+# Collection names
+NODES_COLLECTION = "nodes"
+JOBS_COLLECTION = "jobs"
+MIGRATIONS_COLLECTION = "migrations"
 
 
-# ................. Worker Node Operations ...............#
-###########################################################
+class MongoDBClient:
+    """Thin wrapper around PyMongo with cluster-manager-specific helpers."""
 
+    def __init__(self, uri: str, db_name: str = "oakestra"):
+        self._client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+        self._db: Database = self._client[db_name]
+        logger.info("Connected to MongoDB at %s (db=%s)", uri, db_name)
 
-def mongo_upsert_node(obj):
-    global app, mongo_nodes
-    app.logger.info("MONGODB - upserting node...")
-    json_node_info = obj["node_info"]
-    node_info_hostname = json_node_info.get("host")
+    # ------------------------------------------------------------------
+    # Nodes
+    # ------------------------------------------------------------------
 
-    nodes = mongo_nodes.db.nodes
-    # find node by hostname and if it exists, just upsert
-    node_id = nodes.find_one_and_update(
-        {"node_info.host": node_info_hostname},
-        {
-            "$set": {
-                "node_info": json_node_info,
-                "node_address": obj.get("ip"),
-                "node_subnet": obj.get("node_subnet"),
-            }
-        },
-        upsert=True,
-        return_document=True,
-    ).get("_id")
-    app.logger.info(node_id)
-    return node_id
-
-
-def mongo_find_node_by_id(node_id):
-    global mongo_nodes
-    return mongo_nodes.db.nodes.find_one({"_id": ObjectId(node_id)})
-
-
-def mongo_find_node_by_name(node_name):
-    global mongo_nodes
-    try:
-        return mongo_nodes.db.nodes.find_one({"node_info.host": node_name})
-    except Exception:
-        return "Error"
-
-
-def mongo_find_node_by_id_and_update_cpu_mem(node_id, node_payload):
-    global app, mongo_nodes
-    app.logger.info("MONGODB - update cpu and memory of worker node {0} ...".format(node_id))
-    # o = mongo.db.nodes.find_one({'_id': node_id})
-    # print(o)
-    time_now = datetime.now()
-
-    prev_document = mongo_nodes.db.nodes.find_one_and_update(
-        {"_id": ObjectId(node_id)},
-        {
-            "$set": {
-                "current_ip_address": node_payload.get("ip", 0),
-                "current_cpu_percent": node_payload.get("cpu", 0),
-                "current_cpu_cores_free": node_payload.get("free_cores", 0),
-                "current_memory_percent": node_payload.get("memory", 0),
-                "current_free_memory_in_MB": node_payload.get("memory_free_in_MB", 0),
-                "gpu_driver": node_payload.get("gpu_driver", "-"),
-                "gpu_usage": node_payload.get("gpu_usage", 0),
-                "gpu_cores": node_payload.get("gpu_cores", 0),
-                "gpu_temp": node_payload.get("gpu_temp", 0),
-                "gpu_mem_used": node_payload.get("gpu_mem_used", 0),
-                "gpu_tot_mem": node_payload.get("gpu_tot_mem", 0),
-                "last_modified": time_now,
-                "last_modified_timestamp": datetime.timestamp(time_now),
-            }
-        },
-        upsert=False,
-    )
-
-    if not prev_document:
-        app.logger.error("MONGODB - Node with id {0} not found".format(node_id))
-        return None
-    app.logger.info("MONGODB - Node {0} updated".format(node_id))
-    prev_document["_id"] = str(prev_document["_id"])
-
-    prev_ip = prev_document.get("current_ip_address")
-    curr_ip = node_payload.get("ip", 0)
-    if prev_ip != curr_ip:
-        app.logger.info("IP_CHANGE - Node with id {0} changed its IP address".format(node_id))
-
-    return prev_document
-
-
-def find_one_edge_node():
-    """Find first occurrence of edge nodes"""
-    global mongo_nodes
-    return mongo_nodes.db.nodes.find_one()
-
-
-def find_all_nodes(filter: Optional[dict] = {}):
-    global mongo_nodes
-    return mongo_nodes.db.nodes.find({}, filter)
-
-
-def mongo_dead_nodes():
-    print("looking for dead nodes")
-
-
-def mongo_aggregate_node_information(TIME_INTERVAL):
-    """1. Find all nodes"""
-    """ 2. Aggregate cpu, memory, and more information of worker nodes"""
-
-    global mongo_nodes
-
-    cumulative_values = {
-        "cpu_percent": 0,
-        "cpu_cores": 0,
-        "memory_percent": 0,
-        "gpu_tot_mem": 0,
-        "gpu_mem_used": 0,
-        "gpu_temp": 0,
-        "gpu_drivers": [],
-        "gpu_percent": 0,
-        "gpu_cores": 0,
-        "cumulative_memory_in_mb": 0,
-        "number_of_nodes": 0,
-    }
-
-    technology = set()
-    supported_addons = set()
-    aggregation_per_architecture = defaultdict(
-        lambda: {"cpu_percent": 0, "cpu_cores": 0, "memory": 0, "memory_in_mb": 0}
-    )
-
-    nodes = find_all_nodes()
-    for n in nodes:
+    def find_node(self, node_id: str) -> Optional[Dict[str, Any]]:
+        """Return a single node document by _id, or None."""
         try:
-            date_of_last_update = n.get("last_modified_timestamp", -1)
-            if (
-                date_of_last_update < (datetime.now().timestamp() - TIME_INTERVAL)
-                and date_of_last_update > 0
-            ):
-                print("Node {0} is inactive.".format(n.get("_id")))
-                continue
+            return self._db[NODES_COLLECTION].find_one({"_id": node_id})
+        except errors.OperationFailure as exc:
+            logger.error("Failed to find node %s: %s", node_id, exc)
+            return None
 
-            node_info = n.get("node_info", None)
-            if node_info is None:
-                print("Node {0} has no node_info, skipping.".format(n.get("_id")))
-                continue
-
-            # if it is not older than TIME_INTERVAL
-            cumulative_values["cpu_percent"] += n.get("current_cpu_percent", 0)
-            cumulative_values["cpu_cores"] += n.get("current_cpu_cores_free", 0)
-            cumulative_values["memory_percent"] += n.get("current_memory_percent", 0)
-            cumulative_values["gpu_tot_mem"] += n.get("gpu_tot_mem", 0)
-            cumulative_values["gpu_mem_used"] += n.get("gpu_mem_used", 0)
-            cumulative_values["gpu_temp"] += n.get("gpu_temp", 0)
-            cumulative_values["gpu_drivers"].append(n.get("gpu_driver", "-"))
-            cumulative_values["cumulative_memory_in_mb"] += n.get("current_free_memory_in_MB", 0)
-            cumulative_values["gpu_percent"] += n.get("gpu_usage", 0)
-            cumulative_values["gpu_cores"] += n.get("gpu_cores", 0)
-            cumulative_values["number_of_nodes"] += 1
-            
-            technology.update(node_info.get("technology", []))
-            supported_addons.update(node_info.get("supported_addons", []))
-            arch = node_info.get("architecture")
-            
-            aggregation = aggregation_per_architecture[arch]
-            aggregation["cpu_percent"] += n.get("current_cpu_percent", 0)
-            aggregation["cpu_cores"] += n.get("current_cpu_cores_free", 0)
-            aggregation["memory"] += n.get("current_memory_percent", 0)
-            aggregation["memory_in_mb"] += n.get("current_free_memory_in_MB", 0)
-            # GPU not aggregated for unikernel
-
-        except Exception as e:
-            print(
-                "Problem during the aggregation of the data, skipping the node: ",
-                str(n),
-                " - because - ",
-                str(e),
-            )
-
-    mongo_update_jobs_status(TIME_INTERVAL)
-    jobs = mongo_find_all_jobs()
-
-    return {
-        **cumulative_values,
-        "jobs": list(jobs),
-        "virtualization": list(technology),
-        "aggregation_per_architecture": dict(aggregation_per_architecture),
-        "more": 0,
-        "supported_addons": list(supported_addons),
-    }
-
-
-# ................. Job Operations .......................#
-###########################################################
-
-
-def mongo_create_new_job_instance(job: dict, system_job_id: str, instance_number: int) -> dict:
-    print("insert/upsert requested job")
-    job["system_job_id"] = system_job_id
-    del job["_id"]
-    if job.get("instance_list") is not None:
-        del job["instance_list"]
-    result = mongo_jobs.db.jobs.find_one_and_update(
-        {"system_job_id": str(job["system_job_id"])},
-        {"$set": job},
-        upsert=True,
-        return_document=True,
-    )  # if job does not exist, insert it
-    if result.get("instance_list") is None:
-        result["instance_list"] = []
-    result["instance_list"].append(
-        {
-            "instance_number": instance_number,
-            "status": PositiveSchedulingStatus.CLUSTER_SCHEDULED.value,
-        }
-    )
-    mongo_jobs.db.jobs.find_one_and_update(
-        {"system_job_id": str(job["system_job_id"])},
-        {"$set": {"instance_list": result["instance_list"]}},
-    )
-    result["_id"] = str(result["_id"])
-    return result
-
-
-def mongo_find_job_by_system_id(system_job_id):
-    return mongo_jobs.db.jobs.find_one({"system_job_id": str(system_job_id)})
-
-
-def mongo_find_job_by_system_id_and_instance(system_job_id, instance_number):
-    """Find a job by its system_job_id and instance_number."""
-    return mongo_jobs.db.jobs.find_one(
-        {
-            "system_job_id": str(system_job_id),
-            "instance_list": {
-                "$elemMatch": {"instance_number": int(instance_number)}
-            }
-        },
-        {
-            "_id": 1,
-            "system_job_id": 1,
-            "instance_list": {
-                "$filter": {
-                    "input": "$instance_list",
-                    "as": "instance",
-                    "cond": {"$eq": ["$$instance.instance_number", int(instance_number)]}
-                }
-            }
-        }
-    )
-
-
-def mongo_find_job_by_id(id):
-    print("Find job by Id")
-    return mongo_jobs.db.jobs.find_one({"_id": ObjectId(id)})
-
-
-def mongo_update_jobs_status(time_interval: int) -> None:
-    """Marks inactive jobs as failed.
-
-    If there are no updates from a job in the last TIME_INTERVAL mark it as failed,
-    unless the job is completed.
-    """
-    jobs = mongo_find_jobs_with_inactive_instances(time_interval)
-    for job in jobs:
+    def find_nodes(self, filter_doc: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Return all nodes matching *filter_doc* (default: all nodes)."""
         try:
-            for instance in range(len(job["instance_list"])):
-                last_time_job_was_modified = job["instance_list"][instance].get(
-                    "last_modified_timestamp", datetime.now().timestamp()
-                )
-                job_is_inactive = last_time_job_was_modified < (
-                    datetime.now().timestamp() - time_interval
-                )
-                job_status = (
-                    convert_to_status(job["instance_list"][instance].get("status"))
-                    or LegacyStatus.LEGACY_0
-                )
-                # Set status to failed if no updates in the last TIME_INTERVAL
-                if (
-                    job_is_inactive
-                    and job_status not in PositiveSchedulingStatus
-                    and job_status != DeploymentStatus.COMPLETED
-                ):
-                    logging.info("Job is inactive: " + str(job.get("job_name")))
-                    mongo_update_job_status(
-                        job["system_job_id"],
-                        job["instance_list"][instance]["instance_number"],
-                        DeploymentStatus.FAILED
-                        )
-        except Exception as e:
-            logging.error(e)
-            print(e)
+            cursor = self._db[NODES_COLLECTION].find(filter_doc or {})
+            return list(cursor)
+        except errors.OperationFailure as exc:
+            logger.error("Failed to query nodes with filter %s: %s", filter_doc, exc)
+            return []
 
+    def find_nodes_by_status(self, status: str) -> List[Dict[str, Any]]:
+        """Convenience: find nodes by their status field."""
+        return self.find_nodes({"status": status})
 
-def mongo_find_all_jobs(
-        filter: Optional[dict] = None,
-        limit: Optional[int] = None,
-        skip: Optional[int] = None
-):
-    global mongo_jobs
+    def insert_node(self, node: Dict[str, Any]) -> Optional[str]:
+        """Insert a node document. Returns the inserted _id on success."""
+        try:
+            result = self._db[NODES_COLLECTION].insert_one(node)
+            logger.info("Inserted node %s", result.inserted_id)
+            return str(result.inserted_id)
+        except errors.DuplicateKeyError:
+            logger.warning("Node %s already exists, skipping insert", node.get("_id"))
+            return None
+        except errors.OperationFailure as exc:
+            logger.error("Failed to insert node: %s", exc)
+            return None
 
-    default_filter = {
-                "_id": 0,
-                "system_job_id": 1,
-                "job_name": 1,
-                "status": int(LegacyStatus.LEGACY_1.value),
-                "instance_list": 1,
-            }
-   
-    # Merge default filter with provided filter
-    if filter is None:
-        filter = default_filter
+    def update_node(self, node_id: str, update_doc: Dict[str, Any]) -> bool:
+        """Update a node document using $-prefixed operators (e.g. {"$set": ...}).
 
-    query_result = mongo_jobs.db.jobs.find({}, filter)
-
-    if limit is not None:
-        query_result = query_result.limit(limit)
-    if skip is not None:
-        query_result = query_result.skip(skip)
-
-    return query_result
-
-
-def mongo_find_jobs_with_inactive_instances(inactive_time_interval: int):
-    inactivity_window = datetime.now().timestamp() - inactive_time_interval
-    global mongo_jobs
-    return mongo_jobs.db.jobs.find(
-            {
-                "instance_list":
-                    {
-                        "$elemMatch":
-                        {"last_modified_timestamp": {"$lt": inactivity_window}}
-                    },
-            },
-            {
-                "_id": 0,
-                "system_job_id": 1,
-                "job_name": 1,
-                "status": int(LegacyStatus.LEGACY_1.value),
-                "instance_list": 1,
-            },
-        )
-    
-
-def mongo_find_job_by_name(job_name):
-    global mongo_jobs
-    return mongo_jobs.db.jobs.find_one({"job_name": job_name})
-
-
-def mongo_find_job_by_ip(ip):
-    global mongo_jobs
-    # Search by Service Ip
-    job = mongo_jobs.db.jobs.find_one({"service_ip_list.Address": ip})
-    if job is None:
-        # Search by instance ip
-        job = mongo_jobs.db.jobs.find_one({"instance_list.instance_ip": ip})
-    return job
-
-
-def mongo_update_job_status(
-    system_job_id: str,
-    instance_number: str,
-    status: Status,
-    node: Optional[dict] = None,
-    migration_target: Optional[dict] = None,
-) -> pymongo.results.UpdateResult:
-    global mongo_jobs
-
-    update_set = {   
-        "instance_list.$.status": status.value,
-        "instance_list.$.last_status_change_timestamp": datetime.timestamp(datetime.now()),
-    }
-    if node is not None:
-        port = node.get("node_info", {}).get("node_port", None)
-        if port is None:
-            port = 50011
-        update_set.update({
-            "instance_list.$.host_ip": node["node_address"],
-            "instance_list.$.host_port": port,
-            "instance_list.$.worker_id": node.get("_id"),
-        })
-    if migration_target is not None:
-        update_set.update({
-            "instance_list.$.migration_target": migration_target.get("_id"),
-        })
-
-    return mongo_jobs.db.jobs.find_one_and_update(
-        {
-            "system_job_id": str(system_job_id),
-            "instance_list": {"$elemMatch": {"instance_number": int(instance_number)}},
-        },
-        {
-            "$set": update_set
-        },
-    )
-
-
-def mongo_get_services_with_failed_instanes():
-    return mongo_jobs.db.jobs.find(
-        {
-            "$or": [
-                {"instance_list.status": DeploymentStatus.FAILED.value},
-                {"instance_list.status": DeploymentStatus.DEAD.value},
-                {"instance_list.status": NegativeSchedulingStatus.NO_WORKER_CAPACITY.value},
-            ]
-        }
-    )
-
-
-def mongo_update_job_deployed(
-    sname: str,
-    instance_num: int,
-    status: Status,
-    publicip: str,
-    workerid: str,
-) -> Optional[pymongo.results.UpdateResult]:
-    global mongo_jobs
-    job = mongo_jobs.db.jobs.find_one({"job_name": sname})
-    if job:
-        instance_list = job.get("instance_list", [])
-        updated = False
-        for instance in range(len(instance_list)):
-            if int(instance_list[instance]["instance_number"]) == int(instance_num):
-                if instance_list[instance].get("worker_id") != workerid:
-                    return None  # cannot update another worker's resources
-                instance_list[instance]["status"] = status.value
-                instance_list[instance]["publicip"] = publicip
-                updated = True
-        if updated:
-            return mongo_jobs.db.jobs.update_one(
-                {"job_name": sname}, {"$set": {"instance_list": instance_list}}
+        Uses an explicit filter instead of upsert to avoid silent document creation.
+        """
+        try:
+            result = self._db[NODES_COLLECTION].update_one(
+                {"_id": node_id},
+                update_doc,
             )
-    return None
+            if result.matched_count == 0:
+                logger.warning("Node %s not found, nothing to update", node_id)
+                return False
+            logger.info("Updated node %s (%d modified)", node_id, result.modified_count)
+            return True
+        except errors.OperationFailure as exc:
+            logger.error("Failed to update node %s: %s", node_id, exc)
+            return False
 
+    def delete_node(self, node_id: str) -> bool:
+        """Delete a node document. Returns True if a document was removed."""
+        try:
+            result = self._db[NODES_COLLECTION].delete_one({"_id": node_id})
+            deleted = result.deleted_count > 0
+            if deleted:
+                logger.info("Deleted node %s", node_id)
+            else:
+                logger.warning("Node %s not found for deletion", node_id)
+            return deleted
+        except errors.OperationFailure as exc:
+            logger.error("Failed to delete node %s: %s", node_id, exc)
+            return False
 
-def mongo_update_service_resources(
-    sname: str,
-    service: dict,
-    workerid: str,
-    instance_num: int = 0,
-) -> Optional[pymongo.results.UpdateResult]:
-    global mongo_jobs
-    job = mongo_jobs.db.jobs.find_one({"job_name": sname})
-    if job:
-        instance_list = job["instance_list"]
-        for instance in range(len(instance_list)):
-            if int(instance_list[instance]["instance_number"]) == int(instance_num):
-                if instance_list[instance].get("worker_id") != workerid:
-                    return None  # cannot update another worker's resources
-                instance_list[instance]["status"] = service.get(
-                    "status",
-                    DeploymentStatus.RUNNING.value
-                    )
-                instance_list[instance]["status_detail"] = service.get("status_detail")
-                instance_list[instance]["last_modified_timestamp"] = datetime.timestamp(
-                    datetime.now()
-                )
-                instance_list[instance]["cpu"] = service.get("cpu")
-                instance_list[instance]["memory"] = service.get("memory")
-                instance_list[instance]["disk"] = service.get("disk")
-                instance_list[instance]["logs"] = service.get("logs", "")
-                return mongo_jobs.db.jobs.update_one(
-                    {"job_name": sname}, {"$set": {"instance_list": instance_list}}
-                )
-    else:
-        return None
+    # ------------------------------------------------------------------
+    # Jobs
+    # ------------------------------------------------------------------
 
+    def find_job(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """Return a single job document by _id."""
+        try:
+            return self._db[JOBS_COLLECTION].find_one({"_id": job_id})
+        except errors.OperationFailure as exc:
+            logger.error("Failed to find job %s: %s", job_id, exc)
+            return None
 
-def mongo_remove_job_instance(system_job_id, instance_number):
-    global mongo_jobs
-    job = mongo_jobs.db.jobs.find_one({"system_job_id": str(system_job_id)})
-    instances = job["instance_list"]
-    for instance in instances:
-        if int(instance["instance_number"]) == int(instance_number) or int(instance_number) == -1:
-            instances.remove(instance)
-            break
-    if len(instances) < 1:
-        print("Removing job")
-        print(job)
-        return mongo_jobs.db.jobs.find_one_and_delete({"system_job_id": str(system_job_id)})
-    else:
-        return mongo_jobs.db.jobs.update_one(
-            {"system_job_id": str(system_job_id)},
-            {"$set": {"instance_list": instances}},
-        )
+    def find_jobs(self, filter_doc: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Return all jobs matching *filter_doc*."""
+        try:
+            cursor = self._db[JOBS_COLLECTION].find(filter_doc or {})
+            return list(cursor)
+        except errors.OperationFailure as exc:
+            logger.error("Failed to query jobs with filter %s: %s", filter_doc, exc)
+            return []
+
+    def update_job(self, job_id: str, update_doc: Dict[str, Any]) -> bool:
+        """Update a job document using $-prefixed operators."""
+        try:
+            result = self._db[JOBS_COLLECTION].update_one(
+                {"_id": job_id},
+                update_doc,
+            )
+            if result.matched_count == 0:
+                logger.warning("Job %s not found, nothing to update", job_id)
+                return False
+            logger.info("Updated job %s (%d modified)", job_id, result.modified_count)
+            return True
+        except errors.OperationFailure as exc:
+            logger.error("Failed to update job %s: %s", job_id, exc)
+            return False
+
+    # ------------------------------------------------------------------
+    # Migrations
+    # ------------------------------------------------------------------
+
+    def find_migration(self, migration_id: str) -> Optional[Dict[str, Any]]:
+        """Return a migration document by _id."""
+        try:
+            return self._db[MIGRATIONS_COLLECTION].find_one({"_id": migration_id})
+        except errors.OperationFailure as exc:
+            logger.error("Failed to find migration %s: %s", migration_id, exc)
+            return None
+
+    def insert_migration(self, migration: Dict[str, Any]) -> Optional[str]:
+        """Insert a migration document. Returns the inserted _id."""
+        try:
+            result = self._db[MIGRATIONS_COLLECTION].insert_one(migration)
+            logger.info("Inserted migration %s", result.inserted_id)
+            return str(result.inserted_id)
+        except errors.DuplicateKeyError:
+            logger.warning("Migration %s already exists", migration.get("_id"))
+            return None
+        except errors.OperationFailure as exc:
+            logger.error("Failed to insert migration: %s", exc)
+            return None
+
+    def update_migration(self, migration_id: str, update_doc: Dict[str, Any]) -> bool:
+        """Update a migration document using $-prefixed operators."""
+        try:
+            result = self._db[MIGRATIONS_COLLECTION].update_one(
+                {"_id": migration_id},
+                update_doc,
+            )
+            if result.matched_count == 0:
+                logger.warning("Migration %s not found, nothing to update", migration_id)
+                return False
+            logger.info("Updated migration %s (%d modified)", migration_id, result.modified_count)
+            return True
+        except errors.OperationFailure as exc:
+            logger.error("Failed to update migration %s: %s", migration_id, exc)
+            return False
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def now_iso(self) -> str:
+        """Return the current UTC time as an ISO-8601 string."""
+        return datetime.utcnow().isoformat()
+
+    def set(self, field: str, value: Any) -> Dict[str, Any]:
+        """Convenience: build a {"$set": {field: value}} document."""
+        return {"$set": {field: value}}
+
+    @property
+    def db(self) -> Database:
+        """Expose the raw Database for advanced queries."""
+        return self._db
+
+    def close(self) -> None:
+        """Close the MongoDB connection."""
+        self._client.close()
+        logger.info("MongoDB connection closed")

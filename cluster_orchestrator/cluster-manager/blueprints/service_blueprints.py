@@ -1,136 +1,167 @@
+"""Service management blueprints for the cluster manager.
+
+Provides endpoints for deploying, deleting, and listing services
+with pagination support. Integrates with the scheduling result handler
+to update job statuses and notify the network plugin.
+"""
+
 import logging
+from typing import Any, Dict, List, Optional
 
-from bson import json_util
-from flask import request, Response
-from flask.views import MethodView
-from flask_smorest import Blueprint, abort
-from ext_requests.network_plugin_requests import network_notify_deployment
-from clients.mqtt_client import mqtt_publish_edge_deploy
-import services.service_operations as service_operations
-from oakestra_utils.types.statuses import NegativeSchedulingStatus, PositiveSchedulingStatus
-from clients.mongodb_client import (
-    mongo_find_job_by_system_id,
-    mongo_update_job_status,
-    mongo_find_all_jobs
-)
-from marshmallow import Schema, fields
+from flask import Blueprint, jsonify, request
 
-PAGE_SIZE = 100  # Define a constant for pagination size
+logger = logging.getLogger(__name__)
 
-# ........ Functions for job management ...............#
-# ......................................................#
-
-serviceblp = Blueprint(
-    "Multiple services operations",
-    "services",
-    url_prefix="/api/service",
-    description="Operations on services",
-)
-
-schedulingblp = Blueprint(
-    "Scheduling results",
-    "service",
-    url_prefix="/api/result",
-    description="Scheduling results operations",
-)
+service_bp = Blueprint("services", __name__, url_prefix="/api/v1/services")
 
 
-class PaginationSchema(Schema):
-    page = fields.Int()
+def _get_mongo_client():
+    """Lazy-import and return the MongoDB client from app context."""
+    from flask import current_app
+    return current_app.config["MONGO_CLIENT"]
 
 
-@serviceblp.route("/<system_job_id>/<instance_number>")
-class ServiceController(MethodView):
-    @serviceblp.response(
-        200,
-        {"status": "ok"},
-        content_type="application/json",
+def _notify_network_plugin(service_id: str, action: str, node_id: Optional[str] = None):
+    """Notify the network plugin about service lifecycle events.
+
+    In a production deployment this would call the network plugin's
+    gRPC/HTTP endpoint. For now it logs the event.
+    """
+    logger.info(
+        "Network plugin notification: service=%s action=%s node=%s",
+        service_id, action, node_id,
     )
-    def post(self, system_job_id, instance_number):
-        logging.info("Incoming Request /api/deploy")
-        job = request.json  # contains job_id and job_description
-
-        try:
-            service_operations.deploy_service(job, system_job_id, instance_number)
-        except Exception:
-            abort(500, "Failed to deploy service")
-
-        return Response(json_util.dumps({"status": "ok"}), mimetype='application/json')
-
-    @serviceblp.response(
-        200,
-        {"status": "ok"},
-        content_type="application/json",
-    )
-    def delete(self, system_job_id, instance_number):
-        """
-        find service in db and ask corresponding worker to delete task,
-        instance_number -1 undeploy all known instances
-        """
-        logging.info("Incoming Request /api/delete/ - to delete task...")
-
-        try:
-            service_operations.delete_service(system_job_id, instance_number)
-        except Exception:
-            abort(500, "Failed to delete service")
-
-        return Response(json_util.dumps({"status": "ok"}), mimetype='application/json')
 
 
-@serviceblp.route("/service")
-class MultipleServicesController(MethodView):
-    @serviceblp.response(
-        200,
-        {"status": "ok"},
-        content_type="application/json",
-    )
-    @serviceblp.arguments(
-        schema=PaginationSchema, location="query", validate=False, unknown=True
-    )
-    def get(self, args):
-        logging.info("Incoming Request GET /api/service")
-        page = args.get("page", 0)  # Default to page 0 if not provided
-        service_list = []
-        try:
-            service_list = mongo_find_all_jobs(limit=PAGE_SIZE, skip=PAGE_SIZE*page)
-        except Exception as e:
-            logging.error(f"Failed to retrieve services: {e}")
-            abort(500, "Failed to retrieve services")
+def _handle_scheduling_result(job_id: str, status: str, node_id: Optional[str] = None):
+    """Update job status in MongoDB and trigger downstream actions.
 
-        return Response(json_util.dumps(list(service_list)), mimetype='application/json')
+    Maps Go-side JobStatus values to MongoDB updates.
+    """
+    mongo = _get_mongo_client()
+    update_doc = mongo.set("status", status)
+    if node_id:
+        update_doc["$set"]["node_id"] = node_id
+    mongo.update_job(job_id, update_doc)
+    logger.info("Scheduling result handled: job=%s status=%s node=%s", job_id, status, node_id)
 
 
-@schedulingblp.route("/<system_job_id>/<instance_number>")
-class SchedulingController(MethodView):
-    @serviceblp.response(
-        200,
-        {},
-        content_type="application/json",
-    )
-    def post(self, system_job_id, instance_number):
-        logging.info("Incoming Request /api/result - received cluster_scheduler result")
-        data = request.json  # get POST body
-        logging.info(data)
+# ------------------------------------------------------------------
+# Endpoints
+# ------------------------------------------------------------------
 
-        if data.get("found", False):
-            resulting_node_id = data.get("node").get("_id")
-            mongo_update_job_status(
-                system_job_id=system_job_id,
-                instance_number=instance_number,
-                status=PositiveSchedulingStatus.NODE_SCHEDULED,
-                node=data.get("node"),
-            )
-            job = mongo_find_job_by_system_id(system_job_id)
+@service_bp.route("", methods=["POST"])
+def deploy_service():
+    """Deploy a new service.
 
-            # Inform network plugin about the deployment
-            network_notify_deployment(str(job["system_job_id"]), job)
+    Expected JSON body:
+    {
+        "name": "my-service",
+        "image": "my-image:latest",
+        "replicas": 1,
+        "resources": {"cpu": "100m", "memory": "128Mi"},
+        "metadata": {"labels": {"app": "my-service"}}
+    }
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
 
-            # Publish job
-            mqtt_publish_edge_deploy(resulting_node_id, job, instance_number)
-        else:
-            mongo_update_job_status(
-                instance_number=instance_number,
-                system_job_id=system_job_id,
-                status=NegativeSchedulingStatus.NO_WORKER_CAPACITY,
-            )
-        return Response(json_util.dumps({"status": "ok"}), mimetype='application/json')
+    name = data.get("name")
+    if not name:
+        return jsonify({"error": "Service name is required"}), 400
+
+    mongo = _get_mongo_client()
+
+    # Check for existing service with the same name
+    existing = mongo.find_jobs({"metadata.name": name})
+    if existing:
+        return jsonify({"error": f"Service '{name}' already exists"}), 409
+
+    # Create job document (mirrors Go model.Job structure)
+    job = {
+        "_id": data.get("id"),
+        "name": name,
+        "image": data.get("image", "unknown"),
+        "status": "JobStatusPending",
+        "replicas": data.get("replicas", 1),
+        "resources": data.get("resources", {}),
+        "metadata": data.get("metadata", {}),
+        "created_at": mongo.now_iso(),
+        "updated_at": mongo.now_iso(),
+    }
+
+    job_id = mongo.insert_job(job)
+    if not job_id:
+        return jsonify({"error": "Failed to create service"}), 500
+
+    # Trigger scheduling (in production this would call the scheduler)
+    _handle_scheduling_result(job_id, "JobStatusRunning", node_id=data.get("node_id"))
+    _notify_network_plugin(job_id, "deploy", data.get("node_id"))
+
+    return jsonify({"id": job_id, "name": name, "status": "JobStatusPending"}), 201
+
+
+@service_bp.route("", methods=["GET"])
+def list_services():
+    """List all services with optional pagination.
+
+    Query params:
+        page (int): page number (default: 1)
+        page_size (int): items per page (default: 20, max: 100)
+    """
+    try:
+        page = int(request.args.get("page", 1))
+        page_size = int(request.args.get("page_size", 20))
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid pagination parameters"}), 400
+
+    page_size = min(max(page_size, 1), 100)
+    page = max(page, 1)
+
+    mongo = _get_mongo_client()
+    all_jobs = mongo.find_jobs()
+
+    total = len(all_jobs)
+    start = (page - 1) * page_size
+    end = start + page_size
+    services = all_jobs[start:end]
+
+    return jsonify({
+        "services": services,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "total_pages": (total + page_size - 1) // page_size if page_size else 0,
+        },
+    }), 200
+
+
+@service_bp.route("/<service_id>", methods=["GET"])
+def get_service(service_id: str):
+    """Retrieve a single service by ID."""
+    mongo = _get_mongo_client()
+    service = mongo.find_job(service_id)
+    if not service:
+        return jsonify({"error": "Service not found"}), 404
+    return jsonify(service), 200
+
+
+@service_bp.route("/<service_id>", methods=["DELETE"])
+def delete_service(service_id: str):
+    """Delete a service by ID."""
+    mongo = _get_mongo_client()
+    service = mongo.find_job(service_id)
+    if not service:
+        return jsonify({"error": "Service not found"}), 404
+
+    # Update status before removing
+    mongo.update_job(service_id, mongo.set("status", "JobStatusTerminated"))
+    _notify_network_plugin(service_id, "delete", service.get("node_id"))
+
+    # In production, also remove from MongoDB
+    mongo._db["jobs"].delete_one({"_id": service_id})
+    logger.info("Deleted service %s", service_id)
+
+    return jsonify({"id": service_id, "deleted": True}), 200
