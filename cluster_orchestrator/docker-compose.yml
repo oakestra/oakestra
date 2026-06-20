@@ -7,6 +7,11 @@ x-logging:
     max-file: "1"
     tag: "{{.Name}}"
 
+x-cluster-log-labels: &cluster-log-labels
+  oakestra.logging.collector: cluster
+  oakestra.cluster.id: ${CLUSTER_NAME}
+  logging_jobname: containerlogs
+
 services:
 
   # MQTT 
@@ -14,6 +19,7 @@ services:
     image: eclipse-mosquitto:2.0
     hostname: mqtt
     container_name: mqtt
+    labels: *cluster-log-labels
     expose:
       - "10003"
     ports:
@@ -34,6 +40,7 @@ services:
     image: mongo:8.0
     container_name: cluster_mongo
     hostname: cluster_mongo
+    labels: *cluster-log-labels
     ports:
       - "10107:10107"
     volumes:
@@ -45,6 +52,7 @@ services:
     image: mongo:8.0
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
+    labels: *cluster-log-labels
     ports:
       - "10108:10108"
     volumes:
@@ -56,9 +64,7 @@ services:
   cluster_service_manager:
     image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
     container_name: cluster_service_manager
-    labels:
-      logging: "cluster_promtail"
-      logging_jobname: "containerlogs"
+    labels: *cluster-log-labels
     hostname: cluster_service_manager
     expose:
       - "10110"
@@ -89,9 +95,7 @@ services:
       args:
         - LIB_BRANCH=${LIB_BRANCH:-develop}
     container_name: cluster_manager
-    labels:
-      logging: "cluster_promtail"
-      logging_jobname: "containerlogs"
+    labels: *cluster-log-labels
     hostname: cluster_manager
     expose:
       - "10100"
@@ -129,9 +133,7 @@ services:
     image: cluster_scheduler
     build: ../scheduler/
     container_name: cluster_scheduler
-    labels:
-      logging: "cluster_promtail"
-      logging_jobname: "containerlogs"
+    labels: *cluster-log-labels
     hostname: cluster_scheduler
     expose:
       - "10105"
@@ -154,9 +156,7 @@ services:
     image: resource_abstractor
     build: ../resource-abstractor/
     container_name: cluster_resource_abstractor
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *cluster-log-labels
     hostname: cluster_resource_abstractor
     expose:
       - "11012"
@@ -176,6 +176,7 @@ services:
     image: redis
     hostname: cluster_redis
     container_name: cluster_redis
+    labels: *cluster-log-labels
     ports:
       - "6479:6479"
     command: redis-server --requirepass clusterRedis --port 6479
@@ -185,6 +186,7 @@ services:
     image: prom/prometheus
     container_name: prometheus
     hostname: prometheus
+    labels: *cluster-log-labels
     ports:
       - 10009:9090
     volumes:
@@ -195,11 +197,12 @@ services:
       - cluster_manager
 
 
-  # Observability stack (Grafana, Loki, Promtail)
+  # Observability stack (Grafana, Loki, Alloy)
   cluster_grafana:
     image: grafana/grafana
     hostname: cluster_grafana
     container_name: cluster_grafana
+    labels: *cluster-log-labels
     ports:
       - 3001:3000
     volumes:
@@ -211,24 +214,31 @@ services:
   cluster_loki:
     container_name: cluster_loki
     image: grafana/loki:2.9.2
+    labels: *cluster-log-labels
     ports:
-      - 3101:3100
+      - 3101:3101
     volumes:
       - ./config/loki.yml:/etc/loki/config.yml
       - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
+      - cluster_loki_data:/tmp
 
     command: -config.file=/etc/loki/config.yml
     logging: *default-logging
-  cluster_promtail:
-    image: grafana/promtail:2.9.2
-    container_name: cluster_promtail
+  cluster_alloy:
+    image: grafana/alloy:v1.17.0
+    container_name: cluster_alloy
+    labels: *cluster-log-labels
+    environment:
+      - ALLOY_COLLECTOR_ID=cluster
+      - LOKI_URL=http://cluster_loki:3101/loki/api/v1/push
     volumes:
-      - ./config/promtail.yml:/etc/promtail/config.yml
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: 
-      - '--config.file=/etc/promtail/config.yml'
-      - '--server.enable-runtime-reload'
+      - ./config/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - cluster_alloy_data:/var/lib/alloy/data
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
     depends_on:
       - cluster_loki
     logging: *default-logging
@@ -238,9 +248,7 @@ services:
     image: addons_manager
     container_name: cluster_addons_manager
     build: ../addons_engine/addons-manager/
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *cluster-log-labels
     environment:
       - ADDONS_MANAGER_PORT=11201
       - ADDONS_ENGINE_MONGO_URL=cluster_mongo
@@ -256,9 +264,7 @@ services:
     image: addons_monitor
     container_name: cluster_addons_monitor
     build: ../addons_engine/addons-monitor/
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *cluster-log-labels
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -274,9 +280,7 @@ services:
     image: addons_dashboard
     container_name: cluster_addons_dashboard
     build: ../addons_engine/addons-dashboard/
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *cluster-log-labels
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -297,6 +301,10 @@ volumes:
   mongodb_cluster_data:
     driver: local
   mongodb_cluster_net_data:
+    driver: local
+  cluster_alloy_data:
+    driver: local
+  cluster_loki_data:
     driver: local
 
 networks:

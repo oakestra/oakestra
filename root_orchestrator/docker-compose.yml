@@ -5,6 +5,11 @@ x-logging: &default-logging
     max-file: "1"
     tag: "{{.Name}}"
 
+x-root-log-labels: &root-log-labels
+  oakestra.logging.collector: root
+  oakestra.cluster.id: root
+  logging_jobname: containerlogs
+
 services:
 
   # System Manager REST API of Root Orchestrator
@@ -16,9 +21,7 @@ services:
         - LIB_BRANCH=${LIB_BRANCH:-develop}
     hostname: system_manager
     container_name: system_manager
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *root-log-labels
     expose:
       - "10000"
       - "50052"
@@ -50,6 +53,7 @@ services:
     image: mongo:8.0
     container_name: mongo
     hostname: mongo
+    labels: *root-log-labels
     ports:
       - "10007:10007"
     expose:
@@ -63,6 +67,7 @@ services:
     image: mongo:8.0
     container_name: mongo_net
     hostname: mongo_net
+    labels: *root-log-labels
     ports:
       - "10008:10008"
     volumes:
@@ -73,9 +78,7 @@ services:
   root_service_manager:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
     container_name: root_service_manager
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *root-log-labels
     hostname: root_service_manager
     expose:
       - "10099"
@@ -98,6 +101,7 @@ services:
     image: redis
     hostname: root_redis
     container_name: root_redis
+    labels: *root-log-labels
     ports:
       - "6379:6379"
     command: redis-server --requirepass rootRedis
@@ -107,6 +111,7 @@ services:
     image: grafana/grafana
     hostname: grafana
     container_name: grafana
+    labels: *root-log-labels
     ports:
       - 3000:3000
     volumes:
@@ -118,26 +123,33 @@ services:
   loki:
     container_name: loki
     image: grafana/loki:2.9.2
+    labels: *root-log-labels
     ports:
       - 3100:3100
     volumes:
       - ./config/loki.yml:/etc/loki/config.yml
       - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
+      - loki_data:/tmp
 
     command: -config.file=/etc/loki/config.yml
     #logging:
     #  driver: none
 
-  promtail:
-    image: grafana/promtail:2.9.2
-    container_name: promtail
+  alloy:
+    image: grafana/alloy:v1.17.0
+    container_name: alloy
+    labels: *root-log-labels
+    environment:
+      - ALLOY_COLLECTOR_ID=root
+      - LOKI_URL=http://loki:3100/loki/api/v1/push
     volumes:
-      - ./config/promtail.yml:/etc/promtail/config.yml
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
     command:
-      - '--config.file=/etc/promtail/config.yml'
-      - '--server.enable-runtime-reload'
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
     depends_on:
       - loki
     logging: *default-logging
@@ -148,6 +160,7 @@ services:
       - '80:80'
     restart: unless-stopped
     container_name: oakestra-frontend-container
+    labels: *root-log-labels
     environment:
       - API_ADDRESS=${SYSTEM_MANAGER_URL}:10000
 
@@ -156,9 +169,7 @@ services:
     image: root_scheduler
     build: ../scheduler/
     container_name: root_scheduler
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *root-log-labels
     hostname: root_scheduler
     expose:
       - "10004"
@@ -181,9 +192,7 @@ services:
     image: resource_abstractor
     build: ../resource-abstractor/
     container_name: root_resource_abstractor
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *root-log-labels
     hostname: root_resource_abstractor
     expose:
       - "11011"
@@ -202,6 +211,7 @@ services:
     build: jwt-generator/
     container_name: jwt_generator
     hostname: jwt_generator
+    labels: *root-log-labels
     expose:
       - "10011"
     ports:
@@ -215,9 +225,7 @@ services:
     image: addons_manager
     container_name: root_addons_manager
     build: ../addons_engine/addons-manager/
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *root-log-labels
     environment:
       - ADDONS_MANAGER_PORT=11101
       - ADDONS_ENGINE_MONGO_URL=mongo
@@ -234,9 +242,7 @@ services:
     image: addons_monitor
     container_name: root_addons_monitor
     build: ../addons_engine/addons-monitor/
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *root-log-labels
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -251,9 +257,7 @@ services:
     image: addons_dashboard
     container_name: root_addons_dashboard
     build: ../addons_engine/addons-dashboard/
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *root-log-labels
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -276,9 +280,7 @@ services:
     image: marketplace_manager
     build: ../addons_marketplace/marketplace-manager/
     container_name: marketplace_manager
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *root-log-labels
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     expose:
@@ -297,6 +299,10 @@ volumes:
   mongodb_data:
     driver: local
   mongodb_net_data:
+    driver: local
+  alloy_data:
+    driver: local
+  loki_data:
     driver: local
 
 networks:

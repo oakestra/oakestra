@@ -6,6 +6,21 @@ x-logging:
     max-file: "1"
     tag: "{{.Name}}"
 
+x-root-log-labels: &root-log-labels
+  oakestra.logging.collector: one-doc
+  oakestra.cluster.id: root
+  logging_jobname: rootlogs
+
+x-cluster-log-labels: &cluster-log-labels
+  oakestra.logging.collector: one-doc
+  oakestra.cluster.id: ${CLUSTER_NAME}
+  logging_jobname: clusterlogs
+
+x-shared-log-labels: &shared-log-labels
+  oakestra.logging.collector: one-doc
+  oakestra.cluster.id: one-doc
+  logging_jobname: containerlogs
+
 services:
 
   dashboard:
@@ -15,6 +30,7 @@ services:
       - '80:80'
     restart: unless-stopped
     container_name: oaekstra-frontend-container
+    labels: *root-log-labels
     environment:
       - API_ADDRESS=${SYSTEM_MANAGER_URL}:10000
 
@@ -24,9 +40,7 @@ services:
     pull_policy: always
     hostname: system_manager
     container_name: system_manager
-    labels:
-      logging: "promtail"
-      logging_jobname: "rootlogs"
+    labels: *root-log-labels
     expose:
       - "10000"
       - "50052"
@@ -61,6 +75,7 @@ services:
     pull_policy: always
     container_name: mongo
     hostname: mongo
+    labels: *root-log-labels
     ports:
       - "10007:10007"
     expose:
@@ -75,8 +90,7 @@ services:
     pull_policy: always
     container_name: mongo_net
     hostname: mongo_net
-    labels:
-      logging: "promtail"
+    labels: *root-log-labels
     ports:
       - "10008:10008"
     expose:
@@ -93,9 +107,7 @@ services:
     pull_policy: always
     container_name: root_service_manager
     hostname: root_service_manager
-    labels:
-      logging: "promtail"
-      logging_jobname: "rootlogs"  
+    labels: *root-log-labels
     expose:
       - "10099"
     ports:
@@ -120,6 +132,7 @@ services:
     pull_policy: always
     hostname: root_redis
     container_name: root_redis
+    labels: *root-log-labels
     expose:
       - "6379"
     command: redis-server --requirepass rootRedis
@@ -129,9 +142,7 @@ services:
     pull_policy: always
     container_name: root_resource_abstractor
     hostname: root_resource_abstractor
-    labels:
-      logging: "promtail"
-      logging_jobname: "rootlogs"
+    labels: *root-log-labels
     expose:
       - "11011"
     ports:
@@ -148,9 +159,7 @@ services:
     image: ghcr.io/oakestra/oakestra/jwt-generator:latest
     container_name: jwt_generator
     hostname: jwt_generator
-    labels:
-      logging: "promtail"
-      logging_jobname: "rootlogs"
+    labels: *root-log-labels
     expose:
       - "10011"
     ports:
@@ -166,9 +175,7 @@ services:
     pull_policy: always
     container_name: root_scheduler
     hostname: root_scheduler
-    labels:
-      logging: "promtail"
-      logging_jobname: "rootlogs"
+    labels: *root-log-labels
     expose:
       - "10004"
     environment:
@@ -190,6 +197,7 @@ services:
     pull_policy: always
     hostname: mqtt
     container_name: mqtt
+    labels: *cluster-log-labels
     expose:
       - "10003"
     ports:
@@ -211,6 +219,7 @@ services:
     pull_policy: always
     container_name: cluster_mongo
     hostname: cluster_mongo
+    labels: *cluster-log-labels
     ports:
       - "10107:10107"
     expose:
@@ -225,6 +234,7 @@ services:
     pull_policy: always
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
+    labels: *cluster-log-labels
     ports:
       - "10108:10108"
     expose:
@@ -240,9 +250,7 @@ services:
     pull_policy: always
     container_name: cluster_service_manager
     hostname: cluster_service_manager
-    labels:
-      logging: "promtail"
-      logging_jobname: "clusterlogs"
+    labels: *cluster-log-labels
     expose:
       - "10110"
     ports:
@@ -277,9 +285,7 @@ services:
       - "10100:10100"
       - "10101:10101"
     command: bash -c 'sleep 15; python cluster_manager.py'
-    labels:
-      logging: "promtail"
-      logging_jobname: "clusterlogs"
+    labels: *cluster-log-labels
     environment:
       - MY_PORT=10100
       - LOG_LEVEL=INFO
@@ -313,9 +319,7 @@ services:
     pull_policy: always
     container_name: cluster_scheduler
     hostname: cluster_scheduler
-    labels:
-      logging: "promtail"
-      logging_jobname: "clusterlogs"
+    labels: *cluster-log-labels
     expose:
       - "10105"
     environment:
@@ -335,9 +339,7 @@ services:
     image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
     pull_policy: always
     container_name: cluster_resource_abstractor
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *cluster-log-labels
     hostname: cluster_resource_abstractor
     expose:
       - "11012"
@@ -358,6 +360,7 @@ services:
     pull_policy: always
     hostname: cluster_redis
     container_name: cluster_redis
+    labels: *cluster-log-labels
     expose:
       - "6479"
     command: redis-server --requirepass clusterRedis --port 6479
@@ -368,6 +371,7 @@ services:
     pull_policy: always
     container_name: prometheus
     hostname: prometheus
+    labels: *cluster-log-labels
     volumes:
       - ./prometheus/:/etc/prometheus/
     command:
@@ -376,12 +380,13 @@ services:
       - cluster_manager
   
 
-  # Observability Stack (Promtail, Loki, Grafana)
+  # Shared 1-DOC observability stack (Alloy, Loki, Grafana)
   grafana:
     image: grafana/grafana
     pull_policy: always
     hostname: grafana
     container_name: grafana
+    labels: *shared-log-labels
     ports:
       - 3000:3000
     volumes:
@@ -395,26 +400,33 @@ services:
     container_name: loki
     pull_policy: always
     image: grafana/loki:2.9.2
+    labels: *shared-log-labels
     ports:
       - 3100:3100
     volumes:
       - ./config/loki.yml:/etc/loki/config.yml
       - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
+      - loki_data:/tmp
 
     command: -config.file=/etc/loki/config.yml
 
 
-  promtail:
-    image: grafana/promtail:2.9.2
+  alloy:
+    image: grafana/alloy:v1.17.0
     pull_policy: always
-    container_name: promtail
+    container_name: alloy
+    labels: *shared-log-labels
+    environment:
+      - ALLOY_COLLECTOR_ID=one-doc
+      - LOKI_URL=http://loki:3100/loki/api/v1/push
     volumes:
-      - ./config/promtail.yml:/etc/promtail/config.yml
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: 
-      - '--config.file=/etc/promtail/config.yml'
-      - '--server.enable-runtime-reload'
+      - ./config/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
     depends_on:
       - loki
     logging: *default-logging
@@ -424,9 +436,7 @@ services:
   addons_manager:
     image: ghcr.io/oakestra/oakestra/addons_manager:latest
     container_name: addons_manager
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *root-log-labels
     environment:
       - ADDONS_MANAGER_PORT=11101
       - ADDONS_ENGINE_MONGO_URL=mongo
@@ -443,9 +453,7 @@ services:
     image: ghcr.io/oakestra/oakestra/addons_monitor:latest
     container_name: addons_monitor
     build: ../addons_engine/addons-monitor/
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *root-log-labels
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: bash -c 'sleep 10; python addons_monitor.py'
@@ -459,9 +467,7 @@ services:
   marketplace_manager:
     image: ghcr.io/oakestra/oakestra/marketplace_manager:latest
     container_name: marketplace_manager
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *root-log-labels
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     expose:
@@ -479,9 +485,7 @@ services:
   addons_dashboard:
     image: ghcr.io/oakestra/oakestra/addons_dashboard:latest
     container_name: addons_dashboard
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
+    labels: *root-log-labels
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -507,6 +511,10 @@ volumes:
   mongodb_cluster_data:
     driver: local
   mongodb_cluster_net_data:
+    driver: local
+  alloy_data:
+    driver: local
+  loki_data:
     driver: local
   
 

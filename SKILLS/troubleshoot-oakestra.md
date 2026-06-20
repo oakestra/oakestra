@@ -117,13 +117,16 @@ For each container, check:
 - `Created` (never started) → dependency failed to start
 
 **Expected containers for Root Orchestrator:**
-`system_manager`, `mongo`, `mongo_net`, `root_service_manager`, `root_redis`, `root_scheduler`, `root_resource_abstractor`, `jwt_generator`, `grafana`, `loki`, `promtail`, `oakestra-frontend-container`
+`system_manager`, `mongo`, `mongo_net`, `root_service_manager`, `root_redis`, `root_scheduler`, `root_resource_abstractor`, `jwt_generator`, `grafana`, `loki`, `alloy`, `oakestra-frontend-container`
 
 Optional root containers (if addons enabled):
-`addons_manager`, `addons_monitor`, `addons_dashboard`, `marketplace_manager`
+`root_addons_manager`, `root_addons_monitor`, `root_addons_dashboard`, `marketplace_manager`
 
 **Expected containers for Cluster Orchestrator:**
-`mqtt`, `cluster_mongo`, `cluster_mongo_net`, `cluster_service_manager`, `cluster_manager`, `cluster_scheduler`, `cluster_resource_abstractor`, `cluster_redis`, `prometheus`, `cluster_grafana`, `cluster_loki`, `cluster_promtail`
+`mqtt`, `cluster_mongo`, `cluster_mongo_net`, `cluster_service_manager`, `cluster_manager`, `cluster_scheduler`, `cluster_resource_abstractor`, `cluster_redis`, `prometheus`, `cluster_grafana`, `cluster_loki`, `cluster_alloy`
+
+Optional cluster containers (if addons enabled):
+`cluster_addons_manager`, `cluster_addons_monitor`, `cluster_addons_dashboard`
 
 ### 2.2 Restart Loop Detection
 
@@ -142,7 +145,7 @@ Pull logs for ALL running or recently exited containers. Focus on errors, traceb
 
 ```bash
 # Get logs for all oakestra containers (last 200 lines each)
-for name in $(docker ps -a --format "{{.Names}}" | grep -E "system_manager|mongo|root_service_manager|root_redis|root_scheduler|root_resource_abstractor|jwt_generator|cluster_manager|cluster_service_manager|cluster_mongo|cluster_redis|cluster_scheduler|cluster_resource_abstractor|mqtt|addons|marketplace|promtail|loki|grafana"); do
+for name in $(docker ps -a --format "{{.Names}}" | grep -E "system_manager|mongo|root_service_manager|root_redis|root_scheduler|root_resource_abstractor|jwt_generator|cluster_manager|cluster_service_manager|cluster_mongo|cluster_redis|cluster_scheduler|cluster_resource_abstractor|mqtt|addons|marketplace|alloy|loki|grafana"); do
   echo "===== LOGS: $name ====="
   docker logs --tail 100 "$name" 2>&1 | grep -iE "error|exception|traceback|failed|refused|timeout|fatal|panic|warn" || echo "(no errors in last 100 lines)"
 done
@@ -169,6 +172,8 @@ docker logs <exited_container_name> 2>&1 | tail -50
 | `CLUSTER_ADDRESS env var is not set` (cluster_manager log) | Missing env var — cluster cannot advertise its address to root |
 | `cluster_address is required` (system_manager log) | Cluster connected via gRPC but sent empty `cluster_address` |
 | `Cluster reachability probe failed` / `cluster not reachable at` (system_manager log) | Root cannot reach `http://CLUSTER_ADDRESS:10100/api/cluster/status` — wrong IP, firewall, or cluster_manager not up |
+| `permission denied` opening `/var/run/docker.sock` (Alloy log) | Alloy cannot discover/read container logs; inspect the socket mount and host permissions |
+| `loki.write` connection refused | The local Loki is not ready, or `LOKI_URL` is wrong for the selected network mode |
 
 ---
 
@@ -563,9 +568,13 @@ curl -s --connect-timeout 3 "http://localhost:3101/ready" 2>/dev/null || echo "C
 # Prometheus (cluster)
 curl -s --connect-timeout 3 "http://localhost:10009/-/healthy" 2>/dev/null || echo "Prometheus not responding on :10009"
 
-# Check promtail can access docker socket
-docker exec promtail ls /var/run/docker.sock 2>/dev/null || echo "WARN: promtail cannot access docker socket (logs won't be collected)"
-docker exec cluster_promtail ls /var/run/docker.sock 2>/dev/null || echo "WARN: cluster_promtail cannot access docker socket"
+# Confirm each Alloy has the read-only Docker socket and persistent state volume
+docker inspect alloy --format '{{range .Mounts}}{{println .Destination "RW=" .RW}}{{end}}' 2>/dev/null || echo "Root/1-DOC Alloy is not running"
+docker inspect cluster_alloy --format '{{range .Mounts}}{{println .Destination "RW=" .RW}}{{end}}' 2>/dev/null || echo "Cluster Alloy is not running"
+
+# Confirm the required labels have reached the local Loki
+curl -s --connect-timeout 3 "http://localhost:3100/loki/api/v1/labels" 2>/dev/null | grep -E 'container|compose_service|cluster_id' || echo "Root Loki labels are missing"
+curl -s --connect-timeout 3 "http://localhost:3101/loki/api/v1/labels" 2>/dev/null | grep -E 'container|compose_service|cluster_id' || echo "Cluster Loki labels are missing"
 ```
 
 ---
@@ -710,7 +719,7 @@ sudo kill -9 <pid>
 ### Fix: Stale containers from previous deployment
 ```bash
 # Stop and remove all oakestra containers
-docker ps -a --format "{{.Names}}" | grep -E "system_manager|mongo|root_|cluster_|jwt_|grafana|loki|promtail|mqtt|addons|marketplace|oakestra" | xargs -r docker rm -f
+docker ps -a --format "{{.Names}}" | grep -E "system_manager|mongo|root_|cluster_|jwt_|grafana|loki|alloy|mqtt|addons|marketplace|oakestra" | xargs -r docker rm -f
 # Then restart
 ```
 
