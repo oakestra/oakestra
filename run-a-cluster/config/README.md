@@ -4,30 +4,36 @@
 ## Monitoring Services
 The proposed toolset for logs and alerting is based on:
 - [Loki](https://grafana.com/docs/loki/latest/) is a highly-available, multi-tenant log aggregation system inspired by Prometheus. It focuses on logs instead of metrics, collecting logs via push instead of pull.
-- [Promtail](https://grafana.com/docs/loki/latest/send-data/promtail/) is an agent deployed on machines running applications to ship local logs to a Grafana Loki instance. It supports native log scraping from existing Docker containers.
+- [Grafana Alloy](https://grafana.com/docs/alloy/latest/) is the collection agent. It discovers Docker containers, reads stdout/stderr, processes log lines, and forwards them to the local Loki instance.
 - [Grafana](https://grafana.com/docs/) is already in use for cluster metrics. Use Loki as data source for both logs and alerting.
 
 The high-level composition of the services is here sketched:
+
+> **Migration notice:** This historical diagram still labels the collector as
+> Promtail. Grafana deprecated Promtail and ended support on March 2, 2026. In
+> this repository, the Promtail component shown below has been replaced by
+> Grafana Alloy; the rest of the high-level log flow remains the same.
+
 ![observe-arch](https://i.postimg.cc/vBZWQVLR/arch1.png)
-*Promtail* perform service discovery based on labels: the root components are tagged with `logging=promtail`, while the cluster component are retrieved by the Promtail at cluster level by the label `logging=cluster_promtail`. 
+*Grafana Alloy* performs Docker service discovery. Root and Cluster Compose services carry explicit collector-scope labels, preventing co-located collectors from ingesting each other's containers. The original diagram remains conceptually valid, with Alloy replacing the Promtail collector.
 
 At **root level**, each service is specified by:
 - `loki:3100`
-- `promtail`
+- `alloy`
 - `grafana:3000`
 
 At **cluster level**, each service is specified by:
 - `cluster_loki:3101`
-- `cluster_promtail`
+- `cluster_alloy`
 - `cluster_grafana:3001`
 
 Both two levels use different volumes for the configuration of the three services, respectively in [root_orchestrator/config/](../config/) and [cluster_orchestrator/config/](../../cluster_orchestrator/config/). Both `config` folders are structured as:
 ```bash
 ├── alerts
-│   └── rules.yml           #Loki rules for alerting based on Promtail ingested logs
+│   └── rules.yml           #Loki rules for alerting based on Alloy-ingested logs
 ├── grafana-datasources.yml # Loki datasource setup
 ├── loki.yml                # Ingestion, storage config
-├── promtail.yml            # Service discovery & static logs configuration
+├── config.alloy            # Alloy Docker discovery, processing, and Loki output
 ```
 The configuration files can also be written at runtime but the volumes link allows a faster startup and configuration reload at runtime.
 
@@ -37,62 +43,86 @@ The configuration files can also be written at runtime but the volumes link allo
  ```bash
  docker-compose -f docker-compose.yml -f override-no-observe.yml up --build
  ```
-> ⚠️ 
-> Both `loki` and `cluster_loki` logging output has been inhibited to avoid **output verbosity**. This configuration can be changed both at root/cluster level by modifying [docker-compose.yml](../docker-compose.yml) and removing:
-```yaml
-    logging:
-      driver: none
-```
+> ⚠️
+> Alloy positions and Loki data use named volumes. Regular container recreation preserves them; `docker compose down -v` deliberately removes the stored state and log history.
+
 ### Monitoring granularity configuration
-The [promtail.yml](./promtail.yml) configuration is analyzed in each section, starting from the scraper source:
-```yaml
-- job_name: root_logs_scraper
-  docker_sd_configs: # Service discovery
-  - host: unix:///var/run/docker.sock
-    refresh_interval: 5s
-    filters:
-    - name: label
-      values: ["logging=promtail"]
+The native Alloy configuration is stored in [config.alloy](./config.alloy).
+`discovery.docker` asks the Docker daemon for containers carrying the
+collector-scope label assigned by Compose:
+
+```alloy
+discovery.docker "oakestra" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+
+  filter {
+    name   = "label"
+    values = ["oakestra.logging.collector=" + sys.env("ALLOY_COLLECTOR_ID")]
+  }
+}
 ```
-The default labels for service discovery target `docker_sd_config` has been identified as the following:
-```yaml
-  - source_labels: ['__meta_docker_container_name']
-    regex: '/(.*)'
-    target_label: 'container_name'
-  - source_labels: ['__meta_docker_container_log_stream']
-    target_label: 'logstream'
-  - source_labels: ['__meta_docker_container_label_logging_jobname']
-    target_label: 'job'
+
+`discovery.relabel` derives the labels required for log filtering:
+
+- `container`: readable Docker container name;
+- `compose_service`: stable Docker Compose service key;
+- `cluster_id`: `root` at Root level and the configured `CLUSTER_NAME` at
+  Cluster level.
+
+The assigned Oakestra database ID is not available when Compose creates the
+containers, so `cluster_id` intentionally uses the configured Cluster name.
+The compatibility labels `container_name`, `job`, and `logstream` remain
+available for the existing dashboards and alert rules.
+
+`loki.source.docker` reads both stdout and stderr through the Docker API and
+forwards them to the processing pipeline:
+
+```alloy
+loki.source.docker "oakestra" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.oakestra.output
+  relabel_rules    = discovery.relabel.docker_stream.rules
+  refresh_interval = "5s"
+  forward_to       = [loki.process.oakestra.receiver]
+}
 ```
-More base labels can be extracted based on the [docker_sd_configs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#docker_sd_config) configuration. A careful evaluation of which labels are useful and which values can assume must be priorly done to avoid perfromance degradation at ingestion level.
+
+More Docker metadata is available, but labels such as full container IDs,
+container IPs, and source-line numbers are deliberately not indexed to avoid
+unnecessary label churn and cardinality.
 
 #### Labels granularity
-The specified [logging format](#logging) (*later specified*) allows also to exploit automatic filtering and extraction of labels by using [Prontail Pipeline stages](https://grafana.com/docs/loki/latest/send-data/promtail/stages/), here specified:
-```yaml
-  pipeline_stages:
-  - json: # Stage for `json` log format
-       expressions:
-         level: level
-         service: service
-         container_id: container_id
-         filename: filename
-         context: context
-  - regex: #Stage for `default` log format
-      expression: '(?P<level>[^\[\]]+?)(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (?P<service>[^:]+) (?P<file>[^:]+):(?P<line>\d+)\] (?P<message>.+)'
-  - labels:
-      level:
-      service:
-      file:
-  - logfmt: #Stage for `log` log format
-      mapping:
-        level:
-        service:
-        container_id:
-        file:
+The existing JSON and Oakestra default-format extraction is preserved with
+Alloy's `loki.process` stages:
+
+```alloy
+loki.process "oakestra" {
+  stage.json {
+    expressions = {
+      level    = "level",
+      service  = "service",
+      filename = "filename",
+    }
+  }
+
+  stage.regex {
+    expression = "(?P<level>[^\\[\\]]+?)(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}) (?P<service>[^:]+) (?P<file>[^:]+):(?P<line>\\d+)\\] (?P<message>.+)"
+  }
+
+  stage.labels {
+    values = {
+      level   = "",
+      service = "",
+    }
+  }
+}
 ```
-If one of the format matches the ingested log lines, the specified list of labels are extracted. 
-The [rules.yml](./alerts/rules.yml) contains the rules expression in [LogQL](https://grafana.com/docs/loki/latest/query/) based on the ***labels*** extracted by Promtail.
-Both the **service discovery** and **pipeline stages** labels can also be used in [rules.yml](./alerts/rules.yml) to detect specific conditions on extracted labels.
+
+If a supported format matches, `level` and `service` are extracted as
+labels. Raw lines are still collected when neither parser matches.
+
+The [rules.yml](./alerts/rules.yml) contains LogQL rules based on the labels extracted by Alloy. Both discovery and processing labels can be used for alert conditions.
 
 ## Logging 
 This section briefly provides an overview of logging approach implemented at the moment of this PR. Most of the format and guidelines here specified are assumed be valid for all services both at root and cluster level.
@@ -164,7 +194,7 @@ level=INFO ts=1651254607.000176 service=system_manager file=wsgi.py file_no=639 
   - Remove print, redirect stdout/stderr, aggregate/disaggregate information log where needed
 - Test OpenTelemetry toolset for format-agnostic observability, relieving Oakestra of the weight of the grafana stack:
   - [Automatic Instrumentation](https://opentelemetry.io/docs/languages/python/automatic/example/), may allow to traces with zero-code 
-  - [Collector/Exporter](https://opentelemetry-python.readthedocs.io/en/latest/exporter/otlp/otlp.html): the idea is have OpenTelemetry Collector as log exporter + Promtail for ingestion. Interesting is [automatic instrumentation](https://opentelemetry.io/docs/languages/python/automatic/example/) of Python services.
+  - [Collector/Exporter](https://opentelemetry-python.readthedocs.io/en/latest/exporter/otlp/otlp.html): the idea is have OpenTelemetry Collector as log exporter + Alloy for ingestion. Interesting is [automatic instrumentation](https://opentelemetry.io/docs/languages/python/automatic/example/) of Python services.
 
 ## Explore resources
 - [e2e LGTM stack](https://levelup.gitconnected.com/setting-up-an-end-to-end-monitoring-system-with-grafana-stack-lgtm-1c534ebdf17b)
