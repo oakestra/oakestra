@@ -47,8 +47,10 @@ services:
     #logging:
     #  driver: none
 
-  promtail:
+  alloy:
     network_mode: host
+    environment:
+      - LOKI_URL=http://127.0.0.1:3100/loki/api/v1/push
 
   dashboard:
     network_mode: host
