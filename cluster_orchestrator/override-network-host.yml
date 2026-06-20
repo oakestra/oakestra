@@ -72,7 +72,7 @@ services:
     network_mode: host
 
 
-  # Observability stack (Grafana, Loki, Promtail)
+  # Observability stack (Grafana, Loki, Alloy)
   cluster_grafana:
     network_mode: host
 
@@ -80,8 +80,10 @@ services:
     network_mode: host
 
   
-  cluster_promtail:
+  cluster_alloy:
     network_mode: host
+    environment:
+      - LOKI_URL=http://127.0.0.1:3101/loki/api/v1/push
   
   cluster_addons_manager:
     network_mode: host
