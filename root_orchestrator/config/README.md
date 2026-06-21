@@ -46,6 +46,8 @@ The configuration files can also be written at runtime but the volumes link allo
 > ⚠️
 > Alloy positions and Loki data use named volumes. Regular container recreation preserves them; `docker compose down -v` deliberately removes the stored state and log history.
 
+Alloy's diagnostic UI is available only from the orchestrator host at `http://127.0.0.1:12345`. It shows the component graph, health, and discovered targets. The loopback binding avoids exposing diagnostic and profiling endpoints to the deployment network.
+
 ### Monitoring granularity configuration
 The native Alloy configuration is stored in [config.alloy](./config.alloy).
 `discovery.docker` asks the Docker daemon for containers carrying the
@@ -70,13 +72,9 @@ discovery.docker "oakestra" {
 - `cluster_id`: `root` at Root level and the configured `CLUSTER_NAME` at
   Cluster level.
 
-The assigned Oakestra database ID is not available when Compose creates the
-containers, so `cluster_id` intentionally uses the configured Cluster name.
-The compatibility labels `container_name`, `job`, and `logstream` remain
-available for the existing dashboards and alert rules.
+The assigned Oakestra database ID is not available when Compose creates the containers, so `cluster_id` intentionally uses the configured Cluster name. The compatibility labels `container_name`, `job`, and `logstream` remain available for the existing dashboards and alert rules.
 
-`loki.source.docker` reads both stdout and stderr through the Docker API and
-forwards them to the processing pipeline:
+`loki.source.docker` reads both stdout and stderr through the Docker API and forwards them to the processing pipeline:
 
 ```alloy
 loki.source.docker "oakestra" {
@@ -88,13 +86,10 @@ loki.source.docker "oakestra" {
 }
 ```
 
-More Docker metadata is available, but labels such as full container IDs,
-container IPs, and source-line numbers are deliberately not indexed to avoid
-unnecessary label churn and cardinality.
+More Docker metadata is available, but labels such as full container IDs, container IPs, and source-line numbers are deliberately not indexed to avoid unnecessary label churn and cardinality.
 
 #### Labels granularity
-The existing JSON and Oakestra default-format extraction is preserved with
-Alloy's `loki.process` stages:
+The existing JSON and Oakestra default-format extraction is preserved with Alloy's `loki.process` stages:
 
 ```alloy
 loki.process "oakestra" {
@@ -119,8 +114,7 @@ loki.process "oakestra" {
 }
 ```
 
-If a supported format matches, `level` and `service` are extracted as
-labels. Raw lines are still collected when neither parser matches.
+If a supported format matches, `level` and `service` are extracted as labels. Raw lines are still collected when neither parser matches.
 
 ### Alarming
 The [rules.yml](./alerts/rules.yml) contains the rules expression in [LogQL](https://grafana.com/docs/loki/latest/query/) based on the ***labels*** extracted by Alloy.
