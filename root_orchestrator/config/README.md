@@ -34,6 +34,8 @@ Both two levels use different volumes for the configuration of the three service
 ├── grafana-datasources.yml # Loki datasource setup
 ├── loki.yml                # Ingestion, storage config
 ├── config.alloy            # Alloy Docker discovery, processing, and Loki output
+└── dashboards
+    └── logs-dashboard.json # Provisioned orchestrator logs dashboard
 ```
 The configuration files can also be written at runtime but the volumes link allows a faster startup and configuration reload at runtime.
 
@@ -47,6 +49,23 @@ The configuration files can also be written at runtime but the volumes link allo
 > Alloy positions and Loki data use named volumes. Regular container recreation preserves them; `docker compose down -v` deliberately removes the stored state and log history.
 
 Alloy's diagnostic UI is available only from the orchestrator host at `http://127.0.0.1:12345`. It shows the component graph, health, and discovered targets. The loopback binding avoids exposing diagnostic and profiling endpoints to the deployment network.
+
+## Provisioned logs dashboard
+
+Grafana automatically loads the version-controlled [`[Oakestra] Orchestrator Logs`](./dashboards/logs-dashboard.json) dashboard from the mounted `config/dashboards` directory. Open Root Grafana on port `3000` and select the dashboard from **Dashboards**.
+
+The dashboard provides:
+
+- **Cluster** and **Component** selectors populated from Loki's `cluster_id` and `compose_service` labels;
+- a **Level** selector that searches both full severity names and Oakestra's compact forms such as `[I...]` and `[E...]`;
+- a case-insensitive **Search (regex)** field;
+- an **Extra LogQL pipeline** field for stages such as `|= "worker"`, `| json`, or `| logfmt`;
+- Grafana's dashboard time picker, with presets from 5 minutes to 30 days, for scrolling back through retained logs;
+- links for jumping between the managers, schedulers, resource abstractors, service managers, and observability components.
+
+The severity selector searches the log line instead of requiring a `level` label because not every orchestrator component currently emits the same structured format. Raw lines remain searchable. For unrestricted LogQL editing, open the log panel menu and choose **Explore**; the current query and time range are carried into Grafana Explore.
+
+Root Grafana queries only the Root-local Loki. A standalone Cluster provides the same dashboard through its own Grafana and Loki instead of sending logs to the Root.
 
 ### Monitoring granularity configuration
 The native Alloy configuration is stored in [config.alloy](./config.alloy).
