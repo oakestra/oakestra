@@ -1,0 +1,308 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Browse and query logs from Oakestra Root, Cluster, and 1-DOC orchestrator components.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "gridPos": {
+        "h": 6,
+        "w": 15,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "### Query controls\n- **Cluster** and **Component** select indexed Loki labels. Both support multi-select and **All**.\n- **Level** performs a case-insensitive line filter so it also works for services that do not emit structured `level` labels.\n- **Search (regex)** filters message text. Use `.*` to match everything.\n- **Extra LogQL pipeline** accepts optional pipeline stages, for example `|= \"worker\"`, `| json`, or `| logfmt | duration > 1s`.\n- Use the time picker in the top-right to scroll back through retained logs. Open the logs panel menu and choose **Explore** to edit the complete LogQL query interactively.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "12.0.0",
+      "title": "How to query logs",
+      "type": "text"
+    },
+    {
+      "gridPos": {
+        "h": 6,
+        "w": 9,
+        "x": 15,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "### Component links\n**Root:** [System Manager](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-compose_service=system_manager) → [Scheduler](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-compose_service=root_scheduler) → [Resource Abstractor](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-compose_service=root_resource_abstractor&var-compose_service=resource_abstractor) → [Service Manager](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-compose_service=root_service_manager)\n\n**Cluster:** [Cluster Manager](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-compose_service=cluster_manager) → [Scheduler](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-compose_service=cluster_scheduler) → [Resource Abstractor](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-compose_service=cluster_resource_abstractor) → [Service Manager](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-compose_service=cluster_service_manager)\n\n**Observability:** [Alloy](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-compose_service=alloy&var-compose_service=cluster_alloy) · [Loki](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-compose_service=loki&var-compose_service=cluster_loki) · [Grafana](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-compose_service=grafana&var-compose_service=cluster_grafana)",
+        "mode": "markdown"
+      },
+      "pluginVersion": "12.0.0",
+      "title": "Quick navigation",
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
+      "description": "LogQL selector and pipeline are built from the dashboard controls. Use the panel menu to open this query in Explore.",
+      "gridPos": {
+        "h": 22,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 3,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "editorMode": "code",
+          "expr": "{cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${compose_service:regex}\"} |~ `(?i)(${level_filter:raw})` |~ `(?i)(${search:raw})` ${logql_pipeline:raw}",
+          "maxLines": 1000,
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Orchestrator logs — ${cluster_id:text} / ${compose_service:text}",
+      "type": "logs"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": [
+    "Loki",
+    "logging",
+    "oakestra",
+    "orchestrator"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allValue": ".+",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "Loki"
+        },
+        "definition": "label_values(cluster_id)",
+        "description": "Root or configured Cluster name from the cluster_id Loki label.",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Cluster",
+        "multi": true,
+        "name": "cluster_id",
+        "options": [],
+        "query": {
+          "label": "cluster_id",
+          "refId": "LokiVariableQueryEditor-Cluster",
+          "stream": "",
+          "type": 1
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".+",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "Loki"
+        },
+        "definition": "label_values({cluster_id=~\"${cluster_id:regex}\"}, compose_service)",
+        "description": "Docker Compose services available for the selected Cluster values.",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Component",
+        "multi": true,
+        "name": "compose_service",
+        "options": [],
+        "query": {
+          "label": "compose_service",
+          "refId": "LokiVariableQueryEditor-Component",
+          "stream": "{cluster_id=~\"${cluster_id:regex}\"}",
+          "type": 1
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": ".*"
+        },
+        "description": "Case-insensitive severity search across structured and unstructured lines.",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Level",
+        "multi": false,
+        "name": "level_filter",
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": ".*"
+          },
+          {
+            "selected": false,
+            "text": "Debug",
+            "value": "(\\bDEBUG\\b|\\[D[0-9]{4}-)"
+          },
+          {
+            "selected": false,
+            "text": "Info",
+            "value": "(\\bINFO\\b|\\[I[0-9]{4}-)"
+          },
+          {
+            "selected": false,
+            "text": "Warning",
+            "value": "(\\b(WARN|WARNING)\\b|\\[W[0-9]{4}-)"
+          },
+          {
+            "selected": false,
+            "text": "Error",
+            "value": "(\\b(ERROR|ERR|FATAL|PANIC|EXCEPTION|TRACEBACK|CRITICAL)\\b|\\[(E|F)[0-9]{4}-)"
+          }
+        ],
+        "query": "All : .*, Debug : (\\bDEBUG\\b|\\[D[0-9]{4}-), Info : (\\bINFO\\b|\\[I[0-9]{4}-), Warning : (\\b(WARN|WARNING)\\b|\\[W[0-9]{4}-), Error : (\\b(ERROR|ERR|FATAL|PANIC|EXCEPTION|TRACEBACK|CRITICAL)\\b|\\[(E|F)[0-9]{4}-)",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": ".*",
+          "value": ".*"
+        },
+        "description": "Case-insensitive RE2 expression matched against each log line.",
+        "hide": 0,
+        "label": "Search (regex)",
+        "name": "search",
+        "options": [
+          {
+            "selected": true,
+            "text": ".*",
+            "value": ".*"
+          }
+        ],
+        "query": ".*",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "",
+          "value": ""
+        },
+        "description": "Optional raw LogQL pipeline appended after the built-in filters, for example |= \"worker\" or | json.",
+        "hide": 0,
+        "label": "Extra LogQL pipeline",
+        "name": "logql_pipeline",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h"
+    ],
+    "time_options": [
+      "5m",
+      "15m",
+      "1h",
+      "6h",
+      "12h",
+      "24h",
+      "2d",
+      "7d",
+      "30d"
+    ]
+  },
+  "timezone": "browser",
+  "title": "[Oakestra] Orchestrator Logs",
+  "uid": "oakestra-logs",
+  "version": 1,
+  "weekStart": ""
+}
