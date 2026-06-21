@@ -34,6 +34,8 @@ Both two levels use different volumes for the configuration of the three service
 ├── grafana-datasources.yml # Loki datasource setup
 ├── loki.yml                # Ingestion, storage config
 ├── config.alloy            # Alloy Docker discovery, processing, and Loki output
+└── dashboards
+    └── logs-dashboard.json # Provisioned orchestrator logs dashboard
 ```
 The configuration files can also be written at runtime but the volumes link allows a faster startup and configuration reload at runtime.
 
@@ -47,6 +49,12 @@ The configuration files can also be written at runtime but the volumes link allo
 > Alloy positions and Loki data use named volumes. Regular container recreation preserves them; `docker compose down -v` deliberately removes the stored state and log history.
 
 Alloy's diagnostic UI is available only from the orchestrator host at `http://127.0.0.1:12345`. It shows the component graph, health, and discovered targets. The loopback binding avoids exposing diagnostic and profiling endpoints to the deployment network.
+
+## Provisioned logs dashboard
+
+Grafana automatically loads the version-controlled [`[Oakestra] Orchestrator Logs`](./dashboards/logs-dashboard.json) dashboard from the mounted `config/dashboards` directory. Open Grafana on port `3000` and select it from **Dashboards**.
+
+The dashboard provides Cluster and Component label selectors, severity and case-insensitive regex filters, the standard Grafana time picker, component shortcuts, and an **Extra LogQL pipeline** field for stages such as `|= "worker"` or `| json`. Use the log panel's **Explore** action for unrestricted LogQL editing. In a 1-DOC deployment, the selectors distinguish Root and Cluster streams stored in the shared local Loki. In a Root-only deployment, the same dashboard displays only Root-local logs.
 
 ### Monitoring granularity configuration
 The native Alloy configuration is stored in [config.alloy](./config.alloy). `discovery.docker` asks the Docker daemon for containers carrying the collector-scope label assigned by Compose:
