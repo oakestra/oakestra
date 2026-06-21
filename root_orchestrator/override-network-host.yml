@@ -51,6 +51,11 @@ services:
     network_mode: host
     environment:
       - LOKI_URL=http://127.0.0.1:3100/loki/api/v1/push
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=127.0.0.1:12345
+      - /etc/alloy/config.alloy
 
   dashboard:
     network_mode: host
