@@ -231,6 +231,8 @@ services:
     image: grafana/alloy:v1.17.0
     container_name: cluster_alloy
     labels: *cluster-log-labels
+    ports:
+      - 127.0.0.1:12346:12345
     environment:
       - ALLOY_COLLECTOR_ID=cluster
       - LOKI_URL=http://cluster_loki:3101/loki/api/v1/push
@@ -241,6 +243,7 @@ services:
     command:
       - run
       - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
       - /etc/alloy/config.alloy
     depends_on:
       - cluster_loki

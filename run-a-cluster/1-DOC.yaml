@@ -418,6 +418,8 @@ services:
     pull_policy: always
     container_name: alloy
     labels: *shared-log-labels
+    ports:
+      - 127.0.0.1:12345:12345
     environment:
       - ALLOY_COLLECTOR_ID=one-doc
       - LOKI_URL=http://loki:3100/loki/api/v1/push
@@ -428,6 +430,7 @@ services:
     command:
       - run
       - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
       - /etc/alloy/config.alloy
     depends_on:
       - loki
