@@ -12,8 +12,10 @@ NETWORK_COMPONENT_PORT = os.environ.get("CLUSTER_SERVICE_MANAGER_GATEWAY_PORT") 
 )
 
 
-SYSTEM_MANAGER_ADDR = (
-    os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_GRPC_PORT")
+# `or ""` keeps this module importable in contexts where the gRPC env vars
+# are absent (e.g. the cluster_cert_bootstrap one-shot container).
+SYSTEM_MANAGER_ADDR = (os.environ.get("SYSTEM_MANAGER_URL") or "") + ":" + (
+    os.environ.get("SYSTEM_MANAGER_GRPC_PORT") or ""
 )
 GRPC_REQUEST_TIMEOUT = 120
 
@@ -38,6 +40,21 @@ def mtls_enabled() -> bool:
     )
 
 
+# What to verify the root gateway's *server* certificate against:
+#   ""       -> the internal root CA file (default; works with the fallback
+#               gateway cert, which is signed by the internal CA)
+#   "system" -> the system trust store (root uses a BYO public cert)
+#   <path>   -> a custom CA bundle
+ROOT_GATEWAY_TRUST = os.environ.get("ROOT_GATEWAY_TRUST", "")
+
+
+def root_gateway_verify():
+    """Value for requests' `verify=` when talking to the root gateway."""
+    if ROOT_GATEWAY_TRUST == "system":
+        return True
+    return ROOT_GATEWAY_TRUST or ROOT_CA_FILE
+
+
 # Intermediate CA material. Cluster CA must be signed against root CA
 CLUSTER_CA_CERT_FILE = os.environ.get("CLUSTER_CA_CERT_FILE")
 CLUSTER_CA_KEY_FILE = os.environ.get("CLUSTER_CA_KEY_FILE")
@@ -48,3 +65,25 @@ def cluster_ca_enabled() -> bool:
         path and os.path.isfile(path)
         for path in (CLUSTER_CA_CERT_FILE, CLUSTER_CA_KEY_FILE, ROOT_CA_FILE)
     )
+
+
+MQTT_CONTAINER_NAME = os.environ.get("MQTT_CONTAINER_NAME", "mqtt")
+
+
+def reload_mqtt() -> bool:
+    """Send SIGHUP to the mosquitto broker so it reloads its TLS certificates.
+
+    Mosquitto 2.0 re-reads cert files on SIGHUP without dropping connections.
+    """
+    try:
+        import docker
+
+        client = docker.from_env()
+        container = client.containers.get(MQTT_CONTAINER_NAME)
+        container.kill("HUP")
+        return True
+    except Exception as e:
+        import logging
+
+        logging.getLogger("cluster_manager").error("Could not reload MQTT broker: %s", e)
+        return False

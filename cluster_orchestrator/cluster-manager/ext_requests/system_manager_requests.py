@@ -36,7 +36,7 @@ def _build_session() -> requests.Session:
     session = requests.Session()
     if config.mtls_enabled():
         session.cert = (config.CLUSTER_CERT_FILE, config.CLUSTER_KEY_FILE)
-        session.verify = config.ROOT_CA_FILE
+        session.verify = config.root_gateway_verify()
     return session
 
 

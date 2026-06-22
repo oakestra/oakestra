@@ -1,6 +1,8 @@
 _format_version: "3.0"
 
-# Internal gateway mapping - only traffic from localhost permitted
+# Internal gateway mapping — the proxy listens on 127.0.0.1 only, so every
+# route here is implicitly trusted (loopback). There is no mTLS-vs-public
+# split: no route carries a client-certificate guard.
 services:
   # Cluster Manager API
   - name: cluster_manager_api

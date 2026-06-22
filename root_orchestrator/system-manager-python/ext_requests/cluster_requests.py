@@ -13,6 +13,12 @@ ROOT_CERT_FILE = os.environ.get("ROOT_CERT_FILE")
 ROOT_KEY_FILE = os.environ.get("ROOT_KEY_FILE")
 ROOT_CA_FILE = os.environ.get("ROOT_CA_FILE")
 
+# What to verify the cluster gateway's *server* cert against:
+#   ""       -> the internal root CA (default; works with the fallback gateway cert)
+#   "system" -> the system trust store (clusters using BYO public certs)
+#   <path>   -> a custom CA bundle
+CLUSTER_GATEWAY_TRUST = os.environ.get("CLUSTER_GATEWAY_TRUST", "")
+
 
 def _mtls_enabled() -> bool:
     return all(
@@ -20,11 +26,17 @@ def _mtls_enabled() -> bool:
     )
 
 
+def _gateway_verify():
+    if CLUSTER_GATEWAY_TRUST == "system":
+        return True
+    return CLUSTER_GATEWAY_TRUST or ROOT_CA_FILE
+
+
 def _build_session() -> requests.Session:
     session = requests.Session()
     if _mtls_enabled():
         session.cert = (ROOT_CERT_FILE, ROOT_KEY_FILE)
-        session.verify = ROOT_CA_FILE
+        session.verify = _gateway_verify()
     return session
 
 
@@ -35,6 +47,21 @@ def _cluster_base(cluster) -> str:
     scheme = "https" if _mtls_enabled() else "http"
     return (
         scheme + "://" + sanitize(cluster.get("ip"), request=True) + ":" + str(cluster.get("port"))
+    )
+
+
+def cluster_push_worker_token(cluster, token_hash, expiry_date_iso):
+    """Deliver a one-time worker registration token hash to a cluster.
+
+    Goes through the cluster's external gateway over mTLS (the route is
+    guarded by the gateway's client-certificate check). Returns the response;
+    raises requests.exceptions.RequestException on connection errors.
+    """
+    cluster_addr = _cluster_base(cluster) + "/api/certs/worker-token"
+    return _session.post(
+        cluster_addr,
+        json={"token_hash": token_hash, "expiry_date": expiry_date_iso},
+        timeout=10,
     )
 
 

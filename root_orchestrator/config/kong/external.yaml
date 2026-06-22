@@ -1,6 +1,22 @@
 _format_version: "3.0"
 
+# The external gateway terminates TLS with a *publicly trusted* server cert
+# (/certs/public/, BYO) and verifies client certificates against the internal
+# root CA only *optionally* (KONG_NGINX_PROXY_SSL_VERIFY_CLIENT=optional).
+#
+# Routes are grouped into two sections:
+#   * mTLS Routes  — machine-to-machine (cluster -> root). Each carries a
+#                    pre-function guard that rejects requests without a
+#                    verified client certificate. The first guarded route
+#                    defines the YAML anchor (&mtls_guard); the rest reuse it.
+#   * Public Routes — user-facing (no client cert; app-level JWT auth),
+#                     token-gated bootstrap, and explicitly blocked endpoints.
+
 services:
+  # ======================================================================
+  # mTLS Routes (client certificate required)
+  # ======================================================================
+
   # External gRPC entrypoint for cluster registration.
   - name: system_manager_grpc_external
     url: grpc://system_manager:50052
@@ -11,8 +27,80 @@ services:
           - grpcs
         paths:
           - /clusterRegistration.register_cluster
+        plugins:
+          - &mtls_guard
+            name: pre-function
+            config:
+              access:
+                - |
+                  if ngx.var.ssl_client_verify ~= "SUCCESS" then
+                    return kong.response.exit(401, { message = "mTLS client certificate required" })
+                  end
 
-  # Public API surface for end users.
+  # Machine-to-machine REST surface (cluster_manager -> system_manager).
+  - name: system_manager_m2m
+    url: http://system_manager:10000
+    routes:
+      # Aggregated resource/job updates pushed by cluster managers.
+      - name: sm-information-m2m
+        paths:
+          - /api/information
+        methods: [GET, POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+
+  # Machine-to-machine surface for the root networking plugin
+  # (cluster_service_manager -> root_service_manager).
+  - name: root_service_manager_m2m
+    url: http://root_service_manager:10099
+    routes:
+      - name: rsm-subnet-m2m
+        paths:
+          - /api/net/subnet
+          - /api/net/subnet/
+        methods: [GET, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+      - name: rsm-service-m2m
+        paths:
+          - /api/net/service
+          - /api/net/service/
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+      - name: rsm-service-deploy-status-m2m
+        paths:
+          - /api/net/service/net_deploy_status
+          - /api/net/service/net_deploy_status/
+        methods: [GET, POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+      - name: rsm-job-update-m2m
+        paths:
+          - /api/net/job/update
+          - /api/net/job/update/
+        methods: [POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+      - name: rsm-interest-m2m
+        paths:
+          - /api/net/interest
+          - /api/net/interest/
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+
+  # ======================================================================
+  # Public Routes (no client certificate)
+  # ======================================================================
+
+  # Public API surface for end users (JWT-protected in the application).
   - name: system_manager_public
     url: http://system_manager:10000
     routes:
@@ -25,6 +113,13 @@ services:
       - name: sm-auth-refresh
         paths:
           - /api/auth/refresh
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+      # JWT + Admin role enforced in the application.
+      - name: sm-auth-register
+        paths:
+          - /api/auth/register
         methods: [POST, OPTIONS]
         strip_path: false
 
@@ -71,25 +166,58 @@ services:
         methods: [GET, POST, PUT, OPTIONS]
         strip_path: false
 
+      # JWT + Admin role enforced in the application.
+      - name: sm-users-public
+        paths:
+          - /api/users
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+        strip_path: false
+
+      # JWT + Admin role enforced in the application.
+      - name: sm-organization-public
+        paths:
+          - /api/organization
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+        strip_path: false
+
+      # One-time registration token minting (JWT + role in the application).
+      - name: sm-tokens-public
+        paths:
+          - /api/tokens
+        methods: [POST, OPTIONS]
+        strip_path: false
+
       - name: sm-docs-public
         paths:
           - /api/docs
         methods: [GET, OPTIONS]
         strip_path: false
 
-      - name: sm-information-public
-        paths:
-          - /api/information
-        methods: [GET, POST, OPTIONS]
-        strip_path: false
-
+      # CA download — workers/clusters bootstrap trust from here.
       - name: sm-ca-cert-public
         paths:
           - /api/certs/ca.crt
         methods: [GET, OPTIONS]
         strip_path: false
 
-  # Public root service manager endpoint.
+      # Token-gated cluster certificate bootstrap (no JWT, no client cert —
+      # the one-time token is the credential).
+      - name: sm-cluster-bootstrap-public
+        protocols: [https]
+        paths:
+          - /api/certs/cluster-bootstrap
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+      # CA lifecycle administration (JWT + Admin role in the application):
+      # /reset, /renew-server, /sign, /generate-client, /generate-cluster.
+      - name: sm-certs-admin-public
+        paths:
+          - /api/certs
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+  # Root service manager: user-facing read endpoint.
   - name: root_service_manager_public
     url: http://root_service_manager:10099
     routes:
@@ -99,38 +227,8 @@ services:
           - /api/pubnet/service/netinfo/
         methods: [GET, OPTIONS]
         strip_path: false
-      - name: rsm-subnet-public
-        paths:
-          - /api/net/subnet
-          - /api/net/subnet/
-        methods: [GET, OPTIONS]
-        strip_path: false
-      - name: rsm-service-public
-        paths:
-          - /api/net/service
-          - /api/net/service/
-        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
-        strip_path: false
-      - name: rsm-service-deploy-status-public
-        paths:
-          - /api/net/service/net_deploy_status
-          - /api/net/service/net_deploy_status/
-        methods: [GET, POST, OPTIONS]
-        strip_path: false
-      - name: rsm-job-update-public
-        paths:
-          - /api/net/job/update
-          - /api/net/job/update/
-        methods: [POST, OPTIONS]
-        strip_path: false
-      - name: rsm-interest-public
-        paths:
-          - /api/net/interest
-          - /api/net/interest/
-        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
-        strip_path: false
 
-  # Public addons marketplace endpoint.
+  # Public addons marketplace endpoint (catalogue browsing stays exposed).
   - name: marketplace_manager_public
     url: http://marketplace_manager:11102
     routes:
@@ -141,19 +239,23 @@ services:
         methods: [GET, OPTIONS]
         strip_path: false
 
-  # Explicitly block admin-only endpoints on the external gateway.
+  # Dashboard SPA.
+  - name: dashboard_public
+    url: http://dashboard_external:80
+    routes:
+      - name: dashboard-public-routes
+        paths:
+          - "~/^$"
+          - /
+        methods: [GET, HEAD, OPTIONS]
+        strip_path: false
+
+  # Explicitly block endpoints that must not be reachable externally:
+  # the scheduler callback (/api/result, no app-level auth), grafana, and a
+  # fallback deny for any unlisted API path.
   - name: system_manager_admin_block
     url: http://system_manager:10000
     routes:
-      - name: sm-block-register
-        paths:
-          - /api/auth/register
-        methods: [POST, OPTIONS]
-        strip_path: false
-      - name: sm-block-all-users
-        paths:
-          - /api/users
-        strip_path: false
       # Fallback deny: any API path not matched by the explicit prefix allowlist above stays blocked.
       - name: sm-block-api-fallback
         paths:
@@ -170,17 +272,7 @@ services:
       - name: request-termination
         config:
           status_code: 403
-          message: "Admin endpoints are not exposed on the external gateway"
-
-  - name: dashboard_public
-    url: http://dashboard_external:80
-    routes:
-      - name: dashboard-public-routes
-        paths:
-          - "~/^$"
-          - /
-        methods: [GET, HEAD, OPTIONS]
-        strip_path: false
+          message: "This endpoint is not exposed on the external gateway"
 
 plugins:
   - name: cors

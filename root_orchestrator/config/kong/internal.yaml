@@ -1,6 +1,9 @@
 _format_version: "3.0"
 
-# Internal Gateway mapping - only traffic from localhost permitted
+# Internal Gateway mapping — the proxy listens on 127.0.0.1 only, so every
+# route here is implicitly trusted (loopback). There is no mTLS-vs-public
+# split: no route carries a client-certificate guard, and admin-only
+# endpoints that are blocked on the external gateway are reachable here.
 services:
 
   # System Manager (admin + user API)
@@ -37,6 +40,8 @@ services:
           - /api/user/
           - /api/users
           - /api/users/
+          - /api/tokens
+          - /api/tokens/
           - /api/docs
           - /docs
           - /docs/

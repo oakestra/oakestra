@@ -139,6 +139,18 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | `override-mosquitto-auth.yml` | Enables MQTT authentication (workers need credentials). |
 | `override-images-only.yml` | Forces pre-built images, skips local builds. |
 | `override-local-service-manager.yml` | Builds service manager from local source. |
+| `override-gateway.yml` | Puts Kong gateways in front of root/cluster (see below). |
+
+### Gateway mode (`override-gateway.yml`) — TLS, PKI, and registration tokens
+
+With the gateway override enabled on both levels, all external traffic flows through Kong:
+
+- **External gateways**: root `kong_external` (:443), cluster `cluster_kong_external` (:8443 TLS / :8080 cleartext). They present a **publicly trusted server cert** from `<certs>/public/fullchain.pem|privkey.pem` — a *separate certificate system* from the internal mTLS CA. It is **bring-your-own and required** (no auto-generated fallback): `cert_init` (root) / `cluster_cert_bootstrap` (cluster) fail fast if it's missing, and only normalise its ownership so the kong user can read it. Client certs are verified against the internal root CA with `ssl_verify_client optional`.
+- **Internal gateways**: loopback-only admin access — root `kong_internal` (127.0.0.1:8000), cluster `cluster_kong_internal` (127.0.0.1:8888). Plain HTTP.
+- **Two-tier internal PKI** (separate from the public gateway cert): root CA → per-cluster intermediate CA (pathlen=0) → worker leaf certs. Machine-to-machine routes (cluster registration gRPC, `/api/information`, `/api/net/*`, `/api/node/register`, `/api/service` on the cluster, `/api/certs/worker-token`) are guarded by a Kong `pre-function` plugin requiring a verified client cert. User routes need no client cert (app-level JWT).
+- **One-time registration tokens** (single-use, default TTL 10 min, PBKDF2-hashed at rest): an Admin/Infrastructure_Provider mints them at the root (`POST /api/tokens/cluster`, `POST /api/tokens/worker`). Cluster certs are redeemed at `POST /api/certs/cluster-bootstrap` (root, by `cluster_cert_bootstrap` using `CLUSTER_REGISTRATION_TOKEN`); worker certs at `POST /api/certs/worker-bootstrap` (cluster, by `NodeEngine --token`). Worker token hashes are pushed root→cluster over mTLS and validated locally by the cluster.
+- **Trust knobs** — how an internal component verifies a peer gateway's public server cert: `ROOT_GATEWAY_TRUST` (cluster/worker side) / `CLUSTER_GATEWAY_TRUST` (root side). Default `system` (OS trust store, for a publicly trusted BYO cert); a path = custom CA bundle (privately issued cert); `insecure` = skip (bootstrap only). They do **not** affect the client cert presented (always internal-CA) or MQTT trust (always the internal root CA).
+- Addons management and Grafana stay internal-only; everything else on the root API is exposed externally behind JWT.
 
 ---
 

@@ -4,14 +4,45 @@ services:
   # * from within the docker network
   # * via the gateways
 
-  mqtt:
+  # One-shot: provision the cluster's certificate material before anything
+  # that needs it starts. If the mTLS files are missing it redeems
+  # CLUSTER_REGISTRATION_TOKEN against the root's /api/certs/cluster-bootstrap
+  # endpoint. It also requires a BYO public gateway cert in /certs/public/
+  # (a separate certificate system from the internal mTLS CA) and fails fast
+  # if absent.
+  cluster_cert_bootstrap:
+    image: cluster_manager
+    build:
+      context: cluster-manager/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
+    container_name: cluster_cert_bootstrap
+    entrypoint: ["/bin/sh", "/docker-update-ca-trust.sh"]
+    command: ["python", "bootstrap_certificates.py"]
+    environment:
+      - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
+      - SYSTEM_MANAGER_PORT=${SYSTEM_MANAGER_GATEWAY_HTTPS_PORT:-443}
+      - CLUSTER_NAME=${CLUSTER_NAME}
+      - CLUSTER_IP=${CLUSTER_IP}
+      - CLUSTER_REGISTRATION_TOKEN=${CLUSTER_REGISTRATION_TOKEN:-}
+      - ROOT_GATEWAY_TRUST=${ROOT_GATEWAY_TRUST:-system}
     volumes:
-      - ${CLUSTER_CERT_PATH:-./certs}:/certs:ro
+      - ${CLUSTER_CERT_PATH:-./config/certs}:/certs
+      - ./config/docker-update-ca-trust.sh:/docker-update-ca-trust.sh:ro
+    restart: "no"
+
+  mqtt:
+    user: root
+    volumes:
+      - ${CLUSTER_CERT_PATH:-./config/certs}:/certs:ro
       - ./mosquitto/mosquitto-tls.conf:/mosquitto/config/mosquitto.conf
     ports: !override
       - "8883:8883"
     expose:
       - "8883"
+    depends_on:
+      cluster_cert_bootstrap:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "mosquitto_sub -p 8883 --cafile /certs/ca.crt --cert /certs/cluster.crt --key /certs/cluster.key -t '$$SYS/#' -C 1 -W 3 || exit 1"]
       interval: 10s
@@ -25,10 +56,16 @@ services:
     ports: !reset []
 
   cluster_manager:
+    entrypoint: ["/bin/sh", "/docker-update-ca-trust.sh"]
+    command: ["sh", "-c", "exec gunicorn --bind [::]:$$MY_PORT cluster_manager:app"]
     volumes:
-      - ${CLUSTER_CERT_PATH:-./certs}:/certs:ro
+      - ${CLUSTER_CERT_PATH:-./config/certs}:/certs
+      - ./config/docker-update-ca-trust.sh:/docker-update-ca-trust.sh:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
+      - CLUSTER_REGISTRATION_TOKEN=${CLUSTER_REGISTRATION_TOKEN:-}
       - SYSTEM_MANAGER_PORT=${SYSTEM_MANAGER_GATEWAY_HTTPS_PORT:-443}
+      - MQTT_CONTAINER_NAME=${MQTT_CONTAINER_NAME:-mqtt}
       - SYSTEM_MANAGER_GRPC_PORT=${SYSTEM_MANAGER_GATEWAY_HTTPS_PORT:-443}
       - SYSTEM_MANAGER_USE_TLS=true
       - CLUSTER_SERVICE_MANAGER_GATEWAY_PORT=${CLUSTER_GATEWAY_PORT:-8443}
@@ -39,13 +76,20 @@ services:
       - ROOT_CA_FILE=/certs/ca.crt
       - CLUSTER_CA_CERT_FILE=/certs/cluster_ca.crt
       - CLUSTER_CA_KEY_FILE=/certs/cluster_ca.key
+      - ROOT_GATEWAY_TRUST=${ROOT_GATEWAY_TRUST:-system}
       - MQTT_CERT=/certs
       - MQTT_BROKER_PORT=8883
+    depends_on:
+      cluster_cert_bootstrap:
+        condition: service_completed_successfully
     ports: !reset []
 
   cluster_service_manager:
+    entrypoint: ["/bin/sh", "/docker-update-ca-trust.sh"]
+    command: ["python", "service_manager.py"]
     volumes:
-      - ${CLUSTER_CERT_PATH:-./certs}:/certs:ro
+      - ${CLUSTER_CERT_PATH:-./config/certs}:/certs:ro
+      - ./config/docker-update-ca-trust.sh:/docker-update-ca-trust.sh:ro
     environment:
       - ROOT_SERVICE_MANAGER_PORT=${SYSTEM_MANAGER_GATEWAY_HTTPS_PORT:-443}
       - ROOT_SERVICE_MANAGER_USE_TLS=true
@@ -53,8 +97,12 @@ services:
       - CLUSTER_CERT_FILE=/certs/cluster.crt
       - CLUSTER_KEY_FILE=/certs/cluster.key
       - ROOT_CA_FILE=/certs/ca.crt
+      - ROOT_GATEWAY_TRUST=${ROOT_GATEWAY_TRUST:-system}
       - MQTT_CERT=/certs
       - MQTT_BROKER_PORT=8883
+    depends_on:
+      cluster_cert_bootstrap:
+        condition: service_completed_successfully
     ports: !reset []
 
   cluster_scheduler:
@@ -169,14 +217,14 @@ services:
       - KONG_PG_DATABASE=kong
       - KONG_PROXY_LISTEN=0.0.0.0:8000 http2, 0.0.0.0:8443 ssl http2
       - KONG_ADMIN_LISTEN=0.0.0.0:8001
-      - KONG_SSL_CERT=/certs/cluster.crt
-      - KONG_SSL_CERT_KEY=/certs/cluster.key
+      - KONG_SSL_CERT=/certs/public/fullchain.pem
+      - KONG_SSL_CERT_KEY=/certs/public/privkey.pem
       - KONG_NGINX_PROXY_SSL_CLIENT_CERTIFICATE=/certs/ca.crt
-      - KONG_NGINX_PROXY_SSL_VERIFY_CLIENT=on
+      - KONG_NGINX_PROXY_SSL_VERIFY_CLIENT=optional
       - KONG_NGINX_PROXY_SSL_VERIFY_DEPTH=2
       - KONG_LOG_LEVEL=info
     volumes:
-      - ${CLUSTER_CERT_PATH:-./certs}:/certs:ro
+      - ${CLUSTER_CERT_PATH:-./config/certs}:/certs:ro
     ports:
       - "8080:8000"
       - "8443:8443"
@@ -186,6 +234,8 @@ services:
       cluster_kong_db_external:
         condition: service_healthy
       cluster_kong_bootstrap_external:
+        condition: service_completed_successfully
+      cluster_cert_bootstrap:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "kong", "health"]

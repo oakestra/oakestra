@@ -9,8 +9,8 @@ CA_CERT_FILE="/certs/ca.crt"
 
 # Build a deck-compatible state file for the CA cert so it is included in the
 # sync without needing curl or any other HTTP client in this image.
-# Falls back to a zero-entry file when no cert is present yet (fresh deployment
-# before the first /api/certs/reset call).
+# system_manager generates the CA at startup, so the fallback branch should
+# only trigger if system_manager failed to come up before this init ran.
 CA_CERTS_YAML=/tmp/ca_certs.yaml
 if [ -f "$CA_CERT_FILE" ]; then
   {
@@ -23,7 +23,7 @@ if [ -f "$CA_CERT_FILE" ]; then
   echo "==> CA cert file found — will include in sync"
 else
   printf '_format_version: "3.0"\n' > "$CA_CERTS_YAML"
-  echo "WARNING: $CA_CERT_FILE not found — run /api/certs/reset to initialise mTLS" >&2
+  echo "WARNING: $CA_CERT_FILE not found — system_manager generates it at startup; check its logs" >&2
 fi
 
 echo "==> Syncing external gateway..."

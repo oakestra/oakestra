@@ -21,20 +21,22 @@ const (
 )
 
 type ConfFile struct {
-	ConfVersion     string           `json:"conf_version"`
-	ClusterAddress  string           `json:"cluster_address"`
-	ClusterSSL      bool             `json:"cluster_ssl"`
-	ClusterPort     int              `json:"cluster_port"`
-	AppLogs         string           `json:"app_logs"`
-	OverlayNetwork  string           `json:"overlay_network"`
-	PublicIp        bool             `json:"public_ip"`
-	NetPort         int              `json:"overlay_network_port"`
-	WorkerCertFile  string           `json:"worker_cert_file"`
-	WorkerKeyFile   string           `json:"worker_key_file"`
-	ClusterCaFile   string           `json:"cluster_ca_file"`
-	Addons          []Addon          `json:"addons"`
-	Virtualizations []Virtualization `json:"virtualizations"`
-	CSIDrivers      []CSIDriverType  `json:"csi_drivers"`
+	ConfVersion         string           `json:"conf_version"`
+	ClusterAddress      string           `json:"cluster_address"`
+	ClusterSSL          bool             `json:"cluster_ssl"`
+	ClusterPort         int              `json:"cluster_port"`
+	AppLogs             string           `json:"app_logs"`
+	OverlayNetwork      string           `json:"overlay_network"`
+	PublicIp            bool             `json:"public_ip"`
+	NetPort             int              `json:"overlay_network_port"`
+	WorkerCertFile      string           `json:"worker_cert_file"`
+	WorkerKeyFile       string           `json:"worker_key_file"`
+	ClusterCaFile       string           `json:"cluster_ca_file"`
+	ClusterToken        string           `json:"cluster_token,omitempty"`         // One-time registration token
+	ClusterGatewayTrust string           `json:"cluster_gateway_trust,omitempty"` // CA trust source for cluster certs. Default: Use OS trust store
+	Addons              []Addon          `json:"addons"`
+	Virtualizations     []Virtualization `json:"virtualizations"`
+	CSIDrivers          []CSIDriverType  `json:"csi_drivers"`
 }
 
 type Addon struct {

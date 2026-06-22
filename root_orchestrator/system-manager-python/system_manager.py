@@ -10,6 +10,7 @@ from pathlib import Path
 import grpc
 from blueprints import blueprints
 from bson import json_util
+from ext_requests.certificates import ensure_ca_files, ensure_server_files
 from ext_requests.jwt_generator_requests import get_public_key
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import net_register_cluster
@@ -64,6 +65,17 @@ socketio = SocketIO(
 )
 mongo_init(app)
 create_admin()
+
+
+ROOT_PUBLIC_ADDRESS = os.environ.get("ROOT_PUBLIC_ADDRESS") or ""
+_server_common_name = ROOT_PUBLIC_ADDRESS or "localhost"
+_server_alt_names = [_server_common_name, "localhost", "system_manager"]
+ensure_ca_files()
+ensure_server_files(
+    common_name=_server_common_name,
+    alt_names=list(dict.fromkeys(_server_alt_names)),
+    valid_days=365,
+)
 
 MY_PORT = os.environ.get("MY_PORT") or 10000
 MY_PORT_GRPC = os.environ.get("MY_PORT_GRPC") or 50052

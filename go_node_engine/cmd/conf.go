@@ -274,6 +274,28 @@ func configPort(port int) error {
 	return configManager.Write(clusterConf)
 }
 
+func configToken(token string) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+	clusterConf.ClusterToken = token
+	// Token bootstrap only makes sense over TLS.
+	clusterConf.ClusterSSL = true
+	return configManager.Write(clusterConf)
+}
+
+func configGatewayTrust(trust string) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+	clusterConf.ClusterGatewayTrust = trust
+	return configManager.Write(clusterConf)
+}
+
 func configSSL(encrypt bool) error {
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
