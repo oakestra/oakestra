@@ -3,7 +3,7 @@
 
 import grpc
 
-import proto.clusterRegistration_pb2 as clusterRegistration__pb2
+from proto import clusterRegistration_pb2 as proto_dot_clusterRegistration__pb2
 
 
 class register_clusterStub(object):
@@ -17,13 +17,13 @@ class register_clusterStub(object):
         """
         self.handle_init_greeting = channel.unary_unary(
             "/clusterRegistration.register_cluster/handle_init_greeting",
-            request_serializer=clusterRegistration__pb2.CS1Message.SerializeToString,
-            response_deserializer=clusterRegistration__pb2.SC1Message.FromString,
+            request_serializer=proto_dot_clusterRegistration__pb2.CS1Message.SerializeToString,
+            response_deserializer=proto_dot_clusterRegistration__pb2.SC1Message.FromString,
         )
         self.handle_init_final = channel.unary_unary(
             "/clusterRegistration.register_cluster/handle_init_final",
-            request_serializer=clusterRegistration__pb2.CS2Message.SerializeToString,
-            response_deserializer=clusterRegistration__pb2.SC2Message.FromString,
+            request_serializer=proto_dot_clusterRegistration__pb2.CS2Message.SerializeToString,
+            response_deserializer=proto_dot_clusterRegistration__pb2.SC2Message.FromString,
         )
 
 
@@ -47,13 +47,13 @@ def add_register_clusterServicer_to_server(servicer, server):
     rpc_method_handlers = {
         "handle_init_greeting": grpc.unary_unary_rpc_method_handler(
             servicer.handle_init_greeting,
-            request_deserializer=clusterRegistration__pb2.CS1Message.FromString,
-            response_serializer=clusterRegistration__pb2.SC1Message.SerializeToString,
+            request_deserializer=proto_dot_clusterRegistration__pb2.CS1Message.FromString,
+            response_serializer=proto_dot_clusterRegistration__pb2.SC1Message.SerializeToString,
         ),
         "handle_init_final": grpc.unary_unary_rpc_method_handler(
             servicer.handle_init_final,
-            request_deserializer=clusterRegistration__pb2.CS2Message.FromString,
-            response_serializer=clusterRegistration__pb2.SC2Message.SerializeToString,
+            request_deserializer=proto_dot_clusterRegistration__pb2.CS2Message.FromString,
+            response_serializer=proto_dot_clusterRegistration__pb2.SC2Message.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -83,8 +83,8 @@ class register_cluster(object):
             request,
             target,
             "/clusterRegistration.register_cluster/handle_init_greeting",
-            clusterRegistration__pb2.CS1Message.SerializeToString,
-            clusterRegistration__pb2.SC1Message.FromString,
+            proto_dot_clusterRegistration__pb2.CS1Message.SerializeToString,
+            proto_dot_clusterRegistration__pb2.SC1Message.FromString,
             options,
             channel_credentials,
             insecure,
@@ -112,8 +112,8 @@ class register_cluster(object):
             request,
             target,
             "/clusterRegistration.register_cluster/handle_init_final",
-            clusterRegistration__pb2.CS2Message.SerializeToString,
-            clusterRegistration__pb2.SC2Message.FromString,
+            proto_dot_clusterRegistration__pb2.CS2Message.SerializeToString,
+            proto_dot_clusterRegistration__pb2.SC2Message.FromString,
             options,
             channel_credentials,
             insecure,
