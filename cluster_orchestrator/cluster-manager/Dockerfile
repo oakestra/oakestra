@@ -14,9 +14,11 @@ COPY requirements.txt /
 ARG LIB_BRANCH=develop
 ENV LIB_BRANCH=${LIB_BRANCH}
 
-RUN pip install --no-cache-dir -r requirements.txt 
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /
+
+RUN python -m grpc_tools.protoc -Iproto --python_out=proto --grpc_python_out=proto proto/clusterRegistration.proto
 
 # ENV FLASK_APP=scheduler.py
 ENV FLASK_ENV=development

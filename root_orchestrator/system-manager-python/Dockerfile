@@ -14,6 +14,8 @@ RUN pip install -r requirements.txt --no-cache-dir && rm /requirements.txt
 
 COPY . /
 
+RUN python -m grpc_tools.protoc -Iproto --python_out=proto --grpc_python_out=proto proto/clusterRegistration.proto
+
 # TRUE for verbose logging
 ENV FLASK_DEBUG=FALSE
 
