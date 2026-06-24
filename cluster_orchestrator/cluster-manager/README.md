@@ -42,7 +42,7 @@ sudo -E docker-compose -f cluster_orchestrator/docker-compose.yml up
 
 ## Built With
 
-- Python3.8.5
+- Python3.10
   - Flask
   - Flask-MQTT
   - bson
