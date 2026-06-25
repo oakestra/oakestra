@@ -19,7 +19,7 @@
         {
             "label": "cluster-orchestrator-up",
             "type": "shell",
-            "command": "SYSTEM_MANAGER_URL=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml -f ${workspaceRoot}/cluster_orchestrator/override-custom-service-manager-version.yml -f ${workspaceRoot}/cluster_orchestrator/override-network-host.yml up --build -d",
+            "command": "HOST_IP=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') && SYSTEM_MANAGER_URL=$HOST_IP CLUSTER_ADDRESS=$HOST_IP LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml -f ${workspaceRoot}/cluster_orchestrator/override-custom-service-manager-version.yml -f ${workspaceRoot}/cluster_orchestrator/override-network-host.yml up --build -d",
             "options": {
                 "env": {
                     "CLUSTER_LOCATION": "48.13023160559729,11.583724427641824,100",

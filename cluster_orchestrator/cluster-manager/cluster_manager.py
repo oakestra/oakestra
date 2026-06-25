@@ -3,6 +3,8 @@ import logging
 import os
 import socket
 from pathlib import Path
+import threading
+import time
 
 import config
 import grpc
@@ -262,7 +264,25 @@ def register_with_system_manager():
 # ..........................................................................#
 
 start_http_server(10001)  # start prometheus server
-register_with_system_manager()  # register with system manager using gRPC
+
+
+def _register_in_background():
+    # The root probes GET /api/cluster/status on this cluster_manager during
+    # registration. That probe can only succeed once gunicorn's worker has
+    # entered its accept loop, which doesn't happen until load_wsgi (i.e. this
+    # module's top-level import) returns. So we MUST NOT block the import on
+    # the gRPC call — otherwise the root's probe deadlocks against our own
+    # startup. Give gunicorn a moment to start serving, then register. On
+    # failure, exit the worker so gunicorn respawns it and tries again.
+    time.sleep(2)
+    try:
+        register_with_system_manager()
+    except Exception:
+        logger.exception("Cluster registration failed; exiting worker for restart")
+        os._exit(1)
+
+
+threading.Thread(target=_register_in_background, daemon=True).start()
 
 if __name__ == "__main__":
     import eventlet

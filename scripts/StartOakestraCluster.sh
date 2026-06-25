@@ -31,6 +31,28 @@ if [ ! -z "$CLUSTER_NAME" ]; then
     cluster_name=$CLUSTER_NAME
 fi
 
+if [ ! -z "$CLUSTER_ADDRESS" ]; then
+    cluster_address=$CLUSTER_ADDRESS
+fi
+
+# Resolve the default outbound IP for this host so we can suggest it as the
+# cluster address. This is the IP the root orchestrator will use to reach
+# this cluster_manager — it must be routable from the root.
+detect_default_ip() {
+    case "$(uname)" in
+        Darwin)
+            local iface
+            iface=$(route -n get default 2>/dev/null | awk '/interface: / {print $2}')
+            if [ -n "$iface" ]; then
+                ipconfig getifaddr "$iface" 2>/dev/null
+            fi
+            ;;
+        Linux)
+            ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}'
+            ;;
+    esac
+}
+
 # Check if docker and docker compose installed 
 if [ ! -x "$(command -v docker)" ]; then
   echo "Docker is not installed. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/engine/install/"
@@ -82,48 +104,80 @@ if [ -z "$cluster_location" ]; then
         exit 1
     fi
 
-    # get public IP
-    PUBLIC_IP=$(curl -sLf "https://api.ipify.org")
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to retrieve your public IP address."
-        exit 1
+    # Fetch a URL with retries. Many users have hit transient failures from
+    # api.ipify.org / ipinfo.io (TLS hiccup, DNS blip, rate limit) where a
+    # second run "magically" works — retrying inside the script avoids that
+    # whole class of flake. Prints the body on success, empty on failure.
+    fetch_with_retry() {
+        local url="$1"
+        local attempts=4
+        local delay=2
+        local i
+        for i in $(seq 1 $attempts); do
+            local out
+            out=$(curl -sLf --connect-timeout 5 --max-time 10 "$url") && {
+                printf '%s' "$out"
+                return 0
+            }
+            [ "$i" -lt "$attempts" ] && sleep "$delay"
+            delay=$((delay * 2))
+        done
+        return 1
+    }
+
+    PUBLIC_IP=$(fetch_with_retry "https://api.ipify.org") || PUBLIC_IP=""
+    if [ -n "$PUBLIC_IP" ]; then
+        ipLocation=$(fetch_with_retry "https://ipinfo.io/$PUBLIC_IP/json") || ipLocation=""
     fi
 
-    # get geo coordinates of public IP
-    ipLocation=$(curl -sLf "https://ipinfo.io/$PUBLIC_IP/json")
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to retrieve your public IP address."
-        exit 1
+    if [ -n "$ipLocation" ]; then
+        latitude=$(echo "$ipLocation" | jq -r '.loc | split(",") | .[0]')
+        longitude=$(echo "$ipLocation" | jq -r '.loc | split(",") | .[1]')
+        if [ -n "$latitude" ] && [ "$latitude" != "null" ]; then
+            cluster_location=$(echo $latitude,$longitude,1000)
+            export CLUSTER_LOCATION=$cluster_location
+        fi
     fi
 
-    # Extract latitude and longitude
-    latitude=$(echo "$ipLocation" | jq -r '.loc | split(",") | .[0]')
-    longitude=$(echo "$ipLocation" | jq -r '.loc | split(",") | .[1]')
+    if [ -z "$CLUSTER_LOCATION" ]; then
+        echo "⚠️  Could not auto-detect cluster location from public IP geolocation services."
+        echo "    You will be asked to enter it manually below."
+    fi
+fi
 
-    cluster_location=$(echo $latitude,$longitude,1000)
-    export CLUSTER_LOCATION=$cluster_location
+if [ -z "$cluster_address" ]; then
+    cluster_address=$(detect_default_ip)
 fi
 
 echo Leave a field empty to keep the current value
-echo "Enter Cluster Name (current: $cluster_name): " 
+echo "Enter Cluster Name (current: $cluster_name): "
 read cluster_name_input < /dev/tty
 echo "Enter Cluster Location (current: $cluster_location): "
 read cluster_location_input < /dev/tty
+echo "Enter Cluster Address — IP/hostname the root can reach this cluster on (current: $cluster_address): "
+read cluster_address_input < /dev/tty
 echo "Enter Root Orchestrator URL (current: $SYSTEM_MANAGER_URL): "
 read system_manager_url_input < /dev/tty
 
 if [ ! -z "$cluster_name_input" ]; then
-    echo 🛠️ Setting new cluster name 
+    echo 🛠️ Setting new cluster name
     export CLUSTER_NAME=$cluster_name_input
 fi
 
 if [ ! -z "$cluster_location_input" ]; then
-    echo 🛠️ Setting new cluster location 
+    echo 🛠️ Setting new cluster location
     export CLUSTER_LOCATION=$cluster_location_input
 fi
 
+if [ ! -z "$cluster_address_input" ]; then
+    echo 🛠️ Setting new cluster address
+    export CLUSTER_ADDRESS=$cluster_address_input
+elif [ ! -z "$cluster_address" ]; then
+    export CLUSTER_ADDRESS=$cluster_address
+fi
+
 if [ ! -z "$system_manager_url_input" ]; then
-    echo 🛠️ Setting new root url 
+    echo 🛠️ Setting new root url
     export SYSTEM_MANAGER_URL=$system_manager_url_input
 fi
 
@@ -134,6 +188,11 @@ fi
 
 if [ -z "$CLUSTER_LOCATION" ]; then
      echo ❌❌❌ Cluster Location is required
+    exit 1
+fi
+
+if [ -z "$CLUSTER_ADDRESS" ]; then
+     echo ❌❌❌ Cluster Address is required and could not be auto-detected
     exit 1
 fi
 
