@@ -126,7 +126,7 @@ services:
     image: grafana/loki:2.9.2
     labels: *root-log-labels
     ports:
-      - 3100:3100
+      - 127.0.0.1:3100:3100
     volumes:
       - ./config/loki.yml:/etc/loki/config.yml
       - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
