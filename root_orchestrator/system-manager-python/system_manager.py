@@ -142,6 +142,21 @@ def _is_cluster_reachable(cluster_address, cluster_port):
     return False
 
 
+def get_ip_from_grpc_transport(peer: str) -> str:
+    """Extract the client IP from a gRPC peer string (e.g. 'ipv4:1.2.3.4:5678' -> '1.2.3.4')."""
+    # peer format: "ipv4:<ip>:<port>" or "ipv6:[<ip>]:<port>"
+    parts = peer.split(":", 1)
+    if len(parts) < 2:
+        return peer
+    addr = parts[1]
+    # strip the trailing :<port>
+    if addr.startswith("["):
+        # IPv6: [::1]:port
+        end = addr.find("]")
+        return addr[1:end] if end != -1 else addr
+    return addr.rsplit(":", 1)[0]
+
+
 class ClusterRegistrationServicer(register_clusterServicer):
     def handle_init_greeting(self, request, context):
         logger.info("gRPC - Cluster_Manager connected: {}".format(context.peer()))
@@ -157,8 +172,19 @@ class ClusterRegistrationServicer(register_clusterServicer):
         cluster_address = (
             request.cluster_ip if request.cluster_ip else get_ip_from_grpc_transport(context.peer())
         )
+        cluster_port = str(message["manager_port"])
+        logger.info("Cluster address: {} port: {}".format(cluster_address, cluster_port))
 
-        logger.info("Cluster address: {}".format(cluster_address))
+        if not _is_cluster_reachable(cluster_address, cluster_port):
+            logger.error(
+                "Cluster {} is not reachable at {}:{} — refusing registration".format(
+                    message.get("cluster_name"), cluster_address, cluster_port
+                )
+            )
+            context.abort(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                "cluster not reachable at {}:{}".format(cluster_address, cluster_port),
+            )
 
         cluster_data = {
             "ip": cluster_address,
@@ -172,7 +198,7 @@ class ClusterRegistrationServicer(register_clusterServicer):
         cluster = candidate_operations.create_candidate(cluster_data)
         if cluster is None:
             logger.error("Creating cluster failed")
-            context.abort(grpc.StatusCode.INTERNAL, "failed to create cluster candidate")
+            context.abort(grpc.StatusCode.INTERNAL, "failed to persist cluster")
 
         cid = str(cluster["_id"])
 

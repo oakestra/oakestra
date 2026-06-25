@@ -137,9 +137,7 @@ class ClusterWorkerTokenController(MethodView):
 
 @certbp.route("/worker-bootstrap")
 class ClusterWorkerBootstrapController(MethodView):
-    @certbp.arguments(
-        schema=worker_bootstrap_schema, location="json", validate=False, unknown=True
-    )
+    @certbp.arguments(schema=worker_bootstrap_schema, location="json", validate=False, unknown=True)
     def post(self, *args, **kwargs):
         """Redeem a one-time worker token for a worker certificate.
 
@@ -229,7 +227,10 @@ class ClusterCertRefreshController(MethodView):
         if resp.status_code == 401:
             abort(401, message="Registration token rejected (invalid, expired, or already used)")
         if resp.status_code != 200:
-            abort(502, message=f"Root bootstrap endpoint returned {resp.status_code}: {resp.text[:200]}")
+            abort(
+                502,
+                message=f"Root bootstrap endpoint returned {resp.status_code}: {resp.text[:200]}",
+            )
 
         payload = resp.json()
 

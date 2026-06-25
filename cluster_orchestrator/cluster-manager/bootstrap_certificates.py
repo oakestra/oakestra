@@ -80,9 +80,7 @@ def _resolve_verify(base_url: str):
     import urllib3
 
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    response = requests.get(
-        f"{base_url}/api/certs/ca.crt", verify=False, timeout=REQUEST_TIMEOUT
-    )
+    response = requests.get(f"{base_url}/api/certs/ca.crt", verify=False, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     _write(ROOT_CA_FILE, response.text, 0o644)
     logger.info("Fetched root CA via TOFU -> %s", ROOT_CA_FILE)
@@ -129,9 +127,7 @@ def redeem_cluster_token() -> None:
         )
         sys.exit(1)
     if response.status_code != 200:
-        logger.error(
-            "Cluster bootstrap failed: %s - %s", response.status_code, response.text[:500]
-        )
+        logger.error("Cluster bootstrap failed: %s - %s", response.status_code, response.text[:500])
         sys.exit(1)
 
     payload = response.json()

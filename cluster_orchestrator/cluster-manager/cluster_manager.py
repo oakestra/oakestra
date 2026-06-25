@@ -2,9 +2,9 @@ import json
 import logging
 import os
 import socket
-from pathlib import Path
 import threading
 import time
+from pathlib import Path
 
 import config
 import grpc
@@ -158,7 +158,9 @@ def _refresh_cluster_certs() -> bool:
         logger.error("Cert refresh failed — token rejected (invalid, expired, or already used)")
         return False
     if resp.status_code != 200:
-        logger.error("Cert refresh failed — root returned %d: %s", resp.status_code, resp.text[:200])
+        logger.error(
+            "Cert refresh failed — root returned %d: %s", resp.status_code, resp.text[:200]
+        )
         return False
 
     payload = resp.json()

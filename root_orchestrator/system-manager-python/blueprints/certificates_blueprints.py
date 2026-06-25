@@ -187,8 +187,7 @@ class CertificateAuthorityResetController(Resource):
     @jwt_required()
     @require_role(Role.ADMIN)
     def post(self):
-        """Rotate the internal CA + server cert.
-        """
+        """Rotate the internal CA + server cert."""
         content = request.get_json(silent=True) or {}
 
         # Generate new CA
