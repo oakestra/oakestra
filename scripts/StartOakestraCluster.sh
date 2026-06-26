@@ -296,6 +296,58 @@ if sudo docker ps -a | grep oakestra/cluster >/dev/null 2>&1; then
     fi
 fi
 
+# When override-gateway.yml is in use, cluster↔root and worker↔cluster traffic is mTLS.
+# The cert bundle is either pre-provisioned or bootstrapped automatically with a
+# one-time registration token (CLUSTER_REGISTRATION_TOKEN, minted at the root via
+# POST /api/tokens/cluster):
+#   ca.crt           — root CA (trust anchor for both directions)
+#   cluster.crt/key  — cluster client identity (signed by root CA)
+#   cluster_ca.crt   — cluster intermediate CA cert (signed by root CA)
+#   cluster_ca.key   — cluster intermediate CA private key (signs worker certs)
+if [[ "$OVERRIDE_FILES" == *"override-gateway.yml"* ]]; then
+    CERT_DIR="${CLUSTER_CERT_PATH:-config/certs}"
+
+    certs_present=true
+    for f in ca.crt cluster.crt cluster.key cluster_ca.crt cluster_ca.key; do
+        if [ ! -f "$CERT_DIR/$f" ]; then
+            certs_present=false
+        fi
+    done
+    if [ "$certs_present" = true ]; then
+        for f in cluster.key cluster_ca.key; do
+            perms=$(stat -c '%a' "$CERT_DIR/$f" 2>/dev/null || stat -f '%A' "$CERT_DIR/$f")
+            if [ "$perms" != "600" ] && [ "$perms" != "400" ]; then
+                echo "⚠️  $CERT_DIR/$f has permissions $perms (recommend 600)"
+            fi
+        done
+    elif [ -z "$CLUSTER_REGISTRATION_TOKEN" ]; then
+        echo ❌❌❌ Cluster certificate bundle not found and CLUSTER_REGISTRATION_TOKEN is not set.
+        echo "    Either provision the certs into $CERT_DIR/ manually, or mint a"
+        echo "    one-time token at the root (POST /api/tokens/cluster) and re-run with:"
+        echo "    CLUSTER_REGISTRATION_TOKEN=<token> $0"
+        exit 1
+    else
+        echo 🔑 Bootstrapping cluster certificates with the provided registration token...
+    fi
+    # The cluster gateway's public-facing TLS cert is a separate certificate
+    # system from the internal mTLS CA and must be provided (BYO) — there is no
+    # auto-generated fallback.
+    for f in public/fullchain.pem public/privkey.pem; do
+        if [ ! -f "$CERT_DIR/$f" ]; then
+            echo ❌❌❌ Missing BYO public gateway certificate: "$CERT_DIR/$f"
+            echo "    Provide a publicly trusted cert (e.g. Let's Encrypt) as"
+            echo "    $CERT_DIR/public/fullchain.pem and privkey.pem."
+            echo "    If it is privately issued, also set ROOT_GATEWAY_TRUST to a CA bundle path."
+            exit 1
+        fi
+    done
+    if [ ! -z "$CLUSTER_CERT_PATH" ]; then
+        export CLUSTER_CERT_PATH
+    fi
+    export CLUSTER_REGISTRATION_TOKEN
+    export ROOT_GATEWAY_TRUST
+fi
+
 command_exec="LIB_BRANCH=${OAKESTRA_VERSION} sudo -E docker compose -f ${COMPOSE_FILE} ${OAK_OVERRIDES} up ${BUILD_FLAG} -d"
 echo executing "$command_exec"
 

@@ -1,5 +1,6 @@
+from blueprints.certificates_blueprints import certbp
 from blueprints.cluster_blueprints import clusterblp
 from blueprints.service_blueprints import schedulingblp, serviceblp
 from blueprints.worker_blueprints import workerblp
 
-blueprints = [serviceblp, schedulingblp, workerblp, clusterblp]
+blueprints = [serviceblp, schedulingblp, workerblp, clusterblp, certbp]

@@ -1,0 +1,216 @@
+_format_version: "3.0"
+
+# The external gateway terminates TLS with a *publicly trusted* server cert
+# (/certs/public/, BYO) and verifies client certificates against the internal
+# root CA only *optionally* (KONG_NGINX_PROXY_SSL_VERIFY_CLIENT=optional,
+# depth 2 for worker chains).
+#
+# Routes are grouped into two sections:
+#   * mTLS Routes  — machine-to-machine (root -> cluster, worker -> cluster).
+#                    Each carries a pre-function guard that rejects requests
+#                    without a verified client certificate; the guard also
+#                    rejects requests on the cleartext :8080 listener
+#                    (ssl_client_verify is empty there). The first guarded
+#                    route defines the YAML anchor (&mtls_guard).
+#   * Public Routes — read-only status/docs, the CA download, the token-gated
+#                     worker bootstrap, and explicitly blocked endpoints.
+
+services:
+  # ======================================================================
+  # mTLS Routes (client certificate required)
+  # ======================================================================
+
+  # Cluster-manager machine-to-machine surface.
+  - name: cluster_manager_m2m
+    url: http://cluster_manager:10100
+    routes:
+      # Worker registration (worker presents its bootstrapped cert).
+      - name: cm-node-register
+        protocols: [https]
+        paths:
+          - /api/node/register
+          - /api/node/register/
+        methods: [POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - &mtls_guard
+            name: pre-function
+            config:
+              access:
+                - |
+                  if ngx.var.ssl_client_verify ~= "SUCCESS" then
+                    return kong.response.exit(401, { message = "mTLS client certificate required" })
+                  end
+
+      # Deploy/undeploy commands from the root.
+      - name: cm-service-instance
+        protocols: [https]
+        paths:
+          - /api/service
+          - /api/service/
+        methods: [POST, DELETE, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+
+      - name: cm-result-deploy
+        protocols: [https]
+        paths:
+          - /api/result/deploy
+        methods: [POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+
+      # One-time worker token hashes pushed by the root.
+      - name: cm-worker-token
+        protocols: [https]
+        paths:
+          - /api/certs/worker-token
+        methods: [POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+
+  # Cluster service manager machine-to-machine surface (NetManager / root).
+  - name: cluster_service_manager_m2m
+    url: http://cluster_service_manager:10110
+    routes:
+      - name: csm-job-update
+        protocols: [https]
+        paths:
+          - /api/net/job/update
+          - /api/net/job/update/
+        methods: [POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+
+      - name: csm-deploy-service
+        protocols: [https]
+        paths:
+          - /api/net/deployment
+        methods: [POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+
+      - name: csm-delete-service
+        protocols: [https]
+        paths:
+          - /api/net/deployment
+          - /api/net/deployment/
+        methods: [DELETE, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+
+  # ======================================================================
+  # Public Routes (no client certificate)
+  # ======================================================================
+
+  # Cluster-manager public surface (read-only + token-gated bootstrap).
+  - name: cluster_manager_public
+    url: http://cluster_manager:10100
+    routes:
+      - name: cm-cluster-status
+        paths:
+          - /api/cluster/status
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      # Token-gated worker certificate bootstrap (no client cert — the
+      # one-time token is the credential). https-only so tokens never
+      # traverse the cleartext listener.
+      - name: cm-worker-bootstrap
+        protocols: [https]
+        paths:
+          - /api/certs/worker-bootstrap
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+      - name: cm-docs-public
+        paths:
+          - /api/docs
+          - /docs
+          - /docs/
+          - /docs/openapi.json
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      # Root CA download — workers bootstrap trust from here.
+      - name: cm-ca-cert-public
+        paths:
+          - /api/certs/ca.crt
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+  # Fallback deny: any API path not matched by explicit allowlist stays blocked.
+  # (cluster_manager has no user-level auth of its own, so everything exposed
+  # above is either mTLS-guarded, token-gated, or read-only.)
+  - name: cluster_manager_api_block
+    url: http://cluster_manager:10100
+    routes:
+      - name: cm-block-api-fallback
+        paths:
+          - /api
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        strip_path: false
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 403
+          message: "Endpoint not exposed on the external cluster gateway"
+
+  # Explicitly block addons manager service on the external gateway.
+  - name: cluster_addons_manager_block
+    url: http://cluster_addons_manager:11201
+    routes:
+      - name: cm-block-addons-manager
+        paths:
+          - /api/v1/addons
+          - /api/v1/addons/
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        strip_path: false
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 403
+          message: "Addons manager is not exposed on the external cluster gateway"
+
+  # Explicitly block addons dashboard service on the external gateway.
+  - name: cluster_addons_dashboard_block
+    url: http://cluster_addons_dashboard:11203
+    routes:
+      - name: cm-block-addons-dashboard
+        paths:
+          - /cluster-addons-dashboard
+          - /cluster-addons-dashboard/
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        strip_path: false
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 403
+          message: "Addons dashboard is not exposed on the external cluster gateway"
+
+plugins:
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      headers:
+        - Authorization
+        - Content-Type
+        - Accept
+      exposed_headers:
+        - Authorization
+      credentials: false
+      max_age: 3600

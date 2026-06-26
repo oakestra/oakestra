@@ -77,6 +77,12 @@ func main() {
 		}
 	}
 
+	// redeem a one-time registration token for worker certificates, if configured
+	configs, err = requests.WorkerBootstrap(configs)
+	if err != nil {
+		logger.ErrorLogger().Fatalf("Worker certificate bootstrap failed: %v", err)
+	}
+
 	// hadshake with the cluster orchestrator to get mqtt port and node id
 	handshakeResult := clusterHandshake()
 
@@ -110,7 +116,7 @@ func main() {
 	}
 
 	// binding the node MQTT client
-	mqtt.InitMqtt(handshakeResult.NodeId, configs.ClusterAddress, handshakeResult.MqttPort, configs.CertFile, configs.KeyFile, runtimeManager)
+	mqtt.InitMqtt(handshakeResult.NodeId, configs.ClusterAddress, handshakeResult.MqttPort, configs.WorkerCertFile, configs.WorkerKeyFile, configs.ClusterCaFile, runtimeManager)
 
 	// starting node status background job.
 	jobs.NodeStatusUpdater(MONITORING_CYCLE, mqtt.ReportNodeInformation)

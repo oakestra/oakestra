@@ -40,7 +40,6 @@ register_schema = {
 }
 
 
-# ......... Functions fot the Authentication ...........#
 # ......................................................#
 
 

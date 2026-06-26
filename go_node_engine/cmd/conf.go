@@ -21,8 +21,9 @@ func init() {
 	configCmd.AddCommand(setCni)
 	configCmd.AddCommand(visibility)
 	configCmd.AddCommand(setAuth)
-	setAuth.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
-	setAuth.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
+	setAuth.Flags().StringVarP(&workerCertFile, "certFile", "c", "", "Path to worker certificate for mTLS to cluster")
+	setAuth.Flags().StringVarP(&workerKeyFile, "keyFile", "k", "", "Path to worker private key for mTLS to cluster")
+	setAuth.Flags().StringVarP(&clusterCaFile, "caFile", "a", "", "Path to cluster CA certificate")
 	setVirtualizationCmd.AddCommand(enableUnikernel)
 	setVirtualizationCmd.AddCommand(enableCrosvm)
 	setCni.AddCommand(explainNetManager)
@@ -229,14 +230,15 @@ var (
 		},
 	}
 
-	// --- MQTT AUTH
-	certFile string
-	keyFile  string
-	setAuth  = &cobra.Command{
+	// --- WORKER mTLS MATERIAL
+	workerCertFile string
+	workerKeyFile  string
+	clusterCaFile  string
+	setAuth        = &cobra.Command{
 		Use:   "auth",
-		Short: "Set Mqtt Authentication",
+		Short: "Set worker mTLS material (cert, key, cluster CA) for MQTT + HTTPS to the cluster",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return setMqttAuth()
+			return setWorkerAuth()
 		},
 	}
 )
@@ -278,6 +280,28 @@ func configPort(port int) error {
 		return err
 	}
 	clusterConf.ClusterPort = port
+	return configManager.Write(clusterConf)
+}
+
+func configToken(token string) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+	clusterConf.ClusterToken = token
+	// Token bootstrap only makes sense over TLS.
+	clusterConf.ClusterSSL = true
+	return configManager.Write(clusterConf)
+}
+
+func configGatewayTrust(trust string) error {
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+	clusterConf.ClusterGatewayTrust = trust
 	return configManager.Write(clusterConf)
 }
 
@@ -511,7 +535,7 @@ func setPublicIp(mode config.PublicIPMode) error {
 	return configManager.Write(clusterConf)
 }
 
-func setMqttAuth() error {
+func setWorkerAuth() error {
 
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
@@ -519,11 +543,14 @@ func setMqttAuth() error {
 		return err
 	}
 
-	if certFile != "" {
-		clusterConf.CertFile = certFile
+	if workerCertFile != "" {
+		clusterConf.WorkerCertFile = workerCertFile
 	}
-	if keyFile != "" {
-		clusterConf.KeyFile = keyFile
+	if workerKeyFile != "" {
+		clusterConf.WorkerKeyFile = workerKeyFile
+	}
+	if clusterCaFile != "" {
+		clusterConf.ClusterCaFile = clusterCaFile
 	}
 
 	return configManager.Write(clusterConf)

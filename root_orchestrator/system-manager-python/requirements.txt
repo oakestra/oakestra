@@ -24,3 +24,4 @@ git+https://github.com/oakestra/oakestra.git@${LIB_BRANCH}#subdirectory=librarie
 git+https://github.com/oakestra/oakestra.git@${LIB_BRANCH}#subdirectory=libraries/oakestra_utils_library
 cryptography==44.0.1
 gunicorn==22.0.0
+docker~=7.0.0

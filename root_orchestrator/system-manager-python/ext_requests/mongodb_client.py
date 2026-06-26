@@ -10,6 +10,7 @@ MONGO_ADDR_USERS = f"mongodb://{MONGO_URL}:{MONGO_PORT}/users"
 
 mongo_users = None
 mongo_organization = None
+mongo_registration_tokens = None
 
 app = None
 
@@ -21,11 +22,15 @@ logger = logging.getLogger("system_manager")
 def mongo_init(flask_app):
     global app, mongo_users
     global mongo_organization
+    global mongo_registration_tokens
 
     app = flask_app
 
     mongo_users = PyMongo(app, uri=MONGO_ADDR_USERS).db["user"]
     mongo_organization = PyMongo(app, uri=MONGO_ADDR_USERS).db["organization"]
+    mongo_registration_tokens = PyMongo(app, uri=MONGO_ADDR_USERS).db["registration_tokens"]
+    # Mongo TTL monitor garbage-collects expired one-time registration tokens.
+    mongo_registration_tokens.create_index("expiry_date", expireAfterSeconds=0)
 
     logger.info("MONGODB - init mongo")
     logger.info(mongo_users)

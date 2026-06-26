@@ -30,8 +30,6 @@ class ServiceController(MethodView):
     def post(self):
         logger.debug("Incoming Request /api/node/register - to register node")
         data = request.json  # get POST body
-        data.get("token")  # registration_token
-        # TODO(GB): check and generate tokens
         data["candidate_name"] = data.get("host", "")
         logger.debug("Candidate Name: " + data.get("candidate_name"))
         worker = candidate_operations.create_candidate(data)

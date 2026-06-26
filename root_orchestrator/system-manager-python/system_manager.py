@@ -11,6 +11,7 @@ import grpc
 import requests
 from blueprints import blueprints
 from bson import json_util
+from ext_requests.certificates import ensure_ca_files, ensure_server_files
 from ext_requests.jwt_generator_requests import get_public_key
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import net_register_cluster
@@ -43,7 +44,7 @@ app = Flask(__name__)
 app.config["OPENAPI_VERSION"] = "3.0.2"
 app.config["API_TITLE"] = "Oakestra root api"
 app.config["API_VERSION"] = "v1"
-app.config["OPENAPI_URL_PREFIX"] = "/docs"
+app.config["OPENAPI_URL_PREFIX"] = "/api/docs"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["JWT_ALGORITHM"] = "RS256"
 app.config["JWT_PUBLIC_KEY"] = get_public_key()
@@ -66,6 +67,17 @@ socketio = SocketIO(
 mongo_init(app)
 create_admin()
 
+
+ROOT_PUBLIC_ADDRESS = os.environ.get("ROOT_PUBLIC_ADDRESS") or ""
+_server_common_name = ROOT_PUBLIC_ADDRESS or "localhost"
+_server_alt_names = [_server_common_name, "localhost", "system_manager"]
+ensure_ca_files()
+ensure_server_files(
+    common_name=_server_common_name,
+    alt_names=list(dict.fromkeys(_server_alt_names)),
+    valid_days=365,
+)
+
 MY_PORT = os.environ.get("MY_PORT") or 10000
 MY_PORT_GRPC = os.environ.get("MY_PORT_GRPC") or 50052
 
@@ -82,7 +94,7 @@ api.spec.options["security"] = [{"bearerAuth": []}]
 
 # Swagger docs
 SWAGGER_URL = "/api/docs"
-API_URL = "/docs/openapi.json"
+API_URL = "/api/docs/openapi.json"
 swaggerui_blueprint = get_swaggerui_blueprint(
     SWAGGER_URL,
     API_URL,
@@ -130,6 +142,21 @@ def _is_cluster_reachable(cluster_address, cluster_port):
     return False
 
 
+def get_ip_from_grpc_transport(peer: str) -> str:
+    """Extract the client IP from a gRPC peer string (e.g. 'ipv4:1.2.3.4:5678' -> '1.2.3.4')."""
+    # peer format: "ipv4:<ip>:<port>" or "ipv6:[<ip>]:<port>"
+    parts = peer.split(":", 1)
+    if len(parts) < 2:
+        return peer
+    addr = parts[1]
+    # strip the trailing :<port>
+    if addr.startswith("["):
+        # IPv6: [::1]:port
+        end = addr.find("]")
+        return addr[1:end] if end != -1 else addr
+    return addr.rsplit(":", 1)[0]
+
+
 class ClusterRegistrationServicer(register_clusterServicer):
     def handle_init_greeting(self, request, context):
         logger.info("gRPC - Cluster_Manager connected: {}".format(context.peer()))
@@ -142,18 +169,9 @@ class ClusterRegistrationServicer(register_clusterServicer):
         logger.info(request)
         message = MessageToDict(request, preserving_proto_field_name=True)
         logger.info("Message: {}, request {}".format(message, request))
-
-        cluster_address = message.get("cluster_address", "").strip()
-        if not cluster_address:
-            logger.error(
-                "Cluster did not advertise a cluster_address; refusing registration. "
-                "Set CLUSTER_ADDRESS on the cluster_manager."
-            )
-            context.abort(
-                grpc.StatusCode.INVALID_ARGUMENT,
-                "cluster_address is required",
-            )
-
+        cluster_address = (
+            request.cluster_ip if request.cluster_ip else get_ip_from_grpc_transport(context.peer())
+        )
         cluster_port = str(message["manager_port"])
         logger.info("Cluster address: {} port: {}".format(cluster_address, cluster_port))
 

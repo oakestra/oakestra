@@ -2,11 +2,13 @@ package mqtt
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/virtualization"
+	"os"
 	"strings"
 	"time"
 
@@ -59,6 +61,7 @@ func InitMqtt(
 	brokerport string,
 	certFile string,
 	keyFile string,
+	caFile string,
 	runtimeManager *virtualization.RuntimeManager,
 ) {
 
@@ -77,7 +80,6 @@ func InitMqtt(
 	TOPICS[fmt.Sprintf("nodes/%s/control/delete", clientID)] = withRuntimeManager(deleteHandler, runtimeManager)
 
 	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("tcp://%s:%s", brokerUrl, brokerPort))
 	opts.SetClientID(clientid + "-ne")
 	opts.SetUsername("")
 	opts.SetPassword("")
@@ -89,12 +91,27 @@ func InitMqtt(
 		logger.InfoLogger().Printf("MQTT - Configuring TLS")
 		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
-			logger.ErrorLogger().Printf("Error loading certificate: %v", err)
+			logger.ErrorLogger().Fatalf("Error loading certificate: %v", err)
 		}
-		opts.SetTLSConfig(&tls.Config{
+		tlsCfg := &tls.Config{
 			Certificates: []tls.Certificate{cert},
-		})
+			MinVersion:   tls.VersionTLS12,
+		}
+		if caFile != "" {
+			caPem, err := os.ReadFile(caFile)
+			if err != nil {
+				logger.ErrorLogger().Fatalf("Error reading cluster CA: %v", err)
+			}
+			pool := x509.NewCertPool()
+			if !pool.AppendCertsFromPEM(caPem) {
+				logger.ErrorLogger().Fatalf("Failed to parse cluster CA PEM")
+			}
+			tlsCfg.RootCAs = pool
+		}
+		opts.SetTLSConfig(tlsCfg)
 		opts.AddBroker(fmt.Sprintf("tls://%s:%s", brokerUrl, brokerPort))
+	} else {
+		opts.AddBroker(fmt.Sprintf("tcp://%s:%s", brokerUrl, brokerPort))
 	}
 
 	go runMqttClient(opts)
