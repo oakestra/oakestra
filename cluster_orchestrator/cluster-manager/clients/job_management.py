@@ -36,7 +36,9 @@ def mark_inactive_as_failed(time_interval):
         for instance in job["instance_list"]:
             job_status = convert_to_status(instance.get("status", None)) or LegacyStatus.LEGACY_0
 
-            timestamp = instance.get("last_modified_timestamp", datetime.now(timezone.utc).timestamp())
+            timestamp = instance.get(
+                "last_modified_timestamp", datetime.now(timezone.utc).timestamp()
+            )
 
             if (
                 timestamp < cutoff
