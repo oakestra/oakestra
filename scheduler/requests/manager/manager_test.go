@@ -2,6 +2,7 @@ package manager
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,10 +14,11 @@ import (
 func withTestServer(t *testing.T, srv *httptest.Server, fn func()) {
 	t.Helper()
 	u, _ := url.Parse(srv.URL)
-	origURL, origPort := managerURL, managerPort
+	origURL, origPort, origDeploy := managerURL, managerPort, deployURL
 	managerURL = u.Hostname()
 	managerPort = u.Port()
-	defer func() { managerURL = origURL; managerPort = origPort }()
+	deployURL = fmt.Sprintf("%s://%s:%s%s", protocol, managerURL, managerPort, deployPath)
+	defer func() { managerURL = origURL; managerPort = origPort; deployURL = origDeploy }()
 	fn()
 }
 
@@ -71,10 +73,11 @@ func TestDeploySuccess_HTTPError(t *testing.T) {
 	u, _ := url.Parse(srv.URL)
 	srv.Close() // close immediately so connection is refused
 
-	origURL, origPort := managerURL, managerPort
+	origURL, origPort, origDeploy := managerURL, managerPort, deployURL
 	managerURL = u.Hostname()
 	managerPort = u.Port()
-	defer func() { managerURL = origURL; managerPort = origPort }()
+	deployURL = fmt.Sprintf("%s://%s:%s%s", protocol, managerURL, managerPort, deployPath)
+	defer func() { managerURL = origURL; managerPort = origPort; deployURL = origDeploy }()
 
 	if err := DeploySuccess("job-1", "candidate-1"); err == nil {
 		t.Fatal("expected error, got nil")

@@ -8,11 +8,15 @@ import (
 	"net/http"
 	"os"
 	"scheduler/logger"
+	"time"
 )
 
 var (
 	managerURL  = os.Getenv("MANAGER_URL")
 	managerPort = os.Getenv("MANAGER_PORT")
+	// deployURL is built once at startup; host and port are fixed after process start.
+	deployURL     = fmt.Sprintf("%s://%s:%s%s", protocol, managerURL, managerPort, deployPath)
+	managerClient = &http.Client{Timeout: 10 * time.Second}
 )
 
 const (
@@ -42,15 +46,13 @@ func DeployFailed(jobID, status string) error {
 }
 
 func doPost(payload any) error {
-	url := fmt.Sprintf("%s://%s:%s%s", protocol, managerURL, managerPort, deployPath)
-
 	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.ErrorLogger().Println("Could not marshal deployment request")
 		return err
 	}
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(data)) //nolint:noctx
+	resp, err := managerClient.Post(deployURL, "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		logger.ErrorLogger().Println("Could not send deployment request")
 		return err
@@ -61,6 +63,6 @@ func doPost(payload any) error {
 		}
 	}()
 
-	logger.DebugLogger().Printf("Deployment request %s to url %s", string(data), url)
+	logger.DebugLogger().Printf("Deployment request %s to url %s", string(data), deployURL)
 	return nil
 }

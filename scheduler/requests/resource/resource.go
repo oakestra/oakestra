@@ -9,11 +9,15 @@ import (
 	"scheduler/calculate/schedulers/placement"
 	"scheduler/logger"
 	"strings"
+	"time"
 )
 
 var (
 	resourceAbstractorURL  = os.Getenv("RESOURCE_ABSTRACTOR_URL")
 	resourceAbstractorPort = os.Getenv("RESOURCE_ABSTRACTOR_PORT")
+	// resourceBaseURL is built once at startup; host and port are fixed after process start.
+	resourceBaseURL = fmt.Sprintf("%s://%s:%s%s/", protocol, resourceAbstractorURL, resourceAbstractorPort, resourcesPath)
+	resourceClient  = &http.Client{Timeout: 10 * time.Second}
 )
 
 const (
@@ -60,10 +64,10 @@ func formatInterestedResources(interestedResources []string) string {
 }
 
 func AvailableResources[T placement.Candidate](data *[]T, requestParameters map[string]string, interestedResources []string) error {
-	url := fmt.Sprintf("%s://%s:%s%s/%s", protocol, resourceAbstractorURL, resourceAbstractorPort, resourcesPath, formatQuery(requestParameters, interestedResources))
+	url := resourceBaseURL + formatQuery(requestParameters, interestedResources)
 	logger.DebugLogger().Printf("Request URL: %v", url)
 
-	resp, err := http.Get(url) //nolint:noctx
+	resp, err := resourceClient.Get(url)
 	if err != nil {
 		logger.ErrorLogger().Println("Error fetching resources")
 		return err

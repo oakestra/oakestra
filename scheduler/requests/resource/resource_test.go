@@ -2,6 +2,7 @@ package resource
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -111,10 +112,11 @@ func TestAvailableResources_HTTPError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	u, _ := url.Parse(srv.URL)
 	srv.Close()
-	origURL, origPort := resourceAbstractorURL, resourceAbstractorPort
+	origURL, origPort, origBase := resourceAbstractorURL, resourceAbstractorPort, resourceBaseURL
 	resourceAbstractorURL = u.Hostname()
 	resourceAbstractorPort = u.Port()
-	defer func() { resourceAbstractorURL = origURL; resourceAbstractorPort = origPort }()
+	resourceBaseURL = fmt.Sprintf("%s://%s:%s%s/", protocol, resourceAbstractorURL, resourceAbstractorPort, resourcesPath)
+	defer func() { resourceAbstractorURL = origURL; resourceAbstractorPort = origPort; resourceBaseURL = origBase }()
 
 	var got []testNode
 	if err := AvailableResources(&got, nil, nil); err == nil {
@@ -140,9 +142,10 @@ func TestAvailableResources_InvalidJSON(t *testing.T) {
 func withTestServer(t *testing.T, srv *httptest.Server, fn func()) {
 	t.Helper()
 	u, _ := url.Parse(srv.URL)
-	origURL, origPort := resourceAbstractorURL, resourceAbstractorPort
+	origURL, origPort, origBase := resourceAbstractorURL, resourceAbstractorPort, resourceBaseURL
 	resourceAbstractorURL = u.Hostname()
 	resourceAbstractorPort = u.Port()
-	defer func() { resourceAbstractorURL = origURL; resourceAbstractorPort = origPort }()
+	resourceBaseURL = fmt.Sprintf("%s://%s:%s%s/", protocol, resourceAbstractorURL, resourceAbstractorPort, resourcesPath)
+	defer func() { resourceAbstractorURL = origURL; resourceAbstractorPort = origPort; resourceBaseURL = origBase }()
 	fn()
 }
