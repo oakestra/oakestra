@@ -63,6 +63,10 @@ func doPost(payload any) error {
 		}
 	}()
 
+	if resp.StatusCode >= http.StatusBadRequest {
+		return fmt.Errorf("manager returned HTTP %d", resp.StatusCode)
+	}
+
 	logger.DebugLogger().Printf("Deployment request %s to url %s", string(data), deployURL)
 	return nil
 }

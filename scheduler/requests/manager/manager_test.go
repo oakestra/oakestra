@@ -84,6 +84,19 @@ func TestDeploySuccess_HTTPError(t *testing.T) {
 	}
 }
 
+func TestDeploySuccess_NonOKStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	withTestServer(t, srv, func() {
+		if err := DeploySuccess("job-1", "candidate-1"); err == nil {
+			t.Fatal("expected error for non-2xx response, got nil")
+		}
+	})
+}
+
 func TestDeploySuccess_CorrectPath(t *testing.T) {
 	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

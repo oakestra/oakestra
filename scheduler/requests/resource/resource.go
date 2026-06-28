@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"scheduler/calculate/schedulers/placement"
 	"scheduler/logger"
@@ -51,7 +52,7 @@ func formatRequestParameters(r map[string]string) string {
 		if v == "" {
 			continue
 		}
-		fmt.Fprintf(&sb, "%s=%s&", k, v)
+		fmt.Fprintf(&sb, "%s=%s&", k, url.QueryEscape(v))
 	}
 	return strings.TrimSuffix(sb.String(), "&")
 }
@@ -77,6 +78,10 @@ func AvailableResources[T placement.Candidate](data *[]T, requestParameters map[
 			logger.ErrorLogger().Println("Error closing body")
 		}
 	}()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		return fmt.Errorf("resource abstractor returned HTTP %d", resp.StatusCode)
+	}
 
 	if err := json.NewDecoder(resp.Body).Decode(data); err != nil {
 		logger.ErrorLogger().Println("Error decoding body")

@@ -42,6 +42,13 @@ func TestFormatRequestParameters_EmptyMap(t *testing.T) {
 	}
 }
 
+func TestFormatRequestParameters_SpecialCharsEncoded(t *testing.T) {
+	got := formatRequestParameters(map[string]string{"candidate_name": "rack&eu"})
+	if got != "candidate_name=rack%26eu" {
+		t.Fatalf("expected %q, got %q", "candidate_name=rack%26eu", got)
+	}
+}
+
 // --- formatInterestedResources ---
 
 func TestFormatInterestedResources_Empty(t *testing.T) {
@@ -122,6 +129,19 @@ func TestAvailableResources_HTTPError(t *testing.T) {
 	if err := AvailableResources(&got, nil, nil); err == nil {
 		t.Fatal("expected error, got nil")
 	}
+}
+
+func TestAvailableResources_NonOKStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	withTestServer(t, srv, func() {
+		var got []testNode
+		if err := AvailableResources(&got, nil, nil); err == nil {
+			t.Fatal("expected error for non-2xx response, got nil")
+		}
+	})
 }
 
 func TestAvailableResources_InvalidJSON(t *testing.T) {
