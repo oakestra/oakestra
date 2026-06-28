@@ -3,6 +3,7 @@
 package cpumemfit
 
 import (
+	"cmp"
 	"encoding/json"
 	"os"
 	"scheduler/calculate/schedulers/placement"
@@ -155,14 +156,10 @@ func (Scheduler) Calculate(job Resources, candidates []Resources) (Resources, er
 // filterRequirements returns the candidates that meet the job's resource and
 // constraint requirements.
 func filterRequirements(job Resources, candidates []Resources) []Resources {
-	filtered := make([]Resources, 0, len(candidates))
-	for _, c := range candidates {
+	return placement.Filter(candidates, func(c Resources) bool {
 		logger.DebugLogger().Printf("Filtering candidate: %v", c)
-		if placement.MeetsBasicRequirements(job.BaseResources, c.BaseResources) && hasRequiredCSIDrivers(job, c) {
-			filtered = append(filtered, c)
-		}
-	}
-	return filtered
+		return placement.MeetsBasicRequirements(job.BaseResources, c.BaseResources) && hasRequiredCSIDrivers(job, c)
+	})
 }
 
 // hasRequiredCSIDrivers reports whether candidate advertises every CSI driver
@@ -188,11 +185,5 @@ func hasRequiredCSIDrivers(job, candidate Resources) bool {
 func cmpMemCPU(a, b Resources) int {
 	scoreA := (100.0 - a.CPUPercent) + a.AvailableMem
 	scoreB := (100.0 - b.CPUPercent) + b.AvailableMem
-	if scoreA > scoreB {
-		return 1
-	}
-	if scoreA < scoreB {
-		return -1
-	}
-	return 0
+	return cmp.Compare(scoreA, scoreB)
 }

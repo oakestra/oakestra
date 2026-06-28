@@ -82,11 +82,11 @@ func PerformSchedulingRequest[J placement.Job, C placement.Candidate](job J, alg
 		var schedulingError placement.SchedulingError
 		if errors.As(err, &schedulingError) {
 			logger.ErrorLogger().Printf("Scheduling failed: Sending status %v to manager", err)
-			err = manager.Deploy(job.ID(), schedulingError.Error(), false)
+			err = manager.DeployFailed(job.ID(), schedulingError.Error())
 		}
 		return err
 	}
 
 	logger.InfoLogger().Printf("Scheduled job %s to candidate %s", job.ID(), chosen.ID())
-	return manager.Deploy(job.ID(), chosen.ID(), true)
+	return manager.DeploySuccess(job.ID(), chosen.ID())
 }

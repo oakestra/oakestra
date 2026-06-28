@@ -100,6 +100,17 @@ func MeetsBasicRequirements(job, candidate BaseResources) bool {
 		candidate.AvailableMem >= job.AvailableMem
 }
 
+// Filter returns the elements of candidates for which keep returns true.
+func Filter[C any](candidates []C, keep func(C) bool) []C {
+	filtered := make([]C, 0, len(candidates))
+	for _, c := range candidates {
+		if keep(c) {
+			filtered = append(filtered, c)
+		}
+	}
+	return filtered
+}
+
 // NormalizeVirtualization converts the polymorphic JSON "virtualization" field
 // (string | []string | null) into a uniform []string.
 func NormalizeVirtualization(raw any) ([]string, error) {

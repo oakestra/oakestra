@@ -4,7 +4,6 @@ package resource
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"scheduler/calculate/schedulers/placement"
@@ -75,14 +74,8 @@ func AvailableResources[T placement.Candidate](data *[]T, requestParameters map[
 		}
 	}()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		logger.ErrorLogger().Println("Error reading body")
-		return err
-	}
-
-	if err := json.Unmarshal(body, data); err != nil {
-		logger.ErrorLogger().Println("Error unmarshalling body")
+	if err := json.NewDecoder(resp.Body).Decode(data); err != nil {
+		logger.ErrorLogger().Println("Error decoding body")
 		return err
 	}
 

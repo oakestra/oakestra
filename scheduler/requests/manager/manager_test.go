@@ -20,7 +20,7 @@ func withTestServer(t *testing.T, srv *httptest.Server, fn func()) {
 	fn()
 }
 
-func TestDeploy_Success(t *testing.T) {
+func TestDeploySuccess(t *testing.T) {
 	var gotBody []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotBody, _ = io.ReadAll(r.Body)
@@ -29,7 +29,7 @@ func TestDeploy_Success(t *testing.T) {
 	defer srv.Close()
 
 	withTestServer(t, srv, func() {
-		if err := Deploy("job-1", "candidate-1", true); err != nil {
+		if err := DeploySuccess("job-1", "candidate-1"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
@@ -43,7 +43,7 @@ func TestDeploy_Success(t *testing.T) {
 	}
 }
 
-func TestDeploy_Failure(t *testing.T) {
+func TestDeployFailed(t *testing.T) {
 	var gotBody []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotBody, _ = io.ReadAll(r.Body)
@@ -52,7 +52,7 @@ func TestDeploy_Failure(t *testing.T) {
 	defer srv.Close()
 
 	withTestServer(t, srv, func() {
-		if err := Deploy("job-1", "NO_WORKER_CAPACITY", false); err != nil {
+		if err := DeployFailed("job-1", "NO_WORKER_CAPACITY"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
@@ -66,7 +66,7 @@ func TestDeploy_Failure(t *testing.T) {
 	}
 }
 
-func TestDeploy_HTTPError(t *testing.T) {
+func TestDeploySuccess_HTTPError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	u, _ := url.Parse(srv.URL)
 	srv.Close() // close immediately so connection is refused
@@ -76,12 +76,12 @@ func TestDeploy_HTTPError(t *testing.T) {
 	managerPort = u.Port()
 	defer func() { managerURL = origURL; managerPort = origPort }()
 
-	if err := Deploy("job-1", "candidate-1", true); err == nil {
+	if err := DeploySuccess("job-1", "candidate-1"); err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }
 
-func TestDeploy_CorrectPath(t *testing.T) {
+func TestDeploySuccess_CorrectPath(t *testing.T) {
 	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
@@ -90,7 +90,7 @@ func TestDeploy_CorrectPath(t *testing.T) {
 	defer srv.Close()
 
 	withTestServer(t, srv, func() {
-		_ = Deploy("job-1", "candidate-1", true)
+		_ = DeploySuccess("job-1", "candidate-1")
 	})
 
 	if gotPath != deployPath {

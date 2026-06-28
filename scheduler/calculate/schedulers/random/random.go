@@ -78,12 +78,8 @@ func (Scheduler) Calculate(job Resources, candidates []Resources) (Resources, er
 }
 
 func filterRequirements(job Resources, candidates []Resources) []Resources {
-	filtered := make([]Resources, 0, len(candidates))
-	for _, c := range candidates {
+	return placement.Filter(candidates, func(c Resources) bool {
 		logger.DebugLogger().Printf("Filtering candidate: %v", c)
-		if placement.MeetsBasicRequirements(job.BaseResources, c.BaseResources) {
-			filtered = append(filtered, c)
-		}
-	}
-	return filtered
+		return placement.MeetsBasicRequirements(job.BaseResources, c.BaseResources)
+	})
 }

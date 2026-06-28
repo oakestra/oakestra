@@ -30,27 +30,27 @@ type deploymentFailedRequest struct {
 	Status string `json:"status"`
 }
 
-// Deploy sends the scheduling result to the system or cluster manager.
-// When success is true, result is the chosen candidate's ID; when false,
-// result is the negative scheduling status string.
-func Deploy(jobID string, result string, success bool) error {
+// DeploySuccess notifies the manager that job jobID was placed on candidateID.
+func DeploySuccess(jobID, candidateID string) error {
+	return doPost(deploymentRequest{JobID: jobID, CandidateID: candidateID})
+}
+
+// DeployFailed notifies the manager that scheduling job jobID failed with
+// the given negative status string.
+func DeployFailed(jobID, status string) error {
+	return doPost(deploymentFailedRequest{JobID: jobID, Status: status})
+}
+
+func doPost(payload any) error {
 	url := fmt.Sprintf("%s://%s:%s%s", protocol, managerURL, managerPort, deployPath)
 
-	var (
-		payload []byte
-		err     error
-	)
-	if success {
-		payload, err = json.Marshal(deploymentRequest{JobID: jobID, CandidateID: result})
-	} else {
-		payload, err = json.Marshal(deploymentFailedRequest{JobID: jobID, Status: result})
-	}
+	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.ErrorLogger().Println("Could not marshal deployment request")
 		return err
 	}
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload)) //nolint:noctx
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(data)) //nolint:noctx
 	if err != nil {
 		logger.ErrorLogger().Println("Could not send deployment request")
 		return err
@@ -61,6 +61,6 @@ func Deploy(jobID string, result string, success bool) error {
 		}
 	}()
 
-	logger.DebugLogger().Printf("Deployment request %s to url %s", string(payload), url)
+	logger.DebugLogger().Printf("Deployment request %s to url %s", string(data), url)
 	return nil
 }
