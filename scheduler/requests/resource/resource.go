@@ -1,4 +1,4 @@
-// Package resource interface with the resource abstractor
+// Package resource interfaces with the resource abstractor service.
 package resource
 
 import (
@@ -7,19 +7,19 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"scheduler/calculate/schedulers/interfaces"
+	"scheduler/calculate/schedulers/placement"
 	"scheduler/logger"
 	"strings"
 )
 
 var (
-	RESOURCE_ABSTRACTOR_URL  = os.Getenv("RESOURCE_ABSTRACTOR_URL")
-	RESOURCE_ABSTRACTOR_PORT = os.Getenv("RESOURCE_ABSTRACTOR_PORT")
+	resourceAbstractorURL  = os.Getenv("RESOURCE_ABSTRACTOR_URL")
+	resourceAbstractorPort = os.Getenv("RESOURCE_ABSTRACTOR_PORT")
 )
 
 const (
-	PROTOCOL  = "http"
-	RESOURCES = "/api/v1/resources"
+	protocol      = "http"
+	resourcesPath = "/api/v1/resources"
 )
 
 func formatQuery(requestParameters map[string]string, interestedResources []string) string {
@@ -48,7 +48,7 @@ func formatRequestParameters(r map[string]string) string {
 		if v == "" {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("%s=%s&", k, v))
+		fmt.Fprintf(&sb, "%s=%s&", k, v)
 	}
 	return strings.TrimSuffix(sb.String(), "&")
 }
@@ -57,30 +57,23 @@ func formatInterestedResources(interestedResources []string) string {
 	if len(interestedResources) == 0 {
 		return ""
 	}
-	var sb strings.Builder
-	for _, interestedResource := range interestedResources {
-		sb.WriteString(interestedResource)
-		sb.WriteString(",")
-	}
-
-	return strings.TrimSuffix(sb.String(), ",")
+	return strings.Join(interestedResources, ",")
 }
 
-func AvailableResources[T interfaces.ResourceList](data *[]T, requestParameters map[string]string, interestedResources []string) error {
-	url := fmt.Sprintf("%s://%s:%s%s/%s", PROTOCOL, RESOURCE_ABSTRACTOR_URL, RESOURCE_ABSTRACTOR_PORT, RESOURCES, formatQuery(requestParameters, interestedResources))
+func AvailableResources[T placement.Candidate](data *[]T, requestParameters map[string]string, interestedResources []string) error {
+	url := fmt.Sprintf("%s://%s:%s%s/%s", protocol, resourceAbstractorURL, resourceAbstractorPort, resourcesPath, formatQuery(requestParameters, interestedResources))
 	logger.DebugLogger().Printf("Request URL: %v", url)
 
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) //nolint:noctx
 	if err != nil {
 		logger.ErrorLogger().Println("Error fetching resources")
 		return err
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
 			logger.ErrorLogger().Println("Error closing body")
 		}
-	}(resp.Body)
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -88,8 +81,7 @@ func AvailableResources[T interfaces.ResourceList](data *[]T, requestParameters 
 		return err
 	}
 
-	err = json.Unmarshal(body, data)
-	if err != nil {
+	if err := json.Unmarshal(body, data); err != nil {
 		logger.ErrorLogger().Println("Error unmarshalling body")
 		return err
 	}
