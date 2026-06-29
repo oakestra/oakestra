@@ -14,8 +14,11 @@ type Constraints struct {
 	placement.GenericConstraints
 }
 
-// Resources is a placement candidate or job descriptor for the random scheduler.
-// It implements placement.ResourceList.
+// Resources serves as both the job descriptor (J) and the placement candidate (C)
+// in Algorithm[Resources, Resources]. The two roles share one type because the
+// ResourceAbstractor returns candidates with the same JSON schema as the incoming
+// job payload — they were a single type before the Algorithm interface was
+// generalised to two type parameters.
 type Resources struct {
 	placement.BaseResources
 	Constraints []Constraints `json:"constraints"`

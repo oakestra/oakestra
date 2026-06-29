@@ -79,6 +79,15 @@ type Job interface {
 }
 
 // Algorithm chooses the best Candidate for a Job.
+//
+// J and C are kept as separate type parameters to allow future implementations
+// where the job descriptor and the placement candidate carry different fields.
+// In practice all current implementations bind J and C to the same concrete
+// type (e.g. cpumemfit.Resources for both). This is intentional: the
+// ResourceAbstractor returns candidates using the same JSON schema as the
+// incoming job payload, so the two roles have always shared one struct. The
+// two-parameter form is forward-compatible without forcing that constraint on
+// new algorithms.
 type Algorithm[J Job, C Candidate] interface {
 	// JobData returns an empty value used as a container for the incoming
 	// job request.
