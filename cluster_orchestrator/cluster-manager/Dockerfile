@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /
 
-RUN python -m grpc_tools.protoc -Iproto --python_out=proto --grpc_python_out=proto proto/clusterRegistration.proto
+RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/clusterRegistration.proto
 
 # ENV FLASK_APP=scheduler.py
 ENV FLASK_ENV=development

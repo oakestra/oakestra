@@ -31,7 +31,7 @@ jobs:
       - name: Generate protobuf files
         working-directory: root_orchestrator/system-manager-python
         run: |
-          python -m grpc_tools.protoc -Iproto --python_out=proto --grpc_python_out=proto proto/clusterRegistration.proto
+          python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/clusterRegistration.proto
 
       - name: Build Docker images
         working-directory: resource-abstractor
