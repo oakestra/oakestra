@@ -1,5 +1,8 @@
-# After cloning or updating hooks config, install all hook types:
-#   pre-commit install --hook-type pre-push --hook-type pre-commit --hook-type post-checkout --hook-type post-merge
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+  - post-checkout
+  - post-merge
 default_language_version:
   python: python3
 repos:
