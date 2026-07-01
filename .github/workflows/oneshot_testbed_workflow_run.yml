@@ -29,6 +29,8 @@ jobs:
 
       - name: Testbed Oneshot Execution ${{ github.event.workflow_run.head_branch }}
         uses: ./.github/actions/awx-deploy
+        env:
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
         with:
           AWX_URL: ${{ secrets.TOWER_HOST }}
           AWX_TOKEN: ${{ secrets.TOWER_TOKEN }}
