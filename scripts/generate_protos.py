@@ -17,18 +17,21 @@ def generate(proto_dir: Path) -> None:
     proto_files = list(proto_dir.glob("*.proto"))
     if not proto_files:
         return
+    service_root = proto_dir.parent
     print(f"Generating protobuf files in {proto_dir.relative_to(REPO_ROOT)}")
     subprocess.run(
         [
             sys.executable,
             "-m",
             "grpc_tools.protoc",
-            f"-I{proto_dir}",
-            f"--python_out={proto_dir}",
-            f"--grpc_python_out={proto_dir}",
-            *[str(f) for f in proto_files],
+            "-I.",
+            "--python_out=.",
+            "--pyi_out=.",
+            "--grpc_python_out=.",
+            *[str(Path(proto_dir.name) / f.name) for f in proto_files],
         ],
         check=True,
+        cwd=service_root,
     )
 
 

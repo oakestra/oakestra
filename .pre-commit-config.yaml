@@ -1,5 +1,10 @@
-# After cloning or updating hooks config, install all hook types:
-#   pre-commit install --hook-type pre-push --hook-type pre-commit --hook-type post-checkout --hook-type post-merge
+# Installs all hook types when running `pre-commit install`, so post-checkout
+# and post-merge hooks also run (needed to regenerate protobuf files after
+# switching branches or merging).
+default_install_hook_types:
+  - pre-commit
+  - post-checkout
+  - post-merge
 default_language_version:
   python: python3
 repos:
