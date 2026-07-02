@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from ext_requests.scheduler_requests import scheduler_request_deploy
 from oakestra_utils.types.statuses import (
@@ -15,7 +15,7 @@ logger = logging.getLogger("cluster_manager")
 
 
 def mark_inactive_as_failed(time_interval):
-    cutoff = (datetime.now() - timedelta(seconds=time_interval)).timestamp()
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=time_interval)).timestamp()
     query = {
         "instance_list": {
             "$elemMatch": {
@@ -36,7 +36,9 @@ def mark_inactive_as_failed(time_interval):
         for instance in job["instance_list"]:
             job_status = convert_to_status(instance.get("status", None)) or LegacyStatus.LEGACY_0
 
-            timestamp = instance.get("last_modified_timestamp", datetime.now().timestamp())
+            timestamp = instance.get(
+                "last_modified_timestamp", datetime.now(timezone.utc).timestamp()
+            )
 
             if (
                 timestamp < cutoff
@@ -167,7 +169,7 @@ def update_instance(job_id, instance_number, data):
 
     # Filter none value
     data = {k: v for k, v in data.items() if v is not None}
-    data["last_modified_timestamp"] = datetime.now().timestamp()
+    data["last_modified_timestamp"] = datetime.now(timezone.utc).timestamp()
 
     if job.get("instance_list", None) is None:
         data["instance_number"] = instance_number

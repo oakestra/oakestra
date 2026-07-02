@@ -152,9 +152,9 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 
 | Layer | Language/Framework | Key deps |
 |---|---|---|
-| system_manager | Python 3, Flask, flask-smorest, flask-socketio, eventlet | grpc, pymongo, flask-jwt-extended |
-| cluster_manager | Python 3, Flask, flask-smorest, flask-socketio, eventlet | grpc, paho-mqtt, apscheduler, prometheus_client |
-| resource-abstractor | Python 3, Flask | pymongo, resource_abstractor_client (internal lib) |
+| system_manager | Python 3.10, Flask, flask-smorest, flask-socketio, eventlet | grpc, pymongo, flask-jwt-extended |
+| cluster_manager | Python 3.10, Flask, flask-smorest, flask-socketio, eventlet | grpc, paho-mqtt, apscheduler, prometheus_client |
+| resource-abstractor | Python 3.10, Flask | pymongo, resource_abstractor_client (internal lib) |
 | root/cluster scheduler | Go 1.24 | gin, asynq (Redis-backed task queue) |
 | NodeEngine | Go | paho-mqtt, cobra CLI |
 | Databases | MongoDB 8.0, Redis | — |

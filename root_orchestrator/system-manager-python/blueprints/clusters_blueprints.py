@@ -8,7 +8,6 @@ from flask_smorest import Blueprint, abort
 from oakestra_utils.types.statuses import convert_to_status
 from resource_abstractor_client import candidate_operations
 from services.instance_management import update_job_status
-from utils.network import sanitize
 
 logger = logging.getLogger("system_manager")
 
@@ -119,8 +118,7 @@ class ClusterController(MethodView):
             )
             if result is None:
                 # cluster has outdated jobs, ask to undeploy
-                addr = sanitize(request.remote_addr)
-                cluster_request_to_delete_job_by_ip(j.get("_id"), -1, addr)
+                cluster_request_to_delete_job_by_ip(j.get("_id"), -1, cluster_id)
 
         return "ok"
 

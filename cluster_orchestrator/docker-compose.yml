@@ -74,6 +74,8 @@ services:
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_MONGO_URL=cluster_mongo_net
       - CLUSTER_MONGO_PORT=10108
+      - CLUSTER_ADDRESS=${CLUSTER_ADDRESS}
+      - CLUSTER_NAME=${CLUSTER_NAME}
     depends_on:
       - mongo_clusternet
       - mqtt
@@ -114,6 +116,7 @@ services:
       - RESOURCE_ABSTRACTOR_PORT=11012
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
+      - CLUSTER_ADDRESS=${CLUSTER_ADDRESS}
     depends_on:
       - mongo_cluster
       - mqtt

@@ -90,27 +90,48 @@ if [ "$2" != "custom" ]; then
     fi
     echo Default node IP: $SYSTEM_MANAGER_URL
 
-    # get public IP
-    PUBLIC_IP=$(curl -sLf "https://api.ipify.org")
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to retrieve your public IP address."
-        exit 1
+    # Fetch a URL with retries — api.ipify.org / ipinfo.io occasionally have
+    # transient failures (TLS hiccup, DNS blip, rate limit) that resolve on retry.
+    fetch_with_retry() {
+        local url="$1"
+        local attempts=4
+        local delay=2
+        local i
+        for i in $(seq 1 $attempts); do
+            local out
+            out=$(curl -sLf --connect-timeout 5 --max-time 10 "$url") && {
+                printf '%s' "$out"
+                return 0
+            }
+            [ "$i" -lt "$attempts" ] && sleep "$delay"
+            delay=$((delay * 2))
+        done
+        return 1
+    }
+
+    PUBLIC_IP=$(fetch_with_retry "https://api.ipify.org") || PUBLIC_IP=""
+    if [ -n "$PUBLIC_IP" ]; then
+        ipLocation=$(fetch_with_retry "https://ipinfo.io/$PUBLIC_IP/json") || ipLocation=""
     fi
 
-    # get geo coordinates of public IP
-    ipLocation=$(curl -sLf "https://ipinfo.io/$PUBLIC_IP/json")
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to retrieve your public IP address."
-        exit 1
+    if [ -n "$ipLocation" ]; then
+        latitude=$(echo "$ipLocation" | jq -r '.loc | split(",") | .[0]')
+        longitude=$(echo "$ipLocation" | jq -r '.loc | split(",") | .[1]')
     fi
 
-    # Extract latitude and longitude
-    latitude=$(echo "$ipLocation" | jq -r '.loc | split(",") | .[0]')
-    longitude=$(echo "$ipLocation" | jq -r '.loc | split(",") | .[1]')
-
-    echo Default cluster location $(echo $latitude,$longitude,1000)
-    export CLUSTER_LOCATION=$(echo $latitude,$longitude,1000)
+    if [ -n "$latitude" ] && [ "$latitude" != "null" ]; then
+        echo Default cluster location $(echo $latitude,$longitude,1000)
+        export CLUSTER_LOCATION=$(echo $latitude,$longitude,1000)
+    else
+        echo "⚠️  Could not auto-detect cluster location from public IP geolocation; defaulting to 0,0,1000"
+        export CLUSTER_LOCATION="0,0,1000"
+    fi
     export CLUSTER_NAME=default_cluster
+    # In 1-DOC the cluster runs on the same host as the root, so the cluster's
+    # reachable address is the same host IP as SYSTEM_MANAGER_URL.
+    if [ -z "$CLUSTER_ADDRESS" ]; then
+        export CLUSTER_ADDRESS=$SYSTEM_MANAGER_URL
+    fi
 fi
 
 rm -rf ~/.oakestra 2> /dev/null
@@ -164,7 +185,7 @@ if [ ! -z "$OAKESTRA_VERSION" ]; then
         rm 1-DOC.yaml.bak 
     else
         if [ "$OAKESTRA_VERSION" != "main" ]; then
-          echo "Error: Full 1 Node Oakestra deployment only supports tagged releases, develop or main branch. Please specify a valid tag (e.g., v0.4.401 or alpha-v0.4.403)."
+          echo "Error: Full 1 Node Oakestra deployment only supports tagged releases, develop or main branch. Please specify a valid tag (e.g., v0.4.410 or alpha-v0.4.411)."
           exit 1
         fi
     fi

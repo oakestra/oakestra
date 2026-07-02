@@ -166,6 +166,9 @@ docker logs <exited_container_name> 2>&1 | tail -50
 | `JWT` errors in system_manager | jwt_generator container not started |
 | `CLUSTER_NAME not set` | Missing env var in cluster startup |
 | `SYSTEM_MANAGER_URL not set` | Cluster started without root URL |
+| `CLUSTER_ADDRESS env var is not set` (cluster_manager log) | Missing env var — cluster cannot advertise its address to root |
+| `cluster_address is required` (system_manager log) | Cluster connected via gRPC but sent empty `cluster_address` |
+| `Cluster reachability probe failed` / `cluster not reachable at` (system_manager log) | Root cannot reach `http://CLUSTER_ADDRESS:10100/api/cluster/status` — wrong IP, firewall, or cluster_manager not up |
 
 ---
 
@@ -186,7 +189,7 @@ docker exec root_service_manager env 2>/dev/null | grep -E "SYSTEM_MANAGER|ROOT_
 
 ```bash
 # Cluster Orchestrator critical vars
-docker exec cluster_manager env 2>/dev/null | grep -E "SYSTEM_MANAGER_URL|CLUSTER_NAME|CLUSTER_LOCATION|MQTT|CLUSTER_MONGO|CLUSTER_SCHEDULER|RESOURCE_ABSTRACTOR" || echo "cluster_manager not running"
+docker exec cluster_manager env 2>/dev/null | grep -E "SYSTEM_MANAGER_URL|CLUSTER_NAME|CLUSTER_LOCATION|CLUSTER_ADDRESS|MQTT|CLUSTER_MONGO|CLUSTER_SCHEDULER|RESOURCE_ABSTRACTOR" || echo "cluster_manager not running"
 
 docker exec cluster_scheduler env 2>/dev/null | grep -E "MANAGER_URL|RESOURCE_ABSTRACTOR|REDIS_ADDR" || echo "cluster_scheduler not running"
 
@@ -196,6 +199,7 @@ docker exec cluster_service_manager env 2>/dev/null | grep -E "ROOT_SERVICE_MANA
 **Key validations:**
 - `SYSTEM_MANAGER_URL` in cluster containers must be the **root machine's IP or hostname**, not `localhost` or `127.0.0.1` (unless 1-DOC)
 - `CLUSTER_NAME` and `CLUSTER_LOCATION` must be non-empty in cluster_manager
+- `CLUSTER_ADDRESS` must be non-empty in cluster_manager and must be the **IP/hostname at which the ROOT can reach this cluster manager** (typically the cluster host's default-route IP). It must NOT be `localhost`, `127.0.0.1`, `0.0.0.0`, or a Docker-internal address like `172.17.x.x` / `172.19.x.x` (those are the docker bridge gateway and not routable from the root). In 1-DOC deployments, `CLUSTER_ADDRESS` should equal `SYSTEM_MANAGER_URL`.
 - `REDIS_ADDR` must match `redis://:rootRedis@root_redis:6379` (root) or `redis://:clusterRedis@cluster_redis:6479` (cluster)
 - `CLUSTER_LOCATION` format: `latitude,longitude,radius` (e.g., `48.1,11.6,1000`)
 
@@ -408,15 +412,28 @@ Check for subnet conflicts with the host network. If the `172.x.x.x` range used 
 ### 8.3 IP Address Configuration
 
 ```bash
-# Check what IP was used to start containers
-docker exec cluster_manager env 2>/dev/null | grep SYSTEM_MANAGER_URL
+# Check what IPs were used to start containers
+docker exec cluster_manager env 2>/dev/null | grep -E "SYSTEM_MANAGER_URL|CLUSTER_ADDRESS"
 docker inspect oakestra-frontend-container --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep API_ADDRESS
 
-# Verify the IP is reachable
+# Verify the IPs are reachable
 ip addr show | grep "inet " | grep -v "127.0.0.1"
+
+# From the cluster host, verify CLUSTER_ADDRESS is one of THIS host's IPs:
+CLUSTER_ADDRESS=$(docker exec cluster_manager env 2>/dev/null | grep ^CLUSTER_ADDRESS= | cut -d= -f2)
+ip -o addr show | awk '{print $4}' | cut -d/ -f1 | grep -Fxq "$CLUSTER_ADDRESS" \
+    && echo "OK: CLUSTER_ADDRESS=$CLUSTER_ADDRESS matches a host interface" \
+    || echo "WARNING: CLUSTER_ADDRESS=$CLUSTER_ADDRESS does NOT match any local interface IP"
+
+# From the root host, verify the cluster manager is reachable at its advertised address:
+curl -sS --connect-timeout 5 "http://$CLUSTER_ADDRESS:10100/api/cluster/status" \
+    || echo "FAIL: root cannot reach cluster_manager at $CLUSTER_ADDRESS:10100"
 ```
 
-A common issue is using `localhost` or `127.0.0.1` as SYSTEM_MANAGER_URL when cluster and root are on different machines. The actual machine IP must be used.
+Common pitfalls:
+- Using `localhost`/`127.0.0.1` as `SYSTEM_MANAGER_URL` when cluster and root are on different machines.
+- Using a Docker bridge gateway (e.g., `172.17.0.1`, `172.19.0.1`) as `CLUSTER_ADDRESS` — this address is not routable from the root machine and registration will fail the reachability probe. Use the cluster host's default-route IP instead.
+- Two clusters registering with the same `CLUSTER_ADDRESS` — the second registration is fine on the wire but every dispatch to it will land on whichever host actually answers `CLUSTER_ADDRESS:10100`.
 
 ---
 
@@ -642,8 +659,13 @@ done
 
 **Cluster manager registration failure** — look for:
 ```bash
-docker logs cluster_manager 2>&1 | grep -iE "register|system_manager|refused|timeout" | tail -20
+docker logs cluster_manager 2>&1 | grep -iE "register|system_manager|refused|timeout|cluster_address" | tail -20
+docker logs system_manager 2>&1 | grep -iE "grpc|cluster_address|reachability|register|not reachable" | tail -20
 ```
+Specifically:
+- `CLUSTER_ADDRESS env var is not set` in cluster_manager → cluster started without `CLUSTER_ADDRESS`; the cluster aborts the gRPC handshake.
+- `cluster_address is required` in system_manager → root received a `CS2Message` with an empty `cluster_address` field (old cluster image talking to a new root).
+- `Cluster reachability probe failed for http://<ip>:10100/api/cluster/status` in system_manager → root could not reach the cluster at the advertised address. Causes: wrong `CLUSTER_ADDRESS`, host firewall blocking 10100, cluster_manager not yet listening, or the cluster host is unreachable from the root host. The root aborts registration with `FAILED_PRECONDITION`.
 
 **Scheduler job failure** — look for:
 ```bash
@@ -719,6 +741,34 @@ sudo usermod -aG docker $USER && newgrp docker
 If the startup script detected an IPv6 address for SYSTEM_MANAGER_URL but the cluster expects IPv4:
 - Re-run startup with explicit IPv4: `export SYSTEM_MANAGER_URL=<ipv4_address>`
 - Or use `override-ipv6-enabled.yml` if IPv6 is intentional
+
+### Fix: Cluster registration aborted with `cluster not reachable at <ip>:10100`
+The root probes `GET /api/cluster/status` against the address the cluster advertised in `CLUSTER_ADDRESS`. If the probe fails, registration is refused with gRPC `FAILED_PRECONDITION`.
+
+1. From the cluster host, confirm `CLUSTER_ADDRESS` is one of this host's real interface IPs (NOT `127.0.0.1`, `0.0.0.0`, or a `172.x.x.x` docker bridge IP):
+   ```bash
+   docker exec cluster_manager env | grep ^CLUSTER_ADDRESS=
+   ip -o addr show | awk '{print $4}' | cut -d/ -f1
+   ```
+2. From the root host, verify it can actually reach the cluster:
+   ```bash
+   curl -sS --connect-timeout 5 "http://<CLUSTER_ADDRESS>:10100/api/cluster/status"
+   ```
+   - Connection refused → cluster_manager not yet up. Wait, or check `docker ps`.
+   - Connection timeout → firewall on the cluster host blocks 10100. Open it: `sudo ufw allow 10100/tcp`.
+   - No route → wrong `CLUSTER_ADDRESS`. Re-run `StartOakestraCluster.sh` and supply the correct IP at the prompt, or export `CLUSTER_ADDRESS=<routable_ip>` before running.
+3. Restart the cluster orchestrator so it re-registers:
+   ```bash
+   docker compose -f ~/.oakestra/cluster_orchestrator/cluster-orchestrator.yml down
+   ./scripts/StartOakestraCluster.sh
+   ```
+
+### Fix: Multiple clusters end up with the same advertised IP
+If `oak cl ls` shows two clusters with the same IP (e.g., both `172.19.0.1` or both equal to the same host's address):
+- The registrations were made before the `CLUSTER_ADDRESS` requirement was introduced, OR
+- Both cluster hosts were started with a docker-bridge IP as `CLUSTER_ADDRESS`.
+
+Fix by stopping both clusters, ensuring each one is started with a distinct, **routable-from-root** `CLUSTER_ADDRESS` (the cluster host's default-route IP), and re-registering. The root will now refuse to register a cluster that does not respond at its advertised address, so a misconfiguration shows up immediately at startup instead of silently corrupting job dispatch.
 
 ---
 
