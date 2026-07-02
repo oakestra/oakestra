@@ -96,34 +96,35 @@ func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
 		found = true
 	}
 	if !found {
-		logger.WarnLogger().Printf("No additional OCI runtimes found in containerd config %s", CONTAINERD_CONFIG_PATH)
+		logger.WarnLogger().Printf("No additional OCI runtimes found in containerd config %s. This worker will use the default runc runtime.", CONTAINERD_CONFIG_PATH)
 	}
 
 	return &runtime
 }
 
-// Parses TOML directly: containerd's v2 LoadConfig rejects legacy short-form
-// disabled_plugins entries (e.g. "cri") that ship with Docker's containerd.
+// findAdditionalRuntimePlugins discovers additional OCI runtimes from the
+// default containerd config.
 func findAdditionalRuntimePlugins() iter.Seq[string] {
 	return findAdditionalRuntimePluginsAt(CONTAINERD_CONFIG_PATH)
 }
 
-// checks the containerd config file for additional runtimes and registers them.
+// findAdditionalRuntimePluginsAt checks the containerd config file for
+// additional runtimes and yields them.
 // Parses TOML directly: containerd's v2 LoadConfig rejects legacy short-form
 // disabled_plugins entries (e.g. "cri") that ship with Docker's containerd.
-func findAdditionalRuntimePluginsAt(config_path string) iter.Seq[string] {
-	empty := func(yield func(string) bool) {}
-	data, err := os.ReadFile(config_path)
+func findAdditionalRuntimePluginsAt(configPath string) iter.Seq[string] {
+	emptyIterator := func(yield func(string) bool) {}
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to read containerd config file: %v", err)
-		return empty
+		return emptyIterator
 	}
 	var containerdConfig struct {
 		Plugins map[string]interface{} `toml:"plugins"`
 	}
 	if err := toml.Unmarshal(data, &containerdConfig); err != nil {
 		logger.ErrorLogger().Printf("Unable to parse containerd config file: %v", err)
-		return empty
+		return emptyIterator
 	}
 	for _, ctd := range containerdConfig.Plugins {
 		ctd, ok := ctd.(map[string]interface{})["containerd"].(map[string]interface{})
@@ -131,14 +132,14 @@ func findAdditionalRuntimePluginsAt(config_path string) iter.Seq[string] {
 			runtimes, ok := ctd["runtimes"].(map[string]interface{})
 			if ok {
 				for runtimeName := range runtimes {
-					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", runtimeName, config_path)
+					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", runtimeName, configPath)
 				}
 				return maps.Keys(runtimes)
 			}
 		}
 	}
-	logger.WarnLogger().Printf("No OCI runtimes found in containerd config %s", config_path)
-	return empty
+	logger.WarnLogger().Printf("No OCI runtimes found in containerd config %s. This worker will use the default runc runtime.", configPath)
+	return emptyIterator
 }
 
 // StopContainerdClient stops the container runtime client
