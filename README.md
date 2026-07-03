@@ -101,6 +101,12 @@ export CLUSTER_NAME=My_Awesome_Cluster
 # E.g. CLUSTER_LOCATION=51.518776717233244,-0.12612153395857345,2000
 export CLUSTER_LOCATION=My_Awesome_Location
 
+## IP/hostname at which the root orchestrator can reach THIS cluster manager.
+## Must be a non-loopback address on this host, routable from the root.
+## If unset, the startup script auto-detects the default-route interface IP
+## and offers it as the default.
+export CLUSTER_ADDRESS=<this cluster's IP>
+
 ## IP address where this root component can be reached to access the APIs
 export SYSTEM_MANAGER_URL=<IP address>
 # Note: Use a non-loopback interface IP (e.g. any of your real interfaces that have internet access).
@@ -119,7 +125,7 @@ export OAKESTRA_VERSION=develop
 
 The following ports must be exposed:
 
-- 10100 Cluster Manager (needs to be accessible by the Node Engine)
+- 10100 Cluster Manager — must be reachable from BOTH the Node Engine workers AND the root orchestrator (the root probes `GET /api/cluster/status` at registration time and refuses to register the cluster if `CLUSTER_ADDRESS:10100` is not reachable).
 
 ### Worker nodes 
 

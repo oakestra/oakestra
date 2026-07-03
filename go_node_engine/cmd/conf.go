@@ -31,6 +31,7 @@ func init() {
 	setCni.AddCommand(enableManualNetwork)
 	visibility.AddCommand(publicIP)
 	visibility.AddCommand(privateIP)
+	visibility.AddCommand(predefinedPublicIP)
 	addClusterCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Custom port of the cluster orchestrator")
 	addClusterCmd.Flags().BoolVarP(&clusterSSL, "clusterSSL", "s", false, "Perform cluster orchestrator handshake over HTTPS")
 	configCmd.AddCommand(setAddonCmd)
@@ -174,21 +175,29 @@ var (
 
 	// --- VISIBILITY
 	visibility = &cobra.Command{
-		Use:   "visibility [public/private]",
-		Short: "Use public or private IP",
+		Use:   "visibility [false/auto/<public-ip>]",
+		Short: "Configure node IP visibility mode",
 	}
 	publicIP = &cobra.Command{
 		Use:   "public",
-		Short: "Allow networking over the public IP address",
+		Short: "Use automatic public IP detection",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return setPublicIp(true)
+			return setPublicIp(config.PUBLIC_IP_AUTO)
 		},
 	}
 	privateIP = &cobra.Command{
 		Use:   "private",
-		Short: "Disallow networking over the public IP address",
+		Short: "Disable public IP visibility",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return setPublicIp(false)
+			return setPublicIp(config.PUBLIC_IP_FALSE)
+		},
+	}
+	predefinedPublicIP = &cobra.Command{
+		Use:   "set [public-ip]",
+		Short: "Set a predefined public IP value",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setPublicIp(config.ParsePublicIPMode(args[0]))
 		},
 	}
 
@@ -491,13 +500,13 @@ func setNetwork(cniName string) error {
 	return configManager.Write(clusterConf)
 }
 
-func setPublicIp(public bool) error {
+func setPublicIp(mode config.PublicIPMode) error {
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
 	if err != nil {
 		return err
 	}
-	clusterConf.PublicIp = public
+	clusterConf.PublicIp = mode
 
 	return configManager.Write(clusterConf)
 }

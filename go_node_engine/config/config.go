@@ -2,13 +2,22 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go_node_engine/logger"
 	"os"
+	"strings"
 )
 
-var DEFAULT_LOG_DIR = "/tmp"
-var AUTO_OAK_NETWORK = "default"
+const (
+	DEFAULT_LOG_DIR  = "/tmp"
+	AUTO_OAK_NETWORK = "default"
+	PUBLIC_IP_FALSE  = PublicIPMode("false")
+	PUBLIC_IP_AUTO   = PublicIPMode("auto")
+
+	confDir  = "/etc/oakestra"
+	confPath = "/etc/oakestra/conf.json"
+)
 
 // RuntimeType is the type of runtime that the node executes
 type RuntimeType string
@@ -27,13 +36,76 @@ type ConfFile struct {
 	ClusterPort     int              `json:"cluster_port"`
 	AppLogs         string           `json:"app_logs"`
 	OverlayNetwork  string           `json:"overlay_network"`
-	PublicIp        bool             `json:"public_ip"`
+	PublicIp        PublicIPMode     `json:"public_ip"`
 	NetPort         int              `json:"overlay_network_port"`
 	CertFile        string           `json:"mqtt_cert_file"`
 	KeyFile         string           `json:"mqtt_key_file"`
 	Addons          []Addon          `json:"addons"`
 	Virtualizations []Virtualization `json:"virtualizations"`
 	CSIDrivers      []CSIDriverType  `json:"csi_drivers"`
+}
+
+type PublicIPMode string
+
+func ParsePublicIPMode(mode string) PublicIPMode {
+	normalized := strings.TrimSpace(strings.ToLower(mode))
+	switch normalized {
+	case "", string(PUBLIC_IP_FALSE):
+		return PUBLIC_IP_FALSE
+	case string(PUBLIC_IP_AUTO), "true":
+		return PUBLIC_IP_AUTO
+	default:
+		return PublicIPMode(strings.TrimSpace(mode))
+	}
+}
+
+func (m PublicIPMode) normalized() string {
+	return strings.TrimSpace(strings.ToLower(string(m)))
+}
+
+func (m PublicIPMode) IsDisabled() bool {
+	normalized := m.normalized()
+	return normalized == "" || normalized == string(PUBLIC_IP_FALSE)
+}
+
+func (m PublicIPMode) IsAuto() bool {
+	normalized := m.normalized()
+	return normalized == string(PUBLIC_IP_AUTO) || normalized == "true"
+}
+
+func (m PublicIPMode) Value() string {
+	normalized := m.normalized()
+	if normalized == "" || normalized == string(PUBLIC_IP_FALSE) {
+		return string(PUBLIC_IP_FALSE)
+	}
+	if normalized == string(PUBLIC_IP_AUTO) || normalized == "true" {
+		return string(PUBLIC_IP_AUTO)
+	}
+	return strings.TrimSpace(string(m))
+}
+
+func (m PublicIPMode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m.Value())
+}
+
+func (m *PublicIPMode) UnmarshalJSON(data []byte) error {
+	var boolMode bool
+	if err := json.Unmarshal(data, &boolMode); err == nil {
+		if boolMode {
+			*m = PUBLIC_IP_AUTO
+			return nil
+		}
+		*m = PUBLIC_IP_FALSE
+		return nil
+	}
+
+	var stringMode string
+	if err := json.Unmarshal(data, &stringMode); err == nil {
+		*m = ParsePublicIPMode(stringMode)
+		return nil
+	}
+
+	return fmt.Errorf("invalid public_ip mode: expected boolean or string, got %s", data)
 }
 
 type Addon struct {
@@ -69,95 +141,38 @@ func GetConfFileManager() ConfFileManager {
 	return &f
 }
 
-func getConfFile() (*os.File, ConfFile, error) {
-	clusterConf := ConfFile{}
-
-	confFile, err := os.OpenFile("/etc/oakestra/conf.json", os.O_RDWR, 0644)
-	if err != nil {
-		//create dir /etc/oakestra if not present
-		err := os.MkdirAll("/etc/oakestra", 0755)
-		if err != nil {
-			fmt.Println(err)
-			return nil, ConfFile{}, err
-		}
-
-		//create file /etc/oakestra/cluster.cfg with the cluster address and port
-		confFile, err = os.Create("/etc/oakestra/conf.json")
-		if err != nil {
-			fmt.Println(err)
-			return nil, ConfFile{}, err
-		}
-	} else {
-		//read cluster configuration
-		buffer := make([]byte, 2048)
-		n, err := confFile.Read(buffer)
-		if err != nil {
-			return nil, ConfFile{}, err
-		}
-		err = json.Unmarshal(buffer[:n], &clusterConf)
-		if err != nil {
-			fmt.Printf("Error reading configuration: %v\n, resetting the file", err)
-			err := confFile.Truncate(0)
-			if err != nil {
-				return nil, ConfFile{}, err
-			}
-			return nil, ConfFile{}, err
-
-		}
-	}
-
-	return confFile, clusterConf, nil
-}
-
 func (c *ConfFile) Get() (ConfFile, error) {
-	confFile, configF, err := getConfFile()
+	data, err := os.ReadFile(confPath)
+	if errors.Is(err, os.ErrNotExist) || (err == nil && len(data) == 0) {
+		logger.InfoLogger().Printf("Config file missing or empty, using default configuration")
+		def := GenDefaultConfig()
+		return def, c.Write(def)
+	}
 	if err != nil {
 		return *c, err
 	}
-	defer func() {
-		err := confFile.Close()
-		if err != nil {
-			logger.ErrorLogger().Printf("%v\n", err)
+
+	var clusterConf ConfFile
+	if err := json.Unmarshal(data, &clusterConf); err != nil {
+		logger.ErrorLogger().Printf("Error reading configuration: %v, resetting the file\n", err)
+		if resetErr := c.Write(GenDefaultConfig()); resetErr != nil {
+			return *c, resetErr
 		}
-	}()
-	return configF, nil
+		return *c, err
+	}
+	return clusterConf, nil
 }
 
 func (c *ConfFile) Write(new ConfFile) error {
-	c = &new
-
-	marshalled, err := json.Marshal(c)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	confFile, _, err := getConfFile()
+	data, err := json.Marshal(new)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		err := confFile.Close()
-		if err != nil {
-			logger.ErrorLogger().Printf("%v\n", err)
-		}
-	}()
-
-	err = confFile.Truncate(0)
-	if err != nil {
+	if err := os.MkdirAll(confDir, 0755); err != nil {
+		logger.ErrorLogger().Printf("Failed to create config directory %s: %v\n", confDir, err)
 		return err
 	}
-	_, err = confFile.Seek(0, 0)
-	if err != nil {
-		return err
-	}
-	_, err = confFile.Write(marshalled)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	return nil
+	return os.WriteFile(confPath, data, 0644)
 }
 
 func GenDefaultConfig() ConfFile {
@@ -168,7 +183,7 @@ func GenDefaultConfig() ConfFile {
 		ClusterSSL:     false,
 		AppLogs:        DEFAULT_LOG_DIR,
 		OverlayNetwork: AUTO_OAK_NETWORK,
-		PublicIp:       false,
+		PublicIp:       PUBLIC_IP_FALSE,
 		NetPort:        0,
 		Virtualizations: []Virtualization{
 			{
