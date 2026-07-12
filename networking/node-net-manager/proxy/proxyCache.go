@@ -18,7 +18,10 @@ type ConversionEntry struct {
 }
 
 type ConversionList struct {
-	nextEntry      int
+	nextEntry int
+	// lastUsed holds a Unix timestamp (seconds since epoch, as from time.Now().Unix()).
+	// It is atomic so retrieve methods can update it while holding only the
+	// cache's read lock (RLock), instead of requiring a write lock.
 	lastUsed       atomic.Int64
 	conversionList []ConversionEntry
 }

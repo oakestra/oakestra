@@ -23,8 +23,9 @@ func New() *GoProxyTunnel {
 	cfg, err := os.Open("/etc/netmanager/tuncfg.json")
 	if err != nil {
 		logger.ErrorLogger().Println(err)
+	} else {
+		defer cfg.Close()
 	}
-	defer cfg.Close()
 
 	defaultconfig := Configuration{
 		HostTUNDeviceName:         "goProxyTun",
