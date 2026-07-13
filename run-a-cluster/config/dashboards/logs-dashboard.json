@@ -24,11 +24,24 @@
   "liveNow": false,
   "panels": [
     {
+      "collapsed": false,
       "gridPos": {
-        "h": 6,
-        "w": 15,
+        "h": 1,
+        "w": 24,
         "x": 0,
         "y": 0
+      },
+      "id": 10,
+      "panels": [],
+      "title": "How to query logs",
+      "type": "row"
+    },
+    {
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 1
       },
       "id": 1,
       "options": {
@@ -37,33 +50,25 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "### Query controls\n- **Cluster** and **Component** select indexed Loki labels. Both support multi-select and **All**.\n- **Level** performs a case-insensitive line filter so it also works for services that do not emit structured `level` labels.\n- **Search (regex)** filters message text. Use `.*` to match everything.\n- **Extra LogQL pipeline** accepts optional pipeline stages, for example `|= \"worker\"`, `| json`, or `| logfmt | duration > 1s`.\n- Use the time picker in the top-right to scroll back through retained logs. Open the logs panel menu and choose **Explore** to edit the complete LogQL query interactively.",
+        "content": "- **Cluster** and **Component** select indexed Loki labels. Both support multi-select and **All**.\n- **Level** filters by severity. Choose **All** to see every level.\n- **Search (regex)** is a case-insensitive regular expression matched against the full log line. The default `^` matches every line without highlighting the whole message. Examples: `worker|mqtt`, `panic|traceback`, or a service ID.\n- **Extra LogQL pipeline** appends raw LogQL pipeline stages after the built-in label, level, and search filters. Leave it empty for normal browsing. Examples: `| json` or `| logfmt | duration > 1s`.\n- **Cross-component links:** expand a log line. If it contains a 24-character Oakestra ID, Grafana extracts that ID and shows **Open in...** links in the log details. Selecting one keeps the time range, sets **Search (regex)** to that exact ID, and changes **Component** to the selected target. It is a correlation shortcut: it only returns lines where that target component logged the same ID.\n- Root links search Root-local Loki; Cluster links search that Cluster-local Loki. A link can show no result when the target did not log that ID in the selected time range.\n- Use the time picker in the top-right to scroll back through retained logs. Open the logs panel menu and choose **Explore** to edit the complete LogQL query interactively.",
         "mode": "markdown"
       },
       "pluginVersion": "12.0.0",
-      "title": "How to query logs",
+      "title": "",
       "type": "text"
     },
     {
+      "collapsed": false,
       "gridPos": {
-        "h": 6,
-        "w": 9,
-        "x": 15,
-        "y": 0
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 7
       },
-      "id": 2,
-      "options": {
-        "code": {
-          "language": "plaintext",
-          "showLineNumbers": false,
-          "showMiniMap": false
-        },
-        "content": "### Component links\n**Root:** [System Manager](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-cluster_id=root&${level_filter:queryparam}&${search:queryparam}&${logql_pipeline:queryparam}&var-compose_service=system_manager) → [Scheduler](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-cluster_id=root&${level_filter:queryparam}&${search:queryparam}&${logql_pipeline:queryparam}&var-compose_service=root_scheduler) → [Resource Abstractor](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-cluster_id=root&${level_filter:queryparam}&${search:queryparam}&${logql_pipeline:queryparam}&var-compose_service=root_resource_abstractor&var-compose_service=resource_abstractor) → [Service Manager](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&var-cluster_id=root&${level_filter:queryparam}&${search:queryparam}&${logql_pipeline:queryparam}&var-compose_service=root_service_manager)\n\n**Cluster:** [Cluster Manager](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&${cluster_id:queryparam}&${level_filter:queryparam}&${search:queryparam}&${logql_pipeline:queryparam}&var-compose_service=cluster_manager) → [Scheduler](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&${cluster_id:queryparam}&${level_filter:queryparam}&${search:queryparam}&${logql_pipeline:queryparam}&var-compose_service=cluster_scheduler) → [Resource Abstractor](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&${cluster_id:queryparam}&${level_filter:queryparam}&${search:queryparam}&${logql_pipeline:queryparam}&var-compose_service=cluster_resource_abstractor) → [Service Manager](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&${cluster_id:queryparam}&${level_filter:queryparam}&${search:queryparam}&${logql_pipeline:queryparam}&var-compose_service=cluster_service_manager)\n\n**Observability:** [Alloy](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&${cluster_id:queryparam}&${level_filter:queryparam}&${search:queryparam}&${logql_pipeline:queryparam}&var-compose_service=alloy&var-compose_service=cluster_alloy) · [Loki](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&${cluster_id:queryparam}&${level_filter:queryparam}&${search:queryparam}&${logql_pipeline:queryparam}&var-compose_service=loki&var-compose_service=cluster_loki) · [Grafana](/d/oakestra-logs/oakestra-orchestrator-logs?from=${__from}&to=${__to}&${cluster_id:queryparam}&${level_filter:queryparam}&${search:queryparam}&${logql_pipeline:queryparam}&var-compose_service=grafana&var-compose_service=cluster_grafana)",
-        "mode": "markdown"
-      },
-      "pluginVersion": "12.0.0",
-      "title": "Quick navigation",
-      "type": "text"
+      "id": 12,
+      "panels": [],
+      "title": "Orchestrator logs",
+      "type": "row"
     },
     {
       "datasource": {
@@ -75,7 +80,7 @@
         "h": 22,
         "w": 24,
         "x": 0,
-        "y": 6
+        "y": 8
       },
       "id": 3,
       "options": {
@@ -101,7 +106,7 @@
           "refId": "A"
         }
       ],
-      "title": "Orchestrator logs — ${cluster_id:text} / ${compose_service:text}",
+      "title": "Selected stream \u2014 ${cluster_id:text} / ${compose_service:text}",
       "type": "logs"
     }
   ],
@@ -189,7 +194,7 @@
         "current": {
           "selected": true,
           "text": "All",
-          "value": ".*"
+          "value": "^"
         },
         "description": "Case-insensitive severity search across structured and unstructured lines.",
         "hide": 0,
@@ -201,7 +206,7 @@
           {
             "selected": true,
             "text": "All",
-            "value": ".*"
+            "value": "^"
           },
           {
             "selected": false,
@@ -224,7 +229,7 @@
             "value": "(\\b(ERROR|ERR|FATAL|PANIC|EXCEPTION|TRACEBACK|CRITICAL)\\b|\\[(E|F)[0-9]{4}-)"
           }
         ],
-        "query": "All : .*, Debug : (\\bDEBUG\\b|\\[D[0-9]{4}-), Info : (\\bINFO\\b|\\[I[0-9]{4}-), Warning : (\\b(WARN|WARNING)\\b|\\[W[0-9]{4}-), Error : (\\b(ERROR|ERR|FATAL|PANIC|EXCEPTION|TRACEBACK|CRITICAL)\\b|\\[(E|F)[0-9]{4}-)",
+        "query": "All : ^, Debug : (\\bDEBUG\\b|\\[D[0-9]{4}-), Info : (\\bINFO\\b|\\[I[0-9]{4}-), Warning : (\\b(WARN|WARNING)\\b|\\[W[0-9]{4}-), Error : (\\b(ERROR|ERR|FATAL|PANIC|EXCEPTION|TRACEBACK|CRITICAL)\\b|\\[(E|F)[0-9]{4}-)",
         "queryValue": "",
         "skipUrlSync": false,
         "type": "custom"
@@ -232,8 +237,8 @@
       {
         "current": {
           "selected": true,
-          "text": ".*",
-          "value": ".*"
+          "text": "^",
+          "value": "^"
         },
         "description": "Case-insensitive RE2 expression matched against each log line.",
         "hide": 0,
@@ -242,11 +247,11 @@
         "options": [
           {
             "selected": true,
-            "text": ".*",
-            "value": ".*"
+            "text": "^",
+            "value": "^"
           }
         ],
-        "query": ".*",
+        "query": "^",
         "skipUrlSync": false,
         "type": "textbox"
       },

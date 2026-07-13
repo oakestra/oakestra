@@ -6,6 +6,24 @@ datasources:
     access: proxy
     uid: Loki
     url: http://cluster_loki:3101
-    version: 1
+    version: 2
     editable: true
     isDefault: true
+    jsonData:
+      derivedFields:
+        - name: "Open matching Cluster logs"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs$${__url_time_range}&var-cluster_id=All&var-compose_service=All&var-search=$${__value.raw}'
+          urlDisplayLabel: "Open matching Cluster logs"
+        - name: "Open in Cluster Manager"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs$${__url_time_range}&var-cluster_id=All&var-compose_service=cluster_manager&var-search=$${__value.raw}'
+          urlDisplayLabel: "Open in Cluster Manager"
+        - name: "Open in Cluster Scheduler"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs$${__url_time_range}&var-cluster_id=All&var-compose_service=cluster_scheduler&var-search=$${__value.raw}'
+          urlDisplayLabel: "Open in Cluster Scheduler"
+        - name: "Open in Cluster Resource Abstractor"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs$${__url_time_range}&var-cluster_id=All&var-compose_service=cluster_resource_abstractor&var-search=$${__value.raw}'
+          urlDisplayLabel: "Open in Cluster Resource Abstractor"
