@@ -82,7 +82,8 @@
                 "root-orchestrator-up",
                 "cluster-orchestrator-up",
                 "remove-cluster-manager",
-                "install-cluster-manager-dependencies"
+                "install-cluster-manager-dependencies",
+                "generate-proto-files"
             ],
             "dependsOrder": "sequence",
         },
@@ -91,7 +92,8 @@
             "dependsOn": [
                 "root-orchestrator-up",
                 "remove-root-manager",
-                "install-root-manager-dependencies"
+                "install-root-manager-dependencies",
+                "generate-proto-files"
             ],
             "dependsOrder": "sequence",
         },
@@ -105,6 +107,12 @@
             "label": "install-root-manager-dependencies",
             "type": "shell",
             "command": "LIB_BRANCH=$(git rev-parse --abbrev-ref HEAD) ${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/root_orchestrator/system-manager-python/requirements.txt && ${command:python.interpreterPath} -m pip install ${workspaceRoot}/libraries/oakestra_utils_library ${workspaceRoot}/libraries/resource_abstractor_client" ,
+            "problemMatcher": []
+        },
+        {
+            "label": "generate-proto-files",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} ${workspaceRoot}/scripts/generate_protos.py",
             "problemMatcher": []
         },
         {

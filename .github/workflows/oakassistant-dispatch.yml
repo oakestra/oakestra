@@ -2,7 +2,7 @@ name: AI Fix Dispatcher
 on:
   issues:
     types: [assigned]
-  pull_request:
+  pull_request_target:
     types: [assigned,review_requested]
   issue_comment:
     types: [created]
