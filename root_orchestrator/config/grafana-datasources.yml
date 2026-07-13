@@ -6,6 +6,24 @@ datasources:
     uid: Loki
     access: proxy
     url: http://loki:3100
-    version: 1
+    version: 2
     editable: true
     isDefault: true
+    jsonData:
+      derivedFields:
+        - name: "Open matching Root logs"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs$${__url_time_range}&var-cluster_id=root&var-compose_service=All&var-search=$${__value.raw}'
+          urlDisplayLabel: "Open matching Root logs"
+        - name: "Open in Root Scheduler"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs$${__url_time_range}&var-cluster_id=root&var-compose_service=root_scheduler&var-search=$${__value.raw}'
+          urlDisplayLabel: "Open in Root Scheduler"
+        - name: "Open in Root Resource Abstractor"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs$${__url_time_range}&var-cluster_id=root&var-compose_service=root_resource_abstractor&var-search=$${__value.raw}'
+          urlDisplayLabel: "Open in Root Resource Abstractor"
+        - name: "Open in Root Service Manager"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs$${__url_time_range}&var-cluster_id=root&var-compose_service=root_service_manager&var-search=$${__value.raw}'
+          urlDisplayLabel: "Open in Root Service Manager"
