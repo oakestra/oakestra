@@ -4,6 +4,7 @@ import (
 	"NetManager/TableEntryCache"
 	"NetManager/events"
 	"NetManager/logger"
+	"NetManager/model"
 	"NetManager/mqtt"
 	"NetManager/network"
 	"errors"
@@ -459,6 +460,12 @@ func (env *Environment) CreateHostBridge() error {
 	}
 
 	return nil
+}
+
+// GetTableEntriesOnNode performs a search in the local ServiceCache for entries with the NodeIp of this node
+func (env *Environment) GetTableEntriesOnNode() []TableEntryCache.TableEntry {
+	ip := net.ParseIP(model.NetConfig.NodePublicAddress)
+	return env.translationTable.SearchByNodeIp(ip)
 }
 
 // GetTableEntryByServiceIP Given a ServiceIP this method performs a search in the local ServiceCache

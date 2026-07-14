@@ -75,3 +75,15 @@ func NotifyDeploymentStatus(appname string, status string, instance int, nsip st
 	jsonreq, _ := json.Marshal(request)
 	return GetNetMqttClient().PublishToBroker("service/deployed", string(jsonreq))
 }
+
+// Update cluster about new node adress
+func NotifyAddressChange(appname string, instance int, hostip string, hostport string) error {
+	request := mqttDeployNotification{
+		Appname:        appname,
+		Instancenumber: instance,
+		Hostip:         hostip,
+		Hostport:       hostport,
+	}
+	jsonreq, _ := json.Marshal(request)
+	return GetNetMqttClient().PublishToBroker("service/address-changed", string(jsonreq))
+}

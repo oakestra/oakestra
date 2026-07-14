@@ -217,7 +217,9 @@ def table_query_resolution_by_jobname(service_name):
     service_name = service_name.replace("_", ".")
     logger.info("Incoming Request /api/net/service/" + str(service_name) + "/instances")
     return instances_management.get_service_instances(
-        name=service_name, cluster_ip=request.remote_addr
+        name=service_name,
+        cluster_ip=request.args.get("cluster_address"),
+        cluster_name=request.args.get("cluster_name"),
     )
 
 
@@ -231,7 +233,9 @@ def table_query_resolution_by_ip(service_ip):
         "Incoming Request /api/net/service/ip/" + str(service_ip) + "/instances"
     )
     return instances_management.get_service_instances(
-        ip=service_ip, cluster_ip=request.remote_addr
+        ip=service_ip,
+        cluster_ip=request.args.get("cluster_address"),
+        cluster_name=request.args.get("cluster_name"),
     )
 
 

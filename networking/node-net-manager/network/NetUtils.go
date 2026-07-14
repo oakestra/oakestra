@@ -1,13 +1,16 @@
 package network
 
 import (
+	"NetManager/logger"
 	"NetManager/model"
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/vishvananda/netlink"
@@ -133,7 +136,29 @@ func GetOutboundIP() net.IP {
 	}
 	defer conn.Close()
 
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	if model.NetConfig.PublicIPNetworking {
+		// get public ip (nat ip)
+		req, err := http.Get("https://ifconfig.co")
+		if err != nil {
+			logger.ErrorLogger().Printf("%v", err.Error())
+		}
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				logger.ErrorLogger().Printf("%v", err.Error())
+			}
+		}(req.Body)
 
-	return localAddr.IP
+		body, err := io.ReadAll(req.Body)
+		if err == nil {
+			logger.InfoLogger().Println("Using public IP address: ", string(body))
+			return net.ParseIP(string(body[:len(body)-1]))
+		}
+		logger.ErrorLogger().Printf("%v", err.Error())
+	}
+
+	// get local outbound ip
+	addr := conn.LocalAddr().(*net.UDPAddr)
+	logger.InfoLogger().Println("Using private IP address: ", addr.String())
+	return addr.IP
 }
