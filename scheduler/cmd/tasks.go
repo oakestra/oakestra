@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 	"scheduler/calculate"
-	"scheduler/calculate/schedulers/rootBestCpuMemFit"
+	"scheduler/calculate/schedulers/bestCpuMemFit"
 	"scheduler/logger"
 
 	"github.com/hibiken/asynq"
@@ -17,7 +17,7 @@ const TaskTypeScheduler = "schedule:job"
 var RedisAddr = os.Getenv("REDIS_ADDR")
 
 // A determines scheduler to use
-type A = rootBestCpuMemFit.BestCpuMemFit
+type A = bestCpuMemFit.BestCpuMemFit
 
 func StartTaskQueueServer() {
 	redisOpt, err := asynq.ParseRedisURI(RedisAddr)

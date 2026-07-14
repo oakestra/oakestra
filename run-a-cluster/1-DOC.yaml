@@ -40,6 +40,7 @@ services:
       - root_service_manager
       - jwt_generator
     environment:
+      - ORCHESTRATION_PLANE=root
       - ROOT_MONGO_URL=mongo
       - ROOT_MONGO_PORT=10007
       - ROOT_SCHEDULER_URL=root_scheduler
@@ -198,7 +199,7 @@ services:
       - /mosquitto/data
       - /mosquitto/log
     healthcheck:
-      test: [ "CMD-SHELL", "timeout -t 5 mosquitto_sub -t '$$SYS/#' -C 1 | grep -v Error || exit 1" ]
+      test: [ "CMD-SHELL", "mosquitto_sub -p 10003 -t '$$SYS/#' -C 1 -W 3 || exit 1" ]
       interval: 10s
       timeout: 10s
       retries: 6
@@ -256,6 +257,8 @@ services:
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_MONGO_URL=cluster_mongo_net
       - CLUSTER_MONGO_PORT=10108
+      - CLUSTER_ADDRESS=${CLUSTER_ADDRESS}
+      - CLUSTER_NAME=${CLUSTER_NAME}
     depends_on:
       - mongo_clusternet
       - mqtt
@@ -294,6 +297,7 @@ services:
       - RESOURCE_ABSTRACTOR_PORT=11012
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
+      - CLUSTER_ADDRESS=${CLUSTER_ADDRESS}
     depends_on:
       - mongo_cluster
       - mqtt
@@ -315,6 +319,7 @@ services:
     expose:
       - "10105"
     environment:
+      - ORCHESTRATION_PLANE=cluster
       - API_PORT=10105
       - MANAGER_URL=cluster_manager
       - MANAGER_PORT=10100

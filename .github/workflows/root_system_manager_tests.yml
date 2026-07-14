@@ -28,6 +28,11 @@ jobs:
         run: |
           pip install -r requirements.txt --no-cache-dir
 
+      - name: Generate protobuf files
+        working-directory: root_orchestrator/system-manager-python
+        run: |
+          python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/clusterRegistration.proto
+
       - name: Build Docker images
         working-directory: resource-abstractor
         run: |

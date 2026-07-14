@@ -24,12 +24,14 @@ func init() {
 	setAuth.Flags().StringVarP(&certFile, "certFile", "c", "", "Path to certificate for TLS support")
 	setAuth.Flags().StringVarP(&keyFile, "keyFile", "k", "", "Path to key for TLS support")
 	setVirtualizationCmd.AddCommand(enableUnikernel)
+	setVirtualizationCmd.AddCommand(enableCrosvm)
 	setCni.AddCommand(explainNetManager)
 	setCni.AddCommand(enableNetwork)
 	setCni.AddCommand(disableNetwork)
 	setCni.AddCommand(enableManualNetwork)
 	visibility.AddCommand(publicIP)
 	visibility.AddCommand(privateIP)
+	visibility.AddCommand(predefinedPublicIP)
 	addClusterCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Custom port of the cluster orchestrator")
 	addClusterCmd.Flags().BoolVarP(&clusterSSL, "clusterSSL", "s", false, "Perform cluster orchestrator handshake over HTTPS")
 	configCmd.AddCommand(setAddonCmd)
@@ -92,6 +94,16 @@ var (
 				return errors.New("unikernel command needs exactly one parameter: [on/off]")
 			}
 			return setUnikernel(args[0])
+		},
+	}
+	enableCrosvm = &cobra.Command{
+		Use:   "crosvm [on/off]",
+		Short: "[on/off] Enable/Disable crosvm VM support",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return errors.New("crosvm command needs exactly one parameter: [on/off]")
+			}
+			return setCrosvm(args[0])
 		},
 	}
 
@@ -163,21 +175,29 @@ var (
 
 	// --- VISIBILITY
 	visibility = &cobra.Command{
-		Use:   "visibility [public/private]",
-		Short: "Use public or private IP",
+		Use:   "visibility [false/auto/<public-ip>]",
+		Short: "Configure node IP visibility mode",
 	}
 	publicIP = &cobra.Command{
 		Use:   "public",
-		Short: "Allow networking over the public IP address",
+		Short: "Use automatic public IP detection",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return setPublicIp(true)
+			return setPublicIp(config.PUBLIC_IP_AUTO)
 		},
 	}
 	privateIP = &cobra.Command{
 		Use:   "private",
-		Short: "Disallow networking over the public IP address",
+		Short: "Disable public IP visibility",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return setPublicIp(false)
+			return setPublicIp(config.PUBLIC_IP_FALSE)
+		},
+	}
+	predefinedPublicIP = &cobra.Command{
+		Use:   "set [public-ip]",
+		Short: "Set a predefined public IP value",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return setPublicIp(config.ParsePublicIPMode(args[0]))
 		},
 	}
 
@@ -343,6 +363,36 @@ func setUnikernel(trigger string) error {
 	return configManager.Write(clusterConf)
 }
 
+func setCrosvm(trigger string) error {
+	active := trigger == "on" || trigger == "enable" || trigger == "true"
+
+	configManager := config.GetConfFileManager()
+	clusterConf, err := configManager.Get()
+	if err != nil {
+		return err
+	}
+
+	updated := false
+	for i, virt := range clusterConf.Virtualizations {
+		if virt.Runtime == string(model.CROSVM_RUNTIME) {
+			updated = true
+			virt.Active = active
+			clusterConf.Virtualizations[i] = virt
+		}
+	}
+
+	if !updated {
+		clusterConf.Virtualizations = append(clusterConf.Virtualizations, config.Virtualization{
+			Name:    "crosvm",
+			Runtime: string(model.CROSVM_RUNTIME),
+			Active:  active,
+			Config:  []string{},
+		})
+	}
+
+	return configManager.Write(clusterConf)
+}
+
 func showAddons() error {
 
 	configManager := config.GetConfFileManager()
@@ -450,13 +500,13 @@ func setNetwork(cniName string) error {
 	return configManager.Write(clusterConf)
 }
 
-func setPublicIp(public bool) error {
+func setPublicIp(mode config.PublicIPMode) error {
 	configManager := config.GetConfFileManager()
 	clusterConf, err := configManager.Get()
 	if err != nil {
 		return err
 	}
-	clusterConf.PublicIp = public
+	clusterConf.PublicIp = mode
 
 	return configManager.Write(clusterConf)
 }
