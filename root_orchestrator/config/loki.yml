@@ -56,15 +56,3 @@ table_manager:
 #memberlist: # Config for memberlist cluster discovery. See https://grafana.com/docs/loki/latest/configure/#supported-contents-and-default-values-of-lokiyaml
 #  join_members:
 #    - loki:7946
-
-ruler:
-  storage:
-    type: local
-    local:
-      directory: /etc/loki/rules
-  rule_path: /tmp/loki/rules-temp
-  ring:
-    kvstore:
-      store: inmemory
-  enable_api: true
-  enable_alertmanager_v2: true
