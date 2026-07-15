@@ -399,9 +399,13 @@ services:
     labels: *shared-log-labels
     ports:
       - 3000:3000
+    environment:
+      - OAKESTRA_ALERT_WEBHOOK_URL=${OAKESTRA_ALERT_WEBHOOK_URL:-http://127.0.0.1:65535/oakestra-alerts}
     volumes:
       - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml
       - ./config/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+      - ./config/alerts/grafana-rules.yml:/etc/grafana/provisioning/alerting/oakestra-rules.yml:ro
+      - ./config/alerts/grafana-contact-point.yml:/etc/grafana/provisioning/alerting/oakestra-contact-point.yml:ro
       - ./config/dashboards:/var/lib/grafana/dashboards
     logging: *default-logging
 
@@ -415,7 +419,6 @@ services:
       - 127.0.0.1:3100:3100
     volumes:
       - ./config/loki.yml:/etc/loki/config.yml
-      - ./config/alerts/rules.yml:/etc/loki/rules/fake/rules.yml
       - loki_data:/tmp
 
     command: -config.file=/etc/loki/config.yml
