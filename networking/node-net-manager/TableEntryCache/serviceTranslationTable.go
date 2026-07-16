@@ -112,8 +112,8 @@ func (t *TableManager) SearchByServiceIP(ip net.IP) []TableEntry {
 	// log.Println("Table research, table length: ", len(t.translationTable))
 	// log.Println(t.translationTable)
 	result := make([]TableEntry, 0)
-	t.rwlock.Lock()
-	defer t.rwlock.Unlock()
+	t.rwlock.RLock()
+	defer t.rwlock.RUnlock()
 	for _, tableElement := range t.translationTable {
 		for _, elemip := range tableElement.ServiceIP {
 			if elemip.Address.Equal(ip) || elemip.Address_v6.Equal(ip) {
@@ -126,8 +126,8 @@ func (t *TableManager) SearchByServiceIP(ip net.IP) []TableEntry {
 }
 
 func (t *TableManager) SearchByNsIP(ip net.IP) (TableEntry, bool) {
-	t.rwlock.Lock()
-	defer t.rwlock.Unlock()
+	t.rwlock.RLock()
+	defer t.rwlock.RUnlock()
 	for _, tableElement := range t.translationTable {
 		if tableElement.Nsip.Equal(ip) || tableElement.Nsipv6.Equal(ip) {
 			returnEntry := tableElement
@@ -142,7 +142,7 @@ func (t *TableManager) SearchByNodeIp(ip net.IP) []TableEntry {
 	t.rwlock.RLock()
 	defer t.rwlock.RUnlock()
 	for _, tableElement := range t.translationTable {
-		if tableElement.Nodeip.Equal(ip) || tableElement.Nodeip.Equal(ip) {
+		if tableElement.Nodeip.Equal(ip) {
 			result = append(result, tableElement)
 		}
 	}
@@ -150,8 +150,8 @@ func (t *TableManager) SearchByNodeIp(ip net.IP) []TableEntry {
 }
 
 func (t *TableManager) SearchByJobName(jobname string) []TableEntry {
-	t.rwlock.Lock()
-	defer t.rwlock.Unlock()
+	t.rwlock.RLock()
+	defer t.rwlock.RUnlock()
 	results := make([]TableEntry, 0)
 	for _, tableElement := range t.translationTable {
 		if tableElement.JobName == jobname {
