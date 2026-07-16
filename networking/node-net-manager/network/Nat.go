@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -32,32 +33,22 @@ func IptableFlushAll() {
 	_ = iptable.Delete("nat", "POSTROUTING", "-j", chain)
 	_ = ip6table.DeleteChain("nat", chain)
 	_ = ip6table.Delete("nat", "PREROUTING", "-j", chain)
-	_ = ip6table.Delete("nat", "PREROUTING", "-j", chain)
+	_ = ip6table.Delete("nat", "POSTROUTING", "-j", chain)
 }
 
 func DisableReversePathFiltering(bridgeName string) {
 	log.Println("disabling reverse path filtering")
-	cmd := exec.Command("echo", "0", ">", "/proc/sys/net/ipv4/conf/all/rp_filter")
-	err := cmd.Run()
-	if err != nil {
+	if err := os.WriteFile("/proc/sys/net/ipv4/conf/all/rp_filter", []byte("0"), 0644); err != nil {
 		log.Fatal(err.Error())
 	}
 	log.Println("enabling IP forwarding")
-	cmd = exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1")
-	err = cmd.Run()
-	if err != nil {
+	if err := exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1").Run(); err != nil {
 		log.Fatal(err.Error())
 	}
-
-	cmd = exec.Command("sysctl", "-w", "net.ipv6.conf.all.forwarding=1")
-	err = cmd.Run()
-	if err != nil {
+	if err := exec.Command("sysctl", "-w", "net.ipv6.conf.all.forwarding=1").Run(); err != nil {
 		log.Fatal(err.Error())
 	}
-
-	cmd = exec.Command("echo", "0", ">", "/proc/sys/net/ipv4/conf/"+bridgeName+"/rp_filter")
-	err = cmd.Run()
-	if err != nil {
+	if err := os.WriteFile("/proc/sys/net/ipv4/conf/"+bridgeName+"/rp_filter", []byte("0"), 0644); err != nil {
 		log.Fatal(err.Error())
 	}
 }
