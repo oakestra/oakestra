@@ -18,13 +18,14 @@ import (
 )
 
 // create a  new GoProxyTunnel with the configuration from the custom local file
-func New() GoProxyTunnel {
+func New() *GoProxyTunnel {
 	// load netcfg.json
 	cfg, err := os.Open("/etc/netmanager/tuncfg.json")
 	if err != nil {
 		logger.ErrorLogger().Println(err)
+	} else {
+		defer cfg.Close()
 	}
-	defer cfg.Close()
 
 	defaultconfig := Configuration{
 		HostTUNDeviceName:         "goProxyTun",
@@ -48,7 +49,7 @@ func New() GoProxyTunnel {
 }
 
 // create a  new GoProxyTunnel with a custom configuration
-func NewCustom(configuration Configuration) GoProxyTunnel {
+func NewCustom(configuration Configuration) *GoProxyTunnel {
 	proxy := GoProxyTunnel{
 		isListening:      false,
 		errorChannel:     make(chan error),
@@ -89,7 +90,7 @@ func NewCustom(configuration Configuration) GoProxyTunnel {
 	logger.InfoLogger().Printf("Created ProxyTun device: %s\n", proxy.ifce.Name())
 	logger.InfoLogger().Printf("Local Ip detected: %s\n", proxy.localIP.String())
 
-	return proxy
+	return &proxy
 }
 
 func (proxy *GoProxyTunnel) SetEnvironment(env env.EnvironmentManager) {

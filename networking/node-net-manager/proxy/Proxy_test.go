@@ -77,8 +77,8 @@ func (fakeenv *FakeEnv) GetTableEntryByInstanceIP(ip net.IP) (TableEntryCache.Ta
 	return TableEntryCache.TableEntry{}, false
 }
 
-func getFakeTunnel() GoProxyTunnel {
-	tunnel := GoProxyTunnel{
+func getFakeTunnel() *GoProxyTunnel {
+	tunnel := &GoProxyTunnel{
 		tunNetIP:    "10.19.1.254",
 		ifce:        nil,
 		isListening: true,
