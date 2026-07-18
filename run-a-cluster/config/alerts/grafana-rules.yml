@@ -101,7 +101,7 @@ groups:
           team: infrastructure
         isPaused: false
         notification_settings:
-          receiver: Oakestra Alert Webhook
+          receiver: $OAKESTRA_ALERT_CONTACT_POINT
           group_by:
             - alertname
             - cluster_id
