@@ -215,7 +215,16 @@ services:
     ports:
       - 3001:3000
     environment:
+      - OAKESTRA_ALERT_CONTACT_POINT=${OAKESTRA_ALERT_CONTACT_POINT:-Oakestra Alert Webhook}
       - OAKESTRA_ALERT_WEBHOOK_URL=${OAKESTRA_ALERT_WEBHOOK_URL:-http://127.0.0.1:65535/oakestra-alerts}
+      - OAKESTRA_ALERT_EMAIL_TO=${OAKESTRA_ALERT_EMAIL_TO:-alerts@example.invalid}
+      - GF_SMTP_ENABLED=${OAKESTRA_ALERT_SMTP_ENABLED:-false}
+      - GF_SMTP_HOST=${OAKESTRA_ALERT_SMTP_HOST:-localhost:25}
+      - GF_SMTP_USER=${OAKESTRA_ALERT_SMTP_USER:-}
+      - GF_SMTP_PASSWORD=${OAKESTRA_ALERT_SMTP_PASSWORD:-}
+      - GF_SMTP_FROM_ADDRESS=${OAKESTRA_ALERT_SMTP_FROM_ADDRESS:-oakestra-alerts@localhost}
+      - GF_SMTP_FROM_NAME=${OAKESTRA_ALERT_SMTP_FROM_NAME:-Oakestra Alerts}
+      - GF_SMTP_SKIP_VERIFY=${OAKESTRA_ALERT_SMTP_SKIP_VERIFY:-false}
     volumes:
       - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml
       - ./config/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml
