@@ -190,6 +190,7 @@ line. If Python application lines are plain text, verify the image version and t
 | `permission denied` opening `/var/run/docker.sock` (Alloy log) | Alloy cannot discover/read container logs; inspect the socket mount and host permissions |
 | `loki.write` connection refused | The local Loki is not ready, or `LOKI_URL` is wrong for the selected network mode |
 | `Oakestra Alert Webhook` with `127.0.0.1:65535: connect: connection refused` (Grafana log) | Alerting is evaluating, but the intentionally inactive webhook placeholder is still in use; set `OAKESTRA_ALERT_WEBHOOK_URL` and recreate Grafana |
+| `Oakestra Alert Email` with `SMTP not configured` or SMTP connection/authentication errors (Grafana log) | Email was selected without a working SMTP transport; set `OAKESTRA_ALERT_EMAIL_TO` and the `OAKESTRA_ALERT_SMTP_*` variables, then recreate Grafana |
 
 ---
 
@@ -738,6 +739,7 @@ Apply these fixes directly when the diagnosis matches:
 ### Fix: Grafana log alerts fire but webhook delivery is refused
 ```bash
 # Replace the placeholder with the operator's actual HTTP(S) receiver.
+export OAKESTRA_ALERT_CONTACT_POINT="Oakestra Alert Webhook"
 export OAKESTRA_ALERT_WEBHOOK_URL=https://alerts.example.com/oakestra
 
 # Recreate the Grafana service for the deployment being diagnosed.
@@ -747,6 +749,23 @@ docker compose up -d --force-recreate cluster_grafana
 ```
 
 Verify the URL under **Alerting → Contact points → Oakestra Alert Webhook**. A refusal from `127.0.0.1:65535` is expected only while the default placeholder is active; it does not mean the rule failed to evaluate.
+
+### Fix: Grafana log alert email is not delivered
+```bash
+export OAKESTRA_ALERT_CONTACT_POINT="Oakestra Alert Email"
+export OAKESTRA_ALERT_EMAIL_TO=infra@example.com
+export OAKESTRA_ALERT_SMTP_ENABLED=true
+export OAKESTRA_ALERT_SMTP_HOST=smtp.example.com:587
+export OAKESTRA_ALERT_SMTP_USER=infra@example.com
+export OAKESTRA_ALERT_SMTP_PASSWORD='<smtp-password>'
+export OAKESTRA_ALERT_SMTP_FROM_ADDRESS=infra@example.com
+
+docker compose up -d --force-recreate grafana
+# Standalone Cluster:
+docker compose up -d --force-recreate cluster_grafana
+```
+
+Use **Alerting → Notification configuration → Contact points → Oakestra Alert Email → Test** to separate SMTP/destination problems from alert-rule evaluation problems. Provisioned contact points are read-only in the UI, but the Test action remains available.
 
 ### Fix: Container in restart loop due to dependency not ready
 ```bash
