@@ -11,3 +11,13 @@ contactPoints:
           url: $OAKESTRA_ALERT_WEBHOOK_URL
           httpMethod: POST
           maxAlerts: 0
+
+  - orgId: 1
+    name: Oakestra Alert Email
+    receivers:
+      - uid: oakestra-alert-email
+        type: email
+        disableResolveMessage: false
+        settings:
+          addresses: $OAKESTRA_ALERT_EMAIL_TO
+          singleEmail: false
