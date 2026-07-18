@@ -31,7 +31,7 @@ Both two levels use different volumes for the configuration of the three service
 ```bash
 ├── alerts
 │   ├── grafana-rules.yml         # Grafana-managed log alert rule
-│   └── grafana-contact-point.yml # Configurable webhook contact point
+│   └── grafana-contact-point.yml # Configurable webhook and email contact points
 ├── grafana-datasources.yml # Loki datasource setup
 ├── loki.yml                # Ingestion, storage config
 ├── config.alloy            # Alloy Docker discovery, processing, and Loki output
@@ -132,14 +132,30 @@ The LogQL pattern recognizes structured `level=error`, `level=critical`, and JSO
 
 An instance remains pending for one minute before firing. Notifications are grouped by `alertname`, `cluster_id`, and `compose_service`, wait 30 seconds for related alerts, and repeat after four hours while the problem remains active. When matching lines leave the two-minute window, the alert remains firing for one additional minute before resolving. `severity=error`, `category=logs`, and `team=infrastructure` are attached to every instance.
 
-The provisioned **Oakestra Alert Webhook** contact point reads its destination from `OAKESTRA_ALERT_WEBHOOK_URL`. The Compose default is an intentionally inactive local placeholder: alerts still evaluate and appear in Grafana, but notification delivery reports connection refused until a real receiver is configured. Configure it before starting or recreating Grafana:
+The contact-point file provisions both **Oakestra Alert Webhook** and **Oakestra Alert Email**. `OAKESTRA_ALERT_CONTACT_POINT` selects which one receives notifications from the rule and defaults to the webhook. The webhook reads `OAKESTRA_ALERT_WEBHOOK_URL`; its Compose default is an intentionally inactive local placeholder, so alerts still evaluate but delivery reports connection refused until a real receiver is configured:
 
 ```bash
+export OAKESTRA_ALERT_CONTACT_POINT="Oakestra Alert Webhook"
 export OAKESTRA_ALERT_WEBHOOK_URL=https://alerts.example.com/oakestra
 docker compose -f root_orchestrator/docker-compose.yml up -d --force-recreate grafana
 ```
 
-Open **Alerting → Alert rules** to inspect **Orchestrator error or stacktrace detected** and **Alerting → Contact points** to inspect the webhook. Both resources are provisioned from version-controlled files and therefore must be changed in the repository rather than edited in the Grafana UI.
+Email delivery requires both the recipient and Grafana's SMTP transport. Configure the SMTP server before recreating Grafana; keep real credentials out of tracked files:
+
+```bash
+export OAKESTRA_ALERT_CONTACT_POINT="Oakestra Alert Email"
+export OAKESTRA_ALERT_EMAIL_TO=infra@example.com
+export OAKESTRA_ALERT_SMTP_ENABLED=true
+export OAKESTRA_ALERT_SMTP_HOST=smtp.example.com:587
+export OAKESTRA_ALERT_SMTP_USER=infra@example.com
+export OAKESTRA_ALERT_SMTP_PASSWORD='<smtp-password>'
+export OAKESTRA_ALERT_SMTP_FROM_ADDRESS=infra@example.com
+export OAKESTRA_ALERT_SMTP_FROM_NAME="Oakestra Alerts"
+export OAKESTRA_ALERT_SMTP_SKIP_VERIFY=false
+docker compose -f root_orchestrator/docker-compose.yml up -d --force-recreate grafana
+```
+
+Open **Alerting → Alert rules** to inspect **Orchestrator error or stacktrace detected** and **Alerting → Notification configuration → Contact points** to inspect or test either destination. Both resources are provisioned from version-controlled files and are read-only in the UI; change their structure in the repository and their environment-backed destinations at deployment time. The **Test** action sends a predefined notification without waiting for the alert rule. An end-to-end rule test uses the controlled error below and sends to the contact point selected by `OAKESTRA_ALERT_CONTACT_POINT`.
 
 For a controlled local test, write a unique error line to a running component's main stderr, confirm the alert reaches **Pending** and then **Firing**, and wait for it to return to **Normal** after the query window and keep-firing period expire:
 
@@ -148,4 +164,4 @@ docker exec system_manager sh -c 'printf "ERROR issue-533-alert-test\n" > /proc/
 docker logs system_manager --tail 5
 ```
 
-The alert instance must carry `cluster_id=root` and `compose_service=system_manager`. On a standalone Cluster, run the equivalent command against `cluster_manager`; its local Grafana must show the configured Cluster name and `compose_service=cluster_manager`.
+The alert instance must carry `cluster_id=root` and `compose_service=system_manager`. It should become **Pending** at the next evaluation, **Firing** after the one-minute `for` duration, and later return to **Normal**. On a standalone Cluster, run the equivalent command against `cluster_manager`; its local Grafana must show the configured Cluster name and `compose_service=cluster_manager`.
