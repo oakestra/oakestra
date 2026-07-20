@@ -8,6 +8,37 @@
 !.vscode/README.md
 
 # macOS and Windows
+
+# CMake
+cmake-build-*/
+
+# Additional IDE artifacts
+*.iws
+out/
+.idea_modules/
+atlassian-ide-plugin.xml
+.idea/replstate.xml
+com_crashlytics_export_strings.xml
+crashlytics.properties
+crashlytics-build.properties
+fabric.properties
+
+# Deployment script artifacts
+deployment_helper/support/src
+deployment_helper/support/*.txt
+deployment_helper/support/EdgeIO*
+/cluster_orchestrator/cluster-manager/.idea/
+
+# Releases and virtual environments
+*.zip
+venv/
+env/
+ENV/
+
+# Python bytecode and logs
+*.py[cod]
+*.log*
+
 .DS_Store
 Thumbs.db
 
