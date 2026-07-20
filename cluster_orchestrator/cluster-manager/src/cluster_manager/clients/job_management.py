@@ -1,7 +1,7 @@
-import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from oakestra_logging import get_logger
 from oakestra_utils.types.statuses import (
     DeploymentStatus,
     LegacyStatus,
@@ -14,7 +14,7 @@ from resource_abstractor_client import candidate_operations, job_operations
 from ..ext_requests.scheduler_requests import scheduler_request_deploy
 from ..models.job import Job, JobInstance, JobInstanceResources
 
-logger = logging.getLogger("cluster_manager")
+logger = get_logger(__name__)
 
 
 def mark_inactive_as_failed(running_timeout: int, node_scheduled_timeout: int) -> None:
@@ -50,8 +50,8 @@ def mark_inactive_as_failed(running_timeout: int, node_scheduled_timeout: int) -
         for instance in all_instances:
             if instance.instance_number is None:
                 logger.info(
-                    "Missing instance number in mark_inactive_as_failed: %s",
-                    instance.model_dump_json(indent=2, by_alias=True),
+                    "Missing instance number while checking inactive jobs",
+                    event_name="job.instance.number_missing",
                 )
                 continue
 
@@ -133,7 +133,12 @@ def create_new_job_instance(job: Job, instance_number: int) -> Job:
         updated_job_obj = job_operations.append_job_instance(
             job_id, instance_number, job.model_dump(by_alias=True)
         )
-    logger.debug(f"Created new job instance: {updated_job_obj}")
+    logger.debug(
+        "Created new job instance",
+        event_name="job.instance.created",
+        job_id=str(job_id or updated_job_obj.get("_id")) if updated_job_obj else None,
+        instance_number=instance_number,
+    )
 
     updated_job = Job.model_validate(updated_job_obj)
     return updated_job
@@ -312,7 +317,12 @@ def delete_job_instance(job_id: str, instance_number: int, erase: bool = True) -
     deleted_job_count = 0
     for instance in instance_list:
         if instance.instance_number == instance_number or instance_number == -1:
-            logger.info(f"Deleting instance {instance.instance_number} of job {job_id}")
+            logger.info(
+                "Deleting job instance",
+                event_name="job.instance.delete_started",
+                job_id=job_id,
+                instance_number=instance.instance_number,
+            )
             deleted_job_count += 1
             worker_id = instance.worker_id
 
@@ -329,8 +339,17 @@ def delete_job_instance(job_id: str, instance_number: int, erase: bool = True) -
             # remove from db if erase is true
             if erase:
                 job_operations.delete_job_instance(job_id, instance.instance_number)
-                logger.info(f"Deleted instance {instance.instance_number} of job {job_id} from DB")
+                logger.info(
+                    "Deleted job instance from database",
+                    event_name="job.instance.deleted",
+                    job_id=job_id,
+                    instance_number=instance.instance_number,
+                )
 
     if erase and len(instance_list) <= deleted_job_count:
         job_operations.delete_job(job_id)
-        logger.info(f"Deleted job {job_id} from DB as all instances were removed")
+        logger.info(
+            "Deleted job after removing all instances",
+            event_name="job.deleted",
+            job_id=job_id,
+        )

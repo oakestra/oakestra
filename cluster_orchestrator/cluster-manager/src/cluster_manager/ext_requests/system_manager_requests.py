@@ -1,10 +1,9 @@
 import dataclasses
-import logging
 import threading
-import traceback
 from typing import Any
 
 import requests
+from oakestra_logging import get_logger
 from oakestra_utils.types.statuses import (
     DeploymentStatus,
     NegativeSchedulingStatus,
@@ -18,7 +17,7 @@ from ..clients.my_prometheus_client import prometheus_set_metrics
 from ..models.job import Job, JobInstance
 from .scheduler_requests import scheduler_request_deploy
 
-logger = logging.getLogger("cluster_manager")
+logger = get_logger(__name__)
 
 
 def send_aggregated_info_to_sm(
@@ -32,14 +31,23 @@ def send_aggregated_info_to_sm(
             {"jobs": job_management.aggregate_info(running_timeout, node_scheduled_timeout)}
         )
 
-        logger.debug("sending aggregated info to system manager")
+        logger.debug(
+            "Sending aggregated cluster information",
+            event_name="cluster.resources.send_started",
+            cluster_id=assigned_cluster_id,
+            job_count=len(metrics_msg.get("jobs", [])),
+            field_count=len(metrics_msg),
+        )
         threading.Thread(
             group=None, target=send_aggregated_info, args=(assigned_cluster_id, metrics_msg)
         ).start()
         prometheus_set_metrics(metrics_msg)
-    except Exception as e:
-        logger.error(e)
-        traceback.print_exc()
+    except Exception:
+        logger.exception(
+            "Failed to prepare aggregated cluster information",
+            event_name="cluster.resources.prepare_failed",
+            cluster_id=assigned_cluster_id,
+        )
 
 
 def re_deploy_dead_jobs_routine() -> None:
@@ -54,23 +62,34 @@ def re_deploy_dead_jobs_routine() -> None:
             instances = job.instance_list if job.instance_list else []
             for instance in instances:
                 if convert_to_status(instance.status) in re_deploy_triggers:
-                    logger.info("FAILED INSTANCE, ATTEMPTING RE-DEPLOY")
+                    logger.info(
+                        "Attempting to redeploy failed instance",
+                        event_name="job.instance.redeploy_started",
+                        job_id=job.require_id(),
+                        instance_number=instance.require_instance_number(),
+                    )
                     threading.Thread(
                         group=None,
                         target=trigger_undeploy_and_re_deploy,
                         args=(job, instance),
                     ).start()
-    except Exception as e:
+    except Exception:
         # TODO: why are we randomly catching all errors here
-        logger.error(e)
-        traceback.print_exc()
+        logger.exception(
+            "Failed while scanning jobs for redeployment",
+            event_name="jobs.redeploy.scan_failed",
+        )
 
 
 def send_aggregated_info(assigned_cluster_id: str, data: Any) -> None:
     try:
         requests.post(SYSTEM_MANAGER_ADDR + "/api/information/" + assigned_cluster_id, json=data)
     except requests.exceptions.RequestException:
-        logger.error("Calling System Manager /api/information not successful.")
+        logger.exception(
+            "System Manager resource update failed",
+            event_name="system_manager.resources.update_failed",
+            cluster_id=assigned_cluster_id,
+        )
 
 
 def trigger_undeploy_and_re_deploy(job: Job, instance: JobInstance):
@@ -85,6 +104,11 @@ def trigger_undeploy_and_re_deploy(job: Job, instance: JobInstance):
             status_detail="Waiting for scheduling decision",
         )
         scheduler_request_deploy(job, instance.require_instance_number())
-    except Exception as e:
+    except Exception:
         # TODO: why are we randomly catching all errors here
-        logger.error(e)
+        logger.exception(
+            "Failed to redeploy job instance",
+            event_name="job.instance.redeploy_failed",
+            job_id=job.require_id(),
+            instance_number=instance.require_instance_number(),
+        )

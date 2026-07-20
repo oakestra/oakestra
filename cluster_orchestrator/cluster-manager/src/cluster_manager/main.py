@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import socket
 import sys
 import threading
@@ -12,10 +13,10 @@ from flask_cors import CORS
 from flask_smorest import Api
 from flask_socketio import SocketIO
 from flask_swagger_ui import get_swaggerui_blueprint
+from oakestra_logging import configure_logging, get_logger
 from prometheus_client import start_http_server
 
 from .app_config import CONFIG, GRPC_REQUEST_TIMEOUT, RUNTIME_CONFIG, SYSTEM_MANAGER_GRPC_ADDR
-from .app_logging import configure_logging
 from .blueprints import blueprints
 from .clients.mqtt_client import initialize_mqtt
 from .clients.my_prometheus_client import prometheus_init_gauge_metrics
@@ -23,13 +24,15 @@ from .ext_requests.system_manager_requests import (
     re_deploy_dead_jobs_routine,
     send_aggregated_info_to_sm,
 )
-from .proto.cluster_registration_pb2 import CS1Message, CS2Message, SC1Message, SC2Message
+from .proto.cluster_registration_pb2 import CS1Message, CS2Message, SC2Message
 from .proto.cluster_registration_pb2_grpc import register_clusterStub
 
 SWAGGER_URL = "/api/docs"
 API_URL = "/docs/openapi.json"
 
-logger: logging.Logger = configure_logging()
+configure_logging(os.getenv("OAKESTRA_SERVICE_NAME", "cluster_manager"))
+logger = get_logger(__name__)
+stdlib_logger = logging.getLogger("cluster_manager")
 app = Flask(__name__)
 
 app.config["OPENAPI_VERSION"] = "3.0.2"
@@ -37,7 +40,7 @@ app.config["API_TITLE"] = "Oakestra root api"
 app.config["API_VERSION"] = "v1"
 app.config["OPENAPI_URL_PREFIX"] = "/docs"
 app.config["JWT_ALGORITHM"] = "RS256"
-app.logger = logger
+app.logger = stdlib_logger
 
 socketioserver = SocketIO(app, logger=True, engineio_logger=True)
 api = Api(app, spec_kwargs={"x-internal-id": "1", "host": "oakestra.io"})
@@ -59,7 +62,11 @@ app.register_blueprint(swaggerui_blueprint)
 
 
 def launch_background_jobs(assigned_cluster_id: str):
-    logger.info("Setting up background jobs...")
+    logger.info(
+        "Setting up cluster background jobs",
+        event_name="cluster.background_jobs.starting",
+        cluster_id=assigned_cluster_id,
+    )
     scheduler = BackgroundScheduler()
 
     aggregation_interval = (
@@ -102,11 +109,12 @@ def register_with_system_manager():
         greeting.hello_service_manager = json.dumps(
             {"cluster_name": CONFIG.cluster_name, "location": CONFIG.cluster_location}
         )
-        sc1: SC1Message = stub.handle_init_greeting(
+        stub.handle_init_greeting(
             greeting, wait_for_ready=True, timeout=GRPC_REQUEST_TIMEOUT
         )
         logger.info(
-            "Received greeting message from System Manager: " + str(sc1.hello_cluster_manager)
+            "Received greeting message from System Manager",
+            event_name="cluster.registration.greeting_received",
         )
 
         # Send cluster details (CS2Message)
@@ -127,8 +135,12 @@ def register_with_system_manager():
         assigned_cluster_id = sc2.id
         RUNTIME_CONFIG.assigned_cluster_id = assigned_cluster_id
 
-        logger.info(f"Cluster ID received: {assigned_cluster_id}. Go ahead with Background Jobs")
-        prometheus_init_gauge_metrics(assigned_cluster_id, app.logger)
+        logger.info(
+            "Cluster registration completed",
+            event_name="cluster.registration.completed",
+            cluster_id=assigned_cluster_id,
+        )
+        prometheus_init_gauge_metrics(assigned_cluster_id)
         launch_background_jobs(assigned_cluster_id)
 
 
@@ -150,7 +162,10 @@ def _register_in_background():
     try:
         register_with_system_manager()
     except Exception:
-        logger.exception("Cluster registration failed; exiting worker for restart")
+        logger.exception(
+            "Cluster registration failed; exiting worker for restart",
+            event_name="cluster.registration.unrecoverable",
+        )
         sys.exit(1)
 
 
@@ -160,5 +175,5 @@ if __name__ == "__main__":
     import eventlet.wsgi
 
     eventlet.wsgi.server(
-        eventlet.listen(("::", CONFIG.port), family=socket.AF_INET6), app, log=logger
+        eventlet.listen(("::", CONFIG.port), family=socket.AF_INET6), app, log=stdlib_logger
     )  # see README for logging notes

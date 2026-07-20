@@ -1,20 +1,29 @@
 import json
-import logging
 import os
 import threading
 from functools import wraps
+from urllib.parse import urlsplit
 
 from db import hooks_db
 from flask import request
+from oakestra_logging import get_logger
 from requests import exceptions, post
+
+logger = get_logger(__name__)
 
 RESPONSE_TIMEOUT = os.environ.get("HOOK_REQUEST_TIMEOUT", 5)
 CONNECT_TIMEOUT = os.environ.get("HOOK_CONNECT_TIMEOUT", 10)
 
 
 def call_webhook(url, data):
+    webhook_host = urlsplit(url).hostname or "unknown"
     try:
-        logging.info(f"Calling webhook with data: {data}")
+        logger.info(
+            "Calling webhook",
+            event_name="webhook.request.started",
+            webhook_host=webhook_host,
+            payload_keys=sorted(data) if isinstance(data, dict) else [],
+        )
         response = post(url, json=data, timeout=(CONNECT_TIMEOUT, RESPONSE_TIMEOUT))
         response.raise_for_status()
         try:
@@ -23,14 +32,25 @@ def call_webhook(url, data):
         except json.JSONDecodeError:
             pass
 
-    except exceptions.ConnectTimeout as e:
-        logging.warning(f"Request timed out while trying to connect to {url}", exc_info=e)
-    except exceptions.ReadTimeout as e:
-        logging.warning(
-            f"{url} failed to return response in the allotted amount of time", exc_info=e
+    except exceptions.ConnectTimeout:
+        logger.warning(
+            "Webhook connection timed out",
+            event_name="webhook.request.connect_timeout",
+            webhook_host=webhook_host,
         )
-    except exceptions.RequestException as e:
-        logging.warning(f"Hook failed to send request to {url}", exc_info=e)
+    except exceptions.ReadTimeout:
+        logger.warning(
+            "Webhook response timed out",
+            event_name="webhook.request.read_timeout",
+            webhook_host=webhook_host,
+        )
+    except exceptions.RequestException as exc:
+        logger.warning(
+            "Webhook request failed",
+            event_name="webhook.request.failed",
+            webhook_host=webhook_host,
+            error_type=type(exc).__name__,
+        )
 
     # if request fails the original data is returned
     return data
