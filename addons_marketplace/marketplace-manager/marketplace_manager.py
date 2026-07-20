@@ -6,6 +6,10 @@ from flask import Flask
 from flask_cors import CORS
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
+from oakestra_logging import configure_logging, get_logger
+
+configure_logging(os.getenv("OAKESTRA_SERVICE_NAME", "marketplace_manager"))
+logger = get_logger(__name__)
 
 ADDON_MARKETPLACE_PORT = int(os.environ.get("ADDON_MARKETPLACE_PORT", 11102))
 

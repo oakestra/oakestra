@@ -1,21 +1,21 @@
 import json
-import logging
 import os
 import re
 
 import paho.mqtt.client as paho_mqtt
+from oakestra_logging import get_logger
 from oakestra_utils.types.statuses import convert_to_status
 from resource_abstractor_client import candidate_operations
 
 from clients.job_management import update_deployed_instance_job, update_deployed_instance_worker
 
-logger = logging.getLogger("cluster_manager")
+logger = get_logger(__name__)
 
 mqtt = None
 
 
 def handle_connect(client, userdata, flags, rc):
-    logger.info("MQTT - Connected to MQTT Broker")
+    logger.info("Connected to MQTT broker", event_name="mqtt.connected", result_code=rc)
     mqtt.subscribe("nodes/+/information")
     mqtt.subscribe("nodes/+/job")
     mqtt.subscribe("nodes/+/jobs/resources")
@@ -23,13 +23,17 @@ def handle_connect(client, userdata, flags, rc):
 
 def handle_logging(client, userdata, level, buf):
     if level == "MQTT_LOG_ERR":
-        logger.info("Error: {}".format(buf))
+        logger.error("MQTT client error", event_name="mqtt.client.error", detail=buf)
 
 
 def handle_mqtt_message(client, userdata, message):
     data = dict(topic=message.topic, payload=message.payload.decode())
-    logger.info("MQTT - Received from worker: ")
-    logger.info(data)
+    logger.debug(
+        "Received MQTT message from worker",
+        event_name="mqtt.message.received",
+        topic=message.topic,
+        payload_size=len(message.payload),
+    )
 
     topic = data["topic"]
 
@@ -75,9 +79,14 @@ def handle_mqtt_message(client, userdata, message):
                         service.get("instance"),
                         service.get("virtualization"),
                     )
-            except Exception as e:
-                logger.error("MQTT - unable to update service resources")
-                logger.error(e)
+            except Exception:
+                logger.exception(
+                    "Unable to update service resources from MQTT",
+                    event_name="mqtt.resources.update_failed",
+                    worker_id=client_id,
+                    job_name=service.get("job_name"),
+                    instance_number=service.get("instance"),
+                )
 
 
 def mqtt_init(flask_app):
@@ -95,10 +104,12 @@ def mqtt_init(flask_app):
                 keyfile=os.environ.get("MQTT_CERT") + "/cluster.key",
                 keyfile_password=os.environ.get("CLUSTER_KEYFILE_PASSWORD"),
             )
-            logger.info("MQTT - TLS configured")
-        except FileNotFoundError as e:
-            logger.error("MQTT - Unable to load certificate files")
-            logger.error(e)
+            logger.info("Configured MQTT TLS", event_name="mqtt.tls.configured")
+        except FileNotFoundError:
+            logger.exception(
+                "Unable to load MQTT certificate files",
+                event_name="mqtt.tls.configuration_failed",
+            )
 
     mqtt.connect(
         os.environ.get("MQTT_BROKER_URL").strip("[]"),

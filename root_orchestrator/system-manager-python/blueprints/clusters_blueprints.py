@@ -1,15 +1,14 @@
-import logging
-
 from bson import json_util
 from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
+from oakestra_logging import get_logger
 from oakestra_utils.types.statuses import convert_to_status
 from resource_abstractor_client import candidate_operations
 from services.instance_management import update_job_status
 
-logger = logging.getLogger("system_manager")
+logger = get_logger(__name__)
 
 clustersbp = Blueprint("Clusters", "cluster management", url_prefix="/api/clusters")
 clusterinfo = Blueprint("Clusterinfo", "cluster informations", url_prefix="/api/information")
@@ -93,18 +92,30 @@ class ClusterController(MethodView):
         data = request.json
         cluster_id = kwargs["clusterid"]
         jobs = data.get("jobs")
-        logger.info(f"Received cluster update for {cluster_id}: {data}")
+        logger.info(
+            "Received cluster update",
+            event_name="cluster.update.received",
+            cluster_id=cluster_id,
+            job_count=len(jobs or []),
+            updated_fields=sorted(key for key in data if key != "jobs"),
+        )
         del data["jobs"]
         # Prevent the IP address from being overwritten by cluster updates
         # The IP is set during initial registration and should not change
         if "ip" in data:
             logger.warning(
-                "Cluster update attempted to change IP address, ignoring update to prevent corruption"
+                "Cluster update attempted to change its IP address; ignoring field",
+                event_name="cluster.update.ip_ignored",
+                cluster_id=cluster_id,
             )
             del data["ip"]
         updated_cluster = candidate_operations.update_candidate_information(cluster_id, data)
         if updated_cluster is None:
-            logger.error("Could not update cluster")
+            logger.error(
+                "Could not update cluster",
+                event_name="cluster.update.failed",
+                cluster_id=cluster_id,
+            )
             return abort(400, "Updating cluster failed")
 
         # TODO(GB): fire an event to react to the cluster update
