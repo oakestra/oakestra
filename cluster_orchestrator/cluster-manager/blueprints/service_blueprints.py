@@ -1,6 +1,3 @@
-import logging
-import traceback
-
 from bson import json_util
 from clients import job_management
 from clients.job_management import deploy_job
@@ -9,13 +6,14 @@ from ext_requests.network_manager_requests import network_notify_deployment
 from flask import Response, request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
+from oakestra_logging import get_logger
 from oakestra_utils.types.statuses import (
     PositiveSchedulingStatus,
     convert_to_status,
 )
 from resource_abstractor_client import job_operations
 
-logger = logging.getLogger("cluster_manager")
+logger = get_logger(__name__)
 
 # ........ Functions for job management ...............#
 # ......................................................#
@@ -46,11 +44,20 @@ class ServiceController(MethodView):
         job = request.json  # contains job_id and job_description
 
         try:
-            logger.info(f"Received deployment request for instance {instance_number} of {job}")
+            logger.info(
+                "Received deployment request",
+                event_name="service.deploy.received",
+                job_id=job_id,
+                instance_number=instance_number,
+            )
             deploy_job(job, instance_number)
-        except Exception as e:
-            logger.error(f"Deployment Failed: {e}")
-            logger.error(f"{traceback.format_exc()}")
+        except Exception:
+            logger.exception(
+                "Service deployment failed",
+                event_name="service.deploy.failed",
+                job_id=job_id,
+                instance_number=instance_number,
+            )
             abort(500, "Failed to deploy service")
 
         return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
@@ -65,13 +72,22 @@ class ServiceController(MethodView):
         find service in db and ask corresponding worker to delete task,
         instance_number -1 undeploy all known instances
         """
-        logger.info("Incoming Request /api/delete/ - to delete task...")
+        logger.info(
+            "Received service deletion request",
+            event_name="service.delete.received",
+            job_id=job_id,
+            instance_number=instance_number,
+        )
 
         try:
             job_management.delete_job_instance(job_id, int(instance_number), erase=True)
-        except Exception as e:
-            logger.error(f"Failed to delete service {job_id}: {e}")
-            logger.error(f"{traceback.format_exc()}")
+        except Exception:
+            logger.exception(
+                "Failed to delete service",
+                event_name="service.delete.failed",
+                job_id=job_id,
+                instance_number=instance_number,
+            )
             abort(500, "Failed to delete service")
 
         return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
@@ -86,18 +102,17 @@ class SchedulingController(MethodView):
     )
     def post(self):
         data = request.get_json()
-        logger.debug(data)
         id = data.get("job_id").split("/")
         job_id = id[0]
         instance_number = id[1]
         node_id = data.get("candidate_id")
         logger.info(
-            "Received scheduling result for job "
-            + job_id
-            + " instance "
-            + instance_number
-            + ". Result: "
-            + node_id
+            "Received scheduling result",
+            event_name="scheduling.result.received",
+            job_id=job_id,
+            instance_number=instance_number,
+            worker_id=node_id,
+            status=data.get("status"),
         )
         if node_id is None:
             # scheduling failed
@@ -113,7 +128,11 @@ class SchedulingController(MethodView):
 
         job = job_operations.get_job_by_id(job_id)
         if job is None:
-            logger.error("Job " + job_id + " has been deleted")
+            logger.warning(
+                "Scheduled job no longer exists",
+                event_name="scheduling.job.missing",
+                job_id=job_id,
+            )
             return Response(
                 json_util.dumps({"status": "job_not_found"}), mimetype="application/json"
             )

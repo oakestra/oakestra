@@ -11,7 +11,6 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from blueprints import blueprints
 from clients.mqtt_client import mqtt_init
 from clients.my_prometheus_client import prometheus_init_gauge_metrics
-from cm_logging import configure_logging
 from ext_requests.system_manager_requests import (
     re_deploy_dead_jobs_routine,
     send_aggregated_info_to_sm,
@@ -21,12 +20,14 @@ from flask_cors import CORS
 from flask_smorest import Api
 from flask_socketio import SocketIO
 from flask_swagger_ui import get_swaggerui_blueprint
+from oakestra_logging import configure_logging, get_logger
 from prometheus_client import start_http_server
 from proto.clusterRegistration_pb2 import CS1Message, CS2Message, KeyValue, SC1Message, SC2Message
 from proto.clusterRegistration_pb2_grpc import register_clusterStub
 
-my_logger = configure_logging()
-logger = logging.getLogger("cluster_manager")
+configure_logging(os.getenv("OAKESTRA_SERVICE_NAME", "cluster_manager"))
+logger = get_logger(__name__)
+stdlib_logger = logging.getLogger("cluster_manager")
 app = Flask(__name__)
 
 app.config["OPENAPI_VERSION"] = "3.0.2"
@@ -34,7 +35,7 @@ app.config["API_TITLE"] = "Oakestra root api"
 app.config["API_VERSION"] = "v1"
 app.config["OPENAPI_URL_PREFIX"] = "/docs"
 app.config["JWT_ALGORITHM"] = "RS256"
-app.logger = logger
+app.logger = stdlib_logger
 
 socketioserver = SocketIO(app, logger=True, engineio_logger=True)
 api = Api(app, spec_kwargs={"x-internal-id": "1", "host": "oakestra.io"})
@@ -127,7 +128,11 @@ def register_with_system_manager():
             raise RuntimeError("Registration failed: no cluster id returned by root")
 
         config.MY_ASSIGNED_CLUSTER_ID = sc2.id
-        logger.info(f"Cluster ID received: {sc2.id}. Go ahead with Background Jobs")
+        logger.info(
+            "Cluster registration completed",
+            event_name="cluster.registration.completed",
+            cluster_id=sc2.id,
+        )
         prometheus_init_gauge_metrics(config.MY_ASSIGNED_CLUSTER_ID, app.logger)
         background_job_send_aggregated_information_to_sm()
 
@@ -150,7 +155,11 @@ def _register_in_background():
     try:
         register_with_system_manager()
     except Exception:
-        logger.exception("Cluster registration failed; exiting worker for restart")
+        logger.critical(
+            "Cluster registration failed; exiting worker for restart",
+            event_name="cluster.registration.unrecoverable",
+            exc_info=True,
+        )
         os._exit(1)
 
 
@@ -160,5 +169,7 @@ if __name__ == "__main__":
     import eventlet
 
     eventlet.wsgi.server(
-        eventlet.listen(("::", int(config.MY_PORT)), family=socket.AF_INET6), app, log=my_logger
+        eventlet.listen(("::", int(config.MY_PORT)), family=socket.AF_INET6),
+        app,
+        log=stdlib_logger,
     )  # see README for logging notes

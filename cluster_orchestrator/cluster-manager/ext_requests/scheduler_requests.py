@@ -1,9 +1,9 @@
-import logging
 import os
 
 import requests
+from oakestra_logging import get_logger
 
-logger = logging.getLogger("cluster_manager")
+logger = get_logger(__name__)
 
 SCHEDULER_ADDR = (
     "http://"
@@ -19,7 +19,12 @@ def scheduler_request_deploy(job, instance_number):
         job["_id"] = job["_id"] + "/" + str(instance_number)
         requests.post(request_addr, json=job)
     except requests.exceptions.RequestException:
-        logger.error("Calling scheduler", request_addr, "not successful.")
+        logger.exception(
+            "Scheduler deployment request failed",
+            event_name="scheduler.deploy.request_failed",
+            endpoint=request_addr,
+            instance_number=instance_number,
+        )
 
 
 def scheduler_request_status():
@@ -28,5 +33,8 @@ def scheduler_request_status():
         response = requests.get(request_addr)
         return "Scheduler Request successfull.", response.status_code
     except requests.exceptions.RequestException:
-        logger.error("Calling Cloud Scheduler /status not successful.")
+        logger.exception(
+            "Scheduler status request failed",
+            event_name="scheduler.status.request_failed",
+        )
         return "Scheduler Request failed."
