@@ -3,7 +3,11 @@ LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
 COPY requirements.txt /
 
-RUN pip install --no-cache-dir -r requirements.txt
+# hadolint ignore=DL3022
+COPY --from=libraries . /libraries
+
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir /libraries/oakestra_logging
 
 COPY . /
 
