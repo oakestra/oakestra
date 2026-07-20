@@ -16,7 +16,9 @@ flask-smorest==0.39.0
 flask-cors
 flask-swagger-ui
 gunicorn==22.0.0
-# Oakestra shared libraries (oakestra_utils_library, resource_abstractor_client)
+# Oakestra shared libraries (oakestra_utils_library, resource_abstractor_client,
+# oakestra_logging)
 # are installed from the local libraries/ folder, NOT from git. See the Dockerfile
 # and CI. For local dev install them with:
-#   pip install ../../libraries/oakestra_utils_library ../../libraries/resource_abstractor_client
+#   pip install ../../libraries/oakestra_utils_library \
+#     ../../libraries/resource_abstractor_client ../../libraries/oakestra_logging

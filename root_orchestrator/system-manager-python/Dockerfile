@@ -14,7 +14,9 @@ COPY --from=libraries . /libraries
 
 # Install appropriate requirements
 RUN pip install -r requirements.txt --no-cache-dir \
-    && pip install --no-cache-dir /libraries/resource_abstractor_client /libraries/oakestra_utils_library \
+    && pip install --no-cache-dir /libraries/resource_abstractor_client \
+        /libraries/oakestra_utils_library \
+        /libraries/oakestra_logging \
     && rm /requirements.txt
 
 COPY . /
