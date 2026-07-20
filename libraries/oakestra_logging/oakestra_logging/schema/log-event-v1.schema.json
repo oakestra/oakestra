@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oakestra.io/schemas/log-event-v1.schema.json",
+  "title": "Oakestra structured log event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "timestamp",
+    "level",
+    "service",
+    "logger",
+    "message"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "level": {
+      "enum": ["debug", "info", "warning", "error", "critical"]
+    },
+    "service": {
+      "type": "string",
+      "minLength": 1
+    },
+    "logger": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message": {
+      "type": "string"
+    },
+    "event": {
+      "type": "string",
+      "minLength": 1
+    },
+    "context": {
+      "type": "object"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "function", "line"],
+      "properties": {
+        "file": {"type": "string"},
+        "function": {"type": "string"},
+        "line": {"type": "integer", "minimum": 1}
+      }
+    },
+    "exception": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "message", "stacktrace"],
+      "properties": {
+        "type": {"type": "string"},
+        "message": {"type": "string"},
+        "stacktrace": {"type": "string"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "level": {
+            "enum": ["warning", "error", "critical"]
+          }
+        },
+        "required": ["level"]
+      },
+      "then": {
+        "required": ["source"]
+      },
+      "else": {
+        "not": {
+          "required": ["source"]
+        }
+      }
+    }
+  ]
+}
