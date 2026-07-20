@@ -1,10 +1,9 @@
-import logging
-
 from bson import ObjectId
+from oakestra_logging import get_logger
 
 import ext_requests.mongodb_client as db
 
-logger = logging.getLogger("system_manager")
+logger = get_logger(__name__)
 
 
 def mongo_add_organization(organization):
@@ -44,7 +43,11 @@ def mongo_delete_organization(organization_id):
 
 def mongo_get_organization_by_name(organization_name):
     organization = db.mongo_organization.find_one({"name": organization_name})
-    logger.debug(organization)
+    logger.debug(
+        "Looked up organization",
+        event_name="database.organization.lookup",
+        found=organization is not None,
+    )
     if organization is None:
         return None
     return organization
