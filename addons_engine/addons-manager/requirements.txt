@@ -6,3 +6,5 @@ flask-cors~=3.0.10
 marshmallow~=3.15.0
 werkzeug==2.0.3
 requests==2.31.0
+# Shared structured logging package from the matching Oakestra branch.
+oakestra-logging @ git+https://github.com/oakestra/oakestra.git@${LIB_BRANCH}#subdirectory=libraries/oakestra_logging

@@ -1,10 +1,12 @@
 FROM python:3.13-slim-bookworm
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
-# Cryptography requires libffi
-RUN apt-get update && apt-get install -y curl libffi-dev
+# Cryptography requires libffi. Git installs shared Oakestra libraries.
+RUN apt-get update && apt-get install -y curl git libffi-dev
 
 COPY requirements.txt /
+
+ARG LIB_BRANCH=develop
 
 RUN apt-get update -y && apt-get install apt-file -y && apt-file update && apt-get install -y python3-dev build-essential
 RUN pip install --no-cache-dir -r requirements.txt

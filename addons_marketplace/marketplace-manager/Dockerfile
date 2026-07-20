@@ -3,7 +3,12 @@ LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
 WORKDIR /code
 
+RUN apt-get update && apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt /code
+
+ARG LIB_BRANCH=develop
 
 RUN pip install --no-cache-dir -r requirements.txt
 

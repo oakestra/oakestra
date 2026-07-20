@@ -104,8 +104,9 @@ services:
       - "10100:10100"
       - "10101:10101"
     environment:
+      - OAKESTRA_SERVICE_NAME=cluster_manager
       - MY_PORT=10100
-      - LOG_LEVEL=INFO
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
@@ -154,7 +155,10 @@ services:
 
   cluster_resource_abstractor:
     image: resource_abstractor
-    build: ../resource-abstractor/
+    build:
+      context: ../resource-abstractor/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     container_name: cluster_resource_abstractor
     labels: *cluster-log-labels
     hostname: cluster_resource_abstractor
@@ -163,6 +167,8 @@ services:
     ports:
       - "11012:11012"
     environment:
+      - OAKESTRA_SERVICE_NAME=cluster_resource_abstractor
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - RESOURCE_ABSTRACTOR_PORT=11012
       - MONGO_URL=cluster_mongo
       - MONGO_PORT=10107
@@ -250,9 +256,14 @@ services:
   cluster_addons_manager:
     image: addons_manager
     container_name: cluster_addons_manager
-    build: ../addons_engine/addons-manager/
+    build:
+      context: ../addons_engine/addons-manager/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     labels: *cluster-log-labels
     environment:
+      - OAKESTRA_SERVICE_NAME=cluster_addons_manager
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ADDONS_MANAGER_PORT=11201
       - ADDONS_ENGINE_MONGO_URL=cluster_mongo
       - ADDONS_ENGINE_MONGO_PORT=10107
@@ -266,11 +277,16 @@ services:
   cluster_addons_monitor:
     image: addons_monitor
     container_name: cluster_addons_monitor
-    build: ../addons_engine/addons-monitor/
+    build:
+      context: ../addons_engine/addons-monitor/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     labels: *cluster-log-labels
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      - OAKESTRA_SERVICE_NAME=cluster_addons_monitor
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ADDONS_MANAGER_ADDR=http://cluster_addons_manager:11201
       - ORCHESTRATION_PLANE=cluster
       - DEFAULT_PROJECT_NAME=cluster_orchestrator

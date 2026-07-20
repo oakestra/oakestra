@@ -1,2 +1,4 @@
 docker==7.0.0
 requests==2.31.0
+# Shared structured logging package from the matching Oakestra branch.
+oakestra-logging @ git+https://github.com/oakestra/oakestra.git@${LIB_BRANCH}#subdirectory=libraries/oakestra_logging

@@ -35,8 +35,9 @@ services:
       - root_service_manager
       - jwt_generator
     environment:
+      - OAKESTRA_SERVICE_NAME=system_manager
       - ROOT_MONGO_URL=mongo
-      - LOG_LEVEL=INFO
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ROOT_MONGO_PORT=10007
       - ROOT_SCHEDULER_URL=root_scheduler
       - ROOT_SCHEDULER_PORT=10004
@@ -193,7 +194,10 @@ services:
 
   root_resource_abstractor:
     image: resource_abstractor
-    build: ../resource-abstractor/
+    build:
+      context: ../resource-abstractor/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     container_name: root_resource_abstractor
     labels: *root-log-labels
     hostname: root_resource_abstractor
@@ -202,6 +206,8 @@ services:
     ports:
       - "11011:11011"
     environment:
+      - OAKESTRA_SERVICE_NAME=root_resource_abstractor
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - RESOURCE_ABSTRACTOR_PORT=11011
       - MONGO_URL=mongo
       - MONGO_PORT=10007
@@ -211,7 +217,10 @@ services:
 
   jwt_generator:
     image: jwt_generator
-    build: jwt-generator/
+    build:
+      context: jwt-generator/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     container_name: jwt_generator
     hostname: jwt_generator
     labels: *root-log-labels
@@ -220,6 +229,8 @@ services:
     ports:
       - "10011:10011"
     environment:
+      - OAKESTRA_SERVICE_NAME=jwt_generator
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - JWT_GENERATOR_PORT=10011
     logging: *default-logging
 
@@ -227,9 +238,14 @@ services:
   root_addons_manager:
     image: addons_manager
     container_name: root_addons_manager
-    build: ../addons_engine/addons-manager/
+    build:
+      context: ../addons_engine/addons-manager/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     labels: *root-log-labels
     environment:
+      - OAKESTRA_SERVICE_NAME=root_addons_manager
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ADDONS_MANAGER_PORT=11101
       - ADDONS_ENGINE_MONGO_URL=mongo
       - ADDONS_ENGINE_MONGO_PORT=10007
@@ -244,11 +260,16 @@ services:
   root_addons_monitor:
     image: addons_monitor
     container_name: root_addons_monitor
-    build: ../addons_engine/addons-monitor/
+    build:
+      context: ../addons_engine/addons-monitor/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     labels: *root-log-labels
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      - OAKESTRA_SERVICE_NAME=root_addons_monitor
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ADDONS_MANAGER_ADDR=http://root_addons_manager:11101
       - ORCHESTRATION_PLANE=root
       - DEFAULT_PROJECT_NAME=root_orchestrator
@@ -281,7 +302,10 @@ services:
   # Marketplace
   marketplace_manager:
     image: marketplace_manager
-    build: ../addons_marketplace/marketplace-manager/
+    build:
+      context: ../addons_marketplace/marketplace-manager/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     container_name: marketplace_manager
     labels: *root-log-labels
     volumes:
@@ -291,6 +315,8 @@ services:
     ports:
       - "11102:11102"
     environment:
+      - OAKESTRA_SERVICE_NAME=marketplace_manager
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ADDON_MARKETPLACE_PORT=11102
       - ADDON_MARKETPLACE_MONGO_URL=mongo
       - ADDON_MARKETPLACE_MONGO_PORT=10007

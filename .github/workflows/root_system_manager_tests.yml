@@ -36,12 +36,12 @@ jobs:
       - name: Build Docker images
         working-directory: resource-abstractor
         run: |
-          docker build -t resource_abstractor:test .
+          docker build --build-arg LIB_BRANCH="${LIB_BRANCH}" -t resource_abstractor .
 
       - name: Run containers
         working-directory: root_orchestrator/
         run: |
-          docker compose up root_resource_abstractor -d
+          docker compose up root_resource_abstractor -d --no-build
 
       - name: Run test suite
         working-directory: root_orchestrator/system-manager-python
