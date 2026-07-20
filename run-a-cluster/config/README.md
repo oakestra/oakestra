@@ -116,77 +116,13 @@ If a supported format matches, `level` and `service` are extracted as labels. Ra
 
 The [rules.yml](./alerts/rules.yml) contains LogQL rules based on the labels extracted by Alloy. Both discovery and processing labels can be used for alert conditions.
 
-## Logging 
-This section briefly provides an overview of logging approach implemented at the moment of this PR. Most of the format and guidelines here specified are assumed be valid for all services both at root and cluster level.
+## Python structured logging
 
-The logging is perfomed by a wrapper of `logging` library that implement the specification here described.  
-The logging wrapper support three format (*at the moment*):
-- `default`
-- `json`
-- `logfmt`
+Oakestra Python services use the shared [`oakestra_logging`](../../libraries/oakestra_logging/) package and emit one versioned JSON object per line to stdout. Required fields are `schema_version`, `timestamp`, `level`, `service`, `logger`, and `message`. Optional `event`, `context`, `source`, and `exception` objects provide queryable application details without changing the transport format. The complete contract and examples are documented in the [library README](../../libraries/oakestra_logging/README.md).
 
+`OAKESTRA_SERVICE_NAME` distinguishes Root and Cluster roles that share an image, while `LOG_LEVEL` controls verbosity and defaults to `INFO`. The output format is configured in code and is not runtime-selectable. Python logs go only to stdout; Docker retains them and Alloy sends them to the local Loki. Docker metadata remains attached by Alloy rather than duplicated inside the application record.
 
-The format configuration can be explictly setted in the logging module for each service (*e.g [sm_logging.py](../system-manager-python/sm_logging.py) for `system_manager`*); by default, the `default` format is used. For the purpose of modularity, a `CustomLogger` is used in (*optional*) combination with three `CustomFormatter` to be able to support seamlessly the conversion from a format to another. 
-
-
-The `default` logging format have the following structure:
-```bash
-	[Lmmdd hh:mm:ss.uuuuuu svc file:line] msg key1=value1 key2=value2 ...
-```
-where the fields are defined as follows:
-```bash
-	L                   A single character, representing the log level (eg 'I' for INFO)
-	mm                  The month (zero padded; ie May is '05')
-	dd                  The day (zero padded)
-	hh:mm:ss.uuuuuu     Time in hours, minutes and fractional seconds
-	svc                 The service name (e.g. `system_manager`)
-	file                The file name
-	line                The line number
-	msg                 The user-supplied message
-    extra               Contextual parameters that can be passed by using `extra` dict
-```
-The folowwing format is encoded in the `standard` format. As a `logging` wrapper, it support the [logging levels](https://docs.python.org/3/library/logging.html#levels) `INFO`, `DEBUG`, `WARNING`, `ERROR`, `CRITICAL` and `NOTSET`.  
-The following call:
-```python
-ctx = {"url": url, "headers": headers, "data": data}
-logger.info("HTTP POST request sent", extra={'context': ctx})
-```
-That generate the following log line:
-```bash
-[I2024-02-28 10:43:27 system_manager wsgi.py.py:639] HTTP POST request sent url=https://192.168.1.5/api/node/register headers={'Content-Type': 'application/json'} data={...}
-```
-The `extra` optinal dictionary in combination with the `context` dictionary allows to log additional contextual information and, if the configured according to [labels granularity](#labels-granularity) allows filtering and/or alerting on those fine-grained parameters.
-
-According to the specification, the `json` format output:
-```json
-{
-  "level": "INFO",
-  "timestamp": "2024-02-28T09:43:27.000Z",
-  "service": "system_manager",
-  "filename": "wsgi.py",
-  "line_no": 639,
-  "message": "HTTP POST request sent",
-  "context": {
-    ...
-  }
-}
-
-```
-While for `logfmt` format:
-```log
-level=INFO ts=1651254607.000176 service=system_manager file=wsgi.py file_no=639 message='HTTP POST request sent' url=https://192.168.1.5/api/node/register headers='{"Content-Type": "application/json"}' data='{"key1": "value1", "key2": 123}'
-```
-
-## Next step \#note
-- Refactor log lines of each service
-  - Currently only logging features for `root_scheduler`, `system_manager`, `cluster_manager`
-  - Test if the defined format is suitable for each relevant information extraction
-    - *e.g. Incoming/Outgoing HTTP req, internal cluster updates, deployment descriptor, etc* 
-- Where a logging module is not set up, integrate it and review all the service log lines
-  - Remove print, redirect stdout/stderr, aggregate/disaggregate information log where needed
-- Test OpenTelemetry toolset for format-agnostic observability, relieving Oakestra of the weight of the grafana stack:
-  - [Automatic Instrumentation](https://opentelemetry.io/docs/languages/python/automatic/example/), may allow to traces with zero-code 
-  - [Collector/Exporter](https://opentelemetry-python.readthedocs.io/en/latest/exporter/otlp/otlp.html): the idea is have OpenTelemetry Collector as log exporter + Alloy for ingestion. Interesting is [automatic instrumentation](https://opentelemetry.io/docs/languages/python/automatic/example/) of Python services.
+Sensitive mapping keys are recursively redacted, and service call sites log summaries such as IDs, counts, field names, and payload sizes instead of complete users, credentials, SLAs, MQTT messages, or database objects. Flask and internal libraries that use standard-library logging are bridged into the same JSON contract. Go services and third-party processes may continue to emit raw lines; Alloy collects both forms.
 
 ## Explore resources
 - [e2e LGTM stack](https://levelup.gitconnected.com/setting-up-an-end-to-end-monitoring-system-with-grafana-stack-lgtm-1c534ebdf17b)
