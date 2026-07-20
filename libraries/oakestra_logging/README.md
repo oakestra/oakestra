@@ -51,6 +51,21 @@ Flask and reusable internal libraries compatible while service-owned code uses `
 Calling `configure_logging()` repeatedly replaces the root handler, preventing duplicate records.
 An invalid `LOG_LEVEL` produces a structured warning and falls back to `INFO`.
 
+## Installation in service images
+
+Oakestra's Python service images use separate Docker build contexts, so the repository-level
+library directory is not copied into those images automatically. Compose and image workflows
+provide `libraries/` as a BuildKit named context, and each consuming Dockerfile installs the
+package from that local context:
+
+```text
+COPY --from=libraries . /libraries
+RUN pip install --no-cache-dir /libraries/oakestra_logging
+```
+
+This guarantees that a source build uses the logging package from the same checkout as the service
+without requiring a pushed branch or fetching application dependencies from GitHub.
+
 The recursive redaction processor replaces values whose keys represent passwords, secrets,
 tokens, authorization headers, cookies, API keys, private keys, or credentials. Redaction cannot
 identify a secret interpolated into `message`, an exception message, or an opaque string, so call
