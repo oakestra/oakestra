@@ -175,9 +175,11 @@ class ClusterRegistrationServicer(register_clusterServicer):
 
         if not _is_cluster_reachable(cluster_address, cluster_port):
             logger.error(
-                "Cluster {} is not reachable at {}:{} — refusing registration".format(
-                    message.get("cluster_name"), cluster_address, cluster_port
-                )
+                "Cluster endpoint is not reachable; refusing registration",
+                event_name="cluster.registration.endpoint_unreachable",
+                cluster_name=message.get("cluster_name"),
+                cluster_address=cluster_address,
+                cluster_port=cluster_port,
             )
             context.abort(
                 grpc.StatusCode.FAILED_PRECONDITION,
