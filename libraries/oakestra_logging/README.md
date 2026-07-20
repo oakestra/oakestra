@@ -21,7 +21,9 @@ The output level is controlled with `LOG_LEVEL` and defaults to `INFO`. The JSON
 defined by `oakestra_logging/schema/log-event-v1.schema.json`. Application-specific values are
 placed under `context`; `event_name` becomes the optional stable `event` field. Docker metadata
 such as `cluster_id`, `compose_service`, and `container` is attached by Alloy and is intentionally
-not part of this application schema.
+not a top-level part of this application schema. A record may still reference a business object
+such as a target cluster under `context.cluster_id`; that value does not replace or duplicate the
+collector-owned deployment label.
 
 Sensitive mapping keys are recursively redacted. Call sites must still avoid embedding secrets,
 personal data, or complete large payloads directly in the human-readable message.
