@@ -36,6 +36,11 @@ class ServiceController(MethodView):
         data.get("token")  # registration_token
         # TODO(GB): check and generate tokens
         data["candidate_name"] = data.get("host", "")
+        logger.debug(
+            "Prepared worker candidate name",
+            event_name="worker.registration.candidate_prepared",
+            candidate_name=data.get("candidate_name"),
+        )
         worker = candidate_operations.create_candidate(data)
         if worker is None:
             logger.error(

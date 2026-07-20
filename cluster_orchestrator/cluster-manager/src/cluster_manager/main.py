@@ -24,7 +24,7 @@ from .ext_requests.system_manager_requests import (
     re_deploy_dead_jobs_routine,
     send_aggregated_info_to_sm,
 )
-from .proto.cluster_registration_pb2 import CS1Message, CS2Message, SC2Message
+from .proto.cluster_registration_pb2 import CS1Message, CS2Message, SC1Message, SC2Message
 from .proto.cluster_registration_pb2_grpc import register_clusterStub
 
 SWAGGER_URL = "/api/docs"
@@ -109,12 +109,13 @@ def register_with_system_manager():
         greeting.hello_service_manager = json.dumps(
             {"cluster_name": CONFIG.cluster_name, "location": CONFIG.cluster_location}
         )
-        stub.handle_init_greeting(
+        sc1: SC1Message = stub.handle_init_greeting(
             greeting, wait_for_ready=True, timeout=GRPC_REQUEST_TIMEOUT
         )
         logger.info(
-            "Received greeting message from System Manager",
+            "Received greeting from System Manager",
             event_name="cluster.registration.greeting_received",
+            greeting_size=len(sc1.hello_cluster_manager),
         )
 
         # Send cluster details (CS2Message)
