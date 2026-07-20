@@ -94,7 +94,9 @@ def test_exception_is_one_json_record(capsys):
     except ValueError:
         get_logger(__name__).exception("Operation failed")
 
-    [record] = records(capsys)
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    [record] = [json.loads(line) for line in captured.out.splitlines() if line]
     assert record["exception"]["type"] == "ValueError"
     assert record["exception"]["message"] == "broken"
     assert "Traceback (most recent call last)" in record["exception"]["stacktrace"]
@@ -165,10 +167,15 @@ def test_standard_library_exception_is_one_json_record(capsys):
     except RuntimeError:
         logging.getLogger("legacy.library").exception("Library operation failed")
 
-    [record] = records(capsys)
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    [record] = [json.loads(line) for line in captured.out.splitlines() if line]
     assert record["exception"]["type"] == "RuntimeError"
     assert record["exception"]["message"] == "stdlib failure"
     assert "Traceback (most recent call last)" in record["exception"]["stacktrace"]
+    assert record["source"]["file"] == "test_logging.py"
+    assert record["source"]["function"] == "test_standard_library_exception_is_one_json_record"
+    jsonschema.Draft202012Validator(log_schema()).validate(record)
 
 
 def test_reconfiguration_does_not_duplicate_records(capsys):
