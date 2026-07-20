@@ -1,12 +1,11 @@
-import logging
-
 import config
 from bson import json_util
 from flask import Response
 from flask.views import MethodView
 from flask_smorest import Blueprint
+from oakestra_logging import get_logger
 
-logger = logging.getLogger("cluster_manager")
+logger = get_logger(__name__)
 
 clusterblp = Blueprint(
     "Cluster operations",

@@ -1,13 +1,13 @@
-import logging
 import os
 
 from bson import json_util
 from flask import Response, request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
+from oakestra_logging import get_logger
 from resource_abstractor_client import candidate_operations
 
-logger = logging.getLogger("cluster_manager")
+logger = get_logger(__name__)
 
 # ........ Functions for job management ...............#
 # ......................................................#

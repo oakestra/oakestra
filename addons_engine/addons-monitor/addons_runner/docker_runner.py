@@ -1,7 +1,9 @@
-import logging
 import os
 
 import docker
+from oakestra_logging import get_logger
+
+logger = get_logger(__name__)
 
 ORCHESTRATION_PLANE = os.environ.get("ORCHESTRATION_PLANE") or "root"
 
@@ -69,8 +71,13 @@ class DockerRunner:
     def remove_image(self, image_name):
         try:
             self._client.images.remove(image_name)
-        except docker.errors.DockerException as e:
-            logging.warning(f"Failed to remove image {image_name}: {e}")
+        except docker.errors.DockerException as exc:
+            logger.warning(
+                "Failed to remove image",
+                event_name="addon.image.remove_failed",
+                image=image_name,
+                error_type=type(exc).__name__,
+            )
             return False
 
         return True
@@ -106,8 +113,10 @@ class DockerRunner:
         for network_name in service["networks"][1:]:
             network = self.get_network_by_name(network_name)
             if not network:
-                logging.warning(
-                    f"Network {network_name} not found. Will not attach container to network..."
+                logger.warning(
+                    "Network not found; container will not be attached",
+                    event_name="addon.network.missing",
+                    network=network_name,
                 )
                 continue
             network.connect(created_container)

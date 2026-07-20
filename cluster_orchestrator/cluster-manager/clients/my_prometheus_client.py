@@ -1,9 +1,10 @@
+from oakestra_logging import get_logger
 from prometheus_client import Gauge
 
 metrics = {}
 jobs = {}
 cluster_id = None
-logger = None
+logger = get_logger(__name__)
 
 
 def add_or_set_metric(name, value):
@@ -15,16 +16,22 @@ def add_or_set_metric(name, value):
                 metrics[metrics_name].set(value)
             else:
                 metrics[metrics_name] = Gauge(metrics_name, "")
-        except Exception as e:
-            logger.error("Unable to set metric " + metrics_name + " to " + str(value))
-            logger.error(e)
+        except Exception:
+            logger.exception(
+                "Unable to set Prometheus metric",
+                event_name="prometheus.metric.update_failed",
+                metric_name=metrics_name,
+            )
 
 
 def prometheus_init_gauge_metrics(my_id, app_logger):
-    global cluster_id, logger
-    logger = app_logger
+    global cluster_id
     cluster_id = my_id
-    print("prometheus gauge metrics initialized.")
+    logger.info(
+        "Initialized Prometheus gauge metrics",
+        event_name="prometheus.metrics.initialized",
+        cluster_id=my_id,
+    )
 
 
 def prometheus_set_metrics(data):

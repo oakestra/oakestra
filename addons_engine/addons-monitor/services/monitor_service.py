@@ -1,4 +1,3 @@
-import logging
 import os
 import time
 from collections import defaultdict
@@ -6,6 +5,9 @@ from enum import Enum
 
 import requests
 from addons_runner.runner_types import RunnerTypes, get_runner
+from oakestra_logging import get_logger
+
+logger = get_logger(__name__)
 
 ADDONS_MANAGER_ADDR = os.environ.get("ADDONS_MANAGER_ADDR") or "http://localhost:11101"
 ADDONS_MANAGER_API = f"{ADDONS_MANAGER_ADDR}/api/v1/addons"
@@ -63,8 +65,12 @@ class AddonsMonitor:
         try:
             response = requests.get(f"{ADDONS_MANAGER_API}", params=filters)
             response.raise_for_status()
-        except Exception as e:
-            logging.warning("failed to retrieve addons from addons_manager.", exc_info=e)
+        except Exception as exc:
+            logger.warning(
+                "Failed to retrieve addons from Addons Manager",
+                event_name="addons.query.failed",
+                error_type=type(exc).__name__,
+            )
             return []
 
         return response.json()
@@ -117,7 +123,12 @@ class AddonsMonitor:
         new_status = str(AddonStatusEnum.ACTIVE)
         status_details = {}
         if failed_services:
-            logging.error(f"Failed to run services: {failed_services}")
+            logger.error(
+                "Failed to run addon services",
+                event_name="addon.services.run_failed",
+                failed_service_count=len(failed_services),
+                failed_services=[service.get("service_name") for service in failed_services],
+            )
             if len(failed_services) == len(all_services):
                 new_status = str(AddonStatusEnum.FAILED)
             else:
@@ -204,8 +215,13 @@ class AddonsMonitor:
             try:
                 container = runner_engine.run_service(service, DEFAULT_PROJECT_NAME)
                 running_services.append(container)
-            except Exception as e:
-                logging.warning("Failed to run container.", exc_info=e)
+            except Exception:
+                logger.exception(
+                    "Failed to run addon container",
+                    event_name="addon.container.run_failed",
+                    addon_id=addon_id,
+                    service_name=service.get("service_name"),
+                )
                 failed_services.append(service)
 
         return running_services, failed_services
@@ -254,7 +270,13 @@ class AddonsMonitor:
         curr_retries = self._retry_counts[addon_id].get(container.id, 0)
 
         if curr_retries >= MAX_CONTAINER_RETRIES:
-            logging.error((f"Addon-{addon_id}: container-{container.name} exceeded max retries"))
+            logger.error(
+                "Addon container exceeded maximum retries",
+                event_name="addon.container.retries_exhausted",
+                addon_id=addon_id,
+                container=container.name,
+                retry_count=curr_retries,
+            )
 
             # move to failed, clear counts
             if not self._failed_containers.get(addon_id, None):
@@ -265,19 +287,24 @@ class AddonsMonitor:
             self._pending_restart[addon_id].discard(container.id)
         elif not self._failed_containers.get(addon_id, None):
             new_count = curr_retries + 1
-            logging.info(
-                f"Addon-{addon_id}: container '{container.name}' exited with code {exit_code} "
-                f"(retry {new_count}/{MAX_CONTAINER_RETRIES})"
+            logger.info(
+                "Addon container exited and will be retried",
+                event_name="addon.container.retry_scheduled",
+                addon_id=addon_id,
+                container=container.name,
+                exit_code=exit_code,
+                retry_count=new_count,
+                max_retries=MAX_CONTAINER_RETRIES,
             )
             self._retry_counts[addon_id][container.id] = new_count
             self._pending_restart[addon_id].add(container.id)
 
     def stop_monitoring(self):
-        logging.info("Stopping monitoring of addons...")
+        logger.info("Stopping addon monitoring", event_name="addons.monitor.stopping")
         self._running = False
 
     def start_monitoring(self):
-        logging.info("Starting monitoring of addons...")
+        logger.info("Starting addon monitoring", event_name="addons.monitor.started")
         self._running = True
 
         while self._running:
@@ -293,7 +320,11 @@ class AddonsMonitor:
         installing_addons = self.get_addons_from_manager(
             filters={"status": str(AddonStatusEnum.INSTALLING)}
         )
-        logging.info(f"Found {len(installing_addons)} addons to be installed.")
+        logger.debug(
+            "Found addons waiting for installation",
+            event_name="addons.install.pending",
+            addon_count=len(installing_addons),
+        )
 
         def handle_installing_complete(addon, status, details={}):
             try:
@@ -301,9 +332,14 @@ class AddonsMonitor:
                     addon.get("_id"),
                     {"status": status, "status_details": details},
                 )
-            except Exception as e:
+            except Exception:
                 self.stop_addon(addon)
-                logging.error("Failed to update addon status", exc_info=e)
+                logger.exception(
+                    "Failed to update addon status",
+                    event_name="addon.status.update_failed",
+                    addon_id=addon.get("_id"),
+                    status=status,
+                )
 
         for addon in installing_addons:
             self.run_addon(
@@ -314,15 +350,21 @@ class AddonsMonitor:
         disable_addons = self.get_addons_from_manager(
             filters={"status": str(AddonStatusEnum.DISABLING)}
         )
-        logging.info(f"Found {len(disable_addons)} addons to be disabled.")
+        logger.debug(
+            "Found addons waiting to be disabled",
+            event_name="addons.disable.pending",
+            addon_count=len(disable_addons),
+        )
 
         def handle_disable_complete(addon):
             try:
                 self.update_addon(addon.get("_id"), {"status": str(AddonStatusEnum.DISABLED)})
-            except Exception as e:
-                logging.error(
-                    f"Failed to update addon status {str(AddonStatusEnum.DISABLED)}",
-                    exc_info=e,
+            except Exception:
+                logger.exception(
+                    "Failed to update addon status",
+                    event_name="addon.status.update_failed",
+                    addon_id=addon.get("_id"),
+                    status=str(AddonStatusEnum.DISABLED),
                 )
 
         for addon in disable_addons:
@@ -349,8 +391,10 @@ class AddonsMonitor:
             for container in containers:
                 addon_container_id = runner_engine.get_label(container, ADDONS_ID_LABEL)
                 if addon_container_id not in addons_ids:
-                    logging.info(
-                        f"Cleaning up container '{container.name}' not linked to any addon."
+                    logger.info(
+                        "Cleaning up container not linked to an addon",
+                        event_name="addon.container.orphan_removed",
+                        container=container.name,
                     )
                     runner_engine.stop_container(container)
 
@@ -358,7 +402,11 @@ class AddonsMonitor:
         running_addons = self.get_addons_from_manager(
             filters={"status": str(AddonStatusEnum.ACTIVE)}
         )
-        logging.info(f"Found {len(running_addons)} active addons.")
+        logger.debug(
+            "Found active addons",
+            event_name="addons.active.found",
+            addon_count=len(running_addons),
+        )
 
         for addon in running_addons:
             addon_id = addon.get("_id")
@@ -371,7 +419,12 @@ class AddonsMonitor:
             expected_services = addon.get("services", [])
             if len(addon_containers) == 0 and len(expected_services) > 0:
                 # All containers are missing - mark as failed immediately
-                logging.error(f"Addon-{addon_id}: All containers are missing or were removed")
+                logger.error(
+                    "All expected addon containers are missing",
+                    event_name="addon.containers.missing",
+                    addon_id=addon_id,
+                    expected_container_count=len(expected_services),
+                )
                 try:
                     self.update_addon(
                         addon_id,
@@ -384,8 +437,13 @@ class AddonsMonitor:
                             },
                         },
                     )
-                except Exception as e:
-                    logging.error("Failed to update addon status to failed", exc_info=e)
+                except Exception:
+                    logger.exception(
+                        "Failed to mark addon as failed",
+                        event_name="addon.status.update_failed",
+                        addon_id=addon_id,
+                        status=str(AddonStatusEnum.FAILED),
+                    )
                 continue
 
             for container in addon_containers:
@@ -402,7 +460,9 @@ class AddonsMonitor:
         if not failed_containers:
             return
 
-        logging.info(f"Reporting failure of addon-{addon_id}.")
+        logger.info(
+            "Reporting addon failure", event_name="addon.failure.reported", addon_id=addon_id
+        )
         status = (
             str(AddonStatusEnum.FAILED)
             if len(failed_containers) == len(containers)
@@ -421,8 +481,12 @@ class AddonsMonitor:
                 container = runner_engine.get_container(container_id)
                 logs = runner_engine.get_container_logs(container, tail=100)
                 failed_container_logs.append(f"Logs for container '{container.name}':\n{logs}")
-            except Exception as e:
-                logging.error(f"Failed to get logs for container '{container_id}'", exc_info=e)
+            except Exception:
+                logger.exception(
+                    "Failed to get addon container logs",
+                    event_name="addon.container.logs_failed",
+                    container_id=container_id,
+                )
 
         try:
             self.update_addon(
@@ -436,11 +500,20 @@ class AddonsMonitor:
 
             for container_id in failed_containers:
                 # cleanup failed containers
-                logging.info(f"Cleaning up container with id {container_id}")
+                logger.info(
+                    "Cleaning up failed addon container",
+                    event_name="addon.container.cleanup",
+                    container_id=container_id,
+                )
                 runner_engine.stop_container_by_id(container_id)
             self._failed_containers.pop(addon_id)
-        except Exception as e:
-            logging.error(f"Failed to update addon status {status}", exc_info=e)
+        except Exception:
+            logger.exception(
+                "Failed to update addon status",
+                event_name="addon.status.update_failed",
+                addon_id=addon_id,
+                status=status,
+            )
 
     def process_retry_containers(self, addon_id, runner_engine):
         for container_id in list(self._pending_restart[addon_id]):
@@ -448,7 +521,11 @@ class AddonsMonitor:
             container = runner_engine.get_container(container_id)
             # Sanity check
             if not container:
-                logging.warning(f"Container '{container_id}' not found. Removing from retry list.")
+                logger.warning(
+                    "Addon container not found; removing it from retry list",
+                    event_name="addon.container.retry_missing",
+                    container_id=container_id,
+                )
                 self._pending_restart[addon_id].discard(container_id)
                 self._retry_counts[addon_id].pop(container_id, None)
                 if not self._failed_containers.get(addon_id):
@@ -456,7 +533,12 @@ class AddonsMonitor:
                 self._failed_containers[addon_id].add(container_id)
                 continue
 
-            logging.info(f"Restarting container '{container.name}' for the ({retry_count}) time...")
+            logger.info(
+                "Restarting addon container",
+                event_name="addon.container.restarted",
+                container=container.name,
+                retry_count=retry_count,
+            )
             container.restart()
             # Clear the pending flag
             self._pending_restart[addon_id].discard(container_id)
