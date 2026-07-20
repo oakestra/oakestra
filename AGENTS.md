@@ -161,6 +161,7 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | Messaging | Eclipse Mosquitto 2.0 (MQTT) | — |
 | Networking | oakestra-net (external Go repo) | — |
 | Observability | Grafana, Loki 2.9.2, Alloy 1.17.0, Prometheus | — |
+| Python logging | structlog 26.1.0 + standard-library bridge | JSON schema v1, stdout only |
 
 ---
 
