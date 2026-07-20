@@ -156,6 +156,19 @@ For containers that exited:
 docker logs <exited_container_name> 2>&1 | tail -50
 ```
 
+Python orchestrator services emit one JSON object per application log line. Gunicorn, Docker, and
+third-party libraries may still add unstructured lines. To inspect only schema-v1 records:
+
+```bash
+docker logs --tail 200 system_manager 2>&1 | jq -R 'fromjson? | select(.schema_version == 1)'
+docker logs --tail 200 cluster_manager 2>&1 | jq -R 'fromjson? | select(.schema_version == 1)'
+```
+
+Each structured record must contain `timestamp`, `level`, `service`, `logger`, and `message`.
+Error records may contain a single `exception` object; they should not emit a second traceback
+line. If Python application lines are plain text, verify the image version and the
+`OAKESTRA_SERVICE_NAME`/`LOG_LEVEL` environment variables.
+
 **Common error patterns and what they mean:**
 
 | Pattern | Likely Cause |
@@ -183,7 +196,7 @@ Check that critical env vars were correctly injected into each container:
 
 ```bash
 # Root Orchestrator critical vars
-docker exec system_manager env 2>/dev/null | grep -E "ROOT_MONGO|ROOT_SCHEDULER|RESOURCE_ABSTRACTOR|NET_PLUGIN|JWT" || echo "system_manager not running"
+docker exec system_manager env 2>/dev/null | grep -E "ROOT_MONGO|ROOT_SCHEDULER|RESOURCE_ABSTRACTOR|NET_PLUGIN|JWT|OAKESTRA_SERVICE_NAME|LOG_LEVEL" || echo "system_manager not running"
 
 docker exec root_scheduler env 2>/dev/null | grep -E "MANAGER_URL|RESOURCE_ABSTRACTOR|REDIS_ADDR" || echo "root_scheduler not running"
 
