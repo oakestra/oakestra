@@ -1,9 +1,11 @@
-import logging
 import os
 from enum import Enum
 
 import requests
 from db import addons_db
+from oakestra_logging import get_logger
+
+logger = get_logger(__name__)
 
 MARKETPLACE_ADDR = os.environ.get("MARKETPLACE_ADDR") or "http://localhost:11102"
 MARKETPLACE_API = f"{MARKETPLACE_ADDR}/api/v1/marketplace/addons"
@@ -46,7 +48,11 @@ def install_addon(addon):
     services = marketplace_addon.get("services", [])
 
     if not services:
-        logging.error(f"Addon-{marketplace_id} has no services")
+        logger.error(
+            "Addon has no services",
+            event_name="addon.install.invalid",
+            marketplace_id=marketplace_id,
+        )
         return None
 
     addon["name"] = marketplace_addon.get("name")
