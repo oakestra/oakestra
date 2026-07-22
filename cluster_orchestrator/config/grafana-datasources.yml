@@ -13,17 +13,17 @@ datasources:
       derivedFields:
         - name: "Open matching Cluster logs"
           matcherRegex: '\b([a-fA-F0-9]{24})\b'
-          url: '/d/oakestra-logs/oakestra-orchestrator-logs$${__url_time_range}&var-cluster_id=All&var-compose_service=All&var-search=$${__value.raw}'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-compose_service=All&var-level_filter=%5E&var-search=$${__value.raw}&var-logql_pipeline='
           urlDisplayLabel: "Open matching Cluster logs"
         - name: "Open in Cluster Manager"
           matcherRegex: '\b([a-fA-F0-9]{24})\b'
-          url: '/d/oakestra-logs/oakestra-orchestrator-logs$${__url_time_range}&var-cluster_id=All&var-compose_service=cluster_manager&var-search=$${__value.raw}'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-compose_service=cluster_manager&var-level_filter=%5E&var-search=$${__value.raw}&var-logql_pipeline='
           urlDisplayLabel: "Open in Cluster Manager"
         - name: "Open in Cluster Scheduler"
           matcherRegex: '\b([a-fA-F0-9]{24})\b'
-          url: '/d/oakestra-logs/oakestra-orchestrator-logs$${__url_time_range}&var-cluster_id=All&var-compose_service=cluster_scheduler&var-search=$${__value.raw}'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-compose_service=cluster_scheduler&var-level_filter=%5E&var-search=$${__value.raw}&var-logql_pipeline='
           urlDisplayLabel: "Open in Cluster Scheduler"
         - name: "Open in Cluster Resource Abstractor"
           matcherRegex: '\b([a-fA-F0-9]{24})\b'
-          url: '/d/oakestra-logs/oakestra-orchestrator-logs$${__url_time_range}&var-cluster_id=All&var-compose_service=cluster_resource_abstractor&var-search=$${__value.raw}'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-compose_service=cluster_resource_abstractor&var-level_filter=%5E&var-search=$${__value.raw}&var-logql_pipeline='
           urlDisplayLabel: "Open in Cluster Resource Abstractor"
