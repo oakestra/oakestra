@@ -21,23 +21,26 @@ def cluster_request_status(cluster_id):
 
 
 def cluster_request_to_deploy(cluster_id, job_id, instance_number):
+    request_logger = logger.bind(
+        cluster_id=cluster_id,
+        job_id=job_id,
+        instance_number=instance_number,
+        operation="deploy",
+    )
     cluster = candidate_operations.get_candidate_by_id(cluster_id)
     if cluster is None:
-        logger.error("Cluster not found", event_name="cluster.not_found", cluster_id=cluster_id)
+        request_logger.error("Cluster not found", event_name="cluster.not_found")
         return
 
     job = job_operations.get_job_instance(job_id, instance_number)
     if job is None:
-        logger.error("Job not found", event_name="job.not_found", job_id=job_id)
+        request_logger.error("Job not found", event_name="job.not_found")
         return
 
     try:
-        logger.debug(
+        request_logger.debug(
             "Preparing cluster deployment request",
             event_name="cluster.deploy.preparing",
-            cluster_id=cluster_id,
-            job_id=job_id,
-            instance_number=instance_number,
         )
         cluster_addr = (
             "http://"
@@ -50,21 +53,15 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
             + str(instance_number)
         )
         job["_id"] = str(job["_id"])
-        logger.info(
+        request_logger.info(
             "Sending cluster deployment request",
             event_name="cluster.deploy.requested",
-            cluster_id=cluster_id,
-            job_id=job_id,
-            instance_number=instance_number,
         )
         requests.post(cluster_addr, json=job, timeout=10)
     except Exception:
-        logger.exception(
+        request_logger.exception(
             "Cluster deployment request failed",
             event_name="cluster.deploy.failed",
-            cluster_id=cluster_id,
-            job_id=job_id,
-            instance_number=instance_number,
         )
 
 
