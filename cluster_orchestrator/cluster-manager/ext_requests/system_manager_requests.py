@@ -22,23 +22,26 @@ SYSTEM_MANAGER_ADDR = (
 
 
 def send_aggregated_info_to_sm(my_id, time_interval):
+    update_logger = logger.bind(
+        cluster_id=my_id,
+        operation="resource_aggregation",
+        aggregation_interval_seconds=time_interval,
+    )
     try:
         data = resource_aggregation.aggregate_info(time_interval)
         data.update({"jobs": job_management.aggregate_info(time_interval)})
-        logger.debug(
+        update_logger.debug(
             "Sending aggregated cluster information",
             event_name="cluster.resources.send_started",
-            cluster_id=my_id,
             job_count=len(data.get("jobs", [])),
             field_count=len(data),
         )
         threading.Thread(group=None, target=send_aggregated_info, args=(my_id, data)).start()
         prometheus_set_metrics(data)
     except Exception:
-        logger.exception(
+        update_logger.exception(
             "Failed to prepare aggregated cluster information",
             event_name="cluster.resources.prepare_failed",
-            cluster_id=my_id,
         )
 
 
