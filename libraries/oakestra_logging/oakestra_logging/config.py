@@ -166,9 +166,11 @@ def _shape_event(_logger: WrappedLogger, _method_name: str, event_dict: EventDic
         "timestamp",
     }
     supplied_context = event_dict.pop("context", {})
-    context = dict(supplied_context) if isinstance(supplied_context, Mapping) else {
-        "value": supplied_context
-    }
+    context = (
+        dict(supplied_context)
+        if isinstance(supplied_context, Mapping)
+        else {"value": supplied_context}
+    )
     for key in list(event_dict):
         if key not in reserved and not key.startswith("_"):
             context[key] = event_dict.pop(key)

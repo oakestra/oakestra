@@ -32,9 +32,7 @@ def insert_job(microservice):
         logger.error("Job was not inserted", event_name="job.insert.failed", job_name=job_name)
         return None
 
-    logger.info(
-        "Job inserted", event_name="job.inserted", job_id=str(new_job.get("_id"))
-    )
+    logger.info("Job inserted", event_name="job.inserted", job_id=str(new_job.get("_id")))
     return str(new_job.get("_id"))
 
 
