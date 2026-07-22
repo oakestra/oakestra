@@ -273,6 +273,22 @@ def configure_logging(service: str, level: str | None = None) -> None:
         )
 
 
+def configure_gunicorn_loggers() -> None:
+    """Route Gunicorn's standard-library loggers through the root JSON handler.
+
+    Gunicorn owns its startup messages and normally installs text formatters on
+    ``gunicorn.error`` and ``gunicorn.access``.  The custom Gunicorn logger
+    calls this after its normal setup so those records propagate to the same
+    handler configured by :func:`configure_logging`.
+    """
+    root_level = logging.getLogger().level
+    for logger_name in ("gunicorn.error", "gunicorn.access"):
+        gunicorn_logger = logging.getLogger(logger_name)
+        gunicorn_logger.handlers.clear()
+        gunicorn_logger.setLevel(root_level)
+        gunicorn_logger.propagate = True
+
+
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     """Return a structured logger using the shared configuration."""
     return structlog.get_logger(name)

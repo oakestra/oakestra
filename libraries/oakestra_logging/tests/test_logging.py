@@ -5,6 +5,7 @@ from importlib.resources import files
 import jsonschema
 import pytest
 from oakestra_logging import configure_logging, get_logger
+from oakestra_logging.config import configure_gunicorn_loggers
 
 
 def records(capsys):
@@ -34,6 +35,24 @@ def test_structured_record_matches_schema(capsys):
     assert record["event"] == "worker.registered"
     assert record["context"] == {"worker_id": "worker-1"}
     assert "source" not in record
+
+
+def test_bound_context_is_added_to_each_local_record(capsys):
+    configure_logging("test_service")
+    operation_logger = get_logger("test.logger").bind(
+        cluster_id="cluster-1",
+        operation="deployment",
+    )
+    operation_logger.info("Preparing deployment")
+    operation_logger.info("Deployment completed", job_id="job-1")
+
+    first, second = records(capsys)
+    assert first["context"] == {"cluster_id": "cluster-1", "operation": "deployment"}
+    assert second["context"] == {
+        "cluster_id": "cluster-1",
+        "operation": "deployment",
+        "job_id": "job-1",
+    }
 
 
 def test_warning_contains_source_metadata(capsys):
@@ -175,6 +194,24 @@ def test_standard_library_exception_is_one_json_record(capsys):
     assert "Traceback (most recent call last)" in record["exception"]["stacktrace"]
     assert record["source"]["file"] == "test_logging.py"
     assert record["source"]["function"] == "test_standard_library_exception_is_one_json_record"
+    jsonschema.Draft202012Validator(log_schema()).validate(record)
+
+
+def test_gunicorn_loggers_use_the_shared_contract(capsys):
+    configure_logging("test_service")
+    gunicorn_logger = logging.getLogger("gunicorn.error")
+    gunicorn_logger.addHandler(logging.StreamHandler())
+    gunicorn_logger.propagate = False
+
+    configure_gunicorn_loggers()
+    gunicorn_logger.info("Gunicorn started")
+
+    [record] = records(capsys)
+    assert gunicorn_logger.handlers == []
+    assert gunicorn_logger.propagate is True
+    assert record["logger"] == "gunicorn.error"
+    assert record["message"] == "Gunicorn started"
+    assert record["service"] == "test_service"
     jsonschema.Draft202012Validator(log_schema()).validate(record)
 
 
