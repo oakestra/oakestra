@@ -92,7 +92,7 @@ class ClusterController(MethodView):
         data = request.json
         cluster_id = kwargs["clusterid"]
         jobs = data.get("jobs")
-        logger.info(
+        logger.debug(
             "Received cluster update",
             event_name="cluster.update.received",
             cluster_id=cluster_id,
