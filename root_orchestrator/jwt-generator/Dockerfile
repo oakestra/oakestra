@@ -15,7 +15,8 @@ COPY . /
 
 ENV JWT_GENERATOR_URL=0.0.0.0
 ENV JWT_GENERATOR_PORT=10011
+ENV OAKESTRA_SERVICE_NAME=jwt_generator
 
 EXPOSE 10011
 
-CMD ["gunicorn" , "--bind", "0.0.0.0:10011", "jwt_generator:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:10011", "--logger-class", "oakestra_logging.gunicorn.StructuredGunicornLogger", "jwt_generator:app"]

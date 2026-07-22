@@ -43,5 +43,6 @@ ENV MQTT_BROKER_PORT=10003
 ENV MY_PORT=10100
 
 ENV LOG_LEVEL=INFO
+ENV OAKESTRA_SERVICE_NAME=cluster_manager
 
-CMD gunicorn --bind [::]:${MY_PORT} cluster_manager:app
+CMD gunicorn --bind [::]:${MY_PORT} --logger-class oakestra_logging.gunicorn.StructuredGunicornLogger cluster_manager:app
