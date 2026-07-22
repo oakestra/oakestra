@@ -23,6 +23,12 @@ logger = get_logger(__name__)
 def send_aggregated_info_to_sm(
     assigned_cluster_id: str, running_timeout: int, node_scheduled_timeout: int
 ) -> None:
+    update_logger = logger.bind(
+        cluster_id=assigned_cluster_id,
+        operation="resource_aggregation",
+        running_timeout_seconds=running_timeout,
+        node_scheduled_timeout_seconds=node_scheduled_timeout,
+    )
     try:
         metrics = resource_aggregation.compute_aggregated_worker_metrics()
 
@@ -31,10 +37,9 @@ def send_aggregated_info_to_sm(
             {"jobs": job_management.aggregate_info(running_timeout, node_scheduled_timeout)}
         )
 
-        logger.debug(
+        update_logger.debug(
             "Sending aggregated cluster information",
             event_name="cluster.resources.send_started",
-            cluster_id=assigned_cluster_id,
             job_count=len(metrics_msg.get("jobs", [])),
             field_count=len(metrics_msg),
         )
@@ -43,10 +48,9 @@ def send_aggregated_info_to_sm(
         ).start()
         prometheus_set_metrics(metrics_msg)
     except Exception:
-        logger.exception(
+        update_logger.exception(
             "Failed to prepare aggregated cluster information",
             event_name="cluster.resources.prepare_failed",
-            cluster_id=assigned_cluster_id,
         )
 
 
