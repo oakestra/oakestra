@@ -159,9 +159,7 @@ def test_every_sensitive_key_family_is_case_insensitively_redacted(capsys):
     get_logger(__name__).info("Sensitive values", details=sensitive_context)
 
     [record] = records(capsys)
-    assert record["context"]["details"] == {
-        key: "[REDACTED]" for key in sensitive_context
-    }
+    assert record["context"]["details"] == {key: "[REDACTED]" for key in sensitive_context}
 
 
 def test_standard_library_logging_uses_same_contract(capsys):
