@@ -52,8 +52,9 @@ ENV PATH="$BASE_DIR/.venv/bin:$PATH" \
     NET_PLUGIN_URL=localhost \
     NET_PLUGIN_PORT=10100 \
     MY_PORT=10000 \
-    LOG_LEVEL=INFO
+    LOG_LEVEL=INFO \
+    OAKESTRA_SERVICE_NAME=system_manager
 
 LABEL org.opencontainers.image.source="https://github.com/oakestra/oakestra"
 
-CMD gunicorn --bind [::]:${MY_PORT} system_manager.main:app
+CMD gunicorn --bind [::]:${MY_PORT} --logger-class oakestra_logging.gunicorn.StructuredGunicornLogger system_manager.main:app
