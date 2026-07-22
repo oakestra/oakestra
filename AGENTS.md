@@ -229,7 +229,8 @@ export OAKESTRA_VERSION=develop
 ## Gotchas
 
 - **Host networking breaks container DNS.** When using `override-network-host.yml`, containers can't resolve each other by name — set all env vars to IPs, not container names.
-- **`LIB_BRANCH` on feature branches.** The `oakestra_utils_library` and `resource_abstractor_client` Docker build arg `LIB_BRANCH` defaults to `develop`. If your branch adds library changes, set `LIB_BRANCH` to your branch name or images will build against stale library code.
+- **`LIB_BRANCH` on feature branches.** Shared Python packages are installed from the Git branch or tag selected by the Docker build arg `LIB_BRANCH`, which defaults to `develop`. If a feature branch changes a library, `LIB_BRANCH` must reference that same branch or tag. The reference must already exist in the Oakestra repository; an unpushed local branch cannot be installed by a normal image build.
+- **Structured Python logs.** The JSON shape is fixed in `libraries/oakestra_logging`. Use `LOG_LEVEL` only for verbosity and `OAKESTRA_SERVICE_NAME` for the runtime role. Do not log complete request bodies, credentials, users, SLAs, MQTT payloads, or database records.
 - **eventlet monkey-patching.** Both `system_manager` and `cluster_manager` use eventlet. Monkey-patching must happen before Flask/pymongo imports — don't reorder the top of entry-point files.
 - **Scheduler is the same binary for root and cluster** — differentiated only by env vars (`SCHEDULER_TYPE`, Redis URL/password). Keep deployment-specific logic out of the binary.
 
