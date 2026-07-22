@@ -102,9 +102,7 @@ def cluster_request_to_delete_job_by_ip(job_id, instance_number, cluster_id):
     try:
         cluster = candidate_operations.get_candidate_by_id(cluster_id)
         if cluster is None:
-            logger.error(
-                "Cluster not found", event_name="cluster.not_found", cluster_id=cluster_id
-            )
+            logger.error("Cluster not found", event_name="cluster.not_found", cluster_id=cluster_id)
             return
 
         cluster_addr = (
