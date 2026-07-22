@@ -244,10 +244,11 @@ export OAKESTRA_VERSION=develop
 
 - `libraries/oakestra-utils` — Python enums for job statuses (`DeploymentStatus`, `PositiveSchedulingStatus`, `NegativeSchedulingStatus`). Package name: `oakestra-utils`, module: `oakestra_utils`.
 - `libraries/resource-abstractor-client` — Python HTTP client for resource-abstractor. Package name: `resource-abstractor-client`, module: `resource_abstractor_client`.
+- `libraries/oakestra_logging` — Structured JSON logging configuration, schema, and Gunicorn logger for Python services.
 
 **These libraries are workspace members in the root `pyproject.toml`.**
-- **Docker builds** — `system_manager` and `cluster_manager` Dockerfiles run with the repository root as the build context (`context: ../` in docker-compose.yml, `context: .` in CI) and copy `pyproject.toml`, `uv.lock`, and `libraries/` into the build container before running `uv sync` (with the target project as the working directory).
-- **Local dev / tests** — Running `uv sync --all-packages` installs both libraries into the root `.venv` in editable mode.
+- **Docker builds** — `system_manager` and `cluster_manager` use the repository root as the build context and install workspace packages with `uv sync`. Other consumers use the local `libraries/` BuildKit context, configured in Compose and CI.
+- **Local dev / tests** — Running `uv sync --all-packages` installs the workspace packages into the root `.venv` in editable mode.
 
 ---
 
@@ -256,6 +257,7 @@ export OAKESTRA_VERSION=develop
 - **Host networking breaks container DNS.** When using `override-network-host.yml`, containers can't resolve each other by name — set all env vars to IPs, not container names.
 - **Docker build contexts for UV services.** `system-manager-python` and `cluster-manager` require the repository root build context (`context: ../` in `docker-compose.yml`) so that the uv workspace root (`pyproject.toml`, `uv.lock`, `libraries/`) is accessible during image builds.
 - **Local venv isolation.** Do not mix `pip install -r requirements.txt` for non-uv services inside the root `.venv`, as subsequent `uv sync [--all-packages]` invocations will clean untracked packages. Use a subfolder virtual environment for non-uv services when running outside of Docker.
+- **Structured Python logs.** The JSON shape is fixed in `libraries/oakestra_logging`. Use `LOG_LEVEL` only for verbosity and `OAKESTRA_SERVICE_NAME` for the runtime role. Do not log complete request bodies, credentials, users, SLAs, MQTT payloads, or database records.
 - **eventlet monkey-patching.** Both `system_manager` and `cluster_manager` use eventlet. Monkey-patching must happen before Flask/pymongo imports — don't reorder the top of entry-point files.
 - **Scheduler is the same binary for root and cluster** — differentiated only by env vars (`SCHEDULER_TYPE`, Redis URL/password). Keep deployment-specific logic out of the binary.
 

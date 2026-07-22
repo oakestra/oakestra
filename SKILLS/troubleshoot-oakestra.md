@@ -156,8 +156,10 @@ For containers that exited:
 docker logs <exited_container_name> 2>&1 | tail -50
 ```
 
-Python orchestrator services emit one JSON object per application log line. Gunicorn, Docker, and
-third-party libraries may still add unstructured lines. To inspect only schema-v1 records:
+Oakestra-owned Python application records and standard-library logging records emitted after
+configuration use schema-v1 JSON. Gunicorn messages are also structured in current images. Flask
+development-server banners, subprocesses, and dependencies that write directly to stdout or stderr
+may still produce raw lines; Docker only captures those streams. To inspect schema-v1 records:
 
 ```bash
 docker logs --tail 200 system_manager 2>&1 | jq -R 'fromjson? | select(.schema_version == 1)'
@@ -671,11 +673,11 @@ docker compose build --no-cache system_manager
 docker compose pull
 ```
 
-The shared `libraries/` packages (`oakestra-utils`, `resource-abstractor-client`) are part of the root `uv` workspace and are built from the repo-local `libraries/` folder — not from a remote git repo, and there is no `LIB_BRANCH` env var. If a build fails on these libraries, check that:
+The shared `libraries/` packages (`oakestra-utils`, `resource-abstractor-client`, and `oakestra_logging`) are built from the repo-local `libraries/` folder, not from a remote Git repository. The system and cluster managers use the root UV workspace; other consumers use a Buildx named build context. If a build fails on these libraries, check that:
 ```bash
 # The shared libraries exist locally:
-ls libraries/oakestra-utils libraries/resource-abstractor-client
-# BuildKit/Buildx is enabled (multi-stage UV builds require Buildx — default on modern Docker):
+ls libraries/oakestra-utils libraries/resource-abstractor-client libraries/oakestra_logging
+# BuildKit/Buildx is enabled (named contexts require it — default on modern Docker):
 docker buildx version
 ```
 
