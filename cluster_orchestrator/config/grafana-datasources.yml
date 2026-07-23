@@ -11,19 +11,23 @@ datasources:
     isDefault: true
     jsonData:
       derivedFields:
-        - name: "Open matching Cluster logs"
+        - name: "Search this ID across Cluster logs"
           matcherRegex: '\b([a-fA-F0-9]{24})\b'
-          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-compose_service=All&var-level_filter=%5E&var-search=$${__value.raw}&var-logql_pipeline='
-          urlDisplayLabel: "Open matching Cluster logs"
-        - name: "Open in Cluster Manager"
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-source_scope=.%2B&var-compose_service=All&var-level_filter=.%2A&var-search=$${__value.raw}&var-logql_pipeline='
+          urlDisplayLabel: "Search this ID across Cluster logs"
+        - name: "Search this ID in Cluster Manager"
           matcherRegex: '\b([a-fA-F0-9]{24})\b'
-          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-compose_service=cluster_manager&var-level_filter=%5E&var-search=$${__value.raw}&var-logql_pipeline='
-          urlDisplayLabel: "Open in Cluster Manager"
-        - name: "Open in Cluster Scheduler"
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-source_scope=.%2B&var-compose_service=cluster_manager&var-level_filter=.%2A&var-search=$${__value.raw}&var-logql_pipeline='
+          urlDisplayLabel: "Search this ID in Cluster Manager"
+        - name: "Search this ID in Cluster Scheduler"
           matcherRegex: '\b([a-fA-F0-9]{24})\b'
-          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-compose_service=cluster_scheduler&var-level_filter=%5E&var-search=$${__value.raw}&var-logql_pipeline='
-          urlDisplayLabel: "Open in Cluster Scheduler"
-        - name: "Open in Cluster Resource Abstractor"
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-source_scope=.%2B&var-compose_service=cluster_scheduler&var-level_filter=.%2A&var-search=$${__value.raw}&var-logql_pipeline='
+          urlDisplayLabel: "Search this ID in Cluster Scheduler"
+        - name: "Search this ID in Cluster Resource Abstractor"
           matcherRegex: '\b([a-fA-F0-9]{24})\b'
-          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-compose_service=cluster_resource_abstractor&var-level_filter=%5E&var-search=$${__value.raw}&var-logql_pipeline='
-          urlDisplayLabel: "Open in Cluster Resource Abstractor"
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-source_scope=.%2B&var-compose_service=cluster_resource_abstractor&var-level_filter=.%2A&var-search=$${__value.raw}&var-logql_pipeline='
+          urlDisplayLabel: "Search this ID in Cluster Resource Abstractor"
+        - name: "Search this ID in Cluster Service Manager"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-source_scope=.%2B&var-compose_service=cluster_service_manager&var-level_filter=.%2A&var-search=$${__value.raw}&var-logql_pipeline='
+          urlDisplayLabel: "Search this ID in Cluster Service Manager"
