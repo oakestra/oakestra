@@ -25,7 +25,7 @@ groups:
                 (
                   sum by (cluster_id, compose_service) (
                     count_over_time(
-                      {cluster_id=~".+", compose_service=~".+", compose_service!~"^(grafana|cluster_grafana|loki|cluster_loki|alloy|cluster_alloy)$", level=~"error|critical"}
+                      {cluster_id=~".+", compose_service=~".+", compose_service!~"^(grafana|cluster_grafana|loki|cluster_loki|alloy|cluster_alloy|prometheus)$", level=~"error|critical"}
                       | json
                       | __error__ = ""
                       | schema_version = 1
@@ -37,8 +37,8 @@ groups:
                 (
                   sum by (cluster_id, compose_service) (
                     count_over_time(
-                      {cluster_id=~".+", compose_service=~".+", compose_service!~"^(grafana|cluster_grafana|loki|cluster_loki|alloy|cluster_alloy)$"}
-                      != `"schema_version":1`
+                      {cluster_id=~".+", compose_service=~".+", compose_service!~"^(grafana|cluster_grafana|loki|cluster_loki|alloy|cluster_alloy|prometheus)$"}
+                      !~ `"schema_version"\s*:\s*1\s*[,}]`
                       |~ `(?i:\b(ERROR|FATAL|CRITICAL|EXCEPTION)\b|Traceback \(most recent call last\):|panic:|fatal error:|runtime error:|goroutine [0-9]+ \[|File ".*", line [0-9]+|\.go:[0-9]+ \+0x|\[[EF][0-9])`
                       [2m]
                     )
