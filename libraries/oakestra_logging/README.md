@@ -220,11 +220,16 @@ Docker Compose still limits the host's `json-file` logs with `max-size: 1m` and 
 
 Grafana alert rules should treat the JSON `level` field as the authoritative severity for Oakestra-owned Python records. `stderr` only identifies a Docker stream; it is not an error level, because tools such as Gunicorn can write normal informational messages there.
 
-For a deployment using the Alloy labels, an initial structured-error expression is:
+For a deployment using the Alloy labels, the structured-error path is:
 
 ```logql
-sum by (container_name, service) (
-  count_over_time({job="containerlogs"} | json | schema_version=1 | level=~"error|critical" [5m])
+sum by (cluster_id, compose_service) (
+  count_over_time(
+    {cluster_id=~".+", compose_service=~".+", level=~"error|critical"}
+    | json
+    | __error__=""
+    | schema_version=1 [5m]
+  )
 )
 ```
 
@@ -235,9 +240,9 @@ double-count JSON errors:
 
 ```logql
 count_over_time(
-  {job="containerlogs"}
-  |! "\"schema_version\":1"
-  |~ "(?i)(\\berror\\b|traceback|panic:|fatal|stack.?trace)" [5m]
+  {cluster_id=~".+", compose_service=~".+"}
+  !~ `"schema_version"\s*:\s*1\s*[,}]`
+  |~ `(?i:\b(ERROR|FATAL|CRITICAL|EXCEPTION)\b|Traceback \(most recent call last\):|panic:)` [5m]
 )
 ```
 
