@@ -60,22 +60,230 @@ loki.source.docker "oakestra" {
 }
 
 loki.process "oakestra" {
-	stage.json {
-		expressions = {
-			level    = "level",
-			service  = "service",
-			filename = "filename",
+	// Trust schema-v1 severity only from Python services that use the shared
+	// oakestra_logging contract. Requiring the complete identity header and the
+	// expected service-to-container mapping prevents arbitrary JSON payloads from
+	// becoming indexed severity metadata. The application-provided service remains
+	// query-time JSON; compose_service is the authoritative indexed identity.
+	stage.match {
+		selector = `{compose_service=~"system_manager|root_resource_abstractor|resource_abstractor|jwt_generator|root_addons_manager|root_addons_monitor|addons_manager|addons_monitor|marketplace_manager|cluster_manager|cluster_resource_abstractor|cluster_addons_manager|cluster_addons_monitor"}`
+
+		stage.json {
+			expressions = {
+				schema_version = "schema_version",
+				json_timestamp = "timestamp",
+				json_level     = "level",
+				json_service   = "service",
+				json_logger    = "logger",
+			}
+		}
+
+		stage.template {
+			source   = "schema_header"
+			template = `{{- if and (eq (toString .schema_version) "1") .json_timestamp .json_level .json_service .json_logger -}}true{{- end -}}`
 		}
 	}
 
-	stage.regex {
-		expression = "(?P<level>[^\\[\\]]+?)(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}) (?P<service>[^:]+) (?P<file>[^:]+):(?P<line>\\d+)\\] (?P<message>.+)"
+	stage.match {
+		selector = `{compose_service="system_manager"}`
+
+		stage.template {
+			source   = "schema_record"
+			template = `{{- if and .schema_header (eq .json_service "system_manager") -}}true{{- end -}}`
+		}
+	}
+
+	stage.match {
+		selector = `{compose_service=~"root_resource_abstractor|resource_abstractor"}`
+
+		stage.template {
+			source   = "schema_record"
+			template = `{{- if and .schema_header (eq .json_service "root_resource_abstractor") -}}true{{- end -}}`
+		}
+	}
+
+	stage.match {
+		selector = `{compose_service="jwt_generator"}`
+
+		stage.template {
+			source   = "schema_record"
+			template = `{{- if and .schema_header (eq .json_service "jwt_generator") -}}true{{- end -}}`
+		}
+	}
+
+	stage.match {
+		selector = `{compose_service=~"root_addons_manager|addons_manager"}`
+
+		stage.template {
+			source   = "schema_record"
+			template = `{{- if and .schema_header (eq .json_service "root_addons_manager") -}}true{{- end -}}`
+		}
+	}
+
+	stage.match {
+		selector = `{compose_service=~"root_addons_monitor|addons_monitor"}`
+
+		stage.template {
+			source   = "schema_record"
+			template = `{{- if and .schema_header (eq .json_service "root_addons_monitor") -}}true{{- end -}}`
+		}
+	}
+
+	stage.match {
+		selector = `{compose_service="marketplace_manager"}`
+
+		stage.template {
+			source   = "schema_record"
+			template = `{{- if and .schema_header (eq .json_service "marketplace_manager") -}}true{{- end -}}`
+		}
+	}
+
+	stage.match {
+		selector = `{compose_service="cluster_manager"}`
+
+		stage.template {
+			source   = "schema_record"
+			template = `{{- if and .schema_header (eq .json_service "cluster_manager") -}}true{{- end -}}`
+		}
+	}
+
+	stage.match {
+		selector = `{compose_service="cluster_resource_abstractor"}`
+
+		stage.template {
+			source   = "schema_record"
+			template = `{{- if and .schema_header (eq .json_service "cluster_resource_abstractor") -}}true{{- end -}}`
+		}
+	}
+
+	stage.match {
+		selector = `{compose_service="cluster_addons_manager"}`
+
+		stage.template {
+			source   = "schema_record"
+			template = `{{- if and .schema_header (eq .json_service "cluster_addons_manager") -}}true{{- end -}}`
+		}
+	}
+
+	stage.match {
+		selector = `{compose_service="cluster_addons_monitor"}`
+
+		stage.template {
+			source   = "schema_record"
+			template = `{{- if and .schema_header (eq .json_service "cluster_addons_monitor") -}}true{{- end -}}`
+		}
+	}
+
+	stage.template {
+		source   = "schema_level"
+		template = `{{- if .schema_record -}}{{ .json_level }}{{- end -}}`
+	}
+
+	// MongoDB uses the top-level JSON field s for severity. Restrict that
+	// interpretation to MongoDB Compose services so application payloads cannot
+	// accidentally become severity labels.
+	stage.match {
+		selector = `{compose_service=~"mongo_root|mongo_rootnet|mongo_cluster|mongo_clusternet"}`
+
+		stage.json {
+			expressions = {
+				mongo_level = "s",
+			}
+		}
+	}
+
+	// Grafana, Loki, Alloy, and Prometheus emit logfmt. Parsing only these known
+	// emitters reads the real top-level level field instead of matching text
+	// embedded later in a message or query.
+	stage.match {
+		selector = `{compose_service=~"alloy|cluster_alloy|grafana|cluster_grafana|loki|cluster_loki|prometheus"}`
+
+		stage.logfmt {
+			mapping = {
+				compat_level = "level",
+			}
+		}
+	}
+
+	// Redis encodes severity as a marker after its timestamp: . debug,
+	// - verbose, * notice, and # warning.
+	stage.match {
+		selector = `{compose_service=~"root_redis|cluster_redis|redis"}`
+
+		stage.regex {
+			expression = `^\d+:[A-Z] \d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2}\.\d{3} (?P<redis_marker>[.\-*#]) `
+		}
+
+		stage.template {
+			source   = "redis_level"
+			template = `{{- if eq .redis_marker "." -}}debug{{- else if or (eq .redis_marker "-") (eq .redis_marker "*") -}}info{{- else if eq .redis_marker "#" -}}warning{{- end -}}`
+		}
+	}
+
+	// Nginx-based dashboards put the authoritative severity in brackets near
+	// the beginning of the line.
+	stage.match {
+		selector = `{compose_service=~"dashboard|root_addons_dashboard|cluster_addons_dashboard|addons_dashboard"}`
+
+		stage.regex {
+			expression = `^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} \[(?P<compat_level>debug|info|notice|warn|error|crit|alert|emerg)\] `
+		}
+	}
+
+	// Scheduler dependencies use their own stable prefixes. Keep these parsers
+	// scoped so a similar phrase in another container remains Unparsed.
+	stage.match {
+		selector = `{compose_service=~"root_scheduler|cluster_scheduler"}`
+
+		stage.regex {
+			expression = `^asynq: .* (?P<compat_level>DEBUG|INFO|WARN|ERROR|FATAL): `
+		}
+
+		stage.regex {
+			expression = `^\[GIN-[^]]+\] \[(?P<compat_level>WARNING|ERROR)\] `
+		}
+
+		stage.regex {
+			expression = `^(?P<compat_level>panic)(?::|\s)`
+		}
+
+		stage.regex {
+			expression = `^(?P<compat_level>fatal) error:`
+		}
+	}
+
+	// Strict, anchored compatibility headers used by older Oakestra services.
+	// Scope them to known application emitters so matching payload text from a
+	// database or observability component cannot create a false severity.
+	stage.match {
+		selector = `{compose_service=~"system_manager|root_scheduler|root_resource_abstractor|resource_abstractor|root_service_manager|jwt_generator|root_addons_manager|root_addons_monitor|addons_manager|addons_monitor|marketplace_manager|cluster_manager|cluster_scheduler|cluster_resource_abstractor|cluster_service_manager|cluster_addons_manager|cluster_addons_monitor"}`
+
+		stage.regex {
+			expression = "^\\[(?P<compat_level>[DIWEF])(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}) [^:]+ [^:]+:\\d+\\] .+"
+		}
+
+		stage.regex {
+			expression = "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}(?:,\\d+)?\\s+-\\s+[^-]+\\s+-\\s+(?P<compat_level>DEBUG|INFO|WARN(?:ING)?|ERROR|ERR|CRIT(?:ICAL)?|FATAL)\\s+-\\s+"
+		}
+
+		stage.regex {
+			expression = "^(?P<compat_level>DEBUG|INFO|WARN(?:ING)?|ERROR|ERR|CRIT(?:ICAL)?|FATAL)-\\d{4}/\\d{2}/\\d{2}\\s+"
+		}
+	}
+
+	stage.template {
+		source   = "level"
+		template = `{{- if .schema_level -}}{{ .schema_level }}{{- else if .mongo_level -}}{{ .mongo_level }}{{- else if .redis_level -}}{{ .redis_level }}{{- else if .compat_level -}}{{ .compat_level }}{{- end -}}`
+	}
+
+	stage.template {
+		source   = "level"
+		template = `{{- if .Value -}}{{- $level := ToLower .Value -}}{{- if or (eq $level "debug") (eq $level "d") (eq $level "d1") (eq $level "d2") (eq $level "d3") (eq $level "d4") (eq $level "d5") -}}debug{{- else if or (eq $level "info") (eq $level "i") (eq $level "notice") (eq $level "verbose") -}}info{{- else if or (eq $level "warn") (eq $level "warning") (eq $level "w") -}}warning{{- else if or (eq $level "error") (eq $level "err") (eq $level "e") -}}error{{- else if or (eq $level "critical") (eq $level "crit") (eq $level "fatal") (eq $level "panic") (eq $level "alert") (eq $level "emerg") (eq $level "f") -}}critical{{- end -}}{{- end -}}`
 	}
 
 	stage.labels {
 		values = {
-			level   = "",
-			service = "",
+			level = "",
 		}
 	}
 
