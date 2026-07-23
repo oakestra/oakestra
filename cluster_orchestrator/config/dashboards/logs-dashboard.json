@@ -33,7 +33,7 @@
       },
       "id": 10,
       "panels": [],
-      "title": "How to query logs",
+      "title": "How to query logs · 30-day maximum",
       "type": "row"
     },
     {
@@ -50,7 +50,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "- **Cluster** and **Component** select indexed Loki labels. Both support multi-select and **All**.\n- **Level** filters by severity. Choose **All** to see every level.\n- **Search (regex)** is a case-insensitive regular expression matched against the full log line. The default `^` matches every line without highlighting the whole message. Examples: `worker|mqtt`, `panic|traceback`, or a service ID.\n- **Extra LogQL pipeline** appends raw LogQL pipeline stages after the built-in label, level, and search filters. Leave it empty for normal browsing. Examples: `| json` or `| logfmt | duration > 1s`.\n- **Cross-component links:** expand a log line. If it contains a 24-character Oakestra ID, Grafana extracts that ID and shows **Open in...** links in the log details. Selecting one keeps the time range, sets **Search (regex)** to that exact ID, and changes **Component** to the selected target. It is a correlation shortcut: it only returns lines where that target component logged the same ID.\n- Root links search Root-local Loki; Cluster links search that Cluster-local Loki. A link can show no result when the target did not log that ID in the selected time range.\n- Use the time picker in the top-right to scroll back through retained logs. Open the logs panel menu and choose **Explore** to edit the complete LogQL query interactively.",
+        "content": "- **Cluster** selects the indexed `cluster_id` of the orchestrator that emitted the record: `root` or a configured Cluster name. It supports multi-select and **All**; `context.cluster_id` is only a business value inside an application record.\n- **Source** groups containers into **Oakestra services** (default), **Observability**, **Data stores**, or **All containers**. It filters the Component choices and keeps infrastructure noise out of normal application browsing.\n- **Component** selects one or more indexed Docker Compose services within the chosen Cluster and Source; **All** keeps every matching service.\n- **Level** filters Alloy's normalized Loki `level` label exactly. **Critical** is separate from **Error**. Only schema-v1 Python headers whose service identity matches the emitting Compose service, plus service-scoped compatibility formats may set this label; words inside `logger`, `message`, `event`, or `context` cannot change severity.\n- **Unparsed** shows records whose format has no recognized level. Grafana's text highlighting or inferred color is visual only and does not change the authoritative Loki label.\n- **Display = Compact** turns each schema-v1 JSON record into `[component] message`, followed only by its event, context, and exception summary when present. **Raw** restores the exact stored line. Non-schema records remain readable raw text with a component prefix in Compact mode.\n- **Full-line search (regex)** intentionally matches the complete raw record before display formatting, including message and structured fields. Use it for free text or shared IDs. Highlighting a word such as `ERROR` does not classify the record as Error.\n- **Advanced field filter (LogQL)** parses high-cardinality fields at query time before display formatting. Exact schema-v1 examples: `| json schema=\"schema_version\", event_name=\"event\" | schema=\"1\" | event_name=\"cluster.registration.completed\"`, `| json schema=\"schema_version\", logger_name=\"logger\" | schema=\"1\" | logger_name=\"werkzeug\"`, or `| json schema=\"schema_version\", job_id=\"context.job_id\" | schema=\"1\" | job_id=\"<id>\"`. Aliases avoid collisions with stream labels.\n- `| logfmt` in this field is an optional query-time parser, not Oakestra's Python format. It does not create the Level label; Alloy has already normalized that label during ingestion. Select **Source = Observability** and choose a local observability component that emits logfmt first; then try `| logfmt duration_value=\"duration\" | duration_value > 1ms | __error__=\"\"`.\n- Repeated stream labels are hidden and details open in a sidebar. Expand a line for labels and derived links, or select **Raw** to inspect the complete record. The left timestamp is Loki's entry time in the browser timezone; schema-v1 `timestamp` is the application time in UTC.\n- **Shared-ID links** are correlation shortcuts, not distributed traces. Expand a line containing a 24-character Oakestra ID and choose **Search this ID...** to keep the time range, reset Level, place the ID in Full-line search, and query another component. A target can return no result when it did not log the same ID.\n- **Time range (maximum 30 days):** The generic Grafana picker may show longer ranges, but Loki 2.9 rejects a single query longer than `30d1h`. To inspect older retained history, use an absolute window no wider than 30 days and move that window backward.\n- Open the logs panel menu and choose **Explore** to edit the complete LogQL query.",
         "mode": "markdown"
       },
       "pluginVersion": "12.0.0",
@@ -85,10 +85,12 @@
       "id": 3,
       "options": {
         "dedupStrategy": "none",
+        "detailsMode": "sidebar",
         "enableLogDetails": true,
+        "fontSize": "small",
         "prettifyLogMessage": false,
         "showCommonLabels": false,
-        "showLabels": true,
+        "showLabels": false,
         "showTime": true,
         "sortOrder": "Descending",
         "wrapLogMessage": true
@@ -100,13 +102,13 @@
             "uid": "Loki"
           },
           "editorMode": "code",
-          "expr": "{cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${compose_service:regex}\"} |~ `(?i)(${level_filter:raw})` |~ `(?i)(${search:raw})` ${logql_pipeline:raw}",
+          "expr": "{cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=~\"${level_filter:raw}\"} |~ `(?i)(${search:raw})` ${logql_pipeline:raw} | line_format `{{ if eq \"${display_mode:raw}\" \"compact\" }}[{{ .compose_service }}] {{ with $record := fromJson (__line__) }}{{ if and (eq (printf \"%v\" $record.schema_version) \"1\") $record.timestamp $record.level $record.service $record.logger }}{{ $record.message }}{{ with $record.event }} · event={{ . }}{{ end }}{{ with $record.context }}{{ range $key, $value := . }} · {{ $key }}={{ printf \"%v\" $value }}{{ end }}{{ end }}{{ with $record.exception }} · exception={{ .type }}{{ with .message }}: {{ . }}{{ end }}{{ end }}{{ else }}{{ __line__ }}{{ end }}{{ else }}{{ __line__ }}{{ end }}{{ else }}{{ __line__ }}{{ end }}`",
           "maxLines": 1000,
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Selected stream \u2014 ${cluster_id:text} / ${compose_service:text}",
+      "title": "Selected logs \u2014 ${source_scope:text} \u00b7 ${cluster_id:text} / ${compose_service:text} \u00b7 ${display_mode:text}",
       "type": "logs"
     }
   ],
@@ -136,7 +138,7 @@
           "uid": "Loki"
         },
         "definition": "label_values(cluster_id)",
-        "description": "Root or configured Cluster name from the cluster_id Loki label.",
+        "description": "Origin orchestrator from the indexed cluster_id label: Root or the configured CLUSTER_NAME. Supports multi-select and All.",
         "hide": 0,
         "includeAll": true,
         "label": "Cluster",
@@ -156,6 +158,45 @@
         "type": "query"
       },
       {
+        "current": {
+          "selected": true,
+          "text": "Oakestra services",
+          "value": "^(system_manager|root_scheduler|root_resource_abstractor|resource_abstractor|root_service_manager|jwt_generator|dashboard|marketplace_manager|root_addons_dashboard|root_addons_manager|root_addons_monitor|addons_dashboard|addons_manager|addons_monitor|cluster_manager|cluster_scheduler|cluster_resource_abstractor|cluster_service_manager|cluster_addons_dashboard|cluster_addons_manager|cluster_addons_monitor|mqtt)$"
+        },
+        "description": "Container category and first-stage filter. It also limits the Component choices; Oakestra services is the quiet default.",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Source",
+        "multi": false,
+        "name": "source_scope",
+        "options": [
+          {
+            "selected": true,
+            "text": "Oakestra services",
+            "value": "^(system_manager|root_scheduler|root_resource_abstractor|resource_abstractor|root_service_manager|jwt_generator|dashboard|marketplace_manager|root_addons_dashboard|root_addons_manager|root_addons_monitor|addons_dashboard|addons_manager|addons_monitor|cluster_manager|cluster_scheduler|cluster_resource_abstractor|cluster_service_manager|cluster_addons_dashboard|cluster_addons_manager|cluster_addons_monitor|mqtt)$"
+          },
+          {
+            "selected": false,
+            "text": "Observability",
+            "value": "^(alloy|grafana|loki|cluster_alloy|cluster_grafana|cluster_loki|prometheus)$"
+          },
+          {
+            "selected": false,
+            "text": "Data stores",
+            "value": "^(mongo_root|mongo_rootnet|root_redis|redis|mongo_cluster|mongo_clusternet|cluster_redis)$"
+          },
+          {
+            "selected": false,
+            "text": "All containers",
+            "value": ".+"
+          }
+        ],
+        "query": "Oakestra services : ^(system_manager|root_scheduler|root_resource_abstractor|resource_abstractor|root_service_manager|jwt_generator|dashboard|marketplace_manager|root_addons_dashboard|root_addons_manager|root_addons_monitor|addons_dashboard|addons_manager|addons_monitor|cluster_manager|cluster_scheduler|cluster_resource_abstractor|cluster_service_manager|cluster_addons_dashboard|cluster_addons_manager|cluster_addons_monitor|mqtt)$, Observability : ^(alloy|grafana|loki|cluster_alloy|cluster_grafana|cluster_loki|prometheus)$, Data stores : ^(mongo_root|mongo_rootnet|root_redis|redis|mongo_cluster|mongo_clusternet|cluster_redis)$, All containers : .+",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
         "allValue": ".+",
         "current": {
           "selected": true,
@@ -170,8 +211,8 @@
           "type": "loki",
           "uid": "Loki"
         },
-        "definition": "label_values({cluster_id=~\"${cluster_id:regex}\"}, compose_service)",
-        "description": "Docker Compose services available for the selected Cluster values.",
+        "definition": "label_values({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\"}, compose_service)",
+        "description": "Docker Compose service or services available for the selected Cluster and Source. Supports multi-select and All.",
         "hide": 0,
         "includeAll": true,
         "label": "Component",
@@ -181,7 +222,7 @@
         "query": {
           "label": "compose_service",
           "refId": "LokiVariableQueryEditor-Component",
-          "stream": "{cluster_id=~\"${cluster_id:regex}\"}",
+          "stream": "{cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\"}",
           "type": 1
         },
         "refresh": 2,
@@ -194,9 +235,9 @@
         "current": {
           "selected": true,
           "text": "All",
-          "value": "^"
+          "value": ".*"
         },
-        "description": "Case-insensitive severity search across structured and unstructured lines.",
+        "description": "Exact normalized Loki severity. All includes parsed and unparsed records; Unparsed selects only records without a level label.",
         "hide": 0,
         "includeAll": false,
         "label": "Level",
@@ -206,30 +247,69 @@
           {
             "selected": true,
             "text": "All",
-            "value": "^"
+            "value": ".*"
           },
           {
             "selected": false,
             "text": "Debug",
-            "value": "(\\bDEBUG\\b|\\[D[0-9]{4}-)"
+            "value": "debug"
           },
           {
             "selected": false,
             "text": "Info",
-            "value": "(\\bINFO\\b|\\[I[0-9]{4}-)"
+            "value": "info"
           },
           {
             "selected": false,
             "text": "Warning",
-            "value": "(\\b(WARN|WARNING)\\b|\\[W[0-9]{4}-)"
+            "value": "warning"
           },
           {
             "selected": false,
             "text": "Error",
-            "value": "(\\b(ERROR|ERR|FATAL|PANIC|EXCEPTION|TRACEBACK|CRITICAL)\\b|\\[(E|F)[0-9]{4}-)"
+            "value": "error"
+          },
+          {
+            "selected": false,
+            "text": "Critical",
+            "value": "critical"
+          },
+          {
+            "selected": false,
+            "text": "Unparsed",
+            "value": "^$"
           }
         ],
-        "query": "All : ^, Debug : (\\bDEBUG\\b|\\[D[0-9]{4}-), Info : (\\bINFO\\b|\\[I[0-9]{4}-), Warning : (\\b(WARN|WARNING)\\b|\\[W[0-9]{4}-), Error : (\\b(ERROR|ERR|FATAL|PANIC|EXCEPTION|TRACEBACK|CRITICAL)\\b|\\[(E|F)[0-9]{4}-)",
+        "query": "All : .*, Debug : debug, Info : info, Warning : warning, Error : error, Critical : critical, Unparsed : ^$",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "Compact",
+          "value": "compact"
+        },
+        "description": "Compact formats schema-v1 JSON as a readable summary; Raw shows the exact stored line.",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Display",
+        "multi": false,
+        "name": "display_mode",
+        "options": [
+          {
+            "selected": true,
+            "text": "Compact",
+            "value": "compact"
+          },
+          {
+            "selected": false,
+            "text": "Raw",
+            "value": "raw"
+          }
+        ],
+        "query": "Compact : compact, Raw : raw",
         "queryValue": "",
         "skipUrlSync": false,
         "type": "custom"
@@ -240,9 +320,9 @@
           "text": "^",
           "value": "^"
         },
-        "description": "Case-insensitive RE2 expression matched against each log line.",
+        "description": "Case-insensitive RE2 expression matched against the complete raw record; the default ^ matches every line.",
         "hide": 0,
-        "label": "Search (regex)",
+        "label": "Full-line search (regex)",
         "name": "search",
         "options": [
           {
@@ -261,9 +341,9 @@
           "text": "",
           "value": ""
         },
-        "description": "Optional raw LogQL pipeline appended after the built-in filters, for example |= \"worker\" or | json.",
+        "description": "Appended after the indexed and full-line filters for exact query-time fields, for example | json schema=\"schema_version\", event_name=\"event\" | schema=\"1\" | event_name=\"cluster.registration.completed\".",
         "hide": 0,
-        "label": "Extra LogQL pipeline",
+        "label": "Advanced field filter (LogQL)",
         "name": "logql_pipeline",
         "options": [
           {
