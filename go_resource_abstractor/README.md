@@ -6,8 +6,17 @@ It exposes the same API surface as the Python service so it can be swapped in as
 replacement at either the root (`root_resource_abstractor`, port 11011) or cluster
 (`cluster_resource_abstractor`, port 11012) level, differentiated purely by env vars.
 
-This service is **not yet wired into docker-compose** - it currently builds and runs standalone.
-The Python service remains the one root/cluster docker-compose deploys.
+Docker-compose still defaults to the Python service. To deploy this Go port instead, opt in
+with the composable override (which just swaps the abstractor's build/image; port, env vars and
+dependencies are inherited):
+
+```bash
+export OVERRIDE_FILES=override-go-resource-abstractor.yml
+./scripts/StartOakestraRoot.sh      # or StartOakestraCluster.sh / StartOakestraFull.sh
+```
+
+The override lives at `root_orchestrator/override-go-resource-abstractor.yml` and
+`cluster_orchestrator/override-go-resource-abstractor.yml`.
 
 ## Why a Go port
 

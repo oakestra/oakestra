@@ -4,8 +4,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -98,9 +100,19 @@ func writeJSON(c *gin.Context, status int, v any) {
 	c.JSON(status, db.Normalize(v))
 }
 
-// bindJSONMap decodes the request body into a generic map, matching the
-// Python service's liberal (unknown=INCLUDE) schemas. On malformed JSON it
-// aborts the request with 400.
+// errEmptyBody signals an absent/empty request body, kept distinct from
+// malformed JSON so each binder can decide how to treat it. The Python
+// service is itself split: handlers that read request.json directly (apps,
+// jobs, job instances) reject an empty body, while those backed by a
+// marshmallow @arguments schema (resources, hooks, custom resources) have
+// webargs load a missing body as an empty mapping and accept it as {}.
+var errEmptyBody = errors.New("empty request body")
+
+// bindJSONMap decodes a required JSON-object request body into a generic map,
+// mirroring the Python handlers that read request.json directly (apps, jobs,
+// job instances): an absent/empty body, a literal null, or malformed JSON is
+// rejected with 400, so a bodyless request can't silently create or update a
+// document from {}.
 func bindJSONMap(c *gin.Context) (map[string]any, bool) {
 	data, err := decodeJSONMap(c)
 	if err != nil {
@@ -110,12 +122,32 @@ func bindJSONMap(c *gin.Context) (map[string]any, bool) {
 	return data, true
 }
 
-// bindResourceJSONMap is bindJSONMap's counterpart for the resources
-// blueprint, which registers a custom 422 error handler
-// (@resourcesblp.errorhandler(422)) returning
-// {"message": "Invalid input", "details": {...}} instead of a plain 400.
+// bindOptionalJSONMap is bindJSONMap's counterpart for handlers the Python
+// service backs with a marshmallow @arguments schema (hooks, custom
+// resources): webargs loads an absent/empty body as an empty mapping, so an
+// empty body is accepted as {} here rather than rejected. A literal null or
+// otherwise malformed JSON is still a 400.
+func bindOptionalJSONMap(c *gin.Context) (map[string]any, bool) {
+	data, err := decodeJSONMap(c)
+	if errors.Is(err, errEmptyBody) {
+		return map[string]any{}, true
+	}
+	if err != nil {
+		abortBadRequest(c)
+		return nil, false
+	}
+	return data, true
+}
+
+// bindResourceJSONMap is the resources blueprint's counterpart: like
+// bindOptionalJSONMap it accepts an empty body as {} (ResourceSchema is an
+// @arguments schema), but it reports a literal null or malformed JSON with
+// the custom 422 shape (@resourcesblp.errorhandler(422)) rather than 400.
 func bindResourceJSONMap(c *gin.Context) (map[string]any, bool) {
 	data, err := decodeJSONMap(c)
+	if errors.Is(err, errEmptyBody) {
+		return map[string]any{}, true
+	}
 	if err != nil {
 		abortInvalidInput(c, gin.H{"body": err.Error()})
 		return nil, false
@@ -123,18 +155,81 @@ func bindResourceJSONMap(c *gin.Context) (map[string]any, bool) {
 	return data, true
 }
 
+// decodeJSONMap decodes the request body into a generic map, matching the
+// Python service's liberal (unknown=INCLUDE) schemas.
+//
+// Two details keep it compatible with the Python service:
+//
+//   - Numbers are decoded via json.Number and then resolved to an int64 when
+//     they have no fractional/exponent part, else a float64 (see
+//     resolveJSONNumber). Go's encoding/json would otherwise decode every
+//     JSON number to float64, so an integer like 7 would land in MongoDB as a
+//     BSON double where Python's json - and therefore pymongo - stores a BSON
+//     integer. Consumers and BSON round-trips are sensitive to that type
+//     difference; the resources blueprint's typed fields hid it, but jobs,
+//     apps, custom resources and unknown fields are stored verbatim.
+//   - An empty body is reported as errEmptyBody (not silently as {}), and a
+//     literal JSON null is malformed rather than an empty object, so the
+//     binders can apply each endpoint's Python-matching policy (see
+//     bindJSONMap / bindOptionalJSONMap).
 func decodeJSONMap(c *gin.Context) (map[string]any, error) {
-	var data map[string]any
-	if c.Request.ContentLength == 0 {
-		return map[string]any{}, nil
+	if c.Request.Body == nil {
+		return nil, errEmptyBody
 	}
-	if err := c.ShouldBindJSON(&data); err != nil {
+	dec := json.NewDecoder(c.Request.Body)
+	dec.UseNumber()
+
+	var data map[string]any
+	if err := dec.Decode(&data); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, errEmptyBody
+		}
 		return nil, err
 	}
 	if data == nil {
-		data = map[string]any{}
+		// A literal JSON null: present but not an object. Python's schema
+		// load and its insert path both reject it, so treat it as malformed
+		// rather than as an empty object.
+		return nil, errors.New("request body must be a JSON object")
 	}
+	resolveJSONNumbers(data)
 	return data, nil
+}
+
+// resolveJSONNumbers walks a decoded body in place, replacing every
+// json.Number with an int64 (integer form) or float64 (fractional/exponent
+// form), mirroring how Python's json.loads yields int vs float. See
+// decodeJSONMap for why this matters.
+func resolveJSONNumbers(m map[string]any) {
+	for k, v := range m {
+		m[k] = resolveJSONNumber(v)
+	}
+}
+
+func resolveJSONNumber(v any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		resolveJSONNumbers(val)
+		return val
+	case []any:
+		for i, e := range val {
+			val[i] = resolveJSONNumber(e)
+		}
+		return val
+	case json.Number:
+		s := val.String()
+		if !strings.ContainsAny(s, ".eE") {
+			if i, err := strconv.ParseInt(s, 10, 64); err == nil {
+				return i
+			}
+		}
+		if f, err := val.Float64(); err == nil {
+			return f
+		}
+		return s
+	default:
+		return v
+	}
 }
 
 // queryFilter builds a filter map containing only the given allowed query

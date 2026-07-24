@@ -30,10 +30,12 @@ func (s *Server) registerJobRoutes(v1 *gin.RouterGroup) {
 	itemBothSlashes(group, http.MethodDelete, "/:job_id/:instance_id", s.deleteJobInstance)
 }
 
-// listJobs implements GET /jobs/. A raw ?params= query value replaces the
-// whole filter outright (an unusual carry-over from AllJobsController.get,
-// preserved for compatibility even though it only makes sense for a filter
-// value that happens to be a plain string).
+// listJobs implements GET /jobs/, filterable by applicationID and job_name.
+//
+// The Python service also honored a raw ?params= value by assigning it as
+// the entire Mongo filter, but that value is always a string and pymongo
+// rejects a string filter, so the branch only ever produced a 500. It
+// carried no usable behavior and is dropped here rather than reproduced.
 func (s *Server) listJobs(c *gin.Context) {
 	filter := map[string]any{}
 
@@ -42,9 +44,6 @@ func (s *Server) listJobs(c *gin.Context) {
 	}
 	if jobName := c.Query("job_name"); jobName != "" {
 		filter["job_name"] = jobName
-	}
-	if params := c.Query("params"); params != "" {
-		filter = map[string]any{"params": params}
 	}
 
 	results, err := s.store.FindJobs(c.Request.Context(), bson.M(filter))

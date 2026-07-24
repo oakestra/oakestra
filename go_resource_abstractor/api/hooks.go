@@ -38,7 +38,7 @@ func (s *Server) listHooks(c *gin.Context) {
 // the known async/sync event names, mirroring the OneOf validator on
 // APIObjectPostHookSchema.events.
 func (s *Server) createHook(c *gin.Context) {
-	data, ok := bindJSONMap(c)
+	data, ok := bindOptionalJSONMap(c)
 	if !ok {
 		return
 	}
@@ -72,13 +72,22 @@ func (s *Server) getHook(c *gin.Context) {
 	writeJSON(c, http.StatusOK, hook)
 }
 
-// patchHook implements PATCH /hooks/<id>. Matches
-// SingleHookController.patch, which validates=False on the arguments
-// schema, so the body is not re-validated against the event enum here.
+// patchHook implements PATCH /hooks/<id>.
+//
+// SingleHookController.patch passes validate=False to flask-smorest's
+// arguments decorator, but that only skips schema-level (whole-object)
+// validators - the field-level OneOf validator on
+// APIObjectPostHookSchema.events still runs during marshmallow's load, so an
+// invalid event name is still rejected there. Validated here to match, using
+// the same 400 createHook uses.
 func (s *Server) patchHook(c *gin.Context) {
 	id := c.Param("id")
-	data, ok := bindJSONMap(c)
+	data, ok := bindOptionalJSONMap(c)
 	if !ok {
+		return
+	}
+	if !validHookEvents(data) {
+		abortBadRequest(c)
 		return
 	}
 

@@ -51,7 +51,7 @@ func (s *Server) listCustomResourceDefinitions(c *gin.Context) {
 // registering a new resource type. resource_type is required, mirroring
 // CustomResourceSchema.
 func (s *Server) createCustomResourceDefinition(c *gin.Context) {
-	data, ok := bindJSONMap(c)
+	data, ok := bindOptionalJSONMap(c)
 	if !ok {
 		return
 	}
@@ -71,17 +71,27 @@ func (s *Server) createCustomResourceDefinition(c *gin.Context) {
 
 // deleteCustomResourceDefinition implements DELETE
 // /custom-resources/<type>: a cascading delete of the definition and every
-// instance of that type. The definition delete itself supplies the
-// not-found check, rather than a separate lookup beforehand.
+// instance of that type. Returns 404 if the type isn't registered.
 func (s *Server) deleteCustomResourceDefinition(c *gin.Context) {
 	resourceType := c.Param("resource")
 	ctx := c.Request.Context()
 
-	if _, err := s.store.DeleteCustomResourceByType(ctx, resourceType); abortOnError(c, err) {
+	// Match the Python service's order: confirm the definition exists, drop
+	// every instance first, then the definition itself. Deleting instances
+	// before the definition means a failure of the second step can't leave
+	// orphaned instances behind with no definition to reach them (the earlier
+	// order here deleted the definition first, purely to reuse it as the
+	// not-found check).
+	if _, ok := s.findCustomResourceType(c, resourceType); !ok {
 		return
 	}
 
 	if _, err := s.store.DeleteAllResources(ctx, resourceType); err != nil {
+		abortInternalError(c, err)
+		return
+	}
+
+	if _, err := s.store.DeleteCustomResourceByType(ctx, resourceType); err != nil && !isNotFound(err) {
 		abortInternalError(c, err)
 		return
 	}
@@ -122,7 +132,7 @@ func (s *Server) listCustomResourceInstances(c *gin.Context) {
 // validating the body against the type's stored JSON Schema.
 func (s *Server) createCustomResourceInstance(c *gin.Context) {
 	resourceType := c.Param("resource")
-	data, ok := bindJSONMap(c)
+	data, ok := bindOptionalJSONMap(c)
 	if !ok {
 		return
 	}
@@ -172,7 +182,7 @@ func (s *Server) getCustomResourceInstance(c *gin.Context) {
 func (s *Server) patchCustomResourceInstance(c *gin.Context) {
 	resourceType := c.Param("resource")
 	id := c.Param("id")
-	data, ok := bindJSONMap(c)
+	data, ok := bindOptionalJSONMap(c)
 	if !ok {
 		return
 	}
