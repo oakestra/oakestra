@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -69,6 +70,62 @@ func TestAppendJobInstanceIdempotency(t *testing.T) {
 		"instance_list": []any{instance},
 	}); !errors.Is(err, ErrInstanceConflict) {
 		t.Errorf("append to missing job: got %v, want ErrInstanceConflict", err)
+	}
+}
+
+// TestAppendJobInstanceConcurrentSameNumberOnlyOneWins is a regression test
+// for a TOCTOU race: AppendJobInstance used to check for an existing
+// instance via a separate read (FindJobInstance) before pushing, so two
+// concurrent requests for the same instance_number could both pass the
+// check and both push, producing duplicate instance_number entries. The
+// check now lives in the FindOneAndUpdate filter itself
+// (instance_list.instance_number: {$ne: N}), making it atomic with the
+// write.
+func TestAppendJobInstanceConcurrentSameNumberOnlyOneWins(t *testing.T) {
+	ctx := context.Background()
+
+	job, err := testStore.CreateJob(ctx, bson.M{"job_name": uniqueName("race-job"), "instance_list": bson.A{}})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	jobID := ExtractID(job)
+
+	const attempts = 20
+	instance := map[string]any{"instance_number": 1, "status": "RUNNING"}
+
+	var wg sync.WaitGroup
+	successes := make(chan struct{}, attempts)
+	wg.Add(attempts)
+	for range attempts {
+		go func() {
+			defer wg.Done()
+			if _, err := testStore.AppendJobInstance(ctx, jobID, 1, bson.M{
+				"instance_list": []any{instance},
+			}); err == nil {
+				successes <- struct{}{}
+			} else if !errors.Is(err, ErrInstanceConflict) {
+				t.Errorf("unexpected error: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	close(successes)
+
+	successCount := 0
+	for range successes {
+		successCount++
+	}
+	if successCount != 1 {
+		t.Errorf("successful appends = %d, want exactly 1", successCount)
+	}
+
+	final, err := testStore.FindJobByID(ctx, jobID, bson.M{})
+	if err != nil {
+		t.Fatalf("find job: %v", err)
+	}
+	instanceList, _ := final["instance_list"].(bson.A)
+	if len(instanceList) != 1 {
+		t.Errorf("instance_list length = %d, want exactly 1 (no duplicates): %v", len(instanceList), instanceList)
 	}
 }
 

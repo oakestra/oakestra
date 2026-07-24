@@ -216,15 +216,18 @@ func (s *Store) FindJobInstance(ctx context.Context, jobID string, instanceNumbe
 // the job's instance_list, refusing (ErrInstanceConflict) if the instance
 // already exists, the payload has none, or the job itself doesn't exist.
 // Mirrors jobs_db.append_job_instance.
+//
+// The existence check and the push happen in a single atomic
+// FindOneAndUpdate: the filter only matches a job that both has this _id
+// and has no instance_list entry with this instance_number yet, so two
+// concurrent requests for the same instance_number can't both pass the
+// check and both push - the loser's filter simply matches nothing, and
+// mongo.ErrNoDocuments maps back to ErrInstanceConflict below. (Doing the
+// check as a separate read first, like FindJobInstance, would leave a gap
+// between the check and the write.)
 func (s *Store) AppendJobInstance(ctx context.Context, jobID string, instanceNumber int, jobData bson.M) (bson.M, error) {
 	oid, err := bson.ObjectIDFromHex(jobID)
 	if err != nil {
-		return nil, err
-	}
-
-	if _, err := s.FindJobInstance(ctx, jobID, instanceNumber); err == nil {
-		return nil, ErrInstanceConflict
-	} else if !errors.Is(err, ErrNotFound) {
 		return nil, err
 	}
 
@@ -234,9 +237,13 @@ func (s *Store) AppendJobInstance(ctx context.Context, jobID string, instanceNum
 	}
 	instanceInfo := instanceList[len(instanceList)-1]
 
+	filter := bson.M{
+		"_id":                           oid,
+		"instance_list.instance_number": bson.M{"$ne": instanceNumber},
+	}
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
 	var updated bson.M
-	err = s.Jobs.FindOneAndUpdate(ctx, bson.M{"_id": oid},
+	err = s.Jobs.FindOneAndUpdate(ctx, filter,
 		bson.M{"$push": bson.M{"instance_list": instanceInfo}}, opts).Decode(&updated)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {

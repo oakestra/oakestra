@@ -53,8 +53,18 @@ func health(c *gin.Context) {
 // and trailing-slash forms (e.g. "/resources" and "/resources/"), the
 // equivalent of Flask's strict_slashes=False for that route.
 func bothSlashes(group *gin.RouterGroup, method string, handlers ...gin.HandlerFunc) {
-	group.Handle(method, "", handlers...)
-	group.Handle(method, "/", handlers...)
+	itemBothSlashes(group, method, "", handlers...)
+}
+
+// itemBothSlashes is bothSlashes' counterpart for item routes carrying path
+// parameters (e.g. "/:id", "/:resource/:id"), registering path and
+// path+"/" so both "/resources/<id>" and "/resources/<id>/" resolve -
+// otherwise only the collection routes above got Flask's
+// strict_slashes=False treatment while item routes stayed 404-on-trailing-
+// slash. bothSlashes is just this with path="".
+func itemBothSlashes(group *gin.RouterGroup, method, path string, handlers ...gin.HandlerFunc) {
+	group.Handle(method, path, handlers...)
+	group.Handle(method, path+"/", handlers...)
 }
 
 // corsMiddleware reproduces the CORS configuration resource_abstractor.py

@@ -56,6 +56,52 @@ func TestGetJobInvalidIDIs400(t *testing.T) {
 	}
 }
 
+// TestGetJobInvalidInstanceNumberIs422 guards against an unparsable
+// ?instance_number= value being silently dropped from the filter instead
+// of rejecting the request, matching JobFilterSchema's marshmallow
+// validation on that field.
+func TestGetJobInvalidInstanceNumberIs422(t *testing.T) {
+	job := decodeJSON[map[string]any](t, doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{
+		"job_name": uniqueName("job"),
+	}))
+	jobID := job["_id"].(string)
+
+	rec := doRequest(t, http.MethodGet, "/api/v1/jobs/"+jobID+"?instance_number=not-a-number", nil)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("status = %d, want 422: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestGetJobEmptyInstanceNumberIs422 guards against "?instance_number="
+// (the key present with an empty value) being treated the same as the key
+// being absent entirely.
+func TestGetJobEmptyInstanceNumberIs422(t *testing.T) {
+	job := decodeJSON[map[string]any](t, doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{
+		"job_name": uniqueName("job"),
+	}))
+	jobID := job["_id"].(string)
+
+	rec := doRequest(t, http.MethodGet, "/api/v1/jobs/"+jobID+"?instance_number=", nil)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("status = %d, want 422: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestGetJobTrailingSlashResolves guards against item routes only being
+// registered under their bare form: Flask's strict_slashes=False means
+// "/jobs/<id>" and "/jobs/<id>/" must both resolve.
+func TestGetJobTrailingSlashResolves(t *testing.T) {
+	job := decodeJSON[map[string]any](t, doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{
+		"job_name": uniqueName("job"),
+	}))
+	jobID := job["_id"].(string)
+
+	rec := doRequest(t, http.MethodGet, "/api/v1/jobs/"+jobID+"/", nil)
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET .../%s/ status = %d, want 200: %s", jobID, rec.Code, rec.Body.String())
+	}
+}
+
 func TestUpsertJobCreatesThenUpdatesByName(t *testing.T) {
 	name := uniqueName("upsert-job")
 

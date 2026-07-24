@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -53,6 +54,27 @@ func abortInternalError(c *gin.Context, err error) {
 	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "Internal Server Error"})
 }
 
+// abortInvalidInput aborts the request with resources_blueprint.py's
+// errorhandler(422) shape ({"message": "Invalid input", "details": ...}),
+// shared by every validation-failure path in this package: malformed JSON
+// bodies (bindResourceJSONMap), invalid query params (abortInvalidQuery),
+// and invalid resource body fields (abortIfInvalidResourceFields). details
+// is whatever shape that specific validation failure needs to report.
+func abortInvalidInput(c *gin.Context, details gin.H) {
+	c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{
+		"message": "Invalid input",
+		"details": details,
+	})
+}
+
+// abortInvalidQuery aborts the request with a 422 reporting field as
+// invalid, matching flask-smorest's default response when a query-arguments
+// schema fails marshmallow validation (e.g. JobFilterSchema.instance_number,
+// ResourceFilterSchema.active) instead of the value being silently dropped.
+func abortInvalidQuery(c *gin.Context, field, message string) {
+	abortInvalidInput(c, gin.H{"query": gin.H{field: []string{message}}})
+}
+
 // abortOnError maps a store error to the matching HTTP response - 404 via
 // abortNotFound, anything else via abortInternalError - and reports whether
 // it aborted the request, so callers can write `if abortOnError(c, err) {
@@ -95,10 +117,7 @@ func bindJSONMap(c *gin.Context) (map[string]any, bool) {
 func bindResourceJSONMap(c *gin.Context) (map[string]any, bool) {
 	data, err := decodeJSONMap(c)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{
-			"message": "Invalid input",
-			"details": gin.H{"body": err.Error()},
-		})
+		abortInvalidInput(c, gin.H{"body": err.Error()})
 		return nil, false
 	}
 	return data, true
@@ -131,32 +150,56 @@ func queryFilter(c *gin.Context, keys ...string) map[string]any {
 	return filter
 }
 
+// booleanTruthy and booleanFalsy mirror marshmallow's fields.Boolean truthy/
+// falsy sets (verified against the pinned marshmallow~=3.15.0: {"1", "t",
+// "true", "on", "y", "yes"} and their case variants, and the false
+// counterparts), lowercased here since query values are compared
+// case-insensitively.
+var (
+	booleanTruthy = map[string]bool{"1": true, "t": true, "true": true, "on": true, "y": true, "yes": true}
+	booleanFalsy  = map[string]bool{"0": true, "f": true, "false": true, "off": true, "n": true, "no": true}
+)
+
 // queryBool parses a query param as a bool, mirroring marshmallow's
-// fields.Boolean coercion. ok is false if the key is absent or unparsable.
-func queryBool(c *gin.Context, key string) (value bool, ok bool) {
-	v := c.Query(key)
-	if v == "" {
-		return false, false
+// fields.Boolean coercion. present reports whether the key was supplied at
+// all - including with an empty value (e.g. "?active="), which
+// marshmallow also treats as present-but-invalid rather than absent, hence
+// c.GetQuery (which distinguishes "absent" from "present but empty") rather
+// than c.Query (which conflates the two). If present is true and err is
+// non-nil, the value isn't a valid bool and the caller should reject the
+// request (422, via abortInvalidQuery) rather than silently drop the
+// filter, matching the validation ResourceFilterSchema applies to ?active=.
+func queryBool(c *gin.Context, key string) (value, present bool, err error) {
+	v, exists := c.GetQuery(key)
+	if !exists {
+		return false, false, nil
 	}
-	b, err := strconv.ParseBool(strings.ToLower(v))
-	if err != nil {
-		return false, false
+	lower := strings.ToLower(v)
+	switch {
+	case booleanTruthy[lower]:
+		return true, true, nil
+	case booleanFalsy[lower]:
+		return false, true, nil
+	default:
+		return false, true, fmt.Errorf("%s must be a valid boolean", key)
 	}
-	return b, true
 }
 
-// queryInt parses a query param as an int. ok is false if the key is
-// absent or unparsable.
-func queryInt(c *gin.Context, key string) (value int, ok bool) {
-	v := c.Query(key)
-	if v == "" {
-		return 0, false
+// queryInt parses a query param as an int, mirroring marshmallow's
+// fields.Integer coercion. present/err behave as in queryBool (including
+// using c.GetQuery so "?instance_number=" - present but empty - isn't
+// silently treated as absent), matching the validation JobFilterSchema
+// applies to ?instance_number=.
+func queryInt(c *gin.Context, key string) (value int, present bool, err error) {
+	v, exists := c.GetQuery(key)
+	if !exists {
+		return 0, false, nil
 	}
 	n, err := strconv.Atoi(v)
 	if err != nil {
-		return 0, false
+		return 0, true, fmt.Errorf("%s must be a valid integer", key)
 	}
-	return n, true
+	return n, true, nil
 }
 
 // upsertByName implements the find-by-name-or-create control flow shared by
