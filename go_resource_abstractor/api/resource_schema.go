@@ -11,13 +11,14 @@ import (
 // against the typed fields resources_blueprint.py's ResourceSchema declares
 // (fields.String/Integer/Float/Boolean/Dict/List).
 //
-// kindInteger and kindFloat are split because they're validated
-// differently: marshmallow's Integer field (verified against the pinned
-// marshmallow~=3.15.0) accepts any native int or float value and
-// truncates it - Integer().deserialize(5.7) returns 5, it does not
-// reject the fractional part - so kindInteger truncates float64 input the
-// same way rather than rejecting it. kindFloat has no such coercion since
-// encoding/json's float64 is already the right shape.
+// kindInteger and kindFloat are validated (and coerced) separately. Request
+// bodies are decoded so JSON integers arrive as int64 and JSON decimals as
+// float64 (see decodeJSONMap). marshmallow's Integer field (verified against
+// the pinned marshmallow~=3.15.0) accepts any native int or float and
+// truncates it - Integer().deserialize(5.7) returns 5, it does not reject
+// the fractional part - so a kindInteger field accepts either and stores an
+// int64. marshmallow's Float field likewise accepts an int and widens it, so
+// a kindFloat field accepts either and stores a float64.
 type jsonKind int
 
 const (
@@ -49,8 +50,9 @@ func (k jsonKind) String() string {
 }
 
 // matches reports whether v is directly acceptable for k, for the kinds
-// that don't need coercion. kindInteger is handled separately in
-// validateResourceFields since accepting it also means truncating it.
+// that don't need coercion. The numeric kinds (kindInteger, kindFloat) are
+// handled separately in validateResourceFields, since accepting them also
+// means coercing between int64 and float64.
 func (k jsonKind) matches(v any) bool {
 	switch k {
 	case kindString:
@@ -147,11 +149,18 @@ func validateResourceFields(data map[string]any) (field, message string, ok bool
 
 		switch {
 		case spec.kind == kindInteger:
-			n, isNumber := v.(float64)
-			if !isNumber {
+			n, ok := toInt64(v)
+			if !ok {
 				return key, fmt.Sprintf("field %q must be an integer", key), false
 			}
-			data[key] = int64(n)
+			data[key] = n
+
+		case spec.kind == kindFloat:
+			f, ok := toFloat64(v)
+			if !ok {
+				return key, fmt.Sprintf("field %q must be a %s", key, spec.kind), false
+			}
+			data[key] = f
 
 		case spec.kind == kindList && spec.stringElements:
 			list, isList := v.([]any)
@@ -171,6 +180,34 @@ func validateResourceFields(data map[string]any) (field, message string, ok bool
 		}
 	}
 	return "", "", true
+}
+
+// toInt64 accepts either a decoded JSON integer (int64) or decimal (float64)
+// and returns it as an int64, truncating the fractional part, mirroring
+// marshmallow's Integer field. Any other type is rejected.
+func toInt64(v any) (int64, bool) {
+	switch n := v.(type) {
+	case int64:
+		return n, true
+	case float64:
+		return int64(n), true
+	default:
+		return 0, false
+	}
+}
+
+// toFloat64 accepts either a decoded JSON decimal (float64) or integer
+// (int64) and returns it as a float64, mirroring marshmallow's Float field
+// widening an int. Any other type is rejected.
+func toFloat64(v any) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case int64:
+		return float64(n), true
+	default:
+		return 0, false
+	}
 }
 
 // abortIfInvalidResourceFields validates data against resourceFields and, on

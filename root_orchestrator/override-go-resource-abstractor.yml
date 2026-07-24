@@ -1,0 +1,10 @@
+# Swaps the root resource abstractor for the Go port (go_resource_abstractor),
+# a drop-in replacement for the Python resource-abstractor: same port (11011),
+# same REST API, same MONGO_URL/MONGO_PORT/RESOURCE_ABSTRACTOR_PORT env vars
+# (all inherited from docker-compose.yml). Compose still defaults to the
+# Python service; opt in with:
+#   export OVERRIDE_FILES=override-go-resource-abstractor.yml
+services:
+  root_resource_abstractor:
+    image: go_resource_abstractor
+    build: ../go_resource_abstractor/

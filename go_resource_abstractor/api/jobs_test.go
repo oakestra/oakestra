@@ -37,6 +37,71 @@ func TestAppendJobInstanceConflict(t *testing.T) {
 	}
 }
 
+// TestJobIntegerFieldStoredAsBSONInteger guards the numeric-type fix: a JSON
+// integer in an untyped field must be persisted as a BSON integer (int32/
+// int64), not a BSON double, matching Python/pymongo. encoding/json would
+// otherwise decode it to float64 and store a double.
+func TestJobIntegerFieldStoredAsBSONInteger(t *testing.T) {
+	created := decodeJSON[map[string]any](t, doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{
+		"job_name": uniqueName("job"),
+		"replicas": 3,
+	}))
+	oid, err := bson.ObjectIDFromHex(created["_id"].(string))
+	if err != nil {
+		t.Fatalf("bad id: %v", err)
+	}
+
+	var raw bson.M
+	if err := testStore.Jobs.FindOne(context.Background(), bson.M{"_id": oid}).Decode(&raw); err != nil {
+		t.Fatalf("read raw job: %v", err)
+	}
+	switch raw["replicas"].(type) {
+	case int32, int64:
+		// stored as a BSON integer, as Python/pymongo would
+	default:
+		t.Errorf("replicas stored as %T, want a BSON integer (not double)", raw["replicas"])
+	}
+}
+
+// TestCreateJobEmptyBodyRejected guards the empty-body fix: a bodyless POST
+// must not silently create a document from {}. Python's request.json rejects
+// an absent body, so this returns 400 rather than creating a junk record.
+func TestCreateJobEmptyBodyRejected(t *testing.T) {
+	rec := doRequest(t, http.MethodPost, "/api/v1/jobs/", nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for an empty body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestGetJobFilteredByInstanceNumber guards the fixed instance_number filter:
+// jobs_helper.build_filter left a stray top-level instance_number key that
+// made every such lookup 404. A matching instance_number must now return the
+// job; a non-matching one must still filter it out.
+func TestGetJobFilteredByInstanceNumber(t *testing.T) {
+	job := decodeJSON[map[string]any](t, doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{
+		"job_name":      uniqueName("job"),
+		"instance_list": []any{},
+	}))
+	jobID := job["_id"].(string)
+
+	appendRec := doRequest(t, http.MethodPut, "/api/v1/jobs/"+jobID+"/1", map[string]any{
+		"instance_list": []any{map[string]any{"instance_number": 1}},
+	})
+	if appendRec.Code != http.StatusOK {
+		t.Fatalf("append status = %d, want 200: %s", appendRec.Code, appendRec.Body.String())
+	}
+
+	hit := doRequest(t, http.MethodGet, "/api/v1/jobs/"+jobID+"?instance_number=1", nil)
+	if hit.Code != http.StatusOK {
+		t.Errorf("instance_number=1 status = %d, want 200: %s", hit.Code, hit.Body.String())
+	}
+
+	miss := doRequest(t, http.MethodGet, "/api/v1/jobs/"+jobID+"?instance_number=999", nil)
+	if miss.Code != http.StatusNotFound {
+		t.Errorf("instance_number=999 status = %d, want 404", miss.Code)
+	}
+}
+
 func TestGetJobInstanceMissingIs404(t *testing.T) {
 	job := decodeJSON[map[string]any](t, doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{
 		"job_name": uniqueName("job"),

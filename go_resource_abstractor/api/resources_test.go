@@ -188,6 +188,18 @@ func TestCreateResourceAllowsMixedCsiDriversElements(t *testing.T) {
 	}
 }
 
+// TestCreateResourceEmptyBodyAccepted guards parity with the Python service,
+// where ResourceSchema is an @arguments schema and webargs loads a missing
+// body as an empty mapping: an empty resource POST is accepted (creating a
+// bare candidate), not rejected. This is the counterpart to the raw
+// request.json handlers (jobs, apps) that do reject an empty body.
+func TestCreateResourceEmptyBodyAccepted(t *testing.T) {
+	rec := doRequest(t, http.MethodPost, "/api/v1/resources/", nil)
+	if rec.Code != http.StatusCreated {
+		t.Errorf("empty resource POST status = %d, want 201: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestGetResourceInvalidIDIs400(t *testing.T) {
 	rec := doRequest(t, http.MethodGet, "/api/v1/resources/not-an-object-id", nil)
 	if rec.Code != http.StatusBadRequest {

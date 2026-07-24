@@ -82,14 +82,20 @@ func (s *Store) CreateApp(ctx context.Context, data bson.M) (bson.M, error) {
 // Job operations ##############################################################
 
 // BuildJobFilter translates the query params accepted by GET /jobs/<id>
-// into a MongoDB filter, mirroring jobs_helper.build_filter: an
-// instance_number query param narrows the match to jobs whose instance_list
-// contains that instance.
+// into a MongoDB filter: an instance_number query param narrows the match to
+// jobs whose instance_list contains that instance.
+//
+// Deviation from the Python service (jobs_helper.build_filter): the original
+// builds the instance_list $elemMatch but leaves the raw instance_number key
+// in the filter too. No job document has a top-level instance_number field,
+// so that stray key made every instance_number-filtered lookup match nothing
+// (always 404). The key is dropped here so the filter behaves as intended.
 func BuildJobFilter(query map[string]any) bson.M {
 	filter := bson.M{}
 	maps.Copy(filter, query)
 	if instanceNumber, ok := filter["instance_number"]; ok {
 		filter["instance_list"] = bson.M{"$elemMatch": bson.M{"instance_number": instanceNumber}}
+		delete(filter, "instance_number")
 	}
 	return filter
 }
