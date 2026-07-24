@@ -64,12 +64,14 @@ func main() {
 		serveErr <- nil
 	}()
 
+	exitCode := 0
 	select {
 	case <-ctx.Done():
 		slog.Info("shutdown signal received")
 	case err := <-serveErr:
 		if err != nil {
 			slog.Error("server error", "error", err)
+			exitCode = 1
 		}
 	}
 
@@ -82,4 +84,6 @@ func main() {
 	if err := store.Disconnect(shutdownCtx); err != nil {
 		slog.Error("error disconnecting from mongo", "error", err)
 	}
+
+	os.Exit(exitCode)
 }

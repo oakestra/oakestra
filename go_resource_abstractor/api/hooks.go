@@ -19,9 +19,9 @@ func (s *Server) registerHookRoutes(v1 *gin.RouterGroup) {
 	bothSlashes(group, http.MethodGet, s.listHooks)
 	bothSlashes(group, http.MethodPost, s.createHook)
 
-	group.GET("/:id", s.getHook)
-	group.PATCH("/:id", s.patchHook)
-	group.DELETE("/:id", s.deleteHook)
+	itemBothSlashes(group, http.MethodGet, "/:id", s.getHook)
+	itemBothSlashes(group, http.MethodPatch, "/:id", s.patchHook)
+	itemBothSlashes(group, http.MethodDelete, "/:id", s.deleteHook)
 }
 
 // listHooks implements GET /hooks/.

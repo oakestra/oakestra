@@ -19,9 +19,9 @@ func (s *Server) registerResourceRoutes(v1 *gin.RouterGroup) {
 	bothSlashes(group, http.MethodPost, s.createResource)
 	bothSlashes(group, http.MethodPut, s.upsertResource)
 
-	group.GET("/:id", s.getResource)
-	group.PATCH("/:id", s.patchResource)
-	group.DELETE("/:id", s.deleteResource)
+	itemBothSlashes(group, http.MethodGet, "/:id", s.getResource)
+	itemBothSlashes(group, http.MethodPatch, "/:id", s.patchResource)
+	itemBothSlashes(group, http.MethodDelete, "/:id", s.deleteResource)
 }
 
 // listResources implements GET /resources/. It supports the active,
@@ -29,7 +29,10 @@ func (s *Server) registerResourceRoutes(v1 *gin.RouterGroup) {
 // extension, mirroring AllResourcesController.get.
 func (s *Server) listResources(c *gin.Context) {
 	filter := queryFilter(c, "job_id", "candidate_name", "ip")
-	if active, ok := queryBool(c, "active"); ok {
+	if active, present, err := queryBool(c, "active"); err != nil {
+		abortInvalidQuery(c, "active", err.Error())
+		return
+	} else if present {
 		filter["active"] = active
 	}
 
@@ -74,6 +77,9 @@ func (s *Server) createResource(c *gin.Context) {
 	if !ok {
 		return
 	}
+	if !abortIfInvalidResourceFields(c, data) {
+		return
+	}
 
 	ctx := c.Request.Context()
 	data = s.hooks.PreCreate(ctx, "resources", data)
@@ -93,6 +99,9 @@ func (s *Server) createResource(c *gin.Context) {
 func (s *Server) upsertResource(c *gin.Context) {
 	data, ok := bindResourceJSONMap(c)
 	if !ok {
+		return
+	}
+	if !abortIfInvalidResourceFields(c, data) {
 		return
 	}
 	s.upsertByName(c, "resources", "candidate_name", data,
@@ -128,6 +137,9 @@ func (s *Server) patchResource(c *gin.Context) {
 
 	data, ok := bindResourceJSONMap(c)
 	if !ok {
+		return
+	}
+	if !abortIfInvalidResourceFields(c, data) {
 		return
 	}
 	ctx := c.Request.Context()

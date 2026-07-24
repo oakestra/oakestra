@@ -21,9 +21,9 @@ func (s *Server) registerApplicationRoutes(v1 *gin.RouterGroup) {
 	bothSlashes(group, http.MethodGet, s.listApplications)
 	bothSlashes(group, http.MethodPost, s.createApplication)
 
-	group.GET("/:id", s.getApplication)
-	group.PATCH("/:id", s.patchApplication)
-	group.DELETE("/:id", s.deleteApplication)
+	itemBothSlashes(group, http.MethodGet, "/:id", s.getApplication)
+	itemBothSlashes(group, http.MethodPatch, "/:id", s.patchApplication)
+	itemBothSlashes(group, http.MethodDelete, "/:id", s.deleteApplication)
 }
 
 // listApplications implements GET /applications/, filterable by

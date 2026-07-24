@@ -37,6 +37,32 @@ func TestCustomResourceInstanceSchemaValidation(t *testing.T) {
 	}
 }
 
+// TestCustomResourceMalformedSchemaFailsClosed is a regression test:
+// validateAgainstSchema used to fail open on a stored schema that doesn't
+// compile (returning "valid" for any payload). Since a broken stored
+// schema can't validate anything, this now surfaces as a 500 instead of
+// silently accepting arbitrary instance data.
+func TestCustomResourceMalformedSchemaFailsClosed(t *testing.T) {
+	resourceType := uniqueName("broken-schema")
+
+	defRec := doRequest(t, http.MethodPost, "/api/v1/custom-resources/", map[string]any{
+		"resource_type": resourceType,
+		"schema": map[string]any{
+			"$ref": "#/definitions/does-not-exist",
+		},
+	})
+	if defRec.Code != http.StatusCreated {
+		t.Fatalf("definition create status = %d, want 201: %s", defRec.Code, defRec.Body.String())
+	}
+
+	rec := doRequest(t, http.MethodPost, "/api/v1/custom-resources/"+resourceType, map[string]any{
+		"anything": "goes",
+	})
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status with a malformed stored schema = %d, want 500 (fail closed): %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestCustomResourceCascadingDeleteViaAPI(t *testing.T) {
 	resourceType := uniqueName("gadget")
 

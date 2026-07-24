@@ -20,14 +20,14 @@ func (s *Server) registerJobRoutes(v1 *gin.RouterGroup) {
 	bothSlashes(group, http.MethodPost, s.createJob)
 	bothSlashes(group, http.MethodPut, s.upsertJob)
 
-	group.GET("/:job_id", s.getJob)
-	group.PATCH("/:job_id", s.patchJob)
-	group.DELETE("/:job_id", s.deleteJob)
+	itemBothSlashes(group, http.MethodGet, "/:job_id", s.getJob)
+	itemBothSlashes(group, http.MethodPatch, "/:job_id", s.patchJob)
+	itemBothSlashes(group, http.MethodDelete, "/:job_id", s.deleteJob)
 
-	group.GET("/:job_id/:instance_id", s.getJobInstance)
-	group.PUT("/:job_id/:instance_id", s.appendJobInstance)
-	group.PATCH("/:job_id/:instance_id", s.patchJobInstance)
-	group.DELETE("/:job_id/:instance_id", s.deleteJobInstance)
+	itemBothSlashes(group, http.MethodGet, "/:job_id/:instance_id", s.getJobInstance)
+	itemBothSlashes(group, http.MethodPut, "/:job_id/:instance_id", s.appendJobInstance)
+	itemBothSlashes(group, http.MethodPatch, "/:job_id/:instance_id", s.patchJobInstance)
+	itemBothSlashes(group, http.MethodDelete, "/:job_id/:instance_id", s.deleteJobInstance)
 }
 
 // listJobs implements GET /jobs/. A raw ?params= query value replaces the
@@ -102,7 +102,10 @@ func (s *Server) getJob(c *gin.Context) {
 	}
 
 	query := map[string]any{}
-	if n, ok := queryInt(c, "instance_number"); ok {
+	if n, present, err := queryInt(c, "instance_number"); err != nil {
+		abortInvalidQuery(c, "instance_number", err.Error())
+		return
+	} else if present {
 		query["instance_number"] = n
 	}
 	filter := db.BuildJobFilter(query)

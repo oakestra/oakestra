@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -27,13 +28,13 @@ func (s *Server) registerCustomResourceRoutes(v1 *gin.RouterGroup) {
 	// handlers for the identical path pattern, so both are consolidated
 	// into this one route group keyed by method: same effective dispatch,
 	// one place to read it.
-	group.GET("/:resource", s.listCustomResourceInstances)
-	group.POST("/:resource", s.createCustomResourceInstance)
-	group.DELETE("/:resource", s.deleteCustomResourceDefinition)
+	itemBothSlashes(group, http.MethodGet, "/:resource", s.listCustomResourceInstances)
+	itemBothSlashes(group, http.MethodPost, "/:resource", s.createCustomResourceInstance)
+	itemBothSlashes(group, http.MethodDelete, "/:resource", s.deleteCustomResourceDefinition)
 
-	group.GET("/:resource/:id", s.getCustomResourceInstance)
-	group.PATCH("/:resource/:id", s.patchCustomResourceInstance)
-	group.DELETE("/:resource/:id", s.deleteCustomResourceInstance)
+	itemBothSlashes(group, http.MethodGet, "/:resource/:id", s.getCustomResourceInstance)
+	itemBothSlashes(group, http.MethodPatch, "/:resource/:id", s.patchCustomResourceInstance)
+	itemBothSlashes(group, http.MethodDelete, "/:resource/:id", s.deleteCustomResourceInstance)
 }
 
 // listCustomResourceDefinitions implements GET /custom-resources/.
@@ -131,9 +132,7 @@ func (s *Server) createCustomResourceInstance(c *gin.Context) {
 	if !ok {
 		return
 	}
-
-	if msg, valid := validateAgainstSchema(def, data); !valid {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": msg})
+	if !abortIfInvalidSchema(c, def, data) {
 		return
 	}
 
@@ -183,9 +182,7 @@ func (s *Server) patchCustomResourceInstance(c *gin.Context) {
 	if !ok {
 		return
 	}
-
-	if msg, valid := validateAgainstSchema(def, data); !valid {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": msg})
+	if !abortIfInvalidSchema(c, def, data) {
 		return
 	}
 
@@ -235,33 +232,54 @@ func (s *Server) findCustomResourceType(c *gin.Context, resourceType string) (de
 
 // validateAgainstSchema validates data against the JSON Schema stored in
 // def["schema"], mirroring jsonschema.validate(data, meta_data["schema"])
-// in the Python service. A missing/empty schema, or one that fails to
-// compile, is treated as "no constraint" rather than a 500 - the Python
-// service doesn't guard against a malformed stored schema either, but
-// failing open here is friendlier than crashing the request.
-func validateAgainstSchema(def bson.M, data map[string]any) (message string, valid bool) {
+// in the Python service. A missing/empty schema is "no constraint",
+// matching Python's meta_data.get("schema", {}) default. A schema that
+// fails to compile is reported as a server error rather than silently
+// accepting any payload: Python's jsonschema.validate call has the same
+// failure mode there (a malformed schema raises jsonschema.SchemaError,
+// which isn't caught by the blueprint's except ValidationError clause and
+// surfaces as an uncaught 500), so this keeps the same "don't persist
+// against a broken schema" outcome instead of failing open.
+func validateAgainstSchema(def bson.M, data map[string]any) (message string, valid bool, err error) {
 	rawSchema, ok := def["schema"]
 	if !ok || rawSchema == nil {
-		return "", true
+		return "", true, nil
 	}
 
 	body, err := json.Marshal(db.Normalize(rawSchema))
 	if err != nil {
-		return "", true
+		return "", false, fmt.Errorf("marshal stored schema: %w", err)
 	}
 
 	var schema jsonschema.Schema
 	if err := json.Unmarshal(body, &schema); err != nil {
-		return "", true
+		return "", false, fmt.Errorf("decode stored schema: %w", err)
 	}
 
 	resolved, err := schema.Resolve(nil)
 	if err != nil {
-		return "", true
+		return "", false, fmt.Errorf("resolve stored schema: %w", err)
 	}
 
 	if err := resolved.Validate(data); err != nil {
-		return err.Error(), false
+		return err.Error(), false, nil
 	}
-	return "", true
+	return "", true, nil
+}
+
+// abortIfInvalidSchema validates data against def's stored JSON Schema and
+// aborts the request on either outcome validateAgainstSchema can report: a
+// broken stored schema (500, via abortInternalError) or a schema-invalid
+// payload (400). Reports ok=false if the request was aborted.
+func abortIfInvalidSchema(c *gin.Context, def bson.M, data map[string]any) (ok bool) {
+	msg, valid, err := validateAgainstSchema(def, data)
+	if err != nil {
+		abortInternalError(c, err)
+		return false
+	}
+	if !valid {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": msg})
+		return false
+	}
+	return true
 }
