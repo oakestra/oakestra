@@ -72,7 +72,9 @@ type clientConfig struct {
 }
 
 // WithHTTPClient overrides the *http.Client used for every request,
-// e.g. to install a transport with custom TLS settings or tracing.
+// e.g. to install a transport with custom TLS settings or tracing. The
+// supplied client is copied, not adopted, so combining it with WithTimeout
+// never mutates the caller's own client.
 func WithHTTPClient(h *http.Client) Option {
 	return func(cfg *clientConfig) {
 		cfg.httpClient = h
@@ -97,9 +99,14 @@ func New(baseURL string, opts ...Option) *Client {
 		opt(&cfg)
 	}
 
-	httpClient := cfg.httpClient
-	if httpClient == nil {
-		httpClient = &http.Client{Timeout: defaultTimeout}
+	// Copy rather than mutate: a *http.Client passed via WithHTTPClient is
+	// owned by the caller and may be shared with other code (or already in
+	// use by another goroutine), so writing Timeout onto it would change -
+	// and race with - requests that have nothing to do with this Client.
+	httpClient := &http.Client{Timeout: defaultTimeout}
+	if cfg.httpClient != nil {
+		clone := *cfg.httpClient
+		httpClient = &clone
 	}
 	if cfg.timeout > 0 {
 		httpClient.Timeout = cfg.timeout

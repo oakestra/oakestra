@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -157,6 +158,9 @@ func (h *Hooks) callWebhook(ctx context.Context, url string, data map[string]any
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		slog.Warn("hooks: webhook returned non-2xx, keeping original data", "url", url, "status", resp.StatusCode)
+		// Drain before closing so the connection can be reused: async hooks
+		// fire repeatedly against the same endpoint.
+		_, _ = io.Copy(io.Discard, resp.Body)
 		return data
 	}
 
@@ -164,6 +168,16 @@ func (h *Hooks) callWebhook(ctx context.Context, url string, data map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
 		// Non-JSON response body: keep the original data, the same fallback
 		// the Python service's JSONDecodeError handling takes.
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return data
+	}
+	if decoded == nil {
+		// A literal JSON "null" decodes into a nil map. Propagating it would
+		// hand every downstream write a nil payload - which inserts an empty
+		// document and then panics on the "_id" write-back in
+		// db.insertReturning - so treat it like any other unusable response
+		// and keep the original data.
+		slog.Warn("hooks: webhook returned a null body, keeping original data", "url", url)
 		return data
 	}
 	return decoded
