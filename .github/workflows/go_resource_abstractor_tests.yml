@@ -1,0 +1,48 @@
+name: Go Resource Abstractor Tests
+
+on:
+  push:
+    paths:
+      - 'go_resource_abstractor/**'
+  pull_request:
+    paths:
+      - 'go_resource_abstractor/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: go_resource_abstractor
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go_resource_abstractor/go.mod
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      # Tests spin up real MongoDB containers via testcontainers-go (the
+      # ubuntu-latest runner ships Docker pre-installed and running), using
+      # mongo:8.0 by default to match the version root/cluster docker-compose
+      # deploy in production.
+      - name: Run test suite
+        run: go test ./... -v
