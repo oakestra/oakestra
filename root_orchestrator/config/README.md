@@ -160,7 +160,7 @@ Open **Alerting → Alert rules** to inspect **Orchestrator error or stacktrace 
 For a controlled structured-path test, write a compact schema-v1 error record to a running Python component, confirm the alert reaches **Pending** and then **Firing**, and wait for it to return to **Normal** after the query window and keep-firing period expire:
 
 ```bash
-docker exec system_manager sh -c 'printf "%s\n" "$1" > /proc/1/fd/1' sh '{"schema_version":1,"timestamp":"2026-01-01T00:00:00Z","level":"error","service":"system_manager","logger":"manual-test","message":"issue-533-structured-alert-test"}'
+docker exec system_manager sh -c 'printf "%s\n" "$1" > /proc/1/fd/1' sh '{"schema_version":1,"timestamp":"2026-01-01T00:00:00Z","level":"error","service":"system_manager","logger":"manual-test","message":"manual-structured-alert-test"}'
 docker logs system_manager --tail 5
 ```
 
@@ -169,6 +169,6 @@ The alert instance must carry `cluster_id=root` and `compose_service=system_mana
 Test the false-positive guard only while the rule is **Normal**. The following schema-v1 INFO record contains `ERROR` in its message but must not create an alert. A raw `panic:` line exercises the compatibility path and must create one:
 
 ```bash
-docker exec system_manager sh -c 'printf "%s\n" "$1" > /proc/1/fd/1' sh '{"schema_version":1,"timestamp":"2026-01-01T00:00:00Z","level":"info","service":"system_manager","logger":"manual-test","message":"ERROR issue-533-negative-test"}'
-docker exec system_manager sh -c 'printf "panic: issue-533-legacy-alert-test\n" > /proc/1/fd/2'
+docker exec system_manager sh -c 'printf "%s\n" "$1" > /proc/1/fd/1' sh '{"schema_version":1,"timestamp":"2026-01-01T00:00:00Z","level":"info","service":"system_manager","logger":"manual-test","message":"ERROR manual-negative-test"}'
+docker exec system_manager sh -c 'printf "panic: manual-legacy-alert-test\n" > /proc/1/fd/2'
 ```
