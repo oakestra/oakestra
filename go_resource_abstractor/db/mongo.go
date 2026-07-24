@@ -60,8 +60,20 @@ func Connect(ctx context.Context, uri string) (*Store, error) {
 }
 
 // ensureIndexes recreates the unique indexes the Python service defines in
-// mongo_init: hooks on (entity, webhook_url) and hook_name, meta_data on
-// resource_type.
+// mongo_init (hooks on (entity, webhook_url) and hook_name, meta_data on
+// resource_type), plus the non-unique indexes below that back this service's
+// hot-path lookups.
+//
+// Deviation from the Python service, which relies on collection scans for
+// these: candidates and jobs are queried by candidate_name/job_name on every
+// worker PUT-upsert heartbeat, and candidates are filtered by
+// last_modified_timestamp on every scheduler active-resources query. Those
+// scans grow with cluster size (O(nodes) per heartbeat), so we index the
+// fields. The indexes only affect performance, not results, so adding them is
+// strictly beneficial. They are intentionally non-unique: unlike hook_name,
+// candidate_name/job_name are only unique in practice, and a unique index
+// would fail to build (aborting startup) against any existing deployment that
+// already holds duplicate or legacy documents.
 func (s *Store) ensureIndexes(ctx context.Context) error {
 	unique := true
 
@@ -85,6 +97,21 @@ func (s *Store) ensureIndexes(ctx context.Context) error {
 	})
 	if err != nil {
 		return fmt.Errorf("meta_data index: %w", err)
+	}
+
+	_, err = s.Candidates.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "candidate_name", Value: 1}}},
+		{Keys: bson.D{{Key: "last_modified_timestamp", Value: 1}}},
+	})
+	if err != nil {
+		return fmt.Errorf("candidates indexes: %w", err)
+	}
+
+	_, err = s.Jobs.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "job_name", Value: 1}},
+	})
+	if err != nil {
+		return fmt.Errorf("jobs index: %w", err)
 	}
 
 	return nil
