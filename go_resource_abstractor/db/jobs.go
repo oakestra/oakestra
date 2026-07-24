@@ -13,13 +13,13 @@ import (
 
 // ErrInstanceConflict is returned by AppendJobInstance when the instance
 // already exists, the supplied instance_list is empty, or the parent job
-// does not exist. Mirrors jobs_db.append_job_instance returning None in all
-// three cases; the API layer surfaces it as 400 "Instance already exists"
-// to match the Python blueprint's (slightly misleading, but preserved)
+// does not exist - the same three cases where jobs_db.append_job_instance
+// returns None; the API layer surfaces it as 400 "Instance already exists"
+// to keep the Python blueprint's (slightly misleading, but preserved)
 // behavior.
 var ErrInstanceConflict = errors.New("job instance already exists or payload has no instance to append")
 
-// Application operations #####################################################
+// Application operations
 
 // FindApps lists applications matching filter.
 func (s *Store) FindApps(ctx context.Context, filter bson.M) ([]bson.M, error) {
@@ -79,7 +79,7 @@ func (s *Store) CreateApp(ctx context.Context, data bson.M) (bson.M, error) {
 	return data, nil
 }
 
-// Job operations ##############################################################
+// Job operations
 
 // BuildJobFilter translates the query params accepted by GET /jobs/<id>
 // into a MongoDB filter: an instance_number query param narrows the match to
@@ -176,8 +176,9 @@ func (s *Store) CreateJob(ctx context.Context, data bson.M) (bson.M, error) {
 }
 
 // FindJobInstance returns the job document with instance_list filtered down
-// to just the matching instance_number, mirroring jobs_db.find_job_instance.
-// Returns ErrNotFound if the job doesn't exist or has no such instance.
+// to just the matching instance_number, the Go equivalent of
+// jobs_db.find_job_instance. Returns ErrNotFound if the job doesn't exist or
+// has no such instance.
 func (s *Store) FindJobInstance(ctx context.Context, jobID string, instanceNumber int) (bson.M, error) {
 	oid, err := bson.ObjectIDFromHex(jobID)
 	if err != nil {
@@ -221,7 +222,7 @@ func (s *Store) FindJobInstance(ctx context.Context, jobID string, instanceNumbe
 // AppendJobInstance pushes the last element of jobData's instance_list onto
 // the job's instance_list, refusing (ErrInstanceConflict) if the instance
 // already exists, the payload has none, or the job itself doesn't exist.
-// Mirrors jobs_db.append_job_instance.
+// Go port of jobs_db.append_job_instance.
 //
 // The existence check and the push happen in a single atomic
 // FindOneAndUpdate: the filter only matches a job that both has this _id
@@ -276,7 +277,7 @@ func asSlice(v any) []any {
 // UpdateJobInstance applies a positional update to the matching instance:
 // pushes new cpu/memory history samples (capped at the most recent 100),
 // and $sets the scalar status fields. Returns ErrNotFound if no instance
-// matches. Mirrors jobs_db.update_job_instance.
+// matches. Go port of jobs_db.update_job_instance.
 func (s *Store) UpdateJobInstance(ctx context.Context, jobID string, instanceNumber int, jobData bson.M) (bson.M, error) {
 	oid, err := bson.ObjectIDFromHex(jobID)
 	if err != nil {
@@ -333,7 +334,7 @@ func (s *Store) UpdateJobInstance(ctx context.Context, jobID string, instanceNum
 // DeleteJobInstance removes the instance with the given instance_number
 // from the job's instance_list via $pull. Returns ErrNotFound only if the
 // job itself doesn't exist (a no-op pull on an already-absent instance
-// still returns the job, matching jobs_db.delete_job_instance).
+// still returns the job - same as jobs_db.delete_job_instance).
 func (s *Store) DeleteJobInstance(ctx context.Context, jobID string, instanceNumber int) (bson.M, error) {
 	oid, err := bson.ObjectIDFromHex(jobID)
 	if err != nil {

@@ -10,7 +10,7 @@ import (
 	"go_resource_abstractor/db"
 )
 
-// registerHookRoutes wires up /api/v1/hooks, mirroring hooks_blueprint.py.
+// registerHookRoutes wires up /api/v1/hooks, the Go port of hooks_blueprint.py.
 // Not used by the scheduler or root/cluster managers directly, but consumed
 // by the addons engine to register its webhooks.
 func (s *Server) registerHookRoutes(v1 *gin.RouterGroup) {
@@ -35,7 +35,7 @@ func (s *Server) listHooks(c *gin.Context) {
 }
 
 // createHook implements POST /hooks/. events entries are validated against
-// the known async/sync event names, mirroring the OneOf validator on
+// the known async/sync event names, the same check as the OneOf validator on
 // APIObjectPostHookSchema.events.
 func (s *Server) createHook(c *gin.Context) {
 	data, ok := bindOptionalJSONMap(c)

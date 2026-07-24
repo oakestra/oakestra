@@ -9,7 +9,7 @@ import (
 // important wire-compatibility detail: the Go driver's bson.ObjectID would
 // otherwise JSON-marshal as {"$oid": "..."} (MongoDB Extended JSON), but
 // both the scheduler and resource_abstractor_client expect _id as a plain
-// string, matching Python's json.dumps(doc, default=str).
+// string, the same shape Python's json.dumps(doc, default=str) produces.
 func TestResourceIDIsPlainStringNotExtendedJSON(t *testing.T) {
 	createRec := doRequest(t, http.MethodPost, "/api/v1/resources/", map[string]any{
 		"candidate_name": uniqueName("wire-format"),
@@ -253,8 +253,9 @@ func TestGetResourceTrailingSlashResolves(t *testing.T) {
 
 // TestListResourcesInvalidActiveIs422 guards against an unparsable
 // ?active= value being silently dropped from the filter (which would
-// return an unfiltered list) instead of rejecting the request, matching
-// ResourceFilterSchema's marshmallow validation on that field.
+// return an unfiltered list) instead of rejecting the request - the same
+// rejection ResourceFilterSchema's marshmallow validation applies to that
+// field.
 func TestListResourcesInvalidActiveIs422(t *testing.T) {
 	rec := doRequest(t, http.MethodGet, "/api/v1/resources/?active=notabool", nil)
 	if rec.Code != http.StatusUnprocessableEntity {
@@ -264,7 +265,7 @@ func TestListResourcesInvalidActiveIs422(t *testing.T) {
 
 // TestCreateResourceRejectsWrongFieldType guards against ResourceSchema's
 // typed fields (e.g. memory as Integer) being silently stored with the
-// wrong JSON type instead of rejected, matching the marshmallow validation
+// wrong JSON type instead of rejected - the same marshmallow validation
 // resources_blueprint.py applies to POST/PUT/PATCH bodies.
 func TestCreateResourceRejectsWrongFieldType(t *testing.T) {
 	rec := doRequest(t, http.MethodPost, "/api/v1/resources/", map[string]any{

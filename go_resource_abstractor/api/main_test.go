@@ -17,7 +17,7 @@ import (
 
 // testStore and testRouter are shared by every test in this package: a full
 // gin engine wired to a throwaway MongoDB instance, exercised end-to-end via
-// httptest, matching how a real client (scheduler, resource_abstractor_client)
+// httptest the same way a real client (scheduler, resource_abstractor_client)
 // would see the service.
 var (
 	testStore  *db.Store

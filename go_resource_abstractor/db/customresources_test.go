@@ -26,7 +26,7 @@ func TestCustomResourceDefinitionUniqueIndex(t *testing.T) {
 	}
 }
 
-// TestCustomResourceCascadingDelete mirrors
+// TestCustomResourceCascadingDelete covers the same behavior as
 // CustomResourceDefinitionController.delete: deleting a resource type must
 // remove every instance of that type along with the definition itself.
 func TestCustomResourceCascadingDelete(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// HookEvent identifies a webhook trigger point, mirroring
-// hooks_db.HookEventsEnum.
+// HookEvent identifies a webhook trigger point, the same set
+// hooks_db.HookEventsEnum declares.
 type HookEvent string
 
 const (
@@ -26,8 +26,9 @@ var AsyncEvents = []HookEvent{EventPostCreate, EventPostUpdate, EventPostDelete}
 // payload that gets persisted.
 var SyncEvents = []HookEvent{EventPreCreate, EventPreUpdate, EventPreDelete}
 
-// AllEvents is the full set of event names accepted by POST/PATCH /hooks/,
-// mirroring the OneOf validator built from ASYNC_EVENTS + SYNC_EVENTS.
+// AllEvents is the full set of event names accepted by POST/PATCH /hooks/ -
+// the same OneOf validator the Python service builds from
+// ASYNC_EVENTS + SYNC_EVENTS.
 var AllEvents = append(append([]HookEvent{}, AsyncEvents...), SyncEvents...)
 
 // FindHooks lists hooks matching filter (an empty/nil filter lists all).

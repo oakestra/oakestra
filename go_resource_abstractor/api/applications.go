@@ -13,7 +13,7 @@ import (
 // filter by both GET /applications/ and GET /applications/<id>.
 var applicationFilterKeys = []string{"application_name", "application_namespace", "userId"}
 
-// registerApplicationRoutes wires up /api/v1/applications, mirroring
+// registerApplicationRoutes wires up /api/v1/applications, the Go port of
 // apps_blueprint.py (backed by the apps collection).
 func (s *Server) registerApplicationRoutes(v1 *gin.RouterGroup) {
 	group := v1.Group("/applications")

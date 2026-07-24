@@ -12,8 +12,8 @@ import (
 	"go_resource_abstractor/services"
 )
 
-// NewRouter builds the gin engine and registers every route, mirroring the
-// blueprints registered by resource_abstractor.py: resources, applications,
+// NewRouter builds the gin engine and registers every route, covering the
+// same blueprints resource_abstractor.py registers: resources, applications,
 // jobs, hooks, custom-resources, plus the GET / health check.
 //
 // The Swagger UI / OpenAPI spec the Python service serves at /api/docs and

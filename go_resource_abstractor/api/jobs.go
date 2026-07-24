@@ -11,7 +11,7 @@ import (
 	"go_resource_abstractor/db"
 )
 
-// registerJobRoutes wires up /api/v1/jobs, mirroring jobs_blueprint.py
+// registerJobRoutes wires up /api/v1/jobs, the Go port of jobs_blueprint.py
 // (backed by the jobs collection).
 func (s *Server) registerJobRoutes(v1 *gin.RouterGroup) {
 	group := v1.Group("/jobs")
@@ -76,7 +76,7 @@ func (s *Server) createJob(c *gin.Context) {
 }
 
 // upsertJob implements PUT /jobs/: update-by-job_name if a match exists,
-// else create. Mirrors AllJobsController.put.
+// else create. Go port of AllJobsController.put.
 //
 // Deviation from the Python service: the original fires hooks under the
 // entity name "job" (singular) here, while every other job route uses
@@ -268,8 +268,8 @@ func (s *Server) deleteJobInstance(c *gin.Context) {
 	writeJSON(c, http.StatusOK, updated)
 }
 
-// instanceIDParam parses the :instance_id path segment as an int, matching
-// the int(instance_id) coercion sprinkled through jobs_blueprint.py.
+// instanceIDParam parses the :instance_id path segment as an int - the same
+// int(instance_id) coercion sprinkled through jobs_blueprint.py.
 func instanceIDParam(c *gin.Context) (int, bool) {
 	n, err := strconv.Atoi(c.Param("instance_id"))
 	if err != nil {

@@ -11,8 +11,8 @@ import (
 )
 
 // testStore is a Store connected to a throwaway MongoDB instance shared by
-// every test in this package (started once in TestMain), matching the
-// real deployment's single-server, multi-database topology.
+// every test in this package (started once in TestMain), set up with the
+// same single-server, multi-database topology as a real deployment.
 var testStore *Store
 
 func TestMain(m *testing.M) {
@@ -26,7 +26,7 @@ func runTests(m *testing.M) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Matches the MongoDB version the rest of Oakestra deploys (see
+	// Same MongoDB version the rest of Oakestra deploys (see
 	// docker-compose.yml). Overridable because some hosts' kernels are
 	// incompatible with 8.0's storage engine (SERVER-121912); CI and real
 	// deployments should leave this at the default.

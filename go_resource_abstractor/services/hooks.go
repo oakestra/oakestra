@@ -33,7 +33,7 @@ type Hooks struct {
 
 // NewHooks builds a dispatcher whose outbound webhook calls are bounded by
 // connectTimeout (time to establish the TCP connection) and requestTimeout
-// (time to receive the response after that), mirroring
+// (time to receive the response after that) - the same two knobs as
 // HOOK_CONNECT_TIMEOUT/HOOK_REQUEST_TIMEOUT in the Python service.
 //
 // net/http doesn't expose separate connect/read deadlines the way Python's
@@ -55,7 +55,7 @@ func NewHooks(store *db.Store, connectTimeout, requestTimeout time.Duration) *Ho
 // PreCreate runs registered pre_create webhooks for entity against data,
 // synchronously, and returns the (possibly transformed) payload to persist.
 // On any webhook failure the original data is returned unchanged (fail
-// open), matching call_webhook's error handling in the Python service.
+// open) - the same error handling call_webhook uses in the Python service.
 func (h *Hooks) PreCreate(ctx context.Context, entity string, data map[string]any) map[string]any {
 	return h.processSyncHook(ctx, entity, db.EventPreCreate, data)
 }
@@ -132,8 +132,8 @@ func (h *Hooks) processAsyncHook(entity string, event db.HookEvent, entityID str
 
 // callWebhook POSTs data as JSON to url and returns the JSON-decoded
 // response body. On any failure (network error, non-2xx status, or a
-// non-JSON response body) it logs a warning and returns data unchanged,
-// matching call_webhook's fail-open behavior in hook_service.py.
+// non-JSON response body) it logs a warning and returns data unchanged -
+// the same fail-open behavior call_webhook has in hook_service.py.
 func (h *Hooks) callWebhook(ctx context.Context, url string, data map[string]any) map[string]any {
 	body, err := json.Marshal(data)
 	if err != nil {
@@ -162,8 +162,8 @@ func (h *Hooks) callWebhook(ctx context.Context, url string, data map[string]any
 
 	var decoded map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		// Non-JSON response body: keep the original data, matching the
-		// Python service's JSONDecodeError handling.
+		// Non-JSON response body: keep the original data, the same fallback
+		// the Python service's JSONDecodeError handling takes.
 		return data
 	}
 	return decoded

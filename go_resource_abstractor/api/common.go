@@ -28,8 +28,8 @@ type Server struct {
 	hooks *services.Hooks
 }
 
-// isValidObjectID reports whether id is a valid hex-encoded ObjectID,
-// mirroring the ObjectId.is_valid checks scattered through the Python
+// isValidObjectID reports whether id is a valid hex-encoded ObjectID - the
+// same check as the ObjectId.is_valid calls scattered through the Python
 // blueprints.
 func isValidObjectID(id string) bool {
 	_, err := bson.ObjectIDFromHex(id)
@@ -70,9 +70,10 @@ func abortInvalidInput(c *gin.Context, details gin.H) {
 }
 
 // abortInvalidQuery aborts the request with a 422 reporting field as
-// invalid, matching flask-smorest's default response when a query-arguments
-// schema fails marshmallow validation (e.g. JobFilterSchema.instance_number,
-// ResourceFilterSchema.active) instead of the value being silently dropped.
+// invalid - the same shape flask-smorest returns by default when a
+// query-arguments schema fails marshmallow validation (e.g.
+// JobFilterSchema.instance_number, ResourceFilterSchema.active) instead of
+// the value being silently dropped.
 func abortInvalidQuery(c *gin.Context, field, message string) {
 	abortInvalidInput(c, gin.H{"query": gin.H{field: []string{message}}})
 }
@@ -108,11 +109,11 @@ func writeJSON(c *gin.Context, status int, v any) {
 // webargs load a missing body as an empty mapping and accept it as {}.
 var errEmptyBody = errors.New("empty request body")
 
-// bindJSONMap decodes a required JSON-object request body into a generic map,
-// mirroring the Python handlers that read request.json directly (apps, jobs,
-// job instances): an absent/empty body, a literal null, or malformed JSON is
-// rejected with 400, so a bodyless request can't silently create or update a
-// document from {}.
+// bindJSONMap decodes a required JSON-object request body into a generic
+// map, the same rule the Python handlers that read request.json directly
+// (apps, jobs, job instances) apply: an absent/empty body, a literal null,
+// or malformed JSON is rejected with 400, so a bodyless request can't
+// silently create or update a document from {}.
 func bindJSONMap(c *gin.Context) (map[string]any, bool) {
 	data, err := decodeJSONMap(c)
 	if err != nil {
@@ -155,8 +156,8 @@ func bindResourceJSONMap(c *gin.Context) (map[string]any, bool) {
 	return data, true
 }
 
-// decodeJSONMap decodes the request body into a generic map, matching the
-// Python service's liberal (unknown=INCLUDE) schemas.
+// decodeJSONMap decodes the request body into a generic map, staying as
+// liberal as the Python service's (unknown=INCLUDE) schemas.
 //
 // Two details keep it compatible with the Python service:
 //
@@ -170,7 +171,7 @@ func bindResourceJSONMap(c *gin.Context) (map[string]any, bool) {
 //     apps, custom resources and unknown fields are stored verbatim.
 //   - An empty body is reported as errEmptyBody (not silently as {}), and a
 //     literal JSON null is malformed rather than an empty object, so the
-//     binders can apply each endpoint's Python-matching policy (see
+//     binders can apply each endpoint's own Python-equivalent policy (see
 //     bindJSONMap / bindOptionalJSONMap).
 func decodeJSONMap(c *gin.Context) (map[string]any, error) {
 	if c.Request.Body == nil {
@@ -198,7 +199,7 @@ func decodeJSONMap(c *gin.Context) (map[string]any, error) {
 
 // resolveJSONNumbers walks a decoded body in place, replacing every
 // json.Number with an int64 (integer form) or float64 (fractional/exponent
-// form), mirroring how Python's json.loads yields int vs float. See
+// form) - the same int-vs-float split Python's json.loads produces. See
 // decodeJSONMap for why this matters.
 func resolveJSONNumbers(m map[string]any) {
 	for k, v := range m {
@@ -233,8 +234,8 @@ func resolveJSONNumber(v any) any {
 }
 
 // queryFilter builds a filter map containing only the given allowed query
-// keys that are actually present, mirroring marshmallow's optional filter
-// schemas (e.g. ResourceFilterSchema, ApplicationFilterSchema).
+// keys that are actually present, the same behavior as marshmallow's
+// optional filter schemas (e.g. ResourceFilterSchema, ApplicationFilterSchema).
 func queryFilter(c *gin.Context, keys ...string) map[string]any {
 	filter := map[string]any{}
 	for _, k := range keys {
@@ -245,9 +246,9 @@ func queryFilter(c *gin.Context, keys ...string) map[string]any {
 	return filter
 }
 
-// booleanTruthy and booleanFalsy mirror marshmallow's fields.Boolean truthy/
-// falsy sets (verified against the pinned marshmallow~=3.15.0: {"1", "t",
-// "true", "on", "y", "yes"} and their case variants, and the false
+// booleanTruthy and booleanFalsy reproduce marshmallow's fields.Boolean
+// truthy/falsy sets (verified against the pinned marshmallow~=3.15.0: {"1",
+// "t", "true", "on", "y", "yes"} and their case variants, and the false
 // counterparts), lowercased here since query values are compared
 // case-insensitively.
 var (
@@ -255,7 +256,7 @@ var (
 	booleanFalsy  = map[string]bool{"0": true, "f": true, "false": true, "off": true, "n": true, "no": true}
 )
 
-// queryBool parses a query param as a bool, mirroring marshmallow's
+// queryBool parses a query param as a bool, applying marshmallow's
 // fields.Boolean coercion. present reports whether the key was supplied at
 // all - including with an empty value (e.g. "?active="), which
 // marshmallow also treats as present-but-invalid rather than absent, hence
@@ -263,7 +264,7 @@ var (
 // than c.Query (which conflates the two). If present is true and err is
 // non-nil, the value isn't a valid bool and the caller should reject the
 // request (422, via abortInvalidQuery) rather than silently drop the
-// filter, matching the validation ResourceFilterSchema applies to ?active=.
+// filter - the same validation ResourceFilterSchema applies to ?active=.
 func queryBool(c *gin.Context, key string) (value, present bool, err error) {
 	v, exists := c.GetQuery(key)
 	if !exists {
@@ -280,10 +281,10 @@ func queryBool(c *gin.Context, key string) (value, present bool, err error) {
 	}
 }
 
-// queryInt parses a query param as an int, mirroring marshmallow's
+// queryInt parses a query param as an int, applying marshmallow's
 // fields.Integer coercion. present/err behave as in queryBool (including
 // using c.GetQuery so "?instance_number=" - present but empty - isn't
-// silently treated as absent), matching the validation JobFilterSchema
+// silently treated as absent), the same validation JobFilterSchema
 // applies to ?instance_number=.
 func queryInt(c *gin.Context, key string) (value int, present bool, err error) {
 	v, exists := c.GetQuery(key)

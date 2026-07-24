@@ -17,18 +17,18 @@ import (
 var ErrNotFound = mongo.ErrNoDocuments
 
 const (
-	// candidatesFreshnessInterval mirrors candidates_helper.py's
-	// CANDIDATES_FRESHNESS_INTERVAL: a candidate is "active" if it reported
-	// within the last 30 seconds.
+	// candidatesFreshnessInterval is the same window
+	// candidates_helper.py's CANDIDATES_FRESHNESS_INTERVAL uses: a candidate
+	// is "active" if it reported within the last 30 seconds.
 	candidatesFreshnessInterval = 30 * time.Second
 
 	// historySliceSize caps cpu/memory history arrays at their most recent
-	// 100 entries, matching candidates_db.py's HISTORY_SLICE_SIZE.
+	// 100 entries - the same cap as candidates_db.py's HISTORY_SLICE_SIZE.
 	historySliceSize = -100
 )
 
-// canonicalResourceFields are the fields always projected by FindCandidates,
-// matching CANONICAL_RESOURCES in candidates_db.py.
+// canonicalResourceFields are the fields always projected by FindCandidates -
+// the same set as CANONICAL_RESOURCES in candidates_db.py.
 var canonicalResourceFields = []string{
 	"_id", "cpu_percent", "vcpus", "memory_percent", "vram", "vram_percent",
 	"gpu_temp", "gpu_drivers", "gpu_percent", "vgpus", "memory", "virtualization",
@@ -48,8 +48,8 @@ var canonicalProjection = func() bson.M {
 }()
 
 // FreshnessThreshold returns the last_modified_timestamp cutoff (unix
-// seconds, matching Python's datetime.timestamp() float) below which a
-// candidate is considered stale. Mirrors
+// seconds, the same representation Python's datetime.timestamp() float
+// gives) below which a candidate is considered stale. Go equivalent of
 // candidates_helper.get_freshness_threshold.
 func FreshnessThreshold() float64 {
 	return unixSeconds(time.Now()) - candidatesFreshnessInterval.Seconds()
@@ -60,7 +60,7 @@ func unixSeconds(t time.Time) float64 {
 }
 
 // BuildCandidateFilter translates the query params accepted by GET
-// /resources/ into a MongoDB filter, mirroring
+// /resources/ into a MongoDB filter, following the same rules as
 // candidates_helper.build_filter:
 //   - active=true adds a last_modified_timestamp freshness constraint
 //   - candidate_id (resolved upstream from job_id, see ResolveJobCandidate)
@@ -104,7 +104,7 @@ func truthy(v any) bool {
 // FindCandidates runs the aggregation pipeline behind GET /resources/:
 // $match the filter, $addFields the computed `active` freshness flag, then
 // $project the canonical field set plus any extra fields requested via
-// ?resources=a,b,c. Mirrors candidates_db.find_candidates.
+// ?resources=a,b,c. Go port of candidates_db.find_candidates.
 func (s *Store) FindCandidates(ctx context.Context, filter bson.M, resources []string) ([]bson.M, error) {
 	projection := make(bson.M, len(canonicalProjection)+len(resources))
 	maps.Copy(projection, canonicalProjection)
@@ -176,7 +176,7 @@ func (s *Store) UpdateCandidate(ctx context.Context, id string, data bson.M) (bs
 }
 
 // UpdateCandidateInformation persists an aggregated resource-usage report
-// from a worker/cluster. Mirrors candidates_db.update_candidate_information:
+// from a worker/cluster. Go port of candidates_db.update_candidate_information:
 // timestamps are refreshed, cpu/memory history entries are appended (capped
 // at the most recent 100 via $slice), and the rest of the payload is $set.
 func (s *Store) UpdateCandidateInformation(ctx context.Context, id string, data bson.M) (bson.M, error) {
