@@ -84,9 +84,9 @@ type resourceFieldSpec struct {
 	stringElements bool // only meaningful when kind == kindList
 }
 
-// resourceFields mirrors resources_blueprint.py's ResourceSchema field by
+// resourceFields covers resources_blueprint.py's ResourceSchema field by
 // field: JSON shape, nullability, and (for list fields) element type. Keys
-// not listed here are left unvalidated, matching marshmallow's
+// not listed here are left unvalidated, the same as marshmallow's
 // unknown=INCLUDE on that schema (POST/PUT/PATCH all pass through
 // ResourceSchema(unknown=INCLUDE)).
 //
@@ -124,8 +124,8 @@ var resourceFields = map[string]resourceFieldSpec{
 // against their expected JSON shape, returning the first mismatch found (in
 // a deterministic, sorted-key order). It mutates data in place for accepted
 // kindInteger fields, replacing the generic float64 encoding/json produces
-// with an actual int64, matching marshmallow deserializing an Integer field
-// into a native int rather than a float.
+// with an actual int64 - the same native int marshmallow deserializes an
+// Integer field into, rather than a float.
 func validateResourceFields(data map[string]any) (field, message string, ok bool) {
 	keys := make([]string, 0, len(data))
 	for k := range data {
@@ -183,8 +183,8 @@ func validateResourceFields(data map[string]any) (field, message string, ok bool
 }
 
 // toInt64 accepts either a decoded JSON integer (int64) or decimal (float64)
-// and returns it as an int64, truncating the fractional part, mirroring
-// marshmallow's Integer field. Any other type is rejected.
+// and returns it as an int64, truncating the fractional part - the same
+// coercion marshmallow's Integer field applies. Any other type is rejected.
 func toInt64(v any) (int64, bool) {
 	switch n := v.(type) {
 	case int64:
@@ -197,8 +197,8 @@ func toInt64(v any) (int64, bool) {
 }
 
 // toFloat64 accepts either a decoded JSON decimal (float64) or integer
-// (int64) and returns it as a float64, mirroring marshmallow's Float field
-// widening an int. Any other type is rejected.
+// (int64) and returns it as a float64 - the same widening marshmallow's
+// Float field applies to an int. Any other type is rejected.
 func toFloat64(v any) (float64, bool) {
 	switch n := v.(type) {
 	case float64:

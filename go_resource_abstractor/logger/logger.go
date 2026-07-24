@@ -1,6 +1,6 @@
 // Package logger configures the process-wide structured logger (log/slog)
-// used throughout the resource abstractor. It mirrors the Python service's
-// LOG_LEVEL env var (resource_abstractor.py), defaulting to DEBUG.
+// used throughout the resource abstractor. It reads the same LOG_LEVEL env
+// var as the Python service (resource_abstractor.py), defaulting to DEBUG.
 package logger
 
 import (

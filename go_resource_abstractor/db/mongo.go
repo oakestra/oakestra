@@ -13,8 +13,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-// Store bundles the collection handles the service operates on. It mirrors
-// the module-level globals set up by db/mongodb_client.py's mongo_init.
+// Store bundles the collection handles the service operates on, the same
+// four collections db/mongodb_client.py's mongo_init sets up as module-level
+// globals.
 type Store struct {
 	client *mongo.Client
 
@@ -118,8 +119,8 @@ func (s *Store) ensureIndexes(ctx context.Context) error {
 }
 
 // CustomResourceCollection returns the dynamically named collection that
-// stores instances of the given custom resource type, matching Python's
-// db.db_custom_resources.db[resource_type].
+// stores instances of the given custom resource type - the Go equivalent of
+// Python's db.db_custom_resources.db[resource_type].
 func (s *Store) CustomResourceCollection(resourceType string) *mongo.Collection {
 	return s.customResourcesDB.Collection(resourceType)
 }

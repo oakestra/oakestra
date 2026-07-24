@@ -64,7 +64,7 @@ func TestAppendJobInstanceIdempotency(t *testing.T) {
 	}
 
 	// Appending to a job that doesn't exist is refused the same way,
-	// matching jobs_db.append_job_instance's None-on-missing-job behavior.
+	// the same None-on-missing-job behavior jobs_db.append_job_instance has.
 	missingJobID := bson.NewObjectID().Hex()
 	if _, err := testStore.AppendJobInstance(ctx, missingJobID, 1, bson.M{
 		"instance_list": []any{instance},
@@ -241,8 +241,9 @@ func TestDeleteJobInstance(t *testing.T) {
 	}
 
 	// Deleting an instance_number that doesn't exist is a no-op that still
-	// returns the job (not a 404) - matches jobs_db.delete_job_instance,
-	// where only a missing *job* (not a missing instance) yields None.
+	// returns the job (not a 404) - jobs_db.delete_job_instance behaves the
+	// same way, since only a missing *job* (not a missing instance) yields
+	// None there.
 	updated, err = testStore.DeleteJobInstance(ctx, jobID, 999)
 	if err != nil {
 		t.Fatalf("delete of already-absent instance should not error: %v", err)

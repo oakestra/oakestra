@@ -12,9 +12,9 @@ import (
 	"go_resource_abstractor/db"
 )
 
-// registerCustomResourceRoutes wires up /api/v1/custom-resources, mirroring
-// custom_resources_blueprint.py. Not used by the scheduler or root/cluster
-// managers, but part of the public API surface.
+// registerCustomResourceRoutes wires up /api/v1/custom-resources, the Go
+// port of custom_resources_blueprint.py. Not used by the scheduler or
+// root/cluster managers, but part of the public API surface.
 func (s *Server) registerCustomResourceRoutes(v1 *gin.RouterGroup) {
 	group := v1.Group("/custom-resources")
 
@@ -48,8 +48,8 @@ func (s *Server) listCustomResourceDefinitions(c *gin.Context) {
 }
 
 // createCustomResourceDefinition implements POST /custom-resources/,
-// registering a new resource type. resource_type is required, mirroring
-// CustomResourceSchema.
+// registering a new resource type. resource_type is required, the same as
+// CustomResourceSchema declares.
 func (s *Server) createCustomResourceDefinition(c *gin.Context) {
 	data, ok := bindOptionalJSONMap(c)
 	if !ok {
@@ -241,9 +241,9 @@ func (s *Server) findCustomResourceType(c *gin.Context, resourceType string) (de
 }
 
 // validateAgainstSchema validates data against the JSON Schema stored in
-// def["schema"], mirroring jsonschema.validate(data, meta_data["schema"])
-// in the Python service. A missing/empty schema is "no constraint",
-// matching Python's meta_data.get("schema", {}) default. A schema that
+// def["schema"], the Go equivalent of jsonschema.validate(data,
+// meta_data["schema"]) in the Python service. A missing/empty schema is "no
+// constraint", the same default Python's meta_data.get("schema", {}) gives. A schema that
 // fails to compile is reported as a server error rather than silently
 // accepting any payload: Python's jsonschema.validate call has the same
 // failure mode there (a malformed schema raises jsonschema.SchemaError,

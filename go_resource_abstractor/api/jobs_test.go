@@ -39,8 +39,8 @@ func TestAppendJobInstanceConflict(t *testing.T) {
 
 // TestJobIntegerFieldStoredAsBSONInteger guards the numeric-type fix: a JSON
 // integer in an untyped field must be persisted as a BSON integer (int32/
-// int64), not a BSON double, matching Python/pymongo. encoding/json would
-// otherwise decode it to float64 and store a double.
+// int64), not a BSON double, the same as Python/pymongo would store it.
+// encoding/json would otherwise decode it to float64 and store a double.
 func TestJobIntegerFieldStoredAsBSONInteger(t *testing.T) {
 	created := decodeJSON[map[string]any](t, doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{
 		"job_name": uniqueName("job"),
@@ -123,8 +123,8 @@ func TestGetJobInvalidIDIs400(t *testing.T) {
 
 // TestGetJobInvalidInstanceNumberIs422 guards against an unparsable
 // ?instance_number= value being silently dropped from the filter instead
-// of rejecting the request, matching JobFilterSchema's marshmallow
-// validation on that field.
+// of rejecting the request - the same rejection JobFilterSchema's
+// marshmallow validation applies to that field.
 func TestGetJobInvalidInstanceNumberIs422(t *testing.T) {
 	job := decodeJSON[map[string]any](t, doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{
 		"job_name": uniqueName("job"),

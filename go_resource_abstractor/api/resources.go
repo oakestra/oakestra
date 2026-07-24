@@ -10,7 +10,7 @@ import (
 	"go_resource_abstractor/db"
 )
 
-// registerResourceRoutes wires up /api/v1/resources, mirroring
+// registerResourceRoutes wires up /api/v1/resources, the Go port of
 // resources_blueprint.py (backed by the candidates collection).
 func (s *Server) registerResourceRoutes(v1 *gin.RouterGroup) {
 	group := v1.Group("/resources")
@@ -26,7 +26,7 @@ func (s *Server) registerResourceRoutes(v1 *gin.RouterGroup) {
 
 // listResources implements GET /resources/. It supports the active,
 // job_id, candidate_name and ip filters plus a ?resources=a,b,c projection
-// extension, mirroring AllResourcesController.get.
+// extension, the same as AllResourcesController.get.
 func (s *Server) listResources(c *gin.Context) {
 	filter := queryFilter(c, "job_id", "candidate_name", "ip")
 	if active, present, err := queryBool(c, "active"); err != nil {
@@ -95,7 +95,7 @@ func (s *Server) createResource(c *gin.Context) {
 }
 
 // upsertResource implements PUT /resources/: update-by-candidate_name if a
-// match exists, else create. Mirrors AllResourcesController.put.
+// match exists, else create. Go port of AllResourcesController.put.
 func (s *Server) upsertResource(c *gin.Context) {
 	data, ok := bindResourceJSONMap(c)
 	if !ok {
@@ -126,8 +126,8 @@ func (s *Server) getResource(c *gin.Context) {
 
 // patchResource implements PATCH /resources/<id>, persisting an aggregated
 // usage report via UpdateCandidateInformation. Note: unlike getResource, an
-// invalid id here maps to 404 (not 400), matching ResourceController.patch
-// in the Python service.
+// invalid id here maps to 404 (not 400) - ResourceController.patch in the
+// Python service does the same.
 func (s *Server) patchResource(c *gin.Context) {
 	id := c.Param("id")
 	if !isValidObjectID(id) {

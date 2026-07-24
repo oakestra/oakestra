@@ -1,5 +1,5 @@
 // Package config centralizes environment-variable configuration for the
-// resource abstractor, mirroring the env vars read by the Python service
+// resource abstractor. It reads the same env vars as the Python service
 // (resource-abstractor/db/mongodb_client.py, resource_abstractor.py and
 // services/hook_service.py).
 package config
@@ -31,8 +31,8 @@ type Config struct {
 	LogLevel string
 
 	// HookConnectTimeout / HookRequestTimeout bound outbound webhook calls
-	// fired by services.Hooks. They mirror HOOK_CONNECT_TIMEOUT (connect)
-	// and HOOK_REQUEST_TIMEOUT (read) from hook_service.py.
+	// fired by services.Hooks. Same two knobs as HOOK_CONNECT_TIMEOUT
+	// (connect) and HOOK_REQUEST_TIMEOUT (read) in hook_service.py.
 	HookConnectTimeout time.Duration
 	HookRequestTimeout time.Duration
 }
