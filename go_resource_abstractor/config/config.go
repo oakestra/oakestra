@@ -5,6 +5,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"strconv"
 	"time"
@@ -47,6 +48,32 @@ func Load() Config {
 		HookConnectTimeout: envSecondsOrDefault("HOOK_CONNECT_TIMEOUT", defaultHookConnectSecs),
 		HookRequestTimeout: envSecondsOrDefault("HOOK_REQUEST_TIMEOUT", defaultHookRequestSecs),
 	}
+}
+
+// Validate reports whether the loaded configuration is usable. It exists
+// because the failure modes of the unset values are silent rather than
+// loud: an empty Port makes the listen address ":", which binds a random
+// ephemeral port instead of erroring, so the service would come up looking
+// healthy while every consumer got connection-refused on 11011/11012.
+func (c Config) Validate() error {
+	if c.Port == "" {
+		return errors.New("RESOURCE_ABSTRACTOR_PORT must be set")
+	}
+	if !isValidPort(c.Port) {
+		return errors.New("RESOURCE_ABSTRACTOR_PORT must be a port number between 1 and 65535, got " + c.Port)
+	}
+	if c.MongoURL == "" || c.MongoPort == "" {
+		return errors.New("MONGO_URL and MONGO_PORT must both be set")
+	}
+	if !isValidPort(c.MongoPort) {
+		return errors.New("MONGO_PORT must be a port number between 1 and 65535, got " + c.MongoPort)
+	}
+	return nil
+}
+
+func isValidPort(port string) bool {
+	n, err := strconv.Atoi(port)
+	return err == nil && n >= 1 && n <= 65535
 }
 
 // MongoURI builds the base connection string used to reach MongoDB.

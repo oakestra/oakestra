@@ -46,3 +46,37 @@ jobs:
       # deploy in production.
       - name: Run test suite
         run: go test ./... -v
+
+  client-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: go_resource_abstractor/client
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go_resource_abstractor/client/go.mod
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Build client module
+        run: go build ./...
+
+      - name: Vet client module
+        run: go vet ./...
+
+      - name: Run client module test suite
+        run: go test ./... -v

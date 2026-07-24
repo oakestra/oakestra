@@ -31,6 +31,11 @@ func main() {
 	cfg := config.Load()
 	logger.Init(cfg.LogLevel)
 
+	if err := cfg.Validate(); err != nil {
+		slog.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -75,15 +80,20 @@ func main() {
 		}
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGracePeriod)
-	defer cancel()
-
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), shutdownGracePeriod)
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("error during server shutdown", "error", err)
 	}
-	if err := store.Disconnect(shutdownCtx); err != nil {
+	cancelShutdown()
+
+	// A fresh deadline rather than the one above: if draining in-flight
+	// requests consumed the whole grace period, shutdownCtx is already
+	// expired and Disconnect would fail without ever having tried.
+	disconnectCtx, cancelDisconnect := context.WithTimeout(context.Background(), shutdownGracePeriod)
+	if err := store.Disconnect(disconnectCtx); err != nil {
 		slog.Error("error disconnecting from mongo", "error", err)
 	}
+	cancelDisconnect()
 
 	os.Exit(exitCode)
 }
