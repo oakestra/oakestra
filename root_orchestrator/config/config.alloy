@@ -20,7 +20,6 @@ discovery.relabel "oakestra" {
 		target_label  = "container"
 	}
 
-	// Compatibility alias for existing dashboards and alert rules.
 	rule {
 		source_labels = ["__meta_docker_container_name"]
 		regex         = "/(.*)"
@@ -37,8 +36,6 @@ discovery.relabel "oakestra" {
 		target_label  = "cluster_id"
 	}
 
-	// Compatibility label used by the existing dashboards to distinguish Root
-	// and Cluster logs in a 1-DOC deployment.
 	rule {
 		source_labels = ["__meta_docker_container_label_logging_jobname"]
 		target_label  = "job"
