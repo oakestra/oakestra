@@ -63,11 +63,6 @@ loki.source.docker "oakestra" {
 }
 
 loki.process "oakestra" {
-	// Trust schema-v1 severity only from Python services that use the shared
-	// oakestra_logging contract. Requiring the complete identity header and the
-	// expected service-to-container mapping prevents arbitrary JSON payloads from
-	// becoming indexed severity metadata. The application-provided service remains
-	// query-time JSON; compose_service is the authoritative indexed identity.
 	stage.match {
 		selector = `{compose_service=~"system_manager|root_resource_abstractor|resource_abstractor|jwt_generator|root_addons_manager|root_addons_monitor|addons_manager|addons_monitor|marketplace_manager|cluster_manager|cluster_resource_abstractor|cluster_addons_manager|cluster_addons_monitor"}`
 
@@ -223,8 +218,6 @@ loki.process "oakestra" {
 		}
 	}
 
-	// Nginx-based dashboards put the authoritative severity in brackets near
-	// the beginning of the line.
 	stage.match {
 		selector = `{compose_service=~"dashboard|root_addons_dashboard|cluster_addons_dashboard|addons_dashboard"}`
 
@@ -233,8 +226,6 @@ loki.process "oakestra" {
 		}
 	}
 
-	// Scheduler dependencies use their own stable prefixes. Keep these parsers
-	// scoped so a similar phrase in another container remains Unparsed.
 	stage.match {
 		selector = `{compose_service=~"root_scheduler|cluster_scheduler"}`
 
