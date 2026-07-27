@@ -189,8 +189,6 @@ line. If Python application lines are plain text, verify the image version and t
 | `Cluster reachability probe failed` / `cluster not reachable at` (system_manager log) | Root cannot reach `http://CLUSTER_ADDRESS:10100/api/cluster/status` — wrong IP, firewall, or cluster_manager not up |
 | `permission denied` opening `/var/run/docker.sock` (Alloy log) | Alloy cannot discover/read container logs; inspect the socket mount and host permissions |
 | `loki.write` connection refused | The local Loki is not ready, or `LOKI_URL` is wrong for the selected network mode |
-| `Oakestra Alert Webhook` with `127.0.0.1:65535: connect: connection refused` (Grafana log) | Alerting is evaluating, but the intentionally inactive webhook placeholder is still in use; set `OAKESTRA_ALERT_WEBHOOK_URL` and recreate Grafana |
-| `Oakestra Alert Email` with `SMTP not configured` or SMTP connection/authentication errors (Grafana log) | Email was selected without a working SMTP transport; set `OAKESTRA_ALERT_EMAIL_TO` and the `OAKESTRA_ALERT_SMTP_*` variables, then recreate Grafana |
 
 ---
 
@@ -604,12 +602,6 @@ docker inspect cluster_alloy --format '{{range .Mounts}}{{println .Destination "
 # Confirm the required labels have reached the local Loki
 curl -s --connect-timeout 3 "http://localhost:3100/loki/api/v1/labels" 2>/dev/null | grep -E 'container|compose_service|cluster_id' || echo "Root Loki labels are missing"
 curl -s --connect-timeout 3 "http://localhost:3101/loki/api/v1/labels" 2>/dev/null | grep -E 'container|compose_service|cluster_id' || echo "Cluster Loki labels are missing"
-
-# Confirm the Grafana-managed rule and webhook contact point were file-provisioned
-curl -fsS -u admin:admin "http://localhost:3000/api/v1/provisioning/alert-rules" 2>/dev/null | grep -q 'oakestra-log-errors' || echo "Root Grafana log alert is missing"
-curl -fsS -u admin:admin "http://localhost:3000/api/v1/provisioning/contact-points" 2>/dev/null | grep -q 'oakestra-alert-webhook' || echo "Root Grafana webhook is missing"
-curl -fsS -u admin:admin "http://localhost:3001/api/v1/provisioning/alert-rules" 2>/dev/null | grep -q 'oakestra-log-errors' || echo "Cluster Grafana log alert is missing"
-curl -fsS -u admin:admin "http://localhost:3001/api/v1/provisioning/contact-points" 2>/dev/null | grep -q 'oakestra-alert-webhook' || echo "Cluster Grafana webhook is missing"
 ```
 
 ---
@@ -735,37 +727,6 @@ docker logs cluster_resource_abstractor 2>&1 | grep -iE "error|mongo|failed" | t
 ## STEP 15 — Common Fixes
 
 Apply these fixes directly when the diagnosis matches:
-
-### Fix: Grafana log alerts fire but webhook delivery is refused
-```bash
-# Replace the placeholder with the operator's actual HTTP(S) receiver.
-export OAKESTRA_ALERT_CONTACT_POINT="Oakestra Alert Webhook"
-export OAKESTRA_ALERT_WEBHOOK_URL=https://alerts.example.com/oakestra
-
-# Recreate the Grafana service for the deployment being diagnosed.
-docker compose up -d --force-recreate grafana
-# Standalone Cluster:
-docker compose up -d --force-recreate cluster_grafana
-```
-
-Verify the URL under **Alerting → Contact points → Oakestra Alert Webhook**. A refusal from `127.0.0.1:65535` is expected only while the default placeholder is active; it does not mean the rule failed to evaluate.
-
-### Fix: Grafana log alert email is not delivered
-```bash
-export OAKESTRA_ALERT_CONTACT_POINT="Oakestra Alert Email"
-export OAKESTRA_ALERT_EMAIL_TO=infra@example.com
-export OAKESTRA_ALERT_SMTP_ENABLED=true
-export OAKESTRA_ALERT_SMTP_HOST=smtp.example.com:587
-export OAKESTRA_ALERT_SMTP_USER=infra@example.com
-export OAKESTRA_ALERT_SMTP_PASSWORD='<smtp-password>'
-export OAKESTRA_ALERT_SMTP_FROM_ADDRESS=infra@example.com
-
-docker compose up -d --force-recreate grafana
-# Standalone Cluster:
-docker compose up -d --force-recreate cluster_grafana
-```
-
-Use **Alerting → Notification configuration → Contact points → Oakestra Alert Email → Test** to separate SMTP/destination problems from alert-rule evaluation problems. Provisioned contact points are read-only in the UI, but the Test action remains available.
 
 ### Fix: Container in restart loop due to dependency not ready
 ```bash
