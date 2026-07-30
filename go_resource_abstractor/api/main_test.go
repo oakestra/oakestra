@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -15,13 +16,13 @@ import (
 	"go_resource_abstractor/services"
 )
 
-// testStore and testRouter are shared by every test in this package: a full
-// gin engine wired to a throwaway MongoDB instance, exercised end-to-end via
-// httptest the same way a real client (scheduler, resource_abstractor_client)
-// would see the service.
+// testStore and testRouter are shared by every test in this package: the
+// full HTTP handler wired to a throwaway MongoDB instance, exercised
+// end-to-end via httptest the same way a real client (scheduler,
+// resource_abstractor_client) would see the service.
 var (
 	testStore  *db.Store
-	testRouter *gin.Engine
+	testRouter http.Handler
 )
 
 func TestMain(m *testing.M) {

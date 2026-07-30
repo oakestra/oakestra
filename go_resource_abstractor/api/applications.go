@@ -7,31 +7,14 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"go_resource_abstractor/db"
+	"go_resource_abstractor/openapi"
 )
 
-// applicationFilterKeys are the query params accepted as an applications
-// filter by both GET /applications/ and GET /applications/<id>.
-var applicationFilterKeys = []string{"application_name", "application_namespace", "userId"}
+// ListApplications implements GET /api/v1/applications.
+func (s *Server) ListApplications(c *gin.Context, params openapi.ListApplicationsParams) {
+	filter := applicationFilter(params.ApplicationName, params.ApplicationNamespace, params.UserId)
 
-// registerApplicationRoutes wires up /api/v1/applications, the Go port of
-// apps_blueprint.py (backed by the apps collection).
-func (s *Server) registerApplicationRoutes(v1 *gin.RouterGroup) {
-	group := v1.Group("/applications")
-
-	bothSlashes(group, http.MethodGet, s.listApplications)
-	bothSlashes(group, http.MethodPost, s.createApplication)
-
-	itemBothSlashes(group, http.MethodGet, "/:id", s.getApplication)
-	itemBothSlashes(group, http.MethodPatch, "/:id", s.patchApplication)
-	itemBothSlashes(group, http.MethodDelete, "/:id", s.deleteApplication)
-}
-
-// listApplications implements GET /applications/, filterable by
-// application_name, application_namespace and userId.
-func (s *Server) listApplications(c *gin.Context) {
-	filter := queryFilter(c, applicationFilterKeys...)
-
-	results, err := s.store.FindApps(c.Request.Context(), bson.M(filter))
+	results, err := s.store.FindApps(c.Request.Context(), filter)
 	if err != nil {
 		abortInternalError(c, err)
 		return
@@ -40,9 +23,9 @@ func (s *Server) listApplications(c *gin.Context) {
 	writeJSON(c, http.StatusOK, results)
 }
 
-// createApplication implements POST /applications/. CreateApp populates
+// CreateApplication implements POST /api/v1/applications. CreateApp populates
 // applicationID with the new document's own stringified _id.
-func (s *Server) createApplication(c *gin.Context) {
+func (s *Server) CreateApplication(c *gin.Context) {
 	data, ok := bindJSONMap(c)
 	if !ok {
 		return
@@ -61,12 +44,11 @@ func (s *Server) createApplication(c *gin.Context) {
 	writeJSON(c, http.StatusOK, created)
 }
 
-// getApplication implements GET /applications/<id>.
-func (s *Server) getApplication(c *gin.Context) {
-	id := c.Param("id")
-	filter := queryFilter(c, applicationFilterKeys...)
+// GetApplication implements GET /api/v1/applications/{id}.
+func (s *Server) GetApplication(c *gin.Context, id openapi.ObjectID, params openapi.GetApplicationParams) {
+	filter := applicationFilter(params.ApplicationName, params.ApplicationNamespace, params.UserId)
 
-	app, err := s.store.FindAppByID(c.Request.Context(), id, bson.M(filter))
+	app, err := s.store.FindAppByID(c.Request.Context(), id, filter)
 	if abortOnError(c, err) {
 		return
 	}
@@ -74,9 +56,8 @@ func (s *Server) getApplication(c *gin.Context) {
 	writeJSON(c, http.StatusOK, app)
 }
 
-// patchApplication implements PATCH /applications/<id>.
-func (s *Server) patchApplication(c *gin.Context) {
-	id := c.Param("id")
+// PatchApplication implements PATCH /api/v1/applications/{id}.
+func (s *Server) PatchApplication(c *gin.Context, id openapi.ObjectID) {
 	data, ok := bindJSONMap(c)
 	if !ok {
 		return
@@ -95,9 +76,8 @@ func (s *Server) patchApplication(c *gin.Context) {
 	writeJSON(c, http.StatusOK, updated)
 }
 
-// deleteApplication implements DELETE /applications/<id>.
-func (s *Server) deleteApplication(c *gin.Context) {
-	id := c.Param("id")
+// DeleteApplication implements DELETE /api/v1/applications/{id}.
+func (s *Server) DeleteApplication(c *gin.Context, id openapi.ObjectID) {
 	ctx := c.Request.Context()
 
 	deleted, err := s.store.DeleteApp(ctx, id)
@@ -107,4 +87,14 @@ func (s *Server) deleteApplication(c *gin.Context) {
 	s.hooks.PostDelete("applications", id)
 
 	writeJSON(c, http.StatusOK, deleted)
+}
+
+// applicationFilter builds the Mongo filter shared by the list and fetch
+// routes, which accept the same three query parameters.
+func applicationFilter(name, namespace, userID *string) bson.M {
+	filter := map[string]any{}
+	addFilter(filter, "application_name", name)
+	addFilter(filter, "application_namespace", namespace)
+	addFilter(filter, "userId", userID)
+	return bson.M(filter)
 }

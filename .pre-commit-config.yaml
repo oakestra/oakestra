@@ -28,6 +28,24 @@ repos:
       stages: [post-checkout, post-merge]
       pass_filenames: false
       always_run: true
+    # Unlike protobuf above, this needs no wrapper script: the generator
+    # version and output paths live in the module's own go:generate
+    # directive, so the whole hook is one go invocation. Add one entry per
+    # Go module that gains a spec.
+    #
+    # There is also no post-checkout/post-merge counterpart, because the
+    # generated OpenAPI code is committed: a checkout already brings the
+    # version matching the spec it came from. Only editing the spec can put
+    # the two out of step, which is what this catches - and it fails the
+    # commit if the regenerated code differs, so the result has to be staged
+    # rather than silently diverging from CI.
+    - id: generate-openapi-resource-abstractor
+      name: Generate OpenAPI code (go_resource_abstractor spec changed)
+      language: system
+      entry: go generate -C go_resource_abstractor ./openapi
+      stages: [pre-commit]
+      files: ^go_resource_abstractor/openapi/.*\.yaml$
+      pass_filenames: false
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.14.2
   hooks:

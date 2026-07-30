@@ -219,6 +219,6 @@ func abortIfInvalidResourceFields(c *gin.Context, data map[string]any) (ok bool)
 	if valid {
 		return true
 	}
-	abortInvalidInput(c, gin.H{"body": gin.H{field: []string{msg}}})
+	abortInvalidInput(c, map[string]any{"body": map[string]any{field: []string{msg}}})
 	return false
 }

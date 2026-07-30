@@ -26,10 +26,9 @@ var AsyncEvents = []HookEvent{EventPostCreate, EventPostUpdate, EventPostDelete}
 // payload that gets persisted.
 var SyncEvents = []HookEvent{EventPreCreate, EventPreUpdate, EventPreDelete}
 
-// AllEvents is the full set of event names accepted by POST/PATCH /hooks/ -
-// the same OneOf validator the Python service builds from
-// ASYNC_EVENTS + SYNC_EVENTS.
-var AllEvents = append(append([]HookEvent{}, AsyncEvents...), SyncEvents...)
+// The full set of event names POST/PATCH /hooks/ accepts is not repeated
+// here: it is the HookEvent enum in openapi/openapi.yaml, and the API layer
+// validates against the membership test generated from it.
 
 // FindHooks lists hooks matching filter (an empty/nil filter lists all).
 func (s *Store) FindHooks(ctx context.Context, filter bson.M) ([]bson.M, error) {

@@ -1,5 +1,11 @@
-// Package api implements the HTTP surface of the resource abstractor with
-// gin, porting the five Flask blueprints under resource-abstractor/api/v1/.
+// Package api implements the HTTP surface of the resource abstractor,
+// porting the five Flask blueprints under resource-abstractor/api/v1/.
+//
+// Server implements openapi.ServerInterface, the gin server interface
+// generated from openapi/openapi.yaml: routes, path/query parameter binding
+// and the response schemas all come from that spec. Request bodies do not -
+// the spec's plain (non-strict) gin server leaves them to the handlers,
+// which is what lets this service keep storing unknown fields verbatim.
 package api
 
 import (
@@ -18,6 +24,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"go_resource_abstractor/db"
+	"go_resource_abstractor/openapi"
 	"go_resource_abstractor/services"
 )
 
@@ -44,28 +51,29 @@ func isNotFound(err error) bool {
 }
 
 func abortBadRequest(c *gin.Context) {
-	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Bad Request"})
+	c.AbortWithStatusJSON(http.StatusBadRequest, openapi.Message{Message: "Bad Request"})
 }
 
 func abortNotFound(c *gin.Context) {
-	c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"message": "Not Found"})
+	c.AbortWithStatusJSON(http.StatusNotFound, openapi.Message{Message: "Not Found"})
 }
 
 func abortInternalError(c *gin.Context, err error) {
 	slog.Error("request failed", "path", c.Request.URL.Path, "method", c.Request.Method, "error", err)
-	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "Internal Server Error"})
+	c.AbortWithStatusJSON(http.StatusInternalServerError, openapi.Message{Message: "Internal Server Error"})
 }
 
-// abortInvalidInput aborts the request with resources_blueprint.py's
-// errorhandler(422) shape ({"message": "Invalid input", "details": ...}),
-// shared by every validation-failure path in this package: malformed JSON
-// bodies (bindResourceJSONMap), invalid query params (abortInvalidQuery),
-// and invalid resource body fields (abortIfInvalidResourceFields). details
-// is whatever shape that specific validation failure needs to report.
-func abortInvalidInput(c *gin.Context, details gin.H) {
-	c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{
-		"message": "Invalid input",
-		"details": details,
+// abortInvalidInput aborts the request with the spec's ValidationError shape
+// ({"message": "Invalid input", "details": ...}, resources_blueprint.py's
+// errorhandler(422)), shared by every validation-failure path in this
+// package: malformed JSON bodies (bindResourceJSONMap), invalid query params
+// (abortInvalidQuery), and invalid resource body fields
+// (abortIfInvalidResourceFields). details is whatever shape that specific
+// validation failure needs to report.
+func abortInvalidInput(c *gin.Context, details map[string]any) {
+	c.AbortWithStatusJSON(http.StatusUnprocessableEntity, openapi.ValidationError{
+		Message: "Invalid input",
+		Details: details,
 	})
 }
 
@@ -75,7 +83,7 @@ func abortInvalidInput(c *gin.Context, details gin.H) {
 // JobFilterSchema.instance_number, ResourceFilterSchema.active) instead of
 // the value being silently dropped.
 func abortInvalidQuery(c *gin.Context, field, message string) {
-	abortInvalidInput(c, gin.H{"query": gin.H{field: []string{message}}})
+	abortInvalidInput(c, map[string]any{"query": map[string]any{field: []string{message}}})
 }
 
 // abortOnError maps a store error to the matching HTTP response - 404 via
@@ -150,7 +158,7 @@ func bindResourceJSONMap(c *gin.Context) (map[string]any, bool) {
 		return map[string]any{}, true
 	}
 	if err != nil {
-		abortInvalidInput(c, gin.H{"body": err.Error()})
+		abortInvalidInput(c, map[string]any{"body": err.Error()})
 		return nil, false
 	}
 	return data, true
@@ -233,17 +241,15 @@ func resolveJSONNumber(v any) any {
 	}
 }
 
-// queryFilter builds a filter map containing only the given allowed query
-// keys that are actually present, the same behavior as marshmallow's
-// optional filter schemas (e.g. ResourceFilterSchema, ApplicationFilterSchema).
-func queryFilter(c *gin.Context, keys ...string) map[string]any {
-	filter := map[string]any{}
-	for _, k := range keys {
-		if v := c.Query(k); v != "" {
-			filter[k] = v
-		}
+// addFilter adds key to filter when the query parameter it came from was
+// supplied with a non-empty value. The generated parameter structs give a nil
+// pointer for an absent parameter and a pointer to "" for a present-but-empty
+// one ("?ip="); both are dropped here, the same as marshmallow's optional
+// filter schemas (e.g. ResourceFilterSchema, ApplicationFilterSchema).
+func addFilter(filter map[string]any, key string, value *string) {
+	if value != nil && *value != "" {
+		filter[key] = *value
 	}
-	return filter
 }
 
 // booleanTruthy and booleanFalsy reproduce marshmallow's fields.Boolean
@@ -256,22 +262,25 @@ var (
 	booleanFalsy  = map[string]bool{"0": true, "f": true, "false": true, "off": true, "n": true, "no": true}
 )
 
-// queryBool parses a query param as a bool, applying marshmallow's
-// fields.Boolean coercion. present reports whether the key was supplied at
-// all - including with an empty value (e.g. "?active="), which
-// marshmallow also treats as present-but-invalid rather than absent, hence
-// c.GetQuery (which distinguishes "absent" from "present but empty") rather
-// than c.Query (which conflates the two). If present is true and err is
-// non-nil, the value isn't a valid bool and the caller should reject the
-// request (422, via abortInvalidQuery) rather than silently drop the
-// filter - the same validation ResourceFilterSchema applies to ?active=.
-func queryBool(c *gin.Context, key string) (value, present bool, err error) {
-	v, exists := c.GetQuery(key)
-	if !exists {
+// queryBool parses a query parameter as a bool, applying marshmallow's
+// fields.Boolean coercion.
+//
+// raw is the value from the generated parameter struct: nil when the
+// parameter was absent, otherwise its literal text - including "" for
+// "?active=", which marshmallow treats as present-but-invalid rather than
+// absent. If present is true and err is non-nil the value isn't a valid
+// bool, and the caller should reject the request (422, via
+// abortInvalidQuery) rather than silently drop the filter - the same
+// validation ResourceFilterSchema applies to ?active=.
+//
+// This coercion is why openapi.yaml types the parameter as a string rather
+// than a boolean: an OpenAPI boolean would reject "yes" and "on", and would
+// answer 400 where the contract is 422.
+func queryBool(key string, raw *string) (value, present bool, err error) {
+	if raw == nil {
 		return false, false, nil
 	}
-	lower := strings.ToLower(v)
-	switch {
+	switch lower := strings.ToLower(*raw); {
 	case booleanTruthy[lower]:
 		return true, true, nil
 	case booleanFalsy[lower]:
@@ -281,17 +290,16 @@ func queryBool(c *gin.Context, key string) (value, present bool, err error) {
 	}
 }
 
-// queryInt parses a query param as an int, applying marshmallow's
-// fields.Integer coercion. present/err behave as in queryBool (including
-// using c.GetQuery so "?instance_number=" - present but empty - isn't
-// silently treated as absent), the same validation JobFilterSchema
-// applies to ?instance_number=.
-func queryInt(c *gin.Context, key string) (value int, present bool, err error) {
-	v, exists := c.GetQuery(key)
-	if !exists {
+// queryInt parses a query parameter as an int, applying marshmallow's
+// fields.Integer coercion. raw/present/err behave as in queryBool, and the
+// parameter is typed as a string in openapi.yaml for the same reason: the
+// contract for a non-numeric value is 422, not the 400 a generated integer
+// binding would produce.
+func queryInt(key string, raw *string) (value int, present bool, err error) {
+	if raw == nil {
 		return 0, false, nil
 	}
-	n, err := strconv.Atoi(v)
+	n, err := strconv.Atoi(*raw)
 	if err != nil {
 		return 0, true, fmt.Errorf("%s must be a valid integer", key)
 	}
