@@ -34,6 +34,19 @@ jobs:
             exit 1
           fi
 
+      # openapi/openapi.gen.go is generated from openapi/openapi.yaml and
+      # committed, so that building the service never has to run a code
+      # generator. This catches the spec and the generated code drifting apart
+      # - i.e. someone editing one and not regenerating the other.
+      - name: Check generated OpenAPI code is up to date
+        run: |
+          go generate ./openapi
+          if ! git diff --exit-code -- openapi/openapi.gen.go; then
+            echo "openapi/openapi.gen.go is out of date."
+            echo "Run 'go generate ./openapi' in go_resource_abstractor/ and commit the result."
+            exit 1
+          fi
+
       - name: Build
         run: go build ./...
 
