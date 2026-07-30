@@ -75,7 +75,40 @@ nonroot user, minimal attack surface and image size.
 
 ## API surface
 
-All routes are under `/api/v1`, plus `GET /` for a plain-text `ok` health check:
+[`openapi/openapi.yaml`](openapi/openapi.yaml) is the contract, and it is the source of truth
+rather than documentation written after the fact:
+[oapi-codegen](https://github.com/oapi-codegen/oapi-codegen) turns it into the route table, the
+typed path/query parameters, the response models, and a `ServerInterface` the handlers in `api/`
+implement - so an endpoint that isn't in the spec doesn't exist, and one that is in the spec but
+unimplemented fails the build.
+
+The running service publishes it at `GET /docs/openapi.json` (the path the Python service used)
+and `GET /docs/openapi.yaml`. Point any Swagger UI / Redoc at either.
+
+Two deliberate exceptions to full codegen, both commented where they matter:
+
+- **Request bodies are not generated.** The spec's plain (non-strict) gin server binds
+  parameters only. Binding bodies into typed structs would drop the unknown fields this service
+  is required to store verbatim, so the handlers keep decoding them into generic maps.
+- **`?active=` and `?instance_number=` are typed as strings**, not `boolean`/`integer`. Both
+  carry a validation contract inherited from the Python service - marshmallow's boolean spellings
+  (`yes`, `on`, `t`, ...) and a 422 rather than 400 on a bad value - that generated binding
+  cannot reproduce. They are parsed inside the handlers instead.
+
+### Regenerating
+
+```bash
+go generate ./openapi     # after editing openapi/openapi.yaml
+```
+
+`openapi/openapi.gen.go` is committed, so building or deploying the service never runs a code
+generator; CI fails if the two drift apart. The generator version is pinned in the `go:generate`
+directive in `openapi/spec.go`.
+
+### Routes
+
+All routes are under `/api/v1`, plus `GET /` for a plain-text `ok` health check and the `/docs`
+endpoints above:
 
 - `/resources` - candidate (worker/cluster) resource records, backed by an aggregation that
   computes freshness (`active`, a 30s window) and a projection controllable via `?resources=csv`.
@@ -98,6 +131,10 @@ deliberate bug fixes over the Python source (documented in code comments where t
 - `PUT /jobs/` fires webhooks under the `"jobs"` entity name on its update path, consistent with
   every other job route (the Python service used `"job"`, singular, there only).
 
+The one route not carried over is `/api/docs`, the Swagger UI page the Python service bundled.
+The spec it rendered is still served (see above); serving the UI itself would mean shipping its
+static assets, or fetching them from a CDN that an edge deployment may not be able to reach.
+
 ## Package layout
 
 ```
@@ -105,7 +142,8 @@ go_resource_abstractor/
 ├── main.go        # entrypoint: config -> mongo connect -> router -> graceful shutdown
 ├── config/        # env var loading
 ├── logger/        # log/slog setup
+├── openapi/       # openapi.yaml (the contract) + the code generated from it
 ├── db/            # MongoDB access layer (one file per collection group)
 ├── services/      # webhook dispatch (services.Hooks)
-└── api/           # gin router and HTTP handlers (one file per route group)
+└── api/           # HTTP handlers implementing openapi.ServerInterface
 ```
