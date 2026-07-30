@@ -1,0 +1,1216 @@
+openapi: 3.0.3
+
+info:
+  title: Resource Abstractor API
+  version: v1
+  description: |
+    REST API in front of MongoDB for reading and writing Oakestra's resource
+    state: candidate resources (workers at cluster level, clusters at root
+    level), applications, jobs and their per-worker instances, webhook
+    registrations, and dynamically registered custom resource types.
+
+    The same service runs at both the root (`root_resource_abstractor`, port
+    11011) and cluster (`cluster_resource_abstractor`, port 11012) level,
+    differentiated purely by env vars.
+
+    ## Schemaless documents
+
+    Every document collection is a pass-through to MongoDB: the request bodies
+    below list the fields the service itself reads or validates, but unknown
+    fields are accepted and stored verbatim, and returned again on reads. That
+    is why every document schema sets `additionalProperties: true` - treat the
+    listed properties as the fields consumers can rely on, not as an exhaustive
+    list of what a stored document contains.
+
+    ## Trailing slashes
+
+    Every path is also reachable with a single trailing slash (`/api/v1/jobs/`
+    resolves identically to `/api/v1/jobs`), so clients written against the
+    original Flask service - which set `strict_slashes = False` - keep working
+    unchanged.
+
+servers:
+  - url: http://localhost:11011
+    description: Root orchestrator (root_resource_abstractor)
+  - url: http://localhost:11012
+    description: Cluster orchestrator (cluster_resource_abstractor)
+
+tags:
+  - name: Health
+    description: Liveness probe.
+  - name: Docs
+    description: This document, served by the service itself.
+  - name: Resources
+    description: |
+      Candidate resource records. At cluster level a candidate is a worker
+      node, at root level a whole cluster.
+  - name: Applications
+    description: Application metadata.
+  - name: Jobs
+    description: Jobs (deployed microservices) and their per-worker instances.
+  - name: Hooks
+    description: |
+      Webhook registrations fired around writes to every other entity.
+  - name: Custom Resources
+    description: |
+      Dynamically registered resource types, each with its own JSON Schema,
+      and the instances stored under them.
+
+paths:
+  /:
+    get:
+      operationId: health
+      tags: [Health]
+      summary: Liveness probe
+      description: Always returns the literal body `ok` while the process is serving.
+      responses:
+        '200':
+          description: The service is up.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ok
+
+  /docs/openapi.json:
+    get:
+      operationId: getSpecJSON
+      tags: [Docs]
+      summary: This OpenAPI document, as JSON
+      description: |
+        Served under the same path the original Flask service published its
+        spec at, so tooling pointed there keeps working.
+      responses:
+        '200':
+          description: The OpenAPI document.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /docs/openapi.yaml:
+    get:
+      operationId: getSpecYAML
+      tags: [Docs]
+      summary: This OpenAPI document, in its source YAML form
+      responses:
+        '200':
+          description: The OpenAPI document.
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  /api/v1/resources:
+    get:
+      operationId: listResources
+      tags: [Resources]
+      summary: List candidate resources
+      description: |
+        Returns candidates with a computed `active` flag (true when
+        `last_modified_timestamp` is within the last 30 seconds) and a
+        projection limited to the canonical resource fields, extendable via
+        `resources`.
+      parameters:
+        - $ref: '#/components/parameters/ResourceActive'
+        - $ref: '#/components/parameters/ResourceJobID'
+        - $ref: '#/components/parameters/ResourceCandidateName'
+        - $ref: '#/components/parameters/ResourceIP'
+        - $ref: '#/components/parameters/ResourceProjection'
+      responses:
+        '200':
+          $ref: '#/components/responses/ResourceList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+    post:
+      operationId: createResource
+      tags: [Resources]
+      summary: Create a candidate resource
+      requestBody:
+        $ref: '#/components/requestBodies/Resource'
+      responses:
+        '201':
+          $ref: '#/components/responses/Resource'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+    put:
+      operationId: upsertResource
+      tags: [Resources]
+      summary: Create or update a candidate resource by name
+      description: |
+        Updates the candidate whose `candidate_name` matches the body, or
+        creates a new one if no candidate carries that name. This is the call
+        a cluster manager makes on every resource-aggregation tick.
+      requestBody:
+        $ref: '#/components/requestBodies/Resource'
+      responses:
+        '200':
+          $ref: '#/components/responses/Resource'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/resources/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ObjectID'
+    get:
+      operationId: getResource
+      tags: [Resources]
+      summary: Fetch one candidate resource
+      responses:
+        '200':
+          $ref: '#/components/responses/Resource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: patchResource
+      tags: [Resources]
+      summary: Report resource usage for a candidate
+      description: |
+        Persists an aggregated usage report: `last_modified` /
+        `last_modified_timestamp` are refreshed server-side, the reported
+        `cpu_percent` and `memory_percent` are appended to `cpu_history` and
+        `memory_history` (each capped at the most recent 100 samples), and the
+        rest of the body is stored as-is.
+
+        Any `cpu_history` / `memory_history` sent by the client is ignored, so
+        echoing a previously read document back does not duplicate history.
+
+        Note that an `id` that is not a valid ObjectID is reported as 404 here,
+        not 400 - matching the original Flask service.
+      requestBody:
+        $ref: '#/components/requestBodies/Resource'
+      responses:
+        '200':
+          $ref: '#/components/responses/Resource'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+    delete:
+      operationId: deleteResource
+      tags: [Resources]
+      summary: Delete a candidate resource
+      responses:
+        '204':
+          description: Deleted. Also returned when no candidate carried that id.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/applications:
+    get:
+      operationId: listApplications
+      tags: [Applications]
+      summary: List applications
+      parameters:
+        - $ref: '#/components/parameters/ApplicationName'
+        - $ref: '#/components/parameters/ApplicationNamespace'
+        - $ref: '#/components/parameters/ApplicationUserID'
+      responses:
+        '200':
+          description: Matching applications.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Application'
+    post:
+      operationId: createApplication
+      tags: [Applications]
+      summary: Create an application
+      description: |
+        The stored document's `applicationID` is populated server-side with the
+        new document's own stringified `_id`.
+      requestBody:
+        $ref: '#/components/requestBodies/Application'
+      responses:
+        '200':
+          $ref: '#/components/responses/Application'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/applications/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ObjectID'
+    get:
+      operationId: getApplication
+      tags: [Applications]
+      summary: Fetch one application
+      parameters:
+        - $ref: '#/components/parameters/ApplicationName'
+        - $ref: '#/components/parameters/ApplicationNamespace'
+        - $ref: '#/components/parameters/ApplicationUserID'
+      responses:
+        '200':
+          $ref: '#/components/responses/Application'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: patchApplication
+      tags: [Applications]
+      summary: Update an application
+      requestBody:
+        $ref: '#/components/requestBodies/Application'
+      responses:
+        '200':
+          $ref: '#/components/responses/Application'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteApplication
+      tags: [Applications]
+      summary: Delete an application
+      responses:
+        '200':
+          description: The application as it was immediately before deletion.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/jobs:
+    get:
+      operationId: listJobs
+      tags: [Jobs]
+      summary: List jobs
+      parameters:
+        - $ref: '#/components/parameters/JobApplicationID'
+        - $ref: '#/components/parameters/JobName'
+      responses:
+        '200':
+          description: Matching jobs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Job'
+    post:
+      operationId: createJob
+      tags: [Jobs]
+      summary: Create a job
+      requestBody:
+        $ref: '#/components/requestBodies/Job'
+      responses:
+        '200':
+          $ref: '#/components/responses/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    put:
+      operationId: upsertJob
+      tags: [Jobs]
+      summary: Create or update a job by name
+      description: |
+        Updates the job whose `job_name` matches the body, or creates a new one
+        if no job carries that name.
+      requestBody:
+        $ref: '#/components/requestBodies/Job'
+      responses:
+        '200':
+          $ref: '#/components/responses/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/jobs/{job_id}:
+    parameters:
+      - $ref: '#/components/parameters/JobID'
+    get:
+      operationId: getJob
+      tags: [Jobs]
+      summary: Fetch one job
+      parameters:
+        - $ref: '#/components/parameters/JobInstanceNumber'
+      responses:
+        '200':
+          $ref: '#/components/responses/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+    patch:
+      operationId: patchJob
+      tags: [Jobs]
+      summary: Update a job
+      requestBody:
+        $ref: '#/components/requestBodies/Job'
+      responses:
+        '200':
+          $ref: '#/components/responses/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteJob
+      tags: [Jobs]
+      summary: Delete a job
+      responses:
+        '200':
+          description: The job as it was immediately before deletion.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/jobs/{job_id}/{instance_id}:
+    parameters:
+      - $ref: '#/components/parameters/JobID'
+      - $ref: '#/components/parameters/InstanceID'
+    get:
+      operationId: getJobInstance
+      tags: [Jobs]
+      summary: Fetch one job instance
+      description: |
+        Returns the job, with `instance_list` filtered down to just the
+        matching instance - not a bare instance object, the same shape
+        `put`/`patch`/`delete` on this path return.
+      responses:
+        '200':
+          $ref: '#/components/responses/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: appendJobInstance
+      tags: [Jobs]
+      summary: Append a job instance
+      description: |
+        Appends the last element of the body's `instance_list` to the job,
+        stamped with `instance_id` as its `instance_number`. Appending an
+        instance number the job already carries is rejected with 400.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobInstanceAppend'
+      responses:
+        '200':
+          $ref: '#/components/responses/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    patch:
+      operationId: patchJobInstance
+      tags: [Jobs]
+      summary: Update a job instance
+      description: |
+        Updates the instance's status and resource-usage fields in place, and
+        appends the reported `cpu` / `memory` values to that instance's
+        history arrays (each capped at the most recent 100 samples).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobInstance'
+      responses:
+        '200':
+          $ref: '#/components/responses/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteJobInstance
+      tags: [Jobs]
+      summary: Delete a job instance
+      responses:
+        '200':
+          $ref: '#/components/responses/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/hooks:
+    get:
+      operationId: listHooks
+      tags: [Hooks]
+      summary: List webhook registrations
+      responses:
+        '200':
+          description: Every registered hook.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Hook'
+    post:
+      operationId: createHook
+      tags: [Hooks]
+      summary: Register a webhook
+      requestBody:
+        $ref: '#/components/requestBodies/Hook'
+      responses:
+        '201':
+          $ref: '#/components/responses/Hook'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/hooks/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ObjectID'
+    get:
+      operationId: getHook
+      tags: [Hooks]
+      summary: Fetch one webhook registration
+      responses:
+        '200':
+          $ref: '#/components/responses/Hook'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: patchHook
+      tags: [Hooks]
+      summary: Update a webhook registration
+      requestBody:
+        $ref: '#/components/requestBodies/Hook'
+      responses:
+        '200':
+          $ref: '#/components/responses/Hook'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteHook
+      tags: [Hooks]
+      summary: Delete a webhook registration
+      responses:
+        '204':
+          description: Deleted. Also returned when no hook carried that id.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/custom-resources:
+    get:
+      operationId: listCustomResourceDefinitions
+      tags: [Custom Resources]
+      summary: List registered custom resource types
+      responses:
+        '200':
+          description: Every registered custom resource definition.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CustomResourceDefinition'
+    post:
+      operationId: createCustomResourceDefinition
+      tags: [Custom Resources]
+      summary: Register a custom resource type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomResourceDefinition'
+      responses:
+        '201':
+          description: The stored definition.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomResourceDefinition'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/custom-resources/{resource}:
+    parameters:
+      - $ref: '#/components/parameters/CustomResourceType'
+    get:
+      operationId: listCustomResourceInstances
+      tags: [Custom Resources]
+      summary: List instances of a custom resource type
+      description: |
+        Every query parameter is passed straight through as a MongoDB equality
+        filter, including dotted paths into nested fields - for example
+        `?status=active&spec.region=us-east`. The set of accepted parameters
+        therefore depends entirely on the registered type's schema and cannot
+        be enumerated here.
+      responses:
+        '200':
+          description: Matching instances.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CustomResourceInstance'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: createCustomResourceInstance
+      tags: [Custom Resources]
+      summary: Create an instance of a custom resource type
+      description: |
+        The body is validated against the JSON Schema stored in the type's
+        definition before it is persisted; a schema violation is reported as
+        400 with the validator's own message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomResourceInstance'
+      responses:
+        '200':
+          description: The stored instance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomResourceInstance'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteCustomResourceDefinition
+      tags: [Custom Resources]
+      summary: Delete a custom resource type and every instance of it
+      description: 'A cascading delete: all instances first, then the definition.'
+      responses:
+        '200':
+          description: The type and its instances were deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/custom-resources/{resource}/{id}:
+    parameters:
+      - $ref: '#/components/parameters/CustomResourceType'
+      - $ref: '#/components/parameters/ObjectID'
+    get:
+      operationId: getCustomResourceInstance
+      tags: [Custom Resources]
+      summary: Fetch one custom resource instance
+      responses:
+        '200':
+          description: The instance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomResourceInstance'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: patchCustomResourceInstance
+      tags: [Custom Resources]
+      summary: Update a custom resource instance
+      description: |
+        As with creation, the body is validated against the type's stored JSON
+        Schema before it is persisted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomResourceInstance'
+      responses:
+        '200':
+          description: The updated instance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomResourceInstance'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteCustomResourceInstance
+      tags: [Custom Resources]
+      summary: Delete a custom resource instance
+      responses:
+        '200':
+          description: The id of the deleted instance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletedID'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    ObjectID:
+      name: id
+      in: path
+      required: true
+      description: Hex-encoded MongoDB ObjectID.
+      schema:
+        $ref: '#/components/schemas/ObjectID'
+
+    JobID:
+      name: job_id
+      in: path
+      required: true
+      description: Hex-encoded MongoDB ObjectID of the job.
+      schema:
+        $ref: '#/components/schemas/ObjectID'
+
+    InstanceID:
+      name: instance_id
+      in: path
+      required: true
+      description: The instance's `instance_number` within its job.
+      schema:
+        type: integer
+
+    ResourceActive:
+      name: active
+      in: query
+      required: false
+      description: |
+        When truthy, only return candidates that reported within the freshness
+        window (30 seconds).
+
+        Typed as a string rather than a boolean because the original Flask
+        service parsed it with marshmallow, which accepts `1`, `t`, `true`,
+        `on`, `y`, `yes` and their false counterparts (`0`, `f`, `false`,
+        `off`, `n`, `no`), case-insensitively. Anything else is a 422.
+      schema:
+        type: string
+
+    ResourceJobID:
+      name: job_id
+      in: query
+      required: false
+      description: |
+        Return only the candidate the given job is placed on. Resolved through
+        the job's `candidate` field, so an unknown job or one not yet placed
+        is a 404.
+      schema:
+        $ref: '#/components/schemas/ObjectID'
+
+    ResourceCandidateName:
+      name: candidate_name
+      in: query
+      required: false
+      schema:
+        type: string
+
+    ResourceIP:
+      name: ip
+      in: query
+      required: false
+      schema:
+        type: string
+
+    ResourceProjection:
+      name: resources
+      in: query
+      required: false
+      description: |
+        Extra document fields to include beyond the canonical projection, as a
+        comma-separated list.
+      style: form
+      explode: false
+      schema:
+        type: array
+        items:
+          type: string
+      example: [gpu_temp, gpu_drivers]
+
+    ApplicationName:
+      name: application_name
+      in: query
+      required: false
+      schema:
+        type: string
+
+    ApplicationNamespace:
+      name: application_namespace
+      in: query
+      required: false
+      schema:
+        type: string
+
+    ApplicationUserID:
+      name: userId
+      in: query
+      required: false
+      schema:
+        type: string
+
+    JobApplicationID:
+      name: applicationID
+      in: query
+      required: false
+      schema:
+        type: string
+
+    JobName:
+      name: job_name
+      in: query
+      required: false
+      schema:
+        type: string
+
+    JobInstanceNumber:
+      name: instance_number
+      in: query
+      required: false
+      description: |
+        Narrow the result to jobs carrying an instance with this number.
+
+        Typed as a numeric string rather than an integer so that a
+        non-numeric value keeps returning the 422 `Invalid input` body the
+        original Flask service returned, rather than a plain 400.
+      schema:
+        type: string
+        pattern: '^-?[0-9]+$'
+
+    CustomResourceType:
+      name: resource
+      in: path
+      required: true
+      description: The registered `resource_type` of a custom resource.
+      schema:
+        type: string
+
+  requestBodies:
+    Resource:
+      required: false
+      description: An absent or empty body is accepted and treated as `{}`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Resource'
+
+    Application:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Application'
+
+    Job:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Job'
+
+    Hook:
+      required: false
+      description: An absent or empty body is accepted and treated as `{}`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Hook'
+
+  responses:
+    Resource:
+      description: The stored candidate resource.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Resource'
+
+    ResourceList:
+      description: Matching candidate resources.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/Resource'
+
+    Application:
+      description: The stored application.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Application'
+
+    Job:
+      description: The stored job, including its full instance list.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Job'
+
+    Hook:
+      description: The stored webhook registration.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Hook'
+
+    BadRequest:
+      description: Malformed request - an unparseable body, or an id that is not a valid ObjectID.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Message'
+
+    NotFound:
+      description: No such document.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Message'
+
+    InvalidInput:
+      description: The request body or query parameters failed validation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+
+  schemas:
+    ObjectID:
+      type: string
+      pattern: '^[0-9a-fA-F]{24}$'
+      example: 65f1c0d2a1b2c3d4e5f60718
+
+    Message:
+      type: object
+      description: A bare status or error message.
+      required: [message]
+      properties:
+        message:
+          type: string
+      example:
+        message: Not Found
+
+    ValidationError:
+      type: object
+      description: |
+        A validation failure, carrying per-field messages under `details`. The
+        shape of `details` follows the failing location: `{"body": {...}}` for
+        request bodies and `{"query": {...}}` for query parameters.
+      required: [message, details]
+      properties:
+        message:
+          type: string
+          example: Invalid input
+        details:
+          type: object
+          additionalProperties: true
+      example:
+        message: Invalid input
+        details:
+          query:
+            active: ['active must be a valid boolean']
+
+    DeletedID:
+      type: object
+      required: [_id]
+      properties:
+        _id:
+          x-go-name: ID
+          type: string
+
+    Resource:
+      type: object
+      description: |
+        A candidate resource: a worker node at cluster level, a whole cluster
+        at root level. Unknown fields are stored and returned verbatim.
+      additionalProperties: true
+      properties:
+        _id:
+          x-go-name: ID
+          allOf:
+            - $ref: '#/components/schemas/ObjectID'
+        candidate_name:
+          type: string
+        candidate_location:
+          type: string
+        ip:
+          type: string
+        port:
+          type: string
+        architecture:
+          type: string
+        active:
+          type: boolean
+          readOnly: true
+          description: |
+            True when `last_modified_timestamp` falls within the last 30
+            seconds. Computed per request rather than persisted, and outside
+            the canonical projection - so it is only present on
+            `GET /api/v1/resources` and only when asked for explicitly, with
+            `?resources=active`.
+        active_nodes:
+          type: integer
+        memory:
+          type: integer
+        vcpus:
+          type: integer
+        vgpus:
+          type: integer
+        cpu_percent:
+          type: number
+          format: double
+        memory_percent:
+          type: number
+          format: double
+        gpu_percent:
+          type: integer
+        aggregation_per_architecture:
+          type: object
+          additionalProperties: true
+        virtualization:
+          type: array
+          nullable: true
+          items:
+            type: string
+        supported_addons:
+          type: array
+          nullable: true
+          items:
+            type: string
+        csi_drivers:
+          type: array
+          nullable: true
+          items: {}
+        cpu_history:
+          type: array
+          readOnly: true
+          description: Most recent 100 cpu samples, appended server-side.
+          items:
+            $ref: '#/components/schemas/HistorySample'
+        memory_history:
+          type: array
+          readOnly: true
+          description: Most recent 100 memory samples, appended server-side.
+          items:
+            $ref: '#/components/schemas/HistorySample'
+        last_modified_timestamp:
+          type: number
+          format: double
+          description: Unix seconds, refreshed server-side on every usage report.
+
+    HistorySample:
+      type: object
+      properties:
+        value:
+          type: number
+          format: double
+          nullable: true
+        timestamp:
+          type: number
+          format: double
+
+    JobHistorySample:
+      type: object
+      description: |
+        A job instance's cpu/memory history sample. Unlike Resource's
+        HistorySample, timestamp is an ISO-8601 string
+        (datetime.now(timezone.utc).isoformat()), not a Unix-seconds number -
+        the two aren't interchangeable.
+      properties:
+        value:
+          type: number
+          format: double
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+
+    Application:
+      type: object
+      description: |
+        Application metadata. Unknown fields are stored and returned verbatim.
+      additionalProperties: true
+      properties:
+        _id:
+          x-go-name: ID
+          allOf:
+            - $ref: '#/components/schemas/ObjectID'
+        applicationID:
+          type: string
+          readOnly: true
+          description: Set server-side on creation to the document's own `_id`.
+        application_name:
+          type: string
+        application_namespace:
+          type: string
+        application_desc:
+          type: string
+        userId:
+          type: string
+        microservices:
+          type: array
+          items:
+            type: string
+
+    Job:
+      type: object
+      description: |
+        A deployed microservice and its per-worker instances. Jobs carry the
+        whole SLA the user submitted, so unknown fields are the norm here -
+        they are stored and returned verbatim.
+      additionalProperties: true
+      properties:
+        _id:
+          x-go-name: ID
+          allOf:
+            - $ref: '#/components/schemas/ObjectID'
+        job_name:
+          type: string
+          description: Unique per deployment; the key `PUT /api/v1/jobs` upserts on.
+        applicationID:
+          type: string
+        candidate:
+          type: string
+          description: Id of the candidate resource this job is placed on.
+        instance_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobInstance'
+
+    JobInstance:
+      type: object
+      description: One running copy of a job on one worker.
+      additionalProperties: true
+      properties:
+        instance_number:
+          type: integer
+        worker_id:
+          type: string
+        status:
+          type: string
+        status_detail:
+          type: string
+        host_ip:
+          type: string
+        host_port:
+          type: integer
+        publicip:
+          type: string
+        cpu_percent:
+          type: number
+          format: double
+        memory_percent:
+          type: number
+          format: double
+        disk:
+          type: number
+          format: double
+        logs:
+          type: string
+        last_modified_timestamp:
+          type: number
+          format: double
+          description: |
+            Unix seconds. Unlike cpu_history/memory_history's timestamp
+            (server-generated on every PATCH), this one is taken from the
+            request body verbatim - the caller (cluster_manager) sets it
+            before sending.
+        cpu_history:
+          type: array
+          readOnly: true
+          items:
+            $ref: '#/components/schemas/JobHistorySample'
+        memory_history:
+          type: array
+          readOnly: true
+          items:
+            $ref: '#/components/schemas/JobHistorySample'
+
+    JobInstanceAppend:
+      type: object
+      description: |
+        Body of `PUT /api/v1/jobs/{job_id}/{instance_id}`. Only the last
+        element of `instance_list` is appended; earlier elements are ignored.
+      properties:
+        instance_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobInstance'
+
+    HookEvent:
+      type: string
+      description: |
+        `pre_*` events fire synchronously before the write and may return a
+        transformed payload that is persisted in place of the original.
+        `post_*` events fire asynchronously after the write, receiving only the
+        affected document's id.
+      enum:
+        - pre_create
+        - pre_update
+        - pre_delete
+        - post_create
+        - post_update
+        - post_delete
+
+    Hook:
+      type: object
+      description: A webhook registration.
+      properties:
+        _id:
+          x-go-name: ID
+          allOf:
+            - $ref: '#/components/schemas/ObjectID'
+        hook_name:
+          type: string
+        webhook_url:
+          type: string
+          format: uri
+        entity:
+          type: string
+          description: |
+            The entity to fire for: `resources`, `applications`, `jobs`, or a
+            registered custom `resource_type`.
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/HookEvent'
+
+    CustomResourceDefinition:
+      type: object
+      description: A dynamically registered resource type.
+      required: [resource_type]
+      properties:
+        _id:
+          x-go-name: ID
+          allOf:
+            - $ref: '#/components/schemas/ObjectID'
+        resource_type:
+          type: string
+          description: |
+            Names the type and the path segment its instances live under
+            (`/api/v1/custom-resources/{resource_type}`).
+        schema:
+          type: object
+          description: |
+            JSON Schema every instance of this type is validated against. An
+            absent or empty schema imposes no constraint.
+          additionalProperties: true
+
+    CustomResourceInstance:
+      type: object
+      description: |
+        One instance of a registered custom resource type. Its fields are
+        whatever the type's own JSON Schema allows, so nothing beyond `_id` is
+        fixed here.
+      additionalProperties: true
+      properties:
+        _id:
+          x-go-name: ID
+          allOf:
+            - $ref: '#/components/schemas/ObjectID'

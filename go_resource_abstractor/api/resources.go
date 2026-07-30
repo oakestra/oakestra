@@ -2,34 +2,22 @@ package api
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"go_resource_abstractor/db"
+	"go_resource_abstractor/openapi"
 )
 
-// registerResourceRoutes wires up /api/v1/resources, the Go port of
-// resources_blueprint.py (backed by the candidates collection).
-func (s *Server) registerResourceRoutes(v1 *gin.RouterGroup) {
-	group := v1.Group("/resources")
+// ListResources implements GET /api/v1/resources.
+func (s *Server) ListResources(c *gin.Context, params openapi.ListResourcesParams) {
+	filter := map[string]any{}
+	addFilter(filter, "job_id", params.JobId)
+	addFilter(filter, "candidate_name", params.CandidateName)
+	addFilter(filter, "ip", params.Ip)
 
-	bothSlashes(group, http.MethodGet, s.listResources)
-	bothSlashes(group, http.MethodPost, s.createResource)
-	bothSlashes(group, http.MethodPut, s.upsertResource)
-
-	itemBothSlashes(group, http.MethodGet, "/:id", s.getResource)
-	itemBothSlashes(group, http.MethodPatch, "/:id", s.patchResource)
-	itemBothSlashes(group, http.MethodDelete, "/:id", s.deleteResource)
-}
-
-// listResources implements GET /resources/. It supports the active,
-// job_id, candidate_name and ip filters plus a ?resources=a,b,c projection
-// extension, the same as AllResourcesController.get.
-func (s *Server) listResources(c *gin.Context) {
-	filter := queryFilter(c, "job_id", "candidate_name", "ip")
-	if active, present, err := queryBool(c, "active"); err != nil {
+	if active, present, err := queryBool("active", params.Active); err != nil {
 		abortInvalidQuery(c, "active", err.Error())
 		return
 	} else if present {
@@ -58,8 +46,8 @@ func (s *Server) listResources(c *gin.Context) {
 	}
 
 	var resources []string
-	if raw := c.Query("resources"); raw != "" {
-		resources = strings.Split(raw, ",")
+	if params.Resources != nil {
+		resources = *params.Resources
 	}
 
 	results, err := s.store.FindCandidates(ctx, mongoFilter, resources)
@@ -71,8 +59,8 @@ func (s *Server) listResources(c *gin.Context) {
 	writeJSON(c, http.StatusOK, results)
 }
 
-// createResource implements POST /resources/.
-func (s *Server) createResource(c *gin.Context) {
+// CreateResource implements POST /api/v1/resources.
+func (s *Server) CreateResource(c *gin.Context) {
 	data, ok := bindResourceJSONMap(c)
 	if !ok {
 		return
@@ -94,9 +82,9 @@ func (s *Server) createResource(c *gin.Context) {
 	writeJSON(c, http.StatusCreated, created)
 }
 
-// upsertResource implements PUT /resources/: update-by-candidate_name if a
-// match exists, else create. Go port of AllResourcesController.put.
-func (s *Server) upsertResource(c *gin.Context) {
+// UpsertResource implements PUT /api/v1/resources: update-by-candidate_name
+// if a match exists, else create.
+func (s *Server) UpsertResource(c *gin.Context) {
 	data, ok := bindResourceJSONMap(c)
 	if !ok {
 		return
@@ -108,9 +96,8 @@ func (s *Server) upsertResource(c *gin.Context) {
 		s.store.FindCandidateByName, s.store.UpdateCandidate, s.store.CreateCandidate)
 }
 
-// getResource implements GET /resources/<id>.
-func (s *Server) getResource(c *gin.Context) {
-	id := c.Param("id")
+// GetResource implements GET /api/v1/resources/{id}.
+func (s *Server) GetResource(c *gin.Context, id openapi.ObjectID) {
 	if !isValidObjectID(id) {
 		abortBadRequest(c)
 		return
@@ -124,12 +111,11 @@ func (s *Server) getResource(c *gin.Context) {
 	writeJSON(c, http.StatusOK, candidate)
 }
 
-// patchResource implements PATCH /resources/<id>, persisting an aggregated
-// usage report via UpdateCandidateInformation. Note: unlike getResource, an
-// invalid id here maps to 404 (not 400) - ResourceController.patch in the
-// Python service does the same.
-func (s *Server) patchResource(c *gin.Context) {
-	id := c.Param("id")
+// PatchResource implements PATCH /api/v1/resources/{id}, persisting an
+// aggregated usage report via UpdateCandidateInformation. Note: unlike
+// GetResource, an invalid id here maps to 404 (not 400) -
+// ResourceController.patch in the Python service does the same.
+func (s *Server) PatchResource(c *gin.Context, id openapi.ObjectID) {
 	if !isValidObjectID(id) {
 		abortNotFound(c)
 		return
@@ -156,9 +142,8 @@ func (s *Server) patchResource(c *gin.Context) {
 	writeJSON(c, http.StatusOK, updated)
 }
 
-// deleteResource implements DELETE /resources/<id>.
-func (s *Server) deleteResource(c *gin.Context) {
-	id := c.Param("id")
+// DeleteResource implements DELETE /api/v1/resources/{id}.
+func (s *Server) DeleteResource(c *gin.Context, id openapi.ObjectID) {
 	if !isValidObjectID(id) {
 		abortBadRequest(c)
 		return

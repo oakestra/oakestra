@@ -10,35 +10,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"go_resource_abstractor/db"
+	"go_resource_abstractor/openapi"
 )
 
-// registerCustomResourceRoutes wires up /api/v1/custom-resources, the Go
-// port of custom_resources_blueprint.py. Not used by the scheduler or
-// root/cluster managers, but part of the public API surface.
-func (s *Server) registerCustomResourceRoutes(v1 *gin.RouterGroup) {
-	group := v1.Group("/custom-resources")
-
-	bothSlashes(group, http.MethodGet, s.listCustomResourceDefinitions)
-	bothSlashes(group, http.MethodPost, s.createCustomResourceDefinition)
-
-	// The Python service registers two separate MethodViews on the same
-	// single-segment path - CustomResourceDefinitionController for DELETE
-	// /<resource_type>, ResourcesController for GET/POST /<resource> -
-	// which Flask resolves purely by HTTP method. gin can't register two
-	// handlers for the identical path pattern, so both are consolidated
-	// into this one route group keyed by method: same effective dispatch,
-	// one place to read it.
-	itemBothSlashes(group, http.MethodGet, "/:resource", s.listCustomResourceInstances)
-	itemBothSlashes(group, http.MethodPost, "/:resource", s.createCustomResourceInstance)
-	itemBothSlashes(group, http.MethodDelete, "/:resource", s.deleteCustomResourceDefinition)
-
-	itemBothSlashes(group, http.MethodGet, "/:resource/:id", s.getCustomResourceInstance)
-	itemBothSlashes(group, http.MethodPatch, "/:resource/:id", s.patchCustomResourceInstance)
-	itemBothSlashes(group, http.MethodDelete, "/:resource/:id", s.deleteCustomResourceInstance)
-}
-
-// listCustomResourceDefinitions implements GET /custom-resources/.
-func (s *Server) listCustomResourceDefinitions(c *gin.Context) {
+// ListCustomResourceDefinitions implements GET /api/v1/custom-resources.
+func (s *Server) ListCustomResourceDefinitions(c *gin.Context) {
 	defs, err := s.store.FindCustomResources(c.Request.Context())
 	if err != nil {
 		abortInternalError(c, err)
@@ -47,10 +23,10 @@ func (s *Server) listCustomResourceDefinitions(c *gin.Context) {
 	writeJSON(c, http.StatusOK, defs)
 }
 
-// createCustomResourceDefinition implements POST /custom-resources/,
-// registering a new resource type. resource_type is required, the same as
-// CustomResourceSchema declares.
-func (s *Server) createCustomResourceDefinition(c *gin.Context) {
+// CreateCustomResourceDefinition implements POST /api/v1/custom-resources,
+// registering a new resource type. resource_type is required, the same as the
+// spec's CustomResourceDefinition schema declares.
+func (s *Server) CreateCustomResourceDefinition(c *gin.Context) {
 	data, ok := bindOptionalJSONMap(c)
 	if !ok {
 		return
@@ -69,11 +45,10 @@ func (s *Server) createCustomResourceDefinition(c *gin.Context) {
 	writeJSON(c, http.StatusCreated, created)
 }
 
-// deleteCustomResourceDefinition implements DELETE
-// /custom-resources/<type>: a cascading delete of the definition and every
-// instance of that type. Returns 404 if the type isn't registered.
-func (s *Server) deleteCustomResourceDefinition(c *gin.Context) {
-	resourceType := c.Param("resource")
+// DeleteCustomResourceDefinition implements DELETE
+// /api/v1/custom-resources/{resource}: a cascading delete of the definition
+// and every instance of that type. Returns 404 if the type isn't registered.
+func (s *Server) DeleteCustomResourceDefinition(c *gin.Context, resourceType openapi.CustomResourceType) {
 	ctx := c.Request.Context()
 
 	// Match the Python service's order: confirm the definition exists, drop
@@ -96,16 +71,17 @@ func (s *Server) deleteCustomResourceDefinition(c *gin.Context) {
 		return
 	}
 
-	writeJSON(c, http.StatusOK, gin.H{
-		"message": "Resource type '" + resourceType + "' and all its instances deleted",
+	writeJSON(c, http.StatusOK, openapi.Message{
+		Message: "Resource type '" + resourceType + "' and all its instances deleted",
 	})
 }
 
-// listCustomResourceInstances implements GET /custom-resources/<resource>.
-// Every query param is passed straight through as a MongoDB filter,
-// including dotted nested-field keys (e.g. ?parent.child=value).
-func (s *Server) listCustomResourceInstances(c *gin.Context) {
-	resourceType := c.Param("resource")
+// ListCustomResourceInstances implements GET
+// /api/v1/custom-resources/{resource}. Every query param is passed straight
+// through as a MongoDB filter, including dotted nested-field keys (e.g.
+// ?parent.child=value) - which is why the spec declares no query parameters
+// for this operation and the raw query string is read here instead.
+func (s *Server) ListCustomResourceInstances(c *gin.Context, resourceType openapi.CustomResourceType) {
 	ctx := c.Request.Context()
 
 	if _, ok := s.findCustomResourceType(c, resourceType); !ok {
@@ -128,10 +104,10 @@ func (s *Server) listCustomResourceInstances(c *gin.Context) {
 	writeJSON(c, http.StatusOK, results)
 }
 
-// createCustomResourceInstance implements POST /custom-resources/<resource>,
-// validating the body against the type's stored JSON Schema.
-func (s *Server) createCustomResourceInstance(c *gin.Context) {
-	resourceType := c.Param("resource")
+// CreateCustomResourceInstance implements POST
+// /api/v1/custom-resources/{resource}, validating the body against the type's
+// stored JSON Schema.
+func (s *Server) CreateCustomResourceInstance(c *gin.Context, resourceType openapi.CustomResourceType) {
 	data, ok := bindOptionalJSONMap(c)
 	if !ok {
 		return
@@ -158,10 +134,9 @@ func (s *Server) createCustomResourceInstance(c *gin.Context) {
 	writeJSON(c, http.StatusOK, created)
 }
 
-// getCustomResourceInstance implements GET /custom-resources/<resource>/<id>.
-func (s *Server) getCustomResourceInstance(c *gin.Context) {
-	resourceType := c.Param("resource")
-	id := c.Param("id")
+// GetCustomResourceInstance implements GET
+// /api/v1/custom-resources/{resource}/{id}.
+func (s *Server) GetCustomResourceInstance(c *gin.Context, resourceType openapi.CustomResourceType, id openapi.ObjectID) {
 	ctx := c.Request.Context()
 
 	if _, ok := s.findCustomResourceType(c, resourceType); !ok {
@@ -176,12 +151,10 @@ func (s *Server) getCustomResourceInstance(c *gin.Context) {
 	writeJSON(c, http.StatusOK, result)
 }
 
-// patchCustomResourceInstance implements PATCH
-// /custom-resources/<resource>/<id>, re-validating the body against the
-// type's stored JSON Schema.
-func (s *Server) patchCustomResourceInstance(c *gin.Context) {
-	resourceType := c.Param("resource")
-	id := c.Param("id")
+// PatchCustomResourceInstance implements PATCH
+// /api/v1/custom-resources/{resource}/{id}, re-validating the body against
+// the type's stored JSON Schema.
+func (s *Server) PatchCustomResourceInstance(c *gin.Context, resourceType openapi.CustomResourceType, id openapi.ObjectID) {
 	data, ok := bindOptionalJSONMap(c)
 	if !ok {
 		return
@@ -208,11 +181,9 @@ func (s *Server) patchCustomResourceInstance(c *gin.Context) {
 	writeJSON(c, http.StatusOK, updated)
 }
 
-// deleteCustomResourceInstance implements DELETE
-// /custom-resources/<resource>/<id>.
-func (s *Server) deleteCustomResourceInstance(c *gin.Context) {
-	resourceType := c.Param("resource")
-	id := c.Param("id")
+// DeleteCustomResourceInstance implements DELETE
+// /api/v1/custom-resources/{resource}/{id}.
+func (s *Server) DeleteCustomResourceInstance(c *gin.Context, resourceType openapi.CustomResourceType, id openapi.ObjectID) {
 	ctx := c.Request.Context()
 
 	if _, ok := s.findCustomResourceType(c, resourceType); !ok {
@@ -225,12 +196,12 @@ func (s *Server) deleteCustomResourceInstance(c *gin.Context) {
 	}
 	s.hooks.PostDelete(resourceType, id)
 
-	writeJSON(c, http.StatusOK, gin.H{"_id": id})
+	writeJSON(c, http.StatusOK, openapi.DeletedID{ID: id})
 }
 
 // findCustomResourceType looks up resourceType's definition, aborting the
 // request (404/500) and reporting ok=false if it doesn't exist or the
-// lookup fails. Shared by every /custom-resources/<resource>[/...] handler,
+// lookup fails. Shared by every /custom-resources/{resource}[/...] handler,
 // which all require the type to be registered before touching its instances.
 func (s *Server) findCustomResourceType(c *gin.Context, resourceType string) (def bson.M, ok bool) {
 	def, err := s.store.FindCustomResourceByType(c.Request.Context(), resourceType)
@@ -288,7 +259,7 @@ func abortIfInvalidSchema(c *gin.Context, def bson.M, data map[string]any) (ok b
 		return false
 	}
 	if !valid {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": msg})
+		c.AbortWithStatusJSON(http.StatusBadRequest, openapi.Message{Message: msg})
 		return false
 	}
 	return true

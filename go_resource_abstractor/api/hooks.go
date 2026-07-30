@@ -2,30 +2,15 @@ package api
 
 import (
 	"net/http"
-	"slices"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"go_resource_abstractor/db"
+	"go_resource_abstractor/openapi"
 )
 
-// registerHookRoutes wires up /api/v1/hooks, the Go port of hooks_blueprint.py.
-// Not used by the scheduler or root/cluster managers directly, but consumed
-// by the addons engine to register its webhooks.
-func (s *Server) registerHookRoutes(v1 *gin.RouterGroup) {
-	group := v1.Group("/hooks")
-
-	bothSlashes(group, http.MethodGet, s.listHooks)
-	bothSlashes(group, http.MethodPost, s.createHook)
-
-	itemBothSlashes(group, http.MethodGet, "/:id", s.getHook)
-	itemBothSlashes(group, http.MethodPatch, "/:id", s.patchHook)
-	itemBothSlashes(group, http.MethodDelete, "/:id", s.deleteHook)
-}
-
-// listHooks implements GET /hooks/.
-func (s *Server) listHooks(c *gin.Context) {
+// ListHooks implements GET /api/v1/hooks.
+func (s *Server) ListHooks(c *gin.Context) {
 	hooks, err := s.store.FindHooks(c.Request.Context(), nil)
 	if err != nil {
 		abortInternalError(c, err)
@@ -34,10 +19,10 @@ func (s *Server) listHooks(c *gin.Context) {
 	writeJSON(c, http.StatusOK, hooks)
 }
 
-// createHook implements POST /hooks/. events entries are validated against
-// the known async/sync event names, the same check as the OneOf validator on
-// APIObjectPostHookSchema.events.
-func (s *Server) createHook(c *gin.Context) {
+// CreateHook implements POST /api/v1/hooks. events entries are validated
+// against the HookEvent enum openapi.yaml declares, the same check as the
+// OneOf validator on APIObjectPostHookSchema.events.
+func (s *Server) CreateHook(c *gin.Context) {
 	data, ok := bindOptionalJSONMap(c)
 	if !ok {
 		return
@@ -56,9 +41,8 @@ func (s *Server) createHook(c *gin.Context) {
 	writeJSON(c, http.StatusCreated, created)
 }
 
-// getHook implements GET /hooks/<id>.
-func (s *Server) getHook(c *gin.Context) {
-	id := c.Param("id")
+// GetHook implements GET /api/v1/hooks/{id}.
+func (s *Server) GetHook(c *gin.Context, id openapi.ObjectID) {
 	if !isValidObjectID(id) {
 		abortNotFound(c)
 		return
@@ -72,16 +56,15 @@ func (s *Server) getHook(c *gin.Context) {
 	writeJSON(c, http.StatusOK, hook)
 }
 
-// patchHook implements PATCH /hooks/<id>.
+// PatchHook implements PATCH /api/v1/hooks/{id}.
 //
 // SingleHookController.patch passes validate=False to flask-smorest's
 // arguments decorator, but that only skips schema-level (whole-object)
 // validators - the field-level OneOf validator on
 // APIObjectPostHookSchema.events still runs during marshmallow's load, so an
 // invalid event name is still rejected there. Validated here to match, using
-// the same 400 createHook uses.
-func (s *Server) patchHook(c *gin.Context) {
-	id := c.Param("id")
+// the same 400 CreateHook uses.
+func (s *Server) PatchHook(c *gin.Context, id openapi.ObjectID) {
 	data, ok := bindOptionalJSONMap(c)
 	if !ok {
 		return
@@ -99,9 +82,8 @@ func (s *Server) patchHook(c *gin.Context) {
 	writeJSON(c, http.StatusOK, updated)
 }
 
-// deleteHook implements DELETE /hooks/<id>.
-func (s *Server) deleteHook(c *gin.Context) {
-	id := c.Param("id")
+// DeleteHook implements DELETE /api/v1/hooks/{id}.
+func (s *Server) DeleteHook(c *gin.Context, id openapi.ObjectID) {
 	if !isValidObjectID(id) {
 		abortBadRequest(c)
 		return
@@ -115,8 +97,9 @@ func (s *Server) deleteHook(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// validHookEvents checks that every entry in data["events"] (if present) is
-// one of db.AllEvents.
+// validHookEvents checks that every entry in data["events"] (if present) is a
+// member of the HookEvent enum, using the membership test generated from the
+// spec's enum rather than a second hand-maintained list.
 func validHookEvents(data map[string]any) bool {
 	raw, ok := data["events"]
 	if !ok {
@@ -129,7 +112,7 @@ func validHookEvents(data map[string]any) bool {
 
 	for _, e := range events {
 		name, ok := e.(string)
-		if !ok || !slices.Contains(db.AllEvents, db.HookEvent(name)) {
+		if !ok || !openapi.HookEvent(name).Valid() {
 			return false
 		}
 	}

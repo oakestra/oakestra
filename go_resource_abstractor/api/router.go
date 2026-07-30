@@ -9,62 +9,96 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"go_resource_abstractor/db"
+	"go_resource_abstractor/openapi"
 	"go_resource_abstractor/services"
 )
 
-// NewRouter builds the gin engine and registers every route, covering the
-// same blueprints resource_abstractor.py registers: resources, applications,
-// jobs, hooks, custom-resources, plus the GET / health check.
+// NewRouter builds the HTTP handler for the whole service.
 //
-// The Swagger UI / OpenAPI spec the Python service serves at /api/docs and
-// /docs/openapi.json is intentionally not reproduced here: no consumer
-// (scheduler, system_manager, cluster_manager) depends on it.
-func NewRouter(store *db.Store, hooks *services.Hooks) *gin.Engine {
+// The route table isn't written out here: RegisterHandlersWithOptions is
+// generated from openapi/openapi.yaml, and the compiler enforces that *Server
+// implements every operation the spec declares (openapi.ServerInterface). To
+// add or change an endpoint, edit the spec and re-run `go generate
+// ./openapi`.
+func NewRouter(store *db.Store, hooks *services.Hooks) http.Handler {
 	s := &Server{store: store, hooks: hooks}
 
 	router := gin.New()
 	router.Use(gin.Recovery(), requestLogger())
 	router.Use(corsMiddleware())
 
-	// The Python service sets app.url_map.strict_slashes = False, so both
-	// "/path" and "/path/" must resolve identically. gin's own trailing-
-	// slash redirect only applies to GET, so instead every collection
-	// route below is registered explicitly under both forms.
+	// Trailing slashes are normalized by stripTrailingSlash below rather than
+	// by gin, which would answer with a redirect the Flask service never sent.
 	router.RedirectTrailingSlash = false
 	router.RedirectFixedPath = false
 
-	router.GET("/", health)
+	openapi.RegisterHandlersWithOptions(router, s, openapi.GinServerOptions{
+		ErrorHandler: rejectMalformedParameter,
+	})
 
-	v1 := router.Group("/api/v1")
-	s.registerResourceRoutes(v1)
-	s.registerApplicationRoutes(v1)
-	s.registerJobRoutes(v1)
-	s.registerHookRoutes(v1)
-	s.registerCustomResourceRoutes(v1)
-
-	return router
+	return stripTrailingSlash(router)
 }
 
-func health(c *gin.Context) {
+// rejectMalformedParameter answers a request whose path or query parameters
+// failed to bind to the types openapi.yaml declares for them.
+//
+// In practice only :instance_id can land here - it is the sole non-string
+// parameter in the spec, precisely because the ones with a validation
+// contract of their own (?active=, ?instance_number=) are declared as strings
+// and parsed inside the handlers, where their 422 shape is reproduced. So the
+// blanket 400 below is the same answer the previous hand-rolled
+// strconv.Atoi(c.Param("instance_id")) gave.
+//
+// If a future spec change adds another non-string parameter, it lands here
+// too - a blanket 400, not whatever contract that parameter needs. Give it
+// its own string type and handler-side parsing (like ?active=/?instance_number=
+// above) if it needs anything else.
+func rejectMalformedParameter(c *gin.Context, err error, _ int) {
+	slog.Debug("rejected request parameter", "path", c.Request.URL.Path, "error", err)
+	abortBadRequest(c)
+}
+
+// Health implements GET /. It is the liveness probe the Python service
+// exposed at the same path.
+func (s *Server) Health(c *gin.Context) {
 	c.String(http.StatusOK, "ok")
 }
 
-// bothSlashes registers handlers for a collection route under both its bare
-// and trailing-slash forms (e.g. "/resources" and "/resources/"), the
-// equivalent of Flask's strict_slashes=False for that route.
-func bothSlashes(group *gin.RouterGroup, method string, handlers ...gin.HandlerFunc) {
-	itemBothSlashes(group, method, "", handlers...)
+// GetSpecJSON implements GET /docs/openapi.json.
+func (s *Server) GetSpecJSON(c *gin.Context) {
+	body, err := openapi.SpecJSON()
+	if err != nil {
+		abortInternalError(c, err)
+		return
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", body)
 }
 
-// itemBothSlashes is bothSlashes' counterpart for item routes carrying path
-// parameters (e.g. "/:id", "/:resource/:id"), registering path and
-// path+"/" so both "/resources/<id>" and "/resources/<id>/" resolve -
-// otherwise only the collection routes above got Flask's
-// strict_slashes=False treatment while item routes stayed 404-on-trailing-
-// slash. bothSlashes is just this with path="".
-func itemBothSlashes(group *gin.RouterGroup, method, path string, handlers ...gin.HandlerFunc) {
-	group.Handle(method, path, handlers...)
-	group.Handle(method, path+"/", handlers...)
+// GetSpecYAML implements GET /docs/openapi.yaml.
+func (s *Server) GetSpecYAML(c *gin.Context) {
+	c.Data(http.StatusOK, "application/yaml; charset=utf-8", openapi.SpecYAML)
+}
+
+// stripTrailingSlash rewrites "/path/" to "/path" before routing, so every
+// route is reachable under both forms - the equivalent of the Python
+// service's app.url_map.strict_slashes = False.
+//
+// It runs outside the gin engine because gin middleware only executes after a
+// route has already been matched, which is too late. Rewriting rather than
+// redirecting matters: a 301/308 would make some clients re-issue a POST or
+// PUT as a GET, or drop the body.
+func stripTrailingSlash(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if p := r.URL.Path; len(p) > 1 && strings.HasSuffix(p, "/") {
+			trimmed := *r.URL
+			trimmed.Path = p[:len(p)-1]
+
+			rewritten := *r
+			rewritten.URL = &trimmed
+			r = &rewritten
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // corsMiddleware reproduces the CORS configuration resource_abstractor.py
@@ -99,3 +133,9 @@ func requestLogger() gin.HandlerFunc {
 		)
 	}
 }
+
+// Server implements every operation openapi.yaml declares; the compiler
+// enforces it here as well as at the RegisterHandlersWithOptions call above,
+// so a spec change that adds an operation fails the build until it is
+// implemented.
+var _ openapi.ServerInterface = (*Server)(nil)
