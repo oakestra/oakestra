@@ -28,10 +28,11 @@ repos:
       stages: [post-checkout, post-merge]
       pass_filenames: false
       always_run: true
-    # Unlike protobuf above, this needs no wrapper script: the generator
-    # version and output paths live in the module's own go:generate
-    # directive, so the whole hook is one go invocation. Add one entry per
-    # Go module that gains a spec.
+    # Unlike protobuf above, these need no wrapper script: the generator
+    # version and output paths live in each module's own go:generate
+    # directive, so a hook is one go invocation. Add one entry per generation
+    # target - note that the two below share a spec, generating the server
+    # and the client from the same file, so both have to run when it changes.
     #
     # There is also no post-checkout/post-merge counterpart, because the
     # generated OpenAPI code is committed: a checkout already brings the
@@ -40,9 +41,16 @@ repos:
     # commit if the regenerated code differs, so the result has to be staged
     # rather than silently diverging from CI.
     - id: generate-openapi-resource-abstractor
-      name: Generate OpenAPI code (go_resource_abstractor spec changed)
+      name: Generate OpenAPI server code (go_resource_abstractor spec changed)
       language: system
       entry: go generate -C go_resource_abstractor ./openapi
+      stages: [pre-commit]
+      files: ^go_resource_abstractor/openapi/.*\.yaml$
+      pass_filenames: false
+    - id: generate-openapi-resource-abstractor-client
+      name: Generate OpenAPI client code (go_resource_abstractor spec changed)
+      language: system
+      entry: go generate -C go_resource_abstractor/client ./openapi
       stages: [pre-commit]
       files: ^go_resource_abstractor/openapi/.*\.yaml$
       pass_filenames: false

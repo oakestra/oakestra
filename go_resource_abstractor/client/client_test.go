@@ -8,49 +8,98 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/oakestra/oakestra/go_resource_abstractor/client/openapi"
 )
 
-// --- request core -----------------------------------------------------
+// stub serves body with status for every request, recording the last one it
+// saw. Most tests below only care about one half or the other.
+type stub struct {
+	method  string
+	path    string
+	query   string
+	headers http.Header
+	body    map[string]any
+}
 
-func TestDo_DecodesSuccessResponse(t *testing.T) {
+func serve(t *testing.T, status int, body string) (*Client, *stub) {
+	t.Helper()
+
+	var got stub
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"candidate_name":"worker-1"}`))
-	}))
-	defer srv.Close()
+		got.method, got.path, got.query = r.Method, r.URL.Path, r.URL.RawQuery
+		got.headers = r.Header.Clone()
+		_ = json.NewDecoder(r.Body).Decode(&got.body)
 
-	c := New(srv.URL)
-	doc, err := c.Resources.GetByID(context.Background(), "abc123")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		if body != "" {
+			_, _ = w.Write([]byte(body))
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	return New(srv.URL), &got
+}
+
+// generated returns the generated client underneath a Client, which is where
+// the base URL and the *http.Client end up once New has resolved its Options.
+func generated(t *testing.T, c *Client) *openapi.Client {
+	t.Helper()
+
+	inner, ok := c.api.ClientInterface.(*openapi.Client)
+	if !ok {
+		t.Fatalf("generated client is %T, want *openapi.Client", c.api.ClientInterface)
+	}
+	return inner
+}
+
+// --- response mapping ----------------------------------------------------
+
+func TestResponse_DecodesSuccessPayload(t *testing.T) {
+	c, _ := serve(t, http.StatusOK, `{"candidate_name":"worker-1"}`)
+
+	res, err := c.Resources.GetByID(context.Background(), "abc123")
 	if err != nil {
 		t.Fatalf("GetByID: unexpected error: %v", err)
 	}
-	if doc["candidate_name"] != "worker-1" {
-		t.Errorf("GetByID: got %v, want candidate_name=worker-1", doc)
+	if res.CandidateName == nil || *res.CandidateName != "worker-1" {
+		t.Errorf("GetByID: got %+v, want candidate_name=worker-1", res)
 	}
 }
 
-func TestDo_NotFoundMapsToErrNotFound(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer srv.Close()
+// TestResponse_UnknownFieldsSurviveTheRoundTrip is the guarantee that makes
+// the generated models usable against a service whose documents are
+// schemaless: every document schema in openapi.yaml sets additionalProperties,
+// so a field the spec never mentions has to come back rather than be dropped
+// on decode.
+func TestResponse_UnknownFieldsSurviveTheRoundTrip(t *testing.T) {
+	c, _ := serve(t, http.StatusOK, `{"candidate_name":"worker-1","gpu_temp":61}`)
 
-	c := New(srv.URL)
-	_, err := c.Resources.GetByID(context.Background(), "missing")
-	if !errors.Is(err, ErrNotFound) {
+	res, err := c.Resources.GetByID(context.Background(), "abc123")
+	if err != nil {
+		t.Fatalf("GetByID: unexpected error: %v", err)
+	}
+	got, found := res.Get("gpu_temp")
+	if !found {
+		t.Fatalf("GetByID: gpu_temp missing from %+v, want it in AdditionalProperties", res)
+	}
+	if got != float64(61) {
+		t.Errorf("GetByID: gpu_temp = %v (%T), want 61", got, got)
+	}
+}
+
+func TestResponse_NotFoundMapsToErrNotFound(t *testing.T) {
+	c, _ := serve(t, http.StatusNotFound, "")
+
+	if _, err := c.Resources.GetByID(context.Background(), "missing"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("GetByID: got err %v, want ErrNotFound", err)
 	}
 }
 
-func TestDo_NonNotFoundErrorMapsToAPIError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"message":"Internal Server Error"}`))
-	}))
-	defer srv.Close()
+func TestResponse_NonNotFoundErrorMapsToAPIError(t *testing.T) {
+	c, _ := serve(t, http.StatusInternalServerError, `{"message":"Internal Server Error"}`)
 
-	c := New(srv.URL)
 	_, err := c.Resources.GetByID(context.Background(), "id")
 
 	var apiErr *APIError
@@ -63,70 +112,38 @@ func TestDo_NonNotFoundErrorMapsToAPIError(t *testing.T) {
 	if apiErr.Message != "Internal Server Error" {
 		t.Errorf("APIError.Message = %q, want %q", apiErr.Message, "Internal Server Error")
 	}
+	if apiErr.Method != http.MethodGet || apiErr.Path != "/api/v1/resources/id" {
+		t.Errorf("APIError = %s %s, want GET /api/v1/resources/id", apiErr.Method, apiErr.Path)
+	}
 	if errors.Is(err, ErrNotFound) {
 		t.Errorf("a 500 must not satisfy errors.Is(err, ErrNotFound)")
 	}
 }
 
-func TestDo_EmptyBodyOnSuccessDoesNotError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
+func TestResponse_EmptyBodyOnSuccessDoesNotError(t *testing.T) {
+	c, _ := serve(t, http.StatusNoContent, "")
 
-	c := New(srv.URL)
 	if err := c.Apps.Delete(context.Background(), "app-1"); err != nil {
 		t.Fatalf("Delete: unexpected error on empty 204 body: %v", err)
 	}
 }
 
-func TestDo_QueryParamsOmitEmptyValues(t *testing.T) {
-	var gotQuery string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotQuery = r.URL.RawQuery
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`[]`))
-	}))
-	defer srv.Close()
+// TestResponse_EmptyListIsNotNil keeps list methods returning something a
+// caller can range over unconditionally, whether the service answered with
+// [] or with nothing at all.
+func TestResponse_EmptyListIsNotNil(t *testing.T) {
+	c, _ := serve(t, http.StatusOK, `[]`)
 
-	c := New(srv.URL)
-	_, err := c.Resources.List(context.Background(), map[string]string{
-		"active":         "true",
-		"candidate_name": "",
-	})
+	jobs, err := c.Jobs.List(context.Background())
 	if err != nil {
 		t.Fatalf("List: unexpected error: %v", err)
 	}
-	if gotQuery != "active=true" {
-		t.Errorf("query = %q, want %q (empty-valued keys must be omitted)", gotQuery, "active=true")
+	if len(jobs) != 0 {
+		t.Errorf("List: got %d jobs, want 0", len(jobs))
 	}
 }
 
-func TestDo_RequestBodyIsJSONWithContentType(t *testing.T) {
-	var gotContentType string
-	var gotBody map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotContentType = r.Header.Get("Content-Type")
-		_ = json.NewDecoder(r.Body).Decode(&gotBody)
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"_id":"new-id"}`))
-	}))
-	defer srv.Close()
-
-	c := New(srv.URL)
-	_, err := c.Resources.Create(context.Background(), Document{"candidate_name": "worker-2"})
-	if err != nil {
-		t.Fatalf("Create: unexpected error: %v", err)
-	}
-	if gotContentType != "application/json" {
-		t.Errorf("Content-Type = %q, want application/json", gotContentType)
-	}
-	if gotBody["candidate_name"] != "worker-2" {
-		t.Errorf("request body = %v, want candidate_name=worker-2", gotBody)
-	}
-}
-
-func TestDo_TransportErrorIsNotAnAPIErrorOrNotFound(t *testing.T) {
+func TestResponse_TransportErrorIsNotAnAPIErrorOrNotFound(t *testing.T) {
 	// A closed server guarantees a connection error rather than any HTTP response.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	srv.Close()
@@ -142,6 +159,142 @@ func TestDo_TransportErrorIsNotAnAPIErrorOrNotFound(t *testing.T) {
 	var apiErr *APIError
 	if errors.As(err, &apiErr) {
 		t.Error("a transport error must not be an *APIError")
+	}
+}
+
+// --- request encoding ----------------------------------------------------
+
+func TestRequest_BodyIsJSONWithContentType(t *testing.T) {
+	c, got := serve(t, http.StatusOK, `{"_id":"new-id"}`)
+
+	_, err := c.Resources.Create(context.Background(), Resource{CandidateName: Ptr("worker-2")})
+	if err != nil {
+		t.Fatalf("Create: unexpected error: %v", err)
+	}
+	if ct := got.headers.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+	if got.body["candidate_name"] != "worker-2" {
+		t.Errorf("request body = %v, want candidate_name=worker-2", got.body)
+	}
+}
+
+func TestRequest_NoFiltersSendNoQuery(t *testing.T) {
+	c, got := serve(t, http.StatusOK, `[]`)
+
+	if _, err := c.Resources.List(context.Background()); err != nil {
+		t.Fatalf("List: unexpected error: %v", err)
+	}
+	if got.query != "" {
+		t.Errorf("query = %q, want empty when no filters are given", got.query)
+	}
+}
+
+// TestFilters_BuildTheDocumentedQuery pins each filter option to the query
+// parameter openapi.yaml declares for it. A filter wired to the wrong field
+// is silently ignored by the server, so nothing else would catch it.
+func TestFilters_BuildTheDocumentedQuery(t *testing.T) {
+	cases := []struct {
+		name string
+		call func(c *Client) error
+		want string
+	}{
+		{
+			name: "Active",
+			call: func(c *Client) error { _, err := c.Resources.List(context.Background(), Active()); return err },
+			want: "active=true",
+		},
+		{
+			name: "NamedCandidate",
+			call: func(c *Client) error {
+				_, err := c.Resources.List(context.Background(), NamedCandidate("worker-1"))
+				return err
+			},
+			want: "candidate_name=worker-1",
+		},
+		{
+			name: "CandidateIP",
+			call: func(c *Client) error {
+				_, err := c.Resources.List(context.Background(), CandidateIP("10.0.0.1"))
+				return err
+			},
+			want: "ip=10.0.0.1",
+		},
+		{
+			name: "RunningJob",
+			call: func(c *Client) error {
+				_, err := c.Resources.List(context.Background(), RunningJob("j-1"))
+				return err
+			},
+			want: "job_id=j-1",
+		},
+		{
+			name: "OfApplication",
+			call: func(c *Client) error {
+				_, err := c.Jobs.List(context.Background(), OfApplication("app-1"))
+				return err
+			},
+			want: "applicationID=app-1",
+		},
+		{
+			name: "NamedJob",
+			call: func(c *Client) error { _, err := c.Jobs.List(context.Background(), NamedJob("j")); return err },
+			want: "job_name=j",
+		},
+		{
+			name: "OfUser",
+			call: func(c *Client) error { _, err := c.Apps.List(context.Background(), OfUser("u-1")); return err },
+			want: "userId=u-1",
+		},
+		{
+			name: "NamedApp",
+			call: func(c *Client) error { _, err := c.Apps.List(context.Background(), NamedApp("a")); return err },
+			want: "application_name=a",
+		},
+		{
+			name: "InNamespace",
+			call: func(c *Client) error {
+				_, err := c.Apps.List(context.Background(), InNamespace("default"))
+				return err
+			},
+			want: "application_namespace=default",
+		},
+		{
+			name: "combined",
+			call: func(c *Client) error {
+				_, err := c.Apps.List(context.Background(), NamedApp("a"), InNamespace("default"))
+				return err
+			},
+			want: "application_name=a&application_namespace=default",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, got := serve(t, http.StatusOK, `[]`)
+			if err := tc.call(c); err != nil {
+				t.Fatalf("%s: unexpected error: %v", tc.name, err)
+			}
+			if got.query != tc.want {
+				t.Errorf("%s: query = %q, want %q", tc.name, got.query, tc.want)
+			}
+		})
+	}
+}
+
+// TestFilters_ProjectionIsCommaSeparated pins the one parameter whose
+// encoding is not the obvious one: openapi.yaml declares ?resources= as
+// `style: form, explode: false`, so the generated client has to send a single
+// comma-joined value rather than one key per field.
+func TestFilters_ProjectionIsCommaSeparated(t *testing.T) {
+	c, got := serve(t, http.StatusOK, `[]`)
+
+	_, err := c.Resources.List(context.Background(), Fields("cpu_percent", "memory_percent"))
+	if err != nil {
+		t.Fatalf("List: unexpected error: %v", err)
+	}
+	if got.query != "resources=cpu_percent,memory_percent" {
+		t.Errorf("query = %q, want a single comma-separated resources value", got.query)
 	}
 }
 
@@ -163,9 +316,11 @@ func TestNewFromEnv_BuildsExpectedBaseURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFromEnv: unexpected error: %v", err)
 	}
-	want := "http://cluster_resource_abstractor:11012"
-	if c.baseURL != want {
-		t.Errorf("baseURL = %q, want %q", c.baseURL, want)
+	// The generated constructor appends the trailing slash it resolves the
+	// spec's paths against.
+	want := "http://cluster_resource_abstractor:11012/"
+	if got := generated(t, c).Server; got != want {
+		t.Errorf("Server = %q, want %q", got, want)
 	}
 }
 
@@ -176,19 +331,35 @@ func TestNewFromEnv_BuildsExpectedBaseURL(t *testing.T) {
 func TestWithTimeout_CombinesWithHTTPClientRegardlessOfOptionOrder(t *testing.T) {
 	custom := &http.Client{}
 
-	timeoutThenClient := New("http://example.invalid", WithTimeout(7*time.Second), WithHTTPClient(custom))
-	if timeoutThenClient.httpClient.Timeout != 7*time.Second {
-		t.Errorf("WithTimeout then WithHTTPClient: Timeout = %v, want 7s", timeoutThenClient.httpClient.Timeout)
+	for _, tc := range []struct {
+		name string
+		opts []Option
+	}{
+		{"WithTimeout then WithHTTPClient", []Option{WithTimeout(7 * time.Second), WithHTTPClient(custom)}},
+		{"WithHTTPClient then WithTimeout", []Option{WithHTTPClient(custom), WithTimeout(7 * time.Second)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doer := generated(t, New("http://example.invalid", tc.opts...)).Client
+			httpClient, ok := doer.(*http.Client)
+			if !ok {
+				t.Fatalf("request doer is %T, want *http.Client", doer)
+			}
+			if httpClient.Timeout != 7*time.Second {
+				t.Errorf("Timeout = %v, want 7s", httpClient.Timeout)
+			}
+		})
 	}
 
-	clientThenTimeout := New("http://example.invalid", WithHTTPClient(custom), WithTimeout(7*time.Second))
-	if clientThenTimeout.httpClient.Timeout != 7*time.Second {
-		t.Errorf("WithHTTPClient then WithTimeout: Timeout = %v, want 7s", clientThenTimeout.httpClient.Timeout)
+	if custom.Timeout != 0 {
+		t.Errorf("caller's own *http.Client was mutated: Timeout = %v, want 0", custom.Timeout)
 	}
 }
 
 // --- method -> HTTP path/verb mapping ------------------------------------
 
+// TestMethodRouting is what catches a facade method wired to the wrong
+// generated operation - the paths and verbs themselves come from
+// openapi.yaml, so nothing else in this package asserts them.
 func TestMethodRouting(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -202,7 +373,7 @@ func TestMethodRouting(t *testing.T) {
 	}{
 		{
 			name:       "Apps.List",
-			call:       func(c *Client) error { _, err := c.Apps.List(context.Background(), nil); return err },
+			call:       func(c *Client) error { _, err := c.Apps.List(context.Background()); return err },
 			wantMethod: http.MethodGet, wantPath: "/api/v1/applications", respBody: "[]",
 		},
 		{
@@ -216,7 +387,7 @@ func TestMethodRouting(t *testing.T) {
 		{
 			name: "Apps.Create",
 			call: func(c *Client) error {
-				_, err := c.Apps.Create(context.Background(), "user-1", Document{"application_name": "a"})
+				_, err := c.Apps.Create(context.Background(), "user-1", Application{})
 				return err
 			},
 			wantMethod: http.MethodPost, wantPath: "/api/v1/applications",
@@ -224,7 +395,7 @@ func TestMethodRouting(t *testing.T) {
 		{
 			name: "Apps.Update",
 			call: func(c *Client) error {
-				_, err := c.Apps.Update(context.Background(), "app-1", "user-1", Document{})
+				_, err := c.Apps.Update(context.Background(), "app-1", "user-1", Application{})
 				return err
 			},
 			wantMethod: http.MethodPatch, wantPath: "/api/v1/applications/app-1",
@@ -236,36 +407,58 @@ func TestMethodRouting(t *testing.T) {
 		},
 		{
 			name:       "Resources.List",
-			call:       func(c *Client) error { _, err := c.Resources.List(context.Background(), nil); return err },
+			call:       func(c *Client) error { _, err := c.Resources.List(context.Background()); return err },
 			wantMethod: http.MethodGet, wantPath: "/api/v1/resources", respBody: "[]",
 		},
 		{
-			name:       "Resources.Create",
-			call:       func(c *Client) error { _, err := c.Resources.Create(context.Background(), Document{}); return err },
+			name: "Resources.GetByID",
+			call: func(c *Client) error {
+				_, err := c.Resources.GetByID(context.Background(), "r-1")
+				return err
+			},
+			wantMethod: http.MethodGet, wantPath: "/api/v1/resources/r-1",
+		},
+		{
+			name: "Resources.Create",
+			call: func(c *Client) error {
+				_, err := c.Resources.Create(context.Background(), Resource{})
+				return err
+			},
 			wantMethod: http.MethodPut, wantPath: "/api/v1/resources",
 		},
 		{
 			name: "Resources.UpdateInformation",
 			call: func(c *Client) error {
-				_, err := c.Resources.UpdateInformation(context.Background(), "r-1", Document{})
+				_, err := c.Resources.UpdateInformation(context.Background(), "r-1", Resource{})
 				return err
 			},
 			wantMethod: http.MethodPatch, wantPath: "/api/v1/resources/r-1",
 		},
 		{
 			name:       "Jobs.List",
-			call:       func(c *Client) error { _, err := c.Jobs.List(context.Background(), nil); return err },
+			call:       func(c *Client) error { _, err := c.Jobs.List(context.Background()); return err },
 			wantMethod: http.MethodGet, wantPath: "/api/v1/jobs", respBody: "[]",
 		},
 		{
-			name:       "Jobs.Create",
-			call:       func(c *Client) error { _, err := c.Jobs.Create(context.Background(), Document{}); return err },
+			name: "Jobs.GetByID",
+			call: func(c *Client) error {
+				_, err := c.Jobs.GetByID(context.Background(), "j-1")
+				return err
+			},
+			wantMethod: http.MethodGet, wantPath: "/api/v1/jobs/j-1",
+		},
+		{
+			name: "Jobs.Create",
+			call: func(c *Client) error {
+				_, err := c.Jobs.Create(context.Background(), Job{})
+				return err
+			},
 			wantMethod: http.MethodPut, wantPath: "/api/v1/jobs",
 		},
 		{
 			name: "Jobs.Update",
 			call: func(c *Client) error {
-				_, err := c.Jobs.Update(context.Background(), "j-1", Document{})
+				_, err := c.Jobs.Update(context.Background(), "j-1", Job{})
 				return err
 			},
 			wantMethod: http.MethodPatch, wantPath: "/api/v1/jobs/j-1",
@@ -286,7 +479,7 @@ func TestMethodRouting(t *testing.T) {
 		{
 			name: "Jobs.AppendInstance",
 			call: func(c *Client) error {
-				_, err := c.Jobs.AppendInstance(context.Background(), "j-1", 2, Document{})
+				_, err := c.Jobs.AppendInstance(context.Background(), "j-1", 2, JobInstanceAppend{})
 				return err
 			},
 			wantMethod: http.MethodPut, wantPath: "/api/v1/jobs/j-1/2",
@@ -294,7 +487,7 @@ func TestMethodRouting(t *testing.T) {
 		{
 			name: "Jobs.UpdateInstance",
 			call: func(c *Client) error {
-				_, err := c.Jobs.UpdateInstance(context.Background(), "j-1", 2, Document{})
+				_, err := c.Jobs.UpdateInstance(context.Background(), "j-1", 2, JobInstance{})
 				return err
 			},
 			wantMethod: http.MethodPatch, wantPath: "/api/v1/jobs/j-1/2",
@@ -307,6 +500,11 @@ func TestMethodRouting(t *testing.T) {
 			},
 			wantMethod: http.MethodDelete, wantPath: "/api/v1/jobs/j-1/2",
 		},
+		{
+			name:       "Health",
+			call:       func(c *Client) error { return c.Health(context.Background()) },
+			wantMethod: http.MethodGet, wantPath: "/",
+		},
 	}
 
 	for _, tc := range cases {
@@ -316,23 +514,15 @@ func TestMethodRouting(t *testing.T) {
 				respBody = "{}"
 			}
 
-			var gotMethod, gotPath string
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				gotMethod, gotPath = r.Method, r.URL.Path
-				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write([]byte(respBody))
-			}))
-			defer srv.Close()
-
-			c := New(srv.URL)
+			c, got := serve(t, http.StatusOK, respBody)
 			if err := tc.call(c); err != nil {
 				t.Fatalf("%s: unexpected error: %v", tc.name, err)
 			}
-			if gotMethod != tc.wantMethod {
-				t.Errorf("%s: method = %s, want %s", tc.name, gotMethod, tc.wantMethod)
+			if got.method != tc.wantMethod {
+				t.Errorf("%s: method = %s, want %s", tc.name, got.method, tc.wantMethod)
 			}
-			if gotPath != tc.wantPath {
-				t.Errorf("%s: path = %s, want %s", tc.name, gotPath, tc.wantPath)
+			if got.path != tc.wantPath {
+				t.Errorf("%s: path = %s, want %s", tc.name, got.path, tc.wantPath)
 			}
 		})
 	}
@@ -341,13 +531,7 @@ func TestMethodRouting(t *testing.T) {
 // --- "first or ErrNotFound" lookups --------------------------------------
 
 func TestFirstOrLookups_EmptyResultIsErrNotFound(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`[]`))
-	}))
-	defer srv.Close()
-
-	c := New(srv.URL)
+	c, _ := serve(t, http.StatusOK, `[]`)
 
 	if _, err := c.Resources.GetByName(context.Background(), "missing"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Resources.GetByName: got %v, want ErrNotFound", err)
@@ -361,81 +545,94 @@ func TestFirstOrLookups_EmptyResultIsErrNotFound(t *testing.T) {
 }
 
 func TestFirstOrLookups_ReturnsFirstMatch(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`[{"candidate_name":"first"},{"candidate_name":"second"}]`))
-	}))
-	defer srv.Close()
+	c, got := serve(t, http.StatusOK, `[{"candidate_name":"first"},{"candidate_name":"second"}]`)
 
-	c := New(srv.URL)
-	doc, err := c.Resources.GetByName(context.Background(), "first")
+	res, err := c.Resources.GetByName(context.Background(), "first")
 	if err != nil {
 		t.Fatalf("GetByName: unexpected error: %v", err)
 	}
-	if doc["candidate_name"] != "first" {
-		t.Errorf("GetByName: got %v, want the first element of the result list", doc)
+	if res.CandidateName == nil || *res.CandidateName != "first" {
+		t.Errorf("GetByName: got %+v, want the first element of the result list", res)
+	}
+	if got.query != "candidate_name=first" {
+		t.Errorf("GetByName: query = %q, want candidate_name=first", got.query)
 	}
 }
 
 // --- request bodies with injected/derived fields -------------------------
 
 func TestJobs_UpdateStatus_OmitsEmptyDetail(t *testing.T) {
-	var gotBody map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewDecoder(r.Body).Decode(&gotBody)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{}`))
-	}))
-	defer srv.Close()
+	c, got := serve(t, http.StatusOK, `{}`)
 
-	c := New(srv.URL)
 	if _, err := c.Jobs.UpdateStatus(context.Background(), "j-1", "RUNNING", ""); err != nil {
 		t.Fatalf("UpdateStatus: unexpected error: %v", err)
 	}
-	if _, ok := gotBody["status_detail"]; ok {
-		t.Errorf("UpdateStatus: body has status_detail %v, want it omitted when empty", gotBody["status_detail"])
+	if _, ok := got.body["status_detail"]; ok {
+		t.Errorf("UpdateStatus: body has status_detail %v, want it omitted when empty", got.body["status_detail"])
 	}
-	if gotBody["status"] != "RUNNING" {
-		t.Errorf("UpdateStatus: body[status] = %v, want RUNNING", gotBody["status"])
+	if got.body["status"] != "RUNNING" {
+		t.Errorf("UpdateStatus: body[status] = %v, want RUNNING", got.body["status"])
 	}
 }
 
 func TestJobs_UpdateStatus_IncludesDetailWhenSet(t *testing.T) {
-	var gotBody map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewDecoder(r.Body).Decode(&gotBody)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{}`))
-	}))
-	defer srv.Close()
+	c, got := serve(t, http.StatusOK, `{}`)
 
-	c := New(srv.URL)
 	if _, err := c.Jobs.UpdateStatus(context.Background(), "j-1", "ERROR", "crash loop"); err != nil {
 		t.Fatalf("UpdateStatus: unexpected error: %v", err)
 	}
-	if gotBody["status_detail"] != "crash loop" {
-		t.Errorf("UpdateStatus: body[status_detail] = %v, want %q", gotBody["status_detail"], "crash loop")
+	if got.body["status_detail"] != "crash loop" {
+		t.Errorf("UpdateStatus: body[status_detail] = %v, want %q", got.body["status_detail"], "crash loop")
 	}
 }
 
 func TestApps_Create_InjectsUserIDWithoutMutatingCaller(t *testing.T) {
-	var gotBody map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewDecoder(r.Body).Decode(&gotBody)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{}`))
-	}))
-	defer srv.Close()
+	c, got := serve(t, http.StatusOK, `{}`)
 
-	c := New(srv.URL)
-	data := Document{"application_name": "my-app"}
-	if _, err := c.Apps.Create(context.Background(), "user-42", data); err != nil {
+	app := Application{ApplicationName: Ptr("my-app")}
+	if _, err := c.Apps.Create(context.Background(), "user-42", app); err != nil {
 		t.Fatalf("Create: unexpected error: %v", err)
 	}
-	if gotBody["userId"] != "user-42" {
-		t.Errorf("Create: body[userId] = %v, want user-42", gotBody["userId"])
+	if got.body["userId"] != "user-42" {
+		t.Errorf("Create: body[userId] = %v, want user-42", got.body)
 	}
-	if _, mutated := data["userId"]; mutated {
-		t.Errorf("Create: caller's data map was mutated: %v", data)
+	if app.UserId != nil {
+		t.Errorf("Create: caller's application was mutated: UserId = %q", *app.UserId)
+	}
+}
+
+// TestApps_ListByUser_LeavesCallerFiltersUntouched guards the reason
+// ListByUser sets UserId on the built query instead of appending OfUser to
+// the caller's filters: a slice with spare capacity would be written into.
+func TestApps_ListByUser_LeavesCallerFiltersUntouched(t *testing.T) {
+	c, got := serve(t, http.StatusOK, `[]`)
+
+	filters := make([]AppFilter, 1, 4) // room to grow, so a stray append lands in it
+	filters[0] = InNamespace("default")
+
+	if _, err := c.Apps.ListByUser(context.Background(), "user-42", filters...); err != nil {
+		t.Fatalf("ListByUser: unexpected error: %v", err)
+	}
+	if got.query != "application_namespace=default&userId=user-42" {
+		t.Errorf("ListByUser: query = %q, want both the caller's filter and userId", got.query)
+	}
+	if len(filters) != 1 {
+		t.Errorf("ListByUser: caller's filters grew to %d entries", len(filters))
+	}
+	if filters[0] == nil {
+		t.Error("ListByUser: caller's filters were overwritten")
+	}
+}
+
+// --- optional-field helpers ----------------------------------------------
+
+func TestValue_UnsetFieldIsTheZeroValue(t *testing.T) {
+	var job Job
+
+	if got := Value(job.JobName); got != "" {
+		t.Errorf("Value(nil *string) = %q, want the zero value", got)
+	}
+	if got := Value(Ptr("my-job")); got != "my-job" {
+		t.Errorf("Value(Ptr(%q)) = %q, want my-job", "my-job", got)
 	}
 }
