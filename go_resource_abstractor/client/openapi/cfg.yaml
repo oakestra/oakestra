@@ -1,0 +1,35 @@
+# oapi-codegen configuration for the client half of the contract. Run
+# `go generate ./openapi` from client/ after editing ../../openapi/openapi.yaml;
+# see the go:generate directive in gen.go.
+#
+# The server half is generated from the same spec by ../../openapi/cfg.yaml.
+package: openapi
+output: openapi.gen.go
+
+output-options:
+  skip-prune: true
+  # The two /docs endpoints serve the spec this file is generated from, so a
+  # client method for fetching them is of no use to a consumer that already
+  # has it - and generating one costs a YAML parser in every binary that
+  # links the client, because /docs/openapi.yaml responds as application/yaml.
+  # Same trade-off the server's cfg.yaml declines embedded-spec over.
+  exclude-tags:
+    - Docs
+
+generate:
+  # Request/response models for every schema in components/schemas. Generated
+  # a second time here rather than imported from the server's openapi package:
+  # that would make this module depend on the server module, and with it gin,
+  # mongo-driver and testcontainers - which is exactly what the separate
+  # go.mod exists to avoid.
+  models: true
+  # ClientInterface - one method per operationId, building requests with
+  # spec-derived paths, parameter styles and bodies - plus the
+  # ClientWithResponses layer on top of it, which additionally decodes the
+  # body for every status the spec documents. oapi-codegen emits the two
+  # together; the facade in the parent package builds on the former (see the
+  # comment above its response helpers for why), and exposes the latter
+  # through Client.OpenAPI for the endpoints it doesn't wrap.
+  client: true
+  # Deliberately not embedded-spec: only the server serves the spec, and
+  # embedding it would pull in getkin/kin-openapi for no benefit here.

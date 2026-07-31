@@ -82,6 +82,10 @@ typed path/query parameters, the response models, and a `ServerInterface` the ha
 implement - so an endpoint that isn't in the spec doesn't exist, and one that is in the spec but
 unimplemented fails the build.
 
+The same file also generates the other direction: [`client/`](client), the Go client for this
+service, is generated from it too - so the client's paths, parameter encoding and models can't
+drift from what the server actually serves. See [`client/README.md`](client/README.md).
+
 The running service publishes it at `GET /docs/openapi.json` (the path the Python service used)
 and `GET /docs/openapi.yaml`. Point any Swagger UI / Redoc at either.
 
@@ -97,13 +101,18 @@ Two deliberate exceptions to full codegen, both commented where they matter:
 
 ### Regenerating
 
+Editing `openapi/openapi.yaml` means regenerating both halves - the server here and the client
+in its own module:
+
 ```bash
-go generate ./openapi     # after editing openapi/openapi.yaml
+go generate ./openapi             # server:  openapi/openapi.gen.go
+go generate -C client ./openapi   # client:  client/openapi/openapi.gen.go
 ```
 
-`openapi/openapi.gen.go` is committed, so building or deploying the service never runs a code
-generator; CI fails if the two drift apart. The generator version is pinned in the `go:generate`
-directive in `openapi/spec.go`.
+A pre-commit hook runs both when the spec changes. Both generated files are committed, so
+building or deploying never runs a code generator; CI fails if either drifts from the spec. The
+generator version is pinned in the `go:generate` directives (`openapi/spec.go` and
+`client/openapi/gen.go`), which have to stay on the same version as each other.
 
 ### Routes
 

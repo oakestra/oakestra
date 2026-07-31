@@ -47,16 +47,24 @@ their routing, parameter binding and models from it - currently
 pre-commit hook that regenerates the corresponding Go code; if the result
 differs from what you staged, the commit fails and you re-stage it.
 
+One spec can drive more than one generation target. The resource abstractor's
+generates both directions of its contract: the server it implements, and the Go
+client in `go_resource_abstractor/client/` that calls it. Both are regenerated
+by the hook, so the two halves can't drift from each other.
+
 Unlike the protobuf bindings, the generated Go code **is** committed, so
 building or deploying a service never runs a code generator, and no
-post-checkout hook is needed. CI verifies the two stay in step.
+post-checkout hook is needed. CI verifies every target stays in step with its
+spec.
 
 To regenerate manually:
 
 ```bash
-go generate -C go_resource_abstractor ./openapi
+go generate -C go_resource_abstractor ./openapi          # server
+go generate -C go_resource_abstractor/client ./openapi   # client
 ```
 
 This requires the [Go toolchain](https://go.dev/dl/); the generator itself is
-pinned in the service's `go:generate` directive and fetched on first use, so
-there is nothing else to install.
+pinned in each `go:generate` directive and fetched on first use, so there is
+nothing else to install. Targets generated from the same spec must pin the same
+generator version.

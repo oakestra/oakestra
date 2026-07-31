@@ -85,6 +85,20 @@ jobs:
             exit 1
           fi
 
+      # openapi/openapi.gen.go here is generated from the *server's*
+      # openapi/openapi.yaml - one spec, two generation targets - and is
+      # committed for the same reason. This catches the client half drifting
+      # from the spec, which a spec edit that only regenerated the server
+      # would cause.
+      - name: Check generated OpenAPI client code is up to date
+        run: |
+          go generate ./openapi
+          if ! git diff --exit-code -- openapi/openapi.gen.go; then
+            echo "client/openapi/openapi.gen.go is out of date."
+            echo "Run 'go generate ./openapi' in go_resource_abstractor/client/ and commit the result."
+            exit 1
+          fi
+
       - name: Build client module
         run: go build ./...
 
