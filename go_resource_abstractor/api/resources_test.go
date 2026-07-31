@@ -5,11 +5,10 @@ import (
 	"testing"
 )
 
-// TestResourceIDIsPlainStringNotExtendedJSON guards the single most
-// important wire-compatibility detail: the Go driver's bson.ObjectID would
-// otherwise JSON-marshal as {"$oid": "..."} (MongoDB Extended JSON), but
-// both the scheduler and resource_abstractor_client expect _id as a plain
-// string, the same shape Python's json.dumps(doc, default=str) produces.
+// TestResourceIDIsPlainStringNotExtendedJSON guards the most important
+// wire-compatibility detail: bson.ObjectID would otherwise JSON-marshal as
+// {"$oid": "..."}, but the scheduler and resource_abstractor_client expect
+// _id as a plain string.
 func TestResourceIDIsPlainStringNotExtendedJSON(t *testing.T) {
 	createRec := doRequest(t, http.MethodPost, "/api/v1/resources/", map[string]any{
 		"candidate_name": uniqueName("wire-format"),
@@ -73,11 +72,9 @@ func TestListResourcesActiveFilter(t *testing.T) {
 	}
 }
 
-// TestListResourcesEmptyActiveIs422 guards against "?active=" (the key
-// present with an empty value) being treated the same as the key being
-// absent entirely: marshmallow's Boolean field rejects an empty string
-// just like any other non-boolean value, so this must 422 too, not
-// silently return an unfiltered list.
+// TestListResourcesEmptyActiveIs422 guards against "?active=" being treated
+// as absent: marshmallow's Boolean field rejects an empty string like any
+// other non-boolean value, so this must 422, not silently return everything.
 func TestListResourcesEmptyActiveIs422(t *testing.T) {
 	rec := doRequest(t, http.MethodGet, "/api/v1/resources/?active=", nil)
 	if rec.Code != http.StatusUnprocessableEntity {
@@ -99,10 +96,9 @@ func TestListResourcesActiveAcceptsMarshmallowTruthyStrings(t *testing.T) {
 }
 
 // TestCreateResourceRejectsNullForNonNullableField guards against treating
-// every field as implicitly nullable: marshmallow's default
-// allow_none=False means an explicit JSON null for e.g. candidate_name
-// must be rejected, unlike the three fields (virtualization,
-// supported_addons, csi_drivers) explicitly declared allow_none=True.
+// every field as implicitly nullable: marshmallow's default allow_none=False
+// means an explicit null for e.g. candidate_name must be rejected, unlike
+// the three fields explicitly declared allow_none=True.
 func TestCreateResourceRejectsNullForNonNullableField(t *testing.T) {
 	rec := doRequest(t, http.MethodPost, "/api/v1/resources/", map[string]any{
 		"candidate_name": uniqueName("null-check"),
@@ -127,11 +123,9 @@ func TestCreateResourceAcceptsNullForNullableField(t *testing.T) {
 }
 
 // TestCreateResourceCoercesFractionalIntegerField is a regression test:
-// marshmallow's Integer field (verified against the pinned
-// marshmallow~=3.15.0) truncates a fractional float rather than rejecting
-// it - Integer().deserialize(4.7) returns 4 - so a JSON body value like
-// vcpus: 4.7 must be stored as the integer 4, not rejected and not left as
-// the raw float64 encoding/json produces.
+// marshmallow's Integer field truncates a fractional float rather than
+// rejecting it, so vcpus: 4.7 must be stored as the integer 4, not rejected
+// and not left as the raw float64 encoding/json produces.
 func TestCreateResourceCoercesFractionalIntegerField(t *testing.T) {
 	rec := doRequest(t, http.MethodPost, "/api/v1/resources/", map[string]any{
 		"candidate_name": uniqueName("int-coerce"),
@@ -188,11 +182,10 @@ func TestCreateResourceAllowsMixedCsiDriversElements(t *testing.T) {
 	}
 }
 
-// TestCreateResourceEmptyBodyAccepted guards parity with the Python service,
-// where ResourceSchema is an @arguments schema and webargs loads a missing
-// body as an empty mapping: an empty resource POST is accepted (creating a
-// bare candidate), not rejected. This is the counterpart to the raw
-// request.json handlers (jobs, apps) that do reject an empty body.
+// TestCreateResourceEmptyBodyAccepted guards parity with Python: webargs
+// loads a missing body as an empty mapping, so an empty resource POST
+// creates a bare candidate rather than being rejected - unlike the raw
+// request.json handlers (jobs, apps).
 func TestCreateResourceEmptyBodyAccepted(t *testing.T) {
 	rec := doRequest(t, http.MethodPost, "/api/v1/resources/", nil)
 	if rec.Code != http.StatusCreated {
@@ -251,11 +244,9 @@ func TestGetResourceTrailingSlashResolves(t *testing.T) {
 	}
 }
 
-// TestListResourcesInvalidActiveIs422 guards against an unparsable
-// ?active= value being silently dropped from the filter (which would
-// return an unfiltered list) instead of rejecting the request - the same
-// rejection ResourceFilterSchema's marshmallow validation applies to that
-// field.
+// TestListResourcesInvalidActiveIs422 guards against an unparsable ?active=
+// value being silently dropped from the filter instead of rejecting the
+// request, matching ResourceFilterSchema's marshmallow validation.
 func TestListResourcesInvalidActiveIs422(t *testing.T) {
 	rec := doRequest(t, http.MethodGet, "/api/v1/resources/?active=notabool", nil)
 	if rec.Code != http.StatusUnprocessableEntity {

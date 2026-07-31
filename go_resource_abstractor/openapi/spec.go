@@ -1,14 +1,12 @@
 // Package openapi holds the service's API contract: openapi.yaml is the
-// source of truth, and openapi.gen.go is generated from it by oapi-codegen.
-//
-// The generated half provides the request/response models, the typed
-// path/query parameters, and the gin ServerInterface the api package
-// implements - so adding or changing an endpoint means editing openapi.yaml
-// and re-running the generator, not hand-wiring routes.
+// source of truth, and openapi.gen.go is generated from it by oapi-codegen -
+// models, typed path/query params, and the gin ServerInterface the api
+// package implements. Adding or changing an endpoint means editing
+// openapi.yaml and regenerating, not hand-wiring routes.
 //
 // Regenerate with `go generate ./openapi` after editing openapi.yaml. The
-// generator version is pinned in the directive below rather than in go.mod,
-// so building or deploying the service never has to resolve it.
+// generator version is pinned in the directive below, not go.mod, so
+// building or deploying never has to resolve it.
 package openapi
 
 //go:generate go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0 -config cfg.yaml openapi.yaml

@@ -58,12 +58,11 @@ func (s *Server) GetHook(c *gin.Context, id openapi.ObjectID) {
 
 // PatchHook implements PATCH /api/v1/hooks/{id}.
 //
-// SingleHookController.patch passes validate=False to flask-smorest's
-// arguments decorator, but that only skips schema-level (whole-object)
-// validators - the field-level OneOf validator on
-// APIObjectPostHookSchema.events still runs during marshmallow's load, so an
-// invalid event name is still rejected there. Validated here to match, using
-// the same 400 CreateHook uses.
+// SingleHookController.patch passes validate=False, but that only skips
+// whole-object validators - the field-level OneOf on
+// APIObjectPostHookSchema.events still runs, so an invalid event name is
+// still rejected there. Validated here to match, with the same 400 as
+// CreateHook.
 func (s *Server) PatchHook(c *gin.Context, id openapi.ObjectID) {
 	data, ok := bindOptionalJSONMap(c)
 	if !ok {

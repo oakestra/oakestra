@@ -29,8 +29,7 @@ func TestSpecEndpointsServeTheEmbeddedSpec(t *testing.T) {
 		t.Fatalf("yaml status = %d, want 200", yamlRec.Code)
 	}
 
-	// Both routes must publish the same document, otherwise a consumer's view
-	// of the contract depends on which one it fetched.
+	// Both routes must publish the same document.
 	var fromYAML map[string]any
 	if err := yaml.Unmarshal(yamlRec.Body.Bytes(), &fromYAML); err != nil {
 		t.Fatalf("parse served yaml: %v", err)
@@ -48,11 +47,10 @@ func TestSpecEndpointsServeTheEmbeddedSpec(t *testing.T) {
 	}
 }
 
-// TestTrailingSlashesResolveIdentically guards stripTrailingSlash, which
-// replaced the per-route double registration that reproduced Flask's
-// strict_slashes = False. Item routes are the interesting case: the
-// collection routes are already covered incidentally by the rest of the
-// suite, which addresses them with a trailing slash throughout.
+// TestTrailingSlashesResolveIdentically guards stripTrailingSlash. Item
+// routes are the interesting case here - collection routes are already
+// covered incidentally, since the rest of the suite addresses them with a
+// trailing slash throughout.
 func TestTrailingSlashesResolveIdentically(t *testing.T) {
 	created := decodeJSON[map[string]any](t, doRequest(t, http.MethodPost, "/api/v1/resources", map[string]any{
 		"candidate_name": uniqueName("trailing-slash"),
@@ -73,10 +71,10 @@ func TestTrailingSlashesResolveIdentically(t *testing.T) {
 	}
 }
 
-// TestNonNumericInstanceIDIsBadRequest covers the one parameter the spec
-// declares with a non-string type, and therefore the only one whose binding
-// can fail inside the generated wrapper: the response has to come back in the
-// service's own {"message": ...} shape, not oapi-codegen's default.
+// TestNonNumericInstanceIDIsBadRequest covers the spec's one non-string
+// parameter, the only one whose binding can fail in the generated wrapper -
+// the response must come back in the service's {"message": ...} shape, not
+// oapi-codegen's default.
 func TestNonNumericInstanceIDIsBadRequest(t *testing.T) {
 	rec := doRequest(t, http.MethodGet, "/api/v1/jobs/"+newObjectIDHex()+"/not-a-number", nil)
 	if rec.Code != http.StatusBadRequest {
@@ -87,11 +85,10 @@ func TestNonNumericInstanceIDIsBadRequest(t *testing.T) {
 	}
 }
 
-// TestEmptyStringFilterIsIgnored guards a detail the switch to generated
-// parameter binding could easily have lost: an absent filter and one supplied
-// empty ("?candidate_name=") both mean "no filter", where binding the empty
-// pointer straight into the query would instead match only documents whose
-// field is literally "".
+// TestEmptyStringFilterIsIgnored guards a detail generated parameter binding
+// could easily lose: an absent filter and an empty one ("?candidate_name=")
+// both mean "no filter" - binding the empty pointer straight into the query
+// would instead match only documents whose field is literally "".
 func TestEmptyStringFilterIsIgnored(t *testing.T) {
 	name := uniqueName("empty-filter")
 	doRequest(t, http.MethodPost, "/api/v1/resources", map[string]any{"candidate_name": name})
@@ -107,9 +104,9 @@ func TestEmptyStringFilterIsIgnored(t *testing.T) {
 
 // TestHookEventsMatchSpecEnum keeps the event names the dispatcher fires
 // (db.AsyncEvents / db.SyncEvents) in step with the HookEvent enum the API
-// validates registrations against. A name in one list but not the other would
-// let a hook be registered for an event that never fires, or fire an event no
-// client is allowed to subscribe to.
+// validates against. A name in one list but not the other would let a hook
+// register for an event that never fires, or fire one no client can
+// subscribe to.
 func TestHookEventsMatchSpecEnum(t *testing.T) {
 	dispatched := append(append([]db.HookEvent{}, db.AsyncEvents...), db.SyncEvents...)
 
@@ -136,10 +133,9 @@ func TestHookEventsMatchSpecEnum(t *testing.T) {
 }
 
 // TestResponsesMatchGeneratedModels checks that what the handlers actually
-// write decodes into the types generated from openapi.yaml. Decoding fails on
-// any field whose real type contradicts the declared one - an integer served
-// where the spec says string, say - so this is what stops the spec from
-// drifting into fiction while the tests around it keep passing.
+// write decodes into the types generated from openapi.yaml - catching, say,
+// an integer served where the spec says string - so the spec can't drift
+// into fiction while the tests around it keep passing.
 func TestResponsesMatchGeneratedModels(t *testing.T) {
 	t.Run("resource", func(t *testing.T) {
 		name := uniqueName("model-resource")
@@ -166,10 +162,9 @@ func TestResponsesMatchGeneratedModels(t *testing.T) {
 			t.Errorf("cpu_history = %v, want one sample", got.CpuHistory)
 		}
 
-		// active sits outside the canonical projection, so it only appears on
-		// the list route and only when requested - as the spec says. Freshness
-		// itself (does active come back true) is resources_test.go's concern;
-		// this only checks that the field decodes into the generated model.
+		// active sits outside the canonical projection: only on the list
+		// route, only when requested. Freshness itself is resources_test.go's
+		// concern; this just checks the field decodes into the model.
 		listed := decodeJSON[[]openapi.Resource](t, doRequest(t, http.MethodGet,
 			"/api/v1/resources?candidate_name="+name+"&resources=active", nil))
 		if len(listed) != 1 {
@@ -217,10 +212,9 @@ func TestResponsesMatchGeneratedModels(t *testing.T) {
 			t.Errorf("worker_id = %v, want worker-1", worker)
 		}
 
-		// PATCH is what actually populates cpu_percent/memory_percent and their
-		// history - the fields the spec's JobInstance schema got wrong (named
-		// cpu/memory, and a numeric history timestamp) until it was corrected
-		// to match what's really written here.
+		// PATCH populates cpu_percent/memory_percent and their history - fields
+		// the spec's JobInstance schema originally got wrong (named cpu/memory,
+		// numeric history timestamp) before being corrected to match this.
 		patched := decodeJSON[openapi.Job](t, doRequest(t, http.MethodPatch, "/api/v1/jobs/"+id+"/0", map[string]any{
 			"cpu_percent":    33.5,
 			"memory_percent": 61.2,
@@ -239,10 +233,9 @@ func TestResponsesMatchGeneratedModels(t *testing.T) {
 			t.Errorf("cpu_history = %v, want one sample with a timestamp", instance.CpuHistory)
 		}
 
-		// GetJobInstance returns the job with instance_list filtered down to
-		// the match, not a bare JobInstance - decoding into openapi.Job (not
-		// openapi.JobInstance, which the spec wrongly declared as this route's
-		// response) is itself the regression check.
+		// GetJobInstance returns the job with instance_list filtered to the
+		// match, not a bare JobInstance - decoding into openapi.Job here is
+		// itself the regression check.
 		fetched := decodeJSON[openapi.Job](t, doRequest(t, http.MethodGet, "/api/v1/jobs/"+id+"/0", nil))
 		if fetched.InstanceList == nil || len(*fetched.InstanceList) != 1 {
 			t.Fatalf("GET instance_list = %v, want one matching instance", fetched.InstanceList)

@@ -13,11 +13,9 @@ import (
 
 // ListJobs implements GET /api/v1/jobs.
 //
-// The Python service also honored a raw ?params= value by assigning it as
-// the entire Mongo filter, but that value is always a string and pymongo
-// rejects a string filter, so the branch only ever produced a 500. It
-// carried no usable behavior and is neither reproduced here nor declared in
-// the spec.
+// Python also honored a raw ?params= value as the entire Mongo filter, but
+// pymongo rejects a string filter, so that branch only ever 500'd. No
+// usable behavior to reproduce, so it's dropped here and from the spec.
 func (s *Server) ListJobs(c *gin.Context, params openapi.ListJobsParams) {
 	filter := map[string]any{}
 	addFilter(filter, "applicationID", params.ApplicationID)
@@ -55,10 +53,9 @@ func (s *Server) CreateJob(c *gin.Context) {
 // UpsertJob implements PUT /api/v1/jobs: update-by-job_name if a match
 // exists, else create.
 //
-// Deviation from the Python service: the original fires hooks under the
-// entity name "job" (singular) here, while every other job route uses
-// "jobs" - so a hook registered for "jobs" would never see this path's
-// events. Normalized to "jobs" throughout so one hook registration covers
+// Deviation from Python, which fires hooks under "job" (singular) here
+// while every other job route uses "jobs" - so a "jobs" hook would never
+// see this path's events. Normalized to "jobs" so one registration covers
 // all job writes.
 func (s *Server) UpsertJob(c *gin.Context) {
 	data, ok := bindJSONMap(c)

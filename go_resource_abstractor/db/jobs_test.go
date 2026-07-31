@@ -73,14 +73,10 @@ func TestAppendJobInstanceIdempotency(t *testing.T) {
 	}
 }
 
-// TestAppendJobInstanceConcurrentSameNumberOnlyOneWins is a regression test
-// for a TOCTOU race: AppendJobInstance used to check for an existing
-// instance via a separate read (FindJobInstance) before pushing, so two
-// concurrent requests for the same instance_number could both pass the
-// check and both push, producing duplicate instance_number entries. The
-// check now lives in the FindOneAndUpdate filter itself
-// (instance_list.instance_number: {$ne: N}), making it atomic with the
-// write.
+// TestAppendJobInstanceConcurrentSameNumberOnlyOneWins guards against a
+// TOCTOU race: a separate read-then-push let two concurrent requests for the
+// same instance_number both pass the check, producing duplicates. The check
+// now lives in the FindOneAndUpdate filter itself, atomic with the write.
 func TestAppendJobInstanceConcurrentSameNumberOnlyOneWins(t *testing.T) {
 	ctx := context.Background()
 

@@ -9,11 +9,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-// TestFindHookByIDMatchesByObjectID exercises the fix for a latent bug in
-// the Python service: hooks_db.find_hook_by_id queries {"_id": hook_id}
-// with hook_id left as a raw string rather than an ObjectId, so it can
-// never match a real document (GET /hooks/<id> is always 404 there). This
-// asserts the Go port's ObjectID-based lookup actually finds the hook.
+// TestFindHookByIDMatchesByObjectID guards the fix for a latent Python bug:
+// hooks_db.find_hook_by_id queries with hook_id as a raw string, so GET
+// /hooks/<id> is always 404 there. Asserts the Go port's ObjectID lookup
+// actually finds the hook.
 func TestFindHookByIDMatchesByObjectID(t *testing.T) {
 	ctx := context.Background()
 

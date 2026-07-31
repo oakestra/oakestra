@@ -6,14 +6,13 @@ import "github.com/oakestra/oakestra/go_resource_abstractor/client/openapi"
 //
 // They are aliases, not definitions: client.Job and openapi.Job are the same
 // type, so nothing converts between the two layers, and a value from
-// Client.OpenAPI can be handed straight to a method here. It also means the
-// spec stays the single source of truth - a field added to openapi.yaml
-// shows up here the moment the code is regenerated.
+// Client.OpenAPI can be handed straight to a method here. It also keeps the
+// spec as the single source of truth - a field added to openapi.yaml shows
+// up here as soon as the code is regenerated.
 //
-// Only the types this package's own API uses are aliased here, to keep the
-// list short. Hooks and custom resources have no facade (see
-// Client.OpenAPI), so their types are named through the openapi package
-// directly.
+// Only types this package's own API uses are aliased here. Hooks and custom
+// resources have no facade (see Client.OpenAPI), so their types are named
+// through the openapi package directly.
 type (
 	// Application is application metadata.
 	Application = openapi.Application
@@ -60,9 +59,8 @@ type (
 //
 //	job, err := c.Jobs.Create(ctx, client.Job{JobName: client.Ptr("my-job")})
 //
-// Every field is optional because the resource abstractor stores partial
-// documents and patches them field by field, so none of them can be declared
-// required in the spec.
+// Every field is optional since the resource abstractor stores partial
+// documents and patches them field by field.
 func Ptr[T any](v T) *T { return &v }
 
 // Value dereferences an optional field of a document that was read back,
@@ -70,9 +68,8 @@ func Ptr[T any](v T) *T { return &v }
 //
 //	name := client.Value(job.JobName)
 //
-// Reading *job.JobName directly is a panic waiting for the first document
-// that omits the field - which, on a service that stores whatever it is
-// given, is any of them.
+// Reading *job.JobName directly panics on the first document that omits the
+// field - and on a service storing whatever it's given, that's any of them.
 func Value[T any](p *T) T {
 	if p == nil {
 		var zero T

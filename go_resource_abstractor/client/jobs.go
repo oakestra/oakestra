@@ -74,14 +74,13 @@ func (j *JobsService) Update(ctx context.Context, jobID string, job Job) (*Job, 
 // UpdateStatus patches the job identified by jobID with a new status, and
 // statusDetail when non-empty. Equivalent to Python's update_job_status.
 //
-// Python's version takes an oakestra_utils Status enum and sends its
-// .value; there's no equivalent shared enum in Go, so status is a plain
-// string here - use the same values the rest of the platform does (see
-// libraries/oakestra_utils_library's status enums).
+// status is a plain string here since there's no Go equivalent of Python's
+// oakestra_utils Status enum - use the same values as the rest of the
+// platform (see libraries/oakestra_utils_library).
 //
-// The fields go through Set rather than struct fields because openapi.yaml
-// doesn't declare status/status_detail on Job - the service just stores
-// whatever additionalProperties gives it.
+// Goes through Set rather than struct fields because openapi.yaml doesn't
+// declare status/status_detail on Job - the service just stores whatever
+// additionalProperties gives it.
 func (j *JobsService) UpdateStatus(ctx context.Context, jobID, status, statusDetail string) (*Job, error) {
 	var patch Job
 	patch.Set("status", status)

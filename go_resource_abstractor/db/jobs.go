@@ -12,11 +12,10 @@ import (
 )
 
 // ErrInstanceConflict is returned by AppendJobInstance when the instance
-// already exists, the supplied instance_list is empty, or the parent job
-// does not exist - the same three cases where jobs_db.append_job_instance
-// returns None; the API layer surfaces it as 400 "Instance already exists"
-// to keep the Python blueprint's (slightly misleading, but preserved)
-// behavior.
+// already exists, instance_list is empty, or the parent job doesn't exist -
+// mirrors jobs_db.append_job_instance returning None. The API layer surfaces
+// it as 400 "Instance already exists", matching the Python blueprint even
+// though that message is a bit misleading for the other two cases.
 var ErrInstanceConflict = errors.New("job instance already exists or payload has no instance to append")
 
 // Application operations
@@ -85,11 +84,10 @@ func (s *Store) CreateApp(ctx context.Context, data bson.M) (bson.M, error) {
 // into a MongoDB filter: a non-nil instanceNumber (from ?instance_number=)
 // narrows the match to jobs whose instance_list contains that instance.
 //
-// Deviation from the Python service (jobs_helper.build_filter): the original
-// builds the instance_list $elemMatch but leaves the raw instance_number key
-// in the filter too. No job document has a top-level instance_number field,
-// so that stray key made every instance_number-filtered lookup match nothing
-// (always 404). The key is dropped here so the filter behaves as intended.
+// Deviation from jobs_helper.build_filter, which builds the instance_list
+// $elemMatch but leaves a stray top-level instance_number key in the filter
+// too. No job document has that field, so every such lookup 404'd. Dropped
+// here so the filter actually matches.
 func BuildJobFilter(instanceNumber *int) bson.M {
 	filter := bson.M{}
 	if instanceNumber != nil {
@@ -222,14 +220,11 @@ func (s *Store) FindJobInstance(ctx context.Context, jobID string, instanceNumbe
 // already exists, the payload has none, or the job itself doesn't exist.
 // Go port of jobs_db.append_job_instance.
 //
-// The existence check and the push happen in a single atomic
-// FindOneAndUpdate: the filter only matches a job that both has this _id
-// and has no instance_list entry with this instance_number yet, so two
-// concurrent requests for the same instance_number can't both pass the
-// check and both push - the loser's filter simply matches nothing, and
-// mongo.ErrNoDocuments maps back to ErrInstanceConflict below. (Doing the
-// check as a separate read first, like FindJobInstance, would leave a gap
-// between the check and the write.)
+// The check and the push happen in one atomic FindOneAndUpdate: the filter
+// only matches a job with no instance_list entry for this instance_number
+// yet, so two concurrent requests can't both pass - the loser matches
+// nothing and mongo.ErrNoDocuments maps to ErrInstanceConflict below. A
+// separate read-then-write, like FindJobInstance, would leave a race window.
 func (s *Store) AppendJobInstance(ctx context.Context, jobID string, instanceNumber int, jobData bson.M) (bson.M, error) {
 	oid, err := bson.ObjectIDFromHex(jobID)
 	if err != nil {

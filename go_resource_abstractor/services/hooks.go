@@ -23,10 +23,9 @@ import (
 // run before the write and may transform the payload that gets persisted;
 // async (post_*) hooks run fire-and-forget after the write completes.
 //
-// Python's hook_service.py wires this up via a decorator
-// (pre_post_hook) that wraps each blueprint write method. Go has no
-// equivalent, so handlers call Hooks' methods explicitly around their
-// db calls instead.
+// Python wires this up via a decorator (pre_post_hook) wrapping each
+// blueprint write method. Go has no equivalent, so handlers call Hooks'
+// methods explicitly around their db calls instead.
 type Hooks struct {
 	store  *db.Store
 	client *http.Client
@@ -35,12 +34,11 @@ type Hooks struct {
 // NewHooks builds a dispatcher whose outbound webhook calls are bounded by
 // connectTimeout (time to establish the TCP connection) and requestTimeout
 // (time to receive the response after that) - the same two knobs as
-// HOOK_CONNECT_TIMEOUT/HOOK_REQUEST_TIMEOUT in the Python service.
+// HOOK_CONNECT_TIMEOUT/HOOK_REQUEST_TIMEOUT in Python.
 //
-// net/http doesn't expose separate connect/read deadlines the way Python's
-// requests library does; this approximates it with a Dialer timeout for the
-// connect phase and an overall Client.Timeout covering connect+response for
-// the request phase.
+// net/http has no separate connect/read deadlines the way Python's requests
+// library does, so this approximates it: a Dialer timeout for the connect
+// phase, and an overall Client.Timeout covering connect+response.
 func NewHooks(store *db.Store, connectTimeout, requestTimeout time.Duration) *Hooks {
 	return &Hooks{
 		store: store,
@@ -172,11 +170,9 @@ func (h *Hooks) callWebhook(ctx context.Context, url string, data map[string]any
 		return data
 	}
 	if decoded == nil {
-		// A literal JSON "null" decodes into a nil map. Propagating it would
-		// hand every downstream write a nil payload - which inserts an empty
-		// document and then panics on the "_id" write-back in
-		// db.insertReturning - so treat it like any other unusable response
-		// and keep the original data.
+		// A literal JSON "null" decodes into a nil map, which would insert
+		// an empty document and panic on db.insertReturning's "_id"
+		// write-back. Treat it as an unusable response instead.
 		slog.Warn("hooks: webhook returned a null body, keeping original data", "url", url)
 		return data
 	}

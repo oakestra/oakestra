@@ -10,23 +10,22 @@ type ResourcesService struct {
 }
 
 // ResourceFilter narrows ResourcesService.List. The functions below are the
-// filters the spec defines; the type is exported so a caller can hold a slice
-// of them, not so they can write their own.
+// filters the spec defines; the type is exported so a caller can hold a
+// slice of them, not so they can write their own.
 //
 // Naming rule: a filter constructor names its resource when the same
-// concept could plausibly filter more than one of applications, resources or
-// jobs (hence ResourceFields, NamedCandidate, NamedApp, NamedJob), and omits
-// it when the concept exists on only one of them (hence Active, InNamespace,
-// CandidateIP, RunningJob, OfUser, OfApplication).
+// concept could filter more than one of applications, resources or jobs
+// (ResourceFields, NamedCandidate, NamedApp, NamedJob), and omits it when
+// the concept is unique to one (Active, InNamespace, CandidateIP,
+// RunningJob, OfUser, OfApplication).
 type ResourceFilter func(*ListResourcesParams)
 
 // Active limits the result to candidates that reported within the freshness
 // window (30 seconds).
 //
 // It takes no argument on purpose: the service only applies the freshness
-// filter when ?active= is truthy (BuildCandidateFilter in
-// go_resource_abstractor/db/candidates.go), so `active=false` isn't "only
-// stale candidates" - it's no filter at all, same as leaving Active off. An
+// filter when ?active= is truthy, so `active=false` isn't "only stale
+// candidates" - it's no filter at all, same as leaving Active off. An
 // Active(bool) would imply an inverse the service doesn't have.
 func Active() ResourceFilter {
 	active := "true"

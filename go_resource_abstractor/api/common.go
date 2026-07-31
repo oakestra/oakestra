@@ -63,13 +63,10 @@ func abortInternalError(c *gin.Context, err error) {
 	c.AbortWithStatusJSON(http.StatusInternalServerError, openapi.Message{Message: "Internal Server Error"})
 }
 
-// abortInvalidInput aborts the request with the spec's ValidationError shape
+// abortInvalidInput aborts with the spec's ValidationError shape
 // ({"message": "Invalid input", "details": ...}, resources_blueprint.py's
-// errorhandler(422)), shared by every validation-failure path in this
-// package: malformed JSON bodies (bindResourceJSONMap), invalid query params
-// (abortInvalidQuery), and invalid resource body fields
-// (abortIfInvalidResourceFields). details is whatever shape that specific
-// validation failure needs to report.
+// errorhandler(422)), shared by every validation-failure path here. details
+// is whatever shape that specific failure needs to report.
 func abortInvalidInput(c *gin.Context, details map[string]any) {
 	c.AbortWithStatusJSON(http.StatusUnprocessableEntity, openapi.ValidationError{
 		Message: "Invalid input",
@@ -77,20 +74,17 @@ func abortInvalidInput(c *gin.Context, details map[string]any) {
 	})
 }
 
-// abortInvalidQuery aborts the request with a 422 reporting field as
-// invalid - the same shape flask-smorest returns by default when a
-// query-arguments schema fails marshmallow validation (e.g.
-// JobFilterSchema.instance_number, ResourceFilterSchema.active) instead of
-// the value being silently dropped.
+// abortInvalidQuery aborts with a 422 reporting field as invalid - matching
+// flask-smorest's default response when a query-arguments schema fails
+// marshmallow validation, instead of silently dropping the value.
 func abortInvalidQuery(c *gin.Context, field, message string) {
 	abortInvalidInput(c, map[string]any{"query": map[string]any{field: []string{message}}})
 }
 
-// abortOnError maps a store error to the matching HTTP response - 404 via
-// abortNotFound, anything else via abortInternalError - and reports whether
-// it aborted the request, so callers can write `if abortOnError(c, err) {
-// return }` instead of the isNotFound/abortNotFound/abortInternalError
-// three-step repeated across every handler.
+// abortOnError maps a store error to the matching HTTP response (404 or 500)
+// and reports whether it aborted, so callers can write
+// `if abortOnError(c, err) { return }` instead of repeating the
+// isNotFound/abortNotFound/abortInternalError dance in every handler.
 func abortOnError(c *gin.Context, err error) bool {
 	switch {
 	case err == nil:
@@ -110,18 +104,17 @@ func writeJSON(c *gin.Context, status int, v any) {
 }
 
 // errEmptyBody signals an absent/empty request body, kept distinct from
-// malformed JSON so each binder can decide how to treat it. The Python
-// service is itself split: handlers that read request.json directly (apps,
-// jobs, job instances) reject an empty body, while those backed by a
-// marshmallow @arguments schema (resources, hooks, custom resources) have
-// webargs load a missing body as an empty mapping and accept it as {}.
+// malformed JSON so each binder can decide how to treat it. Python splits
+// the same way: handlers reading request.json directly (apps, jobs, job
+// instances) reject an empty body, while marshmallow @arguments-backed ones
+// (resources, hooks, custom resources) let webargs load it as {}.
 var errEmptyBody = errors.New("empty request body")
 
-// bindJSONMap decodes a required JSON-object request body into a generic
-// map, the same rule the Python handlers that read request.json directly
-// (apps, jobs, job instances) apply: an absent/empty body, a literal null,
-// or malformed JSON is rejected with 400, so a bodyless request can't
-// silently create or update a document from {}.
+// bindJSONMap decodes a required JSON-object body into a generic map: an
+// absent/empty body, a literal null, or malformed JSON is rejected with
+// 400, matching the Python handlers that read request.json directly (apps,
+// jobs, job instances) - so a bodyless request can't silently create or
+// update a document from {}.
 func bindJSONMap(c *gin.Context) (map[string]any, bool) {
 	data, err := decodeJSONMap(c)
 	if err != nil {
@@ -131,11 +124,10 @@ func bindJSONMap(c *gin.Context) (map[string]any, bool) {
 	return data, true
 }
 
-// bindOptionalJSONMap is bindJSONMap's counterpart for handlers the Python
-// service backs with a marshmallow @arguments schema (hooks, custom
-// resources): webargs loads an absent/empty body as an empty mapping, so an
-// empty body is accepted as {} here rather than rejected. A literal null or
-// otherwise malformed JSON is still a 400.
+// bindOptionalJSONMap is bindJSONMap's counterpart for the marshmallow
+// @arguments-backed handlers (hooks, custom resources): an empty body is
+// accepted as {}, matching webargs, while a literal null or malformed JSON
+// is still a 400.
 func bindOptionalJSONMap(c *gin.Context) (map[string]any, bool) {
 	data, err := decodeJSONMap(c)
 	if errors.Is(err, errEmptyBody) {
@@ -149,9 +141,8 @@ func bindOptionalJSONMap(c *gin.Context) (map[string]any, bool) {
 }
 
 // bindResourceJSONMap is the resources blueprint's counterpart: like
-// bindOptionalJSONMap it accepts an empty body as {} (ResourceSchema is an
-// @arguments schema), but it reports a literal null or malformed JSON with
-// the custom 422 shape (@resourcesblp.errorhandler(422)) rather than 400.
+// bindOptionalJSONMap it accepts an empty body as {}, but reports a literal
+// null or malformed JSON with the custom 422 shape instead of 400.
 func bindResourceJSONMap(c *gin.Context) (map[string]any, bool) {
 	data, err := decodeJSONMap(c)
 	if errors.Is(err, errEmptyBody) {
@@ -167,20 +158,17 @@ func bindResourceJSONMap(c *gin.Context) (map[string]any, bool) {
 // decodeJSONMap decodes the request body into a generic map, staying as
 // liberal as the Python service's (unknown=INCLUDE) schemas.
 //
-// Two details keep it compatible with the Python service:
+// Two details keep it compatible with Python:
 //
-//   - Numbers are decoded via json.Number and then resolved to an int64 when
-//     they have no fractional/exponent part, else a float64 (see
-//     resolveJSONNumber). Go's encoding/json would otherwise decode every
-//     JSON number to float64, so an integer like 7 would land in MongoDB as a
-//     BSON double where Python's json - and therefore pymongo - stores a BSON
-//     integer. Consumers and BSON round-trips are sensitive to that type
-//     difference; the resources blueprint's typed fields hid it, but jobs,
-//     apps, custom resources and unknown fields are stored verbatim.
-//   - An empty body is reported as errEmptyBody (not silently as {}), and a
-//     literal JSON null is malformed rather than an empty object, so the
-//     binders can apply each endpoint's own Python-equivalent policy (see
-//     bindJSONMap / bindOptionalJSONMap).
+//   - Numbers decode via json.Number, then resolve to int64 when they have no
+//     fractional/exponent part, else float64 (see resolveJSONNumber).
+//     Otherwise Go would decode every number as float64, so an integer like
+//     7 would land in MongoDB as a BSON double where Python stores a BSON
+//     integer - a difference consumers and BSON round-trips are sensitive to.
+//   - An empty body is reported as errEmptyBody rather than silently {}, and
+//     a literal null is malformed rather than empty, so the binders can each
+//     apply their own Python-equivalent policy (see bindJSONMap /
+//     bindOptionalJSONMap).
 func decodeJSONMap(c *gin.Context) (map[string]any, error) {
 	if c.Request.Body == nil {
 		return nil, errEmptyBody
@@ -196,9 +184,8 @@ func decodeJSONMap(c *gin.Context) (map[string]any, error) {
 		return nil, err
 	}
 	if data == nil {
-		// A literal JSON null: present but not an object. Python's schema
-		// load and its insert path both reject it, so treat it as malformed
-		// rather than as an empty object.
+		// A literal JSON null: present but not an object, and Python
+		// rejects it the same way rather than treating it as empty.
 		return nil, errors.New("request body must be a JSON object")
 	}
 	resolveJSONNumbers(data)
@@ -263,10 +250,8 @@ func queryString(value *string) string {
 }
 
 // booleanTruthy and booleanFalsy reproduce marshmallow's fields.Boolean
-// truthy/falsy sets (verified against the pinned marshmallow~=3.15.0: {"1",
-// "t", "true", "on", "y", "yes"} and their case variants, and the false
-// counterparts), lowercased here since query values are compared
-// case-insensitively.
+// truthy/falsy sets (pinned marshmallow~=3.15.0), lowercased since query
+// values are compared case-insensitively.
 var (
 	booleanTruthy = map[string]bool{"1": true, "t": true, "true": true, "on": true, "y": true, "yes": true}
 	booleanFalsy  = map[string]bool{"0": true, "f": true, "false": true, "off": true, "n": true, "no": true}
@@ -275,17 +260,15 @@ var (
 // queryBool parses a query parameter as a bool, applying marshmallow's
 // fields.Boolean coercion.
 //
-// raw is the value from the generated parameter struct: nil when the
-// parameter was absent, otherwise its literal text - including "" for
-// "?active=", which marshmallow treats as present-but-invalid rather than
-// absent. If present is true and err is non-nil the value isn't a valid
-// bool, and the caller should reject the request (422, via
-// abortInvalidQuery) rather than silently drop the filter - the same
-// validation ResourceFilterSchema applies to ?active=.
+// raw is nil when the parameter was absent, otherwise its literal text -
+// including "" for "?active=", which marshmallow treats as
+// present-but-invalid rather than absent. If present is true and err is
+// non-nil, the caller should reject the request (422, via abortInvalidQuery)
+// rather than silently drop the filter, matching ResourceFilterSchema.
 //
-// This coercion is why openapi.yaml types the parameter as a string rather
-// than a boolean: an OpenAPI boolean would reject "yes" and "on", and would
-// answer 400 where the contract is 422.
+// This is also why openapi.yaml types the parameter as a string rather than
+// a boolean: an OpenAPI boolean would reject "yes"/"on" with a 400 instead
+// of the contract's 422.
 func queryBool(key string, raw *string) (value, present bool, err error) {
 	if raw == nil {
 		return false, false, nil

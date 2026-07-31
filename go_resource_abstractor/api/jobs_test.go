@@ -38,9 +38,8 @@ func TestAppendJobInstanceConflict(t *testing.T) {
 }
 
 // TestJobIntegerFieldStoredAsBSONInteger guards the numeric-type fix: a JSON
-// integer in an untyped field must be persisted as a BSON integer (int32/
-// int64), not a BSON double, the same as Python/pymongo would store it.
-// encoding/json would otherwise decode it to float64 and store a double.
+// integer in an untyped field must persist as a BSON integer, not a BSON
+// double (which is what plain encoding/json decoding would produce).
 func TestJobIntegerFieldStoredAsBSONInteger(t *testing.T) {
 	created := decodeJSON[map[string]any](t, doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{
 		"job_name": uniqueName("job"),
@@ -73,10 +72,10 @@ func TestCreateJobEmptyBodyRejected(t *testing.T) {
 	}
 }
 
-// TestGetJobFilteredByInstanceNumber guards the fixed instance_number filter:
-// jobs_helper.build_filter left a stray top-level instance_number key that
-// made every such lookup 404. A matching instance_number must now return the
-// job; a non-matching one must still filter it out.
+// TestGetJobFilteredByInstanceNumber guards the fixed instance_number filter
+// (jobs_helper.build_filter's stray top-level key made every such lookup
+// 404). A matching instance_number must return the job; a non-matching one
+// must still filter it out.
 func TestGetJobFilteredByInstanceNumber(t *testing.T) {
 	job := decodeJSON[map[string]any](t, doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{
 		"job_name":      uniqueName("job"),
@@ -189,10 +188,9 @@ func TestUpsertJobCreatesThenUpdatesByName(t *testing.T) {
 }
 
 // TestUpsertJobUpdatePathFiresJobsHooks is a regression test for the fixed
-// entity-name inconsistency in jobs_blueprint.py's PUT /jobs/: the original
-// fires hooks under "job" (singular) on the update path while every other
-// job route uses "jobs", so a hook registered for "jobs" would never see
-// PUT /jobs/ updates. This asserts it now does.
+// entity-name inconsistency in jobs_blueprint.py's PUT /jobs/: it fired hooks
+// under "job" (singular) on the update path while every other route uses
+// "jobs". Asserts a "jobs" hook now sees these updates.
 func TestUpsertJobUpdatePathFiresJobsHooks(t *testing.T) {
 	name := uniqueName("upsert-job-hook")
 

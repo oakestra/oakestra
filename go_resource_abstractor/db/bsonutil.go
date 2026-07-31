@@ -6,17 +6,14 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// Normalize recursively rewrites a decoded BSON value so that it JSON-
-// marshals the same way the Python service's responses do: every document
-// is returned via json.dumps(doc, default=str), which turns ObjectId and
-// datetime values into plain strings rather than MongoDB's Extended JSON
-// ({"$oid": "..."} / {"$date": ...}) that the Go driver's default JSON
-// marshaling would otherwise produce.
+// Normalize recursively rewrites a decoded BSON value so it JSON-marshals
+// like the Python service's responses do: ObjectId and datetime values as
+// plain strings, not MongoDB's Extended JSON ({"$oid": ...} / {"$date": ...})
+// that the Go driver would otherwise produce.
 //
-// This must be applied to every document before it is written to a gin
-// response, since it is the detail that keeps the wire format compatible
-// with existing consumers (the Go scheduler and the Python
-// resource_abstractor_client) that read `_id` as a bare string.
+// Apply this to every document before writing a gin response - it's what
+// keeps the wire format compatible with consumers (the Go scheduler, the
+// Python resource_abstractor_client) that expect `_id` as a bare string.
 func Normalize(v any) any {
 	switch val := v.(type) {
 	case bson.ObjectID:

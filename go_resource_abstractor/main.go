@@ -50,8 +50,7 @@ func main() {
 	hooks := services.NewHooks(store, cfg.HookConnectTimeout, cfg.HookRequestTimeout)
 	router := api.NewRouter(store, hooks)
 
-	// ":<port>" binds all interfaces, the equivalent on Linux (this
-	// service's deployment target) of the Python service's explicit
+	// ":<port>" binds all interfaces - matches the Python service's
 	// host="::" dual-stack bind.
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
@@ -86,9 +85,8 @@ func main() {
 	}
 	cancelShutdown()
 
-	// A fresh deadline rather than the one above: if draining in-flight
-	// requests consumed the whole grace period, shutdownCtx is already
-	// expired and Disconnect would fail without ever having tried.
+	// Fresh deadline, not shutdownCtx - that one may already be expired
+	// if draining requests ate the whole grace period.
 	disconnectCtx, cancelDisconnect := context.WithTimeout(context.Background(), shutdownGracePeriod)
 	if err := store.Disconnect(disconnectCtx); err != nil {
 		slog.Error("error disconnecting from mongo", "error", err)

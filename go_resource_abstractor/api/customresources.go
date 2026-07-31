@@ -51,12 +51,9 @@ func (s *Server) CreateCustomResourceDefinition(c *gin.Context) {
 func (s *Server) DeleteCustomResourceDefinition(c *gin.Context, resourceType openapi.CustomResourceType) {
 	ctx := c.Request.Context()
 
-	// Match the Python service's order: confirm the definition exists, drop
-	// every instance first, then the definition itself. Deleting instances
-	// before the definition means a failure of the second step can't leave
-	// orphaned instances behind with no definition to reach them (the earlier
-	// order here deleted the definition first, purely to reuse it as the
-	// not-found check).
+	// Match Python's order: instances first, then the definition. That way
+	// a failure on the second step can't orphan instances with no
+	// definition left to reach them.
 	if _, ok := s.findCustomResourceType(c, resourceType); !ok {
 		return
 	}
@@ -213,14 +210,12 @@ func (s *Server) findCustomResourceType(c *gin.Context, resourceType string) (de
 
 // validateAgainstSchema validates data against the JSON Schema stored in
 // def["schema"], the Go equivalent of jsonschema.validate(data,
-// meta_data["schema"]) in the Python service. A missing/empty schema is "no
-// constraint", the same default Python's meta_data.get("schema", {}) gives. A schema that
-// fails to compile is reported as a server error rather than silently
-// accepting any payload: Python's jsonschema.validate call has the same
-// failure mode there (a malformed schema raises jsonschema.SchemaError,
-// which isn't caught by the blueprint's except ValidationError clause and
-// surfaces as an uncaught 500), so this keeps the same "don't persist
-// against a broken schema" outcome instead of failing open.
+// meta_data["schema"]). A missing/empty schema means no constraint, matching
+// Python's default. A schema that fails to compile is reported as a server
+// error rather than silently accepting any payload - Python's
+// jsonschema.validate has the same failure mode (an uncaught
+// jsonschema.SchemaError surfaces as a 500), so this doesn't persist against
+// a broken schema either.
 func validateAgainstSchema(def bson.M, data map[string]any) (message string, valid bool, err error) {
 	rawSchema, ok := def["schema"]
 	if !ok || rawSchema == nil {
