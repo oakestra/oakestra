@@ -68,11 +68,10 @@ func TestResponse_DecodesSuccessPayload(t *testing.T) {
 	}
 }
 
-// TestResponse_UnknownFieldsSurviveTheRoundTrip is the guarantee that makes
-// the generated models usable against a service whose documents are
-// schemaless: every document schema in openapi.yaml sets additionalProperties,
-// so a field the spec never mentions has to come back rather than be dropped
-// on decode.
+// TestResponse_UnknownFieldsSurviveTheRoundTrip is what makes the generated
+// models usable against a schemaless service: every document schema in
+// openapi.yaml sets additionalProperties, so a field the spec never
+// mentions still comes back on decode instead of getting dropped.
 func TestResponse_UnknownFieldsSurviveTheRoundTrip(t *testing.T) {
 	c, _ := serve(t, http.StatusOK, `{"candidate_name":"worker-1","gpu_temp":61}`)
 
@@ -137,6 +136,9 @@ func TestResponse_EmptyListIsNotNil(t *testing.T) {
 	jobs, err := c.Jobs.List(context.Background())
 	if err != nil {
 		t.Fatalf("List: unexpected error: %v", err)
+	}
+	if jobs == nil {
+		t.Error("List: got nil slice, want a non-nil empty slice")
 	}
 	if len(jobs) != 0 {
 		t.Errorf("List: got %d jobs, want 0", len(jobs))
@@ -289,7 +291,7 @@ func TestFilters_BuildTheDocumentedQuery(t *testing.T) {
 func TestFilters_ProjectionIsCommaSeparated(t *testing.T) {
 	c, got := serve(t, http.StatusOK, `[]`)
 
-	_, err := c.Resources.List(context.Background(), Fields("cpu_percent", "memory_percent"))
+	_, err := c.Resources.List(context.Background(), ResourceFields("cpu_percent", "memory_percent"))
 	if err != nil {
 		t.Fatalf("List: unexpected error: %v", err)
 	}
@@ -321,6 +323,36 @@ func TestNewFromEnv_BuildsExpectedBaseURL(t *testing.T) {
 	want := "http://cluster_resource_abstractor:11012/"
 	if got := generated(t, c).Server; got != want {
 		t.Errorf("Server = %q, want %q", got, want)
+	}
+}
+
+// TestNewFromEnv_HostWithSchemeIsUsedAsIs guards against NewFromEnv
+// prepending "http://" a second time when RESOURCE_ABSTRACTOR_URL already
+// carries a scheme.
+func TestNewFromEnv_HostWithSchemeIsUsedAsIs(t *testing.T) {
+	cases := []struct {
+		name string
+		host string
+		want string
+	}{
+		{"http scheme", "http://cluster_resource_abstractor", "http://cluster_resource_abstractor:11012/"},
+		{"https scheme", "https://cluster_resource_abstractor", "https://cluster_resource_abstractor:11012/"},
+		{"trailing slash", "http://cluster_resource_abstractor/", "http://cluster_resource_abstractor:11012/"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("RESOURCE_ABSTRACTOR_URL", tc.host)
+			t.Setenv("RESOURCE_ABSTRACTOR_PORT", "11012")
+
+			c, err := NewFromEnv()
+			if err != nil {
+				t.Fatalf("NewFromEnv: unexpected error: %v", err)
+			}
+			if got := generated(t, c).Server; got != tc.want {
+				t.Errorf("Server = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

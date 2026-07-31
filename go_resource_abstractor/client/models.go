@@ -5,16 +5,15 @@ import "github.com/oakestra/oakestra/go_resource_abstractor/client/openapi"
 // The document and parameter types this package's methods take and return.
 //
 // They are aliases, not definitions: client.Job and openapi.Job are the same
-// type, so nothing converts between the two layers and a value obtained from
-// Client.OpenAPI can be handed straight to a method here. That also means the
-// spec stays the single source of truth for what a document contains - a
-// field added to openapi.yaml appears here the moment the code is
-// regenerated, with nothing to keep in step by hand.
+// type, so nothing converts between the two layers, and a value from
+// Client.OpenAPI can be handed straight to a method here. It also means the
+// spec stays the single source of truth - a field added to openapi.yaml
+// shows up here the moment the code is regenerated.
 //
-// Aliased here are the types this package's own API is written in - nothing
-// else, so the list stays short enough to read. Hooks and custom resources
-// have no facade (see Client.OpenAPI), so their types are named through the
-// openapi package.
+// Only the types this package's own API uses are aliased here, to keep the
+// list short. Hooks and custom resources have no facade (see
+// Client.OpenAPI), so their types are named through the openapi package
+// directly.
 type (
 	// Application is application metadata.
 	Application = openapi.Application
@@ -38,14 +37,14 @@ type (
 	// string, not Unix seconds - the two aren't interchangeable.
 	JobHistorySample = openapi.JobHistorySample
 
-	// JobInstanceAppend is the body of JobsClient.AppendInstance. Only the
+	// JobInstanceAppend is the body of JobsService.AppendInstance. Only the
 	// last element of its InstanceList is appended.
 	JobInstanceAppend = openapi.JobInstanceAppend
 
 	// ListApplicationsParams is the query the AppFilter options build.
 	ListApplicationsParams = openapi.ListApplicationsParams
 
-	// GetApplicationParams is the query AppsClient.GetByID scopes its lookup
+	// GetApplicationParams is the query AppsService.GetByID scopes its lookup
 	// with.
 	GetApplicationParams = openapi.GetApplicationParams
 
