@@ -81,9 +81,9 @@ func TestBuildCandidateFilterActiveOnlyMatchesFresh(t *testing.T) {
 		t.Fatalf("create candidate: %v", err)
 	}
 
-	filter, err := BuildCandidateFilter(map[string]any{
-		"active":         true,
-		"candidate_name": name,
+	filter, err := BuildCandidateFilter(CandidateFilter{
+		ActiveOnly:    true,
+		CandidateName: name,
 	})
 	if err != nil {
 		t.Fatalf("build filter: %v", err)

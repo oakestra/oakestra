@@ -76,14 +76,14 @@ func (s *Server) GetJob(c *gin.Context, jobID openapi.JobID, params openapi.GetJ
 		return
 	}
 
-	query := map[string]any{}
+	var instanceNumber *int
 	if n, present, err := queryInt("instance_number", params.InstanceNumber); err != nil {
 		abortInvalidQuery(c, "instance_number", err.Error())
 		return
 	} else if present {
-		query["instance_number"] = n
+		instanceNumber = &n
 	}
-	filter := db.BuildJobFilter(query)
+	filter := db.BuildJobFilter(instanceNumber)
 
 	job, err := s.store.FindJobByID(c.Request.Context(), jobID, filter)
 	if abortOnError(c, err) {

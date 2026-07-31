@@ -252,6 +252,16 @@ func addFilter(filter map[string]any, key string, value *string) {
 	}
 }
 
+// queryString dereferences an optional string query parameter, mapping an
+// absent one to "". Absent and present-but-empty are equivalent here, the same
+// as in addFilter.
+func queryString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
 // booleanTruthy and booleanFalsy reproduce marshmallow's fields.Boolean
 // truthy/falsy sets (verified against the pinned marshmallow~=3.15.0: {"1",
 // "t", "true", "on", "y", "yes"} and their case variants, and the false

@@ -12,21 +12,21 @@ import (
 
 // ListResources implements GET /api/v1/resources.
 func (s *Server) ListResources(c *gin.Context, params openapi.ListResourcesParams) {
-	filter := map[string]any{}
-	addFilter(filter, "job_id", params.JobId)
-	addFilter(filter, "candidate_name", params.CandidateName)
-	addFilter(filter, "ip", params.Ip)
-
-	if active, present, err := queryBool("active", params.Active); err != nil {
+	active, _, err := queryBool("active", params.Active)
+	if err != nil {
 		abortInvalidQuery(c, "active", err.Error())
 		return
-	} else if present {
-		filter["active"] = active
+	}
+
+	filter := db.CandidateFilter{
+		CandidateName: queryString(params.CandidateName),
+		IP:            queryString(params.Ip),
+		ActiveOnly:    active,
 	}
 
 	ctx := c.Request.Context()
 
-	if jobID, ok := filter["job_id"].(string); ok && jobID != "" {
+	if jobID := queryString(params.JobId); jobID != "" {
 		if !isValidObjectID(jobID) {
 			abortBadRequest(c)
 			return
@@ -36,7 +36,7 @@ func (s *Server) ListResources(c *gin.Context, params openapi.ListResourcesParam
 		if abortOnError(c, err) {
 			return
 		}
-		filter["candidate_id"] = candidateID
+		filter.CandidateID = candidateID
 	}
 
 	mongoFilter, err := db.BuildCandidateFilter(filter)
