@@ -108,15 +108,9 @@ func New(baseURL string, opts ...Option) *Client {
 	}
 
 	// openapi.NewClientWithResponses can only fail via a bad ClientOption,
-	// and none of ours can, so we build the generated client struct directly
-	// instead of pushing an impossible error onto every caller of New.
-	server := baseURL
-	if !strings.HasSuffix(server, "/") {
-		server += "/"
-	}
-	api := &openapi.ClientWithResponses{
-		ClientInterface: &openapi.Client{Server: server, Client: httpClient},
-	}
+	// and WithHTTPClient's never does, so the error is discarded rather than
+	// pushed onto every caller of New.
+	api, _ := openapi.NewClientWithResponses(baseURL, openapi.WithHTTPClient(httpClient))
 
 	c := &Client{api: api}
 	c.Apps = &AppsService{c: c}
@@ -169,10 +163,23 @@ func (c *Client) Health(ctx context.Context) error {
 // status itself is gone and ErrNotFound can't be reported. Reading the body
 // ourselves keeps the status authoritative.
 
-// read maps a response's status onto this package's error contract - 404 to
-// ErrNotFound, any other non-2xx to *APIError - and returns the body for the
-// caller to decode. err is the transport-level failure the generated client
-// reports (DNS, connection refused, a cancelled context), which stays
+// errorFor maps a non-2xx response onto this package's error contract - 404
+// to ErrNotFound, anything else to *APIError - reading the body first since
+// newAPIError needs it to parse the message.
+func errorFor(resp *http.Response) error {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("resource abstractor: reading response body: %w", err)
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return notFoundError(resp)
+	}
+	return newAPIError(resp, body)
+}
+
+// read returns a 2xx response's body for the caller to decode, or an error
+// mapped by errorFor. err is the transport-level failure the generated
+// client reports (DNS, connection refused, a cancelled context), which stays
 // distinguishable from both.
 func read(resp *http.Response, err error) ([]byte, error) {
 	if err != nil {
@@ -180,16 +187,13 @@ func read(resp *http.Response, err error) ([]byte, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, errorFor(resp)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("resource abstractor: reading response body: %w", err)
-	}
-
-	switch {
-	case resp.StatusCode == http.StatusNotFound:
-		return nil, notFoundError(resp)
-	case resp.StatusCode < 200 || resp.StatusCode >= 300:
-		return nil, newAPIError(resp, body)
 	}
 	return body, nil
 }
@@ -243,8 +247,32 @@ func firstOf[T any](resp *http.Response, err error) (*T, error) {
 }
 
 // done discards the body of a response whose content the caller ignores,
-// keeping only the status check.
+// keeping only the status check. Unlike read, a successful body is streamed
+// to io.Discard rather than buffered - Delete and Health never look at it,
+// and a deleted job's body can be sizeable (it echoes the job with its full
+// instance_list and history).
 func done(resp *http.Response, err error) error {
-	_, err = read(resp, err)
-	return err
+	if err != nil {
+		return fmt.Errorf("resource abstractor: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return errorFor(resp)
+	}
+
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return nil
+}
+
+// collapseParams applies filters, in order, to a zero-valued P and returns
+// it - the shared implementation behind appParams, resourceParams and
+// jobParams, one per resource because each closes over a different
+// generated *Params type.
+func collapseParams[P any, F ~func(*P)](filters []F) *P {
+	var params P
+	for _, filter := range filters {
+		filter(&params)
+	}
+	return &params
 }

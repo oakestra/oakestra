@@ -64,7 +64,7 @@ func ResourceFields(names ...string) ResourceFilter {
 // List returns candidates matching every filter given, or all of them when
 // given none. Equivalent to Python's get_candidates(**kwargs).
 func (r *ResourcesService) List(ctx context.Context, filters ...ResourceFilter) ([]Resource, error) {
-	return list[Resource](r.c.api.ListResources(ctx, resourceParams(filters)))
+	return list[Resource](r.c.api.ListResources(ctx, collapseParams(filters)))
 }
 
 // GetByID returns the candidate with the given id, or ErrNotFound if none
@@ -79,14 +79,14 @@ func (r *ResourcesService) GetByID(ctx context.Context, id string) (*Resource, e
 // matches on "candidate_name" (see go_resource_abstractor/db/candidates.go),
 // unlike the Python service which used "cluster_name" for the same lookup.
 func (r *ResourcesService) GetByName(ctx context.Context, name string) (*Resource, error) {
-	params := resourceParams([]ResourceFilter{NamedCandidate(name)})
+	params := collapseParams([]ResourceFilter{NamedCandidate(name)})
 	return firstOf[Resource](r.c.api.ListResources(ctx, params))
 }
 
 // GetByIP returns the candidate with the given ip, or ErrNotFound if none
 // matches. Equivalent to Python's get_candidate_by_ip.
 func (r *ResourcesService) GetByIP(ctx context.Context, ip string) (*Resource, error) {
-	params := resourceParams([]ResourceFilter{CandidateIP(ip)})
+	params := collapseParams([]ResourceFilter{CandidateIP(ip)})
 	return firstOf[Resource](r.c.api.ListResources(ctx, params))
 }
 
@@ -102,13 +102,4 @@ func (r *ResourcesService) UpdateInformation(ctx context.Context, id string, res
 // a PUT, not a POST.
 func (r *ResourcesService) Create(ctx context.Context, resource Resource) (*Resource, error) {
 	return doc[Resource](r.c.api.UpsertResource(ctx, resource))
-}
-
-// resourceParams collapses filters into the query the generated client takes.
-func resourceParams(filters []ResourceFilter) *ListResourcesParams {
-	var params ListResourcesParams
-	for _, filter := range filters {
-		filter(&params)
-	}
-	return &params
 }

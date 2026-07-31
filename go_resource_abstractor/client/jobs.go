@@ -29,7 +29,7 @@ func NamedJob(name string) JobFilter {
 // List returns jobs matching every filter given, or all of them when given
 // none. Equivalent to Python's get_jobs(**kwargs).
 func (j *JobsService) List(ctx context.Context, filters ...JobFilter) ([]Job, error) {
-	return list[Job](j.c.api.ListJobs(ctx, jobParams(filters)))
+	return list[Job](j.c.api.ListJobs(ctx, collapseParams(filters)))
 }
 
 // ListByApplication returns the jobs belonging to appID. Equivalent to
@@ -108,13 +108,4 @@ func (j *JobsService) DeleteInstance(ctx context.Context, jobID string, instance
 // delete_job.
 func (j *JobsService) Delete(ctx context.Context, jobID string) error {
 	return done(j.c.api.DeleteJob(ctx, jobID))
-}
-
-// jobParams collapses filters into the query the generated client takes.
-func jobParams(filters []JobFilter) *ListJobsParams {
-	var params ListJobsParams
-	for _, filter := range filters {
-		filter(&params)
-	}
-	return &params
 }

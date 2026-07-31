@@ -35,7 +35,7 @@ func InNamespace(namespace string) AppFilter {
 // List returns applications matching every filter given, or all of them when
 // given none. Equivalent to Python's get_apps(**kwargs).
 func (a *AppsService) List(ctx context.Context, filters ...AppFilter) ([]Application, error) {
-	return list[Application](a.c.api.ListApplications(ctx, appParams(filters)))
+	return list[Application](a.c.api.ListApplications(ctx, collapseParams(filters)))
 }
 
 // ListByUser returns applications owned by userID, additionally matching
@@ -44,7 +44,7 @@ func (a *AppsService) ListByUser(ctx context.Context, userID string, filters ...
 	// Set UserId on the built query rather than appending OfUser to filters,
 	// which would write into the caller's slice whenever it has the spare
 	// capacity for one more element.
-	params := appParams(filters)
+	params := collapseParams(filters)
 	params.UserId = &userID
 	return list[Application](a.c.api.ListApplications(ctx, params))
 }
@@ -53,7 +53,7 @@ func (a *AppsService) ListByUser(ctx context.Context, userID string, filters ...
 // namespace for userID, or ErrNotFound if none matches. Equivalent to
 // Python's get_app_by_name_and_namespace.
 func (a *AppsService) GetByNameAndNamespace(ctx context.Context, name, namespace, userID string) (*Application, error) {
-	params := appParams([]AppFilter{NamedApp(name), InNamespace(namespace), OfUser(userID)})
+	params := collapseParams([]AppFilter{NamedApp(name), InNamespace(namespace), OfUser(userID)})
 	return firstOf[Application](a.c.api.ListApplications(ctx, params))
 }
 
@@ -87,13 +87,4 @@ func (a *AppsService) Update(ctx context.Context, appID, userID string, app Appl
 // it, as the Python client does.
 func (a *AppsService) Delete(ctx context.Context, appID string) error {
 	return done(a.c.api.DeleteApplication(ctx, appID))
-}
-
-// appParams collapses filters into the query the generated client takes.
-func appParams(filters []AppFilter) *ListApplicationsParams {
-	var params ListApplicationsParams
-	for _, filter := range filters {
-		filter(&params)
-	}
-	return &params
 }
