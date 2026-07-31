@@ -59,46 +59,44 @@ func unixSeconds(t time.Time) float64 {
 	return float64(t.UnixNano()) / float64(time.Second)
 }
 
-// BuildCandidateFilter translates the query params accepted by GET
-// /resources/ into a MongoDB filter, following the same rules as
-// candidates_helper.build_filter:
-//   - active=true adds a last_modified_timestamp freshness constraint
-//   - candidate_id (resolved upstream from job_id, see ResolveJobCandidate)
-//     becomes an _id match
-//   - job_id/active/candidate_id keys never appear as literal filter fields
-func BuildCandidateFilter(query map[string]any) (bson.M, error) {
-	filter := bson.M{}
-	maps.Copy(filter, query)
+// CandidateFilter holds the query params accepted by GET /resources/, after
+// the handler has coerced them out of their raw query-string form. Empty
+// string fields mean "parameter not supplied" and add no constraint.
+type CandidateFilter struct {
+	CandidateName string
+	IP            string
+	// CandidateID is resolved upstream from ?job_id=, see ResolveJobCandidate.
+	CandidateID string
+	// ActiveOnly comes from ?active=, already parsed by the handler.
+	ActiveOnly bool
+}
 
-	if active, ok := filter["active"]; ok && truthy(active) {
+// BuildCandidateFilter translates a CandidateFilter into a MongoDB filter,
+// following the same rules as candidates_helper.build_filter:
+//   - ActiveOnly adds a last_modified_timestamp freshness constraint
+//   - CandidateID becomes an _id match
+//   - job_id/active/candidate_id never appear as literal filter fields
+func BuildCandidateFilter(query CandidateFilter) (bson.M, error) {
+	filter := bson.M{}
+
+	if query.CandidateName != "" {
+		filter["candidate_name"] = query.CandidateName
+	}
+	if query.IP != "" {
+		filter["ip"] = query.IP
+	}
+	if query.ActiveOnly {
 		filter["last_modified_timestamp"] = bson.M{"$gt": FreshnessThreshold()}
 	}
-
-	if candidateID, ok := filter["candidate_id"]; ok {
-		idStr, _ := candidateID.(string)
-		oid, err := bson.ObjectIDFromHex(idStr)
+	if query.CandidateID != "" {
+		oid, err := bson.ObjectIDFromHex(query.CandidateID)
 		if err != nil {
 			return nil, err
 		}
 		filter["_id"] = oid
 	}
 
-	delete(filter, "candidate_id")
-	delete(filter, "job_id")
-	delete(filter, "active")
-
 	return filter, nil
-}
-
-func truthy(v any) bool {
-	switch val := v.(type) {
-	case bool:
-		return val
-	case string:
-		return val != "" && val != "false" && val != "0"
-	default:
-		return v != nil
-	}
 }
 
 // FindCandidates runs the aggregation pipeline behind GET /resources/:
