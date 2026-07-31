@@ -60,21 +60,14 @@ func Connect(ctx context.Context, uri string) (*Store, error) {
 	return store, nil
 }
 
-// ensureIndexes recreates the unique indexes the Python service defines in
-// mongo_init (hooks on (entity, webhook_url) and hook_name, meta_data on
-// resource_type), plus the non-unique indexes below that back this service's
-// hot-path lookups.
-//
-// Deviation from the Python service, which relies on collection scans for
-// these: candidates and jobs are queried by candidate_name/job_name on every
-// worker PUT-upsert heartbeat, and candidates are filtered by
-// last_modified_timestamp on every scheduler active-resources query. Those
-// scans grow with cluster size (O(nodes) per heartbeat), so we index the
-// fields. The indexes only affect performance, not results, so adding them is
-// strictly beneficial. They are intentionally non-unique: unlike hook_name,
-// candidate_name/job_name are only unique in practice, and a unique index
-// would fail to build (aborting startup) against any existing deployment that
-// already holds duplicate or legacy documents.
+// ensureIndexes recreates the unique indexes from Python's mongo_init (hooks
+// on (entity, webhook_url) and hook_name, meta_data on resource_type), plus
+// non-unique indexes on candidate_name/job_name and last_modified_timestamp -
+// the Python service scans for these instead, which gets expensive as the
+// cluster grows since they're hit on every worker heartbeat and scheduler
+// query. Non-unique because, unlike hook_name, uniqueness there only holds in
+// practice - a unique index could fail to build against an existing
+// deployment with legacy duplicates.
 func (s *Store) ensureIndexes(ctx context.Context) error {
 	unique := true
 

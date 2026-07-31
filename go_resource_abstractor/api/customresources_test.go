@@ -38,10 +38,8 @@ func TestCustomResourceInstanceSchemaValidation(t *testing.T) {
 }
 
 // TestCustomResourceMalformedSchemaFailsClosed is a regression test:
-// validateAgainstSchema used to fail open on a stored schema that doesn't
-// compile (returning "valid" for any payload). Since a broken stored
-// schema can't validate anything, this now surfaces as a 500 instead of
-// silently accepting arbitrary instance data.
+// validateAgainstSchema used to fail open on a schema that doesn't compile,
+// accepting any payload. It now surfaces as a 500 instead.
 func TestCustomResourceMalformedSchemaFailsClosed(t *testing.T) {
 	resourceType := uniqueName("broken-schema")
 

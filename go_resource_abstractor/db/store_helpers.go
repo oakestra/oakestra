@@ -30,9 +30,9 @@ func findAll(ctx context.Context, coll *mongo.Collection, filter bson.M) ([]bson
 }
 
 // insertReturning inserts data (with any client-supplied _id stripped) and
-// returns it annotated with the server-assigned _id. It avoids the
-// refetch-by-InsertedID round trip that create-then-read would otherwise
-// need, since a plain insert doesn't transform the document server-side.
+// returns it annotated with the server-assigned _id, skipping the
+// refetch-by-InsertedID round trip since a plain insert doesn't transform
+// the document server-side.
 func insertReturning(ctx context.Context, coll *mongo.Collection, data bson.M) (bson.M, error) {
 	delete(data, "_id")
 

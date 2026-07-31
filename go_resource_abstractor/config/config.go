@@ -50,11 +50,9 @@ func Load() Config {
 	}
 }
 
-// Validate reports whether the loaded configuration is usable. It exists
-// because the failure modes of the unset values are silent rather than
-// loud: an empty Port makes the listen address ":", which binds a random
-// ephemeral port instead of erroring, so the service would come up looking
-// healthy while every consumer got connection-refused on 11011/11012.
+// Validate reports whether the loaded configuration is usable. Without it,
+// an empty Port silently binds a random ephemeral port instead of erroring,
+// so the service looks healthy while every consumer gets connection-refused.
 func (c Config) Validate() error {
 	if c.Port == "" {
 		return errors.New("RESOURCE_ABSTRACTOR_PORT must be set")

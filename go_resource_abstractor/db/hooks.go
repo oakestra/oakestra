@@ -37,10 +37,9 @@ func (s *Store) FindHooks(ctx context.Context, filter bson.M) ([]bson.M, error) 
 
 // FindHookByID looks up a single hook by id.
 //
-// Deviation from the Python service: hooks_db.find_hook_by_id queries
-// {"_id": hook_id} with hook_id left as a raw string rather than an
-// ObjectId, so GET /hooks/<id> can never match a real document there. Fixed
-// here to decode id as an ObjectID before querying.
+// Deviation from Python's hooks_db.find_hook_by_id, which queries
+// {"_id": hook_id} with hook_id as a raw string - so GET /hooks/<id> can
+// never match there. Fixed here by decoding id as an ObjectID first.
 func (s *Store) FindHookByID(ctx context.Context, id string) (bson.M, error) {
 	oid, err := bson.ObjectIDFromHex(id)
 	if err != nil {

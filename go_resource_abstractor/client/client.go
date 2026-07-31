@@ -1,21 +1,18 @@
 // Package client is a Go HTTP client for the resource abstractor
 // (go_resource_abstractor and its Python predecessor, resource-abstractor,
-// which serve the same /api/v1 REST API). It plays the same role for Go
-// services that libraries/resource_abstractor_client plays for Python
-// services: a thin wrapper around the applications, resources (candidates)
-// and jobs endpoints, so consumers don't hand-roll HTTP calls.
+// which serve the same /api/v1 REST API). It plays the role for Go services
+// that libraries/resource_abstractor_client plays for Python: a thin
+// wrapper around the applications, resources (candidates) and jobs
+// endpoints, so consumers don't hand-roll HTTP calls.
 //
-// Requests, models and parameter encoding come from the service's OpenAPI
-// spec: the openapi subpackage is generated from
-// go_resource_abstractor/openapi/openapi.yaml, the same file the server's
-// routes and handlers are generated from.
+// Requests, models and parameter encoding come from the openapi subpackage,
+// generated from the same openapi.yaml the server is generated from.
 //
 // Document types are re-exported here as aliases (see models.go), so
-// calling code only needs to import this package, not openapi. Use
-// Client.OpenAPI to reach an endpoint the facade doesn't wrap.
+// calling code only needs to import this package. Use Client.OpenAPI to
+// reach an endpoint the facade doesn't wrap.
 //
-// See README.md for why this lives in its own Go module and how a consumer
-// pulls it in.
+// See README.md for why this lives in its own Go module.
 package client
 
 import (
@@ -95,9 +92,9 @@ func New(baseURL string, opts ...Option) *Client {
 		opt(&cfg)
 	}
 
-	// Copy rather than mutate: the caller's *http.Client may be shared with
-	// other code, so writing Timeout onto it directly could change - and
-	// race with - requests that have nothing to do with this Client.
+	// Copy rather than mutate: the caller's *http.Client may be shared
+	// elsewhere, and writing Timeout directly could race with unrelated
+	// requests using it.
 	httpClient := &http.Client{Timeout: defaultTimeout}
 	if cfg.httpClient != nil {
 		clone := *cfg.httpClient
@@ -107,9 +104,8 @@ func New(baseURL string, opts ...Option) *Client {
 		httpClient.Timeout = cfg.timeout
 	}
 
-	// openapi.NewClientWithResponses can only fail via a bad ClientOption,
-	// and WithHTTPClient's never does, so the error is discarded rather than
-	// pushed onto every caller of New.
+	// The only way NewClientWithResponses fails is a bad ClientOption, and
+	// WithHTTPClient's never is - so the error is discarded here.
 	api, _ := openapi.NewClientWithResponses(baseURL, openapi.WithHTTPClient(httpClient))
 
 	c := &Client{api: api}
@@ -120,12 +116,11 @@ func New(baseURL string, opts ...Option) *Client {
 }
 
 // NewFromEnv builds a Client from the same environment variables the Python
-// client reads: RESOURCE_ABSTRACTOR_URL (a bare host, e.g.
-// "root_resource_abstractor", or a full "http://"/"https://" URL used
-// as-is) and RESOURCE_ABSTRACTOR_PORT (11011 for root, 11012 for cluster;
-// see go_resource_abstractor/README.md). Unlike the Python client, which
-// silently builds "http://None:None" when the variables are unset,
-// NewFromEnv returns an error so misconfiguration fails fast at startup.
+// client reads: RESOURCE_ABSTRACTOR_URL (a bare host or a full "http://"/
+// "https://" URL) and RESOURCE_ABSTRACTOR_PORT (11011 for root, 11012 for
+// cluster; see go_resource_abstractor/README.md). Unlike the Python client,
+// which silently builds "http://None:None" when unset, this errors so
+// misconfiguration fails fast at startup.
 func NewFromEnv(opts ...Option) (*Client, error) {
 	host := os.Getenv("RESOURCE_ABSTRACTOR_URL")
 	port := os.Getenv("RESOURCE_ABSTRACTOR_PORT")
@@ -135,8 +130,8 @@ func NewFromEnv(opts ...Option) (*Client, error) {
 	if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
 		host = "http://" + host
 	}
-	// A value copied out of a browser or a compose file may carry a trailing
-	// slash, which the port would otherwise be appended after.
+	// Strip a trailing slash a compose file or browser bar might carry,
+	// which the port would otherwise land after.
 	return New(fmt.Sprintf("%s:%s", strings.TrimSuffix(host, "/"), port), opts...), nil
 }
 
@@ -152,16 +147,15 @@ func (c *Client) Health(ctx context.Context) error {
 	return done(c.api.Health(ctx))
 }
 
-// The helpers below adapt the generated operations - each of which returns
-// the bare (*http.Response, error) pair - to this package's error contract.
-// Every facade method is one call to one of them.
+// The helpers below adapt the generated operations - each returning the bare
+// (*http.Response, error) pair - to this package's error contract. Every
+// facade method is one call to one of them.
 //
-// They use the low-level generated methods rather than the *WithResponse
-// ones on purpose: those decode the body for every status the spec
-// documents, and fail outright when a documented status shows up with an
-// unexpected shape (an empty 404 from a proxy, say) - at which point the
-// status itself is gone and ErrNotFound can't be reported. Reading the body
-// ourselves keeps the status authoritative.
+// They use the low-level generated methods rather than *WithResponse ones on
+// purpose: those decode the body for every documented status and fail
+// outright on an unexpected shape (an empty 404 from a proxy, say), losing
+// the status itself and with it the ability to report ErrNotFound. Reading
+// the body ourselves keeps the status authoritative.
 
 // errorFor maps a non-2xx response onto this package's error contract - 404
 // to ErrNotFound, anything else to *APIError - reading the body first since
@@ -247,10 +241,9 @@ func firstOf[T any](resp *http.Response, err error) (*T, error) {
 }
 
 // done discards the body of a response whose content the caller ignores,
-// keeping only the status check. Unlike read, a successful body is streamed
-// to io.Discard rather than buffered - Delete and Health never look at it,
-// and a deleted job's body can be sizeable (it echoes the job with its full
-// instance_list and history).
+// keeping only the status check. Unlike read, a successful body streams to
+// io.Discard rather than being buffered - a deleted job's body can be
+// sizeable (it echoes the job with its full instance_list and history).
 func done(resp *http.Response, err error) error {
 	if err != nil {
 		return fmt.Errorf("resource abstractor: %w", err)

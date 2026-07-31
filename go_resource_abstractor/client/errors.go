@@ -8,16 +8,14 @@ import (
 )
 
 // ErrNotFound is returned when the resource abstractor responds 404, for
-// whichever method was called - GetByID, List, Delete, or anything else.
-// GetByName/GetByIP/GetByNameAndNamespace also return it when the
-// underlying list came back empty, since the abstractor never answers those
-// with a 404 itself.
+// whichever method was called. GetByName/GetByIP/GetByNameAndNamespace also
+// return it when the underlying list came back empty, since the abstractor
+// never 404s those itself.
 //
-// Unlike the Python resource_abstractor_client, which returns None for a
-// 404, a connection failure, or any other non-2xx response alike, this
-// client keeps "not found" distinct from "the request failed": use
-// errors.Is(err, client.ErrNotFound) to detect the former; any other error
-// (including *APIError) signals the latter.
+// Unlike the Python client, which returns None alike for a 404, a connection
+// failure, or any other non-2xx response, this client keeps "not found"
+// distinct from "the request failed": use errors.Is(err, client.ErrNotFound)
+// for the former; any other error signals the latter.
 var ErrNotFound = errors.New("resource abstractor: not found")
 
 // APIError is returned for any non-2xx response other than 404. It carries
@@ -40,10 +38,10 @@ func (e *APIError) Error() string {
 
 // newAPIError builds an *APIError from a non-2xx, non-404 response, parsing
 // the {"message": "...", "details": {...}} shape the resource abstractor's
-// error handler produces (go_resource_abstractor/api/common.go) when it can.
+// error handler produces when it can.
 //
-// body arrives as bytes, not a stream, because the generated client already
-// read it - there's nothing left to consume here.
+// body arrives as bytes, not a stream, since the generated client already
+// read it.
 func newAPIError(resp *http.Response, body []byte) *APIError {
 	apiErr := &APIError{Status: resp.StatusCode}
 	apiErr.Method, apiErr.Path = requestContext(resp)
@@ -75,9 +73,8 @@ func requestContext(resp *http.Response) (method, path string) {
 
 // notFoundError wraps ErrNotFound with the method and path of the request
 // that got the 404, so errors.Is(err, ErrNotFound) still succeeds while the
-// message names what was requested. When resp carries no usable request
-// context, it returns the bare sentinel rather than a message with two
-// empty fields in it.
+// message names what was requested. Returns the bare sentinel when resp has
+// no usable request context, rather than a message with two empty fields.
 func notFoundError(resp *http.Response) error {
 	method, path := requestContext(resp)
 	if method == "" && path == "" {

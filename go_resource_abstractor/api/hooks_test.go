@@ -18,9 +18,8 @@ func TestCreateHookValidatesEventNames(t *testing.T) {
 }
 
 // TestCreateAndGetHookRoundTrip is a regression test for the fixed
-// find_hook_by_id bug: the Python service queries _id as a raw string
-// there, so it can never match and GET /hooks/<id> is always 404. This
-// asserts the Go port's ObjectID-based lookup actually finds the hook.
+// find_hook_by_id bug: Python queries _id as a raw string, so GET
+// /hooks/<id> is always 404 there. Asserts the Go port actually finds it.
 func TestCreateAndGetHookRoundTrip(t *testing.T) {
 	createRec := doRequest(t, http.MethodPost, "/api/v1/hooks/", map[string]any{
 		"hook_name":   uniqueName("hook"),

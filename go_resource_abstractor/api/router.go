@@ -42,17 +42,12 @@ func NewRouter(store *db.Store, hooks *services.Hooks) http.Handler {
 // rejectMalformedParameter answers a request whose path or query parameters
 // failed to bind to the types openapi.yaml declares for them.
 //
-// In practice only :instance_id can land here - it is the sole non-string
-// parameter in the spec, precisely because the ones with a validation
-// contract of their own (?active=, ?instance_number=) are declared as strings
-// and parsed inside the handlers, where their 422 shape is reproduced. So the
-// blanket 400 below is the same answer the previous hand-rolled
-// strconv.Atoi(c.Param("instance_id")) gave.
-//
-// If a future spec change adds another non-string parameter, it lands here
-// too - a blanket 400, not whatever contract that parameter needs. Give it
-// its own string type and handler-side parsing (like ?active=/?instance_number=
-// above) if it needs anything else.
+// In practice only :instance_id lands here - the spec's other parameters
+// with their own validation contract (?active=, ?instance_number=) are
+// declared as strings and parsed inside the handlers instead. If a future
+// spec change adds another non-string parameter, give it the same
+// string-plus-handler-parsing treatment if it needs anything other than
+// this blanket 400.
 func rejectMalformedParameter(c *gin.Context, err error, _ int) {
 	slog.Debug("rejected request parameter", "path", c.Request.URL.Path, "error", err)
 	abortBadRequest(c)
@@ -80,13 +75,13 @@ func (s *Server) GetSpecYAML(c *gin.Context) {
 }
 
 // stripTrailingSlash rewrites "/path/" to "/path" before routing, so every
-// route is reachable under both forms - the equivalent of the Python
-// service's app.url_map.strict_slashes = False.
+// route is reachable under both forms - matches Python's
+// strict_slashes = False.
 //
-// It runs outside the gin engine because gin middleware only executes after a
-// route has already been matched, which is too late. Rewriting rather than
-// redirecting matters: a 301/308 would make some clients re-issue a POST or
-// PUT as a GET, or drop the body.
+// Runs outside the gin engine since gin middleware only executes after a
+// route is matched, which is too late. Rewrites rather than redirects
+// because a 301/308 would make some clients re-issue POST/PUT as GET, or
+// drop the body.
 func stripTrailingSlash(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if p := r.URL.Path; len(p) > 1 && strings.HasSuffix(p, "/") {

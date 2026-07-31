@@ -8,17 +8,14 @@ import (
 )
 
 // jsonKind is a coarse JSON value shape, used to check request bodies
-// against the typed fields resources_blueprint.py's ResourceSchema declares
+// against the typed fields ResourceSchema declares
 // (fields.String/Integer/Float/Boolean/Dict/List).
 //
-// kindInteger and kindFloat are validated (and coerced) separately. Request
-// bodies are decoded so JSON integers arrive as int64 and JSON decimals as
-// float64 (see decodeJSONMap). marshmallow's Integer field (verified against
-// the pinned marshmallow~=3.15.0) accepts any native int or float and
-// truncates it - Integer().deserialize(5.7) returns 5, it does not reject
-// the fractional part - so a kindInteger field accepts either and stores an
-// int64. marshmallow's Float field likewise accepts an int and widens it, so
-// a kindFloat field accepts either and stores a float64.
+// kindInteger and kindFloat are validated (and coerced) separately: request
+// bodies decode JSON integers as int64 and decimals as float64 (see
+// decodeJSONMap), and marshmallow's Integer/Float fields both accept either
+// and coerce - Integer truncates, Float widens - so those kinds accept
+// either representation too.
 type jsonKind int
 
 const (
@@ -84,20 +81,15 @@ type resourceFieldSpec struct {
 	stringElements bool // only meaningful when kind == kindList
 }
 
-// resourceFields covers resources_blueprint.py's ResourceSchema field by
-// field: JSON shape, nullability, and (for list fields) element type. Keys
-// not listed here are left unvalidated, the same as marshmallow's
-// unknown=INCLUDE on that schema (POST/PUT/PATCH all pass through
-// ResourceSchema(unknown=INCLUDE)).
+// resourceFields covers ResourceSchema field by field: JSON shape,
+// nullability, and (for list fields) element type. Keys not listed here are
+// left unvalidated, matching marshmallow's unknown=INCLUDE on that schema.
 //
-// Every field defaults to marshmallow's allow_none=False and rejects an
-// explicit JSON null with "Field may not be null." - only virtualization,
-// supported_addons and csi_drivers are declared allow_none=True.
-// virtualization and supported_addons are further declared
-// List(fields.String()), so their elements must be strings (a null element
-// included, since fields.String() also defaults allow_none=False);
-// csi_drivers is declared List(fields.Raw()) instead, so its elements are
-// left unvalidated.
+// Every field defaults to allow_none=False and rejects an explicit null -
+// only virtualization, supported_addons and csi_drivers allow it.
+// virtualization and supported_addons are List(fields.String()), so their
+// elements must be strings; csi_drivers is List(fields.Raw()), so its
+// elements are left unvalidated.
 var resourceFields = map[string]resourceFieldSpec{
 	"_id":                          {kind: kindString},
 	"candidate_name":               {kind: kindString},
