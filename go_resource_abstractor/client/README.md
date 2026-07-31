@@ -1,10 +1,10 @@
 # client
 
 A Go HTTP client for [`go_resource_abstractor`](..) (and its Python predecessor,
-[`resource-abstractor`](../../resource-abstractor) - they serve the same wire-compatible
-`/api/v1` REST API). It plays the same role for Go services that
+[`resource-abstractor`](../../resource-abstractor), which serve the same `/api/v1` REST API). It
+plays the same role for Go services that
 [`resource_abstractor_client`](../../libraries/resource_abstractor_client) plays for Python
-services: a thin wrapper around the applications, resources (candidates), and jobs endpoints, so
+services: a thin wrapper around the applications, resources (candidates) and jobs endpoints, so
 consumers don't hand-roll HTTP calls against the abstractor.
 
 ## Generated from the service's own spec
@@ -22,21 +22,20 @@ directions:
       openapi/openapi.gen.go       client/openapi/openapi.gen.go
 ```
 
-So the two halves of the contract can't disagree: a spec change that renames a query parameter or
-moves a route changes both sides at once, and CI fails if either generated file wasn't
-regenerated.
+That keeps the two halves of the contract from disagreeing: a spec change that renames a query
+parameter or moves a route changes both sides at once, and CI fails if either generated file
+wasn't regenerated.
 
-This package is the ergonomic layer over that generated client - construction from the
+This package is the ergonomic layer over that generated client: construction from the
 environment, the `ErrNotFound`/`APIError` split, filter options instead of pointer-filled param
 structs, and the handful of lookups the Python client has consumers for. **Consumers import
-`client` only**: the document types are re-exported here (`client.Job`, `client.Resource`, ...),
+`client` only** - the document types are re-exported here (`client.Job`, `client.Resource`, ...),
 so `openapi` never has to appear in calling code. `Client.OpenAPI()` reaches the generated client
 directly for anything the facade doesn't wrap.
 
 Those re-exports are *type aliases*, not new types - `client.Job` and `openapi.Job` are the same
-type. Nothing converts between the two layers, values pass freely between the facade and
-`Client.OpenAPI()`, and a field added to the spec shows up the moment the code is regenerated,
-with no second model to keep in step by hand.
+type. Values pass freely between the facade and `Client.OpenAPI()`, and a field added to the spec
+shows up here the moment the code is regenerated, with nothing to keep in step by hand.
 
 ### Regenerating
 
@@ -53,20 +52,20 @@ one the server pins in `../openapi/spec.go`.
 
 This is its own Go module (`go.mod` in this directory), nested inside `go_resource_abstractor/`
 purely for co-location with the server it talks to - it imports nothing from the server and the
-server imports nothing from it. Go automatically treats a subdirectory with its own `go.mod` as
-excluded from the parent module, so:
+server imports nothing from it. Go treats a subdirectory with its own `go.mod` as excluded from
+the parent module, so:
 
-- The server's build is completely unaffected (`go build .` / `go build ./...` from
+- The server's build is unaffected (`go build .` / `go build ./...` from
   `go_resource_abstractor/` never descends into `client/`).
 - The client's dependency graph stays minimal - stdlib plus
   [`oapi-codegen/runtime`](https://github.com/oapi-codegen/runtime), the small pure-Go package the
   generated request builders use to encode parameters (it brings `go-jsonmerge` and `google/uuid`
-  with it, and nothing else). No gin, mongo-driver or testcontainers leaks into a consumer's
-  build, in keeping with Oakestra's lightweight-first design principle.
+  with it, nothing else). No gin, mongo-driver or testcontainers leaks into a consumer's build, in
+  keeping with Oakestra's lightweight-first design principle.
 
-The models are therefore generated twice, once per module, rather than shared: importing the
-server's `openapi` package would drag its whole dependency graph along, which is exactly what the
-separate `go.mod` exists to prevent. Both copies come from the same spec, so they cannot disagree.
+The models get generated twice, once per module, instead of shared: importing the server's
+`openapi` package would drag its whole dependency graph along, which is exactly what the separate
+`go.mod` avoids. Both copies come from the same spec, so they can't disagree.
 
 ## Usage
 
@@ -108,8 +107,12 @@ func main() {
 ```
 
 `client.New(baseURL, opts...)` builds a client against an explicit base URL (no `/api/v1` suffix -
-the spec's paths carry it) when you don't want to read it from the environment. `WithHTTPClient`
-and `WithTimeout` (default 10s) are available as `Option`s.
+the spec's paths carry it) when you don't want to read it from the environment.
+`RESOURCE_ABSTRACTOR_URL` itself may be a bare host or already carry a `http://`/`https://` scheme
+- `NewFromEnv` uses either form as given. `WithHTTPClient` and `WithTimeout` (default 10s) are
+available as `Option`s. `WithHTTPClient` takes a concrete `*http.Client`; a caller whose transport
+is a custom `openapi.HttpRequestDoer` should construct the generated client directly instead of
+going through `New`.
 
 ### Filtering lists
 
@@ -123,7 +126,7 @@ apps, err := c.Apps.List(ctx, client.NamedApp("nginx"), client.InNamespace("defa
 // Extend the canonical projection to read fields the service stores but
 // doesn't return by default. The spec sends them as one comma-separated
 // value; pass them separately and let the generated encoder join them.
-res, err := c.Resources.List(ctx, client.Active(), client.Fields("gpu_temp"))
+res, err := c.Resources.List(ctx, client.Active(), client.ResourceFields("gpu_temp"))
 ```
 
 The filter types are distinct per resource (`AppFilter`, `ResourceFilter`, `JobFilter`), so
@@ -164,23 +167,25 @@ a stored document contains.
 
 ### Error handling
 
-Every method returns `(value, error)`. This is a deliberate improvement over the Python client,
-which returns `None` for a 404, a connection failure, *and* any other non-2xx response alike, so
-callers can't distinguish "not found" from "the request failed":
+Every method returns `(value, error)`. That's a deliberate improvement over the Python client,
+which returns `None` for a 404, a connection failure, and any other non-2xx response alike, so
+callers can't tell "not found" apart from "the request failed":
 
-- `errors.Is(err, client.ErrNotFound)` - the abstractor returned 404. Used by `GetByID` calls and
-  by the `GetByName`/`GetByIP`/`GetByNameAndNamespace` helpers when the underlying list came back
-  empty (mirroring the Python client's `result[0] if result else None` pattern).
+- `errors.Is(err, client.ErrNotFound)` - the abstractor returned 404, whichever method was called
+  (`GetByID`, `List`, `Delete`, or anything else). `GetByName`/`GetByIP`/`GetByNameAndNamespace`
+  also return it when the underlying list came back empty (mirroring the Python client's
+  `result[0] if result else None` pattern), since the abstractor never answers those with a 404
+  itself.
 - `errors.As(err, &apiErr)` where `apiErr` is `*client.APIError` - any other non-2xx response.
-  Carries `Status`, the request's method and path, and - when the abstractor's
-  `{"message": "..."}` error body could be decoded - `Message`.
+  Carries `Status`, the request's method and path, and `Message` when the abstractor's
+  `{"message": "..."}` error body could be decoded.
 - Any other `error` - a transport-level failure (DNS, connection refused, context
   cancellation/deadline), or a 2xx body that wasn't the JSON the spec promises.
 
-The status always decides, whatever the body turns out to contain - so a proxy answering with an
-empty 404 is still `ErrNotFound`. Note that the generated client reached through
-`Client.OpenAPI()` does *not* work this way: it hands back the response for the caller to inspect,
-and reports a body it can't decode as an error of its own.
+The status always decides, whatever the body turns out to contain, so a proxy answering with an
+empty 404 is still `ErrNotFound`. The generated client reached through `Client.OpenAPI()` doesn't
+work this way: it hands back the response for the caller to inspect, and reports a body it can't
+decode as an error of its own.
 
 ## API surface
 
