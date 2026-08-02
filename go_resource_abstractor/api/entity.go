@@ -10,22 +10,17 @@ import (
 )
 
 // entity bundles a hook channel name ("jobs", "applications", "resources",
-// or a custom resource type) with the dispatcher, so a write path can name
-// its entity once and let Create/Update/UpdateFound/Delete own the
-// pre-event/store-call/post-event choreography around it instead of
-// repeating it inline. Every write path in this package hand-rolled that
-// shape before this type existed - see api/jobs.go's history for the bug
-// that caused (a hook firing under the wrong entity name because the string
-// literal at one call site didn't match its neighbours).
+// or a custom resource type) with the dispatcher, so a write path names its
+// entity once and Create/Update/UpdateFound/Delete own the
+// pre-event/store-call/post-event choreography around it.
 type entity struct {
 	hooks *services.Hooks
 	name  string
 }
 
-// entityFor builds the entity handle write paths against name use. Called
-// once per fixed entity in NewRouter (s.apps/s.jobs/s.resources); custom
-// resource handlers call it per request since their entity name is the
-// resource type from the path.
+// entityFor builds the handle write paths use for name - built once for the
+// fixed entities, per request for custom resource types since their name
+// comes from the URL path.
 func (s *Server) entityFor(name string) *entity {
 	return &entity{hooks: s.hooks, name: name}
 }
@@ -47,9 +42,9 @@ func (e *entity) Create(
 	return created, nil
 }
 
-// Update injects data["_id"] = id - so a pre_update hook can see which
-// document is being written, the same as every hand-rolled update path did
-// - then runs pre_update, fn, and (iff fn succeeds) post_update.
+// Update injects data["_id"] = id so a pre_update hook can see which
+// document is being written, then runs pre_update, fn, and (iff fn
+// succeeds) post_update.
 func (e *entity) Update(
 	ctx context.Context,
 	id string,
@@ -61,10 +56,8 @@ func (e *entity) Update(
 }
 
 // UpdateFound is Update for a document located by a lookup rather than a
-// path id (upsertByName's update-by-name branch). It does NOT inject _id:
-// the pre-hook is not told the id, matching Python's perform_update, which
-// passes the id as a separate argument alongside the untouched payload
-// rather than folding it in. Used only by upsertByName.
+// path id (upsertByName's update-by-name branch). It does NOT inject _id,
+// so the pre-hook is not told the id.
 func (e *entity) UpdateFound(
 	ctx context.Context,
 	id string,
@@ -93,14 +86,13 @@ func (e *entity) update(
 	return updated, nil
 }
 
-// Delete runs fn, then - iff fn succeeds - post_delete keyed off id, the
-// PATH id rather than whatever the deleted document's own _id was (already
-// uniform across all five delete paths before this refactor).
+// Delete runs fn, then - iff fn succeeds - post_delete keyed off the path
+// id rather than the deleted document's own _id, since some delete routes
+// (DeleteResource, and DeleteCustomResourceInstance when the instance was
+// already gone) return no document to read an _id from.
 //
-// There is deliberately no pre_delete here: hook_service.py maps the
-// "delete" action to (None, process_post_delete), so a pre_delete stage
-// never fires in the Python original either. If that ever changes, this is
-// where the call would go, ahead of fn.
+// There is deliberately no pre_delete here. If one is ever needed, it goes
+// here, ahead of fn.
 func (e *entity) Delete(
 	ctx context.Context,
 	id string,

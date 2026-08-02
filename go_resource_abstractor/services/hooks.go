@@ -17,16 +17,14 @@ import (
 )
 
 // HookRegistry answers the one question Hooks needs of storage: which
-// webhook URLs are registered for a given (entity, event) pair. It exists
-// as a seam so this package can be unit-tested (and its behavior reasoned
-// about) without a MongoDB - previously Hooks held a whole *db.Store (35
-// methods, five collection handles) just to run one filtered query, which
-// dragged Mongo query-document construction into a package that has no
-// other business knowing about the database driver.
+// webhook URLs are registered for a given (entity, event) pair. Narrowing
+// the dependency to this keeps Mongo query-document construction out of a
+// package that otherwise has no business knowing about the database
+// driver, and lets the dispatch behaviour below be tested against a map
+// rather than a MongoDB.
 //
-// *db.Store satisfies this interface via db.Store.WebhookURLsFor and is the
-// production adapter - see main.go, which passes store to NewHooks
-// unchanged.
+// *db.Store satisfies this interface via WebhookURLsFor and is the
+// production adapter.
 type HookRegistry interface {
 	WebhookURLsFor(ctx context.Context, entity string, event db.HookEvent) ([]string, error)
 }

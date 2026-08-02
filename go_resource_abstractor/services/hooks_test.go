@@ -15,10 +15,8 @@ import (
 const testHookTimeout = 3 * time.Second
 
 // fakeRegistry is an in-memory HookRegistry double keyed by (entity, event).
-// It replaces the MongoDB-backed testStore this package used to depend on
-// solely to insert rows for HookRegistry lookups to find - now that Hooks
-// only needs the interface, a map is a complete substitute and this package
-// no longer needs Docker to run its tests.
+// Registrations are the only state Hooks reads, so a map is a complete
+// substitute for the real store, and these tests run without Docker.
 type fakeRegistry map[registryKey][]string
 
 type registryKey struct {
