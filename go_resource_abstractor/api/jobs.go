@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -36,16 +37,12 @@ func (s *Server) CreateJob(c *gin.Context) {
 	if !ok {
 		return
 	}
-	ctx := c.Request.Context()
 
-	data = s.hooks.PreCreate(ctx, "jobs", data)
-
-	created, err := s.store.CreateJob(ctx, bson.M(data))
+	created, err := s.jobs.Create(c.Request.Context(), data, s.store.CreateJob)
 	if err != nil {
 		abortInternalError(c, err)
 		return
 	}
-	s.hooks.PostCreate("jobs", db.ExtractID(created))
 
 	writeJSON(c, http.StatusOK, created)
 }
@@ -62,7 +59,7 @@ func (s *Server) UpsertJob(c *gin.Context) {
 	if !ok {
 		return
 	}
-	s.upsertByName(c, "jobs", "job_name", data, s.store.FindJobByName, s.store.UpdateJob, s.store.CreateJob)
+	s.upsertByName(c, s.jobs, "job_name", data, s.store.FindJobByName, s.store.UpdateJob, s.store.CreateJob)
 }
 
 // GetJob implements GET /api/v1/jobs/{job_id}, optionally narrowed to jobs
@@ -96,29 +93,21 @@ func (s *Server) PatchJob(c *gin.Context, jobID openapi.JobID) {
 	if !ok {
 		return
 	}
-	ctx := c.Request.Context()
 
-	data["_id"] = jobID
-	data = s.hooks.PreUpdate(ctx, "jobs", data)
-
-	updated, err := s.store.UpdateJob(ctx, jobID, bson.M(data))
+	updated, err := s.jobs.Update(c.Request.Context(), jobID, data, s.store.UpdateJob)
 	if abortOnError(c, err) {
 		return
 	}
-	s.hooks.PostUpdate("jobs", db.ExtractID(updated))
 
 	writeJSON(c, http.StatusOK, updated)
 }
 
 // DeleteJob implements DELETE /api/v1/jobs/{job_id}.
 func (s *Server) DeleteJob(c *gin.Context, jobID openapi.JobID) {
-	ctx := c.Request.Context()
-
-	deleted, err := s.store.DeleteJob(ctx, jobID)
+	deleted, err := s.jobs.Delete(c.Request.Context(), jobID, s.store.DeleteJob)
 	if abortOnError(c, err) {
 		return
 	}
-	s.hooks.PostDelete("jobs", jobID)
 
 	writeJSON(c, http.StatusOK, deleted)
 }
@@ -152,10 +141,16 @@ func (s *Server) AppendJobInstance(c *gin.Context, jobID openapi.JobID, instance
 	}
 	ctx := c.Request.Context()
 
+	// This is the one path that fires a *create* event while also injecting
+	// _id: the pre-hook needs to see which job the instance is being
+	// appended to, but there's no separate id to hand Create the way
+	// Update/UpdateFound take one - so the injection stays here rather than
+	// growing a fifth entity method for a single caller.
 	data["_id"] = jobID
-	data = s.hooks.PreCreate(ctx, "jobs", data)
 
-	updated, err := s.store.AppendJobInstance(ctx, jobID, instanceNumber, bson.M(data))
+	updated, err := s.jobs.Create(ctx, data, func(ctx context.Context, data bson.M) (bson.M, error) {
+		return s.store.AppendJobInstance(ctx, jobID, instanceNumber, data)
+	})
 	if err != nil {
 		if errors.Is(err, db.ErrInstanceConflict) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, openapi.Message{Message: "Instance already exists"})
@@ -164,7 +159,6 @@ func (s *Server) AppendJobInstance(c *gin.Context, jobID openapi.JobID, instance
 		abortInternalError(c, err)
 		return
 	}
-	s.hooks.PostCreate("jobs", db.ExtractID(updated))
 
 	writeJSON(c, http.StatusOK, updated)
 }
@@ -182,14 +176,12 @@ func (s *Server) PatchJobInstance(c *gin.Context, jobID openapi.JobID, instanceN
 	}
 	ctx := c.Request.Context()
 
-	data["_id"] = jobID
-	data = s.hooks.PreUpdate(ctx, "jobs", data)
-
-	updated, err := s.store.UpdateJobInstance(ctx, jobID, instanceNumber, bson.M(data))
+	updated, err := s.jobs.Update(ctx, jobID, data, func(ctx context.Context, _ string, data bson.M) (bson.M, error) {
+		return s.store.UpdateJobInstance(ctx, jobID, instanceNumber, data)
+	})
 	if abortOnError(c, err) {
 		return
 	}
-	s.hooks.PostUpdate("jobs", db.ExtractID(updated))
 
 	writeJSON(c, http.StatusOK, updated)
 }
@@ -200,13 +192,13 @@ func (s *Server) DeleteJobInstance(c *gin.Context, jobID openapi.JobID, instance
 		abortBadRequest(c)
 		return
 	}
-	ctx := c.Request.Context()
 
-	updated, err := s.store.DeleteJobInstance(ctx, jobID, instanceNumber)
+	updated, err := s.jobs.Delete(c.Request.Context(), jobID, func(ctx context.Context, _ string) (bson.M, error) {
+		return s.store.DeleteJobInstance(ctx, jobID, instanceNumber)
+	})
 	if abortOnError(c, err) {
 		return
 	}
-	s.hooks.PostDelete("jobs", jobID)
 
 	writeJSON(c, http.StatusOK, updated)
 }

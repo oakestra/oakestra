@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -119,14 +120,13 @@ func (s *Server) CreateCustomResourceInstance(c *gin.Context, resourceType opena
 		return
 	}
 
-	data = s.hooks.PreCreate(ctx, resourceType, data)
-
-	created, err := s.store.CreateResource(ctx, resourceType, bson.M(data))
+	created, err := s.entityFor(resourceType).Create(ctx, data, func(ctx context.Context, data bson.M) (bson.M, error) {
+		return s.store.CreateResource(ctx, resourceType, data)
+	})
 	if err != nil {
 		abortInternalError(c, err)
 		return
 	}
-	s.hooks.PostCreate(resourceType, db.ExtractID(created))
 
 	writeJSON(c, http.StatusOK, created)
 }
@@ -166,14 +166,12 @@ func (s *Server) PatchCustomResourceInstance(c *gin.Context, resourceType openap
 		return
 	}
 
-	data["_id"] = id
-	data = s.hooks.PreUpdate(ctx, resourceType, data)
-
-	updated, err := s.store.UpdateResource(ctx, resourceType, id, bson.M(data))
+	updated, err := s.entityFor(resourceType).Update(ctx, id, data, func(ctx context.Context, id string, data bson.M) (bson.M, error) {
+		return s.store.UpdateResource(ctx, resourceType, id, data)
+	})
 	if abortOnError(c, err) {
 		return
 	}
-	s.hooks.PostUpdate(resourceType, db.ExtractID(updated))
 
 	writeJSON(c, http.StatusOK, updated)
 }
@@ -187,11 +185,19 @@ func (s *Server) DeleteCustomResourceInstance(c *gin.Context, resourceType opena
 		return
 	}
 
-	if _, err := s.store.DeleteResource(ctx, resourceType, id); err != nil && !isNotFound(err) {
+	_, err := s.entityFor(resourceType).Delete(ctx, id, func(ctx context.Context, id string) (bson.M, error) {
+		deleted, err := s.store.DeleteResource(ctx, resourceType, id)
+		if isNotFound(err) {
+			// Python fires post_delete regardless of whether the instance
+			// existed; returning a nil error keeps that.
+			return nil, nil
+		}
+		return deleted, err
+	})
+	if err != nil {
 		abortInternalError(c, err)
 		return
 	}
-	s.hooks.PostDelete(resourceType, id)
 
 	writeJSON(c, http.StatusOK, openapi.DeletedID{ID: id})
 }

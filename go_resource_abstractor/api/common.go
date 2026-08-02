@@ -29,10 +29,17 @@ import (
 )
 
 // Server bundles the dependencies HTTP handlers need: the Mongo-backed
-// store and the webhook dispatcher.
+// store and the webhook dispatcher. apps/jobs/resources are the entity
+// handles for the three fixed entities (see entity.go); custom resources
+// build their own per request since their entity name is the resource type
+// from the path.
 type Server struct {
 	store *db.Store
 	hooks *services.Hooks
+
+	apps      *entity
+	jobs      *entity
+	resources *entity
 }
 
 // isValidObjectID reports whether id is a valid hex-encoded ObjectID - the
@@ -301,11 +308,12 @@ func queryInt(key string, raw *string) (value int, present bool, err error) {
 
 // upsertByName implements the find-by-name-or-create control flow shared by
 // PUT /jobs/ and PUT /resources/: update the existing document if lookup by
-// nameField succeeds, otherwise create a new one. entity names the hook
-// channel to fire PreCreate/PreUpdate/PostCreate/PostUpdate against.
+// nameField succeeds, otherwise create a new one. e names the hook channel
+// the update/create goes through.
 func (s *Server) upsertByName(
 	c *gin.Context,
-	entity, nameField string,
+	e *entity,
+	nameField string,
 	data map[string]any,
 	findByName func(ctx context.Context, name string) (bson.M, error),
 	update func(ctx context.Context, id string, data bson.M) (bson.M, error),
@@ -317,14 +325,10 @@ func (s *Server) upsertByName(
 		existing, err := findByName(ctx, name)
 		switch {
 		case err == nil:
-			id := db.ExtractID(existing)
-			data = s.hooks.PreUpdate(ctx, entity, data)
-
-			updated, err := update(ctx, id, bson.M(data))
+			updated, err := e.UpdateFound(ctx, db.ExtractID(existing), data, update)
 			if abortOnError(c, err) {
 				return
 			}
-			s.hooks.PostUpdate(entity, db.ExtractID(updated))
 			writeJSON(c, http.StatusOK, updated)
 			return
 		case !isNotFound(err):
@@ -333,11 +337,9 @@ func (s *Server) upsertByName(
 		}
 	}
 
-	data = s.hooks.PreCreate(ctx, entity, data)
-	created, err := create(ctx, data)
+	created, err := e.Create(ctx, data, create)
 	if abortOnError(c, err) {
 		return
 	}
-	s.hooks.PostCreate(entity, db.ExtractID(created))
 	writeJSON(c, http.StatusOK, created)
 }

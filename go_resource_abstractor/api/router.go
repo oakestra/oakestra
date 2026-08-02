@@ -22,6 +22,9 @@ import (
 // ./openapi`.
 func NewRouter(store *db.Store, hooks *services.Hooks) http.Handler {
 	s := &Server{store: store, hooks: hooks}
+	s.apps = s.entityFor("applications")
+	s.jobs = s.entityFor("jobs")
+	s.resources = s.entityFor("resources")
 
 	router := gin.New()
 	router.Use(gin.Recovery(), requestLogger())
