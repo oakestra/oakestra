@@ -70,6 +70,68 @@ func TestFindHooksByEntityAndEvent(t *testing.T) {
 	}
 }
 
+// TestWebhookURLsForFiltersByEntityAndEventAndSkipsUnusableURLs covers
+// WebhookURLsFor, the services.HookRegistry adapter: it must return only
+// URLs from hooks matching both entity and event, and must skip a
+// registration whose webhook_url is empty or missing rather than returning
+// it as a usable URL.
+func TestWebhookURLsForFiltersByEntityAndEventAndSkipsUnusableURLs(t *testing.T) {
+	ctx := context.Background()
+	entity := uniqueName("entity")
+
+	if _, err := testStore.CreateHook(ctx, bson.M{
+		"hook_name":   uniqueName("hook-match"),
+		"webhook_url": "http://example.invalid/a",
+		"entity":      entity,
+		"events":      bson.A{string(EventPostCreate), string(EventPreUpdate)},
+	}); err != nil {
+		t.Fatalf("create matching hook: %v", err)
+	}
+
+	if _, err := testStore.CreateHook(ctx, bson.M{
+		"hook_name":   uniqueName("hook-wrong-event"),
+		"webhook_url": "http://example.invalid/b",
+		"entity":      entity,
+		"events":      bson.A{string(EventPostDelete)},
+	}); err != nil {
+		t.Fatalf("create non-matching hook: %v", err)
+	}
+
+	if _, err := testStore.CreateHook(ctx, bson.M{
+		"hook_name":   uniqueName("hook-wrong-entity"),
+		"webhook_url": "http://example.invalid/c",
+		"entity":      uniqueName("other-entity"),
+		"events":      bson.A{string(EventPostCreate)},
+	}); err != nil {
+		t.Fatalf("create hook for a different entity: %v", err)
+	}
+
+	if _, err := testStore.CreateHook(ctx, bson.M{
+		"hook_name":   uniqueName("hook-empty-url"),
+		"webhook_url": "",
+		"entity":      entity,
+		"events":      bson.A{string(EventPostCreate)},
+	}); err != nil {
+		t.Fatalf("create hook with empty webhook_url: %v", err)
+	}
+
+	if _, err := testStore.CreateHook(ctx, bson.M{
+		"hook_name": uniqueName("hook-missing-url"),
+		"entity":    entity,
+		"events":    bson.A{string(EventPostCreate)},
+	}); err != nil {
+		t.Fatalf("create hook with missing webhook_url: %v", err)
+	}
+
+	urls, err := testStore.WebhookURLsFor(ctx, entity, EventPostCreate)
+	if err != nil {
+		t.Fatalf("webhook urls for: %v", err)
+	}
+	if len(urls) != 1 || urls[0] != "http://example.invalid/a" {
+		t.Fatalf("expected only the matching hook's URL, got %v", urls)
+	}
+}
+
 func TestHookNameUniqueIndex(t *testing.T) {
 	ctx := context.Background()
 	name := uniqueName("dup-hook")

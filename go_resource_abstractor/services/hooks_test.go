@@ -3,19 +3,49 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"go.mongodb.org/mongo-driver/v2/bson"
+	"go_resource_abstractor/db"
 )
 
 const testHookTimeout = 3 * time.Second
 
+// fakeRegistry is an in-memory HookRegistry double keyed by (entity, event).
+// It replaces the MongoDB-backed testStore this package used to depend on
+// solely to insert rows for HookRegistry lookups to find - now that Hooks
+// only needs the interface, a map is a complete substitute and this package
+// no longer needs Docker to run its tests.
+type fakeRegistry map[registryKey][]string
+
+type registryKey struct {
+	entity string
+	event  db.HookEvent
+}
+
+func (f fakeRegistry) register(entity string, event db.HookEvent, url string) {
+	key := registryKey{entity, event}
+	f[key] = append(f[key], url)
+}
+
+func (f fakeRegistry) WebhookURLsFor(_ context.Context, entity string, event db.HookEvent) ([]string, error) {
+	return f[registryKey{entity, event}], nil
+}
+
+// erroringRegistry always fails the lookup, simulating a HookRegistry whose
+// backing store is unreachable.
+type erroringRegistry struct{ err error }
+
+func (r erroringRegistry) WebhookURLsFor(context.Context, string, db.HookEvent) ([]string, error) {
+	return nil, r.err
+}
+
 func TestPreCreateTransformsPayload(t *testing.T) {
 	ctx := context.Background()
-	entity := uniqueName("entity")
+	entity := "entity"
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
@@ -27,16 +57,10 @@ func TestPreCreateTransformsPayload(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if _, err := testStore.CreateHook(ctx, bson.M{
-		"hook_name":   uniqueName("hook"),
-		"webhook_url": server.URL,
-		"entity":      entity,
-		"events":      bson.A{"pre_create"},
-	}); err != nil {
-		t.Fatalf("register hook: %v", err)
-	}
+	registry := fakeRegistry{}
+	registry.register(entity, db.EventPreCreate, server.URL)
 
-	hooks := NewHooks(testStore, testHookTimeout, testHookTimeout)
+	hooks := NewHooks(registry, testHookTimeout, testHookTimeout)
 	result := hooks.PreCreate(ctx, entity, map[string]any{"name": "widget"})
 
 	if result["name"] != "widget" {
@@ -49,23 +73,17 @@ func TestPreCreateTransformsPayload(t *testing.T) {
 
 func TestPreUpdateFailsOpenOnWebhookError(t *testing.T) {
 	ctx := context.Background()
-	entity := uniqueName("entity")
+	entity := "entity"
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
-	if _, err := testStore.CreateHook(ctx, bson.M{
-		"hook_name":   uniqueName("hook"),
-		"webhook_url": server.URL,
-		"entity":      entity,
-		"events":      bson.A{"pre_update"},
-	}); err != nil {
-		t.Fatalf("register hook: %v", err)
-	}
+	registry := fakeRegistry{}
+	registry.register(entity, db.EventPreUpdate, server.URL)
 
-	hooks := NewHooks(testStore, testHookTimeout, testHookTimeout)
+	hooks := NewHooks(registry, testHookTimeout, testHookTimeout)
 	original := map[string]any{"name": "widget"}
 	result := hooks.PreUpdate(ctx, entity, original)
 
@@ -76,18 +94,12 @@ func TestPreUpdateFailsOpenOnWebhookError(t *testing.T) {
 
 func TestPreCreateFailsOpenWhenWebhookUnreachable(t *testing.T) {
 	ctx := context.Background()
-	entity := uniqueName("entity")
+	entity := "entity"
 
-	if _, err := testStore.CreateHook(ctx, bson.M{
-		"hook_name":   uniqueName("hook"),
-		"webhook_url": "http://127.0.0.1:1", // nothing listens on port 1
-		"entity":      entity,
-		"events":      bson.A{"pre_create"},
-	}); err != nil {
-		t.Fatalf("register hook: %v", err)
-	}
+	registry := fakeRegistry{}
+	registry.register(entity, db.EventPreCreate, "http://127.0.0.1:1") // nothing listens on port 1
 
-	hooks := NewHooks(testStore, testHookTimeout, testHookTimeout)
+	hooks := NewHooks(registry, testHookTimeout, testHookTimeout)
 	original := map[string]any{"name": "widget"}
 	result := hooks.PreCreate(ctx, entity, original)
 
@@ -97,8 +109,7 @@ func TestPreCreateFailsOpenWhenWebhookUnreachable(t *testing.T) {
 }
 
 func TestPostCreateFiresAsyncWebhookWithEntityPayload(t *testing.T) {
-	ctx := context.Background()
-	entity := uniqueName("entity")
+	entity := "entity"
 
 	received := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -109,16 +120,10 @@ func TestPostCreateFiresAsyncWebhookWithEntityPayload(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if _, err := testStore.CreateHook(ctx, bson.M{
-		"hook_name":   uniqueName("hook"),
-		"webhook_url": server.URL,
-		"entity":      entity,
-		"events":      bson.A{"post_create"},
-	}); err != nil {
-		t.Fatalf("register hook: %v", err)
-	}
+	registry := fakeRegistry{}
+	registry.register(entity, db.EventPostCreate, server.URL)
 
-	hooks := NewHooks(testStore, testHookTimeout, testHookTimeout)
+	hooks := NewHooks(registry, testHookTimeout, testHookTimeout)
 	hooks.PostCreate(entity, "entity-id-123")
 
 	select {
@@ -138,9 +143,8 @@ func TestPostCreateFiresAsyncWebhookWithEntityPayload(t *testing.T) {
 }
 
 func TestPostDeleteDoesNotFireForUnrelatedEntity(t *testing.T) {
-	ctx := context.Background()
-	entity := uniqueName("entity")
-	otherEntity := uniqueName("other-entity")
+	entity := "entity"
+	otherEntity := "other-entity"
 
 	received := make(chan struct{}, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -149,16 +153,10 @@ func TestPostDeleteDoesNotFireForUnrelatedEntity(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if _, err := testStore.CreateHook(ctx, bson.M{
-		"hook_name":   uniqueName("hook"),
-		"webhook_url": server.URL,
-		"entity":      entity,
-		"events":      bson.A{"post_delete"},
-	}); err != nil {
-		t.Fatalf("register hook: %v", err)
-	}
+	registry := fakeRegistry{}
+	registry.register(entity, db.EventPostDelete, server.URL)
 
-	hooks := NewHooks(testStore, testHookTimeout, testHookTimeout)
+	hooks := NewHooks(registry, testHookTimeout, testHookTimeout)
 	hooks.PostDelete(otherEntity, "some-id")
 
 	select {
@@ -167,4 +165,44 @@ func TestPostDeleteDoesNotFireForUnrelatedEntity(t *testing.T) {
 	case <-time.After(500 * time.Millisecond):
 		// expected: no request arrived
 	}
+}
+
+// TestFailsOpenWhenRegistryLookupFails covers a path the old *db.Store-based
+// tests couldn't reach without a real Mongo failure: WebhookURLsFor itself
+// erroring. Both call paths must fail open - sync returns the payload
+// unchanged, async fires no webhooks at all - exactly like a webhook call
+// failure does, just one step earlier in the pipeline.
+func TestFailsOpenWhenRegistryLookupFails(t *testing.T) {
+	ctx := context.Background()
+	registry := erroringRegistry{err: errors.New("registry unavailable")}
+	hooks := NewHooks(registry, testHookTimeout, testHookTimeout)
+
+	t.Run("sync", func(t *testing.T) {
+		original := map[string]any{"name": "widget"}
+		result := hooks.PreCreate(ctx, "entity", original)
+		if result["name"] != "widget" || len(result) != 1 {
+			t.Errorf("expected the original payload unchanged when the registry lookup fails, got %v", result)
+		}
+	})
+
+	t.Run("async", func(t *testing.T) {
+		received := make(chan struct{}, 1)
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			received <- struct{}{}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		// The registry always errors regardless of entity/event, so this
+		// server is never actually reachable through the registry - it only
+		// exists so a stray call would be observable.
+		hooks.PostCreate("entity", "entity-id-123")
+
+		select {
+		case <-received:
+			t.Fatal("expected no webhook call when the registry lookup fails")
+		case <-time.After(300 * time.Millisecond):
+			// expected: no request arrived
+		}
+	})
 }
