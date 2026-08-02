@@ -32,7 +32,7 @@ var SyncEvents = []HookEvent{EventPreCreate, EventPreUpdate, EventPreDelete}
 
 // FindHooks lists hooks matching filter (an empty/nil filter lists all).
 func (s *Store) FindHooks(ctx context.Context, filter bson.M) ([]bson.M, error) {
-	return findAll(ctx, s.Hooks, filter)
+	return findAll(ctx, s.hooks, filter)
 }
 
 // WebhookURLsFor returns the webhook URLs registered for entity that are
@@ -40,7 +40,7 @@ func (s *Store) FindHooks(ctx context.Context, filter bson.M) ([]bson.M, error) 
 // or not a string is skipped rather than returned, so callers can dispatch
 // to every URL they get back without re-checking.
 func (s *Store) WebhookURLsFor(ctx context.Context, entity string, event HookEvent) ([]string, error) {
-	hooks, err := findAll(ctx, s.Hooks, bson.M{"entity": entity, "events": bson.M{"$in": bson.A{string(event)}}})
+	hooks, err := findAll(ctx, s.hooks, bson.M{"entity": entity, "events": bson.M{"$in": bson.A{string(event)}}})
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +66,7 @@ func (s *Store) FindHookByID(ctx context.Context, id string) (bson.M, error) {
 	}
 
 	var hook bson.M
-	if err := s.Hooks.FindOne(ctx, bson.M{"_id": oid}).Decode(&hook); err != nil {
+	if err := s.hooks.FindOne(ctx, bson.M{"_id": oid}).Decode(&hook); err != nil {
 		return nil, err
 	}
 	return hook, nil
@@ -75,12 +75,12 @@ func (s *Store) FindHookByID(ctx context.Context, id string) (bson.M, error) {
 // CreateHook inserts a new hook registration, dropping any client-supplied
 // _id.
 func (s *Store) CreateHook(ctx context.Context, data bson.M) (bson.M, error) {
-	return insertReturning(ctx, s.Hooks, data)
+	return insertReturning(ctx, s.hooks, data)
 }
 
 // UpdateHook applies a plain $set update, dropping any client-supplied _id.
 func (s *Store) UpdateHook(ctx context.Context, id string, data bson.M) (bson.M, error) {
-	return updateByID(ctx, s.Hooks, id, data)
+	return updateByID(ctx, s.hooks, id, data)
 }
 
 // DeleteHook removes a hook by id.
@@ -89,6 +89,6 @@ func (s *Store) DeleteHook(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.Hooks.DeleteOne(ctx, bson.M{"_id": oid})
+	_, err = s.hooks.DeleteOne(ctx, bson.M{"_id": oid})
 	return err
 }

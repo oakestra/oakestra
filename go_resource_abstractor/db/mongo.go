@@ -19,11 +19,11 @@ import (
 type Store struct {
 	client *mongo.Client
 
-	Candidates *mongo.Collection // candidates.candidates
-	Apps       *mongo.Collection // jobs.apps
-	Jobs       *mongo.Collection // jobs.jobs
-	Hooks      *mongo.Collection // hooks.hooks
-	MetaData   *mongo.Collection // custom_resources.meta_data
+	candidates *mongo.Collection // candidates.candidates
+	apps       *mongo.Collection // jobs.apps
+	jobs       *mongo.Collection // jobs.jobs
+	hooks      *mongo.Collection // hooks.hooks
+	metaData   *mongo.Collection // custom_resources.meta_data
 
 	customResourcesDB *mongo.Database // custom_resources, for dynamic per-type collections
 }
@@ -45,11 +45,11 @@ func Connect(ctx context.Context, uri string) (*Store, error) {
 
 	store := &Store{
 		client:            client,
-		Candidates:        client.Database("candidates").Collection("candidates"),
-		Apps:              client.Database("jobs").Collection("apps"),
-		Jobs:              client.Database("jobs").Collection("jobs"),
-		Hooks:             client.Database("hooks").Collection("hooks"),
-		MetaData:          customResourcesDB.Collection("meta_data"),
+		candidates:        client.Database("candidates").Collection("candidates"),
+		apps:              client.Database("jobs").Collection("apps"),
+		jobs:              client.Database("jobs").Collection("jobs"),
+		hooks:             client.Database("hooks").Collection("hooks"),
+		metaData:          customResourcesDB.Collection("meta_data"),
 		customResourcesDB: customResourcesDB,
 	}
 
@@ -71,7 +71,7 @@ func Connect(ctx context.Context, uri string) (*Store, error) {
 func (s *Store) ensureIndexes(ctx context.Context) error {
 	unique := true
 
-	_, err := s.Hooks.Indexes().CreateMany(ctx, []mongo.IndexModel{
+	_, err := s.hooks.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "entity", Value: 1}, {Key: "webhook_url", Value: 1}},
 			Options: options.Index().SetUnique(unique),
@@ -85,7 +85,7 @@ func (s *Store) ensureIndexes(ctx context.Context) error {
 		return fmt.Errorf("hooks indexes: %w", err)
 	}
 
-	_, err = s.MetaData.Indexes().CreateOne(ctx, mongo.IndexModel{
+	_, err = s.metaData.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "resource_type", Value: 1}},
 		Options: options.Index().SetUnique(unique),
 	})
@@ -93,7 +93,7 @@ func (s *Store) ensureIndexes(ctx context.Context) error {
 		return fmt.Errorf("meta_data index: %w", err)
 	}
 
-	_, err = s.Candidates.Indexes().CreateMany(ctx, []mongo.IndexModel{
+	_, err = s.candidates.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "candidate_name", Value: 1}}},
 		{Keys: bson.D{{Key: "last_modified_timestamp", Value: 1}}},
 	})
@@ -101,7 +101,7 @@ func (s *Store) ensureIndexes(ctx context.Context) error {
 		return fmt.Errorf("candidates indexes: %w", err)
 	}
 
-	_, err = s.Jobs.Indexes().CreateOne(ctx, mongo.IndexModel{
+	_, err = s.jobs.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{{Key: "job_name", Value: 1}},
 	})
 	if err != nil {
@@ -111,10 +111,12 @@ func (s *Store) ensureIndexes(ctx context.Context) error {
 	return nil
 }
 
-// CustomResourceCollection returns the dynamically named collection that
-// stores instances of the given custom resource type - the Go equivalent of
-// Python's db.db_custom_resources.db[resource_type].
-func (s *Store) CustomResourceCollection(resourceType string) *mongo.Collection {
+// customResourceCollection returns the dynamically named collection that
+// stores instances of the given custom resource type, inside the
+// custom_resources database - the Go equivalent of Python's
+// db.db_custom_resources.db[resource_type]. It cannot reach the candidates,
+// jobs, hooks or apps collections, which live in separate MongoDB databases.
+func (s *Store) customResourceCollection(resourceType string) *mongo.Collection {
 	return s.customResourcesDB.Collection(resourceType)
 }
 

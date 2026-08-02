@@ -45,13 +45,9 @@ func TestJobIntegerFieldStoredAsBSONInteger(t *testing.T) {
 		"job_name": uniqueName("job"),
 		"replicas": 3,
 	}))
-	oid, err := bson.ObjectIDFromHex(created["_id"].(string))
-	if err != nil {
-		t.Fatalf("bad id: %v", err)
-	}
 
-	var raw bson.M
-	if err := testStore.Jobs.FindOne(context.Background(), bson.M{"_id": oid}).Decode(&raw); err != nil {
+	raw, err := testStore.FindJobByID(context.Background(), created["_id"].(string), bson.M{})
+	if err != nil {
 		t.Fatalf("read raw job: %v", err)
 	}
 	switch raw["replicas"].(type) {

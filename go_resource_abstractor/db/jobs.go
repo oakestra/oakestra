@@ -18,66 +18,6 @@ import (
 // though that message is a bit misleading for the other two cases.
 var ErrInstanceConflict = errors.New("job instance already exists or payload has no instance to append")
 
-// Application operations
-
-// FindApps lists applications matching filter.
-func (s *Store) FindApps(ctx context.Context, filter bson.M) ([]bson.M, error) {
-	return findAll(ctx, s.Apps, filter)
-}
-
-// FindAppByID looks up a single application by id, additionally constrained
-// by extraFilter (e.g. userId from query params).
-func (s *Store) FindAppByID(ctx context.Context, id string, extraFilter bson.M) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(id)
-	if err != nil {
-		return nil, err
-	}
-
-	filter := bson.M{}
-	maps.Copy(filter, extraFilter)
-	filter["_id"] = oid
-
-	var result bson.M
-	if err := s.Apps.FindOne(ctx, filter).Decode(&result); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-// DeleteApp removes an application by id and returns the deleted document.
-func (s *Store) DeleteApp(ctx context.Context, id string) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(id)
-	if err != nil {
-		return nil, err
-	}
-
-	var deleted bson.M
-	if err := s.Apps.FindOneAndDelete(ctx, bson.M{"_id": oid}).Decode(&deleted); err != nil {
-		return nil, err
-	}
-	return deleted, nil
-}
-
-// UpdateApp applies a plain $set update, dropping any client-supplied _id.
-func (s *Store) UpdateApp(ctx context.Context, id string, data bson.M) (bson.M, error) {
-	return updateByID(ctx, s.Apps, id, data)
-}
-
-// CreateApp inserts a new application, populating applicationID with its own
-// stringified _id. The id is generated client-side so both fields can be set
-// in a single insert, rather than jobs_db.create_app's insert-then-update.
-func (s *Store) CreateApp(ctx context.Context, data bson.M) (bson.M, error) {
-	delete(data, "_id")
-	id := bson.NewObjectID()
-	data["_id"] = id
-	data["applicationID"] = id.Hex()
-
-	if _, err := s.Apps.InsertOne(ctx, data); err != nil {
-		return nil, err
-	}
-	return data, nil
-}
-
 // Job operations
 
 // BuildJobFilter translates the query params accepted by GET /jobs/<id>
@@ -98,7 +38,7 @@ func BuildJobFilter(instanceNumber *int) bson.M {
 
 // FindJobs lists jobs matching filter.
 func (s *Store) FindJobs(ctx context.Context, filter bson.M) ([]bson.M, error) {
-	return findAll(ctx, s.Jobs, filter)
+	return findAll(ctx, s.jobs, filter)
 }
 
 // FindJobByID looks up a single job by id, additionally constrained by
@@ -114,7 +54,7 @@ func (s *Store) FindJobByID(ctx context.Context, id string, filter bson.M) (bson
 	f["_id"] = oid
 
 	var job bson.M
-	if err := s.Jobs.FindOne(ctx, f).Decode(&job); err != nil {
+	if err := s.jobs.FindOne(ctx, f).Decode(&job); err != nil {
 		return nil, err
 	}
 	return job, nil
@@ -124,7 +64,7 @@ func (s *Store) FindJobByID(ctx context.Context, id string, filter bson.M) (bson
 // /jobs/ upsert path.
 func (s *Store) FindJobByName(ctx context.Context, name string) (bson.M, error) {
 	var job bson.M
-	if err := s.Jobs.FindOne(ctx, bson.M{"job_name": name}).Decode(&job); err != nil {
+	if err := s.jobs.FindOne(ctx, bson.M{"job_name": name}).Decode(&job); err != nil {
 		return nil, err
 	}
 	return job, nil
@@ -155,7 +95,7 @@ func (s *Store) DeleteJob(ctx context.Context, id string) (bson.M, error) {
 	}
 
 	var deleted bson.M
-	if err := s.Jobs.FindOneAndDelete(ctx, bson.M{"_id": oid}).Decode(&deleted); err != nil {
+	if err := s.jobs.FindOneAndDelete(ctx, bson.M{"_id": oid}).Decode(&deleted); err != nil {
 		return nil, err
 	}
 	return deleted, nil
@@ -163,12 +103,12 @@ func (s *Store) DeleteJob(ctx context.Context, id string) (bson.M, error) {
 
 // UpdateJob applies a plain $set update, dropping any client-supplied _id.
 func (s *Store) UpdateJob(ctx context.Context, id string, data bson.M) (bson.M, error) {
-	return updateByID(ctx, s.Jobs, id, data)
+	return updateByID(ctx, s.jobs, id, data)
 }
 
 // CreateJob inserts a new job document and returns it as stored.
 func (s *Store) CreateJob(ctx context.Context, data bson.M) (bson.M, error) {
-	return insertReturning(ctx, s.Jobs, data)
+	return insertReturning(ctx, s.jobs, data)
 }
 
 // FindJobInstance returns the job document with instance_list filtered down
@@ -195,7 +135,7 @@ func (s *Store) FindJobInstance(ctx context.Context, jobID string, instanceNumbe
 		}}},
 	}
 
-	cursor, err := s.Jobs.Aggregate(ctx, pipeline)
+	cursor, err := s.jobs.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +183,7 @@ func (s *Store) AppendJobInstance(ctx context.Context, jobID string, instanceNum
 	}
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
 	var updated bson.M
-	err = s.Jobs.FindOneAndUpdate(ctx, filter,
+	err = s.jobs.FindOneAndUpdate(ctx, filter,
 		bson.M{"$push": bson.M{"instance_list": instanceInfo}}, opts).Decode(&updated)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
@@ -317,7 +257,7 @@ func (s *Store) UpdateJobInstance(ctx context.Context, jobID string, instanceNum
 
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
 	var updated bson.M
-	err = s.Jobs.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updated)
+	err = s.jobs.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updated)
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +276,7 @@ func (s *Store) DeleteJobInstance(ctx context.Context, jobID string, instanceNum
 
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
 	var updated bson.M
-	err = s.Jobs.FindOneAndUpdate(ctx, bson.M{"_id": oid},
+	err = s.jobs.FindOneAndUpdate(ctx, bson.M{"_id": oid},
 		bson.M{"$pull": bson.M{"instance_list": bson.M{"instance_number": instanceNumber}}}, opts).Decode(&updated)
 	if err != nil {
 		return nil, err
