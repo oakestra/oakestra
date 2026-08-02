@@ -5,14 +5,13 @@ import "github.com/oakestra/oakestra/go_resource_abstractor/client/openapi"
 // The document and parameter types this package's methods take and return.
 //
 // They are aliases, not definitions: client.Job and openapi.Job are the same
-// type, so nothing converts between the two layers, and a value from
-// Client.OpenAPI can be handed straight to a method here. It also keeps the
-// spec as the single source of truth - a field added to openapi.yaml shows
-// up here as soon as the code is regenerated.
+// type, so a value from Client.OpenAPI can be handed straight to a method
+// here, and the spec stays the single source of truth - a field added to
+// openapi.yaml shows up here as soon as the code is regenerated.
 //
-// Only types this package's own API uses are aliased here. Hooks and custom
-// resources have no facade (see Client.OpenAPI), so their types are named
-// through the openapi package directly.
+// Every document type is aliased here, including the ones only reachable
+// through Client.OpenAPI, so calling code never has to import openapi
+// directly.
 type (
 	// Application is application metadata.
 	Application = openapi.Application
@@ -39,6 +38,29 @@ type (
 	// JobInstanceAppend is the body of JobsService.AppendInstance. Only the
 	// last element of its InstanceList is appended.
 	JobInstanceAppend = openapi.JobInstanceAppend
+
+	// Hook is a webhook registration, reachable through HooksService. Its
+	// schema is closed (no AdditionalProperties map), unlike Job, Resource
+	// and Application, so there's no Get/Set on it.
+	Hook = openapi.Hook
+
+	// HookEvent is one of the events a Hook can fire for. pre_* events fire
+	// synchronously before the write and may return a transformed payload
+	// that replaces the original; post_* events fire asynchronously after
+	// the write, receiving only the affected document's id.
+	HookEvent = openapi.HookEvent
+
+	// CustomResourceDefinition is a dynamically registered resource type,
+	// reachable only through Client.OpenAPI - there's no
+	// CustomResourcesService, so decode it with
+	// client.Decode[[]client.CustomResourceDefinition].
+	CustomResourceDefinition = openapi.CustomResourceDefinition
+
+	// CustomResourceInstance is one instance of a registered custom resource
+	// type. Its fields depend on that type's own JSON Schema, so nothing
+	// beyond its id is fixed here. Like CustomResourceDefinition, reachable
+	// only through Client.OpenAPI.
+	CustomResourceInstance = openapi.CustomResourceInstance
 
 	// ListApplicationsParams is the query the AppFilter options build.
 	ListApplicationsParams = openapi.ListApplicationsParams

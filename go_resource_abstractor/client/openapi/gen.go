@@ -4,13 +4,19 @@
 // The contract itself lives one directory up and one module over, in
 // go_resource_abstractor/openapi/openapi.yaml - a single spec from which both
 // directions are generated: the gin server the service implements, and the
-// ClientWithResponses below that callers use to reach it. An endpoint that
+// Client and ClientWithResponses types below that reach it. An endpoint that
 // isn't in the spec therefore exists on neither side.
 //
-// Most callers want the ergonomic facade in the parent package (client)
-// rather than this one, which has a method per operationId and no
-// not-found/error mapping. Reach for this package directly for the endpoints
-// the facade doesn't wrap - /hooks and /custom-resources.
+// Most callers don't need to import this package at all. The Client below
+// has a method per operationId and no not-found/error mapping of its own -
+// each just returns a bare (*http.Response, error) - and the parent package
+// (client) is where that gets adapted: every document type is re-exported
+// there as an alias, and its Decode/Done helpers map these bare responses
+// onto its ErrNotFound/*APIError/transport-error split. That holds even for
+// Client.OpenAPI(), the escape hatch for the one part of the spec with no
+// facade in the parent package: custom resources (/api/v1/custom-resources
+// and its instances). Hooks (/api/v1/hooks) used to be reached the same way
+// but now have their own facade there, client.HooksService.
 //
 // The one part of the spec with no client method is the Docs tag, excluded in
 // cfg.yaml: those endpoints serve this very document, which anything linking
