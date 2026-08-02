@@ -536,3 +536,230 @@ func TestHookEventsPreEventTransformsPayload(t *testing.T) {
 		})
 	}
 }
+
+// TestHookEventsUpdateInjectsIDButUpdateFoundDoesNot pins entity.go's one
+// behavioral difference between Update and UpdateFound: Update sets
+// data["_id"] = id before running pre_update (the id came from the URL
+// path, so the hook is told which document it's writing), while
+// UpdateFound - used by upsertByName's update-by-name branch - leaves data
+// untouched, matching Python's perform_update signature where the id is a
+// separate argument alongside an unmodified payload. Swapping the two
+// methods' bodies leaves every other test in this file green, since none of
+// them inspect the payload a pre_update hook actually receives.
+//
+// A single hook, registered once for the "jobs" entity's pre_update event,
+// observes both a path-addressed PATCH (Update) and a name-addressed PUT
+// update (UpdateFound via upsertByName): the sync dispatch in
+// services.Hooks.processSyncHook blocks the request until the hook
+// responds, so by the time doRequest returns, the body it received is
+// already sitting on the channel - no post-event-style polling needed.
+func TestHookEventsUpdateInjectsIDButUpdateFoundDoesNot(t *testing.T) {
+	bodies := make(chan map[string]any, 1)
+	registerHook(t, "jobs", db.EventPreUpdate, func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		bodies <- body
+		// Echo the body back unchanged: a sync hook must return a JSON
+		// object or the dispatcher fails open and keeps the original
+		// payload, which would make this recorder inert either way.
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(body)
+	})
+
+	t.Run("PATCH path-addressed update injects _id", func(t *testing.T) {
+		id := mustID(t, doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{
+			"job_name": uniqueName("job"),
+		}))
+
+		// No _id in the request body: the only way one can show up in the
+		// hook's payload is entity.Update's injection.
+		rec := doRequest(t, http.MethodPatch, "/api/v1/jobs/"+id, map[string]any{
+			"status": "RUNNING",
+		})
+		if rec.Code >= 300 {
+			t.Fatalf("PATCH /api/v1/jobs/%s failed: status %d: %s", id, rec.Code, rec.Body.String())
+		}
+
+		body := <-bodies
+		if got, _ := body["_id"].(string); got != id {
+			t.Errorf("PATCH /api/v1/jobs/%s: pre_update hook body _id = %v, want %v", id, body["_id"], id)
+		}
+	})
+
+	t.Run("PUT name-addressed update branch omits _id", func(t *testing.T) {
+		name := uniqueName("job")
+		// Seed via POST so the tracked PUT below matches by name and takes
+		// upsertByName's update branch, which calls UpdateFound.
+		doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{"job_name": name})
+
+		rec := doRequest(t, http.MethodPut, "/api/v1/jobs/", map[string]any{
+			"job_name": name,
+			"status":   "RUNNING",
+		})
+		if rec.Code >= 300 {
+			t.Fatalf("PUT /api/v1/jobs/ (update branch) failed: status %d: %s", rec.Code, rec.Body.String())
+		}
+
+		body := <-bodies
+		if _, ok := body["_id"]; ok {
+			t.Errorf("PUT /api/v1/jobs/ (update branch): pre_update hook body unexpectedly has _id = %v, want no _id key", body["_id"])
+		}
+	})
+}
+
+// TestHookEventsPostDeleteEntityID pins entity.Delete's contract that
+// post_delete's entity_id is always the id taken from the request path, not
+// the deleted document's own _id (see entity.Delete's doc comment for why:
+// DeleteResource and a never-existed DeleteCustomResourceInstance have no
+// document to read an _id from at all).
+//
+// DeleteJobInstance is the row where a document-keyed implementation
+// wouldn't obviously produce the wrong id: DeleteJobInstance's store call
+// doesn't return a document with its own top-level _id the way
+// Create/Update do (see db.Store.DeleteJobInstance). DeleteResource is the
+// row that actually discriminates path-id from document-id, since
+// DeleteCandidate returns no document whatsoever.
+func TestHookEventsPostDeleteEntityID(t *testing.T) {
+	tests := []struct {
+		name  string
+		build func(t *testing.T) (entity, pathID string, doDelete func(t *testing.T) *httptest.ResponseRecorder)
+	}{
+		{
+			name: "DeleteApplication",
+			build: func(t *testing.T) (string, string, func(t *testing.T) *httptest.ResponseRecorder) {
+				id := mustID(t, doRequest(t, http.MethodPost, "/api/v1/applications/", map[string]any{
+					"application_name": uniqueName("app"),
+				}))
+				return "applications", id, func(t *testing.T) *httptest.ResponseRecorder {
+					return doRequest(t, http.MethodDelete, "/api/v1/applications/"+id, nil)
+				}
+			},
+		},
+		{
+			name: "DeleteJob",
+			build: func(t *testing.T) (string, string, func(t *testing.T) *httptest.ResponseRecorder) {
+				id := mustID(t, doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{
+					"job_name": uniqueName("job"),
+				}))
+				return "jobs", id, func(t *testing.T) *httptest.ResponseRecorder {
+					return doRequest(t, http.MethodDelete, "/api/v1/jobs/"+id, nil)
+				}
+			},
+		},
+		{
+			// The path is /jobs/{jobID}/{instanceNumber}: the expected
+			// entity_id is jobID, not the instance number "1", proving
+			// post_delete keys off the job id rather than whatever other
+			// path segment happens to also be present.
+			name: "DeleteJobInstance",
+			build: func(t *testing.T) (string, string, func(t *testing.T) *httptest.ResponseRecorder) {
+				id := mustID(t, doRequest(t, http.MethodPost, "/api/v1/jobs/", map[string]any{
+					"job_name":      uniqueName("job"),
+					"instance_list": []any{},
+				}))
+				appendRec := doRequest(t, http.MethodPut, "/api/v1/jobs/"+id+"/1", map[string]any{
+					"instance_list": []any{map[string]any{"instance_number": 1}},
+				})
+				if appendRec.Code != http.StatusOK {
+					t.Fatalf("fixture: append instance status = %d, want 200: %s", appendRec.Code, appendRec.Body.String())
+				}
+				return "jobs", id, func(t *testing.T) *httptest.ResponseRecorder {
+					return doRequest(t, http.MethodDelete, "/api/v1/jobs/"+id+"/1", nil)
+				}
+			},
+		},
+		{
+			// DeleteCandidate (the store call behind DeleteResource) returns
+			// no document at all, so this row is the one that actually
+			// discriminates "keyed off the path id" from "keyed off the
+			// deleted document": a document-keyed implementation has
+			// nothing to fall back to here.
+			name: "DeleteResource",
+			build: func(t *testing.T) (string, string, func(t *testing.T) *httptest.ResponseRecorder) {
+				id := mustID(t, doRequest(t, http.MethodPost, "/api/v1/resources/", map[string]any{
+					"candidate_name": uniqueName("candidate"),
+				}))
+				return "resources", id, func(t *testing.T) *httptest.ResponseRecorder {
+					return doRequest(t, http.MethodDelete, "/api/v1/resources/"+id, nil)
+				}
+			},
+		},
+		{
+			name: "DeleteCustomResourceInstance",
+			build: func(t *testing.T) (string, string, func(t *testing.T) *httptest.ResponseRecorder) {
+				resourceType := uniqueName("cr-delete-id")
+				registerCustomResourceType(t, resourceType)
+				id := mustID(t, doRequest(t, http.MethodPost, "/api/v1/custom-resources/"+resourceType, map[string]any{
+					"name": "instance-1",
+				}))
+				return resourceType, id, func(t *testing.T) *httptest.ResponseRecorder {
+					return doRequest(t, http.MethodDelete, "/api/v1/custom-resources/"+resourceType+"/"+id, nil)
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			entity, pathID, doDelete := tc.build(t)
+
+			received := make(chan map[string]any, 1)
+			registerHook(t, entity, db.EventPostDelete, func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]any
+				_ = json.NewDecoder(r.Body).Decode(&body)
+				received <- body
+				w.WriteHeader(http.StatusOK)
+			})
+
+			rec := doDelete(t)
+			if rec.Code >= 300 {
+				t.Fatalf("%s: delete failed: status %d: %s", tc.name, rec.Code, rec.Body.String())
+			}
+
+			body := waitForHookEvent(t, received, string(db.EventPostDelete), tc.name)
+			if body["entity_id"] != pathID {
+				t.Errorf("%s: post_delete entity_id = %v, want %v (the path id)", tc.name, body["entity_id"], pathID)
+			}
+		})
+	}
+}
+
+// TestHookEventsDeleteNeverExistedFiresPostDelete pins
+// DeleteCustomResourceInstance's deliberate not-found swallow (see the
+// comment above its store call in api/customresources.go): deleting an
+// instance id that was never created still answers 200 with {"_id": id} and
+// still fires post_delete, matching Python's handler, which returns a
+// hardcoded {"_id": resource_id} regardless of whether anything was
+// actually deleted.
+func TestHookEventsDeleteNeverExistedFiresPostDelete(t *testing.T) {
+	resourceType := uniqueName("cr-delete-missing")
+	registerCustomResourceType(t, resourceType)
+
+	// A well-formed ObjectID hex that was never used to create an instance,
+	// so the store call underneath finds nothing to delete.
+	id := newObjectIDHex()
+
+	received := make(chan map[string]any, 1)
+	registerHook(t, resourceType, db.EventPostDelete, func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		received <- body
+		w.WriteHeader(http.StatusOK)
+	})
+
+	rec := doRequest(t, http.MethodDelete, "/api/v1/custom-resources/"+resourceType+"/"+id, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("DELETE /api/v1/custom-resources/%s/%s (never existed) status = %d, want 200: %s",
+			resourceType, id, rec.Code, rec.Body.String())
+	}
+	got := decodeJSON[map[string]any](t, rec)
+	if got["_id"] != id {
+		t.Errorf("DELETE /api/v1/custom-resources/%s/%s (never existed) body _id = %v, want %v",
+			resourceType, id, got["_id"], id)
+	}
+
+	body := waitForHookEvent(t, received, string(db.EventPostDelete), "DeleteCustomResourceInstance (never existed)")
+	if body["entity_id"] != id {
+		t.Errorf("DeleteCustomResourceInstance (never existed): post_delete entity_id = %v, want %v", body["entity_id"], id)
+	}
+}
