@@ -39,11 +39,20 @@ export MONGO_PORT=10007
 
 ### Tests
 
-Tests run against a real MongoDB via [testcontainers-go](https://golang.testcontainers.org/) -
-Docker must be available locally or in CI.
+The `api` and `db` packages test against a real MongoDB via
+[testcontainers-go](https://golang.testcontainers.org/), so running the full suite needs Docker
+available locally or in CI.
 
 ```bash
 go test ./...
+```
+
+The `services` package does not: `services.Hooks` reaches storage through the one-method
+`HookRegistry` interface, so its tests substitute an in-memory registry and run without a
+container.
+
+```bash
+go test ./services/    # no Docker required
 ```
 
 The test MongoDB image defaults to `mongo:8.0` (matching the rest of Oakestra's deployment). On

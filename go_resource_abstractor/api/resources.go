@@ -141,6 +141,9 @@ func (s *Server) DeleteResource(c *gin.Context, id openapi.ObjectID) {
 		return
 	}
 
+	// DeleteCandidate only returns an error, not the deleted document, so
+	// Delete gets nil here and keys post_delete off the path id instead. A
+	// candidate that's already gone is not treated as an error.
 	_, err := s.resources.Delete(c.Request.Context(), id, func(ctx context.Context, id string) (bson.M, error) {
 		return nil, s.store.DeleteCandidate(ctx, id)
 	})

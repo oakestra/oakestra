@@ -36,14 +36,9 @@ func (s *Store) FindHooks(ctx context.Context, filter bson.M) ([]bson.M, error) 
 }
 
 // WebhookURLsFor returns the webhook URLs registered for entity that are
-// subscribed to event. This is services.HookRegistry's production adapter -
-// the query filter and the "skip unusable webhook_url" logic both used to
-// live in services/hooks.go (as hookFilter and an inline
-// `if url == "" { continue }` in processSyncHook/processAsyncHook) and were
-// relocated here so services stays free of Mongo query documents. A
-// registration whose webhook_url is missing, empty, or not a string is
-// skipped rather than returned - the same skip services used to perform
-// itself, now guaranteed by this method instead.
+// subscribed to event. A registration whose webhook_url is missing, empty,
+// or not a string is skipped rather than returned, so callers can dispatch
+// to every URL they get back without re-checking.
 func (s *Store) WebhookURLsFor(ctx context.Context, entity string, event HookEvent) ([]string, error) {
 	hooks, err := findAll(ctx, s.Hooks, bson.M{"entity": entity, "events": bson.M{"$in": bson.A{string(event)}}})
 	if err != nil {
