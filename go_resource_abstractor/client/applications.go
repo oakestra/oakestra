@@ -86,5 +86,5 @@ func (a *AppsService) Update(ctx context.Context, appID, userID string, app Appl
 // with the application as it was immediately before deletion; this discards
 // it, as the Python client does.
 func (a *AppsService) Delete(ctx context.Context, appID string) error {
-	return done(a.c.api.DeleteApplication(ctx, appID))
+	return Done(a.c.api.DeleteApplication(ctx, appID))
 }

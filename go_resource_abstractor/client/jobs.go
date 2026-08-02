@@ -106,5 +106,5 @@ func (j *JobsService) DeleteInstance(ctx context.Context, jobID string, instance
 // Delete removes the job identified by jobID. Equivalent to Python's
 // delete_job.
 func (j *JobsService) Delete(ctx context.Context, jobID string) error {
-	return done(j.c.api.DeleteJob(ctx, jobID))
+	return Done(j.c.api.DeleteJob(ctx, jobID))
 }

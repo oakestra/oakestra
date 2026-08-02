@@ -25,20 +25,23 @@ func ExampleNewFromEnv() {
 	}
 }
 
-// ExampleClient_OpenAPI reaches an endpoint the Apps/Resources/Jobs facades
-// don't wrap, by going through the generated client underneath.
+// ExampleClient_OpenAPI reaches an endpoint no facade wraps - custom
+// resources - by going through the generated client underneath and Decode,
+// which carries over this package's usual error handling.
 func ExampleClient_OpenAPI() {
 	c := New("http://root_resource_abstractor:11011")
 
-	resp, err := c.OpenAPI().ListHooksWithResponse(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	if resp.StatusCode() != 200 {
-		panic(fmt.Sprintf("unexpected status: %s", resp.Status()))
-	}
-	for _, hook := range *resp.JSON200 {
-		fmt.Println(Value(hook.HookName))
+	defs, err := Decode[[]CustomResourceDefinition](c.OpenAPI().ListCustomResourceDefinitions(context.Background()))
+	var apiErr *APIError
+	switch {
+	case errors.As(err, &apiErr):
+		fmt.Printf("resource abstractor returned %d: %s\n", apiErr.Status, apiErr.Message)
+	case err != nil:
+		fmt.Println("transport error:", err)
+	default:
+		for _, def := range defs {
+			fmt.Println(def.ResourceType)
+		}
 	}
 }
 
@@ -81,4 +84,19 @@ func ExampleJobsService_List() {
 		panic(err)
 	}
 	fmt.Println(len(all))
+}
+
+// ExampleHooksService_List lists every registered hook. Unlike
+// Apps/Resources/Jobs.List, it takes no filters - listHooks declares no
+// query parameters in the spec.
+func ExampleHooksService_List() {
+	c := New("http://cluster_resource_abstractor:11012")
+
+	hooks, err := c.Hooks.List(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	for _, hook := range hooks {
+		fmt.Println(Value(hook.HookName))
+	}
 }

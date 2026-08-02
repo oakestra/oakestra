@@ -4,12 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/oakestra/oakestra/go_resource_abstractor/client/openapi"
 )
 
 // stub serves body with status for every request, recording the last one it
@@ -18,16 +17,17 @@ type stub struct {
 	method  string
 	path    string
 	query   string
+	host    string
 	headers http.Header
 	body    map[string]any
 }
 
-func serve(t *testing.T, status int, body string) (*Client, *stub) {
-	t.Helper()
-
-	var got stub
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// stubHandler is the handler shared by serve and rawServer: it records every
+// request it sees into got and answers with status/body.
+func stubHandler(got *stub, status int, body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		got.method, got.path, got.query = r.Method, r.URL.Path, r.URL.RawQuery
+		got.host = r.Host
 		got.headers = r.Header.Clone()
 		_ = json.NewDecoder(r.Body).Decode(&got.body)
 
@@ -36,22 +36,37 @@ func serve(t *testing.T, status int, body string) (*Client, *stub) {
 		if body != "" {
 			_, _ = w.Write([]byte(body))
 		}
-	}))
+	}
+}
+
+func serve(t *testing.T, status int, body string) (*Client, *stub) {
+	t.Helper()
+
+	var got stub
+	srv := httptest.NewServer(stubHandler(&got, status, body))
 	t.Cleanup(srv.Close)
 
 	return New(srv.URL), &got
 }
 
-// generated returns the generated client underneath a Client, which is where
-// the base URL and the *http.Client end up once New has resolved its Options.
-func generated(t *testing.T, c *Client) *openapi.Client {
+// rawServer is like serve, but hands back the *httptest.Server itself so a
+// caller can read the listener's address - what the NewFromEnv tests need to
+// build RESOURCE_ABSTRACTOR_URL/PORT from a real address.
+func rawServer(t *testing.T, tlsServer bool) (*httptest.Server, *stub) {
 	t.Helper()
 
-	inner, ok := c.api.ClientInterface.(*openapi.Client)
-	if !ok {
-		t.Fatalf("generated client is %T, want *openapi.Client", c.api.ClientInterface)
+	var got stub
+	handler := stubHandler(&got, http.StatusOK, `[]`)
+
+	var srv *httptest.Server
+	if tlsServer {
+		srv = httptest.NewTLSServer(handler)
+	} else {
+		srv = httptest.NewServer(handler)
 	}
-	return inner
+	t.Cleanup(srv.Close)
+
+	return srv, &got
 }
 
 // --- response mapping ----------------------------------------------------
@@ -311,18 +326,23 @@ func TestNewFromEnv_MissingVarsErrors(t *testing.T) {
 }
 
 func TestNewFromEnv_BuildsExpectedBaseURL(t *testing.T) {
-	t.Setenv("RESOURCE_ABSTRACTOR_URL", "cluster_resource_abstractor")
-	t.Setenv("RESOURCE_ABSTRACTOR_PORT", "11012")
+	srv, got := rawServer(t, false)
+	host, port, err := net.SplitHostPort(srv.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("SplitHostPort(%q): %v", srv.Listener.Addr().String(), err)
+	}
+	t.Setenv("RESOURCE_ABSTRACTOR_URL", host)
+	t.Setenv("RESOURCE_ABSTRACTOR_PORT", port)
 
 	c, err := NewFromEnv()
 	if err != nil {
 		t.Fatalf("NewFromEnv: unexpected error: %v", err)
 	}
-	// The generated constructor appends the trailing slash it resolves the
-	// spec's paths against.
-	want := "http://cluster_resource_abstractor:11012/"
-	if got := generated(t, c).Server; got != want {
-		t.Errorf("Server = %q, want %q", got, want)
+	if _, err := c.Resources.List(context.Background()); err != nil {
+		t.Fatalf("List: unexpected error: %v", err)
+	}
+	if got.host != srv.Listener.Addr().String() {
+		t.Errorf("request reached host %q, want %q", got.host, srv.Listener.Addr().String())
 	}
 }
 
@@ -331,26 +351,41 @@ func TestNewFromEnv_BuildsExpectedBaseURL(t *testing.T) {
 // carries a scheme.
 func TestNewFromEnv_HostWithSchemeIsUsedAsIs(t *testing.T) {
 	cases := []struct {
-		name string
-		host string
-		want string
+		name   string
+		useTLS bool
+		host   func(host string) string
 	}{
-		{"http scheme", "http://cluster_resource_abstractor", "http://cluster_resource_abstractor:11012/"},
-		{"https scheme", "https://cluster_resource_abstractor", "https://cluster_resource_abstractor:11012/"},
-		{"trailing slash", "http://cluster_resource_abstractor/", "http://cluster_resource_abstractor:11012/"},
+		{"http scheme", false, func(host string) string { return "http://" + host }},
+		{"https scheme", true, func(host string) string { return "https://" + host }},
+		{"trailing slash", false, func(host string) string { return "http://" + host + "/" }},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("RESOURCE_ABSTRACTOR_URL", tc.host)
-			t.Setenv("RESOURCE_ABSTRACTOR_PORT", "11012")
+			srv, got := rawServer(t, tc.useTLS)
+			host, port, err := net.SplitHostPort(srv.Listener.Addr().String())
+			if err != nil {
+				t.Fatalf("SplitHostPort(%q): %v", srv.Listener.Addr().String(), err)
+			}
+			t.Setenv("RESOURCE_ABSTRACTOR_URL", tc.host(host))
+			t.Setenv("RESOURCE_ABSTRACTOR_PORT", port)
 
-			c, err := NewFromEnv()
+			var opts []Option
+			if tc.useTLS {
+				// The TLS server's own client trusts its self-signed
+				// certificate; without it the handshake would fail before
+				// the request ever reached the handler.
+				opts = append(opts, WithHTTPClient(srv.Client()))
+			}
+			c, err := NewFromEnv(opts...)
 			if err != nil {
 				t.Fatalf("NewFromEnv: unexpected error: %v", err)
 			}
-			if got := generated(t, c).Server; got != tc.want {
-				t.Errorf("Server = %q, want %q", got, tc.want)
+			if _, err := c.Resources.List(context.Background()); err != nil {
+				t.Fatalf("List: unexpected error: %v", err)
+			}
+			if got.host != srv.Listener.Addr().String() {
+				t.Errorf("request reached host %q, want %q", got.host, srv.Listener.Addr().String())
 			}
 		})
 	}
@@ -358,26 +393,38 @@ func TestNewFromEnv_HostWithSchemeIsUsedAsIs(t *testing.T) {
 
 // TestWithTimeout_CombinesWithHTTPClientRegardlessOfOptionOrder guards
 // against Option application being order-dependent: WithTimeout must apply
-// to whichever *http.Client the Client ends up using no matter which
-// option was passed first.
+// to whichever *http.Client the Client ends up using, whichever option was
+// passed first.
 func TestWithTimeout_CombinesWithHTTPClientRegardlessOfOptionOrder(t *testing.T) {
 	custom := &http.Client{}
+
+	// Blocks on the request's own context so it returns as soon as the
+	// client's timeout cancels it, instead of sleeping a fixed duration.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	t.Cleanup(srv.Close)
 
 	for _, tc := range []struct {
 		name string
 		opts []Option
 	}{
-		{"WithTimeout then WithHTTPClient", []Option{WithTimeout(7 * time.Second), WithHTTPClient(custom)}},
-		{"WithHTTPClient then WithTimeout", []Option{WithHTTPClient(custom), WithTimeout(7 * time.Second)}},
+		{"WithTimeout then WithHTTPClient", []Option{WithTimeout(50 * time.Millisecond), WithHTTPClient(custom)}},
+		{"WithHTTPClient then WithTimeout", []Option{WithHTTPClient(custom), WithTimeout(50 * time.Millisecond)}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			doer := generated(t, New("http://example.invalid", tc.opts...)).Client
-			httpClient, ok := doer.(*http.Client)
-			if !ok {
-				t.Fatalf("request doer is %T, want *http.Client", doer)
+			c := New(srv.URL, tc.opts...)
+
+			_, err := c.Resources.GetByID(context.Background(), "id")
+			if err == nil {
+				t.Fatal("GetByID: expected the timeout to fire, got nil error")
 			}
-			if httpClient.Timeout != 7*time.Second {
-				t.Errorf("Timeout = %v, want 7s", httpClient.Timeout)
+			if errors.Is(err, ErrNotFound) {
+				t.Error("a timeout must not satisfy errors.Is(err, ErrNotFound)")
+			}
+			var apiErr *APIError
+			if errors.As(err, &apiErr) {
+				t.Error("a timeout must not be an *APIError")
 			}
 		})
 	}
@@ -533,6 +580,40 @@ func TestMethodRouting(t *testing.T) {
 			wantMethod: http.MethodDelete, wantPath: "/api/v1/jobs/j-1/2",
 		},
 		{
+			name:       "Hooks.List",
+			call:       func(c *Client) error { _, err := c.Hooks.List(context.Background()); return err },
+			wantMethod: http.MethodGet, wantPath: "/api/v1/hooks", respBody: "[]",
+		},
+		{
+			name: "Hooks.GetByID",
+			call: func(c *Client) error {
+				_, err := c.Hooks.GetByID(context.Background(), "h-1")
+				return err
+			},
+			wantMethod: http.MethodGet, wantPath: "/api/v1/hooks/h-1",
+		},
+		{
+			name: "Hooks.Create",
+			call: func(c *Client) error {
+				_, err := c.Hooks.Create(context.Background(), Hook{})
+				return err
+			},
+			wantMethod: http.MethodPost, wantPath: "/api/v1/hooks",
+		},
+		{
+			name: "Hooks.Update",
+			call: func(c *Client) error {
+				_, err := c.Hooks.Update(context.Background(), "h-1", Hook{})
+				return err
+			},
+			wantMethod: http.MethodPatch, wantPath: "/api/v1/hooks/h-1",
+		},
+		{
+			name:       "Hooks.Delete",
+			call:       func(c *Client) error { return c.Hooks.Delete(context.Background(), "h-1") },
+			wantMethod: http.MethodDelete, wantPath: "/api/v1/hooks/h-1",
+		},
+		{
 			name:       "Health",
 			call:       func(c *Client) error { return c.Health(context.Background()) },
 			wantMethod: http.MethodGet, wantPath: "/",
@@ -557,6 +638,94 @@ func TestMethodRouting(t *testing.T) {
 				t.Errorf("%s: path = %s, want %s", tc.name, got.path, tc.wantPath)
 			}
 		})
+	}
+}
+
+// --- Hooks ----------------------------------------------------------------
+
+// TestHooks_Delete_EmptyBodyOnSuccessDoesNotError checks the ordinary
+// empty-204 case, and that an unknown id isn't reported as ErrNotFound -
+// DeleteHook answers 204 either way.
+func TestHooks_Delete_EmptyBodyOnSuccessDoesNotError(t *testing.T) {
+	c, _ := serve(t, http.StatusNoContent, "")
+
+	if err := c.Hooks.Delete(context.Background(), "missing"); err != nil {
+		t.Fatalf("Delete: unexpected error on empty 204 body: %v", err)
+	}
+}
+
+// TestHooks_Create_DecodesOnCreated checks the one Create method that
+// answers 201 rather than 200 (Jobs.Create and Resources.Create upsert via
+// PUT and answer 200).
+func TestHooks_Create_DecodesOnCreated(t *testing.T) {
+	c, _ := serve(t, http.StatusCreated, `{"_id":"h-1"}`)
+
+	hook, err := c.Hooks.Create(context.Background(), Hook{})
+	if err != nil {
+		t.Fatalf("Create: unexpected error: %v", err)
+	}
+	if hook.ID == nil || *hook.ID != "h-1" {
+		t.Errorf("Create: got %+v, want _id=h-1", hook)
+	}
+}
+
+// --- the escape hatch carries the error contract --------------------------
+
+// These tests pin that Decode/Done give a call made through the OpenAPI
+// escape hatch the same three-way error split (ErrNotFound, *APIError,
+// transport error) as any facade method, using custom resources - the one
+// document type still without a facade - as the illustration.
+
+func TestOpenAPI_Decode_DecodesSuccessPayload(t *testing.T) {
+	c, _ := serve(t, http.StatusOK, `[{"resource_type":"gpu"}]`)
+
+	defs, err := Decode[[]CustomResourceDefinition](c.OpenAPI().ListCustomResourceDefinitions(context.Background()))
+	if err != nil {
+		t.Fatalf("ListCustomResourceDefinitions: unexpected error: %v", err)
+	}
+	if len(defs) != 1 || defs[0].ResourceType != "gpu" {
+		t.Errorf("ListCustomResourceDefinitions: got %+v, want one definition named gpu", defs)
+	}
+}
+
+func TestOpenAPI_Decode_NotFoundMapsToErrNotFound(t *testing.T) {
+	c, _ := serve(t, http.StatusNotFound, "")
+
+	_, err := Decode[[]CustomResourceDefinition](c.OpenAPI().ListCustomResourceDefinitions(context.Background()))
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("ListCustomResourceDefinitions: got err %v, want ErrNotFound", err)
+	}
+}
+
+func TestOpenAPI_Decode_NonNotFoundErrorMapsToAPIError(t *testing.T) {
+	c, _ := serve(t, http.StatusInternalServerError, `{"message":"boom"}`)
+
+	_, err := Decode[[]CustomResourceDefinition](c.OpenAPI().ListCustomResourceDefinitions(context.Background()))
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("ListCustomResourceDefinitions: got err %v (%T), want *APIError", err, err)
+	}
+	if apiErr.Status != http.StatusInternalServerError {
+		t.Errorf("APIError.Status = %d, want %d", apiErr.Status, http.StatusInternalServerError)
+	}
+	if apiErr.Message != "boom" {
+		t.Errorf("APIError.Message = %q, want %q", apiErr.Message, "boom")
+	}
+	if errors.Is(err, ErrNotFound) {
+		t.Error("a 500 must not satisfy errors.Is(err, ErrNotFound)")
+	}
+}
+
+func TestOpenAPI_Done_MapsSuccessAndNotFoundTheSameWayAsDecode(t *testing.T) {
+	c, _ := serve(t, http.StatusNoContent, "")
+	if err := Done(c.OpenAPI().DeleteCustomResourceInstance(context.Background(), "gpu", "cri-1")); err != nil {
+		t.Fatalf("DeleteCustomResourceInstance: unexpected error on empty 204 body: %v", err)
+	}
+
+	c, _ = serve(t, http.StatusNotFound, "")
+	if err := Done(c.OpenAPI().DeleteCustomResourceInstance(context.Background(), "gpu", "cri-1")); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("DeleteCustomResourceInstance: got err %v, want ErrNotFound", err)
 	}
 }
 
