@@ -120,7 +120,7 @@ func (s *Store) FindCandidates(ctx context.Context, filter bson.M, resources []s
 		{{Key: "$project", Value: projection}},
 	}
 
-	cursor, err := s.Candidates.Aggregate(ctx, pipeline)
+	cursor, err := s.candidates.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func (s *Store) FindCandidateByID(ctx context.Context, id string) (bson.M, error
 // candidate_name field, used by the PUT /resources/ upsert path.
 func (s *Store) FindCandidateByName(ctx context.Context, name string) (bson.M, error) {
 	var result bson.M
-	if err := s.Candidates.FindOne(ctx, bson.M{"candidate_name": name}).Decode(&result); err != nil {
+	if err := s.candidates.FindOne(ctx, bson.M{"candidate_name": name}).Decode(&result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -164,13 +164,13 @@ func (s *Store) FindCandidateByName(ctx context.Context, name string) (bson.M, e
 
 // CreateCandidate inserts a new candidate document and returns it as stored.
 func (s *Store) CreateCandidate(ctx context.Context, data bson.M) (bson.M, error) {
-	return insertReturning(ctx, s.Candidates, data)
+	return insertReturning(ctx, s.candidates, data)
 }
 
 // UpdateCandidate applies a plain $set update, dropping any client-supplied
 // _id, and returns the updated document.
 func (s *Store) UpdateCandidate(ctx context.Context, id string, data bson.M) (bson.M, error) {
-	return updateByID(ctx, s.Candidates, id, data)
+	return updateByID(ctx, s.candidates, id, data)
 }
 
 // UpdateCandidateInformation persists an aggregated resource-usage report
@@ -208,7 +208,7 @@ func (s *Store) UpdateCandidateInformation(ctx context.Context, id string, data 
 
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
 	var updated bson.M
-	err = s.Candidates.FindOneAndUpdate(ctx, bson.M{"_id": oid}, update, opts).Decode(&updated)
+	err = s.candidates.FindOneAndUpdate(ctx, bson.M{"_id": oid}, update, opts).Decode(&updated)
 	if err != nil {
 		return nil, err
 	}
@@ -221,6 +221,6 @@ func (s *Store) DeleteCandidate(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.Candidates.DeleteOne(ctx, bson.M{"_id": oid})
+	_, err = s.candidates.DeleteOne(ctx, bson.M{"_id": oid})
 	return err
 }
