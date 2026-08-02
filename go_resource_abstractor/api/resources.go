@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -69,15 +70,11 @@ func (s *Server) CreateResource(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-	data = s.hooks.PreCreate(ctx, "resources", data)
-
-	created, err := s.store.CreateCandidate(ctx, bson.M(data))
+	created, err := s.resources.Create(c.Request.Context(), data, s.store.CreateCandidate)
 	if err != nil {
 		abortInternalError(c, err)
 		return
 	}
-	s.hooks.PostCreate("resources", db.ExtractID(created))
 
 	writeJSON(c, http.StatusCreated, created)
 }
@@ -92,7 +89,7 @@ func (s *Server) UpsertResource(c *gin.Context) {
 	if !abortIfInvalidResourceFields(c, data) {
 		return
 	}
-	s.upsertByName(c, "resources", "candidate_name", data,
+	s.upsertByName(c, s.resources, "candidate_name", data,
 		s.store.FindCandidateByName, s.store.UpdateCandidate, s.store.CreateCandidate)
 }
 
@@ -128,16 +125,11 @@ func (s *Server) PatchResource(c *gin.Context, id openapi.ObjectID) {
 	if !abortIfInvalidResourceFields(c, data) {
 		return
 	}
-	ctx := c.Request.Context()
 
-	data["_id"] = id
-	data = s.hooks.PreUpdate(ctx, "resources", data)
-
-	updated, err := s.store.UpdateCandidateInformation(ctx, id, bson.M(data))
+	updated, err := s.resources.Update(c.Request.Context(), id, data, s.store.UpdateCandidateInformation)
 	if abortOnError(c, err) {
 		return
 	}
-	s.hooks.PostUpdate("resources", db.ExtractID(updated))
 
 	writeJSON(c, http.StatusOK, updated)
 }
@@ -149,12 +141,13 @@ func (s *Server) DeleteResource(c *gin.Context, id openapi.ObjectID) {
 		return
 	}
 
-	ctx := c.Request.Context()
-	if err := s.store.DeleteCandidate(ctx, id); err != nil {
+	_, err := s.resources.Delete(c.Request.Context(), id, func(ctx context.Context, id string) (bson.M, error) {
+		return nil, s.store.DeleteCandidate(ctx, id)
+	})
+	if err != nil {
 		abortInternalError(c, err)
 		return
 	}
-	s.hooks.PostDelete("resources", id)
 
 	c.Status(http.StatusNoContent)
 }

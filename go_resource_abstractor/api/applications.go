@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"go_resource_abstractor/db"
 	"go_resource_abstractor/openapi"
 )
 
@@ -30,16 +29,12 @@ func (s *Server) CreateApplication(c *gin.Context) {
 	if !ok {
 		return
 	}
-	ctx := c.Request.Context()
 
-	data = s.hooks.PreCreate(ctx, "applications", data)
-
-	created, err := s.store.CreateApp(ctx, bson.M(data))
+	created, err := s.apps.Create(c.Request.Context(), data, s.store.CreateApp)
 	if err != nil {
 		abortInternalError(c, err)
 		return
 	}
-	s.hooks.PostCreate("applications", db.ExtractID(created))
 
 	writeJSON(c, http.StatusOK, created)
 }
@@ -62,29 +57,21 @@ func (s *Server) PatchApplication(c *gin.Context, id openapi.ObjectID) {
 	if !ok {
 		return
 	}
-	ctx := c.Request.Context()
 
-	data["_id"] = id
-	data = s.hooks.PreUpdate(ctx, "applications", data)
-
-	updated, err := s.store.UpdateApp(ctx, id, bson.M(data))
+	updated, err := s.apps.Update(c.Request.Context(), id, data, s.store.UpdateApp)
 	if abortOnError(c, err) {
 		return
 	}
-	s.hooks.PostUpdate("applications", db.ExtractID(updated))
 
 	writeJSON(c, http.StatusOK, updated)
 }
 
 // DeleteApplication implements DELETE /api/v1/applications/{id}.
 func (s *Server) DeleteApplication(c *gin.Context, id openapi.ObjectID) {
-	ctx := c.Request.Context()
-
-	deleted, err := s.store.DeleteApp(ctx, id)
+	deleted, err := s.apps.Delete(c.Request.Context(), id, s.store.DeleteApp)
 	if abortOnError(c, err) {
 		return
 	}
-	s.hooks.PostDelete("applications", id)
 
 	writeJSON(c, http.StatusOK, deleted)
 }
