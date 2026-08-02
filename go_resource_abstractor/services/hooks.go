@@ -13,10 +13,23 @@ import (
 	"net/http"
 	"time"
 
-	"go.mongodb.org/mongo-driver/v2/bson"
-
 	"go_resource_abstractor/db"
 )
+
+// HookRegistry answers the one question Hooks needs of storage: which
+// webhook URLs are registered for a given (entity, event) pair. It exists
+// as a seam so this package can be unit-tested (and its behavior reasoned
+// about) without a MongoDB - previously Hooks held a whole *db.Store (35
+// methods, five collection handles) just to run one filtered query, which
+// dragged Mongo query-document construction into a package that has no
+// other business knowing about the database driver.
+//
+// *db.Store satisfies this interface via db.Store.WebhookURLsFor and is the
+// production adapter - see main.go, which passes store to NewHooks
+// unchanged.
+type HookRegistry interface {
+	WebhookURLsFor(ctx context.Context, entity string, event db.HookEvent) ([]string, error)
+}
 
 // Hooks dispatches the pre/post webhook events fired around writes to
 // applications, jobs, resources and custom resources. Sync (pre_*) hooks
@@ -27,8 +40,8 @@ import (
 // blueprint write method. Go has no equivalent, so handlers call Hooks'
 // methods explicitly around their db calls instead.
 type Hooks struct {
-	store  *db.Store
-	client *http.Client
+	registry HookRegistry
+	client   *http.Client
 }
 
 // NewHooks builds a dispatcher whose outbound webhook calls are bounded by
@@ -39,9 +52,9 @@ type Hooks struct {
 // net/http has no separate connect/read deadlines the way Python's requests
 // library does, so this approximates it: a Dialer timeout for the connect
 // phase, and an overall Client.Timeout covering connect+response.
-func NewHooks(store *db.Store, connectTimeout, requestTimeout time.Duration) *Hooks {
+func NewHooks(registry HookRegistry, connectTimeout, requestTimeout time.Duration) *Hooks {
 	return &Hooks{
-		store: store,
+		registry: registry,
 		client: &http.Client{
 			Timeout: connectTimeout + requestTimeout,
 			Transport: &http.Transport{
@@ -80,24 +93,14 @@ func (h *Hooks) PostDelete(entity, entityID string) {
 	h.processAsyncHook(entity, db.EventPostDelete, entityID)
 }
 
-// hookFilter builds the "registered for entity and subscribed to event"
-// filter shared by the sync and async lookup paths below.
-func hookFilter(entity string, event db.HookEvent) bson.M {
-	return bson.M{"entity": entity, "events": bson.M{"$in": bson.A{string(event)}}}
-}
-
 func (h *Hooks) processSyncHook(ctx context.Context, entity string, event db.HookEvent, data map[string]any) map[string]any {
-	hooks, err := h.store.FindHooks(ctx, hookFilter(entity, event))
+	urls, err := h.registry.WebhookURLsFor(ctx, entity, event)
 	if err != nil {
 		slog.Warn("hooks: failed to look up sync hooks", "entity", entity, "event", event, "error", err)
 		return data
 	}
 
-	for _, hook := range hooks {
-		url, _ := hook["webhook_url"].(string)
-		if url == "" {
-			continue
-		}
+	for _, url := range urls {
 		data = h.callWebhook(ctx, url, data)
 	}
 	return data
@@ -109,17 +112,13 @@ func (h *Hooks) processAsyncHook(entity string, event db.HookEvent, entityID str
 	// fire-and-forget POSTs below must outlive the request context.
 	ctx := context.Background()
 
-	hooks, err := h.store.FindHooks(ctx, hookFilter(entity, event))
+	urls, err := h.registry.WebhookURLsFor(ctx, entity, event)
 	if err != nil {
 		slog.Warn("hooks: failed to look up async hooks", "entity", entity, "event", event, "error", err)
 		return
 	}
 
-	for _, hook := range hooks {
-		url, _ := hook["webhook_url"].(string)
-		if url == "" {
-			continue
-		}
+	for _, url := range urls {
 		payload := map[string]any{
 			"entity":    entity,
 			"entity_id": entityID,

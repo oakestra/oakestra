@@ -35,6 +35,30 @@ func (s *Store) FindHooks(ctx context.Context, filter bson.M) ([]bson.M, error) 
 	return findAll(ctx, s.Hooks, filter)
 }
 
+// WebhookURLsFor returns the webhook URLs registered for entity that are
+// subscribed to event. This is services.HookRegistry's production adapter -
+// the query filter and the "skip unusable webhook_url" logic both used to
+// live in services/hooks.go (as hookFilter and an inline
+// `if url == "" { continue }` in processSyncHook/processAsyncHook) and were
+// relocated here so services stays free of Mongo query documents. A
+// registration whose webhook_url is missing, empty, or not a string is
+// skipped rather than returned - the same skip services used to perform
+// itself, now guaranteed by this method instead.
+func (s *Store) WebhookURLsFor(ctx context.Context, entity string, event HookEvent) ([]string, error) {
+	hooks, err := findAll(ctx, s.Hooks, bson.M{"entity": entity, "events": bson.M{"$in": bson.A{string(event)}}})
+	if err != nil {
+		return nil, err
+	}
+
+	urls := make([]string, 0, len(hooks))
+	for _, hook := range hooks {
+		if url, ok := hook["webhook_url"].(string); ok && url != "" {
+			urls = append(urls, url)
+		}
+	}
+	return urls, nil
+}
+
 // FindHookByID looks up a single hook by id.
 //
 // Deviation from Python's hooks_db.find_hook_by_id, which queries
