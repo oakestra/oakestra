@@ -1,4 +1,4 @@
-package virtualization
+package unikernel
 
 import (
 	"archive/tar"
@@ -8,6 +8,8 @@ import (
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/requests"
+	"go_node_engine/util/taskid"
+	"go_node_engine/virtualization/internal/logutils"
 	"go_node_engine/virtualization/internal/networkutils"
 	virtrt "go_node_engine/virtualization/internal/runtime"
 	"io"
@@ -90,8 +92,8 @@ func (r *UnikernelRuntime) Stop() {
 		if r.killQueue[id.String()] == nil {
 			continue
 		}
-		logger.InfoLogger().Printf("Stopping VM %s : %s %d\n", id.String(), extractSnameFromTaskID(id.String()), extractInstanceNumberFromTaskID(id.String()))
-		err := r.Undeploy(extractSnameFromTaskID(id.String()), extractInstanceNumberFromTaskID(id.String()))
+		logger.InfoLogger().Printf("Stopping VM %s : %s %d\n", id.String(), taskid.ExtractServiceName(id.String()), taskid.ExtractInstanceNumber(id.String()))
+		err := r.Undeploy(taskid.ExtractServiceName(id.String()), taskid.ExtractInstanceNumber(id.String()))
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", id.String(), err)
 		}
@@ -107,11 +109,11 @@ func (r *UnikernelRuntime) Deploy(service model.Service, statusChangeNotificatio
 	errorChannel := make(chan error)
 
 	r.channelLock.RLock()
-	el, servicefound := r.killQueue[genTaskID(service.Sname, service.Instance)]
+	el, servicefound := r.killQueue[taskid.Generate(service.Sname, service.Instance)]
 	r.channelLock.RUnlock()
 	if !servicefound || el == nil {
 		r.channelLock.Lock()
-		r.killQueue[genTaskID(service.Sname, service.Instance)] = &killChannel
+		r.killQueue[taskid.Generate(service.Sname, service.Instance)] = &killChannel
 		r.channelLock.Unlock()
 	} else {
 		return errors.New("service already deployed")
@@ -130,7 +132,7 @@ func (r *UnikernelRuntime) Undeploy(service string, instance int) error {
 
 	r.channelLock.Lock()
 	defer r.channelLock.Unlock()
-	hostname := genTaskID(service, instance)
+	hostname := taskid.Generate(service, instance)
 	//r.qemuDomains = append(r.qemuDomains, hostname)
 	el, found := r.killQueue[hostname]
 	if found && el != nil {
@@ -365,7 +367,7 @@ func (r *UnikernelRuntime) VirtualMachineCreationRoutine(
 	qemuConfig.Memory = service.Memory
 	qemuConfig.CPU = service.Vcpus
 	//hostname is used as name for the namespace in which the unikernel will be running in
-	hostname := genTaskID(service.Sname, service.Instance)
+	hostname := taskid.Generate(service.Sname, service.Instance)
 	qemuConfig.Name = hostname
 	qemuConfig.NSname = &hostname
 
@@ -587,7 +589,7 @@ func (r *UnikernelRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 				Memory:   fmt.Sprintf("%f", sysInfo.Memory),
 				Disk:     fmt.Sprintf("%d", 0),
 				Sname:    domain.Sname,
-				Logs:     getLogs(domain.Name),
+				Logs:     logutils.GetLogs(domain.Name),
 				Runtime:  string(model.UNIKERNEL_RUNTIME),
 				Instance: domain.Instance,
 			})
