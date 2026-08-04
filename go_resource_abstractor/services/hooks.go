@@ -149,7 +149,7 @@ func (h *Hooks) callWebhook(ctx context.Context, url string, data map[string]any
 		slog.Warn("hooks: webhook request failed, keeping original data", "url", url, "error", err)
 		return data
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		slog.Warn("hooks: webhook returned non-2xx, keeping original data", "url", url, "status", resp.StatusCode)

@@ -124,7 +124,7 @@ func (s *Store) FindCandidates(ctx context.Context, filter bson.M, resources []s
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var results []bson.M
 	if err := cursor.All(ctx, &results); err != nil {

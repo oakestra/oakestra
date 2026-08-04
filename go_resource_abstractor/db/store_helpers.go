@@ -20,7 +20,7 @@ func findAll(ctx context.Context, coll *mongo.Collection, filter bson.M) ([]bson
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var results []bson.M
 	if err := cursor.All(ctx, &results); err != nil {

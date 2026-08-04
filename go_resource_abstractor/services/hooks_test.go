@@ -24,8 +24,8 @@ type registryKey struct {
 	event  db.HookEvent
 }
 
-func (f fakeRegistry) register(entity string, event db.HookEvent, url string) {
-	key := registryKey{entity, event}
+func (f fakeRegistry) register(event db.HookEvent, url string) {
+	key := registryKey{"entity", event}
 	f[key] = append(f[key], url)
 }
 
@@ -56,7 +56,7 @@ func TestPreCreateTransformsPayload(t *testing.T) {
 	defer server.Close()
 
 	registry := fakeRegistry{}
-	registry.register(entity, db.EventPreCreate, server.URL)
+	registry.register(db.EventPreCreate, server.URL)
 
 	hooks := NewHooks(registry, testHookTimeout, testHookTimeout)
 	result := hooks.PreCreate(ctx, entity, map[string]any{"name": "widget"})
@@ -79,7 +79,7 @@ func TestPreUpdateFailsOpenOnWebhookError(t *testing.T) {
 	defer server.Close()
 
 	registry := fakeRegistry{}
-	registry.register(entity, db.EventPreUpdate, server.URL)
+	registry.register(db.EventPreUpdate, server.URL)
 
 	hooks := NewHooks(registry, testHookTimeout, testHookTimeout)
 	original := map[string]any{"name": "widget"}
@@ -95,7 +95,7 @@ func TestPreCreateFailsOpenWhenWebhookUnreachable(t *testing.T) {
 	entity := "entity"
 
 	registry := fakeRegistry{}
-	registry.register(entity, db.EventPreCreate, "http://127.0.0.1:1") // nothing listens on port 1
+	registry.register(db.EventPreCreate, "http://127.0.0.1:1") // nothing listens on port 1
 
 	hooks := NewHooks(registry, testHookTimeout, testHookTimeout)
 	original := map[string]any{"name": "widget"}
@@ -119,7 +119,7 @@ func TestPostCreateFiresAsyncWebhookWithEntityPayload(t *testing.T) {
 	defer server.Close()
 
 	registry := fakeRegistry{}
-	registry.register(entity, db.EventPostCreate, server.URL)
+	registry.register(db.EventPostCreate, server.URL)
 
 	hooks := NewHooks(registry, testHookTimeout, testHookTimeout)
 	hooks.PostCreate(entity, "entity-id-123")
@@ -141,7 +141,6 @@ func TestPostCreateFiresAsyncWebhookWithEntityPayload(t *testing.T) {
 }
 
 func TestPostDeleteDoesNotFireForUnrelatedEntity(t *testing.T) {
-	entity := "entity"
 	otherEntity := "other-entity"
 
 	received := make(chan struct{}, 1)
@@ -152,7 +151,7 @@ func TestPostDeleteDoesNotFireForUnrelatedEntity(t *testing.T) {
 	defer server.Close()
 
 	registry := fakeRegistry{}
-	registry.register(entity, db.EventPostDelete, server.URL)
+	registry.register(db.EventPostDelete, server.URL)
 
 	hooks := NewHooks(registry, testHookTimeout, testHookTimeout)
 	hooks.PostDelete(otherEntity, "some-id")
