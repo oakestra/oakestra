@@ -12,8 +12,9 @@ services:
     image: system_manager
     build:
       context: system-manager-python/
-      args:
-        - LIB_BRANCH=${LIB_BRANCH:-develop}
+      additional_contexts:
+        # Oakestra shared libraries are built from the repo-local libraries/ folder.
+        - libraries=../libraries
     hostname: system_manager
     container_name: system_manager
     labels:

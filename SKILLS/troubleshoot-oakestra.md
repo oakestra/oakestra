@@ -632,9 +632,12 @@ docker compose build --no-cache system_manager
 docker compose pull
 ```
 
-Check `LIB_BRANCH` env var — it controls which branch of the `libraries` package is used during build:
+The shared `libraries/` packages (`oakestra_utils_library`, `resource_abstractor_client`) are built from the repo-local `libraries/` folder via a Buildx named build context — not from a remote git repo, and there is no `LIB_BRANCH` env var. If a build fails on these libraries, check that:
 ```bash
-echo $LIB_BRANCH  # Should match the Oakestra version being deployed
+# The libraries build context resolves (declared in docker-compose.yml as additional_contexts):
+ls libraries/oakestra_utils_library libraries/resource_abstractor_client
+# BuildKit/Buildx is enabled (named build contexts require it — default on modern Docker):
+docker buildx version
 ```
 
 ---

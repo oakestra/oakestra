@@ -105,7 +105,7 @@ jobs:
         env:
             DOCKERFILE_CONTEXT: ${{ matrix.value }}
         id: build-and-push
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v6
         with:
             context: |
                 ${{format('./{0}/', matrix.value)}}
@@ -114,6 +114,8 @@ jobs:
             push: false
             tags: ${{ steps.meta.outputs.tags }}
             labels: ${{ steps.meta.outputs.labels }}
-            build-args: |
-              LIB_BRANCH=${{ github.head_ref || github.ref_name }}
+            # Oakestra shared libraries are built from the repo-local libraries/ folder.
+            # (Unused by services that don't import them, harmless to provide.)
+            build-contexts: |
+              libraries=./libraries
             
