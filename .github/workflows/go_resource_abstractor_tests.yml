@@ -39,6 +39,11 @@ jobs:
       # generator. This catches the spec and the generated code drifting apart
       # - i.e. someone editing one and not regenerating the other.
       - name: Check generated OpenAPI code is up to date
+        env:
+          # oapi-codegen's go:generate pin can require a newer Go than this
+          # module's go.mod - let the toolchain auto-fetch it for codegen
+          # only, overriding setup-go's default GOTOOLCHAIN=local.
+          GOTOOLCHAIN: auto
         run: |
           go generate ./openapi
           if ! git diff --exit-code -- openapi/openapi.gen.go; then
@@ -91,6 +96,11 @@ jobs:
       # from the spec, which a spec edit that only regenerated the server
       # would cause.
       - name: Check generated OpenAPI client code is up to date
+        env:
+          # oapi-codegen's go:generate pin can require a newer Go than this
+          # module's go.mod - let the toolchain auto-fetch it for codegen
+          # only, overriding setup-go's default GOTOOLCHAIN=local.
+          GOTOOLCHAIN: auto
         run: |
           go generate ./openapi
           if ! git diff --exit-code -- openapi/openapi.gen.go; then
