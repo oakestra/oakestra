@@ -220,15 +220,19 @@ export OAKESTRA_VERSION=develop
 
 ## Shared Libraries
 
-- `libraries/oakestra_utils_library` — Python enums for job statuses (`DeploymentStatus`, `PositiveSchedulingStatus`, `NegativeSchedulingStatus`). Imported by system_manager and cluster_manager. Branch used during build is controlled by the `LIB_BRANCH` build arg (defaults to `develop`).
+- `libraries/oakestra_utils_library` — Python enums for job statuses (`DeploymentStatus`, `PositiveSchedulingStatus`, `NegativeSchedulingStatus`). Imported by system_manager and cluster_manager.
 - `libraries/resource_abstractor_client` — Python HTTP client for resource-abstractor. Reads `RESOURCE_ABSTRACTOR_URL` and `RESOURCE_ABSTRACTOR_PORT` from env.
+
+**These libraries are always built from this repo's local `libraries/` folder — never fetched from a remote git repo.** Consumers wire them in as follows:
+- **Docker builds** — the service's `docker-compose.yml` exposes `libraries/` as a named build context (`additional_contexts: libraries=../libraries`); the Dockerfile does `COPY --from=libraries . /libraries` and `pip install`s them. CI (`docker/build-push-action`) passes the same via `build-contexts: libraries=./libraries`.
+- **Local dev / tests** — `pip install ./libraries/oakestra_utils_library ./libraries/resource_abstractor_client` (the VS Code `install-*-dependencies` tasks already do this). The `requirements.txt` files no longer list the libraries.
 
 ---
 
 ## Gotchas
 
 - **Host networking breaks container DNS.** When using `override-network-host.yml`, containers can't resolve each other by name — set all env vars to IPs, not container names.
-- **`LIB_BRANCH` on feature branches.** The `oakestra_utils_library` and `resource_abstractor_client` Docker build arg `LIB_BRANCH` defaults to `develop`. If your branch adds library changes, set `LIB_BRANCH` to your branch name or images will build against stale library code.
+- **Shared libraries are always local.** `oakestra_utils_library` and `resource_abstractor_client` are built from this repo's `libraries/` folder (see the Shared Libraries section) — there is no `LIB_BRANCH` build arg any more, and nothing is fetched from a remote git repo. Edit the code in `libraries/` and rebuild; changes take effect immediately, no push required. Docker builds need BuildKit/Buildx (named build contexts) — already the default in the compose files, CI, and VS Code tasks.
 - **eventlet monkey-patching.** Both `system_manager` and `cluster_manager` use eventlet. Monkey-patching must happen before Flask/pymongo imports — don't reorder the top of entry-point files.
 - **Scheduler is the same binary for root and cluster** — differentiated only by env vars (`SCHEDULER_TYPE`, Redis URL/password). Keep deployment-specific logic out of the binary.
 

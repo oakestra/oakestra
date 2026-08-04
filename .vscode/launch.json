@@ -1,5 +1,4 @@
 {
-    // Runs local 
     "version": "0.2.0",
     "configurations": [
         {
@@ -10,11 +9,12 @@
             "program": "${workspaceRoot}/go_node_engine/internal/daemon/nodeengined.go",
             "console": "integratedTerminal",
             "asRoot": true,
-            "args": ["-a", "0.0.0.0",],
+            "args": ["-a", "0.0.0.0"],
             "env": {
-                "PATH": "${env:PATH}:/usr/local/go/bin" 
+                "PATH": "${env:PATH}:/usr/local/go/bin"
             },
-            "preLaunchTask": "prep-debug-node-engine-env",        },
+            "preLaunchTask": "prep-debug-node-engine-env"
+        },
         {
             "name": "Debug Node Engine With Custom Cluster",
             "type": "go",
@@ -23,10 +23,124 @@
             "program": "${workspaceRoot}/go_node_engine/internal/daemon/nodeengined.go",
             "console": "integratedTerminal",
             "asRoot": true,
-            "args": ["-a","${input:enterClusterIp}"],
+            "args": ["-a", "${input:enterClusterIp}"],
             "env": {
-                "PATH": "${env:PATH}:/usr/local/go/bin" 
+                "PATH": "${env:PATH}:/usr/local/go/bin"
             }
+        },
+        {
+            "name": "Debug Root Manager",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${command:python.interpreterPath}",
+            "program": "${workspaceRoot}/root_orchestrator/system-manager-python/system_manager.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}/libraries/oakestra_utils_library:${workspaceRoot}/libraries/resource_abstractor_client:${env:PYTHONPATH}",
+                "ROOT_MONGO_URL": "0.0.0.0",
+                "LOG_LEVEL": "INFO",
+                "ROOT_MONGO_PORT": "10007",
+                "ROOT_SCHEDULER_URL": "0.0.0.0",
+                "ROOT_SCHEDULER_PORT": "10004",
+                "RESOURCE_ABSTRACTOR_URL": "0.0.0.0",
+                "RESOURCE_ABSTRACTOR_PORT": "11011",
+                "NET_PLUGIN_URL": "0.0.0.0",
+                "NET_PLUGIN_PORT": "10099",
+                "JWT_GENERATOR_URL": "0.0.0.0",
+                "JWT_GENERATOR_PORT": "10011"
+            },
+            "preLaunchTask": "prep-debug-root-manager-env"
+        },
+        {
+            "name": "Debug Root Scheduler",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/scheduler/cmd",
+            "console": "integratedTerminal",
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin",
+                "ORCHESTRATION_PLANE": "root",
+                "API_PORT": "10004",
+                "MANAGER_URL": "0.0.0.0",
+                "MANAGER_PORT": "10000",
+                "RESOURCE_ABSTRACTOR_URL": "0.0.0.0",
+                "RESOURCE_ABSTRACTOR_PORT": "11011",
+                "REDIS_ADDR": "redis://:rootRedis@0.0.0.0:6379"
+            },
+            "preLaunchTask": "prep-debug-root-scheduler-env"
+        },
+        {
+            "name": "Debug Root Resource Abstractor",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${command:python.interpreterPath}",
+            "program": "${workspaceRoot}/resource-abstractor/resource_abstractor.py",
+            "console": "integratedTerminal",
+            "env": {
+                "RESOURCE_ABSTRACTOR_PORT": "11011",
+                "MONGO_URL": "0.0.0.0",
+                "MONGO_PORT": "10007",
+                "LOG_LEVEL": "INFO"
+            },
+            "preLaunchTask": "prep-debug-root-resource-abstractor-env"
+        },
+        {
+            "name": "Debug JWT Generator",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${command:python.interpreterPath}",
+            "program": "${workspaceRoot}/root_orchestrator/jwt-generator/jwt_generator.py",
+            "console": "integratedTerminal",
+            "env": {
+                "JWT_GENERATOR_HOST": "0.0.0.0",
+                "JWT_GENERATOR_PORT": "10011"
+            },
+            "preLaunchTask": "prep-debug-jwt-generator-env"
+        },
+        {
+            "name": "Debug Root Addons Manager",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${command:python.interpreterPath}",
+            "program": "${workspaceRoot}/addons_engine/addons-manager/addons_manager.py",
+            "console": "integratedTerminal",
+            "env": {
+                "ADDONS_MANAGER_PORT": "11101",
+                "ADDONS_ENGINE_MONGO_URL": "0.0.0.0",
+                "ADDONS_ENGINE_MONGO_PORT": "10007",
+                "MARKETPLACE_ADDR": "http://0.0.0.0:11102"
+            },
+            "preLaunchTask": "prep-debug-root-addons-manager-env"
+        },
+        {
+            "name": "Debug Root Addons Monitor",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${command:python.interpreterPath}",
+            "program": "${workspaceRoot}/addons_engine/addons-monitor/addons_monitor.py",
+            "console": "integratedTerminal",
+            "env": {
+                "ADDONS_MANAGER_ADDR": "http://0.0.0.0:11101",
+                "ORCHESTRATION_PLANE": "root",
+                "DEFAULT_PROJECT_NAME": "root_orchestrator",
+                "FLASK_DEBUG": "True"
+            },
+            "preLaunchTask": "prep-debug-root-addons-monitor-env"
+        },
+        {
+            "name": "Debug Marketplace Manager",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${command:python.interpreterPath}",
+            "program": "${workspaceRoot}/addons_marketplace/marketplace-manager/marketplace_manager.py",
+            "console": "integratedTerminal",
+            "env": {
+                "ADDON_MARKETPLACE_PORT": "11102",
+                "ADDON_MARKETPLACE_MONGO_URL": "0.0.0.0",
+                "ADDON_MARKETPLACE_MONGO_PORT": "10007"
+            },
+            "preLaunchTask": "prep-debug-marketplace-manager-env"
         },
         {
             "name": "Debug Cluster Manager",
@@ -56,9 +170,9 @@
                 "RESOURCE_ABSTRACTOR_URL": "0.0.0.0",
                 "RESOURCE_ABSTRACTOR_PORT": "11012",
                 "MY_PORT": "10100",
-                "SYSTEM_MANAGER_GRPC_PORT": "50052",
+                "SYSTEM_MANAGER_GRPC_PORT": "50052"
             },
-            "preLaunchTask": "prep-debug-cluster-manager-env",
+            "preLaunchTask": "prep-debug-cluster-manager-env"
         },
         {
             "name": "Debug Cluster Scheduler",
@@ -69,39 +183,83 @@
             "console": "integratedTerminal",
             "env": {
                 "PATH": "${env:PATH}:/usr/local/go/bin",
-                "API_PORT":"10105",
-                "MANAGER_URL":"0.0.0.0",
-                "MANAGER_PORT":"10100",
-                "CLUSTER_MONGO_URL":"0.0.0.0",
-                "CLUSTER_MONGO_PORT":"10107",
-                "RESOURCE_ABSTRACTOR_URL":"0.0.0.0",
-                "RESOURCE_ABSTRACTOR_PORT":"11012",
-                "REDIS_ADDR":"redis://:clusterRedis@0.0.0.0:6479"
+                "ORCHESTRATION_PLANE": "cluster",
+                "API_PORT": "10105",
+                "MANAGER_URL": "0.0.0.0",
+                "MANAGER_PORT": "10100",
+                "CLUSTER_MONGO_URL": "0.0.0.0",
+                "CLUSTER_MONGO_PORT": "10107",
+                "RESOURCE_ABSTRACTOR_URL": "0.0.0.0",
+                "RESOURCE_ABSTRACTOR_PORT": "11012",
+                "REDIS_ADDR": "redis://:clusterRedis@0.0.0.0:6479"
             },
-            "preLaunchTask": "prep-debug-cluster-scheduler-env",
+            "preLaunchTask": "prep-debug-cluster-scheduler-env"
         },
         {
-            "name": "Debug Root Manager",
+            "name": "Debug Cluster Resource Abstractor",
             "type": "debugpy",
             "request": "launch",
             "python": "${command:python.interpreterPath}",
-            "program": "${workspaceRoot}/root_orchestrator/system-manager-python/system_manager.py",
+            "program": "${workspaceRoot}/resource-abstractor/resource_abstractor.py",
             "console": "integratedTerminal",
             "env": {
-                "PYTHONPATH": "${workspaceRoot}/libraries/oakestra_utils_library:${workspaceRoot}/libraries/resource_abstractor_client:${env:PYTHONPATH}",
-                "ROOT_MONGO_URL": "0.0.0.0",
-                "LOG_LEVEL": "INFO",
-                "ROOT_MONGO_PORT": "10007",
-                "ROOT_SCHEDULER_URL": "0.0.0.0",
-                "ROOT_SCHEDULER_PORT": "10004",
-                "RESOURCE_ABSTRACTOR_URL": "0.0.0.0",
-                "RESOURCE_ABSTRACTOR_PORT": "11011",
-                "NET_PLUGIN_URL": "0.0.0.0",
-                "NET_PLUGIN_PORT": "10099",
-                "JWT_GENERATOR_URL": "0.0.0.0",
-                "JWT_GENERATOR_PORT": "10011"
+                "RESOURCE_ABSTRACTOR_PORT": "11012",
+                "MONGO_URL": "0.0.0.0",
+                "MONGO_PORT": "10107",
+                "LOG_LEVEL": "INFO"
             },
-            "preLaunchTask": "prep-debug-root-manager-env",
+            "preLaunchTask": "prep-debug-cluster-resource-abstractor-env"
+        },
+        {
+            "name": "Debug Cluster Addons Manager",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${command:python.interpreterPath}",
+            "program": "${workspaceRoot}/addons_engine/addons-manager/addons_manager.py",
+            "console": "integratedTerminal",
+            "env": {
+                "ADDONS_MANAGER_PORT": "11201",
+                "ADDONS_ENGINE_MONGO_URL": "0.0.0.0",
+                "ADDONS_ENGINE_MONGO_PORT": "10107",
+                "MARKETPLACE_ADDR": "http://0.0.0.0:11102"
+            },
+            "preLaunchTask": "prep-debug-cluster-addons-manager-env"
+        },
+        {
+            "name": "Debug Cluster Addons Monitor",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${command:python.interpreterPath}",
+            "program": "${workspaceRoot}/addons_engine/addons-monitor/addons_monitor.py",
+            "console": "integratedTerminal",
+            "env": {
+                "ADDONS_MANAGER_ADDR": "http://0.0.0.0:11201",
+                "ORCHESTRATION_PLANE": "cluster",
+                "DEFAULT_PROJECT_NAME": "cluster_orchestrator",
+                "FLASK_DEBUG": "True"
+            },
+            "preLaunchTask": "prep-debug-cluster-addons-monitor-env"
+        },
+        {
+            "name": "Debug Addons Dashboard",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:4200",
+            "webRoot": "${workspaceRoot}/addons_engine/addons-dashboard",
+            "preLaunchTask": "serve-addons-dashboard"
+        },
+        {
+            "name": "Debug CSI HostPath Driver",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/csi/hostpath",
+            "console": "integratedTerminal",
+            "asRoot": true,
+            "args": ["--nodeid", "debug-node"],
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin"
+            }
         },
         {
             "name": "Cleanup Dev Environment",
@@ -109,15 +267,66 @@
             "request": "launch",
             "program": "${workspaceRoot}/cluster_orchestrator/cluster-manager/logs/cm_logging.py",
             "console": "integratedTerminal",
-            "preLaunchTask": "cleanup-debug-env",
+            "preLaunchTask": "cleanup-debug-env"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Debug Full Root Orchestrator",
+            "configurations": [
+                "Debug JWT Generator",
+                "Debug Root Resource Abstractor",
+                "Debug Root Scheduler",
+                "Debug Root Manager"
+            ],
+            "stopAll": true
+        },
+        {
+            "name": "Debug Full Cluster Orchestrator",
+            "configurations": [
+                "Debug Cluster Resource Abstractor",
+                "Debug Cluster Scheduler",
+                "Debug Cluster Manager"
+            ],
+            "stopAll": true
+        },
+        {
+            "name": "Debug Root Addons Stack",
+            "configurations": [
+                "Debug Marketplace Manager",
+                "Debug Root Addons Manager",
+                "Debug Root Addons Monitor"
+            ],
+            "stopAll": true
+        },
+        {
+            "name": "Debug Cluster Addons Stack",
+            "configurations": [
+                "Debug Cluster Addons Manager",
+                "Debug Cluster Addons Monitor"
+            ],
+            "stopAll": true
+        },
+        {
+            "name": "Debug Full Stack (Root + Cluster)",
+            "configurations": [
+                "Debug JWT Generator",
+                "Debug Root Resource Abstractor",
+                "Debug Root Scheduler",
+                "Debug Root Manager",
+                "Debug Cluster Resource Abstractor",
+                "Debug Cluster Scheduler",
+                "Debug Cluster Manager"
+            ],
+            "stopAll": true
         }
     ],
     "inputs": [
         {
-          "id": "enterClusterIp",
-          "type": "promptString",
-          "description": "Cluster Orchestrator IP",
-          "default": "0.0.0.0"
+            "id": "enterClusterIp",
+            "type": "promptString",
+            "description": "Cluster Orchestrator IP",
+            "default": "0.0.0.0"
         }
-      ]
+    ]
 }
