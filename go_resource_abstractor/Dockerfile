@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS build-stage
+FROM golang:1.24-alpine AS build-stage
 LABEL org.opencontainers.image.source="https://github.com/oakestra/oakestra"
 
 WORKDIR /app
