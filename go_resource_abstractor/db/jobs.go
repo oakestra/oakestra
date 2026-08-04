@@ -139,7 +139,7 @@ func (s *Store) FindJobInstance(ctx context.Context, jobID string, instanceNumbe
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	if !cursor.Next(ctx) {
 		if err := cursor.Err(); err != nil {
