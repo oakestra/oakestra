@@ -854,10 +854,14 @@
         "overrides": [
           {
             "matcher": {
-              "id": "byName",
-              "options": "critical"
+              "id": "byFrameRefID",
+              "options": "E"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "Critical"
+              },
               {
                 "id": "color",
                 "value": {
@@ -869,10 +873,14 @@
           },
           {
             "matcher": {
-              "id": "byName",
-              "options": "error"
+              "id": "byFrameRefID",
+              "options": "D"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "Error"
+              },
               {
                 "id": "color",
                 "value": {
@@ -884,10 +892,14 @@
           },
           {
             "matcher": {
-              "id": "byName",
-              "options": "warning"
+              "id": "byFrameRefID",
+              "options": "C"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "Warning"
+              },
               {
                 "id": "color",
                 "value": {
@@ -899,10 +911,14 @@
           },
           {
             "matcher": {
-              "id": "byName",
-              "options": "info"
+              "id": "byFrameRefID",
+              "options": "B"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "Info"
+              },
               {
                 "id": "color",
                 "value": {
@@ -914,10 +930,14 @@
           },
           {
             "matcher": {
-              "id": "byName",
-              "options": "debug"
+              "id": "byFrameRefID",
+              "options": "A"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "Debug"
+              },
               {
                 "id": "color",
                 "value": {
@@ -929,10 +949,14 @@
           },
           {
             "matcher": {
-              "id": "byName",
-              "options": "unparsed"
+              "id": "byFrameRefID",
+              "options": "F"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "Unparsed"
+              },
               {
                 "id": "color",
                 "value": {
@@ -986,8 +1010,8 @@
             "uid": "Loki"
           },
           "editorMode": "code",
-          "expr": "sum by (level) (count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=~\"debug|info|warning|error|critical\"}[$__range]))",
-          "legendFormat": "{{level}}",
+          "expr": "sum(count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=\"debug\"}[$__range])) or on() vector(0)",
+          "legendFormat": "Debug",
           "queryType": "instant",
           "refId": "A"
         },
@@ -997,10 +1021,54 @@
             "uid": "Loki"
           },
           "editorMode": "code",
-          "expr": "sum(count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=\"\"}[$__range])) or on() vector(0)",
-          "legendFormat": "unparsed",
+          "expr": "sum(count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=\"info\"}[$__range])) or on() vector(0)",
+          "legendFormat": "Info",
           "queryType": "instant",
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=\"warning\"}[$__range])) or on() vector(0)",
+          "legendFormat": "Warning",
+          "queryType": "instant",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=\"error\"}[$__range])) or on() vector(0)",
+          "legendFormat": "Error",
+          "queryType": "instant",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=\"critical\"}[$__range])) or on() vector(0)",
+          "legendFormat": "Critical",
+          "queryType": "instant",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=\"\"}[$__range])) or on() vector(0)",
+          "legendFormat": "Unparsed",
+          "queryType": "instant",
+          "refId": "F"
         }
       ],
       "title": "Log-level distribution",
