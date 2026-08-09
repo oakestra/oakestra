@@ -854,8 +854,8 @@
         "overrides": [
           {
             "matcher": {
-              "id": "byFrameRefID",
-              "options": "E"
+              "id": "byName",
+              "options": "Critical"
             },
             "properties": [
               {
@@ -873,8 +873,8 @@
           },
           {
             "matcher": {
-              "id": "byFrameRefID",
-              "options": "D"
+              "id": "byName",
+              "options": "Error"
             },
             "properties": [
               {
@@ -892,8 +892,8 @@
           },
           {
             "matcher": {
-              "id": "byFrameRefID",
-              "options": "C"
+              "id": "byName",
+              "options": "Warning"
             },
             "properties": [
               {
@@ -911,8 +911,8 @@
           },
           {
             "matcher": {
-              "id": "byFrameRefID",
-              "options": "B"
+              "id": "byName",
+              "options": "Info"
             },
             "properties": [
               {
@@ -930,8 +930,8 @@
           },
           {
             "matcher": {
-              "id": "byFrameRefID",
-              "options": "A"
+              "id": "byName",
+              "options": "Debug"
             },
             "properties": [
               {
@@ -949,8 +949,8 @@
           },
           {
             "matcher": {
-              "id": "byFrameRefID",
-              "options": "F"
+              "id": "byName",
+              "options": "Unparsed"
             },
             "properties": [
               {
@@ -976,10 +976,7 @@
       },
       "id": 14,
       "options": {
-        "displayLabels": [
-          "name",
-          "percent"
-        ],
+        "displayLabels": [],
         "legend": {
           "displayMode": "table",
           "placement": "right",
