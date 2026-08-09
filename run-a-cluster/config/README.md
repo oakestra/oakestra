@@ -36,7 +36,8 @@ Both two levels use different volumes for the configuration of the three service
 ├── loki.yml                # Ingestion, storage config
 ├── config.alloy            # Alloy Docker discovery, processing, and Loki output
 └── dashboards
-    └── logs-dashboard.json # Provisioned orchestrator logs dashboard
+    ├── logs-dashboard.json          # Provisioned orchestrator logs dashboard
+    └── log-statistics-dashboard.json # Provisioned log statistics dashboard
 ```
 The configuration files can also be written at runtime but the volumes link allows a faster startup and configuration reload at runtime.
 
@@ -56,6 +57,10 @@ Alloy's diagnostic UI is available only from the orchestrator host at `http://12
 Grafana automatically loads the version-controlled [`[Oakestra] Orchestrator Logs`](./dashboards/logs-dashboard.json) dashboard from the mounted `config/dashboards` directory. Open Grafana on port `3000` and select it from **Dashboards**.
 
 The dashboard provides Source, Cluster, and Component selectors, exact normalized severity filtering, Full-line regex search, the standard Grafana time picker, shared-ID correlation links, and an **Advanced field filter (LogQL)**. Keep each query window at 30 days or less: Grafana's generic picker can display longer ranges, but Loki 2.9 rejects a single query longer than its `30d1h` default; inspect older retained history by moving an absolute window of at most 30 days backward. Critical is separate from Error, while **Unparsed** selects records without a recognized severity. **Display** defaults to a Compact component/message/event/context summary and can switch to the exact Raw record; this query-time formatting runs after filtering and does not modify Loki data. Python fields are accepted only from expected structured services with the schema-v1 identity fields and matching service-to-container identity, while compatibility parsers are scoped to known emitters; a payload field, logger name, or message word therefore cannot create a false severity match. The application `service` field stays in JSON for query-time filtering; `compose_service` is the trusted indexed component. Use `| json` in the advanced field to search `event`, `logger`, or nested `context` values at query time. Optional `| logfmt` applies only to a selected local observability component that emits logfmt; it is not the Python application format. Use the log panel's **Explore** action for unrestricted LogQL editing. In a 1-DOC deployment, the selectors distinguish Root and Cluster streams stored in the shared local Loki. In a Root-only deployment, the same dashboard displays only Root-local logs.
+
+## Provisioned log statistics dashboard
+
+Grafana also loads the version-controlled [`[Oakestra] Log Statistics`](./dashboards/log-statistics-dashboard.json) dashboard. It replaces the former mixed logs and statistics page with selected-range totals, average throughput, component and Cluster trends, top-N components by average warning or error/critical lines per second, and a normalized level distribution. Error panels combine `error` and `critical`, while the distribution keeps Critical separate and shows records without an indexed level as **Unparsed**. Cluster, Source, and Component filters are shared with the Logs dashboard, and links preserve those filters and the time range. Source defaults to Oakestra services but can include observability services, data stores, or all containers. In 1-DOC the shared local Loki lets the Cluster selector compare Root and local Cluster streams; keep each query range at 30 days or less because Loki 2.9 rejects a single query longer than `30d1h`.
 
 ### Monitoring granularity configuration
 The native Alloy configuration is stored in [config.alloy](./config.alloy). `discovery.docker` asks the Docker daemon for containers carrying the collector-scope label assigned by Compose:
