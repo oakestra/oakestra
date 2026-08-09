@@ -16,6 +16,10 @@ Cluster Grafana automatically loads the version-controlled [`[Oakestra] Orchestr
 
 The dashboard only displays logs stored in this Cluster's `cluster_loki`. It does not depend on Root Grafana and does not make Cluster logs available at the Root.
 
+## Provisioned log statistics dashboard
+
+Cluster Grafana also loads the version-controlled [`[Oakestra] Log Statistics`](./dashboards/log-statistics-dashboard.json) dashboard. It shows selected-range totals, average throughput, component and Cluster trends, top-N components by average warning or error/critical lines per second, and a distribution of Alloy's normalized `debug`, `info`, `warning`, `error`, and `critical` labels. **Unparsed** counts retained records without a recognized level rather than inferring severity from message text. Cluster, Source, and Component filters are shared with the Logs dashboard, and links between both dashboards preserve those filters and the time range. The Source selector defaults to Oakestra services and can include local observability services, data stores, or all collected containers. The data remains Cluster-local, and each query range must stay at 30 days or less because Loki 2.9 rejects a single query longer than `30d1h`.
+
 ## Provisioned log alerting
 
 Cluster Grafana provisions the same Grafana-managed error and stacktrace rule against `cluster_loki`. Every alert instance is grouped by the configured `CLUSTER_NAME` in `cluster_id` and by `compose_service`, waits one minute before firing, and retains the firing state for one minute after the two-minute log window clears. The rule covers structured error levels, uppercase error tokens, Oakestra compact error records, Python tracebacks, and Go panic/stack markers.
