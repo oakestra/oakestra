@@ -36,7 +36,8 @@ Both two levels use different volumes for the configuration of the three service
 ├── loki.yml                # Ingestion, storage config
 ├── config.alloy            # Alloy Docker discovery, processing, and Loki output
 └── dashboards
-    └── logs-dashboard.json # Provisioned orchestrator logs dashboard
+    ├── logs-dashboard.json          # Provisioned orchestrator logs dashboard
+    └── log-statistics-dashboard.json # Provisioned log statistics dashboard
 ```
 The configuration files can also be written at runtime but the volumes link allows a faster startup and configuration reload at runtime.
 
@@ -71,6 +72,12 @@ The selector matches the indexed `level` label exactly. Python fields are truste
 High-cardinality structured fields are parsed at query time instead of indexed. For example, use `| json schema="schema_version", event_name="event" | schema="1" | event_name="cluster.registration.completed"` in **Advanced field filter (LogQL)**. The same pattern works for `logger` and nested context fields. Compact formatting happens after these filters, so searches still inspect the original record; it changes only the returned line presentation and not Loki's stored data. `| logfmt` in this box is an optional query-time parser for a selected observability component that emits logfmt, not the schema-v1 Python format. It does not create the dashboard Level label: Alloy has already normalized that label during ingestion, using a separate scoped `stage.logfmt` for known logfmt emitters. For unrestricted LogQL editing, open the log panel menu and choose **Explore**.
 
 Root Grafana queries only the Root-local Loki. A standalone Cluster provides the same dashboard through its own Grafana and Loki instead of sending logs to the Root.
+
+## Provisioned log statistics dashboard
+
+Grafana also loads the version-controlled [`[Oakestra] Log Statistics`](./dashboards/log-statistics-dashboard.json) dashboard. It replaces the former mixed logs and statistics page with selected-range totals, average throughput, component and Cluster trends, top-N noisy components, and a normalized level distribution. The dashboard links to the Logs dashboard while preserving the selected time range, Cluster, Source, and Component filters.
+
+Severity statistics use Alloy's indexed lowercase `level` label: Error panels include `error` and `critical`, Warning panels select only `warning`, and the distribution keeps Critical separate. **Unparsed** counts retained records that have no recognized level instead of guessing from their message text. Top-N panels rank average lines per second across the selected range, while trend panels adapt their rate window to the graph resolution. The Source selector defaults to Oakestra services but can include observability services, data stores, or every collected container. Root Grafana still queries only Root-local Loki; keep each dashboard range at 30 days or less because Loki 2.9 rejects a single query longer than `30d1h`.
 
 ### Monitoring granularity configuration
 The native Alloy configuration is stored in [config.alloy](./config.alloy).
