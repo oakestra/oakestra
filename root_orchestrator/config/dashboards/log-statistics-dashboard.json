@@ -855,7 +855,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Critical"
+              "options": "critical"
             },
             "properties": [
               {
@@ -866,7 +866,7 @@
                 "id": "color",
                 "value": {
                   "fixedColor": "dark-red",
-                  "mode": "fixed-color"
+                  "mode": "fixed"
                 }
               }
             ]
@@ -874,7 +874,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Error"
+              "options": "error"
             },
             "properties": [
               {
@@ -885,7 +885,7 @@
                 "id": "color",
                 "value": {
                   "fixedColor": "red",
-                  "mode": "fixed-color"
+                  "mode": "fixed"
                 }
               }
             ]
@@ -893,7 +893,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Warning"
+              "options": "warning"
             },
             "properties": [
               {
@@ -904,7 +904,7 @@
                 "id": "color",
                 "value": {
                   "fixedColor": "yellow",
-                  "mode": "fixed-color"
+                  "mode": "fixed"
                 }
               }
             ]
@@ -912,7 +912,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Info"
+              "options": "info"
             },
             "properties": [
               {
@@ -923,7 +923,7 @@
                 "id": "color",
                 "value": {
                   "fixedColor": "green",
-                  "mode": "fixed-color"
+                  "mode": "fixed"
                 }
               }
             ]
@@ -931,7 +931,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Debug"
+              "options": "debug"
             },
             "properties": [
               {
@@ -942,7 +942,7 @@
                 "id": "color",
                 "value": {
                   "fixedColor": "purple",
-                  "mode": "fixed-color"
+                  "mode": "fixed"
                 }
               }
             ]
@@ -950,7 +950,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Unparsed"
+              "options": "unparsed"
             },
             "properties": [
               {
@@ -961,7 +961,7 @@
                 "id": "color",
                 "value": {
                   "fixedColor": "dark-gray",
-                  "mode": "fixed-color"
+                  "mode": "fixed"
                 }
               }
             ]
@@ -1007,65 +1007,37 @@
             "uid": "Loki"
           },
           "editorMode": "code",
-          "expr": "sum(count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=\"debug\"}[$__range])) or on() vector(0)",
-          "legendFormat": "Debug",
+          "expr": "sum by (level) (count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\"} | label_format level=`{{ if eq .level \"\" }}unparsed{{ else }}{{ .level }}{{ end }}` [$__range]))",
+          "legendFormat": "{{level}}",
           "queryType": "instant",
           "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
         },
         {
-          "datasource": {
-            "type": "loki",
-            "uid": "Loki"
-          },
-          "editorMode": "code",
-          "expr": "sum(count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=\"info\"}[$__range])) or on() vector(0)",
-          "legendFormat": "Info",
-          "queryType": "instant",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "Loki"
-          },
-          "editorMode": "code",
-          "expr": "sum(count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=\"warning\"}[$__range])) or on() vector(0)",
-          "legendFormat": "Warning",
-          "queryType": "instant",
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "Loki"
-          },
-          "editorMode": "code",
-          "expr": "sum(count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=\"error\"}[$__range])) or on() vector(0)",
-          "legendFormat": "Error",
-          "queryType": "instant",
-          "refId": "D"
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "Loki"
-          },
-          "editorMode": "code",
-          "expr": "sum(count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=\"critical\"}[$__range])) or on() vector(0)",
-          "legendFormat": "Critical",
-          "queryType": "instant",
-          "refId": "E"
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "Loki"
-          },
-          "editorMode": "code",
-          "expr": "sum(count_over_time({cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\", level=\"\"}[$__range])) or on() vector(0)",
-          "legendFormat": "Unparsed",
-          "queryType": "instant",
-          "refId": "F"
+          "id": "rowsToFields",
+          "options": {
+            "mappings": [
+              {
+                "fieldName": "Time",
+                "handlerKey": "__ignore"
+              },
+              {
+                "fieldName": "level",
+                "handlerKey": "field.name"
+              },
+              {
+                "fieldName": "Value #A",
+                "handlerKey": "field.value"
+              }
+            ]
+          }
         }
       ],
       "title": "Log-level distribution",
