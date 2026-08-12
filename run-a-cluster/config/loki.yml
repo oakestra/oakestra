@@ -54,6 +54,11 @@ compactor:
 limits_config:
   reject_old_samples: true  # Whether to reject old samples
   reject_old_samples_max_age: 24h  # Maximum age for old samples
+  max_query_parallelism: 4
+  split_queries_by_interval: 24h
+
+query_scheduler:
+  max_outstanding_requests_per_tenant: 256
 
 # Chunk store configuration
 chunk_store_config:
