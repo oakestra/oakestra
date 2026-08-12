@@ -384,6 +384,8 @@
         "y": 7
       },
       "id": 7,
+      "interval": "30s",
+      "maxDataPoints": 300,
       "options": {
         "legend": {
           "calcs": [
@@ -501,6 +503,8 @@
         "y": 17
       },
       "id": 8,
+      "interval": "30s",
+      "maxDataPoints": 300,
       "options": {
         "legend": {
           "calcs": [
@@ -629,6 +633,8 @@
         "y": 28
       },
       "id": 9,
+      "interval": "30s",
+      "maxDataPoints": 300,
       "options": {
         "legend": {
           "calcs": [
@@ -1044,7 +1050,7 @@
       "type": "piechart"
     }
   ],
-  "refresh": "30s",
+  "refresh": "1m",
   "schemaVersion": 39,
   "tags": [
     "Loki",
@@ -1205,8 +1211,6 @@
   },
   "timepicker": {
     "refresh_intervals": [
-      "5s",
-      "10s",
       "30s",
       "1m",
       "5m",
