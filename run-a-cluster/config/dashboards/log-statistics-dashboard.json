@@ -423,7 +423,7 @@
         "type": "loki",
         "uid": "Loki"
       },
-      "description": "Normalized error/critical and warning rates for each selected component.",
+      "description": "Normalized rates for each selected component. Colors distinguish series; error/critical lines are solid and warning lines are dashed.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -471,10 +471,9 @@
             },
             "properties": [
               {
-                "id": "color",
+                "id": "custom.lineStyle",
                 "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed-color"
+                  "fill": "solid"
                 }
               }
             ]
@@ -486,10 +485,13 @@
             },
             "properties": [
               {
-                "id": "color",
+                "id": "custom.lineStyle",
                 "value": {
-                  "fixedColor": "yellow",
-                  "mode": "fixed-color"
+                  "dash": [
+                    10,
+                    10
+                  ],
+                  "fill": "dash"
                 }
               }
             ]
@@ -553,7 +555,7 @@
         "type": "loki",
         "uid": "Loki"
       },
-      "description": "Normalized error/critical and warning rates aggregated by cluster.",
+      "description": "Normalized rates aggregated by cluster. Colors distinguish series; error/critical lines are solid and warning lines are dashed.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -601,10 +603,9 @@
             },
             "properties": [
               {
-                "id": "color",
+                "id": "custom.lineStyle",
                 "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed-color"
+                  "fill": "solid"
                 }
               }
             ]
@@ -616,10 +617,13 @@
             },
             "properties": [
               {
-                "id": "color",
+                "id": "custom.lineStyle",
                 "value": {
-                  "fixedColor": "yellow",
-                  "mode": "fixed-color"
+                  "dash": [
+                    10,
+                    10
+                  ],
+                  "fill": "dash"
                 }
               }
             ]
