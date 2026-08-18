@@ -46,8 +46,11 @@ docker compose version 2>/dev/null || docker-compose --version 2>/dev/null
 ```
 
 **Requirements:**
-- Docker Engine ≥ 20.10 (24+ recommended)
+- Docker Engine ≥ 20.10 for the core orchestrator
+- Docker Engine ≥ 25 on rootful Linux when Prometheus, node_exporter, and cAdvisor are enabled
 - Docker Compose plugin v2+ (i.e., `docker compose`, not `docker-compose`)
+
+The metrics stack supports AMD64 and ARM64. On an older or unsupported host, confirm that `override-no-observe.yml` was applied before treating the Docker version as the deployment failure.
 
 **Fix if outdated:**
 ```bash
@@ -93,12 +96,16 @@ done
 
 **Cluster Orchestrator ports:**
 ```bash
-for port in 10003 10107 10108 10110 10100 10101 10105 11012 6479 10009 3001 3101 12346; do
+for port in 10003 10107 10108 10110 10100 10101 10105 11012 6479 3001 3101 12346; do
   ss -tlnp "sport = :$port" 2>/dev/null | grep -v "State" | head -1 && echo "  ^ port $port" || true
 done
 ```
 
 Flag any port occupied by a non-Oakestra process. Common conflict: port 80 occupied by nginx/apache, port 3000 by another Grafana, port 6379 by a system Redis.
+
+Prometheus and node_exporter are internal in normal deployments. cAdvisor is loopback-only on Root/1-DOC port `8081` or standalone Cluster port `8082`. With `override-network-host.yml`, also check Root loopback port `10010` or Cluster loopback port `10009`; none of these endpoints may bind to a non-loopback address.
+
+node_exporter intentionally uses the host network namespace for physical interface counters but must not use the host PID namespace or retain Linux capabilities. Its port 9100 listener must bind only to the configured private metrics-network gateway, never `0.0.0.0`.
 
 ---
 
@@ -117,13 +124,17 @@ For each container, check:
 - `Created` (never started) → dependency failed to start
 
 **Expected containers for Root Orchestrator:**
-`system_manager`, `mongo`, `mongo_net`, `root_service_manager`, `root_redis`, `root_scheduler`, `root_resource_abstractor`, `jwt_generator`, `grafana`, `loki`, `alloy`, `oakestra-frontend-container`
+`system_manager`, `mongo`, `mongo_net`, `root_service_manager`, `root_redis`, `root_scheduler`, `root_resource_abstractor`, `jwt_generator`, `root_prometheus`, `root_node_exporter`, `root_cadvisor`, `grafana`, `loki`, `alloy`, `oakestra-frontend-container`
+
+In 1-DOC, the single shared metrics pipeline is named `prometheus`, `node_exporter`, and `cadvisor` instead of using the standalone Root names.
 
 Optional root containers (if addons enabled):
 `root_addons_manager`, `root_addons_monitor`, `root_addons_dashboard`, `marketplace_manager`
 
 **Expected containers for Cluster Orchestrator:**
-`mqtt`, `cluster_mongo`, `cluster_mongo_net`, `cluster_service_manager`, `cluster_manager`, `cluster_scheduler`, `cluster_resource_abstractor`, `cluster_redis`, `prometheus`, `cluster_grafana`, `cluster_loki`, `cluster_alloy`
+`mqtt`, `cluster_mongo`, `cluster_mongo_net`, `cluster_service_manager`, `cluster_manager`, `cluster_scheduler`, `cluster_resource_abstractor`, `cluster_redis`, `cluster_prometheus`, `cluster_node_exporter`, `cluster_cadvisor`, `cluster_grafana`, `cluster_loki`, `cluster_alloy`
+
+The Prometheus and exporter containers are intentionally absent when `override-no-observe.yml` is active.
 
 Optional cluster containers (if addons enabled):
 `cluster_addons_manager`, `cluster_addons_monitor`, `cluster_addons_dashboard`
@@ -189,6 +200,9 @@ line. If Python application lines are plain text, verify the image version and t
 | `Cluster reachability probe failed` / `cluster not reachable at` (system_manager log) | Root cannot reach `http://CLUSTER_ADDRESS:10100/api/cluster/status` — wrong IP, firewall, or cluster_manager not up |
 | `permission denied` opening `/var/run/docker.sock` (Alloy log) | Alloy cannot discover/read container logs; inspect the socket mount and host permissions |
 | `loki.write` connection refused | The local Loki is not ready, or `LOKI_URL` is wrong for the selected network mode |
+| cAdvisor `permission denied` or missing Docker root | Verify rootful Docker, the read-only socket/host mounts, and `DOCKER_ROOT_DIR`; do not silently enable privileged mode |
+| Prometheus target `DOWN` / `connection refused` | Inspect the relevant Prometheus config and Compose network; host-network Cluster mode must use `prometheus-host.yml` |
+| metrics stack requires Docker Engine 25 | Upgrade Docker or apply `override-no-observe.yml` on that host |
 
 ---
 
@@ -588,8 +602,26 @@ curl -s --connect-timeout 3 "http://localhost:3001/api/health" 2>/dev/null | pyt
 curl -s --connect-timeout 3 "http://localhost:3100/ready" 2>/dev/null || echo "Root Loki not responding on :3100"
 curl -s --connect-timeout 3 "http://localhost:3101/ready" 2>/dev/null || echo "Cluster Loki not responding on :3101"
 
-# Prometheus (cluster)
-curl -s --connect-timeout 3 "http://localhost:10009/-/healthy" 2>/dev/null || echo "Prometheus not responding on :10009"
+# Prometheus is internal. Query whichever local deployment is present.
+for prometheus_container in root_prometheus cluster_prometheus prometheus; do
+  if docker inspect "$prometheus_container" >/dev/null 2>&1; then
+    echo "=== $prometheus_container targets ==="
+    docker exec "$prometheus_container" \
+      promtool query instant http://127.0.0.1:9090 up 2>/dev/null || \
+      echo "$prometheus_container is not ready"
+  fi
+done
+
+# Verify cAdvisor is not privileged and all host bind mounts are read-only.
+for cadvisor_container in root_cadvisor cluster_cadvisor cadvisor; do
+  docker inspect "$cadvisor_container" \
+    --format 'privileged={{.HostConfig.Privileged}}{{range .Mounts}}{{println .Destination "RW=" .RW}}{{end}}' \
+    2>/dev/null || true
+done
+
+# cAdvisor diagnostic UIs and raw metrics (loopback only).
+curl -fsS --connect-timeout 3 -o /dev/null "http://127.0.0.1:8081/metrics" 2>/dev/null || echo "Root/1-DOC cAdvisor not responding on :8081"
+curl -fsS --connect-timeout 3 -o /dev/null "http://127.0.0.1:8082/metrics" 2>/dev/null || echo "Cluster cAdvisor not responding on :8082"
 
 # Alloy diagnostic UIs (loopback only)
 curl -fsS --connect-timeout 3 "http://localhost:12345/-/ready" 2>/dev/null || echo "Root/1-DOC Alloy UI not responding on :12345"
