@@ -1,11 +1,12 @@
-# Alert & Logging Configuration
+# Observability Configuration
 
 
 ## Monitoring Services
-The proposed toolset for logs and alerting is based on:
+The observability stack is based on:
 - [Loki](https://grafana.com/docs/loki/latest/) is a highly-available, multi-tenant log aggregation system inspired by Prometheus. It focuses on logs instead of metrics, collecting logs via push instead of pull.
 - [Grafana Alloy](https://grafana.com/docs/alloy/latest/) is the collection agent. It discovers Docker containers, reads stdout/stderr, processes log lines, and forwards them to the local Loki instance.
-- [Grafana](https://grafana.com/docs/) is already in use for cluster metrics. Use Loki as data source for both logs and alerting.
+- [Prometheus](https://prometheus.io/docs/) stores host and container metrics collected from node_exporter and cAdvisor.
+- [Grafana](https://grafana.com/docs/) queries both local Loki logs and local Prometheus metrics.
 
 The high-level composition of the services is here sketched:
 
@@ -20,6 +21,9 @@ The high-level composition of the services is here sketched:
 At **root level**, each service is specified by:
 - `loki:3100`
 - `alloy`
+- `prometheus:9090`
+- `node_exporter:9100`
+- `cadvisor:8080`
 - `grafana:3000`
 
 At **cluster level**, each service is specified by:
@@ -32,7 +36,7 @@ Both two levels use different volumes for the configuration of the three service
 ├── alerts
 │   ├── grafana-rules.yml         # Grafana-managed log alert rule
 │   └── grafana-contact-point.yml # Configurable webhook and email contact points
-├── grafana-datasources.yml # Loki datasource setup
+├── grafana-datasources.yml # Loki and Prometheus datasource setup
 ├── loki.yml                # Ingestion, storage config
 ├── config.alloy            # Alloy Docker discovery, processing, and Loki output
 └── dashboards
@@ -43,14 +47,29 @@ The configuration files can also be written at runtime but the volumes link allo
 
 
 > ⚠️ 
-> The *observability stack* can be ovverided to exclude the deployments of the three services at root/cluster deployment by:
+> The observability stack can be disabled with:
  ```bash
- docker-compose -f docker-compose.yml -f override-no-observe.yml up --build
+ docker compose -f 1-DOC.yaml -f override-no-observe.yml up -d
  ```
 > ⚠️
-> Alloy positions and Loki data use named volumes. Regular container recreation preserves them; `docker compose down -v` deliberately removes the stored state and log history.
+> Alloy positions, Loki data, and Prometheus metrics use named volumes. Regular container recreation preserves them; `docker compose down -v` deliberately removes their stored state.
 
 Alloy's diagnostic UI is available only from the orchestrator host at `http://127.0.0.1:12345`. It shows the component graph, health, and discovered targets. The loopback binding avoids exposing diagnostic and profiling endpoints to the deployment network.
+
+## Control-plane metrics
+
+A 1-DOC deployment runs one Prometheus, one node_exporter, and one cAdvisor because Root and Cluster share one physical host and Docker daemon. Prometheus scrapes those targets, itself, and Cluster Manager every 15 seconds. Host metrics use `host_scope="one-doc"`; cAdvisor container metrics retain the existing `cluster_id` values (`root`, the configured Cluster name, or `one-doc`) and `compose_service`, so the two logical orchestration planes remain distinguishable without collecting the machine twice.
+
+node_exporter shares the host network namespace so its network collector sees physical host interfaces rather than only a container `eth0`; it does not share the host PID namespace. Its listener is restricted to the private internal metrics-network gateway, and the process has read-only host mounts, no Linux capabilities, and `no-new-privileges`.
+
+The direct [`root-orchestrator.yml`](../root-orchestrator.yml) deployment uses the separate `prometheus-root.yml` configuration and the same Root-local ownership model as the source Compose deployment.
+
+Prometheus keeps at most seven days or 1 GB. Grafana accesses it through the provisioned `Prometheus` datasource, while node_exporter remains internal. cAdvisor's diagnostic UI and raw metrics are available only from the host at `http://127.0.0.1:8081` and `http://127.0.0.1:8081/metrics`. The metrics stack requires rootful Linux Docker Engine 25 or newer on AMD64 or ARM64. Set `DOCKER_ROOT_DIR` for a custom Docker data directory and use `override-no-observe.yml` on unsupported hosts. cAdvisor's read-only Docker socket and host mounts still expose sensitive host metadata, so its port must remain loopback-only.
+
+```bash
+docker exec prometheus promtool query instant http://127.0.0.1:9090 up
+docker exec prometheus promtool query instant http://127.0.0.1:9090 prometheus_tsdb_head_series
+```
 
 ## Provisioned logs dashboard
 
