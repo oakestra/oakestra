@@ -10,6 +10,21 @@ The Cluster identity in Loki's `cluster_id` label is the configured `CLUSTER_NAM
 
 Python services use the versioned JSON contract documented by the shared [`oakestra_logging`](../../libraries/oakestra_logging/) package. Alloy collects these structured records together with raw Go and third-party output.
 
+## Control-plane metrics
+
+Each Cluster also runs a local `cluster_prometheus`, `cluster_node_exporter`, and `cluster_cadvisor`. Prometheus scrapes itself, both exporters, and the existing Cluster Manager metrics endpoint every 15 seconds. node_exporter reports host CPU, memory, filesystem, disk, and network counters. cAdvisor reports the same resource families per Oakestra container, filters out unrelated Docker containers, and maps the trusted Compose labels to `compose_service` and the configured `CLUSTER_NAME` in `cluster_id`. Host-wide series use `host_scope="cluster"`.
+
+node_exporter shares the host network namespace so its network collector sees physical host interfaces rather than only a container `eth0`; it does not share the host PID namespace. Its listener is restricted to the private internal metrics-network gateway, and the process has read-only host mounts, no Linux capabilities, and `no-new-privileges`.
+
+Metrics are retained for at most seven days or 1 GB. Cluster Grafana reaches Prometheus through the provisioned `Prometheus` datasource. cAdvisor's diagnostic UI and raw metrics are available only from the Cluster host at `http://127.0.0.1:8082` and `http://127.0.0.1:8082/metrics`; under the host-network override Prometheus is additionally bound only to `127.0.0.1:10009`. The Root does not scrape these metrics, so every standalone Cluster keeps and displays its own history.
+
+The metrics stack requires rootful Linux Docker Engine 25 or newer on AMD64 or ARM64. Set `DOCKER_ROOT_DIR` for a non-default Docker data directory. The Docker socket and host filesystems are mounted read-only but remain sensitive; keep cAdvisor on loopback and do not expose node_exporter. Use `override-no-observe.yml` on unsupported hosts.
+
+```bash
+docker exec cluster_prometheus promtool query instant http://127.0.0.1:9090 up
+docker exec cluster_prometheus promtool query instant http://127.0.0.1:9090 prometheus_tsdb_head_series
+```
+
 ## Provisioned logs dashboard
 
 Cluster Grafana automatically loads the version-controlled [`[Oakestra] Orchestrator Logs`](./dashboards/logs-dashboard.json) dashboard. Open `http://<cluster-address>:3001` and select it from **Dashboards**. **Source** separates Oakestra services, observability, and data stores; Cluster, Component, Level, Full-line search, and the time picker narrow the Cluster-local history. Keep each query window at 30 days or less: Grafana's generic picker can display longer ranges, but Loki 2.9 rejects a single query longer than its `30d1h` default; inspect older retained history by moving an absolute window of at most 30 days backward. Level matches Alloy's normalized label exactly, with Critical separate from Error and unsupported formats under Unparsed. **Display** defaults to a Compact component/message/event/context summary and can switch to the exact Raw record; formatting happens after filtering and does not modify Loki data. Python fields are accepted only from expected structured services with the schema-v1 identity fields and matching service-to-container identity, while MongoDB, logfmt, Redis, Nginx, scheduler, and legacy parsers are scoped to their known formats. Payload fields, logger names, and message words therefore cannot cause false severity matches. The application `service` field stays in JSON for query-time filtering; `compose_service` is the trusted indexed component. Use **Advanced field filter (LogQL)** with `| json` to query `event`, `logger`, or nested `context` fields without indexing them. Its optional `| logfmt` parser is only for a selected local observability component that emits logfmt. Shared-ID links retain the time range and search the same Oakestra ID in another component; they are correlation shortcuts rather than distributed traces. Use the panel's **Explore** action for the full LogQL editor.
