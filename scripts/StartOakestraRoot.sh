@@ -78,7 +78,7 @@ curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_VERSION/
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_VERSION/root_orchestrator/override-images-only.yml > override-root-images-only.yml
 
 chmod +x downloadConfigFiles.sh
-./downloadConfigFiles.sh run-a-cluster $OAKESTRA_VERSION
+./downloadConfigFiles.sh root_orchestrator $OAKESTRA_VERSION
 
 #If additional override files provided, download them
 OAK_OVERRIDES=''

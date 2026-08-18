@@ -1,15 +1,13 @@
 services:
-
-  # Remove observability services for cluster components
-  cluster_alloy:
+  alloy:
     deploy:
       mode: replicated
       replicas: 0
-  cluster_loki:
+  loki:
     deploy:
       mode: replicated
       replicas: 0
-  cluster_grafana:
+  grafana:
     deploy:
       mode: replicated
       replicas: 0
