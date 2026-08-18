@@ -1120,7 +1120,7 @@
           {
             "selected": false,
             "text": "Observability",
-            "value": "^(alloy|grafana|loki|cluster_alloy|cluster_grafana|cluster_loki|prometheus)$"
+            "value": "^(alloy|grafana|loki|cluster_alloy|cluster_grafana|cluster_loki|prometheus|node_exporter|cadvisor)$"
           },
           {
             "selected": false,
@@ -1133,7 +1133,7 @@
             "value": ".+"
           }
         ],
-        "query": "Oakestra services : ^(system_manager|root_scheduler|root_resource_abstractor|resource_abstractor|root_service_manager|jwt_generator|dashboard|marketplace_manager|root_addons_dashboard|root_addons_manager|root_addons_monitor|addons_dashboard|addons_manager|addons_monitor|cluster_manager|cluster_scheduler|cluster_resource_abstractor|cluster_service_manager|cluster_addons_dashboard|cluster_addons_manager|cluster_addons_monitor|mqtt)$, Observability : ^(alloy|grafana|loki|cluster_alloy|cluster_grafana|cluster_loki|prometheus)$, Data stores : ^(mongo_root|mongo_rootnet|root_redis|redis|mongo_cluster|mongo_clusternet|cluster_redis)$, All containers : .+",
+        "query": "Oakestra services : ^(system_manager|root_scheduler|root_resource_abstractor|resource_abstractor|root_service_manager|jwt_generator|dashboard|marketplace_manager|root_addons_dashboard|root_addons_manager|root_addons_monitor|addons_dashboard|addons_manager|addons_monitor|cluster_manager|cluster_scheduler|cluster_resource_abstractor|cluster_service_manager|cluster_addons_dashboard|cluster_addons_manager|cluster_addons_monitor|mqtt)$, Observability : ^(alloy|grafana|loki|cluster_alloy|cluster_grafana|cluster_loki|prometheus|node_exporter|cadvisor)$, Data stores : ^(mongo_root|mongo_rootnet|root_redis|redis|mongo_cluster|mongo_clusternet|cluster_redis)$, All containers : .+",
         "queryValue": "",
         "skipUrlSync": false,
         "type": "custom"
