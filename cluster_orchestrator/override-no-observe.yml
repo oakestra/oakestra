@@ -17,3 +17,11 @@ services:
     deploy:
       mode: replicated
       replicas: 0
+  node_exporter:
+    deploy:
+      mode: replicated
+      replicas: 0
+  cadvisor:
+    deploy:
+      mode: replicated
+      replicas: 0
