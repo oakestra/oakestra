@@ -12,7 +12,7 @@ func RemoveOrWarn(name string) {
 
 func RemoveOrWarnInFs(fs afero.Fs, name string) {
 	if err := fs.Remove(name); err != nil {
-		logger.WarnLogger().Printf("failed to remove file or directory %q: %v", name, err)
+		logger.WarnLogger("failed to remove file or directory %q: %v", name, err)
 	}
 }
 
@@ -22,6 +22,6 @@ func RemoveAllOrWarn(name string) {
 
 func RemoveAllOrWarnInFs(fs afero.Fs, name string) {
 	if err := fs.RemoveAll(name); err != nil {
-		logger.WarnLogger().Printf("failed to remove file or directory %q: %v", name, err)
+		logger.WarnLogger("failed to remove file or directory %q: %v", name, err)
 	}
 }

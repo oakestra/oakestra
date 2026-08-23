@@ -159,7 +159,7 @@ func SetNodeId(id string) {
 func getIp() string {
 	conf, err := config.GetConfFileManager().Get()
 	if err != nil {
-		logger.ErrorLogger().Fatal(err)
+		logger.FatalErrorLogger("%v", err)
 	}
 	if conf.PublicIp.IsAuto() {
 
@@ -172,7 +172,7 @@ func getIp() string {
 
 		req, err := http.Get("https://ifconfig.co")
 		if err != nil {
-			logger.ErrorLogger().Printf("%v", err.Error())
+			logger.ErrorLogger("%v", err.Error())
 			return getPrivateIp()
 		}
 		if req.Body == nil {
@@ -181,13 +181,13 @@ func getIp() string {
 		defer func(Body io.ReadCloser) {
 			err := Body.Close()
 			if err != nil {
-				logger.ErrorLogger().Printf("%v", err.Error())
+				logger.ErrorLogger("%v", err.Error())
 			}
 		}(req.Body)
 
 		body, err := io.ReadAll(req.Body)
 		if err != nil {
-			logger.ErrorLogger().Printf("%v", err.Error())
+			logger.ErrorLogger("%v", err.Error())
 			return getPrivateIp()
 		}
 
@@ -225,7 +225,7 @@ func getHostname() string {
 	hostname, err := os.Hostname()
 	if err != nil {
 		hostname = ""
-		logger.ErrorLogger().Fatal("Unable to get Node hostname")
+		logger.FatalErrorLogger("Unable to get Node hostname")
 	}
 	return hostname
 }
@@ -233,7 +233,7 @@ func getHostname() string {
 func getSystemInfo() map[string]string {
 	hostinfo, err := host.Info()
 	if err != nil {
-		logger.ErrorLogger().Printf("Error: %s", err.Error())
+		logger.ErrorLogger("Error: %s", err.Error())
 		return make(map[string]string, 0)
 	}
 	sysInfo := make(map[string]string)
@@ -249,7 +249,7 @@ func getSystemInfo() map[string]string {
 func getCpuCores() int {
 	cpu, err := cpu.Counts(true)
 	if err != nil {
-		logger.ErrorLogger().Printf("Error: %s", err.Error())
+		logger.ErrorLogger("Error: %s", err.Error())
 		return 0
 	}
 	return cpu
@@ -269,7 +269,7 @@ func getAvgCpuUsage() float64 {
 func getMemoryMB() int {
 	mem, err := mem.VirtualMemory()
 	if err != nil {
-		logger.ErrorLogger().Printf("Error: %s", err.Error())
+		logger.ErrorLogger("Error: %s", err.Error())
 		return 0
 	}
 	return int(mem.Available >> 20)
@@ -278,7 +278,7 @@ func getMemoryMB() int {
 func getMemoryUsage() float64 {
 	mem, err := mem.VirtualMemory()
 	if err != nil {
-		logger.ErrorLogger().Printf("Error: %s", err.Error())
+		logger.ErrorLogger("Error: %s", err.Error())
 		return 100
 	}
 	return mem.UsedPercent

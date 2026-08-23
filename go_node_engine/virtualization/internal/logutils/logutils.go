@@ -14,20 +14,20 @@ func GetLogs(serviceID string) string {
 
 	file, err := os.Open(fmt.Sprintf("%s/%s", model.GetNodeInfo().LogDirectory, serviceID))
 	if err != nil {
-		logger.ErrorLogger().Printf("%v", err)
+		logger.ErrorLogger("%v", err)
 		return ""
 	}
 	//defer file.Close()
 	defer func() {
 		if err := file.Close(); err != nil {
-			logger.ErrorLogger().Printf("%v", err)
+			logger.ErrorLogger("%v", err)
 		}
 	}()
 
 	buf := make([]byte, LOG_SIZE)
 	stat, err := file.Stat()
 	if err != nil {
-		logger.ErrorLogger().Printf("%v", err)
+		logger.ErrorLogger("%v", err)
 		return ""
 	}
 

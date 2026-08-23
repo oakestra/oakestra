@@ -43,7 +43,7 @@ func getInterestedResources[T interfaces.ResourceList](jobData T) []string {
 		interestedResources = append(interestedResources, name)
 	}
 
-	logger.DebugLogger().Printf("Interested resources: %v", interestedResources)
+	logger.DebugLogger("Interested resources: %v", interestedResources)
 	interestedResourcesCache.Store(t, interestedResources)
 	return interestedResources
 }
@@ -55,19 +55,19 @@ func PerformSchedulingRequest[T interfaces.ResourceList](job T, algorithm interf
 	if err != nil {
 		return err
 	}
-	logger.DebugLogger().Printf("Available Resources: %v", data)
+	logger.DebugLogger("Available Resources: %v", data)
 
 	placementCandidate, err := algorithm.Calculate(job, data)
 	if err != nil {
 		var schedulingError interfaces.SchedulingError
 		if errors.As(err, &schedulingError) {
-			logger.ErrorLogger().Printf("Scheduling failed: Sending status %v to manager", err)
+			logger.ErrorLogger("Scheduling failed: Sending status %v to manager", err)
 			err = manager.Deploy(job.GetId(), schedulingError.Error(), false)
 		}
 		return err
 	}
 
-	logger.InfoLogger().Printf("Scheduled job %s to candidate %s", job.GetId(), placementCandidate.GetId())
+	logger.InfoLogger("Scheduled job %s to candidate %s", job.GetId(), placementCandidate.GetId())
 	err = manager.Deploy(job.GetId(), placementCandidate.GetId(), true)
 
 	return err

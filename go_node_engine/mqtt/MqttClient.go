@@ -22,11 +22,11 @@ var brokerUrl = ""
 var brokerPort = ""
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-	logger.InfoLogger().Printf("DEBUG - Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
+	logger.InfoLogger("DEBUG - Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
 }
 
 var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
-	logger.InfoLogger().Println("Connected to the MQTT broker")
+	logger.InfoLogger("Connected to the MQTT broker")
 
 	topicsQosMap := make(map[string]byte)
 	for key := range TOPICS {
@@ -36,7 +36,7 @@ var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
 	//subscribe to all the topics
 	tqtoken := client.SubscribeMultiple(topicsQosMap, subscribeHandlerDispatcher)
 	tqtoken.Wait()
-	logger.InfoLogger().Printf("Subscribed to topics \n")
+	logger.InfoLogger("Subscribed to topics \n")
 
 }
 
@@ -49,7 +49,7 @@ var subscribeHandlerDispatcher = func(client mqtt.Client, msg mqtt.Message) {
 }
 
 var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
-	logger.InfoLogger().Printf("Connect lost: %v", err)
+	logger.InfoLogger("Connect lost: %v", err)
 }
 
 // InitMqtt initializes the mqtt client by connecting to the broker, setting the client ID and the topics
@@ -63,7 +63,7 @@ func InitMqtt(
 ) {
 
 	if clientID != "" {
-		logger.InfoLogger().Printf("Mqtt already initialized no need for any further initialization")
+		logger.InfoLogger("Mqtt already initialized no need for any further initialization")
 		return
 	}
 
@@ -86,10 +86,10 @@ func InitMqtt(
 	opts.OnConnectionLost = connectLostHandler
 
 	if certFile != "" {
-		logger.InfoLogger().Printf("MQTT - Configuring TLS")
+		logger.InfoLogger("MQTT - Configuring TLS")
 		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
-			logger.ErrorLogger().Printf("Error loading certificate: %v", err)
+			logger.ErrorLogger("Error loading certificate: %v", err)
 		}
 		opts.SetTLSConfig(&tls.Config{
 			Certificates: []tls.Certificate{cert},
@@ -108,10 +108,10 @@ func runMqttClient(opts *mqtt.ClientOptions) {
 }
 
 func publishToBroker(topic string, payload string) {
-	logger.InfoLogger().Printf("MQTT - publish to - %s - the payload - %s", topic, payload)
+	logger.InfoLogger("MQTT - publish to - %s - the payload - %s", topic, payload)
 	token := mainMqttClient.Publish(fmt.Sprintf("nodes/%s/%s", clientID, topic), 1, false, payload)
 	if token.WaitTimeout(time.Second*5) && token.Error() != nil {
-		logger.ErrorLogger().Printf("ERROR: MQTT PUBLISH: %s", token.Error())
+		logger.ErrorLogger("ERROR: MQTT PUBLISH: %s", token.Error())
 	}
 }
 
@@ -125,12 +125,12 @@ func withRuntimeManager(
 }
 
 func deployHandler(client mqtt.Client, msg mqtt.Message, runtimeManager *virtualization.RuntimeManager) {
-	logger.InfoLogger().Printf("Received deployment request with payload: %s", string(msg.Payload()))
+	logger.InfoLogger("Received deployment request with payload: %s", string(msg.Payload()))
 	service := model.Service{}
 	err := json.Unmarshal(msg.Payload(), &service)
-	logger.InfoLogger().Printf("%+v", service)
+	logger.InfoLogger("%+v", service)
 	if err != nil {
-		logger.ErrorLogger().Printf("ERROR: unable to unmarshal cluster orch request: %v", err)
+		logger.ErrorLogger("ERROR: unable to unmarshal cluster orch request: %v", err)
 		return
 	}
 	//handle deployment in background
@@ -139,7 +139,7 @@ func deployHandler(client mqtt.Client, msg mqtt.Message, runtimeManager *virtual
 		err = runtime.Deploy(service, ReportServiceStatus)
 		service.Status = model.SERVICE_CREATED
 		if err != nil {
-			logger.ErrorLogger().Printf("ERROR during app deployment: %v", err)
+			logger.ErrorLogger("ERROR during app deployment: %v", err)
 			service.StatusDetail = err.Error()
 			service.Status = model.SERVICE_FAILED
 		}
@@ -148,18 +148,18 @@ func deployHandler(client mqtt.Client, msg mqtt.Message, runtimeManager *virtual
 }
 
 func deleteHandler(client mqtt.Client, msg mqtt.Message, runtimeManager *virtualization.RuntimeManager) {
-	logger.InfoLogger().Printf("Received undeployment request with payload: %s", string(msg.Payload()))
+	logger.InfoLogger("Received undeployment request with payload: %s", string(msg.Payload()))
 	service := model.Service{}
 	err := json.Unmarshal(msg.Payload(), &service)
 	if err != nil {
-		logger.ErrorLogger().Printf("ERROR: unable to unmarshal cluster orch request: %v", err)
+		logger.ErrorLogger("ERROR: unable to unmarshal cluster orch request: %v", err)
 		return
 	}
 	go func() {
 		runtime := runtimeManager.GetRuntime(model.RuntimeType(service.Runtime))
 		err = runtime.Undeploy(service.Sname, service.Instance)
 		if err != nil {
-			logger.ErrorLogger().Printf("Unable to undeploy application: %s", err.Error())
+			logger.ErrorLogger("Unable to undeploy application: %s", err.Error())
 			return
 		}
 		service.Status = model.SERVICE_UNDEPLOYED
@@ -185,7 +185,7 @@ func ReportServiceStatus(service model.Service) {
 	}
 	jsonmsg, err := json.Marshal(reportStatusStruct)
 	if err != nil {
-		logger.ErrorLogger().Printf("ERROR: unable to report service status: %v", err)
+		logger.ErrorLogger("ERROR: unable to report service status: %v", err)
 	}
 	publishToBroker("job", string(jsonmsg))
 }
@@ -200,7 +200,7 @@ func ReportServiceResources(services []model.Resources) {
 	}
 	jsonmsg, err := json.Marshal(reportStatusStruct)
 	if err != nil {
-		logger.ErrorLogger().Printf("ERROR: unable to report services resources: %v", err)
+		logger.ErrorLogger("ERROR: unable to report services resources: %v", err)
 	}
 	publishToBroker("jobs/resources", string(jsonmsg))
 }
@@ -209,7 +209,7 @@ func ReportServiceResources(services []model.Resources) {
 func ReportNodeInformation(node model.Node) {
 	data, err := json.Marshal(node)
 	if err != nil {
-		logger.ErrorLogger().Printf("ERROR: error gathering node info")
+		logger.ErrorLogger("ERROR: error gathering node info")
 	}
 	publishToBroker("information", string(data))
 }

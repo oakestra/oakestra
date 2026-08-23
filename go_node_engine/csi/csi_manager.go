@@ -49,7 +49,7 @@ func MountVolumes(service model.Service) ([]MountedVolume, error) {
 func UnmountVolumes(mounted []MountedVolume) {
 	for _, mv := range mounted {
 		if err := unmountSingle(mv); err != nil {
-			logger.ErrorLogger().Printf("[CSI] Unmount error for volume %s: %v", mv.VolumeID, err)
+			logger.ErrorLogger("[CSI] Unmount error for volume %s: %v", mv.VolumeID, err)
 		}
 	}
 }
@@ -90,7 +90,7 @@ func mountSingle(service model.Service, vol model.VolumeRequest) (MountedVolume,
 			return MountedVolume{}, fmt.Errorf("NodeStageVolume: %w", err)
 		}
 		mv.StagingPath = stagingPath
-		logger.InfoLogger().Printf("[CSI] Staged volume %s at %s", vol.VolumeID, stagingPath)
+		logger.InfoLogger("[CSI] Staged volume %s at %s", vol.VolumeID, stagingPath)
 	}
 
 	// Publish
@@ -110,7 +110,7 @@ func mountSingle(service model.Service, vol model.VolumeRequest) (MountedVolume,
 		return mv, fmt.Errorf("NodePublishVolume: %w", err)
 	}
 	mv.TargetPath = targetPath
-	logger.InfoLogger().Printf("[CSI] Published volume %s at %s", vol.VolumeID, targetPath)
+	logger.InfoLogger("[CSI] Published volume %s at %s", vol.VolumeID, targetPath)
 
 	return mv, nil
 }
@@ -119,7 +119,7 @@ func unmountSingle(mv MountedVolume) error {
 	reg := GetRegistry()
 	plugin, err := reg.Get(mv.DriverName)
 	if err != nil {
-		logger.ErrorLogger().Printf("[CSI] Plugin %s not found during unmount of %s: %v",
+		logger.ErrorLogger("[CSI] Plugin %s not found during unmount of %s: %v",
 			mv.DriverName, mv.VolumeID, err)
 		return nil
 	}
@@ -134,9 +134,9 @@ func unmountSingle(mv MountedVolume) error {
 			TargetPath: mv.TargetPath,
 		})
 		if err != nil {
-			logger.ErrorLogger().Printf("[CSI] NodeUnpublishVolume %s: %v", mv.VolumeID, err)
+			logger.ErrorLogger("[CSI] NodeUnpublishVolume %s: %v", mv.VolumeID, err)
 		} else {
-			logger.InfoLogger().Printf("[CSI] Unpublished volume %s from %s", mv.VolumeID, mv.TargetPath)
+			logger.InfoLogger("[CSI] Unpublished volume %s from %s", mv.VolumeID, mv.TargetPath)
 		}
 		_ = os.Remove(mv.TargetPath)
 	}
@@ -148,9 +148,9 @@ func unmountSingle(mv MountedVolume) error {
 			StagingTargetPath: mv.StagingPath,
 		})
 		if err != nil {
-			logger.ErrorLogger().Printf("[CSI] NodeUnstageVolume %s: %v", mv.VolumeID, err)
+			logger.ErrorLogger("[CSI] NodeUnstageVolume %s: %v", mv.VolumeID, err)
 		} else {
-			logger.InfoLogger().Printf("[CSI] Unstaged volume %s from %s", mv.VolumeID, mv.StagingPath)
+			logger.InfoLogger("[CSI] Unstaged volume %s from %s", mv.VolumeID, mv.StagingPath)
 		}
 		_ = os.Remove(mv.StagingPath)
 	}

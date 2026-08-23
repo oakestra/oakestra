@@ -40,25 +40,25 @@ func Deploy(jobId string, result string, success bool) error {
 		req := deploymentRequest{jobId, result}
 		payload, err = json.Marshal(req)
 		if err != nil {
-			logger.ErrorLogger().Println("Could not marshal deployment request")
+			logger.ErrorLogger("Could not marshal deployment request")
 			return err
 		}
 	} else {
 		req := deploymentFailedRequest{jobId, result}
 		payload, err = json.Marshal(req)
 		if err != nil {
-			logger.ErrorLogger().Println("Could not marshal deployment request")
+			logger.ErrorLogger("Could not marshal deployment request")
 			return err
 		}
 	}
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
 	if err != nil {
-		logger.ErrorLogger().Println("Could not send deployment request")
+		logger.ErrorLogger("Could not send deployment request")
 		return err
 	}
 
-	logger.DebugLogger().Printf("Deployment request %s to url %s", string(payload), url)
+	logger.DebugLogger("Deployment request %s to url %s", string(payload), url)
 	err = resp.Body.Close()
 	if err != nil {
 		return err

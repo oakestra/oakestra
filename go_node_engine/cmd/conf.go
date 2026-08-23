@@ -426,7 +426,7 @@ func setBuilder(trigger string) error {
 	cmd := exec.Command("dpkg", "-s", "qemu-user-static")
 	output, err := cmd.Output()
 	if err != nil || !strings.Contains(string(output), "ok installed") {
-		logger.ErrorLogger().Fatalf("Unable to find qemu-user-static apt package for multi-platform image-builder: %v\n", err)
+		logger.FatalErrorLogger("Unable to find qemu-user-static apt package for multi-platform image-builder: %v\n", err)
 	}
 
 	active := trigger == "on" || trigger == "enable" || trigger == "true"

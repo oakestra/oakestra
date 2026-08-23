@@ -9,7 +9,7 @@ import (
 type FlopsAddon struct{}
 
 func (a FlopsAddon) Startup(configFile []string) {
-	logger.InfoLogger().Printf("Starting FLOps Data Manager")
+	logger.InfoLogger("Starting FLOps Data Manager")
 	HandleFLOpsDataManager()
 }
 
@@ -20,7 +20,7 @@ func HandleFLOpsDataManager() {
 	cmd := exec.Command("docker", "ps", "-a", "--format", "{{.Names}}")
 	output, err := cmd.Output()
 	if err != nil {
-		logger.ErrorLogger().Fatalln("Error:", err)
+		logger.FatalErrorLogger("Error:", err)
 		return
 	}
 
@@ -41,7 +41,7 @@ func HandleFLOpsDataManager() {
 		err := cmd.Run()
 
 		if err != nil {
-			logger.ErrorLogger().Fatalf("Error pulling FLOps Data Manager image: %v\n", err)
+			logger.FatalErrorLogger("Error pulling FLOps Data Manager image: %v\n", err)
 			return
 		}
 
@@ -49,13 +49,13 @@ func HandleFLOpsDataManager() {
 		err = cmd.Run()
 
 		if err != nil {
-			logger.ErrorLogger().Fatalf("Error running container: %v\n", err)
+			logger.FatalErrorLogger("Error running container: %v\n", err)
 			return
 		}
 
 	} else {
-		logger.InfoLogger().Printf("Container %q already exists.", container_name)
+		logger.InfoLogger("Container %q already exists.", container_name)
 	}
 
-	logger.InfoLogger().Printf("FLOps Data Manager container started successfully.")
+	logger.InfoLogger("FLOps Data Manager container started successfully.")
 }

@@ -37,7 +37,7 @@ func main() {
 	var err error
 	configs, err = configManager.Get()
 	if err != nil {
-		logger.ErrorLogger().Fatal(err)
+		logger.FatalErrorLogger("%v", err)
 	}
 
 	// set log directory
@@ -49,7 +49,7 @@ func main() {
 	// Initialize virtualization runtimes
 	runtimeManager, err := virtualization.NewRuntimeManager()
 	if err != nil {
-		logger.ErrorLogger().Fatal(err)
+		logger.FatalErrorLogger("%v", err)
 	}
 	for _, virt := range configs.Virtualizations {
 		if virt.Active {
@@ -65,14 +65,14 @@ func main() {
 	csiReg.InitFromConfig(configs)
 	for _, driver := range csiReg.List() {
 		model.GetNodeInfo().AddCSIDriver(driver)
-		logger.InfoLogger().Printf("CSI driver available: %s (%s)", driver.Name, driver.Endpoint)
+		logger.InfoLogger("CSI driver available: %s (%s)", driver.Name, driver.Endpoint)
 	}
 	defer csiReg.StopAll()
 
 	//Startup Addons
 	for _, addon := range configs.Addons {
 		if addon.Active {
-			logger.InfoLogger().Printf("Startup addon: %s", addon.Name)
+			logger.InfoLogger("Startup addon: %s", addon.Name)
 			addons.StartupAddon(model.AddonType(addon.Name), addon.Config)
 		}
 	}
@@ -83,29 +83,29 @@ func main() {
 	// enable overlay network if required
 	switch configs.OverlayNetwork {
 	case config.AUTO_OAK_NETWORK:
-		logger.InfoLogger().Printf("Looking for local NetManager socket.")
+		logger.InfoLogger("Looking for local NetManager socket.")
 		cmd := exec.Command("systemctl", "start", "netmanager")
 		_ = cmd.Run()
 		model.EnableOverlay()
 	case cmd.DISABLE_NETWORK:
-		logger.InfoLogger().Printf("Overlay network disabled 🟠")
+		logger.InfoLogger("Overlay network disabled 🟠")
 	default:
 		if strings.Contains(configs.OverlayNetwork, "custom:") {
 			netPath := strings.Split(configs.OverlayNetwork, ":")
 			model.GetNodeInfo().SetOverlaySocket(netPath[1])
 			model.EnableOverlay()
 		} else {
-			logger.InfoLogger().Printf("Invalid overlay network detected. Network disabled 🟠")
+			logger.InfoLogger("Invalid overlay network detected. Network disabled 🟠")
 		}
 	}
 	if model.GetNodeInfo().Overlay {
-		logger.InfoLogger().Printf("Overlay network enabled 🟢")
+		logger.InfoLogger("Overlay network enabled 🟢")
 		// wait for systemctl to start the netmanager service
-		logger.InfoLogger().Printf("Waiting for NetManager to start...")
+		logger.InfoLogger("Waiting for NetManager to start...")
 		time.Sleep(5 * time.Second)
 		err := requests.RegisterSelfToNetworkComponent()
 		if err != nil {
-			logger.ErrorLogger().Fatalf("Error registering to NetManager: %v", err)
+			logger.FatalErrorLogger("Error registering to NetManager: %v", err)
 		}
 	}
 
@@ -121,20 +121,20 @@ func main() {
 	termination := make(chan os.Signal, 1)
 	signal.Notify(termination, syscall.SIGTERM, syscall.SIGINT)
 	ossignal := <-termination
-	logger.InfoLogger().Printf("Terminating the NodeEngine, signal:%v", ossignal)
+	logger.InfoLogger("Terminating the NodeEngine, signal:%v", ossignal)
 }
 
 func clusterHandshake() requests.HandshakeAnswer {
-	logger.InfoLogger().Printf("INIT: Starting handshake with cluster orchestrator %s:%d", configs.ClusterAddress, configs.ClusterPort)
+	logger.InfoLogger("INIT: Starting handshake with cluster orchestrator %s:%d", configs.ClusterAddress, configs.ClusterPort)
 	node := model.GetNodeInfo()
-	logger.InfoLogger().Printf("Node Statistics: \n__________________")
-	logger.InfoLogger().Printf("CPU Cores: %d", node.CpuCores)
-	logger.InfoLogger().Printf("CPU Usage: %f", node.CpuUsage)
-	logger.InfoLogger().Printf("Mem Usage: %f", node.MemoryUsed)
-	logger.InfoLogger().Printf("GPU Driver: %s", node.GpuDriver)
-	logger.InfoLogger().Printf("\n________________")
+	logger.InfoLogger("Node Statistics: \n__________________")
+	logger.InfoLogger("CPU Cores: %d", node.CpuCores)
+	logger.InfoLogger("CPU Usage: %f", node.CpuUsage)
+	logger.InfoLogger("Mem Usage: %f", node.MemoryUsed)
+	logger.InfoLogger("GPU Driver: %s", node.GpuDriver)
+	logger.InfoLogger("\n________________")
 	clusterReponse := requests.ClusterHandshake(configs.ClusterAddress, configs.ClusterPort)
-	logger.InfoLogger().Printf("Got cluster response with MQTT port %s and node ID %s", clusterReponse.MqttPort, clusterReponse.NodeId)
+	logger.InfoLogger("Got cluster response with MQTT port %s and node ID %s", clusterReponse.MqttPort, clusterReponse.NodeId)
 
 	model.SetNodeId(clusterReponse.NodeId)
 	return clusterReponse
