@@ -1,38 +1,33 @@
 package logger
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"os"
-	"sync"
 )
 
-var infologger *log.Logger
-var errorlogger *log.Logger
-var warnlogger *log.Logger
-var infoonce sync.Once
-var erroronce sync.Once
-var warnonce sync.Once
-
-// InfoLogger returns a logger for info messages
-func InfoLogger() *log.Logger {
-	infoonce.Do(func() {
-		infologger = log.New(os.Stdout, "INFO-", log.Ldate|log.Ltime|log.Lshortfile)
-	})
-	return infologger
+// InfoLogger logs an info level message with the given format and arguments
+func InfoLogger(format string, args ...any) {
+	slog.Info(fmt.Sprintf(format, args...))
 }
 
-// WarnLogger returns a logger for warn messages
-func WarnLogger() *log.Logger {
-	warnonce.Do(func() {
-		warnlogger = log.New(os.Stderr, "WARN-", log.Ldate|log.Ltime|log.Lshortfile)
-	})
-	return warnlogger
+// WarnLogger logs a warning level message with the given format and arguments
+func WarnLogger(format string, args ...any) {
+	slog.Warn(fmt.Sprintf(format, args...))
 }
 
-// ErrorLogger returns a logger for error messages
-func ErrorLogger() *log.Logger {
-	erroronce.Do(func() {
-		errorlogger = log.New(os.Stderr, "ERROR-", log.Ldate|log.Ltime|log.Lshortfile)
-	})
-	return errorlogger
+// ErrorLogger logs an error level message with the given format and arguments
+func ErrorLogger(format string, args ...any) {
+	slog.Error(fmt.Sprintf(format, args...))
+}
+
+// DebugLogger logs a debug level message with the given format and arguments
+func DebugLogger(format string, args ...any) {
+	slog.Debug(fmt.Sprintf(format, args...))
+}
+
+// FatalErrorLogger logs an error level message and exits with status code 1
+func FatalErrorLogger(format string, args ...any) {
+	slog.Error(fmt.Sprintf(format, args...))
+	os.Exit(1)
 }

@@ -114,7 +114,7 @@ func attach() error {
 	defer func() {
 		err := logFile.Close()
 		if err != nil {
-			logger.ErrorLogger().Printf("Unable to close logfile")
+			logger.ErrorLogger("Unable to close logfile")
 		}
 	}()
 

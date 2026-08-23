@@ -50,7 +50,7 @@ func (r Resources) ID() string { return r.BaseResources.ID }
 func (r Resources) ResourceConstraints() map[string]string {
 	constraints := make(map[string]string)
 	for _, c := range r.Constraints {
-		logger.DebugLogger().Printf("Constraint: %+v", c)
+		logger.DebugLogger("Constraint: %+v", c)
 		if c.Type == "direct" {
 			var name string
 			if plane == "cluster" {
@@ -160,7 +160,7 @@ func (Scheduler) Calculate(job Resources, candidates []Resources) (Resources, er
 // constraint requirements.
 func filterRequirements(job Resources, candidates []Resources) []Resources {
 	return placement.Filter(candidates, func(c Resources) bool {
-		logger.DebugLogger().Printf("Filtering candidate: %v", c)
+		logger.DebugLogger("Filtering candidate: %v", c)
 		return placement.MeetsBasicRequirements(job.BaseResources, c.BaseResources) && hasRequiredCSIDrivers(job, c)
 	})
 }
@@ -173,7 +173,7 @@ func hasRequiredCSIDrivers(job, candidate Resources) bool {
 			continue
 		}
 		if !slices.Contains(candidate.CSIDrivers, vol.CSIDriver) {
-			logger.DebugLogger().Printf(
+			logger.DebugLogger(
 				"Candidate %s does not have required CSI driver %s (available: %v)",
 				candidate.ID(), vol.CSIDriver, candidate.CSIDrivers,
 			)

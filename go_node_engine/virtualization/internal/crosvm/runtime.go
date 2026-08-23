@@ -48,7 +48,7 @@ type Runtime struct {
 func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 	systemMetricsTracker, err := stats.NewSystemMetricsTracker()
 	if err != nil {
-		logger.ErrorLogger().Printf("failed to create SystemMetricsTracker: %v", err)
+		logger.ErrorLogger("failed to create SystemMetricsTracker: %v", err)
 		return &Runtime{
 			error: err,
 		}
@@ -56,7 +56,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 
 	// this is a workaround for a known issue in crosvm, which causes it to fail when /var/empty does not exist
 	if err := os.MkdirAll("/var/empty", 0o755); err != nil {
-		logger.ErrorLogger().Printf("failed to create /var/empty directory: %v", err)
+		logger.ErrorLogger("failed to create /var/empty directory: %v", err)
 		return &Runtime{
 			error: err,
 		}
@@ -64,7 +64,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 
 	executablePath, err := exec.LookPath(executableName)
 	if err != nil {
-		logger.ErrorLogger().Printf("unable to find crosvm executable (%s): %v\n", executableName, err)
+		logger.ErrorLogger("unable to find crosvm executable (%s): %v\n", executableName, err)
 		return &Runtime{
 			error: err,
 		}
@@ -72,7 +72,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 
 	runtimeDirPath, err := iotools.CreateSubDir(info.RuntimeDirPath, "crosvm", 0o700)
 	if err != nil {
-		logger.ErrorLogger().Printf("failed to setup runtime directory for crosvm runtime: %v", err)
+		logger.ErrorLogger("failed to setup runtime directory for crosvm runtime: %v", err)
 		return &Runtime{
 			error: err,
 		}
@@ -80,7 +80,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 
 	stateDirPath, err := iotools.CreateSubDir(info.StateDirPath, "crosvm", 0o700)
 	if err != nil {
-		logger.ErrorLogger().Printf("failed to setup state directory for crosvm runtime: %v", err)
+		logger.ErrorLogger("failed to setup state directory for crosvm runtime: %v", err)
 		return &Runtime{
 			error: err,
 		}
@@ -88,7 +88,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 
 	cacheDirPath, err := iotools.CreateSubDir(info.CacheDirPath, "crosvm", 0o700)
 	if err != nil {
-		logger.ErrorLogger().Printf("failed to setup cache directory for crosvm runtime: %v", err)
+		logger.ErrorLogger("failed to setup cache directory for crosvm runtime: %v", err)
 		return &Runtime{
 			error: err,
 		}
@@ -96,7 +96,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 
 	imageDirPath, err := iotools.CreateSubDir(cacheDirPath, "images", 0o700)
 	if err != nil {
-		logger.ErrorLogger().Printf("failed to setup directory for crosvm images: %v", err)
+		logger.ErrorLogger("failed to setup directory for crosvm images: %v", err)
 		return &Runtime{
 			error: err,
 		}
@@ -104,7 +104,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 
 	imageStore, err := image.NewStore(imageDirPath, image.NewContainersSource(docker.Transport))
 	if err != nil {
-		logger.ErrorLogger().Printf("failed to create crosvm image store: %v", err)
+		logger.ErrorLogger("failed to create crosvm image store: %v", err)
 		return &Runtime{
 			error: err,
 		}
@@ -116,7 +116,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 	_, _ = fmt.Fprintf(&infoMsg, "  > runtime directory: %s\n", runtimeDirPath)
 	_, _ = fmt.Fprintf(&infoMsg, "  > state directory: %s\n", stateDirPath)
 	_, _ = fmt.Fprintf(&infoMsg, "  > cache directory: %s\n", cacheDirPath)
-	logger.InfoLogger().Print(infoMsg.String())
+	logger.InfoLogger(infoMsg.String())
 
 	return &Runtime{
 		error: nil,
@@ -201,7 +201,7 @@ func (r *Runtime) Stop() {
 		go func(id string, inst *instance.Instance) {
 			defer wg.Done()
 			if err := inst.Close(); err != nil {
-				logger.ErrorLogger().Printf("unable to stop and close instance %q: %v", id, err)
+				logger.ErrorLogger("unable to stop and close instance %q: %v", id, err)
 				// TODO(axiphi): What do we do in case of an error here? It might be problematic to just keep the VM running.
 			}
 		}(id, inst)
@@ -228,7 +228,7 @@ func (r *Runtime) reportResources(notifyHandler func(res []model.Resources)) {
 
 	systemMetrics, err := r.systemMetricsTracker.GatherMetrics()
 	if err != nil {
-		logger.WarnLogger().Printf("failed to gather system metrics: %v", err)
+		logger.WarnLogger("failed to gather system metrics: %v", err)
 		return
 	}
 

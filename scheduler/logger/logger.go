@@ -2,35 +2,38 @@
 package logger
 
 import (
-	"io"
-	"log"
+	"fmt"
+	"log/slog"
 	"os"
 )
 
-// Loggers are initialised to safe defaults at package load time so that
-// library code can log without requiring an explicit Init call. Debug output
-// is discarded unless Init is called with debug=true.
-var (
-	infoLogger  = log.New(os.Stdout, "INFO-", log.Ldate|log.Ltime|log.Lshortfile)
-	errorLogger = log.New(os.Stderr, "ERROR-", log.Ldate|log.Ltime|log.Lshortfile)
-	debugLogger = log.New(io.Discard, "DEBUG-", log.Ldate|log.Ltime|log.Lshortfile)
-)
-
-// Init reconfigures the debug logger. Call once from main. If debug is true,
-// debug output is written to stdout instead of being discarded.
+// Init configures the default slog logger. Call once from main. If debug is true,
+// the level is set to DEBUG, which allows DebugLogger messages to be output.
 func Init(debug bool) {
-	debugOut := io.Discard
 	if debug {
-		debugOut = os.Stdout
+		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		})))
 	}
-	debugLogger = log.New(debugOut, "DEBUG-", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
-// InfoLogger returns the info logger.
-func InfoLogger() *log.Logger { return infoLogger }
+// InfoLogger logs an info level message with the given format and arguments
+func InfoLogger(format string, args ...any) {
+	slog.Info(fmt.Sprintf(format, args...))
+}
 
-// ErrorLogger returns the error logger.
-func ErrorLogger() *log.Logger { return errorLogger }
+// WarnLogger logs a warning level message with the given format and arguments
+func WarnLogger(format string, args ...any) {
+	slog.Warn(fmt.Sprintf(format, args...))
+}
 
-// DebugLogger returns the debug logger.
-func DebugLogger() *log.Logger { return debugLogger }
+// ErrorLogger logs an error level message with the given format and arguments
+func ErrorLogger(format string, args ...any) {
+	slog.Error(fmt.Sprintf(format, args...))
+}
+
+// DebugLogger logs a debug level message with the given format and arguments.
+// Messages are only output if the slog default logger's level is set to DEBUG
+func DebugLogger(format string, args ...any) {
+	slog.Debug(fmt.Sprintf(format, args...))
+}

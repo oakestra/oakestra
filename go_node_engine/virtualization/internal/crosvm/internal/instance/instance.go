@@ -122,12 +122,12 @@ func NewInstance(
 		return nil, err
 	}
 
-	logger.InfoLogger().Printf("setting up network for instance %q...", id)
+	logger.InfoLogger("setting up network for instance %q...", id)
 	netConf, err := setupNetwork(service)
 	if err != nil {
 		return nil, err
 	}
-	logger.InfoLogger().Printf("set up network for instance %q", id)
+	logger.InfoLogger("set up network for instance %q", id)
 
 	socketPath := path.Join(baseRuntimeDirPath, uuid.New().String()+".sock")
 
@@ -177,7 +177,7 @@ func NewInstance(
 	_, _ = inst.outputBuffer.Write([]byte{'\n'})
 
 	if err := inst.createConfigFile(); err != nil {
-		logger.ErrorLogger().Printf("could not create config file for instance %q: %v", inst.id, err)
+		logger.ErrorLogger("could not create config file for instance %q: %v", inst.id, err)
 		_ = inst.Close()
 		return nil, err
 	}
@@ -234,7 +234,7 @@ func NewInstance(
 		path.Join(inst.stateDirPath, cloudInitFileName),
 	)
 	if err != nil {
-		logger.ErrorLogger().Printf("could not create cloud-init drive for instance %q: %v", inst.id, err)
+		logger.ErrorLogger("could not create cloud-init drive for instance %q: %v", inst.id, err)
 		_ = inst.Close()
 		return nil, err
 	}
@@ -247,12 +247,12 @@ func (i *Instance) Start() error {
 	defer i.lock.Unlock()
 
 	if i.status == instanceStatusRunning {
-		logger.WarnLogger().Printf("ignoring instance start for %q, because it is already running", i.id)
+		logger.WarnLogger("ignoring instance start for %q, because it is already running", i.id)
 		return nil
 	}
 
 	if i.status == instanceStatusClosed {
-		logger.ErrorLogger().Printf("ignoring instance start for %q, because it is already closed", i.id)
+		logger.ErrorLogger("ignoring instance start for %q, because it is already closed", i.id)
 		return errAlreadyClosed
 	}
 
@@ -273,12 +273,12 @@ func (i *Instance) Start() error {
 	runCmd.Stdout = outputWriter
 	runCmd.Stderr = outputWriter
 
-	logger.InfoLogger().Printf("starting instance %q with args %q", i.id, runArgs)
+	logger.InfoLogger("starting instance %q with args %q", i.id, runArgs)
 	if err := runCmd.Start(); err != nil {
-		logger.ErrorLogger().Printf("failed to start instance %q: %v", i.id, err)
+		logger.ErrorLogger("failed to start instance %q: %v", i.id, err)
 		return err
 	}
-	logger.InfoLogger().Printf("started instance %q", i.id)
+	logger.InfoLogger("started instance %q", i.id)
 
 	i.startCount++
 	i.status = instanceStatusRunning
@@ -298,7 +298,7 @@ func (i *Instance) Stop() error {
 	}
 
 	if err := i.stopInternal(); err != nil {
-		logger.WarnLogger().Printf("Stopping crosvm instance %q via command failed: %v", i.id, err)
+		logger.WarnLogger("Stopping crosvm instance %q via command failed: %v", i.id, err)
 	}
 
 	select {
@@ -323,7 +323,7 @@ func (i *Instance) Close() error {
 
 	if i.status == instanceStatusRunning {
 		if err := i.stopInternal(); err != nil {
-			logger.WarnLogger().Printf("Stopping crosvm instance %q via command failed: %v", i.id, err)
+			logger.WarnLogger("Stopping crosvm instance %q via command failed: %v", i.id, err)
 		}
 		select {
 		case exit := <-i.exitChan:
@@ -388,7 +388,7 @@ func (i *Instance) waitForExit(cmd *exec.Cmd, startNum uint32) {
 
 	var exit instanceExitType
 	if runErr == nil {
-		logger.InfoLogger().Printf("instance %q exited successfully", i.id)
+		logger.InfoLogger("instance %q exited successfully", i.id)
 		exit = instanceExitTypeSuccess
 	} else {
 		var err *exec.ExitError
@@ -406,9 +406,9 @@ func (i *Instance) waitForExit(cmd *exec.Cmd, startNum uint32) {
 				}
 			}
 
-			logger.ErrorLogger().Print(msgBuilder.String())
+			logger.ErrorLogger(msgBuilder.String())
 		} else {
-			logger.ErrorLogger().Printf("unexpected error when trying to run instance %q: %v", i.id, runErr)
+			logger.ErrorLogger("unexpected error when trying to run instance %q: %v", i.id, runErr)
 		}
 		exit = instanceExitTypeError
 	}
@@ -421,7 +421,7 @@ func (i *Instance) waitForExit(cmd *exec.Cmd, startNum uint32) {
 	case i.exitChan <- exit:
 		break
 	default:
-		logger.ErrorLogger().Printf(
+		logger.ErrorLogger(
 			"instance %q exit could not be emitted into channel, this should never happen", i.id,
 		)
 		return
@@ -474,7 +474,7 @@ func (i *Instance) restart() {
 	go func() {
 		err := i.Start()
 		if err != nil {
-			logger.ErrorLogger().Printf("failed to restart instance %q: %v", i.id, err)
+			logger.ErrorLogger("failed to restart instance %q: %v", i.id, err)
 		}
 	}()
 }
