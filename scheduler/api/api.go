@@ -51,16 +51,16 @@ func getStatus(c *gin.Context) {
 func calculate(c *gin.Context) {
 	json, err := c.GetRawData()
 	if err != nil {
-		logger.ErrorLogger().Printf("Received bad request: %v", err)
+		logger.ErrorLogger("Received bad request: %v", err)
 		c.Status(http.StatusBadRequest)
 	}
 
 	task := asynq.NewTask(TaskTypeScheduler, json)
 	info, err := asynqClient.Enqueue(task)
 	if err != nil {
-		logger.ErrorLogger().Printf("Task enqueue error: %v", err)
+		logger.ErrorLogger("Task enqueue error: %v", err)
 		c.Status(http.StatusInternalServerError)
 	}
-	logger.InfoLogger().Printf("Task enqueued: ID=%s, Type=%s, Queue=%s, Payload=%s",
+	logger.InfoLogger("Task enqueued: ID=%s, Type=%s, Queue=%s, Payload=%s",
 		info.ID, info.Type, info.Queue, string(info.Payload))
 }

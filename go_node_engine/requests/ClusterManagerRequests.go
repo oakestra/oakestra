@@ -21,13 +21,13 @@ type HandshakeAnswer struct {
 func ClusterHandshake(address string, port int) HandshakeAnswer {
 	data, err := json.Marshal(model.GetNodeInfo())
 	if err != nil {
-		logger.ErrorLogger().Fatalf("Handshake failed, json encoding problem, %v", err)
+		logger.FatalErrorLogger("Handshake failed, json encoding problem, %v", err)
 	}
 	jsonbody := bytes.NewBuffer(data)
 
 	cfg, err := config.GetConfFileManager().Get()
 	if err != nil {
-		logger.ErrorLogger().Fatalf("Could not get config")
+		logger.FatalErrorLogger("Could not get config")
 	}
 
 	var resp *http.Response
@@ -38,26 +38,26 @@ func ClusterHandshake(address string, port int) HandshakeAnswer {
 	resp, err = http.Post(fmt.Sprintf("%s://%s:%d/api/node/register", proto, address, port), "application/json", jsonbody)
 
 	if err != nil {
-		logger.ErrorLogger().Fatalf("Handshake failed, %v", err)
+		logger.FatalErrorLogger("Handshake failed, %v", err)
 	}
 	if resp.StatusCode != 200 {
-		logger.ErrorLogger().Fatalf("Handshake failed with error code %d", resp.StatusCode)
+		logger.FatalErrorLogger("Handshake failed with error code %d", resp.StatusCode)
 	}
 	//defer resp.Body.Close()
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			logger.ErrorLogger().Fatalf("Handshake failed, %v", err)
+			logger.FatalErrorLogger("Handshake failed, %v", err)
 		}
 	}()
 
 	handhsakeanswer := HandshakeAnswer{}
 	responseBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.ErrorLogger().Fatalf("Handshake failed, %v", err)
+		logger.FatalErrorLogger("Handshake failed, %v", err)
 	}
 	err = json.Unmarshal(responseBytes, &handhsakeanswer)
 	if err != nil {
-		logger.ErrorLogger().Fatalf("Handshake failed, %v", err)
+		logger.FatalErrorLogger("Handshake failed, %v", err)
 	}
 	return handhsakeanswer
 }

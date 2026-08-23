@@ -76,7 +76,7 @@ func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
 	layersDirRemoved := false // allow removing the layers directory early
 	layersDirPath, err := iotools.CreateSubDir(dstDirPath, "layers", 0o700)
 	if err != nil {
-		logger.ErrorLogger().Printf("failed to create layers directory for %q: %v", id, err)
+		logger.ErrorLogger("failed to create layers directory for %q: %v", id, err)
 		return err
 	}
 	defer func() {
@@ -87,7 +87,7 @@ func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
 
 	rootfsDirPath, err := iotools.CreateSubDir(dstDirPath, "rootfs", 0o700)
 	if err != nil {
-		logger.ErrorLogger().Printf("failed to create rootfs directory for %q: %v", id, err)
+		logger.ErrorLogger("failed to create rootfs directory for %q: %v", id, err)
 		return err
 	}
 	defer iotools.RemoveAllOrWarn(rootfsDirPath)
@@ -156,7 +156,7 @@ func (s *ContainersSource) Retrieve(id string, dstDirPath string) error {
 
 	// remove layers directory early to save disk space
 	if err := os.RemoveAll(layersDirPath); err != nil {
-		logger.WarnLogger().Printf("failed to remove directory %q", layersDirPath)
+		logger.WarnLogger("failed to remove directory %q", layersDirPath)
 	}
 	layersDirRemoved = true
 

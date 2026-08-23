@@ -77,7 +77,7 @@ const CLEANUP_TIMEOUT = 5 * time.Second
 func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
 	client, err := ctd.New("/run/containerd/containerd.sock")
 	if err != nil {
-		logger.ErrorLogger().Printf("Unable to start the container engine: %v\n", err)
+		logger.ErrorLogger("Unable to start the container engine: %v\n", err)
 		return &ContainerRuntime{}
 	}
 
@@ -98,7 +98,7 @@ func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
 		found = true
 	}
 	if !found {
-		logger.WarnLogger().Printf("No additional OCI runtimes found in containerd config %s. This worker will use the default runc runtime.", CONTAINERD_CONFIG_PATH)
+		logger.WarnLogger("No additional OCI runtimes found in containerd config %s. This worker will use the default runc runtime.", CONTAINERD_CONFIG_PATH)
 	}
 
 	return &runtime
@@ -118,14 +118,14 @@ func findAdditionalRuntimePluginsAt(configPath string) iter.Seq[string] {
 	emptyIterator := func(yield func(string) bool) {}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		logger.ErrorLogger().Printf("Unable to read containerd config file: %v", err)
+		logger.ErrorLogger("Unable to read containerd config file: %v", err)
 		return emptyIterator
 	}
 	var containerdConfig struct {
 		Plugins map[string]interface{} `toml:"plugins"`
 	}
 	if err := toml.Unmarshal(data, &containerdConfig); err != nil {
-		logger.ErrorLogger().Printf("Unable to parse containerd config file: %v", err)
+		logger.ErrorLogger("Unable to parse containerd config file: %v", err)
 		return emptyIterator
 	}
 	for _, ctdPlugin := range containerdConfig.Plugins {
@@ -134,13 +134,13 @@ func findAdditionalRuntimePluginsAt(configPath string) iter.Seq[string] {
 			runtimes, ok := ctdPluginInner["runtimes"].(map[string]interface{})
 			if ok {
 				for runtimeName := range runtimes {
-					logger.InfoLogger().Printf("Adding compatibility custom runtime %s configured in containerd config file %s", runtimeName, configPath)
+					logger.InfoLogger("Adding compatibility custom runtime %s configured in containerd config file %s", runtimeName, configPath)
 				}
 				return maps.Keys(runtimes)
 			}
 		}
 	}
-	logger.WarnLogger().Printf("No OCI runtimes found in containerd config %s. This worker will use the default runc runtime.", configPath)
+	logger.WarnLogger("No OCI runtimes found in containerd config %s. This worker will use the default runc runtime.", configPath)
 	return emptyIterator
 }
 
@@ -156,7 +156,7 @@ func (r *ContainerRuntime) Stop() {
 	for _, taskId := range taskIDs {
 		err := r.Undeploy(taskid.ExtractServiceName(taskId), taskid.ExtractInstanceNumber(taskId))
 		if err != nil {
-			logger.ErrorLogger().Printf("Unable to undeploy %s, error: %v", taskId, err)
+			logger.ErrorLogger("Unable to undeploy %s, error: %v", taskId, err)
 		}
 	}
 	waitDone := make(chan struct{})
@@ -166,13 +166,13 @@ func (r *ContainerRuntime) Stop() {
 	}()
 	select {
 	case <-waitDone:
-		logger.InfoLogger().Printf("All containers stopped cleanly")
+		logger.InfoLogger("All containers stopped cleanly")
 	case <-time.After(CLEANUP_TIMEOUT):
-		logger.ErrorLogger().Printf("Timed out waiting for containers to stop, forcing cleanup")
+		logger.ErrorLogger("Timed out waiting for containers to stop, forcing cleanup")
 		r.forceContainerCleanup()
 	}
 	if err := r.containerClient.Close(); err != nil {
-		logger.ErrorLogger().Printf("Unable to close containerd client: %v", err)
+		logger.ErrorLogger("Unable to close containerd client: %v", err)
 	}
 }
 
@@ -185,7 +185,7 @@ func (r *ContainerRuntime) Deploy(service model.Service, statusChangeNotificatio
 	if err == nil {
 		image = ctd.NewImage(r.containerClient, sysimg)
 	} else {
-		logger.ErrorLogger().Printf("Error retrieving the image: %v \n Trying to pull the image online.", err)
+		logger.ErrorLogger("Error retrieving the image: %v \n Trying to pull the image online.", err)
 
 		remoteOpt := []ctd.RemoteOpt{ctd.WithPullUnpack}
 		if service.Platform != "" {
@@ -261,7 +261,7 @@ func (r *ContainerRuntime) Undeploy(service string, instance int) error {
 		*ch <- true
 		return nil
 	}
-	logger.ErrorLogger().Printf("Unable to undeploy service %s instance %d: not found", service, instance)
+	logger.ErrorLogger("Unable to undeploy service %s instance %d: not found", service, instance)
 	return fmt.Errorf("service not found")
 }
 
@@ -298,9 +298,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 			containerOpts = append(containerOpts, ctd.WithRuntime(service.Runtime, &runcoptions.Options{}))
 		} else {
 			path, err := exec.LookPath(service.Runtime)
-			logger.InfoLogger().Printf("Using custom runtime %s", path)
+			logger.InfoLogger("Using custom runtime %s", path)
 			if err != nil {
-				logger.ErrorLogger().Printf("ERROR: unable to find runtime %s, %v", service.Runtime, err)
+				logger.ErrorLogger("ERROR: unable to find runtime %s, %v", service.Runtime, err)
 			}
 			containerOpts = append(containerOpts, ctd.WithRuntime(plugin.RuntimeRuncV2, &runcoptions.Options{BinaryName: path}))
 		}
@@ -328,13 +328,13 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	if service.Vgpus > 0 {
 		gpuDevices, err := selectBestGPUs(service.Vgpus)
 		if err != nil {
-			logger.ErrorLogger().Printf("Failed to select GPUs: %v", err)
+			logger.ErrorLogger("Failed to select GPUs: %v", err)
 			// Fallback to GPU 0 if selection fails
 			specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(0), nvidia.WithAllCapabilities))
-			logger.InfoLogger().Printf("NVIDIA - Adding GPU 0 (fallback)")
+			logger.InfoLogger("NVIDIA - Adding GPU 0 (fallback)")
 		} else {
 			specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(gpuDevices...), nvidia.WithAllCapabilities))
-			logger.InfoLogger().Printf("NVIDIA - Adding GPU(s): %v", gpuDevices)
+			logger.InfoLogger("NVIDIA - Adding GPU(s): %v", gpuDevices)
 		}
 	}
 	// ---- mount CSI volumes (stage + publish) and add bind mounts to OCI spec
@@ -385,14 +385,14 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	//defer file.Close()
 	defer func() {
 		if err := file.Close(); err != nil {
-			logger.ErrorLogger().Printf("Unable to close log file: %v", err)
+			logger.ErrorLogger("Unable to close log file: %v", err)
 		}
 	}()
 
 	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStreams(nil, file, file)))
 
 	if err != nil {
-		logger.ErrorLogger().Printf("ERROR: containerd task creation failure: %v", err)
+		logger.ErrorLogger("ERROR: containerd task creation failure: %v", err)
 		_ = container.Delete(ctx)
 		revert(err)
 		return
@@ -404,7 +404,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// get wait channel
 	exitStatusC, err := task.Wait(ctx)
 	if err != nil {
-		logger.ErrorLogger().Printf("ERROR: containerd task wait failure: %v", err)
+		logger.ErrorLogger("ERROR: containerd task wait failure: %v", err)
 		revert(err)
 		return
 	}
@@ -414,7 +414,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		taskpid := int(task.Pid())
 		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports)
 		if err != nil {
-			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
+			logger.ErrorLogger("Unable to attach network interface to the task: %v", err)
 			revert(err)
 			return
 		}
@@ -422,7 +422,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 
 	// execute the image's task
 	if err := task.Start(ctx); err != nil {
-		logger.ErrorLogger().Printf("ERROR: containerd task start failure: %v", err)
+		logger.ErrorLogger("ERROR: containerd task start failure: %v", err)
 		revert(err)
 		return
 	}
@@ -480,7 +480,7 @@ func getTotalCpuUsageByPid(pid int32) (float64, error) {
 	totCpu := 0.0
 	procs, err := process.NewProcess(pid)
 	if err != nil {
-		logger.ErrorLogger().Printf("ERROR: %v", err)
+		logger.ErrorLogger("ERROR: %v", err)
 		return 0, err
 	}
 
@@ -492,7 +492,7 @@ func getTotalCpuUsageByPid(pid int32) (float64, error) {
 	for _, child := range children {
 		cpuUsage, err := child.CPUPercent()
 		if err != nil {
-			logger.ErrorLogger().Printf("ERROR: %v", err)
+			logger.ErrorLogger("ERROR: %v", err)
 			return 0, err
 		}
 		totCpu += cpuUsage
@@ -511,7 +511,7 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 	for range ticker.C {
 		deployedContainers, err := r.containerClient.Containers(r.ctx)
 		if err != nil {
-			logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
+			logger.ErrorLogger("Unable to fetch running containers: %v", err)
 		}
 
 		resourceList := make([]model.Resources, 0)
@@ -519,17 +519,17 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 		for _, container := range deployedContainers {
 			task, err := container.Task(r.ctx, nil)
 			if err != nil {
-				logger.ErrorLogger().Printf("Unable to fetch container task: %v", err)
+				logger.ErrorLogger("Unable to fetch container task: %v", err)
 
 				info, err := container.Info(r.ctx)
 				if err != nil {
-					logger.ErrorLogger().Printf("Unable to fetch container info: %v", err)
+					logger.ErrorLogger("Unable to fetch container info: %v", err)
 					continue
 				}
 
 				// if container created less than 10 seconds ago, then skip removal
 				if time.Since(info.CreatedAt) < 10*time.Second {
-					logger.InfoLogger().Printf("Skipping container %s, it is still starting up", container.ID())
+					logger.InfoLogger("Skipping container %s, it is still starting up", container.ID())
 					continue
 				}
 
@@ -541,7 +541,7 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 			if err != nil {
 				sysInfo, err := pidusage.GetStat(int(task.Pid()))
 				if err != nil {
-					logger.ErrorLogger().Printf("Unable to fetch task info: %v", err)
+					logger.ErrorLogger("Unable to fetch task info: %v", err)
 					continue
 				}
 				cpuUsage = sysInfo.CPU / float64(model.GetNodeInfo().CpuCores)
@@ -549,20 +549,20 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 
 			memUsage, err := r.getContainerMemoryUsage(container.ID(), int(task.Pid()))
 			if err != nil {
-				logger.ErrorLogger().Printf("Unable to fetch container Memory: %v", err)
+				logger.ErrorLogger("Unable to fetch container Memory: %v", err)
 				memUsage = 0
 			}
 
 			containerMetadata, err := container.Info(r.ctx)
 			if err != nil {
-				logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
+				logger.ErrorLogger("Unable to fetch container metadata: %v", err)
 				continue
 			}
 
 			currentsnapshotter := r.containerClient.SnapshotService(containerMetadata.Snapshotter)
 			usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
 			if err != nil {
-				logger.ErrorLogger().Printf("Unable to fetch task disk usage: %v", err)
+				logger.ErrorLogger("Unable to fetch task disk usage: %v", err)
 			}
 
 			resourceList = append(resourceList, model.Resources{
@@ -583,7 +583,7 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 func (r *ContainerRuntime) forceContainerCleanup() {
 	deployedContainers, err := r.containerClient.Containers(r.ctx)
 	if err != nil {
-		logger.ErrorLogger().Printf("Unable to fetch running containers: %v", err)
+		logger.ErrorLogger("Unable to fetch running containers: %v", err)
 	}
 	for _, container := range deployedContainers {
 		_ = r.removeContainer(container)
@@ -592,14 +592,14 @@ func (r *ContainerRuntime) forceContainerCleanup() {
 
 func (r *ContainerRuntime) removeContainer(container ctd.Container) error {
 	if container == nil {
-		logger.WarnLogger().Printf("Container is nil, nothing to remove")
+		logger.WarnLogger("Container is nil, nothing to remove")
 		return nil
 	}
 
-	logger.InfoLogger().Printf("Cleaning up container: %s", container.ID())
+	logger.InfoLogger("Cleaning up container: %s", container.ID())
 	containerMetadata, err := container.Info(r.ctx)
 	if err != nil {
-		logger.ErrorLogger().Printf("Unable to fetch container metadata: %v", err)
+		logger.ErrorLogger("Unable to fetch container metadata: %v", err)
 	}
 
 	//kill task
@@ -607,7 +607,7 @@ func (r *ContainerRuntime) removeContainer(container ctd.Container) error {
 	if err == nil {
 		err := killTask(r.ctx, task, container)
 		if err != nil {
-			logger.ErrorLogger().Printf("Unable to kill task: %v", err)
+			logger.ErrorLogger("Unable to kill task: %v", err)
 		}
 	}
 
@@ -617,11 +617,11 @@ func (r *ContainerRuntime) removeContainer(container ctd.Container) error {
 		if currentsnapshotter != nil {
 			err = currentsnapshotter.Remove(r.ctx, containerMetadata.SnapshotKey)
 			if err != nil {
-				logger.WarnLogger().Printf("Unable to remove snapshotter %s: %v", containerMetadata.Snapshotter, err)
+				logger.WarnLogger("Unable to remove snapshotter %s: %v", containerMetadata.Snapshotter, err)
 			}
 			err = currentsnapshotter.Close()
 			if err != nil {
-				logger.WarnLogger().Printf("Unable to close snapshotter %s: %v", containerMetadata.Snapshotter, err)
+				logger.WarnLogger("Unable to close snapshotter %s: %v", containerMetadata.Snapshotter, err)
 			}
 		}
 	}
@@ -629,7 +629,7 @@ func (r *ContainerRuntime) removeContainer(container ctd.Container) error {
 	// remove container
 	err = container.Delete(r.ctx)
 	if err != nil {
-		logger.ErrorLogger().Printf("Unable to delete container: %v", err)
+		logger.ErrorLogger("Unable to delete container: %v", err)
 		return err
 	}
 
@@ -685,7 +685,7 @@ func withCSIVolumeMounts(mounts []csi.MountedVolume) func(context.Context, oci.C
 				Source:      mv.TargetPath,
 				Options:     []string{"rbind", "rw"},
 			})
-			logger.InfoLogger().Printf("CSI volume %s bind-mounted %s -> %s", mv.VolumeID, mv.TargetPath, dest)
+			logger.InfoLogger("CSI volume %s bind-mounted %s -> %s", mv.VolumeID, mv.TargetPath, dest)
 		}
 		return nil
 	}
@@ -694,23 +694,23 @@ func withCSIVolumeMounts(mounts []csi.MountedVolume) func(context.Context, oci.C
 func getResolveConfFile() (string, error) {
 	//check if /run/systemd/resolve/resolv.conf exists and use that
 	if _, err := os.Stat("/run/systemd/resolve/resolv.conf"); err == nil {
-		logger.InfoLogger().Printf("Using systemd-resolved resolv.conf")
+		logger.InfoLogger("Using systemd-resolved resolv.conf")
 		return "/run/systemd/resolve/resolv.conf", nil
 	}
 
 	file, err := os.CreateTemp("/tmp", "oakestra-resolv-conf")
 	if err != nil {
-		logger.ErrorLogger().Printf("Unable to create temp resolv file: %v", err)
+		logger.ErrorLogger("Unable to create temp resolv file: %v", err)
 		return "", err
 	}
 	defer func() {
 		if err := file.Close(); err != nil {
-			logger.ErrorLogger().Printf("Unable to close temp resolv file: %v", err)
+			logger.ErrorLogger("Unable to close temp resolv file: %v", err)
 		}
 	}()
 	_, err = file.WriteString("nameserver 8.8.8.8\n")
 	if err != nil {
-		logger.ErrorLogger().Printf("Unable to write temp resolv file: %v", err)
+		logger.ErrorLogger("Unable to write temp resolv file: %v", err)
 		return "", err
 	}
 	_ = file.Chmod(0444)
@@ -721,18 +721,18 @@ func killTask(ctx context.Context, task ctd.Task, container ctd.Container) error
 	//removing the task
 	p, err := task.LoadProcess(ctx, task.ID(), nil)
 	if err != nil {
-		logger.ErrorLogger().Printf("ERROR deleting the task, LoadProcess: %v", err)
+		logger.ErrorLogger("ERROR deleting the task, LoadProcess: %v", err)
 		return err
 	}
 	_, err = p.Delete(ctx, ctd.WithProcessKill)
 	if err != nil {
-		logger.ErrorLogger().Printf("ERROR deleting the task, Delete: %v", err)
+		logger.ErrorLogger("ERROR deleting the task, Delete: %v", err)
 		return err
 	}
 	_, _ = task.Delete(ctx)
 	_ = container.Delete(ctx)
 
-	logger.ErrorLogger().Printf("Task %s terminated", task.ID())
+	logger.ErrorLogger("Task %s terminated", task.ID())
 	return nil
 }
 
@@ -759,7 +759,7 @@ func selectBestGPUs(requested int) ([]int, error) {
 	// Cap requested GPUs to available GPUs
 	numGPUs := requested
 	if numGPUs > totalGPUs {
-		logger.WarnLogger().Printf("Requested %d GPUs but only %d available, using %d", requested, totalGPUs, totalGPUs)
+		logger.WarnLogger("Requested %d GPUs but only %d available, using %d", requested, totalGPUs, totalGPUs)
 		numGPUs = totalGPUs
 	}
 
@@ -769,25 +769,25 @@ func selectBestGPUs(requested int) ([]int, error) {
 		// Query free memory (memory.free) and total memory (memory.total)
 		freeMemStr, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.free")
 		if err != nil {
-			logger.WarnLogger().Printf("Failed to query free memory for GPU %d: %v", i, err)
+			logger.WarnLogger("Failed to query free memory for GPU %d: %v", i, err)
 			continue
 		}
 
 		totalMemStr, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.total")
 		if err != nil {
-			logger.WarnLogger().Printf("Failed to query total memory for GPU %d: %v", i, err)
+			logger.WarnLogger("Failed to query total memory for GPU %d: %v", i, err)
 			continue
 		}
 
 		freeMem, err := strconv.ParseInt(freeMemStr, 10, 64)
 		if err != nil {
-			logger.WarnLogger().Printf("Failed to parse free memory for GPU %d: %v", i, err)
+			logger.WarnLogger("Failed to parse free memory for GPU %d: %v", i, err)
 			continue
 		}
 
 		totalMem, err := strconv.ParseInt(totalMemStr, 10, 64)
 		if err != nil {
-			logger.WarnLogger().Printf("Failed to parse total memory for GPU %d: %v", i, err)
+			logger.WarnLogger("Failed to parse total memory for GPU %d: %v", i, err)
 			continue
 		}
 
@@ -797,7 +797,7 @@ func selectBestGPUs(requested int) ([]int, error) {
 			totalMemory: totalMem,
 		})
 
-		logger.InfoLogger().Printf("GPU %d: %d MiB free / %d MiB total", i, freeMem, totalMem)
+		logger.InfoLogger("GPU %d: %d MiB free / %d MiB total", i, freeMem, totalMem)
 	}
 
 	if len(gpuList) == 0 {

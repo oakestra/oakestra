@@ -46,7 +46,7 @@ func (r CpuMemResources) GetId() string {
 func (r CpuMemResources) ResourceConstraints() map[string]string {
 	var constraints = make(map[string]string)
 	for _, constraint := range r.Constraints {
-		logger.DebugLogger().Printf("Constraint: %+v", constraint)
+		logger.DebugLogger("Constraint: %+v", constraint)
 		if constraint.Type == "direct" {
 			var c string
 			if Plane == "cluster" {
@@ -181,7 +181,7 @@ func (a BestCpuMemFit) Calculate(job CpuMemResources, candidates []CpuMemResourc
 func filterRequirements(job CpuMemResources, candidates []CpuMemResources) []CpuMemResources {
 	filteredCandidates := make([]CpuMemResources, 0, len(candidates))
 	for _, candidate := range candidates {
-		logger.DebugLogger().Printf("Filtering candidate: %v", candidate)
+		logger.DebugLogger("Filtering candidate: %v", candidate)
 		if slices.Contains(candidate.Virtualization, job.Virtualization[0]) {
 			if candidate.AvailableCPU >= job.AvailableCPU {
 				if candidate.AvailableMem >= job.AvailableMem {
@@ -203,7 +203,7 @@ func hasRequiredCSIDrivers(job CpuMemResources, candidate CpuMemResources) bool 
 			continue
 		}
 		if !slices.Contains(candidate.CSIDrivers, vol.CSIDriver) {
-			logger.DebugLogger().Printf(
+			logger.DebugLogger(
 				"Candidate %s does not have required CSI driver %s (available: %v)",
 				candidate.Id, vol.CSIDriver, candidate.CSIDrivers,
 			)

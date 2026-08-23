@@ -68,29 +68,29 @@ func formatInterestedResources(interestedResources []string) string {
 
 func AvailableResources[T interfaces.ResourceList](data *[]T, requestParameters map[string]string, interestedResources []string) error {
 	url := fmt.Sprintf("%s://%s:%s%s/%s", PROTOCOL, RESOURCE_ABSTRACTOR_URL, RESOURCE_ABSTRACTOR_PORT, RESOURCES, formatQuery(requestParameters, interestedResources))
-	logger.DebugLogger().Printf("Request URL: %v", url)
+	logger.DebugLogger("Request URL: %v", url)
 
 	resp, err := http.Get(url)
 	if err != nil {
-		logger.ErrorLogger().Println("Error fetching resources")
+		logger.ErrorLogger("Error fetching resources")
 		return err
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			logger.ErrorLogger().Println("Error closing body")
+			logger.ErrorLogger("Error closing body")
 		}
 	}(resp.Body)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.ErrorLogger().Println("Error reading body")
+		logger.ErrorLogger("Error reading body")
 		return err
 	}
 
 	err = json.Unmarshal(body, data)
 	if err != nil {
-		logger.ErrorLogger().Println("Error unmarshalling body")
+		logger.ErrorLogger("Error unmarshalling body")
 		return err
 	}
 

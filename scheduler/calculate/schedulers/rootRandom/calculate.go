@@ -30,7 +30,7 @@ func (r RandomResources) GetId() string {
 func (r RandomResources) ResourceConstraints() map[string]string {
 	var constraints = make(map[string]string)
 	for _, constraint := range r.Constraints {
-		logger.DebugLogger().Printf("Constraint: %+v", constraint)
+		logger.DebugLogger("Constraint: %+v", constraint)
 		if constraint.Type == "direct" {
 			constraints["cluster_name"] = constraint.Cluster
 			constraints["node_name"] = constraint.Node
@@ -109,7 +109,7 @@ func (a BestCpuMemFit) Calculate(job RandomResources, candidates []RandomResourc
 func filterRequirements(job RandomResources, candidates []RandomResources) []RandomResources {
 	filteredCandidates := make([]RandomResources, 0, len(candidates))
 	for _, candidate := range candidates {
-		logger.DebugLogger().Printf("Filtering candidate: %v", candidate)
+		logger.DebugLogger("Filtering candidate: %v", candidate)
 		if slices.Contains(candidate.Virtualization, job.Virtualization[0]) {
 			if candidate.AvailableCPU >= job.AvailableCPU {
 				if candidate.AvailableMem >= job.AvailableMem {
