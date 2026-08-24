@@ -240,7 +240,9 @@ docker exec mongo mongosh --port 10007 --eval "
 
 **What to look for:**
 - Clusters/nodes with zero available CPU/memory despite real resources → resource abstractor not syncing
-- Jobs stuck in `CLUSTER_SCHEDULED` or `NODE_SCHEDULED` for a long time → worker not acknowledging deployment
+- Jobs stuck in `CLUSTER_SCHEDULED` or `NODE_SCHEDULED` for more than 15 s → worker not acknowledging deployment (node dead or MQTT lost). The cluster will mark them FAILED and reschedule automatically.
+- Jobs stuck in `INSTANTIATION` for more than 30 s without heartbeats → worker died during image pull / container creation. Will be marked FAILED and rescheduled automatically.
+- Jobs stuck in `INSTANTIATION` indefinitely with fresh heartbeats → normal for large images; wait for the image pull to finish.
 - Jobs stuck in `CREATING` → NodeEngine issue on worker
 - No clusters registered despite cluster being started → cluster_manager cannot reach system_manager
 
