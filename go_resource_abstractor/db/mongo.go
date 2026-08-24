@@ -1,0 +1,126 @@
+// Package db implements the MongoDB access layer for the resource
+// abstractor. It ports resource-abstractor/db/mongodb_client.py and its
+// sibling *_db.py modules: four logical databases (candidates, jobs, hooks,
+// custom_resources) reached from a single MongoDB deployment.
+package db
+
+import (
+	"context"
+	"fmt"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+)
+
+// Store bundles the collection handles the service operates on, the same
+// four collections db/mongodb_client.py's mongo_init sets up as module-level
+// globals.
+type Store struct {
+	client *mongo.Client
+
+	candidates *mongo.Collection // candidates.candidates
+	apps       *mongo.Collection // jobs.apps
+	jobs       *mongo.Collection // jobs.jobs
+	hooks      *mongo.Collection // hooks.hooks
+	metaData   *mongo.Collection // custom_resources.meta_data
+
+	customResourcesDB *mongo.Database // custom_resources, for dynamic per-type collections
+}
+
+// Connect dials MongoDB at uri, wires up the collection handles for all four
+// logical databases, and ensures the same indexes the Python service creates
+// at startup exist.
+func Connect(ctx context.Context, uri string) (*Store, error) {
+	client, err := mongo.Connect(options.Client().ApplyURI(uri))
+	if err != nil {
+		return nil, fmt.Errorf("connect to mongo: %w", err)
+	}
+
+	if err := client.Ping(ctx, nil); err != nil {
+		return nil, fmt.Errorf("ping mongo: %w", err)
+	}
+
+	customResourcesDB := client.Database("custom_resources")
+
+	store := &Store{
+		client:            client,
+		candidates:        client.Database("candidates").Collection("candidates"),
+		apps:              client.Database("jobs").Collection("apps"),
+		jobs:              client.Database("jobs").Collection("jobs"),
+		hooks:             client.Database("hooks").Collection("hooks"),
+		metaData:          customResourcesDB.Collection("meta_data"),
+		customResourcesDB: customResourcesDB,
+	}
+
+	if err := store.ensureIndexes(ctx); err != nil {
+		return nil, fmt.Errorf("ensure indexes: %w", err)
+	}
+
+	return store, nil
+}
+
+// ensureIndexes recreates the unique indexes from Python's mongo_init (hooks
+// on (entity, webhook_url) and hook_name, meta_data on resource_type), plus
+// non-unique indexes on candidate_name/job_name and last_modified_timestamp -
+// the Python service scans for these instead, which gets expensive as the
+// cluster grows since they're hit on every worker heartbeat and scheduler
+// query. Non-unique because, unlike hook_name, uniqueness there only holds in
+// practice - a unique index could fail to build against an existing
+// deployment with legacy duplicates.
+func (s *Store) ensureIndexes(ctx context.Context) error {
+	unique := true
+
+	_, err := s.hooks.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "entity", Value: 1}, {Key: "webhook_url", Value: 1}},
+			Options: options.Index().SetUnique(unique),
+		},
+		{
+			Keys:    bson.D{{Key: "hook_name", Value: 1}},
+			Options: options.Index().SetUnique(unique),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("hooks indexes: %w", err)
+	}
+
+	_, err = s.metaData.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "resource_type", Value: 1}},
+		Options: options.Index().SetUnique(unique),
+	})
+	if err != nil {
+		return fmt.Errorf("meta_data index: %w", err)
+	}
+
+	_, err = s.candidates.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "candidate_name", Value: 1}}},
+		{Keys: bson.D{{Key: "last_modified_timestamp", Value: 1}}},
+	})
+	if err != nil {
+		return fmt.Errorf("candidates indexes: %w", err)
+	}
+
+	_, err = s.jobs.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "job_name", Value: 1}},
+	})
+	if err != nil {
+		return fmt.Errorf("jobs index: %w", err)
+	}
+
+	return nil
+}
+
+// customResourceCollection returns the dynamically named collection that
+// stores instances of the given custom resource type, inside the
+// custom_resources database - the Go equivalent of Python's
+// db.db_custom_resources.db[resource_type]. It cannot reach the candidates,
+// jobs, hooks or apps collections, which live in separate MongoDB databases.
+func (s *Store) customResourceCollection(resourceType string) *mongo.Collection {
+	return s.customResourcesDB.Collection(resourceType)
+}
+
+// Disconnect closes the underlying MongoDB client.
+func (s *Store) Disconnect(ctx context.Context) error {
+	return s.client.Disconnect(ctx)
+}
