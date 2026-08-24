@@ -28,7 +28,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Install the generator
         run: pip install openapi-python-client==0.29.0 ruff==0.15.22
