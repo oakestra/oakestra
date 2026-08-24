@@ -1,0 +1,14 @@
+# openapi-python-client config for the generated transport layer in
+# resource_abstractor_client/openapi/. Run `python scripts/generate_python_client.py`
+# from the repo root after editing ../../go_resource_abstractor/openapi/openapi.yaml;
+# see scripts/generate_python_client.py for the full invocation.
+#
+# package_name_override makes the generated package importable as
+# resource_abstractor_client.openapi instead of the spec title's slug
+# ("resource_abstractor_api_client").
+package_name_override: openapi
+
+# post_hooks left at its --meta none default (ruff --fix-only --extend-select=I, then
+# ruff format) so the generated tree is readable - isort'd and formatted - even though
+# it's excluded from this repo's own ruff checks (see pyproject.toml). Requires `ruff`
+# on PATH when generating, same as this repo's own pre-commit ruff hooks already do.
