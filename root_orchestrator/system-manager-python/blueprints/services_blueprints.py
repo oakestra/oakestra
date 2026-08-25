@@ -1,15 +1,16 @@
-import logging
-
 import sla.schema
 from bson import json_util
 from flask import request
 from flask.views import MethodView
 from flask_restful import Resource
 from flask_smorest import Blueprint, abort
+from oakestra_logging import get_logger
 from roles.securityUtils import Role, get_jwt_auth_identity, jwt_auth_required, require_role
 from services import service_management
 
 from blueprints.schema_wrapper import SchemaWrapper
+
+logger = get_logger(__name__)
 
 # ........ Functions for job management ...............#
 # ......................................................#
@@ -115,10 +116,16 @@ class ServiceControllerPost(MethodView):
                 if status != 200:
                     abort(status, result)
                 return result
-            except Exception as e:
-                logging.log(logging.ERROR, e)
+            except Exception:
+                logger.exception(
+                    "Service creation request failed",
+                    event_name="service.create.request_failed",
+                )
                 abort(400, {"message": "The given SLA was not formatted correctly"})
-        logging.log(logging.ERROR, "POST service no data found")
+        logger.warning(
+            "Service creation request has no data",
+            event_name="service.create.request_missing_data",
+        )
         abort(404, {"message": "/api/deploy request without a yaml file\n"})
 
 

@@ -1,12 +1,10 @@
-import logging
-import traceback
-
+from oakestra_logging import get_logger
 from resource_abstractor_client import app_operations
 from sla.versioned_sla_parser import SLAFormatError, parse_sla_json
 
 from services.service_management import create_services_of_app, delete_service
 
-logger = logging.getLogger("system_manager")
+logger = get_logger(__name__)
 
 
 def get_user_apps(userid):
@@ -60,7 +58,11 @@ def register_app(applications, userid):
                         delete_app(app_id, userid)
                         return result, status
                 except Exception:
-                    logger.error(traceback.format_exc())
+                    logger.exception(
+                        "Failed to register application microservices",
+                        event_name="application.services.register_failed",
+                        application_id=app_id,
+                    )
                     delete_app(app_id, userid)
                     return {"message": "error during the registration of the microservices"}, 500
 
@@ -81,7 +83,9 @@ def update_app(appid, userid, fields):
 def delete_app(appid, userid):
     application = app_operations.get_app_by_id(appid, userid)
     if application is None:
-        logging.warn(f"Application {appid} not found")
+        logger.warning(
+            "Application not found", event_name="application.not_found", application_id=appid
+        )
         return None
 
     for service_id in application.get("microservices"):

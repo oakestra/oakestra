@@ -22,18 +22,19 @@ from flask_smorest import Api
 from flask_socketio import SocketIO
 from flask_swagger_ui import get_swaggerui_blueprint
 from google.protobuf.json_format import MessageToDict
+from oakestra_logging import configure_logging, get_logger
 from proto.clusterRegistration_pb2 import SC1Message, SC2Message
 from proto.clusterRegistration_pb2_grpc import (
     add_register_clusterServicer_to_server,
     register_clusterServicer,
 )
 from resource_abstractor_client import candidate_operations
-from sm_logging import configure_logging
 from utils.network import add_brackets_if_ipv6
 from werkzeug.utils import redirect, secure_filename
 
-my_logger = configure_logging()
-logger = logging.getLogger("system_manager")
+configure_logging(os.getenv("OAKESTRA_SERVICE_NAME", "system_manager"))
+logger = get_logger(__name__)
+stdlib_logger = logging.getLogger("system_manager")
 
 UPLOAD_FOLDER = "files"
 ALLOWED_EXTENSIONS = {"txt", "json", "yml"}
@@ -50,7 +51,7 @@ app.config["JWT_PUBLIC_KEY"] = get_public_key()
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=10)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
 app.config["RESET_TOKEN_EXPIRES"] = timedelta(hours=3)  # for password reset
-app.logger = my_logger
+app.logger = stdlib_logger
 
 jwt = JWTManager(app)
 api = Api(app, spec_kwargs={"host": "oakestra.io", "x-internal-id": "1"})
@@ -126,22 +127,31 @@ def _is_cluster_reachable(cluster_address, cluster_port):
             if time.monotonic() >= deadline:
                 break
             time.sleep(2)
-    logger.error("Cluster reachability probe failed for {}: {}".format(url, last_exc))
+    logger.error(
+        "Cluster reachability probe failed",
+        event_name="cluster.reachability.failed",
+        endpoint=url,
+        exc_info=last_exc,
+    )
     return False
 
 
 class ClusterRegistrationServicer(register_clusterServicer):
     def handle_init_greeting(self, request, context):
-        logger.info("gRPC - Cluster_Manager connected: {}".format(context.peer()))
+        logger.info(
+            "Cluster Manager connected over gRPC",
+            event_name="cluster.registration.connected",
+            peer=context.peer(),
+        )
         return SC1Message(hello_cluster_manager="please send your cluster info")
 
     def handle_init_final(self, request, context):
         logger.info(
-            "gRPC - Received Cluster_Manager_to_System_Manager_1: {}".format(context.peer())
+            "Received cluster registration details",
+            event_name="cluster.registration.received",
+            peer=context.peer(),
         )
-        logger.info(request)
         message = MessageToDict(request, preserving_proto_field_name=True)
-        logger.info("Message: {}, request {}".format(message, request))
 
         cluster_address = message.get("cluster_address", "").strip()
         if not cluster_address:
@@ -155,13 +165,21 @@ class ClusterRegistrationServicer(register_clusterServicer):
             )
 
         cluster_port = str(message["manager_port"])
-        logger.info("Cluster address: {} port: {}".format(cluster_address, cluster_port))
+        logger.info(
+            "Validating advertised cluster endpoint",
+            event_name="cluster.registration.validating",
+            cluster_name=message.get("cluster_name"),
+            cluster_address=cluster_address,
+            cluster_port=cluster_port,
+        )
 
         if not _is_cluster_reachable(cluster_address, cluster_port):
             logger.error(
-                "Cluster {} is not reachable at {}:{} — refusing registration".format(
-                    message.get("cluster_name"), cluster_address, cluster_port
-                )
+                "Cluster endpoint is not reachable; refusing registration",
+                event_name="cluster.registration.endpoint_unreachable",
+                cluster_name=message.get("cluster_name"),
+                cluster_address=cluster_address,
+                cluster_port=cluster_port,
             )
             context.abort(
                 grpc.StatusCode.FAILED_PRECONDITION,
@@ -176,10 +194,20 @@ class ClusterRegistrationServicer(register_clusterServicer):
             "candidate_name": message["cluster_name"],
         }
 
-        logger.info("Cluster data: {}".format(cluster_data))
+        logger.info(
+            "Creating registered cluster",
+            event_name="cluster.registration.creating",
+            cluster_name=cluster_data["candidate_name"],
+            cluster_address=cluster_data["ip"],
+            cluster_port=cluster_data["port"],
+        )
         cluster = candidate_operations.create_candidate(cluster_data)
         if cluster is None:
-            logger.error("Creating cluster failed")
+            logger.error(
+                "Creating cluster failed",
+                event_name="cluster.registration.create_failed",
+                cluster_name=cluster_data["candidate_name"],
+            )
             context.abort(grpc.StatusCode.INTERNAL, "failed to persist cluster")
 
         cid = str(cluster["_id"])
@@ -235,12 +263,12 @@ def upload_file():
 
 def start_flask_server():
     eventlet.wsgi.server(
-        eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=my_logger
+        eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=stdlib_logger
     )
 
 
 def start_grpc_server():
-    my_logger.info("Start gRPC Server on port {}".format(MY_PORT_GRPC))
+    logger.info("Starting gRPC server", event_name="grpc.server.started", port=MY_PORT_GRPC)
     serve()
 
 

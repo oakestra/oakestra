@@ -54,12 +54,13 @@ services:
       - root_service_manager
       - jwt_generator
     environment:
+      - OAKESTRA_SERVICE_NAME=system_manager
       - ORCHESTRATION_PLANE=root
       - ROOT_MONGO_URL=mongo
       - ROOT_MONGO_PORT=10007
       - ROOT_SCHEDULER_URL=root_scheduler
       - ROOT_SCHEDULER_PORT=10004
-      - LOG_LEVEL=INFO
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
       - RESOURCE_ABSTRACTOR_PORT=11011
       - NET_PLUGIN_URL=root_service_manager
@@ -148,6 +149,8 @@ services:
     ports:
       - "11011:11011"
     environment:
+      - OAKESTRA_SERVICE_NAME=root_resource_abstractor
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - RESOURCE_ABSTRACTOR_PORT=11011
       - MONGO_URL=mongo
       - MONGO_PORT=10007
@@ -165,6 +168,8 @@ services:
     ports:
       - "10011:10011"
     environment:
+      - OAKESTRA_SERVICE_NAME=jwt_generator
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - JWT_GENERATOR_PORT=10011
     logging: *default-logging
 
@@ -287,8 +292,9 @@ services:
     command: bash -c 'sleep 15; python cluster_manager.py'
     labels: *cluster-log-labels
     environment:
+      - OAKESTRA_SERVICE_NAME=cluster_manager
       - MY_PORT=10100
-      - LOG_LEVEL=INFO
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - SYSTEM_MANAGER_PORT=10000
       - CLUSTER_SERVICE_MANAGER_ADDR=cluster_service_manager
@@ -348,6 +354,8 @@ services:
     ports:
       - "11012:11012"
     environment:
+      - OAKESTRA_SERVICE_NAME=cluster_resource_abstractor
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - RESOURCE_ABSTRACTOR_PORT=11012
       - MONGO_URL=cluster_mongo
       - MONGO_PORT=10107
@@ -443,6 +451,8 @@ services:
     container_name: addons_manager
     labels: *root-log-labels
     environment:
+      - OAKESTRA_SERVICE_NAME=root_addons_manager
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ADDONS_MANAGER_PORT=11101
       - ADDONS_ENGINE_MONGO_URL=mongo
       - ADDONS_ENGINE_MONGO_PORT=10007
@@ -463,6 +473,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     command: bash -c 'sleep 10; python addons_monitor.py'
     environment:
+      - OAKESTRA_SERVICE_NAME=root_addons_monitor
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ADDONS_MANAGER_ADDR=http://addons_manager:11101
       - CONTAINER_POLL_INTERVAL=5
     depends_on:
@@ -480,6 +492,8 @@ services:
     ports:
       - "11102:11102"
     environment:
+      - OAKESTRA_SERVICE_NAME=marketplace_manager
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ADDON_MARKETPLACE_PORT=11102
       - ADDON_MARKETPLACE_MONGO_URL=mongo
       - ADDON_MARKETPLACE_MONGO_PORT=10007

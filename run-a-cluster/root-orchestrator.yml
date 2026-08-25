@@ -28,6 +28,8 @@ services:
       - root_service_manager
       - jwt_generator
     environment:
+      - OAKESTRA_SERVICE_NAME=system_manager
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ROOT_MONGO_URL=mongo
       - ROOT_MONGO_PORT=10007
       - ROOT_SCHEDULER_URL=scheduler
@@ -98,6 +100,8 @@ services:
     ports:
       - "10011:10011"
     environment:
+      - OAKESTRA_SERVICE_NAME=jwt_generator
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - JWT_GENERATOR_PORT=10011
     logging: *default-logging
 
@@ -206,6 +210,8 @@ services:
     ports:
       - "11011:11011"
     environment:
+      - OAKESTRA_SERVICE_NAME=root_resource_abstractor
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - RESOURCE_ABSTRACTOR_PORT=11011
       - ROOT_MONGO_URL=mongo
       - ROOT_MONGO_PORT=10007

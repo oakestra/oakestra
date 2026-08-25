@@ -29,7 +29,8 @@ jobs:
       - name: Install local Oakestra libraries
         working-directory: root_orchestrator/system-manager-python
         run: |
-          pip install --no-cache-dir ../../libraries/resource_abstractor_client ../../libraries/oakestra_utils_library
+          pip install --no-cache-dir ../../libraries/resource_abstractor_client \
+            ../../libraries/oakestra_utils_library ../../libraries/oakestra_logging
 
       - name: Generate protobuf files
         working-directory: root_orchestrator/system-manager-python
@@ -39,12 +40,12 @@ jobs:
       - name: Build Docker images
         working-directory: resource-abstractor
         run: |
-          docker build -t resource_abstractor:test .
+          docker build --build-context libraries=../libraries -t resource_abstractor .
 
       - name: Run containers
         working-directory: root_orchestrator/
         run: |
-          docker compose up root_resource_abstractor -d
+          docker compose up root_resource_abstractor -d --no-build
 
       - name: Run test suite
         working-directory: root_orchestrator/system-manager-python

@@ -1,11 +1,10 @@
-import logging
-
 from bson import json_util
 from flask import request
 from flask.views import MethodView
 from flask_jwt_extended import jwt_required
 from flask_restful import Resource
 from flask_smorest import abort
+from oakestra_logging import get_logger
 from roles.securityUtils import (
     Role,
     get_jwt_auth_identity,
@@ -17,7 +16,7 @@ from users.auth import user_login, user_register, user_token_refresh
 
 from blueprints.jwt_wrapper import BlueprintExt
 
-logger = logging.getLogger("system_manager")
+logger = get_logger(__name__)
 
 
 loginbp = BlueprintExt("Login", "auth", url_prefix="/api/auth")
@@ -49,7 +48,11 @@ class UserLoginController(MethodView):
     @loginbp.arguments(schema=login_schema, location="json", validate=False, unknown=True)
     def post(self, *args, **kwargs):
         content = request.get_json()
-        logger.debug(content)
+        logger.debug(
+            "Processing login request",
+            event_name="authentication.request.received",
+            has_organization=bool(content and content.get("organization")),
+        )
         if content is None:
             abort(403, {"message": "No credentials provided"})
         resp = user_login(content)

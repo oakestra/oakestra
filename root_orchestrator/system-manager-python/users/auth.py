@@ -1,5 +1,4 @@
 import hashlib
-import logging
 import os
 from datetime import datetime
 
@@ -8,12 +7,13 @@ from ext_requests import organization_db, user_db
 from flask import abort
 from mail import mail
 from mail.mail import ResetPasswordMailFactory
+from oakestra_logging import get_logger
 from roles import securityUtils
 from werkzeug.security import check_password_hash, generate_password_hash
 
 mail_user = os.environ.get("MAIL_USER", "")
 
-logger = logging.getLogger("system_manager")
+logger = get_logger(__name__)
 
 
 def user_register(content, organization_id):
@@ -67,9 +67,8 @@ def user_login(content):
     if len(username) > 0 and len(password) > 0:
         user_struct = user_db.mongo_get_user_by_name(username)
 
-        logging.log(logging.INFO, user_struct)
         if user_struct is not None:
-            logging.log(level=logging.ERROR, msg="User not found")
+            logger.debug("User record found", event_name="authentication.user.found")
             roles = get_user_roles_from_organization(organization_struct, str(user_struct["_id"]))
             if check_password_hash(user_struct.get("password"), password):
                 access_token = securityUtils.create_jwt_auth_access_token(
@@ -92,14 +91,23 @@ def user_login(content):
                 return {"token": access_token, "refresh_token": refresh_token}
 
             else:
-                logging.log(
-                    level=logging.ERROR,
-                    msg="Invalid password provided from user: " + username,
+                logger.warning(
+                    "Authentication rejected: invalid password",
+                    event_name="authentication.rejected",
+                    reason="invalid_password",
                 )
         else:
-            logging.log(level=logging.ERROR, msg="User not found: " + username)
+            logger.warning(
+                "Authentication rejected: user not found",
+                event_name="authentication.rejected",
+                reason="user_not_found",
+            )
     else:
-        logging.log(level=logging.ERROR, msg="Invalid credentials")
+        logger.warning(
+            "Authentication rejected: invalid credentials",
+            event_name="authentication.rejected",
+            reason="invalid_credentials",
+        )
 
     return {}
 
@@ -191,6 +199,10 @@ def user_change_password_with_reset_request(reset_token, new_password):
 def get_user_roles_from_organization(organization, user_id):
     for member in organization["member"]:
         if member["user_id"] == user_id:
-            logger.debug(member["roles"])
+            logger.debug(
+                "Resolved organization roles",
+                event_name="authorization.roles.resolved",
+                role_count=len(member["roles"]),
+            )
             return member["roles"]
     return []

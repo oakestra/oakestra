@@ -1,4 +1,3 @@
-import logging
 import os
 import time
 from datetime import timedelta
@@ -6,6 +5,7 @@ from typing import Any, Optional
 
 import requests
 from flask_jwt_extended.typing import ExpiresDelta, Fresh
+from oakestra_logging import get_logger
 
 JWT_GENERATOR_ADDR = (
     "http://"
@@ -65,8 +65,8 @@ def create_refresh_token(
 
 
 def get_public_key():
-    logger = logging.getLogger()
-    logger.info("Requesting JWT public key...")
+    logger = get_logger(__name__)
+    logger.info("Requesting JWT public key", event_name="jwt.public_key.requested")
     request_addr = JWT_GENERATOR_ADDR + "/key"
     while True:
         try:
@@ -74,11 +74,21 @@ def get_public_key():
             r.raise_for_status()
             body = r.json()
             return body["public_key"]
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"Error: {e}, retrying in 5 seconds...")
+        except requests.exceptions.HTTPError as exc:
+            logger.warning(
+                "JWT public-key request returned an error; retrying",
+                event_name="jwt.public_key.retry",
+                error_type=type(exc).__name__,
+                retry_delay_seconds=5,
+            )
             time.sleep(5)
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Calling JWT generator /key not successful: {e}")
+        except requests.exceptions.RequestException as exc:
+            logger.warning(
+                "JWT public-key request failed; retrying",
+                event_name="jwt.public_key.retry",
+                error_type=type(exc).__name__,
+                retry_delay_seconds=5,
+            )
             time.sleep(5)
 
 
