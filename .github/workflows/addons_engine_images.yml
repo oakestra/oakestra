@@ -17,8 +17,6 @@ jobs:
     with:
       image_name: addons_manager
       context: ./addons_engine/addons-manager/
-      build_args: |
-        LIB_BRANCH=${{ github.head_ref || github.ref_name }}
     secrets: inherit
 
   build-addons-monitor:
@@ -26,8 +24,6 @@ jobs:
     with:
       image_name: addons_monitor
       context: ./addons_engine/addons-monitor/
-      build_args: |
-        LIB_BRANCH=${{ github.head_ref || github.ref_name }}
     secrets: inherit
 
   build-marketplace-manager:
@@ -35,8 +31,6 @@ jobs:
     with:
       image_name: marketplace_manager
       context: ./addons_marketplace/marketplace-manager/
-      build_args: |
-        LIB_BRANCH=${{ github.head_ref || github.ref_name }}
     secrets: inherit
 
   build-addons-dashboard:

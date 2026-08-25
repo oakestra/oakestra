@@ -17,6 +17,7 @@ jobs:
     with:
       image_name: cluster-manager
       context: ./cluster_orchestrator/cluster-manager/
-      build_args: |
-        LIB_BRANCH=${{ github.head_ref || github.ref_name }}
+      # Oakestra shared libraries are built from the repo-local libraries/ folder.
+      build_contexts: |
+        libraries=./libraries
     secrets: inherit

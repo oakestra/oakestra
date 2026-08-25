@@ -17,6 +17,4 @@ jobs:
     with:
       image_name: csi-hostpath-plugin
       context: ./csi/hostpath/
-      build_args: |
-        LIB_BRANCH=${{ github.head_ref || github.ref_name }}
     secrets: inherit

@@ -42,8 +42,6 @@ cors = CORS(app, resources={r"/*": {"origins": "*"}})
 
 mqtt_init(app)
 
-BACKGROUND_JOB_INTERVAL = 15
-
 # Register apis
 for bp in blueprints:
     api.register_blueprint(bp)
@@ -66,14 +64,15 @@ def background_job_send_aggregated_information_to_sm():
     scheduler.add_job(
         send_aggregated_info_to_sm,
         "interval",
-        seconds=BACKGROUND_JOB_INTERVAL,
+        seconds=config.AGGREGATION_INTERVAL,
         kwargs={
             "my_id": config.MY_ASSIGNED_CLUSTER_ID,
-            "time_interval": 2 * BACKGROUND_JOB_INTERVAL,
+            "running_timeout": 2 * config.AGGREGATION_INTERVAL,
+            "node_scheduled_timeout": config.NODE_SCHEDULED_TIMEOUT,
         },
     )
     # job_re_deploy_dead_jobs
-    scheduler.add_job(re_deploy_dead_jobs_routine, "interval", seconds=BACKGROUND_JOB_INTERVAL)
+    scheduler.add_job(re_deploy_dead_jobs_routine, "interval", seconds=config.AGGREGATION_INTERVAL)
 
     scheduler.start()
 

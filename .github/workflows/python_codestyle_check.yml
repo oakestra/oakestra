@@ -8,3 +8,6 @@ permissions:
 jobs:
   style-check:
     uses: oakestra/.github/.github/workflows/python-codestyle.yml@v1
+    with:
+      # Keep in sync with the ruff rev in .pre-commit-config.yaml
+      ruff_version: 0.15.22

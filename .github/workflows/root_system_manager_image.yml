@@ -17,6 +17,7 @@ jobs:
     with:
       image_name: root-system-manager
       context: ./root_orchestrator/system-manager-python/
-      build_args: |
-        LIB_BRANCH=${{ github.head_ref || github.ref_name }}
+      # Oakestra shared libraries are built from the repo-local libraries/ folder.
+      build_contexts: |
+        libraries=./libraries
     secrets: inherit
