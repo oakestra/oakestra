@@ -1,0 +1,126 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Oakestra log alerts
+    folder: Oakestra
+    interval: 30s
+    rules:
+      - uid: oakestra-log-errors
+        title: Orchestrator error or stacktrace detected
+        condition: C
+        data:
+          - refId: A
+            queryType: instant
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: Loki
+            model:
+              datasource:
+                type: loki
+                uid: Loki
+              editorMode: code
+              expr: |
+                (
+                  sum by (cluster_id, compose_service) (
+                    count_over_time(
+                      {cluster_id=~".+", compose_service=~".+", compose_service!~"^(grafana|cluster_grafana|loki|cluster_loki|alloy|cluster_alloy|prometheus)$", level=~"error|critical"}
+                      | json
+                      | __error__ = ""
+                      | schema_version = 1
+                      [2m]
+                    )
+                  )
+                )
+                or
+                (
+                  sum by (cluster_id, compose_service) (
+                    count_over_time(
+                      {cluster_id=~".+", compose_service=~".+", compose_service!~"^(grafana|cluster_grafana|loki|cluster_loki|alloy|cluster_alloy|prometheus)$"}
+                      !~ `"schema_version"\s*:\s*1\s*[,}]`
+                      |~ `(?i:\b(ERROR|FATAL|CRITICAL|EXCEPTION)\b|Traceback \(most recent call last\):|panic:|fatal error:|runtime error:|goroutine [0-9]+ \[|File ".*", line [0-9]+|\.go:[0-9]+ \+0x|\[[EF][0-9])`
+                      [2m]
+                    )
+                  )
+                )
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: []
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        dashboardUid: oakestra-logs
+        panelId: 3
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        keepFiringFor: 1m
+        annotations:
+          __dashboardUid__: oakestra-logs
+          __panelId__: "3"
+          summary: 'Error logs detected in {{ $labels.compose_service }} on {{ $labels.cluster_id }}'
+          description: 'One or more matching error or stacktrace records were found in the last two minutes.'
+        labels:
+          category: logs
+          severity: error
+          team: infrastructure
+        isPaused: false
+        notification_settings:
+          receiver: $OAKESTRA_ALERT_CONTACT_POINT
+          group_by:
+            - alertname
+            - cluster_id
+            - compose_service
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h

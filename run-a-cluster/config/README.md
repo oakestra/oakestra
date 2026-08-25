@@ -30,7 +30,8 @@ At **cluster level**, each service is specified by:
 Both two levels use different volumes for the configuration of the three services, respectively in [root_orchestrator/config/](../config/) and [cluster_orchestrator/config/](../../cluster_orchestrator/config/). Both `config` folders are structured as:
 ```bash
 ├── alerts
-│   └── rules.yml           #Loki rules for alerting based on Alloy-ingested logs
+│   ├── grafana-rules.yml         # Grafana-managed log alert rule
+│   └── grafana-contact-point.yml # Configurable webhook and email contact points
 ├── grafana-datasources.yml # Loki datasource setup
 ├── loki.yml                # Ingestion, storage config
 ├── config.alloy            # Alloy Docker discovery, processing, and Loki output
@@ -100,7 +101,19 @@ The authoritative processing pipeline is [`config.alloy`](./config.alloy). Struc
 
 Only low-cardinality routing and severity values are indexed. Message text, logger names, events, IDs, and context values stay in the record and are parsed at query time with `| json`. This retains exact structured searches without multiplying Loki streams.
 
-The [rules.yml](./alerts/rules.yml) contains LogQL rules based on the labels extracted by Alloy. Both discovery and processing labels can be used for alert conditions.
+## Provisioned log alerting
+
+Grafana automatically provisions [grafana-rules.yml](./alerts/grafana-rules.yml) and [grafana-contact-point.yml](./alerts/grafana-contact-point.yml). The Grafana-managed LogQL rule checks the local Loki every 30 seconds and creates an alert instance for each `cluster_id` and `compose_service`. Schema-v1 Python and Gunicorn records are matched authoritatively through `level=error|critical`; a separate path excludes those JSON records before applying compatibility patterns to raw Python tracebacks, uppercase legacy errors, Oakestra compact errors, and Go panic/stack frames. Observability-service streams are excluded to prevent recursive alert noise.
+
+The rule waits one minute before firing and one minute before resolving after the two-minute query window becomes clear. Notifications are grouped by alert name, Cluster, and component, with a 30-second group wait and four-hour repeat interval. Both **Oakestra Alert Webhook** and **Oakestra Alert Email** are provisioned; choose the rule destination through `OAKESTRA_ALERT_CONTACT_POINT`. For a webhook, export a real URL before starting the deployment:
+
+```bash
+export OAKESTRA_ALERT_CONTACT_POINT="Oakestra Alert Webhook"
+export OAKESTRA_ALERT_WEBHOOK_URL=https://alerts.example.com/oakestra
+docker compose -f 1-DOC.yaml up -d --force-recreate grafana
+```
+
+For email, select `Oakestra Alert Email` and set `OAKESTRA_ALERT_EMAIL_TO`, `OAKESTRA_ALERT_SMTP_ENABLED=true`, `OAKESTRA_ALERT_SMTP_HOST`, and the remaining SMTP credentials/from-address variables described in the Root configuration README. Inspect or test the provisioned destinations under **Alerting → Notification configuration → Contact points**. The Root configuration README documents structured-error, structured-INFO false-positive, and raw-panic tests. A matching alert must transition from **Pending** to **Firing**, carry the corresponding `cluster_id` and `compose_service`, notify the selected contact point, and return to **Normal** after the window and keep-firing duration expire.
 
 ## Python structured logging
 
