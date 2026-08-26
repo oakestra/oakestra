@@ -31,3 +31,14 @@ datasources:
           matcherRegex: '\b([a-fA-F0-9]{24})\b'
           url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=root&var-source_scope=.%2B&var-compose_service=root_service_manager&var-level_filter=.%2A&var-search=$${__value.raw}&var-logql_pipeline='
           urlDisplayLabel: "Search this ID in Root Service Manager"
+
+  - name: Prometheus
+    type: prometheus
+    uid: Prometheus
+    access: proxy
+    url: $PROMETHEUS_URL
+    editable: true
+    isDefault: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s

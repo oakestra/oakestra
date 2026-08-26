@@ -377,17 +377,143 @@ services:
 
 
   prometheus:
-    image: prom/prometheus
+    image: prom/prometheus:v3.13.2-distroless
     pull_policy: always
     container_name: prometheus
     hostname: prometheus
-    labels: *cluster-log-labels
+    labels: *shared-log-labels
+    expose:
+      - "9090"
     volumes:
-      - ./prometheus/:/etc/prometheus/
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=1GB
     depends_on:
       - cluster_manager
+      - node_exporter
+      - cadvisor
+    extra_hosts:
+      - host.metrics.internal=${ONE_DOC_METRICS_GATEWAY:-172.30.252.1}
+    networks:
+      - default
+      - metrics
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging: *default-logging
+
+  node_exporter:
+    image: quay.io/prometheus/node-exporter:v1.12.1
+    pull_policy: always
+    container_name: node_exporter
+    hostname: node_exporter
+    labels: *shared-log-labels
+    network_mode: host
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/containers/storage/.+)($$|/)
+      - --web.listen-address=${ONE_DOC_METRICS_GATEWAY:-172.30.252.1}:9100
+      - --web.max-requests=5
+    volumes:
+      - type: bind
+        source: /proc
+        target: /host/proc
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /sys
+        target: /host/sys
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /
+        target: /host
+        read_only: true
+        bind:
+          propagation: rslave
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging: *default-logging
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.5
+    pull_policy: always
+    container_name: cadvisor
+    hostname: cadvisor
+    labels: *shared-log-labels
+    ports:
+      - "127.0.0.1:8081:8080"
+    command:
+      - --docker_only=true
+      - --store_container_labels=false
+      - --whitelisted_container_labels=com.docker.compose.service,oakestra.cluster.id,oakestra.logging.collector
+      - --enable_metrics=cpu,disk,diskIO,memory,network
+      - --housekeeping_interval=10s
+      - --max_housekeeping_interval=15s
+      - --storage_duration=1m
+    volumes:
+      - type: bind
+        source: /
+        target: /rootfs
+        read_only: true
+        bind:
+          propagation: rslave
+      - type: bind
+        source: /sys
+        target: /sys
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CONTAINERD_SOCKET:-/run/containerd/containerd.sock}
+        target: ${CONTAINERD_SOCKET:-/run/containerd/containerd.sock}
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${DOCKER_ROOT_DIR:-/var/lib/docker}
+        target: ${DOCKER_ROOT_DIR:-/var/lib/docker}
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /dev/disk
+        target: /dev/disk
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging: *default-logging
   
 
   # Shared 1-DOC observability stack (Alloy, Loki, Grafana)
@@ -400,6 +526,7 @@ services:
     ports:
       - 3000:3000
     environment:
+      - PROMETHEUS_URL=http://prometheus:9090
       - OAKESTRA_ALERT_CONTACT_POINT=${OAKESTRA_ALERT_CONTACT_POINT:-Oakestra Alert Webhook}
       - OAKESTRA_ALERT_WEBHOOK_URL=${OAKESTRA_ALERT_WEBHOOK_URL:-http://127.0.0.1:65535/oakestra-alerts}
       - OAKESTRA_ALERT_EMAIL_TO=${OAKESTRA_ALERT_EMAIL_TO:-alerts@example.invalid}
@@ -547,10 +674,18 @@ volumes:
     driver: local
   loki_data:
     driver: local
+  prometheus_data:
+    driver: local
   
 
 networks:
   default:
     name: oakestra
+  metrics:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${ONE_DOC_METRICS_SUBNET:-172.30.252.0/24}
+          gateway: ${ONE_DOC_METRICS_GATEWAY:-172.30.252.1}
   ip6net:
     enable_ipv6: true

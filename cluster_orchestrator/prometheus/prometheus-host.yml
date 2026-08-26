@@ -6,24 +6,24 @@ global:
 scrape_configs:
   - job_name: prometheus
     static_configs:
-      - targets: ["prometheus:9090"]
+      - targets: ["cluster_prometheus:9090"]
         labels:
-          host_scope: one-doc
+          host_scope: cluster
 
   - job_name: node-exporter
     static_configs:
       - targets: ["host.metrics.internal:9100"]
         labels:
-          host_scope: one-doc
+          host_scope: cluster
 
   - job_name: cadvisor
     static_configs:
-      - targets: ["cadvisor:8080"]
+      - targets: ["cluster_cadvisor:8080"]
         labels:
-          host_scope: one-doc
+          host_scope: cluster
     metric_relabel_configs:
       - source_labels: [container_label_oakestra_logging_collector]
-        regex: one-doc
+        regex: cluster
         action: keep
       - source_labels: [container_label_com_docker_compose_service]
         target_label: compose_service
@@ -34,6 +34,6 @@ scrape_configs:
 
   - job_name: cluster-manager
     static_configs:
-      - targets: ["cluster_manager:10001"]
+      - targets: ["host.docker.internal:10001"]
         labels:
-          host_scope: one-doc
+          host_scope: cluster
