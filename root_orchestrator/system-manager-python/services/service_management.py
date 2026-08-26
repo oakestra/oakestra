@@ -43,7 +43,7 @@ def create_services_of_app(username, data, force=False):
         parse_sla_json(data)
     except SLAFormatError as e:
         logging.log(logging.ERROR, e)
-        return {"message": e}, 422
+        return {"message": str(e)}, 422
 
     app_id = data.get("applications")[0]["applicationID"]
     last_service_id = ""
