@@ -75,7 +75,7 @@ def mongo_save_user_without_roles(data):
 
 
 def mongo_get_user():
-    return db.mongo_users.find()
+    return list(db.mongo_users.find())
 
 
 def mongo_get_user_by_name(username, organization_id=None):
@@ -104,8 +104,9 @@ def mongo_get_user_by_organization_id(organization_id):
 
 def mongo_delete_user(username):
     user = db.mongo_users.find_one_and_delete({"name": username})
-    mongo_delete_all_role_entrys_of_user(str(user["_id"]))
-    return db.mongo_users.find()
+    if user is not None:
+        mongo_delete_all_role_entrys_of_user(str(user["_id"]))
+    return list(db.mongo_users.find())
 
 
 def mongo_update_user(user_id, user):
@@ -117,6 +118,8 @@ def mongo_update_user(user_id, user):
 
 
 def mongo_add_roles_to_user(user, organization_id):
+    if user is None:
+        return None
     if organization_id is None:
         return user
 

@@ -1,6 +1,5 @@
-from bson import json_util
 from ext_requests.user_db import mongo_get_user_by_name
-from flask import request
+from flask import jsonify, request
 from flask.views import MethodView
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from flask_restful import Resource
@@ -57,10 +56,9 @@ class ApplicationController(MethodView):
             result, code = get_user_app(current_user, appid)
             if code != 200:
                 abort(code, result)
-                # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
-                return {**result, "_id": {"$oid": str(result["_id"])}}
+            return result
         except Exception as e:
-            return abort(404, {"message": e})
+            return abort(404, {"message": str(e)})
 
     @jwt_required()
     def delete(self, appid, *args, **kwargs):
@@ -68,20 +66,20 @@ class ApplicationController(MethodView):
             current_user = get_jwt_identity()
             res = delete_app(appid, current_user)
             if res:
-                return {"message": "Application Deleted"}
+                return jsonify({"message": "Application Deleted"})
             else:
                 abort(501, {"message": "User could not be deleted"})
         except ConnectionError as e:
-            abort(404, {"message": e})
+            abort(404, {"message": str(e)})
 
     @jwt_required()
     def put(self, appid, *args, **kwargs):
         try:
             current_user = get_jwt_identity()
             update_app(appid, current_user, request.get_json())
-            return {"message": "Application is updated"}
+            return jsonify({"message": "Application is updated"})
         except ConnectionError as e:
-            abort(404, {"message": e})
+            abort(404, {"message": str(e)})
 
 
 @applicationblp.route("/")
@@ -98,11 +96,7 @@ class CreateApplicationController(Resource):
         if code != 200:
             abort(code, description=result)
 
-        # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
-        for i in range(len(result)):
-            result[i]["_id"] = {"$oid": result[i]["_id"]}
-
-        return json_util.dumps(result)
+        return jsonify(result)
 
 
 @applicationsblp.route("/<userid>")
@@ -121,11 +115,7 @@ class MultipleApplicationControllerUser(Resource):
         if code != 200:
             abort(code, result)
 
-        # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
-        for i in range(len(result)):
-            result[i]["_id"] = {"$oid": result[i]["_id"]}
-
-        return json_util.dumps(result)
+        return jsonify(result)
 
 
 # For the Admin to get all applications
@@ -141,8 +131,4 @@ class MultipleApplicationController(Resource):
         if code != 200:
             abort(code, result)
 
-        # TODO(ME): Frontend should be able to handle the _id being a string and not an object.
-        for i in range(len(result)):
-            result[i]["_id"] = {"$oid": result[i]["_id"]}
-
-        return json_util.dumps(result)
+        return jsonify(result)
