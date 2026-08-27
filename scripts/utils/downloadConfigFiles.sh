@@ -52,7 +52,7 @@ download_file() {
     mv "$temporary" "$destination"
 }
 
-common_config_files="config/grafana-dashboards.yml config/grafana-datasources.yml config/loki.yml config/config.alloy config/alerts/grafana-rules.yml config/alerts/grafana-contact-point.yml config/dashboards/logs-dashboard.json config/dashboards/log-statistics-dashboard.json"
+common_config_files="config/grafana-dashboards.yml config/grafana-datasources.yml config/loki.yml config/config.alloy config/alerts/grafana-rules.yml config/alerts/grafana-contact-point.yml config/dashboards/logs-dashboard.json config/dashboards/log-statistics-dashboard.json config/dashboards/resources-dashboard.json"
 
 case "$repo_folder" in
     root_orchestrator)

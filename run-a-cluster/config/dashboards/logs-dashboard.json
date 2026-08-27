@@ -32,6 +32,18 @@
       "tooltip": "Open the Log Statistics dashboard with the same Cluster, Source, Component, and time range.",
       "type": "link",
       "url": "/d/fRIvzUZM8/oakestra-log-statistics"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Open resources",
+      "tooltip": "Open the Resources dashboard with the same Cluster, Source, Component, and time range.",
+      "type": "link",
+      "url": "/d/oakestra-resources/oakestra-resources"
     }
   ],
   "liveNow": false,
