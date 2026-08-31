@@ -8,7 +8,9 @@ import (
 	"NetManager/mqtt"
 	"NetManager/network"
 	"NetManager/proxy"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -28,8 +30,9 @@ type undeployRequest struct {
 }
 
 type registerRequest struct {
-	ClientID       string `json:"client_id"`
-	ClusterAddress string `json:"cluster_address"`
+	ClientID          string `json:"client_id"`
+	ClusterAddress    string `json:"cluster_address"`
+	NodePublicAddress string `json:"node_public_address"`
 }
 
 type DeployResponse struct {
@@ -56,35 +59,48 @@ func update() {
 	}
 }
 
-func HandleRequests(port int) {
-	netRouter := mux.NewRouter().StrictSlash(true)
-	netRouter.HandleFunc("/register", register).Methods("POST")
-
-	//If default route, fetch default gateway address and use that, update regularly
-	if model.NetConfig.NodePublicAddress == "0.0.0.0" {
-		defaultLink := network.GetOutboundIP()
-		model.NetConfig.NodePublicAddress = defaultLink.String()
-		go update()
-	}
-
-	handlers.RegisterAllManagers(&Env, &model.WorkerID, model.NetConfig.NodePublicAddress, model.NetConfig.NodePublicPort, netRouter)
-
+func createListener(port int) net.Listener {
 	if port <= 0 {
 		logger.InfoLogger().Println("Starting NetManager on unix socket /etc/netmanager/netmanager.sock")
 		_ = os.Remove("/etc/netmanager/netmanager.sock")
 		listener, err := net.Listen("unix", "/etc/netmanager/netmanager.sock")
 		if err != nil {
-			log.Fatalf("Could not create listner: %s", err)
+			log.Fatalf("Could not create listener: %s", err)
 		}
-		log.Fatal(http.Serve(listener, netRouter))
-	} else {
-		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), netRouter))
+		return listener
 	}
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		log.Fatalf("Could not create listener: %s", err)
+	}
+	return listener
+}
+
+func HandleRequests(port int) {
+	// registration bootstrap server
+	initRouter := mux.NewRouter().StrictSlash(true)
+	initRouter.HandleFunc("/register", register).Methods("POST")
+
+	initServer = &http.Server{Handler: initRouter}
+	initListener := createListener(port)
+
+	if err := initServer.Serve(initListener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatalf("Registration server failed: %s", err)
+	}
+
+	// main server with all registered routes
+	mainRouter := mux.NewRouter().StrictSlash(true)
+	mainRouter.HandleFunc("/register", register).Methods("POST")
+	handlers.RegisterAllManagers(&Env, &model.WorkerID, model.NetConfig.NodePublicAddress, model.NetConfig.NodePublicPort, mainRouter)
+
+	mainListener := createListener(port)
+	log.Fatal(http.Serve(mainListener, mainRouter))
 }
 
 var (
-	Env   env.Environment
-	Proxy *proxy.GoProxyTunnel
+	Env        env.Environment
+	Proxy      *proxy.GoProxyTunnel
+	initServer *http.Server
 )
 
 /*
@@ -123,6 +139,19 @@ func register(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
+	// 0.0.0.0 is the default when netcfg.json is created
+	if model.NetConfig.NodePublicAddress == "" || model.NetConfig.NodePublicAddress == "0.0.0.0" {
+		if requestStruct.NodePublicAddress != "" {
+			// when NodeEngine had an explicit public IP configured, use it
+			model.NetConfig.NodePublicAddress = requestStruct.NodePublicAddress
+		} else {
+			// when NodeEngine had no IP configured, get the default outbound IP
+			defaultLink := network.GetOutboundIP()
+			model.NetConfig.NodePublicAddress = defaultLink.String()
+			go update()
+		}
+	}
+
 	model.WorkerID = requestStruct.ClientID
 
 	//Use default cluster address given by NodeEngine version >= v0.4.302
@@ -153,4 +182,11 @@ func register(writer http.ResponseWriter, request *http.Request) {
 
 	logger.InfoLogger().Printf("NetManager is now running 🟢")
 	writer.WriteHeader(http.StatusOK)
+
+	// Shut down stage 1 server so HandleRequests proceeds to stage 2
+	if initServer != nil {
+		go func() {
+			_ = initServer.Shutdown(context.Background())
+		}()
+	}
 }
