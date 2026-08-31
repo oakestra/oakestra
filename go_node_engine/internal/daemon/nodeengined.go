@@ -102,7 +102,7 @@ func main() {
 		// wait for systemctl to start the netmanager service
 		logger.InfoLogger().Printf("Waiting for NetManager to start...")
 		time.Sleep(5 * time.Second)
-		err := requests.RegisterSelfToNetworkComponent()
+		err := requests.RegisterSelfToNetworkComponent(configs)
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Error registering to NetManager: %v", err)
 		}
