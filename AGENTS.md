@@ -4,7 +4,7 @@
 
 Oakestra is a **lightweight orchestration platform for edge computing**. Unlike Kubernetes or K3s, which were designed for cloud-grade machines, Oakestra targets heterogeneous, resource-constrained edge devices. The entire root + cluster stack runs in ~1 GB RAM. A worker node needs only 100 MB RAM and 50 MB disk.
 
-The platform orchestrates containerised workloads (Docker, containerd) and unikernels across a two-level hierarchy: **root → clusters → workers**. Applications are described via SLA (Service Level Agreement) JSON documents that encode resource constraints, placement preferences, and networking requirements. The scheduler places each microservice on the best-fit worker using a pluggable algorithm (default: `bestCpuMemFit`).
+The platform orchestrates containerised workloads (Docker, containerd) and unikernels across a two-level hierarchy: **root → clusters → workers**. Applications are described via SLA (Service Level Agreement) JSON documents that encode resource constraints, placement preferences, and networking requirements. The scheduler places each microservice on the best-fit worker using a pluggable algorithm (default: `cpumemfit.Scheduler`).
 
 Current develop version: see `version.txt`.
 
@@ -242,7 +242,7 @@ export OAKESTRA_VERSION=develop
 
 1. **Lightweight first.** The whole orchestrator stack targets ~1 GB RAM. Avoid pulling in heavy dependencies or adding services without strong justification.
 2. **Two-level hierarchy is intentional.** Root handles multi-cluster global placement; cluster handles per-worker placement. Keep concerns separated — root doesn't talk to workers directly, cluster doesn't bypass root for scheduling decisions.
-3. **Pluggable scheduling.** The scheduler binary is shared between root and cluster, differing only via env vars. New algorithms should implement the `interfaces.Algorithm` interface in `scheduler/calculate/schedulers/`.
+3. **Pluggable scheduling.** The scheduler binary is shared between root and cluster, differing only via env vars. New algorithms should implement the `placement.Algorithm` interface in `scheduler/calculate/schedulers/placement/`.
 4. **Stateless services, stateful DBs.** Services (schedulers, managers) are designed to restart cleanly. State lives in MongoDB and Redis. Don't add in-process state that survives restarts without an explicit persistence story.
 5. **Override-based configuration.** Don't bake deployment-specific config into docker-compose.yml. Add a new `override-*.yml` file instead.
 6. **The network plugin is external.** `oakestra-net` (`root_service_manager`, `cluster_service_manager`) is a separate repository. Changes to network behavior need PRs there, not here.

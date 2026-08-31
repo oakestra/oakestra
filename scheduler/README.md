@@ -3,48 +3,87 @@
 The scheduler is the scheduling component of the Oakestra control plane.
 It accepts deployment job requests in the form of SLAs and returns the appropriate
 scheduling candidate (cluster or worker) on which the service should be scheduled.
-If no appropriate ResourceList could be found a NegativeSchedulingResult is returned.
+If no appropriate candidate could be found a `NegativeSchedulingResult` is returned.
 
-The scheduler was constructed with expandability in mind. A new scheduler can be implemented by defining a ResourceList and a calculate function.
-The scheduler works agnostically to the underlying ResourceList and SchedulingAlgorithm.
+The scheduler was designed for extensibility. A new algorithm can be added by implementing
+the `Job`, `Candidate`, and `Algorithm` interfaces defined in `calculate/schedulers/placement`.
+The scheduler is agnostic to the underlying resource types and scheduling algorithm.
 
 ## Taxonomy
-- ResourceList: A collection of named resources. A new scheduler can be implemented by defining a new ResourceList with a new calculate function.
-- Job: An object of type ResourceList. It defines the required resources for a service and is provided in the form of an SLA
-- Placement Candidate: An object of type ResourceList. It defines the available resources of a cluster/worker and is provided by the ResourceAbstractor
+
+- **Job**: Describes the resource requirements of a workload. Decoded from the incoming SLA payload.
+- **Candidate**: Represents a cluster or worker node with available resources. Fetched from the ResourceAbstractor.
+- **BaseResources**: A shared struct embedded by concrete `Job`/`Candidate` types that carries the common fields (`_id`, `virtualization`, `memory`, `vcpus`, `cpu_percent`).
+- **Algorithm**: A generic interface parameterised on `Job` and `Candidate` types that runs the placement logic.
 
 ## Architecture
+
 ![fig](fig/scheduler-arch.drawio.svg)
 
-1. The API Module receives deployment job requests. 
-2. These jobs are enqueued with asynq and stored in a redis db. 
-3. In order to ascertain the placement candidates a request is sent to the ResourceAbstractor. 
-4. The calculate function is applied to the jobs and placement candidates.
-5. The calculate function is implemented in an instance of the scheduler interface. 
-6. The most appropriate candidate is sent to the Manager so that the job can be scheduled.
-
+1. The API module receives deployment job requests.
+2. These jobs are enqueued with asynq and stored in Redis.
+3. To find placement candidates, a request is sent to the ResourceAbstractor.
+4. The `Calculate` function is applied to the job and the list of candidates.
+5. `Calculate` is implemented by the active `Algorithm` (currently `cpumemfit.Scheduler`).
+6. The chosen candidate is reported to the Manager so the job can be dispatched.
 
 ## Interfacing with the Scheduler
-The scheduler will expose an API endpoint at `[API_PORT]:/api/calculate/deploy`.
-`API_PORT` should be defined in the docker compose file and the port must also be exposed.
 
-The scheduler will send the response back to `[MANAGER_URL]:[MANAGER_PORT]/api/result/deploy`
-Where `MANAGER_URL` and `MANAGER_PORT` should be defined as environment variables in the docker compose file
+The scheduler exposes an API endpoint at `[API_PORT]:/api/calculate/deploy`.
+`API_PORT` must be set in the docker-compose file and the port must be exposed.
+
+The scheduler sends the result back to `[MANAGER_URL]:[MANAGER_PORT]/api/result/deploy`.
+`MANAGER_URL` and `MANAGER_PORT` must be set as environment variables.
 
 ## Implementing new Scheduler behaviour
 
-New scheduling behaviour can be rapidly introduced by implementing `ResourceList` and `Algorithm[T ResourceList]`. These interfaces are defined in `calculate/schedulers/interfaces`.
+New scheduling behaviour can be added by implementing `Job`, `Candidate`, and
+`Algorithm[J, C]`. These interfaces are defined in `calculate/schedulers/placement`.
 
-The `ResourceList` implementation should define the resources (name and type) that this scheduling algorithm will consider. The struct must be annotated with the json tags, so that the struct can be used to marshall the job and the data returned by the ResourceAbstractor API.
+### Concrete resource types
 
-The `ResourceList` must, at least, provide: 
-- The `GetId()` function, as jobs and placement candidates will always have an id 
-- The `ResourceConstraints()` function, that returns a mapping for constraints to values. These could just be the provided `GenericConstraints` which should always be considered by the scheduling algorithm
-- (Optionally) a custom Unmarshaller should be implemented `UnmarshalJSON(data []byte) error`
+Create a struct that embeds `placement.BaseResources` to inherit the common fields:
 
-The `Algorithm` implementation is parameterized with a ResourceList implementation.
+```go
+type Resources struct {
+    placement.BaseResources
+    Constraints []Constraints `json:"constraints"`
+    // ... algorithm-specific fields
+}
 
-The `Algorithm` mist, at least, provide:
-- The`ResourceList() []T ` function, that returns a slice of ResourceLists objects. These objects are empty as the slice is used to capture the response from the ResourceAbstractor API
-- `JobData() T`, that returns an empty ResourceList object. This is used to capture the scheduling request payload
-- `Calculate(job T, candidates []T) (T, error)`, the crux of the scheduler implementation. This function should evaluate the job and return the best candidate from the list
+// ID returns the candidate or job identifier.
+func (r Resources) ID() string { return r.BaseResources.ID }
+
+// ResourceConstraints maps constraint names to values used to query the
+// ResourceAbstractor (required by the Job interface).
+func (r Resources) ResourceConstraints() map[string]string { ... }
+```
+
+The struct must use `json` struct tags so that `getInterestedResources` can build the
+field-projection list sent to the ResourceAbstractor.
+
+If the `virtualization` field may arrive as a bare string rather than a `[]string`,
+implement a custom `UnmarshalJSON` and call `placement.NormalizeVirtualization`.
+
+### Algorithm interface
+
+```go
+type Algorithm[J Job, C Candidate] interface {
+    JobData() J                                  // returns an empty job used to decode the request payload
+    Calculate(job J, candidates []C) (C, error)  // returns the best candidate, or a SchedulingError
+}
+```
+
+- `JobData()` returns a zero-value `J` used as the unmarshal target for the incoming payload.
+- `Calculate` receives the decoded job and the list of active candidates. Return a
+  `placement.SchedulingError` with the appropriate `NegativeSchedulingStatus` when
+  no suitable candidate exists.
+- To switch the active algorithm, replace `cpumemfit.Scheduler{}` with your implementation
+  in `cmd/tasks.go` (`activeScheduler`).
+
+### Existing algorithms
+
+| Package | Type | Behaviour |
+|---|---|---|
+| `calculate/schedulers/cpumemfit` | `Scheduler` | Picks the candidate with the most available CPU headroom and memory. Also checks virtualization type and CSI driver availability. |
+| `calculate/schedulers/random` | `Scheduler` | Picks a qualifying candidate at random. |
