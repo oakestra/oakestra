@@ -234,12 +234,18 @@ services:
   root_addons_monitor:
     image: addons_monitor
     container_name: root_addons_monitor
-    build: ../addons_engine/addons-monitor/
+    build:
+      context: ../addons_engine/addons-monitor/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     labels:
       logging: "promtail"
       logging_jobname: "containerlogs"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Mount the host's docker auth so implicit pulls during containers.run()
+      # can authenticate to private registries.
+      - ${HOME}/.docker/config.json:/root/.docker/config.json:ro
     environment:
       - ADDONS_MANAGER_ADDR=http://root_addons_manager:11101
       - ORCHESTRATION_PLANE=root
@@ -275,13 +281,20 @@ services:
   # Marketplace
   marketplace_manager:
     image: marketplace_manager
-    build: ../addons_marketplace/marketplace-manager/
+    build:
+      context: ../addons_marketplace/marketplace-manager/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     container_name: marketplace_manager
     labels:
       logging: "promtail"
       logging_jobname: "containerlogs"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Mount the host's docker auth so image pulls can authenticate.
+      # The docker SDK does NOT read the host's config on its own — we read
+      # it inside the container and pass auth_config to images.pull().
+      - ${HOME}/.docker/config.json:/root/.docker/config.json:ro
     expose:
       - "11102"
     ports:

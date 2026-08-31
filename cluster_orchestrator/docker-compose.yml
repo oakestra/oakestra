@@ -258,12 +258,18 @@ services:
   cluster_addons_monitor:
     image: addons_monitor
     container_name: cluster_addons_monitor
-    build: ../addons_engine/addons-monitor/
+    build:
+      context: ../addons_engine/addons-monitor/
+      args:
+        - LIB_BRANCH=${LIB_BRANCH:-develop}
     labels:
       logging: "promtail"
       logging_jobname: "containerlogs"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Mount the host's docker auth so implicit pulls during containers.run()
+      # can authenticate to private registries.
+      - ${HOME}/.docker/config.json:/root/.docker/config.json:ro
     environment:
       - ADDONS_MANAGER_ADDR=http://cluster_addons_manager:11201
       - ORCHESTRATION_PLANE=cluster
