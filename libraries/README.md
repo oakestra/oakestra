@@ -1,10 +1,13 @@
-### How to use it:
-To install a non-published package, add it in the `requirements.txt` file as follows:
+### Shared Libraries
 
-```py
-git+https://github.com/{username}/{project}.git@{branch}#subdirectory=libraries/{library_name}
+The libraries in this directory (`oakestra-utils`, `resource-abstractor-client`) are members of the root `uv` workspace defined in [pyproject.toml](../pyproject.toml).
+
+#### Local Development:
+Run `uv sync` from the repository root to install the shared libraries in editable mode into the workspace `.venv`:
+
+```bash
+uv sync
 ```
-For development purposes use:
-```py
-pip install -e .
-```
+
+#### In Docker builds:
+The service Dockerfiles copy `pyproject.toml`, `uv.lock`, and `libraries/` into the build container and install dependencies via `uv sync`.

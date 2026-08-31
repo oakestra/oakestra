@@ -25,9 +25,9 @@ oakestra/
 ├── scheduler/                  # Go – shared scheduler (used by both root & cluster)
 ├── resource-abstractor/        # Python/Flask – resource DB layer (used by both levels)
 ├── go_node_engine/             # Go – worker binary (NodeEngine)
-├── libraries/                  # Shared Python packages
-│   ├── oakestra_utils_library/ # Enums: statuses, scheduling states
-│   └── resource_abstractor_client/ # HTTP client for resource-abstractor
+├── libraries/                  # Shared Python packages (UV workspace members)
+│   ├── oakestra-utils/         # Enums: statuses, scheduling states (package: oakestra-utils)
+│   └── resource-abstractor-client/ # HTTP client for resource-abstractor (package: resource-abstractor-client)
 ├── addons_engine/              # Optional addons subsystem (root only)
 ├── addons_marketplace/         # Optional marketplace manager
 ├── csi/                        # Container Storage Interface driver
@@ -164,18 +164,39 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 
 ---
 
+## Python Dependency Management: UV vs. Legacy
+
+| Component | Status | Dependency Manager | Local Env / Build Notes |
+|---|---|---|---|
+| `system-manager-python` | **Migrated to `uv`** | UV workspace member (`pyproject.toml`) | Docker build context is repo root (`../`). Managed via root `uv sync`. |
+| `cluster-manager` | **Migrated to `uv`** | UV workspace member (`pyproject.toml`) | Docker build context is repo root (`../`). Managed via root `uv sync`. |
+| `oakestra-utils` | **Migrated to `uv`** | UV workspace member (`libraries/oakestra-utils`) | Installed into `.venv` in editable mode via `uv sync`. |
+| `resource-abstractor-client` | **Migrated to `uv`** | UV workspace member (`libraries/resource-abstractor-client`) | Installed into `.venv` in editable mode via `uv sync`. |
+| `resource-abstractor` | *Not yet migrated* | `requirements.txt` (pip) | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev. |
+| `jwt-generator` | *Not yet migrated* | `requirements.txt` (pip) | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev. |
+| `addons-manager` | *Not yet migrated* | `requirements.txt` (pip) | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev. |
+| `addons-monitor` | *Not yet migrated* | `requirements.txt` (pip) | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev. |
+| `marketplace-manager` | *Not yet migrated* | `requirements.txt` (pip) | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev. |
+
+> [!IMPORTANT]
+> **CI Pipelines and Docker Container Builds** build each service in an isolated environment and are unaffected by mixed dependency managers.
+> **Local Uncontainerized Development**: Running `uv sync` manages packages strictly according to `uv.lock` and will uninstall untracked pip packages from the root `.venv`. When running/debugging non-uv modules locally without Docker, **always** use dedicated secondary virtual environments in their respective subdirectories (e.g., `resource-abstractor/.venv`). Never run `pip install -r requirements.txt` into the root `.venv`.
+
+---
+
 ## Development Commands
 
-### Python services (system_manager, cluster_manager, resource-abstractor, etc.)
+### Python services
 
 ```bash
-# Install deps for a service (example: system_manager)
-pip install -r root_orchestrator/system-manager-python/requirements.txt
+# Sync all uv workspace services (system_manager, cluster_manager, shared libraries)
+uv sync
 
-# Run tests
-pytest root_orchestrator/system-manager-python/tests/
+# Run tests for system_manager
+uv run --with pytest pytest root_orchestrator/system-manager-python/src/system_manager/tests/
+
+# Run tests for resource-abstractor (non-uv, uses its local venv / pip)
 pytest resource-abstractor/tests/
-# Note: cluster_manager has no unit tests currently
 
 # Lint (ruff is configured in pyproject.toml at repo root; line-length=100)
 ruff check .
@@ -220,19 +241,20 @@ export OAKESTRA_VERSION=develop
 
 ## Shared Libraries
 
-- `libraries/oakestra_utils_library` — Python enums for job statuses (`DeploymentStatus`, `PositiveSchedulingStatus`, `NegativeSchedulingStatus`). Imported by system_manager and cluster_manager.
-- `libraries/resource_abstractor_client` — Python HTTP client for resource-abstractor. Reads `RESOURCE_ABSTRACTOR_URL` and `RESOURCE_ABSTRACTOR_PORT` from env.
+- `libraries/oakestra-utils` — Python enums for job statuses (`DeploymentStatus`, `PositiveSchedulingStatus`, `NegativeSchedulingStatus`). Package name: `oakestra-utils`, module: `oakestra_utils`.
+- `libraries/resource-abstractor-client` — Python HTTP client for resource-abstractor. Package name: `resource-abstractor-client`, module: `resource_abstractor_client`.
 
-**These libraries are always built from this repo's local `libraries/` folder — never fetched from a remote git repo.** Consumers wire them in as follows:
-- **Docker builds** — the service's `docker-compose.yml` exposes `libraries/` as a named build context (`additional_contexts: libraries=../libraries`); the Dockerfile does `COPY --from=libraries . /libraries` and `pip install`s them. CI (`docker/build-push-action`) passes the same via `build-contexts: libraries=./libraries`.
-- **Local dev / tests** — `pip install ./libraries/oakestra_utils_library ./libraries/resource_abstractor_client` (the VS Code `install-*-dependencies` tasks already do this). The `requirements.txt` files no longer list the libraries.
+**These libraries are workspace members in the root `pyproject.toml`.**
+- **Docker builds** — `system_manager` and `cluster_manager` Dockerfiles run with the repository root as the build context (`context: ../` in docker-compose.yml, `context: .` in CI) and copy `pyproject.toml`, `uv.lock`, and `libraries/` into the build container before running `uv sync`.
+- **Local dev / tests** — Running `uv sync` installs both libraries into the root `.venv` in editable mode.
 
 ---
 
 ## Gotchas
 
 - **Host networking breaks container DNS.** When using `override-network-host.yml`, containers can't resolve each other by name — set all env vars to IPs, not container names.
-- **Shared libraries are always local.** `oakestra_utils_library` and `resource_abstractor_client` are built from this repo's `libraries/` folder (see the Shared Libraries section) — there is no `LIB_BRANCH` build arg any more, and nothing is fetched from a remote git repo. Edit the code in `libraries/` and rebuild; changes take effect immediately, no push required. Docker builds need BuildKit/Buildx (named build contexts) — already the default in the compose files, CI, and VS Code tasks.
+- **Docker build contexts for UV services.** `system-manager-python` and `cluster-manager` require the repository root build context (`context: ../` in `docker-compose.yml`) so that the uv workspace root (`pyproject.toml`, `uv.lock`, `libraries/`) is accessible during image builds.
+- **Local venv isolation.** Do not mix `pip install -r requirements.txt` for non-uv services inside the root `.venv`, as subsequent `uv sync` invocations will clean untracked packages. Use a subfolder virtual environment for non-uv services when running outside of Docker.
 - **eventlet monkey-patching.** Both `system_manager` and `cluster_manager` use eventlet. Monkey-patching must happen before Flask/pymongo imports — don't reorder the top of entry-point files.
 - **Scheduler is the same binary for root and cluster** — differentiated only by env vars (`SCHEDULER_TYPE`, Redis URL/password). Keep deployment-specific logic out of the binary.
 

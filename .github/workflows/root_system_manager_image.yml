@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # Install the cosign tool except on PR
       # https://github.com/sigstore/cosign-installer
@@ -73,14 +73,12 @@ jobs:
         id: build-and-push
         uses: docker/build-push-action@v6
         with:
-          context: ./root_orchestrator/system-manager-python/
+          context: .
+          file: ./root_orchestrator/system-manager-python/Dockerfile
           platforms: linux/amd64,linux/armhf,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Oakestra shared libraries are built from the repo-local libraries/ folder.
-          build-contexts: |
-            libraries=./libraries
 
       # Sign the resulting Docker image digest except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
