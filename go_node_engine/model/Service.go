@@ -47,6 +47,7 @@ type Resources struct {
 	Sname    string `json:"job_name"`
 	Runtime  string `json:"virtualization"`
 	Instance int    `json:"instance"`
+	Status   string `json:"status"`
 }
 
 // ServiceStatus is the struct that describes the service status
@@ -69,4 +70,13 @@ const (
 	// SERVICE_UNDEPLOYED means the service was undeployed successfully and is not running anymore.
 	// This status is managed from outside the runtimes.
 	SERVICE_UNDEPLOYED = "UNDEPLOYED"
+	// SERVICE_RUNNING means the service is running normally.
+	// This status is reported by the runtimes during periodic resource updates.
+	SERVICE_RUNNING = "RUNNING"
+	// SERVICE_INSTANTIATION means the worker accepted the deploy and is creating
+	// the container. Emitted before Deploy() starts; cleared on completion.
+	SERVICE_INSTANTIATION = "INSTANTIATION"
+	// SERVICE_UNKNOWN means the runtime could not determine the state of the service.
+	// Reported instead of guessing, so the problem stays diagnosable.
+	SERVICE_UNKNOWN = "UNKNOWN"
 )

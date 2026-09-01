@@ -25,7 +25,7 @@ func ClusterHandshake(address string, port int) HandshakeAnswer {
 	}
 	jsonbody := bytes.NewBuffer(data)
 
-	cfg, err := config.GetConfFileManager().Get()
+	cfg, err := config.Read()
 	if err != nil {
 		logger.ErrorLogger().Fatalf("Could not get config")
 	}
