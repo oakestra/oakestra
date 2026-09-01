@@ -169,6 +169,7 @@ docker logs <exited_container_name> 2>&1 | tail -50
 | `CLUSTER_ADDRESS env var is not set` (cluster_manager log) | Missing env var — cluster cannot advertise its address to root |
 | `cluster_address is required` (system_manager log) | Cluster connected via gRPC but sent empty `cluster_address` |
 | `Cluster reachability probe failed` / `cluster not reachable at` (system_manager log) | Root cannot reach `http://CLUSTER_ADDRESS:10100/api/cluster/status` — wrong IP, firewall, or cluster_manager not up |
+| mongo/mongo_net/cluster_mongo container exits immediately on startup, no clear crash trace | Possible host kernel 6.19-7.0.13 incompatibility with MongoDB's vendored TCMalloc — check `uname -r`, see STEP 4.1 |
 
 ---
 
@@ -207,7 +208,23 @@ docker exec cluster_service_manager env 2>/dev/null | grep -E "ROOT_SERVICE_MANA
 
 ## STEP 4 — Database Diagnostics (MongoDB)
 
-### 4.1 MongoDB Connectivity
+### 4.1 Kernel Compatibility Check
+
+MongoDB 8.0 (all packages, including the Docker images Oakestra uses for `mongo`, `mongo_net`, `cluster_mongo`, `cluster_mongo_net`) refuses to start on Linux kernel versions **6.19 through 7.0.13** due to an incompatibility with the vendored TCMalloc. If any mongo container is exited or crash-looping, check the host kernel version before digging further:
+
+```bash
+uname -r
+```
+
+If the version falls in the `6.19` - `7.0.13` range, this is the cause, not an Oakestra bug. Confirm via the mongo container logs — it will typically log a startup abort rather than a normal crash trace:
+
+```bash
+docker logs mongo 2>&1 | tail -30
+```
+
+This is a host kernel incompatibility, not something to fix as part of automated troubleshooting — do **not** attempt to upgrade the kernel or modify the host. Report it to the user: they need to upgrade the host to Linux kernel `7.0.14` or later themselves (see the [MongoDB 8.0 release notes](https://www.mongodb.com/docs/v8.0/release-notes/8.0/) and the upstream bug report [SERVER-125742](https://jira.mongodb.org/browse/SERVER-125742)), then restart the affected containers.
+
+### 4.2 MongoDB Connectivity
 
 ```bash
 # Root Orchestrator MongoDB
@@ -219,7 +236,7 @@ docker exec cluster_mongo mongosh --port 10107 --eval "db.adminCommand('ping')" 
 docker exec cluster_mongo_net mongosh --port 10108 --eval "db.adminCommand('ping')" 2>/dev/null || echo "FAIL: cluster_mongo_net not reachable"
 ```
 
-### 4.2 Root MongoDB — Data Consistency
+### 4.3 Root MongoDB — Data Consistency
 
 ```bash
 docker exec mongo mongosh --port 10007 --eval "
@@ -246,7 +263,7 @@ docker exec mongo mongosh --port 10007 --eval "
 - Jobs stuck in `CREATING` → NodeEngine issue on worker
 - No clusters registered despite cluster being started → cluster_manager cannot reach system_manager
 
-### 4.3 Cluster MongoDB — Data Consistency
+### 4.4 Cluster MongoDB — Data Consistency
 
 ```bash
 docker exec cluster_mongo mongosh --port 10107 --eval "
@@ -262,7 +279,7 @@ docker exec cluster_mongo mongosh --port 10107 --eval "
 " 2>/dev/null || echo "Could not query cluster MongoDB"
 ```
 
-### 4.4 Network MongoDB
+### 4.5 Network MongoDB
 
 ```bash
 docker exec mongo_net mongosh --port 10008 --eval "
