@@ -32,7 +32,7 @@ Worker Node:
 - 100MB RAM
 - ARM64 or AMD64 architecture
 
-*Note: root and cluster orchestrator run MongoDB 8.0, which is incompatible with Linux kernel versions 6.19 through 7.0.13 ([details](https://www.mongodb.com/docs/v8.0/release-notes/8.0/)).*
+*Note: root and cluster orchestrator run MongoDB 8.0, which is incompatible with Linux kernel versions 6.19 through 7.0.13 ([details](https://www.mongodb.com/docs/v8.0/release-notes/8.0/), tracked upstream as [SERVER-125742](https://jira.mongodb.org/browse/SERVER-125742)).*
 
 ### Network Configuration
 Root: 

@@ -222,7 +222,7 @@ If the version falls in the `6.19` - `7.0.13` range, this is the cause, not an O
 docker logs mongo 2>&1 | tail -30
 ```
 
-This is a host kernel incompatibility, not something to fix as part of automated troubleshooting — do **not** attempt to upgrade the kernel or modify the host. Report it to the user: they need to upgrade the host to Linux kernel `7.0.14` or later themselves (see the [MongoDB 8.0 release notes](https://www.mongodb.com/docs/v8.0/release-notes/8.0/)), then restart the affected containers.
+This is a host kernel incompatibility, not something to fix as part of automated troubleshooting — do **not** attempt to upgrade the kernel or modify the host. Report it to the user: they need to upgrade the host to Linux kernel `7.0.14` or later themselves (see the [MongoDB 8.0 release notes](https://www.mongodb.com/docs/v8.0/release-notes/8.0/) and the upstream bug report [SERVER-125742](https://jira.mongodb.org/browse/SERVER-125742)), then restart the affected containers.
 
 ### 4.2 MongoDB Connectivity
 
