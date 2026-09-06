@@ -1,0 +1,381 @@
+apiVersion: 1
+groups:
+- orgId: 1
+  name: Oakestra container alerts
+  folder: Oakestra
+  interval: 30s
+  rules:
+  - uid: oakestra-container-missing
+    title: Expected container is not running
+    condition: C
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 300
+        to: 0
+      datasourceUid: Prometheus
+      model:
+        datasource:
+          type: prometheus
+          uid: Prometheus
+        editorMode: code
+        expr: oakestra:container_missing_replicas
+        instant: true
+        range: false
+        intervalMs: 15000
+        maxDataPoints: 43200
+        refId: A
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params: []
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+        reducer: last
+        refId: B
+        type: reduce
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - C
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: B
+        intervalMs: 1000
+        maxDataPoints: 43200
+        refId: C
+        type: threshold
+    noDataState: OK
+    execErrState: Error
+    for: 1m
+    keepFiringFor: 1m
+    annotations:
+      summary: Missing running replicas for {{ $labels.compose_service }} on {{ $labels.cluster_id }}
+      description: Compose project {{ $labels.compose_project }} has fewer running containers than its generated
+        inventory expects. Check Docker state and deployment overrides.
+    labels:
+      category: containers
+      severity: error
+      team: infrastructure
+    isPaused: false
+    notification_settings:
+      receiver: $OAKESTRA_ALERT_CONTACT_POINT
+      group_by:
+      - alertname
+      - cluster_id
+      - compose_service
+      - compose_project
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+  - uid: oakestra-container-restarts
+    title: Container restarted automatically
+    condition: C
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 300
+        to: 0
+      datasourceUid: Prometheus
+      model:
+        datasource:
+          type: prometheus
+          uid: Prometheus
+        editorMode: code
+        expr: oakestra:container_restarts_5m
+        instant: true
+        range: false
+        intervalMs: 15000
+        maxDataPoints: 43200
+        refId: A
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params: []
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+        reducer: last
+        refId: B
+        type: reduce
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - C
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: B
+        intervalMs: 1000
+        maxDataPoints: 43200
+        refId: C
+        type: threshold
+    noDataState: OK
+    execErrState: Error
+    for: 0s
+    keepFiringFor: 1m
+    annotations:
+      summary: Automatic restarts for {{ $labels.compose_service }} on {{ $labels.cluster_id }}
+      description: Docker recorded automatic restart-policy restarts during the last five minutes in Compose project
+        {{ $labels.compose_project }}. Repeated restarts may indicate a crash loop. Manual restarts and recreations
+        are not counted.
+    labels:
+      category: containers
+      severity: warning
+      team: infrastructure
+    isPaused: false
+    notification_settings:
+      receiver: $OAKESTRA_ALERT_CONTACT_POINT
+      group_by:
+      - alertname
+      - cluster_id
+      - compose_service
+      - compose_project
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+  - uid: oakestra-container-monitoring
+    title: Container monitoring unavailable
+    condition: C
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 300
+        to: 0
+      datasourceUid: Prometheus
+      model:
+        datasource:
+          type: prometheus
+          uid: Prometheus
+        editorMode: code
+        expr: 1 - (oakestra:container_monitoring_ready or vector(0))
+        instant: true
+        range: false
+        intervalMs: 15000
+        maxDataPoints: 43200
+        refId: A
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params: []
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+        reducer: last
+        refId: B
+        type: reduce
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - C
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: B
+        intervalMs: 1000
+        maxDataPoints: 43200
+        refId: C
+        type: threshold
+    noDataState: OK
+    execErrState: Error
+    for: 1m
+    keepFiringFor: 1m
+    annotations:
+      summary: Container lifecycle monitoring is unavailable
+      description: Check the docker-state and node-exporter Prometheus targets, Docker API permissions, and node_exporter
+        textfile errors. Per-service failure detection is suppressed while its inputs are unavailable.
+    labels:
+      category: containers
+      severity: error
+      team: infrastructure
+    isPaused: false
+    notification_settings:
+      receiver: $OAKESTRA_ALERT_CONTACT_POINT
+      group_by:
+      - alertname
+      - cluster_id
+      - compose_service
+      - compose_project
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+  - uid: oakestra-container-inventory
+    title: Expected container inventory is missing
+    condition: C
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 300
+        to: 0
+      datasourceUid: Prometheus
+      model:
+        datasource:
+          type: prometheus
+          uid: Prometheus
+        editorMode: code
+        expr: (vector(1) unless on() (sum(oakestra_container_inventory_services{job="node-exporter"}) > 0)) and
+          on() oakestra:container_monitoring_ready
+        instant: true
+        range: false
+        intervalMs: 15000
+        maxDataPoints: 43200
+        refId: A
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params: []
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+        reducer: last
+        refId: B
+        type: reduce
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - C
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: B
+        intervalMs: 1000
+        maxDataPoints: 43200
+        refId: C
+        type: threshold
+    noDataState: OK
+    execErrState: Error
+    for: 1m
+    keepFiringFor: 1m
+    annotations:
+      summary: Expected container inventory is missing or empty
+      description: Generate the container inventory from the same resolved Compose configuration used for deployment.
+        Without it, removed or never-created services cannot be detected.
+    labels:
+      category: containers
+      severity: error
+      team: infrastructure
+    isPaused: false
+    notification_settings:
+      receiver: $OAKESTRA_ALERT_CONTACT_POINT
+      group_by:
+      - alertname
+      - cluster_id
+      - compose_service
+      - compose_project
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h

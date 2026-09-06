@@ -25,3 +25,8 @@ services:
     deploy:
       mode: replicated
       replicas: 0
+
+  docker_state_exporter:
+    deploy:
+      mode: replicated
+      replicas: 0
