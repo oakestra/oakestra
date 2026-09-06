@@ -201,6 +201,21 @@ if sudo docker ps -a | grep oakestra >/dev/null 2>&1; then
   fi
 fi
 
+# Generate desired state before startup, using the same project and overrides.
+if [[ ",${OVERRIDE_FILES:-}," != *override-no-observe* ]]; then
+    inventory_generator=./generateContainerInventory.py
+    if [ -f ../scripts/utils/generateContainerInventory.py ]; then
+        inventory_generator=../scripts/utils/generateContainerInventory.py
+    fi
+    if ! (set -o pipefail
+        eval "sudo -E docker compose -f 1-DOC.yaml ${OAK_OVERRIDES} config --format json" |
+            python3 "$inventory_generator" --output config/container-inventory/containers.prom
+    ); then
+        echo "Error: failed to generate the expected-container inventory; startup cancelled."
+        exit 1
+    fi
+fi
+
 command_exec="sudo -E docker compose -f 1-DOC.yaml ${OAK_OVERRIDES} up -d"
 echo executing "$command_exec"
 

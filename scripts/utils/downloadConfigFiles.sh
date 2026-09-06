@@ -39,9 +39,10 @@ check_metrics_compatibility() {
 
 download_file() {
     local config_file=$1
+    local source_path=${2:-${repo_folder}/${config_file}}
     local destination=$config_file
     local temporary="${destination}.tmp.$$"
-    local url="https://raw.githubusercontent.com/oakestra/oakestra/${repo_branch}/${repo_folder}/${config_file}"
+    local url="https://raw.githubusercontent.com/oakestra/oakestra/${repo_branch}/${source_path}"
 
     mkdir -p "$(dirname "$destination")"
     if ! curl -fsSL "$url" -o "$temporary"; then
@@ -52,7 +53,7 @@ download_file() {
     mv "$temporary" "$destination"
 }
 
-common_config_files="config/grafana-dashboards.yml config/grafana-datasources.yml config/loki.yml config/config.alloy config/alerts/grafana-rules.yml config/alerts/grafana-contact-point.yml config/dashboards/logs-dashboard.json config/dashboards/log-statistics-dashboard.json config/dashboards/resources-dashboard.json"
+common_config_files="prometheus/container-lifecycle-rules.yml config/alerts/grafana-container-rules.yml config/grafana-dashboards.yml config/grafana-datasources.yml config/loki.yml config/config.alloy config/alerts/grafana-rules.yml config/alerts/grafana-contact-point.yml config/dashboards/logs-dashboard.json config/dashboards/log-statistics-dashboard.json config/dashboards/resources-dashboard.json"
 
 case "$repo_folder" in
     root_orchestrator)
@@ -71,6 +72,15 @@ case "$repo_folder" in
 esac
 
 check_metrics_compatibility || exit 1
+
+if ! metrics_disabled; then
+    command -v python3 >/dev/null 2>&1 || {
+        echo "Error: Python 3 is required to generate the container monitoring inventory."
+        exit 1
+    }
+fi
+mkdir -p config/container-inventory
+download_file generateContainerInventory.py scripts/utils/generateContainerInventory.py || exit 1
 
 # Remove the retired combined logs and statistics dashboard.
 rm -f config/dashboards/dashboard.json
