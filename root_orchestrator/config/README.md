@@ -44,7 +44,8 @@ Both two levels use different volumes for the configuration of the three service
 ├── config.alloy            # Alloy Docker discovery, processing, and Loki output
 └── dashboards
     ├── logs-dashboard.json          # Provisioned orchestrator logs dashboard
-    └── log-statistics-dashboard.json # Provisioned log statistics dashboard
+    ├── log-statistics-dashboard.json # Provisioned log statistics dashboard
+    └── resources-dashboard.json      # Provisioned host and container resources dashboard
 ```
 The configuration files can also be written at runtime but the volumes link allows a faster startup and configuration reload at runtime.
 
@@ -75,6 +76,12 @@ Check the scrape targets without exposing Prometheus:
 docker exec root_prometheus promtool query instant http://127.0.0.1:9090 up
 docker exec root_prometheus promtool query instant http://127.0.0.1:9090 prometheus_tsdb_head_series
 ```
+
+## Provisioned resources dashboard
+
+Root Grafana automatically loads the version-controlled [`[Oakestra] Resources`](./dashboards/resources-dashboard.json) dashboard. Its host panels show CPU usage, memory used and available, root-filesystem usage, filesystem usage by mountpoint, and disk read/write throughput from node_exporter. These panels always describe the Root host and therefore do not change when a container filter changes.
+
+The container panels show cAdvisor CPU and working-set memory trends plus top-N consumers. **Cluster**, **Source**, and **Component** filter only these panels; **Source** defaults to all Oakestra-managed containers, including orchestration services, data stores, and observability. Container CPU is core percentage, so `100%` means one fully occupied CPU core and an aggregated service can exceed `100%` on a multicore host. Working set is cgroup usage minus inactive file cache; it can still include active cache and is not application heap or RSS. Dashboard links preserve compatible filters and the time range when moving between Resources, Logs, and Log Statistics. Quick ranges stop at seven days, matching Prometheus's time-retention setting. The 1-GB size-retention limit can shorten available history; WAL and active-head data also consume disk space.
 
 ## Provisioned logs dashboard
 
