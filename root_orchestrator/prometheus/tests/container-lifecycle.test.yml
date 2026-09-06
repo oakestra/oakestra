@@ -1,0 +1,233 @@
+rule_files:
+- ../container-lifecycle-rules.yml
+evaluation_interval: 15s
+tests:
+- name: healthy service
+  interval: 15s
+  input_series:
+  - series: up{job="docker-state",instance="exporter:8080"}
+    values: 1+0x40
+  - series: up{job="node-exporter",instance="node:9100"}
+    values: 1+0x40
+  - series: node_textfile_scrape_error{job="node-exporter"}
+    values: 0+0x40
+  - series: oakestra_expected_container_replicas{job="node-exporter",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  - series: docker_container_labels{job="docker-state",instance="exporter:8080",name="manager",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  - series: docker_container_state{job="docker-state",instance="exporter:8080",name="manager",state="running"}
+    values: 1+0x40
+  - series: docker_container_restarts_total{job="docker-state",instance="exporter:8080",name="manager"}
+    values: 0+0x40
+  promql_expr_test:
+  - expr: oakestra:container_missing_replicas
+    eval_time: 5m
+    exp_samples:
+    - labels: oakestra:container_missing_replicas{cluster_id="root",compose_service="system_manager",compose_project="test"}
+      value: 0
+  - expr: oakestra:container_restarts_5m
+    eval_time: 5m
+    exp_samples:
+    - labels: oakestra:container_restarts_5m{cluster_id="root",compose_service="system_manager",compose_project="test"}
+      value: 0
+- name: stopped container
+  interval: 15s
+  input_series:
+  - series: up{job="docker-state",instance="exporter:8080"}
+    values: 1+0x40
+  - series: up{job="node-exporter",instance="node:9100"}
+    values: 1+0x40
+  - series: node_textfile_scrape_error{job="node-exporter"}
+    values: 0+0x40
+  - series: oakestra_expected_container_replicas{job="node-exporter",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  - series: docker_container_labels{job="docker-state",instance="exporter:8080",name="manager",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  - series: docker_container_state{job="docker-state",instance="exporter:8080",name="manager",state="exited"}
+    values: 1+0x40
+  - series: docker_container_restarts_total{job="docker-state",instance="exporter:8080",name="manager"}
+    values: 0+0x40
+  promql_expr_test:
+  - expr: oakestra:container_missing_replicas
+    eval_time: 5m
+    exp_samples:
+    - labels: oakestra:container_missing_replicas{cluster_id="root",compose_service="system_manager",compose_project="test"}
+      value: 1
+- name: removed container
+  interval: 15s
+  input_series:
+  - series: up{job="docker-state",instance="exporter:8080"}
+    values: 1+0x40
+  - series: up{job="node-exporter",instance="node:9100"}
+    values: 1+0x40
+  - series: node_textfile_scrape_error{job="node-exporter"}
+    values: 0+0x40
+  - series: oakestra_expected_container_replicas{job="node-exporter",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  promql_expr_test:
+  - expr: oakestra:container_missing_replicas
+    eval_time: 5m
+    exp_samples:
+    - labels: oakestra:container_missing_replicas{cluster_id="root",compose_service="system_manager",compose_project="test"}
+      value: 1
+- name: replica deficit
+  interval: 15s
+  input_series:
+  - series: up{job="docker-state",instance="exporter:8080"}
+    values: 1+0x40
+  - series: up{job="node-exporter",instance="node:9100"}
+    values: 1+0x40
+  - series: node_textfile_scrape_error{job="node-exporter"}
+    values: 0+0x40
+  - series: oakestra_expected_container_replicas{job="node-exporter",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 2+0x40
+  - series: docker_container_labels{job="docker-state",instance="exporter:8080",name="manager",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  - series: docker_container_state{job="docker-state",instance="exporter:8080",name="manager",state="running"}
+    values: 1+0x40
+  - series: docker_container_restarts_total{job="docker-state",instance="exporter:8080",name="manager"}
+    values: 0+0x40
+  promql_expr_test:
+  - expr: oakestra:container_missing_replicas
+    eval_time: 5m
+    exp_samples:
+    - labels: oakestra:container_missing_replicas{cluster_id="root",compose_service="system_manager",compose_project="test"}
+      value: 1
+- name: unavailable Docker exporter suppresses missing alerts
+  interval: 15s
+  input_series:
+  - series: up{job="docker-state",instance="exporter:8080"}
+    values: 0+0x40
+  - series: up{job="node-exporter",instance="node:9100"}
+    values: 1+0x40
+  - series: node_textfile_scrape_error{job="node-exporter"}
+    values: 0+0x40
+  - series: oakestra_expected_container_replicas{job="node-exporter",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  promql_expr_test:
+  - expr: oakestra:container_missing_replicas
+    eval_time: 5m
+    exp_samples: []
+- name: textfile read error suppresses missing alerts
+  interval: 15s
+  input_series:
+  - series: up{job="docker-state",instance="exporter:8080"}
+    values: 1+0x40
+  - series: up{job="node-exporter",instance="node:9100"}
+    values: 1+0x40
+  - series: node_textfile_scrape_error{job="node-exporter"}
+    values: 1+0x40
+  - series: oakestra_expected_container_replicas{job="node-exporter",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  promql_expr_test:
+  - expr: oakestra:container_missing_replicas
+    eval_time: 5m
+    exp_samples: []
+- name: scrape reported Docker API error
+  interval: 15s
+  input_series:
+  - series: up{job="docker-state",instance="exporter:8080"}
+    values: 1+0x40
+  - series: up{job="node-exporter",instance="node:9100"}
+    values: 1+0x40
+  - series: node_textfile_scrape_error{job="node-exporter"}
+    values: 0+0x40
+  - series: oakestra_expected_container_replicas{job="node-exporter",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  - series: docker_exporter_scrape_errors_total{job="docker-state"}
+    values: 1+0x40
+  promql_expr_test:
+  - expr: oakestra:container_missing_replicas
+    eval_time: 5m
+    exp_samples: []
+- name: automatic restarts
+  interval: 15s
+  input_series:
+  - series: up{job="docker-state",instance="exporter:8080"}
+    values: 1+0x40
+  - series: up{job="node-exporter",instance="node:9100"}
+    values: 1+0x40
+  - series: node_textfile_scrape_error{job="node-exporter"}
+    values: 0+0x40
+  - series: oakestra_expected_container_replicas{job="node-exporter",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  - series: docker_container_labels{job="docker-state",instance="exporter:8080",name="manager",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  - series: docker_container_state{job="docker-state",instance="exporter:8080",name="manager",state="running"}
+    values: 1+0x40
+  - series: docker_container_restarts_total{job="docker-state",instance="exporter:8080",name="manager"}
+    values: 0+0x4 3+0x35
+  promql_expr_test:
+  - expr: oakestra:container_restarts_5m > bool 0
+    eval_time: 5m
+    exp_samples:
+    - labels: '{cluster_id="root",compose_service="system_manager",compose_project="test"}'
+      value: 1
+- name: counter reset is not a new restart
+  interval: 15s
+  input_series:
+  - series: up{job="docker-state",instance="exporter:8080"}
+    values: 1+0x40
+  - series: up{job="node-exporter",instance="node:9100"}
+    values: 1+0x40
+  - series: node_textfile_scrape_error{job="node-exporter"}
+    values: 0+0x40
+  - series: oakestra_expected_container_replicas{job="node-exporter",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  - series: docker_container_labels{job="docker-state",instance="exporter:8080",name="manager",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  - series: docker_container_state{job="docker-state",instance="exporter:8080",name="manager",state="running"}
+    values: 1+0x40
+  - series: docker_container_restarts_total{job="docker-state",instance="exporter:8080",name="manager"}
+    values: 5+0x4 0+0x35
+  promql_expr_test:
+  - expr: oakestra:container_restarts_5m
+    eval_time: 5m
+    exp_samples:
+    - labels: oakestra:container_restarts_5m{cluster_id="root",compose_service="system_manager",compose_project="test"}
+      value: 0
+- name: unmanaged container ignored
+  interval: 15s
+  input_series:
+  - series: up{job="docker-state",instance="exporter:8080"}
+    values: 1+0x40
+  - series: up{job="node-exporter",instance="node:9100"}
+    values: 1+0x40
+  - series: node_textfile_scrape_error{job="node-exporter"}
+    values: 0+0x40
+  - series: oakestra_expected_container_replicas{job="node-exporter",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  - series: docker_container_labels{job="docker-state",instance="exporter:8080",name="manager",cluster_id="root",compose_service="unmanaged",compose_project="test"}
+    values: 1+0x40
+  - series: docker_container_state{job="docker-state",instance="exporter:8080",name="manager",state="running"}
+    values: 1+0x40
+  - series: docker_container_restarts_total{job="docker-state",instance="exporter:8080",name="manager"}
+    values: 0+0x40
+  promql_expr_test:
+  - expr: oakestra:container_missing_replicas
+    eval_time: 5m
+    exp_samples:
+    - labels: oakestra:container_missing_replicas{cluster_id="root",compose_service="system_manager",compose_project="test"}
+      value: 1
+- name: disabled service has no alert
+  interval: 15s
+  input_series:
+  - series: up{job="docker-state",instance="exporter:8080"}
+    values: 1+0x40
+  - series: up{job="node-exporter",instance="node:9100"}
+    values: 1+0x40
+  - series: node_textfile_scrape_error{job="node-exporter"}
+    values: 0+0x40
+  - series: docker_container_labels{job="docker-state",instance="exporter:8080",name="manager",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  - series: docker_container_state{job="docker-state",instance="exporter:8080",name="manager",state="running"}
+    values: 1+0x40
+  - series: docker_container_restarts_total{job="docker-state",instance="exporter:8080",name="manager"}
+    values: 0+0x40
+  promql_expr_test:
+  - expr: oakestra:container_missing_replicas
+    eval_time: 5m
+    exp_samples: []
+  - expr: oakestra:container_restarts_5m
+    eval_time: 5m
+    exp_samples: []
