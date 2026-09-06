@@ -212,3 +212,9 @@ Test the false-positive guard only while the rule is **Normal**. The following s
 docker exec system_manager sh -c 'printf "%s\n" "$1" > /proc/1/fd/1' sh '{"schema_version":1,"timestamp":"2026-01-01T00:00:00Z","level":"info","service":"system_manager","logger":"manual-test","message":"ERROR manual-negative-test"}'
 docker exec system_manager sh -c 'printf "panic: manual-legacy-alert-test\n" > /proc/1/fd/2'
 ```
+
+## Container lifecycle alerts
+
+The local `docker_state_exporter` supplies Docker state and automatic restart counters to Prometheus. Grafana provisions alerts for missing running replicas and recent automatic restarts, identified by `cluster_id`, `compose_service`, and `compose_project`. Separate rules report unavailable monitoring and missing desired-state inventory. These alerts reuse the existing webhook/email contact points; they do not replace application health checks.
+
+Startup scripts generate the expected-container inventory from the resolved Compose configuration using Python 3. With manual Compose commands, generate it before startup and regenerate it after intentional service, profile, or replica changes. The exporter is internal, resource-limited, and disabled by `override-no-observe.yml`; its Docker socket access remains security-sensitive even with a read-only mount. See [container lifecycle monitoring](../../docs/container-alerts.md) for commands, alert timing, limitations, security, and verification. A 1-DOC deployment uses one exporter and inventory for its shared host.

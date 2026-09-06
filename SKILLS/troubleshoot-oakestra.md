@@ -124,15 +124,15 @@ For each container, check:
 - `Created` (never started) → dependency failed to start
 
 **Expected containers for Root Orchestrator:**
-`system_manager`, `mongo`, `mongo_net`, `root_service_manager`, `root_redis`, `root_scheduler`, `root_resource_abstractor`, `jwt_generator`, `root_prometheus`, `root_node_exporter`, `root_cadvisor`, `grafana`, `loki`, `alloy`, `oakestra-frontend-container`
+`system_manager`, `mongo`, `mongo_net`, `root_service_manager`, `root_redis`, `root_scheduler`, `root_resource_abstractor`, `jwt_generator`, `root_prometheus`, `root_node_exporter`, `root_cadvisor`, `root_docker_state_exporter`, `grafana`, `loki`, `alloy`, `oakestra-frontend-container`
 
-In 1-DOC, the single shared metrics pipeline is named `prometheus`, `node_exporter`, and `cadvisor` instead of using the standalone Root names.
+In 1-DOC, the single shared metrics pipeline is named `prometheus`, `node_exporter`, `cadvisor`, and `docker_state_exporter` instead of using the standalone Root names.
 
 Optional root containers (if addons enabled):
 `root_addons_manager`, `root_addons_monitor`, `root_addons_dashboard`, `marketplace_manager`
 
 **Expected containers for Cluster Orchestrator:**
-`mqtt`, `cluster_mongo`, `cluster_mongo_net`, `cluster_service_manager`, `cluster_manager`, `cluster_scheduler`, `cluster_resource_abstractor`, `cluster_redis`, `cluster_prometheus`, `cluster_node_exporter`, `cluster_cadvisor`, `cluster_grafana`, `cluster_loki`, `cluster_alloy`
+`mqtt`, `cluster_mongo`, `cluster_mongo_net`, `cluster_service_manager`, `cluster_manager`, `cluster_scheduler`, `cluster_resource_abstractor`, `cluster_redis`, `cluster_prometheus`, `cluster_node_exporter`, `cluster_cadvisor`, `cluster_docker_state_exporter`, `cluster_grafana`, `cluster_loki`, `cluster_alloy`
 
 The Prometheus and exporter containers are intentionally absent when `override-no-observe.yml` is active.
 
@@ -201,6 +201,7 @@ line. If Python application lines are plain text, verify the image version and t
 | `permission denied` opening `/var/run/docker.sock` (Alloy log) | Alloy cannot discover/read container logs; inspect the socket mount and host permissions |
 | `loki.write` connection refused | The local Loki is not ready, or `LOKI_URL` is wrong for the selected network mode |
 | cAdvisor `permission denied` or missing Docker root | Verify rootful Docker, the read-only socket/host mounts, and `DOCKER_ROOT_DIR`; do not silently enable privileged mode |
+| Container monitoring unavailable / missing inventory | Check the `docker-state` and `node-exporter` targets, Docker socket permissions, and `node_textfile_scrape_error`; regenerate inventory using the same Compose project and overrides, not a list of currently running containers |
 | Prometheus target `DOWN` / `connection refused` | Inspect the relevant Prometheus config and Compose network; host-network Cluster mode must use `prometheus-host.yml` |
 | metrics stack requires Docker Engine 25 | Upgrade Docker or apply `override-no-observe.yml` on that host |
 
@@ -612,6 +613,18 @@ for prometheus_container in root_prometheus cluster_prometheus prometheus; do
   fi
 done
 
+# Expected replicas and monitoring readiness (empty readiness means no reliable coverage).
+for prometheus_container in root_prometheus cluster_prometheus prometheus; do
+  if docker inspect "$prometheus_container" >/dev/null 2>&1; then
+    docker exec "$prometheus_container" promtool query instant http://127.0.0.1:9090 \\
+      'oakestra:container_monitoring_ready' 2>/dev/null || true
+    docker exec "$prometheus_container" promtool query instant http://127.0.0.1:9090 \\
+      'oakestra_expected_container_replicas' 2>/dev/null || true
+    docker exec "$prometheus_container" promtool query instant http://127.0.0.1:9090 \\
+      'oakestra:container_missing_replicas' 2>/dev/null || true
+  fi
+done
+
 # Verify cAdvisor is not privileged and all host bind mounts are read-only.
 for cadvisor_container in root_cadvisor cluster_cadvisor cadvisor; do
   docker inspect "$cadvisor_container" \
@@ -639,6 +652,8 @@ curl -s --connect-timeout 3 "http://localhost:3101/loki/api/v1/labels" 2>/dev/nu
 ---
 
 ## STEP 11 — API Smoke Tests
+
+Docker-state exporter `/metrics` is internal: use the `docker-state` target's `up` metric and `oakestra:container_monitoring_ready` checks in STEP 10 rather than opening a host port. `up = 1` alone is insufficient if Docker API reads fail.
 
 ```bash
 # Alloy diagnostic API

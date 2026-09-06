@@ -177,3 +177,9 @@ Sensitive mapping keys are recursively redacted, and service call sites log summ
 - [OTel at Grafana](https://grafana.com/docs/opentelemetry/?pg=oss-tempo&plcmt=resources)
 - [Automatic Grafana Dashboards](https://stackoverflow.com/questions/63518460/grafana-import-dashboard-as-part-of-docker-compose)
 - [Ready dashboards](https://levelup.gitconnected.com/initialize-grafana-inside-the-docker-container-with-a-ready-dashboard-a90eb76f75a4)
+
+## Container lifecycle alerts
+
+The local `docker_state_exporter` supplies Docker state and automatic restart counters to Prometheus. Grafana provisions alerts for missing running replicas and recent automatic restarts, identified by `cluster_id`, `compose_service`, and `compose_project`. Separate rules report unavailable monitoring and missing desired-state inventory. These alerts reuse the existing webhook/email contact points; they do not replace application health checks.
+
+Startup scripts generate the expected-container inventory from the resolved Compose configuration using Python 3. With manual Compose commands, generate it before startup and regenerate it after intentional service, profile, or replica changes. The exporter is internal, resource-limited, and disabled by `override-no-observe.yml`; its Docker socket access remains security-sensitive even with a read-only mount. See [container lifecycle monitoring](../../docs/container-alerts.md) for commands, alert timing, limitations, security, and verification. A 1-DOC deployment uses one exporter and inventory for its shared host.
