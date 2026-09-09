@@ -7,7 +7,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /
 
-
 ENV LOG_LEVEL=WARNING
 
 ENV MONGO_URL=localhost
