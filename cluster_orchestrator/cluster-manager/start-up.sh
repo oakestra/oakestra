@@ -1,13 +1,5 @@
 #!/bin/bash
 
-# docker-compose --file ../docker-compose-amd64.yml up -d
-
-# create virtualenv
-virtualenv --clear -p python3 .venv
-source .venv/bin/activate
-
-.venv/bin/pip install -r requirements.txt
-
 export FLASK_ENV=development
 export FLASK_DEBUG=True # TRUE for logging
 
@@ -21,7 +13,7 @@ export SYSTEM_MANAGER_URL=localhost
 export SYSTEM_MANAGER_PORT=10000
 
 export CLUSTER_SCHEDULER_URL=localhost
-export CLUSTER_SCHUEDLER_PORT=10105
+export CLUSTER_SCHEDULER_PORT=10105
 
 export CLUSTER_SERVICE_MANAGER_ADDR=localhost
 export CLUSTER_SERVICE_MANAGER_PORT=10110
@@ -50,4 +42,4 @@ export CLUSTER_NAME=cluster_local
 
 export MY_PORT=8000
 
-.venv/bin/python cluster_manager.py
+uv run src/cluster_manager/main.py

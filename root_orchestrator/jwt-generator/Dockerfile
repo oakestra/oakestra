@@ -1,4 +1,4 @@
-FROM python:3.13-slim-bookworm
+FROM python:3.10-slim-bookworm
 LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
 
 # Cryptography requires libffi

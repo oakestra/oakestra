@@ -85,10 +85,8 @@ services:
   cluster_manager:
     image: cluster_manager
     build:
-      context: cluster-manager/
-      additional_contexts:
-        # Oakestra shared libraries are built from the repo-local libraries/ folder.
-        - libraries=../libraries
+      context: ../
+      dockerfile: cluster_orchestrator/cluster-manager/Dockerfile
     container_name: cluster_manager
     labels:
       logging: "cluster_promtail"

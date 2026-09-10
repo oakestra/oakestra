@@ -92,9 +92,11 @@ You normally don't run these directly — profiles invoke them — but they're a
   `cleanup-debug-env`, `remove-containers`, `remove-volumes`.
 - **`prep-debug-<component>-env`:** the full pre-launch sequence for one profile.
 - **`remove-<container>`:** frees a single container's name/port.
-- **`install-<component>-dependencies`:** installs one component's Python deps. The
-  cluster/root manager installers also `pip install` the local shared libraries from
-  [../libraries/](../libraries/).
+- **`install-<component>-dependencies`:** installs one component's Python deps. For `uv`-managed
+  services (`system-manager-python`, `cluster-manager`), dependencies and local shared libraries
+  (`oakestra-utils`, `resource-abstractor-client`) are installed via `uv sync`. For components not
+  yet migrated to `uv` (`resource-abstractor`, `jwt-generator`, `addons_*`), dependencies are
+  installed from `requirements.txt`.
 - **`serve-addons-dashboard`** (+ `install-addons-dashboard-dependencies`): background
   `ng serve` for the dashboard profile.
 
@@ -114,6 +116,12 @@ You normally don't run these directly — profiles invoke them — but they're a
 - **Angular readiness pattern:** `serve-addons-dashboard` waits for Angular's esbuild
   "bundle generation complete" / "Local: http" line before attaching. If your Angular
   version prints a different ready message, update the task's `endsPattern`.
-- **Shared libraries are local.** Python components that use them get
-  [../libraries/](../libraries/) on `PYTHONPATH` (managers) or pip-installed (via the
-  install tasks) — nothing is fetched from a remote git repo.
+- **Shared libraries and UV workspace.** `system-manager-python`, `cluster-manager`, and the shared
+  libraries under `libraries/` are managed via the root `uv` workspace. Running `uv sync` installs
+  them into `.venv` in editable mode.
+- **Local virtualenv isolation:** Docker container builds and CI workflows are fully isolated
+  and unaffected. However, when running uv-managed and non-uv-managed modules locally and
+  uncontainerized at the same time, sharing a single virtual environment can cause dependency
+  conflicts, and `uv sync` will uninstall unmanaged packages. We recommend setting up secondary
+  virtual environments in each non-uv module's subdirectory (e.g., `resource-abstractor/.venv`,
+  `addons_engine/.venv`) when running them locally without Docker.

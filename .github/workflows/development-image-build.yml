@@ -5,10 +5,14 @@ on:
     branches:
       - develop  
     paths:
-        - 'root_orchestrator/**/Dockerfile'
-        - 'root_orchestrator/**/requirements.txt'
-        - 'cluster_orchestrator/**/Dockerfile'
-        - 'cluster_orchestrator/**/requirements.txt'
+      - 'root_orchestrator/system-manager-python/Dockerfile'
+      - 'root_orchestrator/system-manager-python/pyproject.toml'
+      - 'cluster_orchestrator/cluster-manager/Dockerfile'
+      - 'cluster_orchestrator/cluster-manager/pyproject.toml'
+      - 'libraries/resource-abstractor-client/pyproject.toml'
+      - 'libraries/oakestra-utils/pyproject.toml'
+      - 'pyproject.toml'
+      - 'uv.lock'
 
 jobs:
   gather-modified-files:
@@ -16,8 +20,8 @@ jobs:
     outputs:
       matrix: ${{ steps.folders.outputs.value }}
     steps:
-      - name: Run
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -28,41 +32,47 @@ jobs:
         with:
           since_last_remote_commit: true 
           files: |
-            ./**/**/Dockerfile
-            ./**/**/requirements.txt
+            root_orchestrator/system-manager-python/Dockerfile
+            root_orchestrator/system-manager-python/pyproject.toml
+            cluster_orchestrator/cluster-manager/Dockerfile
+            cluster_orchestrator/cluster-manager/pyproject.toml
+            libraries/resource-abstractor-client/pyproject.toml
+            libraries/oakestra-utils/pyproject.toml
+            pyproject.toml
+            uv.lock
+
       - name: Run step if matching changed files are detected
         id: folders
         if: steps.changed-files.outputs.any_changed == 'true'  
         env:
-                DETECTED_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          DETECTED_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
-                # Extract parent directory of each changed file
-                echo "Changed file detected: $DETECTED_CHANGED_FILES"
-                # Split the string delimited by a space into an array
-                readarray -d ' ' -t context_array <<< "$DETECTED_CHANGED_FILES"
-                
-                # Declare an empty array to store the results
-                value=()
-                
-                # Loop through each element in the context_array
-                for element in "${context_array[@]}"; do
-                # Apply dirname function to each element and store the result in the value array
-                value+=("$(dirname "$element")")
-                done
-                
-                # Format the output string
-                output="value=["
-                for item in "${value[@]}"; do
-                output+="\"$item\", "
-                done
-                
-                # Remove the trailing comma and add closing bracket and quotes
-                output="${output%, }]"
-                
-                # Print the formatted output string
-                echo "$output" >> $GITHUB_OUTPUT
+          echo "Changed files detected: $DETECTED_CHANGED_FILES"
+          readarray -d ' ' -t context_array <<< "$DETECTED_CHANGED_FILES"
+          
+          value=()
+          for element in "${context_array[@]}"; do
+            element=$(echo "$element" | tr -d '[:space:]')
+            element="${element#./}"
+            [ -z "$element" ] && continue
+
+            if [[ "$element" == libraries/* ]] || [[ "$element" == "pyproject.toml" ]] || [[ "$element" == "uv.lock" ]]; then
+              value+=("root_orchestrator/system-manager-python")
+              value+=("cluster_orchestrator/cluster-manager")
+            elif [[ "$element" == */Dockerfile ]] || [[ "$element" == */pyproject.toml ]]; then
+              dir="$(dirname "$element")"
+              if [ -f "$dir/Dockerfile" ]; then
+                value+=("$dir")
+              fi
+            fi
+          done
+          
+          # Deduplicate array and format as JSON
+          unique_values=($(printf "%s\n" "${value[@]}" | sort -u))
+          output="value=$(printf '%s\n' "${unique_values[@]}" | jq -R . | jq -s -c .)"
+          echo "$output" >> $GITHUB_OUTPUT
                   
-### Dynamic matrix for spawning multiple build jobs
+  ### Dynamic matrix for spawning multiple build jobs
   build:
     needs: [ gather-modified-files ]
     runs-on: ubuntu-latest
@@ -80,7 +90,7 @@ jobs:
         value: ${{fromJSON(needs.gather-modified-files.outputs.matrix)}}
     steps:      
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@79abd3f86f79a9d68a23c75a09a9a85889262adf
@@ -100,22 +110,25 @@ jobs:
             image: tonistiigi/binfmt:latest
             platforms: all
     
+      - name: Determine Docker build context
+        id: build-config
+        run: |
+          if [ "${{ matrix.value }}" = "root_orchestrator/system-manager-python" ] || [ "${{ matrix.value }}" = "cluster_orchestrator/cluster-manager" ]; then
+            echo "context=." >> $GITHUB_OUTPUT
+            echo "file=./${{ matrix.value }}/Dockerfile" >> $GITHUB_OUTPUT
+          else
+            echo "context=./${{ matrix.value }}/" >> $GITHUB_OUTPUT
+            echo "file=./${{ matrix.value }}/Dockerfile" >> $GITHUB_OUTPUT
+          fi
+
     # Build Docker image with Buildx (matching file push on same PR)
       - name: Build Docker image (push disabled)
-        env:
-            DOCKERFILE_CONTEXT: ${{ matrix.value }}
         id: build-and-push
         uses: docker/build-push-action@v6
         with:
-            context: |
-                ${{format('./{0}/', matrix.value)}}
-            # To build on all supported arch, add to following line: ,linux/armhf,linux/arm64
+            context: ${{ steps.build-config.outputs.context }}
+            file: ${{ steps.build-config.outputs.file }}
             platforms: linux/amd64
             push: false
             tags: ${{ steps.meta.outputs.tags }}
             labels: ${{ steps.meta.outputs.labels }}
-            # Oakestra shared libraries are built from the repo-local libraries/ folder.
-            # (Unused by services that don't import them, harmless to provide.)
-            build-contexts: |
-              libraries=./libraries
-            

@@ -9,32 +9,26 @@ jobs:
 
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v2
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.10"
-
-      - name: Install pytest
-        working-directory: root_orchestrator/system-manager-python
-        run: |
-          pip install pytest coverage
+          enable-cache: true
 
       - name: Install dependencies
-        working-directory: root_orchestrator/system-manager-python
-        run: |
-          pip install -r requirements.txt --no-cache-dir
-
-      - name: Install local Oakestra libraries
-        working-directory: root_orchestrator/system-manager-python
-        run: |
-          pip install --no-cache-dir ../../libraries/resource_abstractor_client ../../libraries/oakestra_utils_library
+        run: uv sync --locked
 
       - name: Generate protobuf files
         working-directory: root_orchestrator/system-manager-python
         run: |
-          python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/clusterRegistration.proto
+          uv run --no-sync -m grpc_tools.protoc \
+            -Isrc \
+            --python_out=src \
+            --grpc_python_out=src \
+            --pyi_out=src \
+            src/system_manager/proto/cluster_registration.proto
 
       - name: Build Docker images
         working-directory: resource-abstractor
@@ -49,9 +43,4 @@ jobs:
       - name: Run test suite
         working-directory: root_orchestrator/system-manager-python
         run: |
-          coverage run -m pytest
-
-      - name: Generate report
-        working-directory: root_orchestrator/system-manager-python
-        run: |
-          coverage html -d tests/coverage
+          uv run --with pytest pytest
