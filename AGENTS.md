@@ -166,21 +166,21 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 
 ## Python Dependency Management: UV vs. Legacy
 
-| Component | Status | Dependency Manager | Local Env / Build Notes |
-|---|---|---|---|
-| `system-manager-python` | **Migrated to `uv`** | UV workspace member (`pyproject.toml`) | Docker build context is repo root (`../`). Managed via root `uv sync`. |
-| `cluster-manager` | **Migrated to `uv`** | UV workspace member (`pyproject.toml`) | Docker build context is repo root (`../`). Managed via root `uv sync`. |
-| `oakestra-utils` | **Migrated to `uv`** | UV workspace member (`libraries/oakestra-utils`) | Installed into `.venv` in editable mode via `uv sync`. |
-| `resource-abstractor-client` | **Migrated to `uv`** | UV workspace member (`libraries/resource-abstractor-client`) | Installed into `.venv` in editable mode via `uv sync`. |
-| `resource-abstractor` | *Not yet migrated* | `requirements.txt` (pip) | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev. |
-| `jwt-generator` | *Not yet migrated* | `requirements.txt` (pip) | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev. |
-| `addons-manager` | *Not yet migrated* | `requirements.txt` (pip) | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev. |
-| `addons-monitor` | *Not yet migrated* | `requirements.txt` (pip) | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev. |
-| `marketplace-manager` | *Not yet migrated* | `requirements.txt` (pip) | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev. |
+| Component                    | Status               | Dependency Manager                                           | Local Env / Build Notes                                                                                              |
+|------------------------------|----------------------|--------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------|
+| `system-manager-python`      | **Migrated to `uv`** | UV workspace member (`pyproject.toml`)                       | Docker build context is repo root (`../`). Managed via `uv sync` (with `--all-packages` flag if run from repo root). |
+| `cluster-manager`            | **Migrated to `uv`** | UV workspace member (`pyproject.toml`)                       | Docker build context is repo root (`../`). Managed via `uv sync` (with `--all-packages` flag if run from repo root). |
+| `oakestra-utils`             | **Migrated to `uv`** | UV workspace member (`libraries/oakestra-utils`)             | Installed into `.venv` in editable mode via `uv sync` (with `--all-packages` flag if run from repo root).            |
+| `resource-abstractor-client` | **Migrated to `uv`** | UV workspace member (`libraries/resource-abstractor-client`) | Installed into `.venv` in editable mode via `uv sync` (with `--all-packages` flag if run from repo root).            |
+| `resource-abstractor`        | *Not yet migrated*   | `requirements.txt` (pip)                                     | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev.                          |
+| `jwt-generator`              | *Not yet migrated*   | `requirements.txt` (pip)                                     | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev.                          |
+| `addons-manager`             | *Not yet migrated*   | `requirements.txt` (pip)                                     | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev.                          |
+| `addons-monitor`             | *Not yet migrated*   | `requirements.txt` (pip)                                     | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev.                          |
+| `marketplace-manager`        | *Not yet migrated*   | `requirements.txt` (pip)                                     | Isolated build context. Requires dedicated subfolder `.venv` for local uncontainerized dev.                          |
 
 > [!IMPORTANT]
 > **CI Pipelines and Docker Container Builds** build each service in an isolated environment and are unaffected by mixed dependency managers.
-> **Local Uncontainerized Development**: Running `uv sync` manages packages strictly according to `uv.lock` and will uninstall untracked pip packages from the root `.venv`. When running/debugging non-uv modules locally without Docker, **always** use dedicated secondary virtual environments in their respective subdirectories (e.g., `resource-abstractor/.venv`). Never run `pip install -r requirements.txt` into the root `.venv`.
+> **Local Uncontainerized Development**: Running `uv sync --all-packages` manages packages strictly according to `uv.lock` and will uninstall untracked pip packages from the root `.venv`. When running/debugging non-uv modules locally without Docker, **always** use dedicated secondary virtual environments in their respective subdirectories (e.g., `resource-abstractor/.venv`). Never run `pip install -r requirements.txt` into the root `.venv`.
 
 ---
 
@@ -190,7 +190,7 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 
 ```bash
 # Sync all uv workspace services (system_manager, cluster_manager, shared libraries)
-uv sync
+uv sync --all-packages
 
 # Run tests for system_manager
 uv run --with pytest pytest root_orchestrator/system-manager-python/src/system_manager/tests/
@@ -245,8 +245,8 @@ export OAKESTRA_VERSION=develop
 - `libraries/resource-abstractor-client` — Python HTTP client for resource-abstractor. Package name: `resource-abstractor-client`, module: `resource_abstractor_client`.
 
 **These libraries are workspace members in the root `pyproject.toml`.**
-- **Docker builds** — `system_manager` and `cluster_manager` Dockerfiles run with the repository root as the build context (`context: ../` in docker-compose.yml, `context: .` in CI) and copy `pyproject.toml`, `uv.lock`, and `libraries/` into the build container before running `uv sync`.
-- **Local dev / tests** — Running `uv sync` installs both libraries into the root `.venv` in editable mode.
+- **Docker builds** — `system_manager` and `cluster_manager` Dockerfiles run with the repository root as the build context (`context: ../` in docker-compose.yml, `context: .` in CI) and copy `pyproject.toml`, `uv.lock`, and `libraries/` into the build container before running `uv sync` (with the target project as the working directory).
+- **Local dev / tests** — Running `uv sync --all-packages` installs both libraries into the root `.venv` in editable mode.
 
 ---
 
@@ -254,7 +254,7 @@ export OAKESTRA_VERSION=develop
 
 - **Host networking breaks container DNS.** When using `override-network-host.yml`, containers can't resolve each other by name — set all env vars to IPs, not container names.
 - **Docker build contexts for UV services.** `system-manager-python` and `cluster-manager` require the repository root build context (`context: ../` in `docker-compose.yml`) so that the uv workspace root (`pyproject.toml`, `uv.lock`, `libraries/`) is accessible during image builds.
-- **Local venv isolation.** Do not mix `pip install -r requirements.txt` for non-uv services inside the root `.venv`, as subsequent `uv sync` invocations will clean untracked packages. Use a subfolder virtual environment for non-uv services when running outside of Docker.
+- **Local venv isolation.** Do not mix `pip install -r requirements.txt` for non-uv services inside the root `.venv`, as subsequent `uv sync [--all-packages]` invocations will clean untracked packages. Use a subfolder virtual environment for non-uv services when running outside of Docker.
 - **eventlet monkey-patching.** Both `system_manager` and `cluster_manager` use eventlet. Monkey-patching must happen before Flask/pymongo imports — don't reorder the top of entry-point files.
 - **Scheduler is the same binary for root and cluster** — differentiated only by env vars (`SCHEDULER_TYPE`, Redis URL/password). Keep deployment-specific logic out of the binary.
 

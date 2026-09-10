@@ -24,7 +24,7 @@ Oakestra uses a [`uv`](https://docs.astral.sh/uv/) workspace at the repository r
 After cloning, install and synchronize the root virtual environment:
 
 ```bash
-uv sync
+uv sync --all-packages
 ```
 
 Running `uv sync` installs all workspace packages and links shared libraries in editable mode into the root `.venv/`.
