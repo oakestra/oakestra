@@ -785,33 +785,56 @@ func killTask(ctx context.Context, task ctd.Task, container ctd.Container) error
 	return nil
 }
 
-const containerIdMaxLen = 72
+const containerIdMaxLen = 76
 
-var containerIdHashEncoding = base32.NewEncoding("abcdefghijklmnopqrstuvwxyz234567").WithPadding(base32.NoPadding)
-var invalidContainerIdChars = regexp.MustCompile("[^a-zA-Z0-9._-]")
+var (
+	containerIdHashEncoding = base32.NewEncoding(
+		"abcdefghijklmnopqrstuvwxyz234567",
+	).WithPadding(base32.NoPadding)
 
-// convertTaskIdToContainerId converts the given taskId of an instance to an ID that can be used to containerd container.
-// The following requirements are fulfilled by the resulting container id:
-//   - The maximum length for container ids is 76 characters (see https://github.com/containerd/containerd/blob/main/pkg/identifiers/validate.go).
-//   - Container IDs can only contain characters matching this regex "[A-Za-z0-9]" or "[._-]" (inverse in invalidContainerIdChars).
-//     To make sure this requirement is fulfilled, other characters are not taken over from the taskId.
-//   - For more consistency in unit names, all uppercase characters in the taskId are converted to lowercase
-//     when taken over into the result.
-//   - To ensure generated container IDs are still unique after all the steps taken above,
-//     part of the base-32 encoded hash of the original taskId is appended to the result as ".${hash}".
+	invalidContainerIdChars = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
+	containerIdSeparators   = regexp.MustCompile(`[._-]+`)
+)
+
+// convertTaskIdToContainerId converts taskId into a valid containerd identifier.
+// See // See https://github.com/containerd/containerd/blob/v1.7.28/identifiers/validate.go.
+// The generated identifier:
+//   - is at most 76 characters long;
+//   - contains only ASCII letters, digits, dots, underscores, and hyphens;
+//   - starts and ends with an ASCII letter or digit;
+//   - contains no consecutive separators;
+//   - uses lowercase characters in its readable prefix; and
+//   - includes a 100-bit base32-encoded prefix of the SHA-256 hash of the
+//     original task ID to make collisions unlikely.
+//
+// Invalid characters are removed and runs of separators are normalized to a
+// single dot. If no readable prefix remains, the hash alone is returned.
 func convertTaskIdToContainerId(taskId string) string {
 	hashBytes := sha256.Sum256([]byte(taskId))
-	hashString := containerIdHashEncoding.EncodeToString(hashBytes[:])
 	// At this point hashString is 52 characters long which is too long to be useful, so we truncate it.
 	// This should still make collisions very unlikely.
-	hashString = hashString[:20]
+	hashString := containerIdHashEncoding.EncodeToString(hashBytes[:])[:20]
 
-	containerIdSuffix := "." + hashString
+	safeTaskId := strings.ToLower(
+		invalidContainerIdChars.ReplaceAllString(taskId, ""),
+	)
+	safeTaskId = containerIdSeparators.ReplaceAllString(safeTaskId, ".")
+	safeTaskId = strings.Trim(safeTaskId, "._-")
 
-	safeTaskId := strings.ToLower(invalidContainerIdChars.ReplaceAllString(taskId, ""))
-	safeTaskId = safeTaskId[:min(containerIdMaxLen-len(containerIdSuffix), len(safeTaskId))]
+	maxPrefixLen := containerIdMaxLen - len(hashString) - 1
+	if len(safeTaskId) > maxPrefixLen {
+		safeTaskId = safeTaskId[:maxPrefixLen]
+	}
 
-	return safeTaskId + containerIdSuffix
+	// Truncation may leave a separator at the end of the readable prefix.
+	safeTaskId = strings.TrimRight(safeTaskId, "._-")
+
+	// This ensures the container id doesn't end up being '.<hash>' which would be an illegal start with a separator.
+	if safeTaskId == "" {
+		return hashString
+	}
+
+	return safeTaskId + "." + hashString
 }
 
 // gpuInfo holds GPU device information for sorting
