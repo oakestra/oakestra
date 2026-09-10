@@ -26,7 +26,7 @@ def _load_optional_env_int(name: str) -> int | None:
 
 def _load_required_env_int(name: str) -> int:
     value = _load_optional_env_int(name)
-    if not value:
+    if value is None:
         raise RuntimeError(f"Required environment variable '${name}' is not set.")
     return value
 
