@@ -55,7 +55,7 @@ class ServiceController(MethodView):
         except Exception as e:
             logger.error(f"Deployment Failed: {e}")
             logger.error(f"{traceback.format_exc()}")
-            abort(500, RuntimeError("Failed to deploy service"))
+            abort(500, message="Failed to deploy service")
 
         return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
 
@@ -78,7 +78,7 @@ class ServiceController(MethodView):
         except Exception as e:
             logger.error(f"Failed to delete service {job_id}: {e}")
             logger.error(f"{traceback.format_exc()}")
-            abort(500, RuntimeError("Failed to delete service"))
+            abort(500, message="Failed to delete service")
 
         return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
 
