@@ -223,12 +223,6 @@ services:
         bind:
           create_host_path: false
       - type: bind
-        source: ${CONTAINERD_SOCKET:-/run/containerd/containerd.sock}
-        target: ${CONTAINERD_SOCKET:-/run/containerd/containerd.sock}
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
         source: ${DOCKER_ROOT_DIR:-/var/lib/docker}
         target: ${DOCKER_ROOT_DIR:-/var/lib/docker}
         read_only: true
@@ -359,7 +353,7 @@ services:
       - "11011:11011"
     environment:
       - OAKESTRA_SERVICE_NAME=root_resource_abstractor
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_LEVEL=${LOG_LEVEL:-WARNING}
       - RESOURCE_ABSTRACTOR_PORT=11011
       - ROOT_MONGO_URL=mongo
       - ROOT_MONGO_PORT=10007
