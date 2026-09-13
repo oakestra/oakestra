@@ -1,16 +1,15 @@
-import logging
-
 from ext_requests.net_plugin_requests import net_inform_service_deploy, net_inform_service_undeploy
+from oakestra_logging import get_logger
 from resource_abstractor_client import app_operations, job_operations
 from sla.versioned_sla_parser import SLAFormatError, parse_sla_json
 
 from services.instance_management import request_scale_down_instance
 
-logger = logging.getLogger("system_manager")
+logger = get_logger(__name__)
 
 
 def insert_job(microservice):
-    logging.log(logging.INFO, "MONGODB - insert job...")
+    logger.debug("Inserting job", event_name="job.insert.started")
     # jobname and details generation
     job_name = (
         microservice["app_name"]
@@ -30,20 +29,29 @@ def insert_job(microservice):
     # job insertion
     new_job = job_operations.create_job(job_content)
     if new_job is None:
-        logger.error(f"job not inserted - {job_name}")
+        logger.error("Job was not inserted", event_name="job.insert.failed", job_name=job_name)
         return None
 
-    logger.info("job {} inserted".format(str(new_job.get("_id"))))
+    logger.info("Job inserted", event_name="job.inserted", job_id=str(new_job.get("_id")))
     return str(new_job.get("_id"))
 
 
 def create_services_of_app(username, data, force=False):
-    logging.log(logging.DEBUG, data)
+    applications = data.get("applications", []) if isinstance(data, dict) else []
+    logger.debug(
+        "Creating application services",
+        event_name="services.create.started",
+        application_count=len(applications),
+    )
     try:
         parse_sla_json(data)
-    except SLAFormatError as e:
-        logging.log(logging.ERROR, e)
-        return {"message": e}, 422
+    except SLAFormatError as exc:
+        logger.warning(
+            "SLA validation failed",
+            event_name="sla.validation.failed",
+            error_type=type(exc).__name__,
+        )
+        return {"message": exc}, 422
 
     app_id = data.get("applications")[0]["applicationID"]
     last_service_id = ""
@@ -59,8 +67,11 @@ def create_services_of_app(username, data, force=False):
         service = generate_db_structure(application, microservice)
         last_service_id = insert_job(service)
         if last_service_id is None:
-            logging.warning(
-                f"service not inserted for app-{app_id}, service-{service['service_name']}"
+            logger.warning(
+                "Service was not inserted",
+                event_name="service.insert.failed",
+                application_id=app_id,
+                service_name=service["service_name"],
             )
             # TODO(ME): add a reason why it failed.
             failed_services.append({"service_name": service["service_name"], "status": 500})
@@ -93,7 +104,7 @@ def create_services_of_app(username, data, force=False):
 
 
 def delete_job(job_id):
-    logger.info("delete job...")
+    logger.info("Deleting job", event_name="job.delete.started", job_id=job_id)
     job_operations.delete_job(job_id)
 
 
@@ -116,20 +127,6 @@ def update_service(username, sla, serviceid):
     # TODO(ME): Check fields and redeploy service
     # TODO(ME): this function is currently causing a lof of issues as such it is commented it out.
     # https://github.com/oakestra/oakestra/pull/282#discussion_r1526433174
-
-    # apps = app_operations.get_user_apps(username)
-    # for application in apps:
-    #     if serviceid in application["microservices"]:
-    #         logging.log(logging.INFO, f"update job - {serviceid}...")
-
-    #         job = job_operations.update_job(serviceid, sla)
-    #         if job is None:
-    #             logging.log(logging.ERROR, "job not updated")
-    #             continue
-
-    #         logging.log(logging.INFO, "job {} updated")
-    #         return job, 200
-
     return {"message": "Not implemented"}, 501
 
 

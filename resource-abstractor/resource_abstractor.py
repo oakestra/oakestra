@@ -1,6 +1,5 @@
 import logging
 import os
-import sys
 
 from api.v1 import blueprints
 from db.mongodb_client import mongo_init
@@ -8,18 +7,10 @@ from flask import Flask
 from flask_cors import CORS
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
+from oakestra_logging import configure_logging, get_logger
 
-# Configure logging with environment variable, default to DEBUG
-log_level_str = os.environ.get("LOG_LEVEL", "DEBUG").upper()
-log_level = getattr(logging, log_level_str, logging.DEBUG)
-
-logging.basicConfig(
-    level=log_level,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-logger = logging.getLogger("resource_abstractor")
-logger.setLevel(log_level)
+configure_logging(os.getenv("OAKESTRA_SERVICE_NAME", "resource_abstractor"))
+logger = get_logger(__name__)
 
 # Suppress mongo debug logs
 logging.getLogger("pymongo").setLevel(logging.WARNING)
@@ -29,7 +20,8 @@ logging.getLogger("pymongo.serverSelection").setLevel(logging.WARNING)
 RESOURCE_ABSTRACTOR_PORT = os.environ.get("RESOURCE_ABSTRACTOR_PORT")
 
 app = Flask(__name__)
-app.logger.setLevel(log_level)
+app.logger.handlers.clear()
+app.logger.propagate = True
 
 # Configure CORS with explicit settings
 CORS(

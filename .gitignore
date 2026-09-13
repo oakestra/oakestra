@@ -66,6 +66,10 @@ env/
 ENV/
 .env
 
+# Python bytecode
+__pycache__/
+*.py[cod]
+
 # logs
 *.log*
 

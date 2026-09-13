@@ -1,9 +1,9 @@
 # ......... CREATE ADMIN USER ...............
 #############################################
-import logging
 from datetime import datetime
 
 from bson import ObjectId
+from oakestra_logging import get_logger
 from werkzeug.security import generate_password_hash
 
 import ext_requests.mongodb_client as db
@@ -15,7 +15,7 @@ from ext_requests.organization_db import (
     mongo_get_roles_of_user_in_organization,
 )
 
-logger = logging.getLogger("system_manager")
+logger = get_logger(__name__)
 
 
 def create_admin():
@@ -47,7 +47,10 @@ def create_admin():
 
         organization = {"name": "root", "member": member}
         mongo_add_organization(organization)
-    logger.info("MONGODB - created root organization with admin")
+    logger.info(
+        "Ensured root organization and administrator exist",
+        event_name="database.bootstrap.completed",
+    )
 
 
 def mongo_save_user(data, organization_id):
@@ -109,7 +112,11 @@ def mongo_delete_user(username):
 
 
 def mongo_update_user(user_id, user):
-    logger.debug(user)
+    logger.debug(
+        "Updating user record",
+        event_name="database.user.update",
+        updated_fields=sorted(key for key in user if key != "password"),
+    )
     if "_id" in user:
         del user["_id"]
     db.mongo_users.find_one_and_update({"_id": ObjectId(user_id)}, {"$set": user})
