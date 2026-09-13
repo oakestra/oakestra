@@ -18,6 +18,8 @@ node_exporter shares the host network namespace so its network collector sees ph
 
 Metrics are retained for at most seven days or 1 GB. Cluster Grafana reaches Prometheus through the provisioned `Prometheus` datasource. cAdvisor's diagnostic UI and raw metrics are available only from the Cluster host at `http://127.0.0.1:8082` and `http://127.0.0.1:8082/metrics`; under the host-network override Prometheus is additionally bound only to `127.0.0.1:10009`. The Root does not scrape these metrics, so every standalone Cluster keeps and displays its own history.
 
+For upgrades from the previous Cluster metrics layout, the Prometheus container is named `cluster_prometheus`. Normal bridge mode no longer publishes port `10009`; Grafana reaches Prometheus privately at `http://cluster_prometheus:9090`, and host-side checks can use `docker exec` as shown below. The host-network override exposes `127.0.0.1:10009` only to the Cluster host. Existing off-host scrapers that used `<cluster-address>:10009` must be reconfigured because public Prometheus access is intentionally no longer provided.
+
 The metrics stack requires rootful Linux Docker Engine 25 or newer on AMD64 or ARM64. Set `DOCKER_ROOT_DIR` for a non-default Docker data directory. The Docker socket and host filesystems are mounted read-only but remain sensitive; keep cAdvisor on loopback and do not expose node_exporter. Use `override-no-observe.yml` on unsupported hosts.
 
 ```bash
