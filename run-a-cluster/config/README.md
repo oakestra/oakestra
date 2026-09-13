@@ -34,6 +34,8 @@ Both two levels use different volumes for the configuration of the three service
 ├── grafana-datasources.yml # Loki datasource setup
 ├── loki.yml                # Ingestion, storage config
 ├── config.alloy            # Alloy Docker discovery, processing, and Loki output
+└── dashboards
+    └── logs-dashboard.json # Provisioned orchestrator logs dashboard
 ```
 The configuration files can also be written at runtime but the volumes link allows a faster startup and configuration reload at runtime.
 
@@ -47,6 +49,12 @@ The configuration files can also be written at runtime but the volumes link allo
 > Alloy positions and Loki data use named volumes. Regular container recreation preserves them; `docker compose down -v` deliberately removes the stored state and log history.
 
 Alloy's diagnostic UI is available only from the orchestrator host at `http://127.0.0.1:12345`. It shows the component graph, health, and discovered targets. The loopback binding avoids exposing diagnostic and profiling endpoints to the deployment network.
+
+## Provisioned logs dashboard
+
+Grafana automatically loads the version-controlled [`[Oakestra] Orchestrator Logs`](./dashboards/logs-dashboard.json) dashboard from the mounted `config/dashboards` directory. Open Grafana on port `3000` and select it from **Dashboards**.
+
+The dashboard provides Source, Cluster, and Component selectors, exact normalized severity filtering, Full-line regex search, the standard Grafana time picker, shared-ID correlation links, and an **Advanced field filter (LogQL)**. Keep each query window at 30 days or less: Grafana's generic picker can display longer ranges, but Loki 2.9 rejects a single query longer than its `30d1h` default; inspect older retained history by moving an absolute window of at most 30 days backward. Critical is separate from Error, while **Unparsed** selects records without a recognized severity. **Display** defaults to a Compact component/message/event/context summary and can switch to the exact Raw record; this query-time formatting runs after filtering and does not modify Loki data. Python fields are accepted only from expected structured services with the schema-v1 identity fields and matching service-to-container identity, while compatibility parsers are scoped to known emitters; a payload field, logger name, or message word therefore cannot create a false severity match. The application `service` field stays in JSON for query-time filtering; `compose_service` is the trusted indexed component. Use `| json` in the advanced field to search `event`, `logger`, or nested `context` values at query time. Optional `| logfmt` applies only to a selected local observability component that emits logfmt; it is not the Python application format. Use the log panel's **Explore** action for unrestricted LogQL editing. In a 1-DOC deployment, the selectors distinguish Root and Cluster streams stored in the shared local Loki. In a Root-only deployment, the same dashboard displays only Root-local logs.
 
 ### Monitoring granularity configuration
 The native Alloy configuration is stored in [config.alloy](./config.alloy). `discovery.docker` asks the Docker daemon for containers carrying the collector-scope label assigned by Compose:
@@ -86,33 +94,11 @@ loki.source.docker "oakestra" {
 
 More Docker metadata is available, but labels such as full container IDs, container IPs, and source-line numbers are deliberately not indexed to avoid unnecessary label churn and cardinality.
 
-#### Labels granularity
-The existing JSON and Oakestra default-format extraction is preserved with Alloy's `loki.process` stages:
+#### Severity and field granularity
 
-```alloy
-loki.process "oakestra" {
-  stage.json {
-    expressions = {
-      level    = "level",
-      service  = "service",
-      filename = "filename",
-    }
-  }
+The authoritative processing pipeline is [`config.alloy`](./config.alloy). Structured Python parsing is limited to expected `oakestra_logging` Compose services and checks the schema identity fields. Separate service-scoped stages parse MongoDB, observability logfmt, Redis, Nginx, and scheduler headers; strict anchored expressions retain legacy Oakestra compatibility. Supported aliases map to the fixed lowercase set `debug`, `info`, `warning`, `error`, and `critical`; unknown formats stay collected without a level label and appear under **Unparsed**. Existing Loki data is not relabelled retroactively.
 
-  stage.regex {
-    expression = "(?P<level>[^\\[\\]]+?)(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}) (?P<service>[^:]+) (?P<file>[^:]+):(?P<line>\\d+)\\] (?P<message>.+)"
-  }
-
-  stage.labels {
-    values = {
-      level   = "",
-      service = "",
-    }
-  }
-}
-```
-
-If a supported format matches, `level` and `service` are extracted as labels. Raw lines are still collected when neither parser matches.
+Only low-cardinality routing and severity values are indexed. Message text, logger names, events, IDs, and context values stay in the record and are parsed at query time with `| json`. This retains exact structured searches without multiplying Loki streams.
 
 The [rules.yml](./alerts/rules.yml) contains LogQL rules based on the labels extracted by Alloy. Both discovery and processing labels can be used for alert conditions.
 
