@@ -49,3 +49,18 @@ chown "$KONG_UID:$KONG_GID" "$PUBLIC_DIR" "$PUBLIC_DIR/fullchain.pem" "$PUBLIC_D
 chmod 644 "$PUBLIC_DIR/fullchain.pem"
 chmod 600 "$PUBLIC_DIR/privkey.pem"
 echo "Public gateway certificate present; normalised ownership for the kong user."
+
+# Wait for the initial CRL file, which system_manager writes at startup alongside
+# ca.crt. Kong's ssl_crl directive requires the file to exist at nginx start.
+CRL_FILE="$CERT_DIR/revoked.crl"
+elapsed=0
+while [ ! -f "$CRL_FILE" ]; do
+    if [ "$elapsed" -ge "$TIMEOUT" ]; then
+        echo "ERROR: $CRL_FILE not present after ${TIMEOUT}s." >&2
+        echo "       system_manager writes the initial CRL at startup — check its logs." >&2
+        exit 1
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+done
+echo "CRL present at $CRL_FILE."

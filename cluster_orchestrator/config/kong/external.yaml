@@ -72,6 +72,16 @@ services:
         plugins:
           - *mtls_guard
 
+      # In-band cert renewal pushed by the root after a CA rotation.
+      - name: cm-cert-renew
+        protocols: [https]
+        paths:
+          - /api/certs/renew
+        methods: [POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+
   # Cluster service manager machine-to-machine surface (NetManager / root).
   - name: cluster_service_manager_m2m
     url: http://cluster_service_manager:10110

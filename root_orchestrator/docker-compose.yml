@@ -44,6 +44,7 @@ services:
       - JWT_GENERATOR_URL=jwt_generator
       - JWT_GENERATOR_PORT=10011
       - CERT_PATH=${CERT_PATH:-/certs}
+      - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
     volumes:
       - ./config/certs:${CERT_PATH:-/certs}
     logging: *default-logging

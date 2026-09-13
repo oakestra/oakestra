@@ -196,6 +196,7 @@ services:
       - KONG_NGINX_PROXY_SSL_CLIENT_CERTIFICATE=/certs/ca.crt
       - KONG_NGINX_PROXY_SSL_VERIFY_CLIENT=optional
       - KONG_NGINX_PROXY_SSL_VERIFY_DEPTH=1
+      - KONG_NGINX_PROXY_SSL_CRL=/certs/revoked.crl
       - KONG_LOG_LEVEL=info
     volumes:
       - ${ROOT_CERT_PATH:-./config/certs}:/certs:ro

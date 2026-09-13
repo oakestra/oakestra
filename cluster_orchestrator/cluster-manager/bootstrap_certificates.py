@@ -11,9 +11,9 @@ Two responsibilities:
    cert) /api/certs/cluster-bootstrap endpoint and write the five files:
    ca.crt, cluster.crt, cluster.key, cluster_ca.crt, cluster_ca.key.
 
-2. If no BYO public gateway certificate is present in /certs/public/,
-   generate a fallback server cert signed by the cluster's intermediate CA
-   so the external gateway can start. BYO files are never touched.
+2. Verify that a BYO public gateway certificate is present in /certs/public/.
+   There is intentionally NO auto-generated fallback — fail fast with an
+   actionable error if the operator has not provided fullchain.pem + privkey.pem.
 
 Server verification during bootstrap is controlled by ROOT_GATEWAY_TRUST:
   "system"  -> system trust store (root gateway uses a BYO public cert)
@@ -92,7 +92,7 @@ def redeem_cluster_token() -> None:
     root_url = os.environ.get("SYSTEM_MANAGER_URL") or ""
     root_port = os.environ.get("SYSTEM_MANAGER_PORT") or "443"
     cluster_name = os.environ.get("CLUSTER_NAME") or ""
-    cluster_ip = os.environ.get("CLUSTER_IP") or ""
+    cluster_ip = os.environ.get("CLUSTER_ADDRESS") or ""
 
     if not token:
         logger.error(
@@ -185,12 +185,79 @@ def ensure_public_gateway_cert() -> None:
     _make_kong_readable()
 
 
+WARN_EXPIRY_DAYS = 30
+
+
+def _check_cert_expiry() -> bool:
+    """Return True if the cluster client cert is still usable.
+
+    Logs a warning if it expires within WARN_EXPIRY_DAYS, exits 1 if already
+    expired (forces re-bootstrap with a fresh token).
+    """
+    try:
+        from datetime import datetime as _dt
+        from datetime import timezone as _tz
+
+        from cryptography import x509 as _x509
+
+        pem = CLUSTER_CERT_FILE.read_text()
+        cert = _x509.load_pem_x509_certificate(pem.encode("utf-8"))
+        remaining = cert.not_valid_after_utc - _dt.now(_tz.utc)
+        days = remaining.days
+
+        if remaining.total_seconds() <= 0:
+            logger.error(
+                "Cluster client certificate has expired (was valid until %s). "
+                "Re-bootstrap with a fresh token: set CLUSTER_REGISTRATION_TOKEN and restart.",
+                cert.not_valid_after_utc.isoformat(),
+            )
+            sys.exit(1)
+
+        if days <= WARN_EXPIRY_DAYS:
+            logger.warning(
+                "Cluster client certificate expires in %d day(s) (%s). "
+                "Consider refreshing: POST /api/certs/renew on the cluster, "
+                "or re-bootstrap with a new token.",
+                days,
+                cert.not_valid_after_utc.isoformat(),
+            )
+        return True
+    except Exception as exc:
+        logger.warning("Could not check cluster cert expiry: %s", exc)
+        return True
+
+
+def _init_cluster_crl() -> None:
+    """Write an empty cluster CRL if one doesn't already exist.
+
+    Mosquitto's crlfile directive requires the file to be present at startup
+    even when no worker certs have been revoked yet.
+    """
+    crl_path = CERT_DIR / "cluster_revoked.crl"
+    if crl_path.is_file():
+        return
+    try:
+        sys.path.insert(0, "/app")
+        from ext_requests.cluster_certificates import regenerate_cluster_crl
+
+        if regenerate_cluster_crl([]):
+            logger.info("Wrote empty cluster CRL to %s", crl_path)
+        else:
+            logger.warning("Could not write empty cluster CRL — mosquitto may fail to start")
+    except Exception as exc:
+        logger.warning(
+            "CRL init failed (%s) — mosquitto may fail to start if crlfile is configured", exc
+        )
+
+
 def main() -> None:
     if all(path.is_file() for path in MTLS_FILES):
         logger.info("Cluster certificate material already present — skipping token redemption.")
+        _check_cert_expiry()
     else:
         redeem_cluster_token()
     ensure_public_gateway_cert()
+    _init_cluster_crl()
     logger.info("Certificate bootstrap complete.")
 
 

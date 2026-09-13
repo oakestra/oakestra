@@ -65,6 +65,38 @@ def cluster_push_worker_token(cluster, token_hash, expiry_date_iso):
     )
 
 
+def cluster_push_cert_renew(clusters) -> dict:
+    """Ask each cluster to renew its mTLS cert material via the in-band CSR path.
+
+    Calls POST /api/certs/renew on each cluster over the existing mTLS session
+    (root presents its server.crt/key as a client cert on that channel).
+    Fire-and-forget per cluster: errors are logged but do not abort the loop.
+
+    Returns {cluster_id: True/False} result map.
+    """
+    results = {}
+    for cluster in clusters:
+        cid = str(cluster.get("_id", ""))
+        try:
+            resp = _session.post(
+                _cluster_base(cluster) + "/api/certs/renew",
+                timeout=30,
+            )
+            ok = resp.status_code == 200
+            if not ok:
+                logger.error(
+                    "Cert renewal push to cluster %s returned %d: %s",
+                    cid,
+                    resp.status_code,
+                    resp.text[:200],
+                )
+            results[cid] = ok
+        except requests.exceptions.RequestException as e:
+            logger.error("Cert renewal push to cluster %s failed: %s", cid, e)
+            results[cid] = False
+    return results
+
+
 def cluster_request_status(cluster_id):
     cluster = candidate_operations.get_candidate_by_id(cluster_id)
     try:

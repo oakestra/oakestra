@@ -314,3 +314,59 @@ def ensure_server_files(
     return regenerate_server_files(
         common_name=common_name, alt_names=alt_names, valid_days=valid_days
     )
+
+
+def cert_expires_in(cert_pem: str) -> "timedelta":
+    """Return how long until the certificate expires (negative if already expired)."""
+    cert = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
+    return cert.not_valid_after_utc - datetime.now(timezone.utc)
+
+
+def get_crl_path() -> Path:
+    return get_cert_path() / "revoked.crl"
+
+
+def generate_root_crl(revoked_serials: list) -> bytes:
+    """Build and sign a CRL from a list of (serial_int, revoked_at) tuples.
+
+    revoked_serials may be empty — an empty CRL is valid and signals that
+    revocation checking is active with nothing currently revoked.
+    Returns PEM bytes.
+    """
+    ca_cert, ca_key = load_ca_material()
+    now = datetime.now(timezone.utc)
+
+    builder = (
+        x509.CertificateRevocationListBuilder()
+        .issuer_name(ca_cert.subject)
+        .last_update(now)
+        .next_update(now + timedelta(days=30))
+    )
+    for serial, revoked_at in revoked_serials:
+        if revoked_at.tzinfo is None:
+            revoked_at = revoked_at.replace(tzinfo=timezone.utc)
+        revoked = (
+            x509.RevokedCertificateBuilder()
+            .serial_number(serial)
+            .revocation_date(revoked_at)
+            .build()
+        )
+        builder = builder.add_revoked_certificate(revoked)
+
+    crl = builder.sign(private_key=ca_key, algorithm=hashes.SHA256())
+    return crl.public_bytes(serialization.Encoding.PEM)
+
+
+def regenerate_root_crl(revoked_serials: list) -> bool:
+    """Regenerate /certs/revoked.crl from the given serial list. Returns True on success."""
+    try:
+        pem = generate_root_crl(revoked_serials)
+        crl_path = get_crl_path()
+        crl_path.write_bytes(pem)
+        os.chmod(crl_path, 0o644)
+        return True
+    except Exception as exc:
+        import logging as _logging
+
+        _logging.getLogger(__name__).error("Failed to write CRL to %s: %s", get_crl_path(), exc)
+        return False

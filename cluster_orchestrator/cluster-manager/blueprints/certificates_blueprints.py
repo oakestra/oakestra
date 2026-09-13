@@ -6,11 +6,18 @@ from pathlib import Path
 import config
 import requests
 from ext_requests.cluster_certificates import (
+    generate_cluster_csr,
     generate_worker_cert,
     get_root_ca_pem,
+    regenerate_cluster_crl,
     sign_worker_csr,
 )
-from ext_requests.token_db import consume_token, store_token_hash
+from ext_requests.token_db import (
+    consume_token,
+    get_revoked_serials,
+    store_revoked_cert,
+    store_token_hash,
+)
 from flask import Response, request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
@@ -206,7 +213,7 @@ class ClusterCertRefreshController(MethodView):
         root_url = os.environ.get("SYSTEM_MANAGER_URL") or ""
         root_port = os.environ.get("SYSTEM_MANAGER_PORT") or "443"
         cluster_name = config.MY_CHOSEN_CLUSTER_NAME or ""
-        cluster_ip = config.MY_CLUSTER_IP or ""
+        cluster_ip = config.MY_CLUSTER_ADDRESS or ""
 
         if not root_url or not cluster_name:
             abort(500, message="SYSTEM_MANAGER_URL and CLUSTER_NAME must be configured")
@@ -258,6 +265,144 @@ class ClusterCertRefreshController(MethodView):
             ),
             "mqtt_reloaded": mqtt_reloaded,
             "cert_dir": str(cert_dir),
+        }
+
+
+def _renew_cluster_certs_in_band() -> tuple:
+    """Renew cluster mTLS material via the root's /api/certs/cluster-renew endpoint.
+
+    Uses the *current* cluster cert as the mTLS credential — valid as long as
+    the root's dual-CA grace period is active. Generates a fresh key + CSR,
+    sends it to the root, installs the new material, and reloads MQTT.
+
+    Returns (success: bool, message: str).
+    """
+    root_url = os.environ.get("SYSTEM_MANAGER_URL") or ""
+    root_port = os.environ.get("SYSTEM_MANAGER_PORT") or "443"
+    cluster_name = config.MY_CHOSEN_CLUSTER_NAME or ""
+    cluster_ip = config.MY_CLUSTER_ADDRESS or ""
+
+    if not root_url or not cluster_name:
+        return False, "SYSTEM_MANAGER_URL and CLUSTER_NAME must be configured"
+    if not config.mtls_enabled():
+        return False, "mTLS is not enabled — cannot renew in-band"
+
+    alt_names = [n for n in (cluster_ip, cluster_name, "mqtt", "localhost") if n]
+    new_key_pem, csr_pem = generate_cluster_csr(cluster_name, alt_names)
+
+    base_url = f"https://{root_url}:{root_port}"
+    try:
+        resp = requests.post(
+            f"{base_url}/api/certs/cluster-renew",
+            json={"csr": csr_pem, "alt_names": alt_names, "valid_days": 365},
+            cert=(config.CLUSTER_CERT_FILE, config.CLUSTER_KEY_FILE),
+            verify=config.root_gateway_verify(),
+            timeout=30,
+        )
+    except requests.exceptions.RequestException as e:
+        return False, f"Could not reach root: {e}"
+
+    if resp.status_code == 401:
+        return False, "mTLS client cert rejected — grace period may have ended"
+    if resp.status_code != 200:
+        return False, f"Root returned {resp.status_code}: {resp.text[:200]}"
+
+    payload = resp.json()
+    cert_dir = Path(config.ROOT_CA_FILE).parent if config.ROOT_CA_FILE else Path("/certs")
+
+    def _write(path, content, mode):
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content)
+        os.chmod(p, mode)
+
+    _write(config.CLUSTER_KEY_FILE, new_key_pem, 0o600)
+    _write(config.CLUSTER_CERT_FILE, payload["client_cert"], 0o644)
+    _write(config.CLUSTER_CA_CERT_FILE, payload["cluster_ca_cert"], 0o644)
+    _write(config.CLUSTER_CA_KEY_FILE, payload["cluster_ca_key"], 0o600)
+    _write(config.ROOT_CA_FILE, payload["root_ca"], 0o644)
+
+    logger.info("Cluster certificates renewed in-band in %s", cert_dir)
+    mqtt_reloaded = config.reload_mqtt()
+    msg = (
+        "Certificates renewed and MQTT broker reloaded."
+        if mqtt_reloaded
+        else "Certificates renewed. MQTT broker reload failed — restart mqtt manually."
+    )
+    return True, msg
+
+
+@certbp.route("/renew")
+class ClusterCertRenewController(MethodView):
+    def post(self):
+        """Renew this cluster's mTLS certificate material via in-band CSR.
+
+        Sends a CSR to the root's /api/certs/cluster-renew endpoint using the
+        current (old) client cert while the root's dual-CA grace period is
+        active. Installs the new cert material and reloads MQTT.
+
+        Reachable via the internal gateway only.
+        """
+        success, message = _renew_cluster_certs_in_band()
+        if not success:
+            abort(502, message=message)
+        return {"message": message}
+
+
+revoke_cert_schema = {
+    "type": "object",
+    "properties": {
+        "cert_pem": {"type": "string"},
+        "reason": {"type": "string"},
+    },
+    "required": ["cert_pem"],
+}
+
+
+@certbp.route("/revoke")
+class ClusterCertRevokeController(MethodView):
+    @certbp.arguments(schema=revoke_cert_schema, location="json", validate=False, unknown=True)
+    def post(self, *args, **kwargs):
+        """Revoke a worker certificate by PEM.
+
+        Adds the cert's serial to the cluster revoked_certs collection,
+        regenerates /certs/cluster_revoked.crl (signed by the cluster
+        intermediate CA), and reloads MQTT so the updated CRL takes effect.
+
+        Reachable via the internal gateway only.
+        """
+        from cryptography import x509 as _x509
+
+        content = request.get_json(silent=True) or {}
+        cert_pem = content.get("cert_pem") or ""
+        if not cert_pem.strip():
+            abort(400, message="cert_pem is required")
+
+        try:
+            cert = _x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
+        except Exception as e:
+            abort(400, message=f"Invalid certificate PEM: {e}")
+
+        serial_hex = format(cert.serial_number, "x")
+        cert_subject = cert.subject.rfc4514_string()
+
+        store_revoked_cert(
+            serial_hex=serial_hex,
+            cert_subject=cert_subject,
+            reason=content.get("reason") or "",
+            revoked_by="api",
+        )
+
+        all_revoked = get_revoked_serials()
+        crl_ok = regenerate_cluster_crl(all_revoked)
+        mqtt_reloaded = config.reload_mqtt() if crl_ok else False
+
+        return {
+            "message": "Worker certificate revoked",
+            "serial_hex": serial_hex,
+            "cert_subject": cert_subject,
+            "crl_regenerated": crl_ok,
+            "mqtt_reloaded": mqtt_reloaded,
         }
 
 

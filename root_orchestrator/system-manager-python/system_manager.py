@@ -11,7 +11,12 @@ import grpc
 import requests
 from blueprints import blueprints
 from bson import json_util
-from ext_requests.certificates import ensure_ca_files, ensure_server_files
+from ext_requests.certificates import (
+    ensure_ca_files,
+    ensure_server_files,
+    get_crl_path,
+    regenerate_root_crl,
+)
 from ext_requests.jwt_generator_requests import get_public_key
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import net_register_cluster
@@ -77,6 +82,9 @@ ensure_server_files(
     alt_names=list(dict.fromkeys(_server_alt_names)),
     valid_days=365,
 )
+if not get_crl_path().is_file():
+    if not regenerate_root_crl([]):
+        raise RuntimeError("Failed to write initial CRL — check CA key permissions and logs")
 
 MY_PORT = os.environ.get("MY_PORT") or 10000
 MY_PORT_GRPC = os.environ.get("MY_PORT_GRPC") or 50052
@@ -142,21 +150,6 @@ def _is_cluster_reachable(cluster_address, cluster_port):
     return False
 
 
-def get_ip_from_grpc_transport(peer: str) -> str:
-    """Extract the client IP from a gRPC peer string (e.g. 'ipv4:1.2.3.4:5678' -> '1.2.3.4')."""
-    # peer format: "ipv4:<ip>:<port>" or "ipv6:[<ip>]:<port>"
-    parts = peer.split(":", 1)
-    if len(parts) < 2:
-        return peer
-    addr = parts[1]
-    # strip the trailing :<port>
-    if addr.startswith("["):
-        # IPv6: [::1]:port
-        end = addr.find("]")
-        return addr[1:end] if end != -1 else addr
-    return addr.rsplit(":", 1)[0]
-
-
 class ClusterRegistrationServicer(register_clusterServicer):
     def handle_init_greeting(self, request, context):
         logger.info("gRPC - Cluster_Manager connected: {}".format(context.peer()))
@@ -169,9 +162,18 @@ class ClusterRegistrationServicer(register_clusterServicer):
         logger.info(request)
         message = MessageToDict(request, preserving_proto_field_name=True)
         logger.info("Message: {}, request {}".format(message, request))
-        cluster_address = (
-            request.cluster_ip if request.cluster_ip else get_ip_from_grpc_transport(context.peer())
-        )
+
+        cluster_address = message.get("cluster_address", "").strip()
+        if not cluster_address:
+            logger.error(
+                "Cluster did not advertise a cluster_address; refusing registration. "
+                "Set CLUSTER_ADDRESS on the cluster_manager."
+            )
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "cluster_address is required",
+            )
+
         cluster_port = str(message["manager_port"])
         logger.info("Cluster address: {} port: {}".format(cluster_address, cluster_port))
 

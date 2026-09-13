@@ -50,6 +50,17 @@ services:
         plugins:
           - *mtls_guard
 
+      # In-band cluster cert renewal: cluster sends a CSR while its old cert is
+      # still trusted (during the dual-CA grace period after POST /api/certs/rotate).
+      - name: cluster-renew-external
+        protocols: [https]
+        paths:
+          - /api/certs/cluster-renew
+        methods: [POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - *mtls_guard
+
   # Machine-to-machine surface for the root networking plugin
   # (cluster_service_manager -> root_service_manager).
   - name: root_service_manager_m2m
@@ -251,11 +262,19 @@ services:
         strip_path: false
 
   # Explicitly block endpoints that must not be reachable externally:
-  # the scheduler callback (/api/result, no app-level auth), grafana, and a
-  # fallback deny for any unlisted API path.
+  # the scheduler callback (/api/result, no app-level auth), grafana,
+  # /api/certs/public (BYO cert upload — private key must not cross external TLS),
+  # and a fallback deny for any unlisted API path.
   - name: system_manager_admin_block
     url: http://system_manager:10000
     routes:
+      # Block BYO public cert upload: the private key must not cross the external
+      # TLS termination point. More specific than /api/certs so Kong matches first.
+      - name: sm-block-certs-public
+        paths:
+          - /api/certs/public
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        strip_path: false
       # Fallback deny: any API path not matched by the explicit prefix allowlist above stays blocked.
       - name: sm-block-api-fallback
         paths:

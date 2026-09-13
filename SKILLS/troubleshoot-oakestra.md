@@ -207,7 +207,7 @@ docker exec cluster_service_manager env 2>/dev/null | grep -E "ROOT_SERVICE_MANA
 # Gateway deployments only (override-gateway.yml): TLS/token bootstrap vars
 docker exec system_manager env 2>/dev/null | grep -E "ROOT_CERT_FILE|ROOT_PUBLIC_ADDRESS|REGISTRATION_TOKEN_TTL|CLUSTER_GATEWAY_TRUST"
 docker exec cluster_manager env 2>/dev/null | grep -E "CLUSTER_CERT_FILE|ROOT_CA_FILE|ROOT_GATEWAY_TRUST|SYSTEM_MANAGER_USE_TLS"
-docker exec cluster_cert_bootstrap env 2>/dev/null | grep -E "CLUSTER_REGISTRATION_TOKEN|ROOT_GATEWAY_TRUST|CLUSTER_NAME|CLUSTER_IP"
+docker exec cluster_cert_bootstrap env 2>/dev/null | grep -E "CLUSTER_REGISTRATION_TOKEN|ROOT_GATEWAY_TRUST|CLUSTER_NAME|CLUSTER_ADDRESS"
 ```
 
 **Gateway-mode validations:**
@@ -1048,9 +1048,9 @@ curl -ks https://<ROOT_IP>/api/certs/ca.crt | head -2
 # Machine-to-machine route without client cert -> must return 401
 curl -ks -o /dev/null -w "%{http_code}\n" -X POST https://<ROOT_IP>/api/information/test
 # Worker registration without client cert -> must return 401
-curl -ks -o /dev/null -w "%{http_code}\n" -X POST https://<CLUSTER_IP>:8443/api/node/register
+curl -ks -o /dev/null -w "%{http_code}\n" -X POST https://<CLUSTER_ADDRESS>:8443/api/node/register
 # Cleartext listener on the cluster must also reject machine routes (401)
-curl -s -o /dev/null -w "%{http_code}\n" -X POST http://<CLUSTER_IP>:8080/api/node/register
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://<CLUSTER_ADDRESS>:8080/api/node/register
 ```
 
 ### 18.4 Registration token flow
@@ -1067,7 +1067,7 @@ echo "$TOKEN_JSON"   # contains token, expires_at, suggested_command
 curl -ks -X POST https://<ROOT_IP>/api/tokens/worker -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" -d '{"cluster_id": "<id from /api/clusters>"}'
 
 # 4. Register the worker with the returned one-liner:
-# sudo NodeEngine -a <cluster_ip> -p 8443 -s --token <token>
+# sudo NodeEngine -a <cluster_address> -p 8443 -s --token <token>
 ```
 
 **Failure modes:**

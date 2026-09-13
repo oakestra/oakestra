@@ -133,7 +133,7 @@ def _refresh_cluster_certs() -> bool:
     root_url = os.environ.get("SYSTEM_MANAGER_URL") or ""
     root_port = os.environ.get("SYSTEM_MANAGER_PORT") or "443"
     cluster_name = config.MY_CHOSEN_CLUSTER_NAME or ""
-    cluster_ip = config.MY_CLUSTER_IP or ""
+    cluster_ip = config.MY_CLUSTER_ADDRESS or ""
 
     if not root_url or not cluster_name:
         logger.error("Cannot refresh certs: SYSTEM_MANAGER_URL or CLUSTER_NAME not configured")
@@ -217,7 +217,7 @@ def _try_register() -> bool:
             message.network_component_port = int(config.NETWORK_COMPONENT_PORT)
             message.cluster_name = config.MY_CHOSEN_CLUSTER_NAME
             message.cluster_location = config.MY_CLUSTER_LOCATION
-            message.cluster_ip = config.MY_CLUSTER_IP
+            message.cluster_address = config.MY_CLUSTER_ADDRESS
 
             key_value_message = KeyValue()
             message.cluster_info.append(key_value_message)
@@ -243,6 +243,13 @@ def _try_register() -> bool:
 
 def register_with_system_manager():
     """Register with the system manager, refreshing certs and retrying once on failure."""
+    if not config.MY_CLUSTER_ADDRESS:
+        raise RuntimeError(
+            "CLUSTER_ADDRESS env var is not set. The root orchestrator needs the "
+            "reachable IP of this cluster manager. Set CLUSTER_ADDRESS to the "
+            "IP/hostname the root can use to reach this host."
+        )
+
     if _try_register():
         return
 
@@ -268,6 +275,38 @@ def register_with_system_manager():
 start_http_server(10001)  # start prometheus server
 
 
+_CERT_WARN_DAYS = 30
+
+
+def _check_cluster_cert_expiry():
+    """Log a warning/error if the mTLS client cert is near expiry or already expired."""
+    if not config.mtls_enabled():
+        return
+    if not config.CLUSTER_CERT_FILE:
+        return
+    try:
+        from pathlib import Path
+
+        from ext_requests.cluster_certificates import cert_expires_in
+
+        pem = Path(config.CLUSTER_CERT_FILE).read_text()
+        remaining = cert_expires_in(pem)
+        days = remaining.days
+        if remaining.total_seconds() <= 0:
+            logger.error(
+                "Cluster mTLS client certificate has EXPIRED. "
+                "Call POST /api/certs/renew or re-bootstrap with a new token."
+            )
+        elif days <= _CERT_WARN_DAYS:
+            logger.warning(
+                "Cluster mTLS client certificate expires in %d day(s). "
+                "Call POST /api/certs/renew before it expires.",
+                days,
+            )
+    except Exception as exc:
+        logger.warning("Could not check cluster cert expiry: %s", exc)
+
+
 def _register_in_background():
     # The root probes GET /api/cluster/status on this cluster_manager during
     # registration. That probe can only succeed once gunicorn's worker has
@@ -278,6 +317,7 @@ def _register_in_background():
     # failure, exit the worker so gunicorn respawns it and tries again.
     time.sleep(2)
     try:
+        _check_cluster_cert_expiry()
         register_with_system_manager()
     except Exception:
         logger.exception("Cluster registration failed; exiting worker for restart")

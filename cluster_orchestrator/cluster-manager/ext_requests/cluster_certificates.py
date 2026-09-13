@@ -6,7 +6,7 @@ from config import CLUSTER_CA_CERT_FILE, CLUSTER_CA_KEY_FILE, ROOT_CA_FILE
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import ExtensionOID, NameOID
+from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID, NameOID
 
 DEFAULT_KEY_SIZE = 3072
 
@@ -129,6 +129,113 @@ def generate_worker_cert(
     ).decode("utf-8")
 
     return private_pem, fullchain_pem
+
+
+def cert_expires_in(cert_pem: str) -> timedelta:
+    """Return how long until the certificate expires (negative if already expired)."""
+    cert = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
+    return cert.not_valid_after_utc - datetime.now(timezone.utc)
+
+
+def get_cluster_crl_path() -> Path:
+    base = Path(ROOT_CA_FILE).parent if ROOT_CA_FILE else Path("/certs")
+    return base / "cluster_revoked.crl"
+
+
+def generate_cluster_crl(revoked_serials: list) -> bytes:
+    """Build and sign a CRL from (serial_int, revoked_at) tuples using the cluster intermediate CA.
+
+    An empty revoked_serials list produces a valid empty CRL.
+    Returns PEM bytes.
+    """
+    intermediate_cert, intermediate_key, _ = load_cluster_ca()
+    now = datetime.now(timezone.utc)
+
+    builder = (
+        x509.CertificateRevocationListBuilder()
+        .issuer_name(intermediate_cert.subject)
+        .last_update(now)
+        .next_update(now + timedelta(days=30))
+    )
+    for serial, revoked_at in revoked_serials:
+        if revoked_at.tzinfo is None:
+            revoked_at = revoked_at.replace(tzinfo=timezone.utc)
+        revoked = (
+            x509.RevokedCertificateBuilder()
+            .serial_number(serial)
+            .revocation_date(revoked_at)
+            .build()
+        )
+        builder = builder.add_revoked_certificate(revoked)
+
+    crl = builder.sign(private_key=intermediate_key, algorithm=hashes.SHA256())
+    return crl.public_bytes(serialization.Encoding.PEM)
+
+
+def regenerate_cluster_crl(revoked_serials: list) -> bool:
+    """Regenerate /certs/cluster_revoked.crl from the given serial list. Returns True on success."""
+    try:
+        pem = generate_cluster_crl(revoked_serials)
+        crl_path = get_cluster_crl_path()
+        crl_path.write_bytes(pem)
+        import os as _os
+
+        _os.chmod(crl_path, 0o644)
+        return True
+    except Exception:
+        return False
+
+
+def generate_cluster_csr(common_name: str, alt_names: list) -> tuple:
+    """Generate a new RSA private key and CSR for cluster client cert renewal.
+
+    The CSR includes clientAuth + serverAuth EKUs so the signed cert can be
+    used both as an mTLS client identity (cluster→root) and as a server cert
+    (root→cluster callbacks).
+
+    Returns (private_key_pem, csr_pem).
+    """
+    key = rsa.generate_private_key(public_exponent=65537, key_size=DEFAULT_KEY_SIZE)
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
+
+    san_list = []
+    for name in alt_names or []:
+        try:
+            san_list.append(x509.IPAddress(ipaddress.ip_address(name)))
+        except ValueError:
+            san_list.append(x509.DNSName(name))
+
+    builder = x509.CertificateSigningRequestBuilder().subject_name(subject)
+    if san_list:
+        builder = builder.add_extension(x509.SubjectAlternativeName(san_list), critical=False)
+    builder = builder.add_extension(
+        x509.KeyUsage(
+            digital_signature=True,
+            content_commitment=False,
+            key_encipherment=True,
+            data_encipherment=False,
+            key_agreement=False,
+            key_cert_sign=False,
+            crl_sign=False,
+            encipher_only=False,
+            decipher_only=False,
+        ),
+        critical=True,
+    )
+    builder = builder.add_extension(
+        x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH, ExtendedKeyUsageOID.SERVER_AUTH]),
+        critical=False,
+    )
+
+    csr = builder.sign(key, hashes.SHA256())
+
+    key_pem = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
+    csr_pem = csr.public_bytes(serialization.Encoding.PEM).decode("utf-8")
+    return key_pem, csr_pem
 
 
 def sign_worker_csr(csr_pem: str, valid_days: int = 365) -> str:

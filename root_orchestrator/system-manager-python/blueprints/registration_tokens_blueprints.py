@@ -39,9 +39,10 @@ worker_token_schema = {
 
 
 def _root_public_address() -> str:
-    # ROOT_PUBLIC_ADDRESS is authoritative; the forwarded host is a
-    # convenience fallback for the suggested command only.
     address = os.environ.get("ROOT_PUBLIC_ADDRESS")
+    if address:
+        return address
+    address = os.environ.get("SYSTEM_MANAGER_URL")
     if address:
         return address
     forwarded = request.headers.get("X-Forwarded-Host")
@@ -70,12 +71,7 @@ class ClusterRegistrationTokenController(Resource):
             "expires_at": expiry_date.isoformat(),
             "root_address": root_address,
             "root_port": 443,
-            "suggested_command": (
-                f"CLUSTER_REGISTRATION_TOKEN={token} "
-                f"SYSTEM_MANAGER_URL={root_address} "
-                "CLUSTER_NAME=<name> "
-                "./StartOakestraCluster.sh"
-            ),
+            "suggested_command": (f"oak cluster connect --token {token} --root {root_address}"),
         }
 
 

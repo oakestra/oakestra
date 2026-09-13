@@ -11,6 +11,7 @@ CLUSTER_MONGO_URL = os.environ.get("CLUSTER_MONGO_URL", "localhost")
 CLUSTER_MONGO_PORT = os.environ.get("CLUSTER_MONGO_PORT", 10107)
 
 _worker_tokens = None
+_revoked_certs = None
 
 
 def _collection():
@@ -21,6 +22,37 @@ def _collection():
         # Mongo TTL monitor garbage-collects expired one-time tokens.
         _worker_tokens.create_index("expiry_date", expireAfterSeconds=0)
     return _worker_tokens
+
+
+def _revoked_certs_collection():
+    global _revoked_certs
+    if _revoked_certs is None:
+        client = MongoClient(f"mongodb://{CLUSTER_MONGO_URL}:{CLUSTER_MONGO_PORT}/")
+        _revoked_certs = client["clusters"]["revoked_certs"]
+        # TTL: 730 days (twice max cert validity)
+        _revoked_certs.create_index("revoked_at", expireAfterSeconds=63072000)
+    return _revoked_certs
+
+
+def store_revoked_cert(serial_hex: str, cert_subject: str, reason: str, revoked_by: str) -> None:
+    _revoked_certs_collection().insert_one(
+        {
+            "serial_hex": serial_hex,
+            "cert_subject": cert_subject,
+            "cert_type": "worker",
+            "revoked_at": datetime.now(timezone.utc),
+            "reason": reason,
+            "revoked_by": revoked_by,
+        }
+    )
+
+
+def get_revoked_serials() -> list:
+    """Return list of (serial_int, revoked_at) tuples for CRL generation."""
+    return [
+        (int(doc["serial_hex"], 16), doc["revoked_at"])
+        for doc in _revoked_certs_collection().find({}, {"serial_hex": 1, "revoked_at": 1})
+    ]
 
 
 def hash_worker_token(token: str) -> str:
