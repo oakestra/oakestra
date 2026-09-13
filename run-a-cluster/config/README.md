@@ -182,4 +182,12 @@ Sensitive mapping keys are recursively redacted, and service call sites log summ
 
 The local `docker_state_exporter` supplies Docker state and automatic restart counters to Prometheus. Grafana provisions alerts for missing running replicas and recent automatic restarts, identified by `cluster_id`, `compose_service`, and `compose_project`. Separate rules report unavailable monitoring and missing desired-state inventory. These alerts reuse the existing webhook/email contact points; they do not replace application health checks.
 
-Startup scripts generate the expected-container inventory from the resolved Compose configuration using Python 3. With manual Compose commands, generate it before startup and regenerate it after intentional service, profile, or replica changes. The exporter is internal, resource-limited, and disabled by `override-no-observe.yml`; its Docker socket access remains security-sensitive even with a read-only mount. See [container lifecycle monitoring](../../docs/container-alerts.md) for commands, alert timing, limitations, security, and verification. A 1-DOC deployment uses one exporter and inventory for its shared host.
+Startup scripts generate the expected-container inventory from the resolved Compose configuration using Python 3. With manual Compose commands, generate it before startup and regenerate it after intentional service, profile, or replica changes. Use the same Compose files, project, profiles, environment, and overrides for inventory generation and deployment:
+
+```bash
+docker compose -f run-a-cluster/1-DOC.yaml config --format json |
+  python3 scripts/utils/generateContainerInventory.py \
+    --output run-a-cluster/config/container-inventory/containers.prom
+```
+
+The exporter is internal, resource-limited, and disabled by `override-no-observe.yml`; its Docker socket access remains security-sensitive even with a read-only mount. A healthy deployment returns `1` for `oakestra:container_monitoring_ready` and `0` for every `oakestra:container_missing_replicas` and `oakestra:container_restarts_5m` series. Missing-container, monitoring-unavailable, and missing-inventory conditions wait one minute before firing; automatic restart-counter increases have no pending delay. Manual restarts and container recreation are not automatic restart-policy events, and a running container is not proof that its application is responsive. A 1-DOC deployment uses one exporter and inventory for its shared host.
