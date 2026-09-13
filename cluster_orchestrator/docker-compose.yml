@@ -177,7 +177,7 @@ services:
       - "11012:11012"
     environment:
       - OAKESTRA_SERVICE_NAME=cluster_resource_abstractor
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_LEVEL=${LOG_LEVEL:-WARNING}
       - RESOURCE_ABSTRACTOR_PORT=11012
       - MONGO_URL=cluster_mongo
       - MONGO_PORT=10107
