@@ -20,7 +20,20 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Open log statistics",
+      "tooltip": "Open the Log Statistics dashboard with the same Cluster, Source, Component, and time range.",
+      "type": "link",
+      "url": "/d/fRIvzUZM8/oakestra-log-statistics"
+    }
+  ],
   "liveNow": false,
   "panels": [
     {
