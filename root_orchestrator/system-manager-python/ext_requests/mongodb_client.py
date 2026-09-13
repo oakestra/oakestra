@@ -2,6 +2,7 @@ import logging
 import os
 
 from flask_pymongo import PyMongo
+from utils.gateway import GATEWAY_ENABLED
 
 MONGO_URL = os.environ.get("ROOT_MONGO_URL", "localhost")
 MONGO_PORT = os.environ.get("ROOT_MONGO_PORT", 10007)
@@ -30,14 +31,16 @@ def mongo_init(flask_app):
 
     mongo_users = PyMongo(app, uri=MONGO_ADDR_USERS).db["user"]
     mongo_organization = PyMongo(app, uri=MONGO_ADDR_USERS).db["organization"]
-    mongo_registration_tokens = PyMongo(app, uri=MONGO_ADDR_USERS).db["registration_tokens"]
-    # Mongo TTL monitor garbage-collects expired one-time registration tokens.
-    mongo_registration_tokens.create_index("expiry_date", expireAfterSeconds=0)
 
-    mongo_revoked_certs = PyMongo(app, uri=MONGO_ADDR_USERS).db["revoked_certs"]
-    # TTL: keep revocation records for twice the max cert validity so
-    # recently expired certs are still blocked during their potential reuse window.
-    mongo_revoked_certs.create_index("revoked_at", expireAfterSeconds=63072000)  # 730 days
+    if GATEWAY_ENABLED:
+        mongo_registration_tokens = PyMongo(app, uri=MONGO_ADDR_USERS).db["registration_tokens"]
+        # Mongo TTL monitor garbage-collects expired one-time registration tokens.
+        mongo_registration_tokens.create_index("expiry_date", expireAfterSeconds=0)
+
+        mongo_revoked_certs = PyMongo(app, uri=MONGO_ADDR_USERS).db["revoked_certs"]
+        # TTL: keep revocation records for twice the max cert validity so
+        # recently expired certs are still blocked during their potential reuse window.
+        mongo_revoked_certs.create_index("revoked_at", expireAfterSeconds=63072000)  # 730 days
 
     logger.info("MONGODB - init mongo")
     logger.info(mongo_users)

@@ -42,9 +42,9 @@ type ConfFile struct {
 	OverlayNetwork      string           `json:"overlay_network"`
 	PublicIp            PublicIPMode     `json:"public_ip"`
 	NetPort             int              `json:"overlay_network_port"`
-	WorkerCertFile      string           `json:"worker_cert_file"`
-	WorkerKeyFile       string           `json:"worker_key_file"`
-	ClusterCaFile       string           `json:"cluster_ca_file"`
+	WorkerCertFile      string           `json:"mqtt_cert_file"`
+	WorkerKeyFile       string           `json:"mqtt_key_file"`
+	ClusterCaFile       string           `json:"cluster_ca_file,omitempty"`
 	ClusterToken        string           `json:"cluster_token,omitempty"`         // One-time registration token
 	ClusterGatewayTrust string           `json:"cluster_gateway_trust,omitempty"` // CA trust source for cluster certs. Default: Use OS trust store
 	Addons              []Addon          `json:"addons"`

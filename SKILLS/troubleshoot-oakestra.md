@@ -205,8 +205,8 @@ docker exec cluster_service_manager env 2>/dev/null | grep -E "ROOT_SERVICE_MANA
 
 ```bash
 # Gateway deployments only (override-gateway.yml): TLS/token bootstrap vars
-docker exec system_manager env 2>/dev/null | grep -E "ROOT_CERT_FILE|ROOT_PUBLIC_ADDRESS|REGISTRATION_TOKEN_TTL|CLUSTER_GATEWAY_TRUST"
-docker exec cluster_manager env 2>/dev/null | grep -E "CLUSTER_CERT_FILE|ROOT_CA_FILE|ROOT_GATEWAY_TRUST|SYSTEM_MANAGER_USE_TLS"
+docker exec system_manager env 2>/dev/null | grep -E "GATEWAY_ENABLED|ROOT_CERT_FILE|ROOT_PUBLIC_ADDRESS|REGISTRATION_TOKEN_TTL|CLUSTER_GATEWAY_TRUST"
+docker exec cluster_manager env 2>/dev/null | grep -E "GATEWAY_ENABLED|CLUSTER_CERT_FILE|ROOT_CA_FILE|ROOT_GATEWAY_TRUST|SYSTEM_MANAGER_USE_TLS"
 docker exec cluster_cert_bootstrap env 2>/dev/null | grep -E "CLUSTER_REGISTRATION_TOKEN|ROOT_GATEWAY_TRUST|CLUSTER_NAME|CLUSTER_ADDRESS"
 ```
 

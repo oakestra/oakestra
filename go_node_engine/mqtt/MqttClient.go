@@ -80,6 +80,10 @@ func InitMqtt(
 	TOPICS[fmt.Sprintf("nodes/%s/control/delete", clientID)] = withRuntimeManager(deleteHandler, runtimeManager)
 
 	opts := mqtt.NewClientOptions()
+	if caFile == "" {
+		// Without a cluster CA (non-gateway setups) keep the plain broker first, as before.
+		opts.AddBroker(fmt.Sprintf("tcp://%s:%s", brokerUrl, brokerPort))
+	}
 	opts.SetClientID(clientid + "-ne")
 	opts.SetUsername("")
 	opts.SetPassword("")
@@ -91,7 +95,7 @@ func InitMqtt(
 		logger.InfoLogger().Printf("MQTT - Configuring TLS")
 		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
-			logger.ErrorLogger().Fatalf("Error loading certificate: %v", err)
+			logger.ErrorLogger().Printf("Error loading certificate: %v", err)
 		}
 		tlsCfg := &tls.Config{
 			Certificates: []tls.Certificate{cert},
@@ -110,8 +114,6 @@ func InitMqtt(
 		}
 		opts.SetTLSConfig(tlsCfg)
 		opts.AddBroker(fmt.Sprintf("tls://%s:%s", brokerUrl, brokerPort))
-	} else {
-		opts.AddBroker(fmt.Sprintf("tcp://%s:%s", brokerUrl, brokerPort))
 	}
 
 	go runMqttClient(opts)

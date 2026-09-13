@@ -39,7 +39,9 @@ func ClusterHandshake(address string, port int) HandshakeAnswer {
 	client := http.DefaultClient
 	if cfg.ClusterSSL {
 		proto = "https"
-		if cfg.WorkerCertFile != "" && cfg.WorkerKeyFile != "" {
+		// Only gateway setups (gateway trust or cluster CA configured) present the worker cert.
+		gatewaySetup := cfg.ClusterGatewayTrust != "" || cfg.ClusterCaFile != ""
+		if gatewaySetup && cfg.WorkerCertFile != "" && cfg.WorkerKeyFile != "" {
 			cert, err := tls.LoadX509KeyPair(cfg.WorkerCertFile, cfg.WorkerKeyFile)
 			if err != nil {
 				logger.ErrorLogger().Fatalf("Failed to load worker cert: %v", err)

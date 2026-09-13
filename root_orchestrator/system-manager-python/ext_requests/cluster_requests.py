@@ -40,7 +40,15 @@ def _build_session() -> requests.Session:
     return session
 
 
-_session = _build_session()
+_session = None
+
+
+def get_cluster_session() -> requests.Session:
+    # Built lazily: system_manager generates the cert files after this module is imported.
+    global _session
+    if _session is None:
+        _session = _build_session()
+    return _session
 
 
 def _cluster_base(cluster) -> str:
@@ -58,7 +66,7 @@ def cluster_push_worker_token(cluster, token_hash, expiry_date_iso):
     raises requests.exceptions.RequestException on connection errors.
     """
     cluster_addr = _cluster_base(cluster) + "/api/certs/worker-token"
-    return _session.post(
+    return get_cluster_session().post(
         cluster_addr,
         json={"token_hash": token_hash, "expiry_date": expiry_date_iso},
         timeout=10,
@@ -78,7 +86,7 @@ def cluster_push_cert_renew(clusters) -> dict:
     for cluster in clusters:
         cid = str(cluster.get("_id", ""))
         try:
-            resp = _session.post(
+            resp = get_cluster_session().post(
                 _cluster_base(cluster) + "/api/certs/renew",
                 timeout=30,
             )
@@ -101,7 +109,7 @@ def cluster_request_status(cluster_id):
     cluster = candidate_operations.get_candidate_by_id(cluster_id)
     try:
         cluster_addr = _cluster_base(cluster) + "/status"
-        _session.get(cluster_addr, timeout=5)
+        get_cluster_session().get(cluster_addr, timeout=5)
     except requests.exceptions.RequestException:
         logger.error("Calling Cluster Orchestrator /status not successful.")
 
@@ -126,7 +134,7 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
         )
         job["_id"] = str(job["_id"])
         logger.info(f"Deploy request to {cluster_addr}")
-        _session.post(cluster_addr, json=job, timeout=10)
+        get_cluster_session().post(cluster_addr, json=job, timeout=10)
     except Exception as e:
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} not successful: {e}")
 
@@ -142,7 +150,7 @@ def cluster_request_to_delete_job(job_id, instance_number):
             _cluster_base(cluster) + "/api/service/" + str(job_id) + "/" + str(instance_number)
         )
         logger.info(f"Delete request to {cluster_addr}")
-        _session.delete(cluster_addr, timeout=10)
+        get_cluster_session().delete(cluster_addr, timeout=10)
     except Exception as e:
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} job not successful: {e}")
 
@@ -158,7 +166,7 @@ def cluster_request_to_delete_job_by_ip(job_id, instance_number, cluster_id):
             _cluster_base(cluster) + "/api/service/" + str(job_id) + "/" + str(instance_number)
         )
         logger.info(f"Delete request to {cluster_addr}")
-        _session.delete(cluster_addr, timeout=10)
+        get_cluster_session().delete(cluster_addr, timeout=10)
     except Exception as e:
         logger.error(e)
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} job by ip not successful.")
@@ -167,7 +175,9 @@ def cluster_request_to_delete_job_by_ip(job_id, instance_number, cluster_id):
 def cluster_request_to_replicate_up(cluster_obj, job_obj, int_replicas):
     cluster_addr = _cluster_base(cluster_obj) + "/api/replicate/"
     try:
-        _session.post(cluster_addr, json={"job": job_obj, "int_replicas": int_replicas}, timeout=10)
+        get_cluster_session().post(
+            cluster_addr, json={"job": job_obj, "int_replicas": int_replicas}, timeout=10
+        )
         return 1
     except requests.exceptions.RequestException:
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} /api/replicate not successful.")
@@ -176,7 +186,9 @@ def cluster_request_to_replicate_up(cluster_obj, job_obj, int_replicas):
 def cluster_request_to_replicate_down(cluster_obj, job_obj, int_replicas):
     cluster_addr = _cluster_base(cluster_obj) + "/api/replicate/"
     try:
-        _session.post(cluster_addr, json={"job": job_obj, "int_replicas": int_replicas}, timeout=10)
+        get_cluster_session().post(
+            cluster_addr, json={"job": job_obj, "int_replicas": int_replicas}, timeout=10
+        )
         return 1
     except requests.exceptions.RequestException:
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} /api/replicate not successful.")
@@ -185,7 +197,7 @@ def cluster_request_to_replicate_down(cluster_obj, job_obj, int_replicas):
 def cluster_request_to_move_within_cluster(cluster_obj, job_id, node_from, node_to):
     cluster_addr = _cluster_base(cluster_obj) + "/api/move/"
     try:
-        _session.post(
+        get_cluster_session().post(
             cluster_addr,
             json={"job": job_id, "node_from": node_from, "node_to": node_to},
             timeout=10,

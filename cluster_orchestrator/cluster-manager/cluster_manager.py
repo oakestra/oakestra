@@ -252,20 +252,17 @@ def register_with_system_manager():
     if _try_register():
         return
 
+    # Failures raise so the worker exits and gunicorn retries registration.
     token = os.environ.get("CLUSTER_REGISTRATION_TOKEN") or ""
     if not token:
-        logger.error(
-            "gRPC registration failed and CLUSTER_REGISTRATION_TOKEN is not set — "
-            "cannot attempt cert refresh. Set the token and restart."
-        )
-        return
+        raise RuntimeError("gRPC registration with the System Manager failed")
 
     logger.warning("gRPC registration failed — refreshing cluster certificates with provided token")
-    if _refresh_cluster_certs():
-        logger.info("Certificates refreshed, retrying gRPC registration")
-        _try_register()
-    else:
-        logger.error("Cert refresh failed — cluster is not registered")
+    if not _refresh_cluster_certs():
+        raise RuntimeError("gRPC registration failed and the cluster cert refresh failed")
+    logger.info("Certificates refreshed, retrying gRPC registration")
+    if not _try_register():
+        raise RuntimeError("gRPC registration failed after refreshing cluster certificates")
 
 
 # ........... FINISH - register to System Manager with gRPC.................#

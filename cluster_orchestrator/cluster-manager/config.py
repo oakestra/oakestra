@@ -21,6 +21,9 @@ SYSTEM_MANAGER_ADDR = (
 )
 GRPC_REQUEST_TIMEOUT = 120
 
+# Set only by override-gateway.yml; gates the gateway-only certificate APIs.
+GATEWAY_ENABLED = os.environ.get("GATEWAY_ENABLED", "").lower() in ("true", "1", "yes")
+
 # mTLS configuration. When all three files are present and SYSTEM_MANAGER_USE_TLS is truthy,
 # cluster→root traffic (gRPC + REST) is wrapped in TLS with client-cert authentication.
 SYSTEM_MANAGER_USE_TLS = os.environ.get("SYSTEM_MANAGER_USE_TLS", "").lower() in (
