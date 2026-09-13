@@ -222,12 +222,6 @@ services:
         bind:
           create_host_path: false
       - type: bind
-        source: ${CONTAINERD_SOCKET:-/run/containerd/containerd.sock}
-        target: ${CONTAINERD_SOCKET:-/run/containerd/containerd.sock}
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
         source: ${DOCKER_ROOT_DIR:-/var/lib/docker}
         target: ${DOCKER_ROOT_DIR:-/var/lib/docker}
         read_only: true
