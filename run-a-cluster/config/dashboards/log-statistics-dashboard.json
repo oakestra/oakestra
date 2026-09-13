@@ -1052,6 +1052,57 @@
       ],
       "title": "Log-level distribution",
       "type": "piechart"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 60
+      },
+      "id": 15,
+      "panels": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "description": "Current Pending and Firing instances of the provisioned Oakestra log-error rule. This panel uses Grafana alert state and is independent of the dashboard time range and variables.",
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 61
+          },
+          "id": 16,
+          "options": {
+            "alertInstanceLabelFilter": "{category=\"logs\"}",
+            "alertName": "Orchestrator error or stacktrace detected",
+            "dashboardAlerts": false,
+            "datasource": "Loki",
+            "groupBy": [],
+            "groupMode": "default",
+            "maxItems": 20,
+            "showInactiveAlerts": false,
+            "showInstances": true,
+            "sortOrder": 3,
+            "stateFilter": {
+              "error": false,
+              "firing": true,
+              "noData": false,
+              "normal": false,
+              "pending": true,
+              "recovering": false
+            },
+            "viewMode": "list"
+          },
+          "title": "Pending and firing log alerts",
+          "type": "alertlist"
+        }
+      ],
+      "title": "Active log alerts",
+      "type": "row"
     }
   ],
   "refresh": "1m",
@@ -1237,6 +1288,6 @@
   "timezone": "browser",
   "title": "[Oakestra] Log Statistics",
   "uid": "fRIvzUZM8",
-  "version": 11,
+  "version": 12,
   "weekStart": ""
 }
