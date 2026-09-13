@@ -63,17 +63,3 @@ chunk_store_config:
 table_manager:
   retention_deletes_enabled: false  # Whether retention deletes are enabled
   retention_period: 0s  # Retention period for tables
-
-# Ruler settings
-ruler:
-  storage:
-    type: local  # Type of storage used by the ruler
-    local:
-      directory: /etc/loki/rules  # Directory for rule files
-  rule_path: /tmp/loki/rules-temp  # Path for temporary rule files
-  alertmanager_url: http://alertmanager:9093  # URL for Alertmanager
-  ring:
-    kvstore:
-      store: inmemory  # Key-value store used by the ruler ring
-  enable_api: true  # Whether API is enabled
-  enable_alertmanager_v2: true  # Whether Alertmanager v2 is enabled
