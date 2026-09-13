@@ -69,12 +69,19 @@ services:
 
 
   prometheus:
-    network_mode: host
+    ports:
+      - 127.0.0.1:10009:9090
+    volumes:
+      - ./prometheus/prometheus-host.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - host.docker.internal:host-gateway
 
 
   # Observability stack (Grafana, Loki, Alloy)
   cluster_grafana:
     network_mode: host
+    environment:
+      - PROMETHEUS_URL=http://127.0.0.1:10009
 
   cluster_loki:
     network_mode: host

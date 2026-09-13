@@ -66,6 +66,9 @@ Root Orchestrator  (1 per deployment)
 | `root_resource_abstractor` | Python/Flask | 11011 | DB abstraction layer over mongo (port 10007). Exposes REST for reading/writing cluster and job resource data. |
 | `jwt_generator` | Go | 10011 | Issues RS256 key pairs. system_manager fetches the public key on startup. |
 | `root_redis` | Redis | 6379 (pw: `rootRedis`) | Job queue (asynq) for root_scheduler. |
+| `root_prometheus` | Prometheus 3.13.2 | 9090 (internal) | Stores Root-host and Root-container metrics locally with 7-day/1-GB retention. |
+| `root_node_exporter` | node_exporter 1.12.1 | 9100 (internal) | Exposes Root-host CPU, memory, filesystem, disk, and network metrics. |
+| `root_cadvisor` | cAdvisor 0.60.5 | 8081 (loopback) | Exposes per-container resources for Oakestra-labelled Root containers and a host-local diagnostic UI. |
 | `grafana` | Grafana | 3000 | Dashboards. |
 | `loki` | Loki | 3100 | Log aggregation. |
 | `alloy` | Grafana Alloy 1.17.0 | 12345 (loopback) | Discovers every Root container, ships stdout/stderr to the Root-local Loki, and exposes its diagnostic UI locally. |
@@ -90,7 +93,9 @@ Root Orchestrator  (1 per deployment)
 | `cluster_addons_manager` | Python | 11201 | Cluster-level addons manager (optional, disable with override-no-addons.yml). |
 | `cluster_addons_monitor` | Python | — | Monitors running addon containers via docker socket at cluster level. |
 | `cluster_addons_dashboard` | Python | 11203 | Cluster addons UI. |
-| `prometheus` | Prometheus | 10009 (→9090) | Scrapes cluster_manager metrics. |
+| `cluster_prometheus` | Prometheus 3.13.2 | 9090 (internal) | Stores Cluster-host, Cluster-container, and cluster_manager metrics locally with 7-day/1-GB retention. |
+| `cluster_node_exporter` | node_exporter 1.12.1 | 9100 (internal) | Exposes Cluster-host CPU, memory, filesystem, disk, and network metrics. |
+| `cluster_cadvisor` | cAdvisor 0.60.5 | 8082 (loopback) | Exposes per-container resources for Oakestra-labelled Cluster containers and a host-local diagnostic UI. |
 | `cluster_grafana` | Grafana | 3001 | Cluster dashboards. |
 | `cluster_loki` | Loki | 3101 | Cluster log aggregation. |
 | `cluster_alloy` | Grafana Alloy 1.17.0 | 12346 (loopback) | Discovers every Cluster container, ships stdout/stderr to that Cluster's local Loki, and exposes its diagnostic UI locally. |
@@ -140,7 +145,7 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | `override-no-network.yml` | Disables the network plugin (root/cluster service managers). |
 | `override-no-addons.yml` | Removes addons subsystem from root. |
 | `override-no-dashboard.yml` | Removes frontend dashboard from root. |
-| `override-no-observe.yml` | Removes Grafana/Loki/Alloy/Prometheus. |
+| `override-no-observe.yml` | Removes Grafana, Loki, Alloy, Prometheus, node_exporter, and cAdvisor. |
 | `override-mosquitto-auth.yml` | Enables MQTT authentication (workers need credentials). |
 | `override-images-only.yml` | Forces pre-built images, skips local builds. |
 | `override-local-service-manager.yml` | Builds service manager from local source. |
@@ -160,7 +165,7 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | Databases | MongoDB 8.0, Redis | — |
 | Messaging | Eclipse Mosquitto 2.0 (MQTT) | — |
 | Networking | oakestra-net (external Go repo) | — |
-| Observability | Grafana, Loki 2.9.2, Alloy 1.17.0, Prometheus | — |
+| Observability | Grafana, Loki 2.9.2, Alloy 1.17.0, Prometheus 3.13.2, node_exporter 1.12.1, cAdvisor 0.60.5 | — |
 | Python logging | structlog 26.1.0 + standard-library bridge | JSON schema v1, stdout only |
 
 ---
@@ -235,6 +240,10 @@ export OAKESTRA_VERSION=develop
 
 - **Host networking breaks container DNS.** When using `override-network-host.yml`, containers can't resolve each other by name — set all env vars to IPs, not container names.
 - **Shared libraries are always local.** Internal Python packages are built from this repo's `libraries/` folder (see the Shared Libraries section); they are not fetched from a remote Git repository. Edit the local library and rebuild. Docker builds use BuildKit/Buildx named contexts, which are already configured in Compose, CI, and VS Code tasks.
+- **Metrics compatibility.** The metrics stack requires rootful Linux Docker Engine 25+ on AMD64 or ARM64. Core Oakestra can run on older supported Docker versions with `override-no-observe.yml`.
+- **Metrics stay local.** Standalone Root and Cluster Prometheus instances store only their host's data. 1-DOC uses one exporter pair and one Prometheus for the shared physical host. cAdvisor container series use `cluster_id` and `compose_service`; host-wide series use `host_scope`.
+- **Host network counters need the host network namespace.** node_exporter has host networking but no host PID namespace or capabilities. Its listener is restricted to the private metrics-network gateway and must not be changed to `0.0.0.0`.
+- **Metrics mounts are sensitive.** cAdvisor receives read-only host and Docker socket mounts. Read-only socket access still exposes privileged daemon metadata, so its diagnostic UI is loopback-only; Prometheus and node_exporter remain internal in normal deployments.
 - **Structured Python logs.** The JSON shape is fixed in `libraries/oakestra_logging`. Use `LOG_LEVEL` only for verbosity and `OAKESTRA_SERVICE_NAME` for the runtime role. Do not log complete request bodies, credentials, users, SLAs, MQTT payloads, or database records.
 - **eventlet monkey-patching.** Both `system_manager` and `cluster_manager` use eventlet. Monkey-patching must happen before Flask/pymongo imports — don't reorder the top of entry-point files.
 - **Scheduler is the same binary for root and cluster** — differentiated only by env vars (`SCHEDULER_TYPE`, Redis URL/password). Keep deployment-specific logic out of the binary.
