@@ -6,6 +6,7 @@ MY_CLUSTER_PORT = os.environ.get("CLUSTER_PORT") or MY_PORT
 MY_CHOSEN_CLUSTER_NAME = os.environ.get("CLUSTER_NAME")
 MY_CLUSTER_LOCATION = os.environ.get("CLUSTER_LOCATION")
 MY_CLUSTER_ADDRESS = os.environ.get("CLUSTER_ADDRESS")
+MY_ASSIGNED_CLUSTER_ID = None
 NETWORK_COMPONENT_PORT = os.environ.get("CLUSTER_SERVICE_MANAGER_GATEWAY_PORT") or os.environ.get(
     "CLUSTER_SERVICE_MANAGER_PORT"
 )
@@ -88,3 +89,8 @@ def reload_mqtt() -> bool:
 
         logging.getLogger("cluster_manager").error("Could not reload MQTT broker: %s", e)
         return False
+
+
+AGGREGATION_INTERVAL = int(os.environ.get("AGGREGATION_INTERVAL", 15))
+# seconds; deploy command sent but no worker ACK yet
+NODE_SCHEDULED_TIMEOUT = int(os.environ.get("NODE_SCHEDULED_TIMEOUT", 15))

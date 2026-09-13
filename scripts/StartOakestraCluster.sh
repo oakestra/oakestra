@@ -348,7 +348,7 @@ if [[ "$OVERRIDE_FILES" == *"override-gateway.yml"* ]]; then
     export ROOT_GATEWAY_TRUST
 fi
 
-command_exec="LIB_BRANCH=${OAKESTRA_VERSION} sudo -E docker compose -f ${COMPOSE_FILE} ${OAK_OVERRIDES} up ${BUILD_FLAG} -d"
+command_exec="sudo -E docker compose -f ${COMPOSE_FILE} ${OAK_OVERRIDES} up ${BUILD_FLAG} -d"
 echo executing "$command_exec"
 
 eval "$command_exec"

@@ -20,6 +20,9 @@ inputs:
   PR_COMMIT:
     description: "The commit SHA of the PR that triggered the deployment"
     required: true
+  FORK_REPO:
+    description: "The forked repository where the PR was opened"
+    required: false
 
 runs:
   using: "node24"

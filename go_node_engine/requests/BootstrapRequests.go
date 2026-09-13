@@ -122,7 +122,7 @@ func certFilesPresent(cfg config.ConfFile) bool {
 
 func clearToken(cfg config.ConfFile) (config.ConfFile, error) {
 	cfg.ClusterToken = ""
-	if err := config.GetConfFileManager().Write(cfg); err != nil {
+	if err := config.Write(cfg); err != nil {
 		return cfg, err
 	}
 	return cfg, nil

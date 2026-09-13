@@ -14,8 +14,9 @@ services:
     image: cluster_manager
     build:
       context: cluster-manager/
-      args:
-        - LIB_BRANCH=${LIB_BRANCH:-develop}
+      additional_contexts:
+        # Oakestra shared libraries are built from the repo-local libraries/ folder.
+        - libraries=../libraries
     container_name: cluster_cert_bootstrap
     entrypoint: ["/bin/sh", "/docker-update-ca-trust.sh"]
     command: ["python", "bootstrap_certificates.py"]

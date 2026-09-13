@@ -152,7 +152,7 @@ var (
 		Use:   "auto",
 		Short: "Enable auto overlay network startup",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return setNetwork(config.AUTO_OAK_NETWORK)
+			return setNetwork(config.AutoOakNetwork)
 		},
 	}
 	enableManualNetwork = &cobra.Command{
@@ -183,14 +183,14 @@ var (
 		Use:   "public",
 		Short: "Use automatic public IP detection",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return setPublicIp(config.PUBLIC_IP_AUTO)
+			return setPublicIp(config.PublicIPAuto)
 		},
 	}
 	privateIP = &cobra.Command{
 		Use:   "private",
 		Short: "Disable public IP visibility",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return setPublicIp(config.PUBLIC_IP_FALSE)
+			return setPublicIp(config.PublicIPFalse)
 		},
 	}
 	predefinedPublicIP = &cobra.Command{
@@ -244,14 +244,12 @@ var (
 )
 
 func defaultConfig() error {
-	configManager := config.GetConfFileManager()
-	clusterConf := config.GenDefaultConfig()
-	return configManager.Write(clusterConf)
+	clusterConf := config.Default()
+	return config.Write(clusterConf)
 }
 
 func configCluster(address string) error {
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -260,77 +258,70 @@ func configCluster(address string) error {
 	clusterConf.ClusterPort = clusterPort
 	clusterConf.ClusterSSL = clusterSSL
 
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func configAddress(address string) error {
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
 	clusterConf.ClusterAddress = address
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func configPort(port int) error {
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
 	clusterConf.ClusterPort = port
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func configToken(token string) error {
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
 	clusterConf.ClusterToken = token
 	// Token bootstrap only makes sense over TLS.
 	clusterConf.ClusterSSL = true
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func configGatewayTrust(trust string) error {
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
 	clusterConf.ClusterGatewayTrust = trust
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func configSSL(encrypt bool) error {
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
 	clusterConf.ClusterSSL = encrypt
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func configLogs(path string) error {
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
 
 	clusterConf.AppLogs = path
 
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func showVirtualization() error {
 
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -359,8 +350,7 @@ func showVirtualization() error {
 func setUnikernel(trigger string) error {
 	active := trigger == "on" || trigger == "enable" || trigger == "true"
 
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -384,14 +374,13 @@ func setUnikernel(trigger string) error {
 		clusterConf.Virtualizations = append(clusterConf.Virtualizations, UnikernelVirt)
 	}
 
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func setCrosvm(trigger string) error {
 	active := trigger == "on" || trigger == "enable" || trigger == "true"
 
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -414,13 +403,12 @@ func setCrosvm(trigger string) error {
 		})
 	}
 
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func showAddons() error {
 
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -455,8 +443,7 @@ func setBuilder(trigger string) error {
 
 	active := trigger == "on" || trigger == "enable" || trigger == "true"
 
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -479,14 +466,13 @@ func setBuilder(trigger string) error {
 		clusterConf.Addons = append(clusterConf.Addons, BuilderAddon)
 	}
 
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func setFLOps(trigger string) error {
 	active := trigger == "on" || trigger == "enable" || trigger == "true"
 
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -509,36 +495,33 @@ func setFLOps(trigger string) error {
 		clusterConf.Addons = append(clusterConf.Addons, FlopsLearnerAddon)
 	}
 
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func setNetwork(cniName string) error {
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
 
 	clusterConf.OverlayNetwork = cniName
 
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func setPublicIp(mode config.PublicIPMode) error {
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
 	clusterConf.PublicIp = mode
 
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func setWorkerAuth() error {
 
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -553,12 +536,11 @@ func setWorkerAuth() error {
 		clusterConf.ClusterCaFile = clusterCaFile
 	}
 
-	return configManager.Write(clusterConf)
+	return config.Write(clusterConf)
 }
 
 func showCsiDrivers() error {
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -575,8 +557,7 @@ func showCsiDrivers() error {
 }
 
 func addCsiDriver(name, endpoint string) error {
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -585,7 +566,7 @@ func addCsiDriver(name, endpoint string) error {
 	for i, d := range clusterConf.CSIDrivers {
 		if d.Name == name {
 			clusterConf.CSIDrivers[i].Endpoint = endpoint
-			if err := configManager.Write(clusterConf); err != nil {
+			if err := config.Write(clusterConf); err != nil {
 				return err
 			}
 			fmt.Printf("CSI driver %q updated (endpoint: %s)\n", name, endpoint)
@@ -597,7 +578,7 @@ func addCsiDriver(name, endpoint string) error {
 		Name:     name,
 		Endpoint: endpoint,
 	})
-	if err := configManager.Write(clusterConf); err != nil {
+	if err := config.Write(clusterConf); err != nil {
 		return err
 	}
 	fmt.Printf("CSI driver %q added (endpoint: %s)\n", name, endpoint)
@@ -605,8 +586,7 @@ func addCsiDriver(name, endpoint string) error {
 }
 
 func removeCsiDriver(name string) error {
-	configManager := config.GetConfFileManager()
-	clusterConf, err := configManager.Get()
+	clusterConf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -626,7 +606,7 @@ func removeCsiDriver(name string) error {
 	}
 
 	clusterConf.CSIDrivers = filtered
-	if err := configManager.Write(clusterConf); err != nil {
+	if err := config.Write(clusterConf); err != nil {
 		return err
 	}
 	fmt.Printf("CSI driver %q removed\n", name)

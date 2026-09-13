@@ -16,6 +16,7 @@ async function triggerAWX() {
     const pullRequestBranch = core.getInput('PR_BRANCH');
     const pullRequestCommit = core.getInput('PR_COMMIT');
     const pullRequestUser = core.getInput('PR_USER');
+    const forkRepo = core.getInput('FORK_REPO');
 
     const headers = {
       'Authorization': `Bearer ${token}`,
@@ -27,7 +28,8 @@ async function triggerAWX() {
       oak_repo_commit: pullRequestCommit,
       oak_branch: pullRequestBranch, //compatibility with oak custom workflow
       oak_commit: pullRequestCommit, //compatibility with oak custom workflow
-      pr_fork_user: pullRequestUser
+      pr_fork_user: pullRequestUser,
+      pr_fork_repo: forkRepo //compatibility for PRs coming from forks
     };
 
     core.info(`🌱 Branch: ${pullRequestBranch}`);

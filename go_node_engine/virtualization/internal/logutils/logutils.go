@@ -1,4 +1,4 @@
-package virtualization
+package logutils
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 const LOG_SIZE = 1024
 
 // reads the last 100 bytes of the logfile of a container
-func getLogs(serviceID string) string {
+func GetLogs(serviceID string) string {
 
 	file, err := os.Open(fmt.Sprintf("%s/%s", model.GetNodeInfo().LogDirectory, serviceID))
 	if err != nil {
