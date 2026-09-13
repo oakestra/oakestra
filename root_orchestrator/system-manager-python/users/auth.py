@@ -99,18 +99,21 @@ def user_login(content):
                     "Authentication rejected: invalid password",
                     event_name="authentication.rejected",
                     reason="invalid_password",
+                    username=username,
                 )
         else:
             logger.warning(
                 "Authentication rejected: user not found",
                 event_name="authentication.rejected",
                 reason="user_not_found",
+                username=username,
             )
     else:
         logger.warning(
             "Authentication rejected: invalid credentials",
             event_name="authentication.rejected",
             reason="invalid_credentials",
+            username=username,
         )
 
     return {}
