@@ -211,7 +211,7 @@ docker exec cluster_cert_bootstrap env 2>/dev/null | grep -E "CLUSTER_REGISTRATI
 ```
 
 **Gateway-mode validations:**
-- `ROOT_GATEWAY_TRUST` / `CLUSTER_GATEWAY_TRUST`: how an internal component verifies the peer gateway's **public** server cert. Default `system` (OS trust store, for a publicly trusted BYO cert); set to a **path** for a privately-issued BYO cert (custom CA bundle); `insecure` skips verification (bootstrap only). It does *not* affect the client cert presented or MQTT trust (always the internal root CA)
+- `ROOT_GATEWAY_TRUST` / `CLUSTER_GATEWAY_TRUST`: how an internal component verifies the peer gateway's **public** server cert. Default `system` (OS trust store, for a publicly trusted BYO cert); set to a **path inside the container** (e.g. `/certs/root-gateway-ca.crt`, a file placed in the mounted cert directory) for a privately-issued BYO cert; an explicitly empty value means the internal root CA. `ROOT_GATEWAY_TRUST=insecure` skips verification for HTTPS calls (bootstrap, cluster_service_manager), but `cluster_manager` refuses to start with it (`Invalid ROOT_GATEWAY_TRUST … not supported for the gRPC channel`) because gRPC cannot skip server verification; a path that does not exist in the container also stops it at startup. It does *not* affect the client cert presented or MQTT trust (always the internal root CA)
 - `CLUSTER_REGISTRATION_TOKEN` is only needed on the *first* cluster start (one-time token, consumed during bootstrap); a stale token in the env is harmless once certs exist
 - `REGISTRATION_TOKEN_TTL_MINUTES` (root, default 10) controls how long minted registration tokens stay valid
 
@@ -1035,13 +1035,13 @@ docker logs cluster_cert_bootstrap 2>/dev/null | tail -30
 ```bash
 # Root (default ROOT_CERT_PATH=root_orchestrator/config/certs)
 ls -la root_orchestrator/config/certs/ root_orchestrator/config/certs/public/
-# Cluster (default CLUSTER_CERT_PATH=cluster_orchestrator/certs)
-ls -la cluster_orchestrator/certs/ cluster_orchestrator/certs/public/
+# Cluster (default CLUSTER_CERT_PATH=cluster_orchestrator/config/certs)
+ls -la cluster_orchestrator/config/certs/ cluster_orchestrator/config/certs/public/
 # Worker
 ls -la /etc/oakestra/certs/
 ```
 
-Expected files — root: `ca.crt ca.key server.crt server.key public/fullchain.pem public/privkey.pem`; cluster: `ca.crt cluster.crt cluster.key cluster_ca.crt cluster_ca.key public/*`; worker: `ca.crt worker.crt worker.key`. Keys must be mode 600. The `public/*` files are operator-provided (BYO) and owned by the kong user (UID 1000).
+Expected files — root: `ca.crt ca.key server.crt server.key public/fullchain.pem public/privkey.pem`; cluster: `ca.crt cluster.crt cluster.key cluster_ca.crt cluster_ca.key public/*`, plus `cluster_revoked.crl cluster_mqtt.crt cluster_mqtt.key` which `cluster_cert_bootstrap` writes on every start; worker: `ca.crt worker.crt worker.key`. Keys must be mode 600. The `public/*` files are operator-provided (BYO) and owned by the kong user (UID 1000).
 
 On workers, NetManager's `/etc/netmanager/netcfg.json` `MqttCert`/`MqttKey`/`MqttCa` should point at the NodeEngine-bootstrapped files in `/etc/oakestra/certs/` (worker.crt, worker.key, ca.crt).
 
@@ -1085,7 +1085,7 @@ curl -ks -X POST https://<ROOT_IP>/api/tokens/worker -H "Authorization: Bearer $
 | TLS handshake fails on *any* route after `/api/certs/reset` | Peer still presents a cert signed by the old root CA — nginx rejects invalid client certs even in `optional` mode | Re-bootstrap the cluster/worker with a fresh token; restart `cluster_kong_external` after replacing the cluster's `ca.crt` |
 | `cert_init` / `cluster_cert_bootstrap` exits 1: "public gateway certificate not found" | No BYO public cert provided (required — there is no fallback) | Drop `public/fullchain.pem`+`privkey.pem` into `<certs>/public/` and restart |
 | Browser warns about untrusted cert | The BYO public cert is privately issued (not from a public CA) | Use a publicly trusted cert (e.g. Let's Encrypt), or install your CA into the client's trust store |
-| cluster_manager can't reach root: certificate verify failed | `ROOT_GATEWAY_TRUST` mismatch — default `system` but the BYO public cert is privately issued (not in the OS trust store) | Set `ROOT_GATEWAY_TRUST` to the CA-bundle path for that cert; same logic for `CLUSTER_GATEWAY_TRUST` on the root |
+| cluster_manager can't reach root: certificate verify failed | `ROOT_GATEWAY_TRUST` mismatch — default `system` but the BYO public cert is privately issued (not in the OS trust store) | Set `ROOT_GATEWAY_TRUST` to the CA-bundle path for that cert, as a path inside the container (e.g. `/certs/…`); same logic for `CLUSTER_GATEWAY_TRUST` on the root |
 
 ### 18.5 Kong gateway state
 
@@ -1097,3 +1097,22 @@ docker exec kong_external curl -s http://localhost:8001/routes | python3 -c "imp
 # Reload after replacing certificate files on disk
 docker exec kong_external kong reload
 ```
+
+### 18.6 Certificate revocation lists (CRLs)
+
+Kong (root, `revoked.crl`) and mosquitto (cluster, `cluster_revoked.crl`) reject **every** client certificate when their CRL is expired or was signed by a CA key that has since been replaced — even if nothing is revoked. CRLs are signed for 30 days. `system_manager` and `cluster_manager` re-sign them from MongoDB at startup and every `CRL_REFRESH_INTERVAL_HOURS` (default 24; the first refresh, which also reloads Kong/mosquitto, runs one minute after startup). `POST /api/certs/reset` clears all revocations and re-signs the root CRL. mosquitto only accepts MQTT client certificates issued by the cluster intermediate CA (the CRL's issuer), so the cluster's own services use `cluster_mqtt.crt` rather than the root-issued `cluster.crt`; a client certificate from any other issuer fails with `unable to get certificate CRL`.
+
+```bash
+# Must print "verify OK", and nextUpdate must be in the future
+openssl crl -in root_orchestrator/config/certs/revoked.crl -CAfile root_orchestrator/config/certs/ca.crt -noout -nextupdate
+openssl crl -in cluster_orchestrator/config/certs/cluster_revoked.crl -CAfile cluster_orchestrator/config/certs/cluster_ca.crt -noout -nextupdate
+
+# List / clear / un-revoke — root: Admin JWT via the internal gateway (or external :443)
+curl -s http://localhost:8000/api/certs/revoke -H "Authorization: Bearer $JWT"
+curl -s -X DELETE http://localhost:8000/api/certs/revoke -H "Authorization: Bearer $JWT"
+curl -s -X DELETE http://localhost:8000/api/certs/revoke/<serial_hex> -H "Authorization: Bearer $JWT"
+# Cluster: internal gateway only, no login
+curl -s -X DELETE http://localhost:8888/api/certs/revoke
+```
+
+**What it means:** a `verify failure` or past `nextUpdate` explains blanket `401 mTLS client certificate required` (root) or rejected MQTT TLS connections (cluster). Restart `system_manager` / `cluster_manager` to re-sign immediately.

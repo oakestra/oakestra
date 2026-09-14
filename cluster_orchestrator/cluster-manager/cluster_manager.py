@@ -29,6 +29,16 @@ from proto.clusterRegistration_pb2_grpc import register_clusterStub
 
 my_logger = configure_logging()
 logger = logging.getLogger("cluster_manager")
+
+if config.mtls_enabled():
+    # Validate ROOT_GATEWAY_TRUST while gunicorn loads the app: an unusable value then
+    # stops the container once ("Worker failed to boot") instead of crash-looping.
+    try:
+        config.root_gateway_grpc_root_certificates()
+    except (ValueError, OSError) as exc:
+        logger.critical("Invalid ROOT_GATEWAY_TRUST: %s", exc)
+        raise
+
 app = Flask(__name__)
 
 app.config["OPENAPI_VERSION"] = "3.0.2"
@@ -91,18 +101,9 @@ def _build_grpc_channel():
     behaviour for the no-gateway compose path).
     """
     if config.mtls_enabled():
-        # Specify the CA to verify the root gateway's server cert
-        # "system" -> OS trust store (root uses a publicly trusted BYO cert).
-        # <path>   -> that CA bundle (privately issued cert).
-        # ""       -> fall back to ROOT_CA_FILE (/certs/ca.crt), the default
-        #             when the public cert is signed by the internal CA.
-        # "insecure" has no effect here: gRPC always verifies the server cert.
-        if config.ROOT_GATEWAY_TRUST == "system":
-            ca_bytes = None
-        else:
-            trust_file = config.ROOT_GATEWAY_TRUST or config.ROOT_CA_FILE
-            with open(trust_file, "rb") as f:
-                ca_bytes = f.read()
+        # Server trust follows ROOT_GATEWAY_TRUST (see config.py); "insecure" is rejected
+        # because gRPC cannot skip server verification.
+        ca_bytes = config.root_gateway_grpc_root_certificates()
         with open(config.CLUSTER_KEY_FILE, "rb") as f:
             key_bytes = f.read()
         with open(config.CLUSTER_CERT_FILE, "rb") as f:
@@ -178,7 +179,12 @@ def _refresh_cluster_certs() -> bool:
     _write(config.CLUSTER_CA_KEY_FILE, payload["cluster_ca_key"], 0o600)
 
     logger.info("Cluster certificates refreshed in %s", cert_dir)
-    if config.reload_mqtt():
+    from blueprints.certificates_blueprints import refresh_cluster_crl
+    from ext_requests.cluster_certificates import write_cluster_mqtt_identity
+
+    # The MQTT identity and CRL must chain to / be signed by the new cluster CA.
+    write_cluster_mqtt_identity(cluster_name)
+    if refresh_cluster_crl()["mqtt_reloaded"]:
         logger.info("MQTT broker reloaded with new certificates")
     else:
         logger.warning("Cert files updated but MQTT broker reload failed — restart mqtt manually")
@@ -319,6 +325,25 @@ def _register_in_background():
         logger.exception("Cluster registration failed; exiting worker for restart")
         os._exit(1)
 
+
+def _refresh_crl_periodically():
+    # The cluster CRL expires 30 days after it is signed, so re-sign it regularly;
+    # the first run also replaces a stale CRL left over from before a restart.
+    from blueprints.certificates_blueprints import refresh_cluster_crl
+
+    delay = 60
+    while True:
+        time.sleep(delay)
+        delay = config.CRL_REFRESH_INTERVAL_HOURS * 3600
+        try:
+            if not refresh_cluster_crl()["crl_regenerated"]:
+                logger.error("Periodic CRL refresh could not write the cluster CRL")
+        except Exception:
+            logger.exception("Periodic CRL refresh failed")
+
+
+if config.GATEWAY_ENABLED:
+    threading.Thread(target=_refresh_crl_periodically, daemon=True).start()
 
 threading.Thread(target=_register_in_background, daemon=True).start()
 

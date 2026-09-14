@@ -1,7 +1,6 @@
 import logging
 import os
 
-import ext_requests.mongodb_client as db
 import requests
 from ext_requests.certificates import (
     KONG_CA_CERT_UUID,
@@ -17,6 +16,14 @@ from ext_requests.certificates import (
     sign_csr_pem,
 )
 from ext_requests.registration_tokens_db import TOKEN_TYPE_CLUSTER, consume_registration_token
+from ext_requests.revoked_certs_db import (
+    add_revoked_cert,
+    clear_revoked_certs,
+    get_revoked_serials,
+    list_revoked_certs,
+    prune_expired_revoked_certs,
+    remove_revoked_cert,
+)
 from flask import request, send_file
 from flask_jwt_extended import jwt_required
 from flask_restful import Resource
@@ -119,6 +126,23 @@ def _update_kong_certificate(old_ca_data: str = None) -> tuple[bool, str]:
         return False, f"Error updating Kong certificates: {str(e)}"
 
 
+# CRLs are signed with a 30-day nextUpdate (see generate_root_crl); re-sign well before expiry.
+CRL_REFRESH_INTERVAL_HOURS = float(os.environ.get("CRL_REFRESH_INTERVAL_HOURS") or 24)
+
+
+def write_root_crl_from_db() -> bool:
+    """Drop entries for expired certs and rewrite /certs/revoked.crl from the database."""
+    prune_expired_revoked_certs()
+    return regenerate_root_crl(get_revoked_serials())
+
+
+def refresh_root_crl() -> dict:
+    """Rewrite the CRL from the database and reload Kong so the new CRL takes effect."""
+    crl_ok = write_root_crl_from_db()
+    reload_ok, reload_msg = _reload_kong_nginx() if crl_ok else (False, "CRL was not written")
+    return {"crl_regenerated": crl_ok, "kong_reloaded": reload_ok, "kong_reload_status": reload_msg}
+
+
 # --------- ROUTES ---------
 
 create_ca_schema = {
@@ -210,6 +234,10 @@ class CertificateAuthorityResetController(Resource):
             valid_days=int(content.get("server_valid_days") or 365),
         )
 
+        # Revocations belong to the replaced CA: clear them and re-sign an empty CRL with the new key.
+        revoked_cleared = clear_revoked_certs()
+        crl_ok = regenerate_root_crl([])
+
         # Update Kong's client-verification CA
         kong_updated, kong_message = _update_kong_certificate(old_ca_data)
 
@@ -219,6 +247,8 @@ class CertificateAuthorityResetController(Resource):
         return {
             "created": ca_created and server_created,
             "ca_cert": str(get_ca_cert_path()),
+            "revoked_certs_cleared": revoked_cleared,
+            "crl_regenerated": crl_ok,
             "server_cert": str(get_server_cert_path()),
             "server_key": str(get_server_key_path()),
             "kong_updated": kong_updated,
@@ -429,20 +459,24 @@ cluster_renew_schema = {
 
 @certbp.route("/revoke")
 class CertificateRevokeController(Resource):
+    @jwt_required()
+    @require_role(Role.ADMIN)
+    def get(self):
+        """List revoked cluster client certificates."""
+        return {"revoked_certs": list_revoked_certs()}
+
     @certbp.arguments(schema=revoke_cert_schema, location="json", validate=False, unknown=True)
     @jwt_required()
     @require_role(Role.ADMIN)
     def post(self, *args, **kwargs):
         """Revoke a cluster client certificate by PEM.
 
-        Adds the cert's serial number to the revoked_certs collection,
+        Records the cert's serial number in the revoked_certs collection,
         regenerates /certs/revoked.crl (signed by the root CA), and reloads
         Kong nginx so the updated CRL takes effect immediately.
         """
-        from datetime import datetime
-        from datetime import timezone as _tz
-
         from cryptography import x509 as _x509
+        from flask_jwt_extended import get_jwt_identity
 
         content = request.get_json(silent=True) or {}
         cert_pem = content.get("cert_pem") or ""
@@ -456,37 +490,39 @@ class CertificateRevokeController(Resource):
 
         serial_hex = format(cert.serial_number, "x")
         cert_subject = cert.subject.rfc4514_string()
-        now = datetime.now(_tz.utc)
-
-        from flask_jwt_extended import get_jwt_identity
-
-        db.mongo_revoked_certs.insert_one(
-            {
-                "serial_hex": serial_hex,
-                "cert_subject": cert_subject,
-                "cert_type": "cluster",
-                "revoked_at": now,
-                "reason": content.get("reason") or "",
-                "revoked_by": get_jwt_identity() or "",
-            }
+        add_revoked_cert(
+            serial_hex=serial_hex,
+            cert_subject=cert_subject,
+            not_after=cert.not_valid_after_utc,
+            reason=content.get("reason") or "",
+            revoked_by=get_jwt_identity() or "",
         )
-
-        # Reload all revoked serials and regenerate the CRL file.
-        all_revoked = [
-            (int(doc["serial_hex"], 16), doc["revoked_at"])
-            for doc in db.mongo_revoked_certs.find({}, {"serial_hex": 1, "revoked_at": 1})
-        ]
-        crl_ok = regenerate_root_crl(all_revoked)
-        reload_ok, reload_msg = _reload_kong_nginx()
 
         return {
             "message": "Certificate revoked",
             "serial_hex": serial_hex,
             "cert_subject": cert_subject,
-            "crl_regenerated": crl_ok,
-            "kong_reloaded": reload_ok,
-            "kong_reload_status": reload_msg,
+            **refresh_root_crl(),
         }
+
+    @jwt_required()
+    @require_role(Role.ADMIN)
+    def delete(self):
+        """Clear the revocation list, un-revoking every certificate."""
+        cleared = clear_revoked_certs()
+        return {"message": "Revocation list cleared", "cleared": cleared, **refresh_root_crl()}
+
+
+@certbp.route("/revoke/<serial_hex>")
+class CertificateUnrevokeController(Resource):
+    @jwt_required()
+    @require_role(Role.ADMIN)
+    def delete(self, *args, **kwargs):
+        """Un-revoke a single certificate by serial number (hex, as listed by GET /revoke)."""
+        serial_hex = kwargs["serial_hex"]
+        if not remove_revoked_cert(serial_hex):
+            abort(404, {"message": f"Serial {serial_hex} is not revoked"})
+        return {"message": "Certificate un-revoked", "serial_hex": serial_hex, **refresh_root_crl()}
 
 
 @certbp.route("/rotate")
@@ -635,10 +671,7 @@ class CertificateRotateCompleteController(Resource):
         # All old-CA certs are now untrusted at the CA level. Revocation records
         # for them are stale — their serial numbers are scoped to the old CA and
         # carrying them into the new CRL would be wrong. Clear and regenerate.
-        import ext_requests.mongodb_client as _db
-
-        if _db.mongo_revoked_certs is not None:
-            _db.mongo_revoked_certs.delete_many({})
+        clear_revoked_certs()
         regenerate_root_crl([])
 
         kong_updated, kong_message = _update_kong_ca(ca_path.read_text())

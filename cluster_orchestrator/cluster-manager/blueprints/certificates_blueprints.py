@@ -11,10 +11,15 @@ from ext_requests.cluster_certificates import (
     get_root_ca_pem,
     regenerate_cluster_crl,
     sign_worker_csr,
+    write_cluster_mqtt_identity,
 )
 from ext_requests.token_db import (
+    clear_revoked_certs,
     consume_token,
     get_revoked_serials,
+    list_revoked_certs,
+    prune_expired_revoked_certs,
+    remove_revoked_cert,
     store_revoked_cert,
     store_token_hash,
 )
@@ -256,7 +261,9 @@ class ClusterCertRefreshController(MethodView):
         _write(config.CLUSTER_CA_KEY_FILE, payload["cluster_ca_key"], 0o600)
 
         logger.info("Cluster certificate material refreshed from root")
-        mqtt_reloaded = config.reload_mqtt()
+        # The MQTT identity and CRL must chain to / be signed by the new cluster CA.
+        write_cluster_mqtt_identity(cluster_name)
+        mqtt_reloaded = refresh_cluster_crl()["mqtt_reloaded"]
         return {
             "message": (
                 "Certificates refreshed and MQTT broker reloaded."
@@ -323,7 +330,9 @@ def _renew_cluster_certs_in_band() -> tuple:
     _write(config.ROOT_CA_FILE, payload["root_ca"], 0o644)
 
     logger.info("Cluster certificates renewed in-band in %s", cert_dir)
-    mqtt_reloaded = config.reload_mqtt()
+    # The MQTT identity and CRL must chain to / be signed by the new cluster CA.
+    write_cluster_mqtt_identity(cluster_name)
+    mqtt_reloaded = refresh_cluster_crl()["mqtt_reloaded"]
     msg = (
         "Certificates renewed and MQTT broker reloaded."
         if mqtt_reloaded
@@ -359,13 +368,24 @@ revoke_cert_schema = {
 }
 
 
+def refresh_cluster_crl() -> dict:
+    """Drop entries for expired certs, rewrite the cluster CRL from the database and reload MQTT."""
+    prune_expired_revoked_certs()
+    crl_ok = regenerate_cluster_crl(get_revoked_serials())
+    return {"crl_regenerated": crl_ok, "mqtt_reloaded": config.reload_mqtt() if crl_ok else False}
+
+
 @certbp.route("/revoke")
 class ClusterCertRevokeController(MethodView):
+    def get(self):
+        """List revoked worker certificates. Reachable via the internal gateway only."""
+        return {"revoked_certs": list_revoked_certs()}
+
     @certbp.arguments(schema=revoke_cert_schema, location="json", validate=False, unknown=True)
     def post(self, *args, **kwargs):
         """Revoke a worker certificate by PEM.
 
-        Adds the cert's serial to the cluster revoked_certs collection,
+        Records the cert's serial in the cluster revoked_certs collection,
         regenerates /certs/cluster_revoked.crl (signed by the cluster
         intermediate CA), and reloads MQTT so the updated CRL takes effect.
 
@@ -385,24 +405,37 @@ class ClusterCertRevokeController(MethodView):
 
         serial_hex = format(cert.serial_number, "x")
         cert_subject = cert.subject.rfc4514_string()
-
         store_revoked_cert(
             serial_hex=serial_hex,
             cert_subject=cert_subject,
+            not_after=cert.not_valid_after_utc,
             reason=content.get("reason") or "",
             revoked_by="api",
         )
-
-        all_revoked = get_revoked_serials()
-        crl_ok = regenerate_cluster_crl(all_revoked)
-        mqtt_reloaded = config.reload_mqtt() if crl_ok else False
 
         return {
             "message": "Worker certificate revoked",
             "serial_hex": serial_hex,
             "cert_subject": cert_subject,
-            "crl_regenerated": crl_ok,
-            "mqtt_reloaded": mqtt_reloaded,
+            **refresh_cluster_crl(),
+        }
+
+    def delete(self):
+        """Clear the revocation list, un-revoking every worker certificate. Internal gateway only."""
+        cleared = clear_revoked_certs()
+        return {"message": "Revocation list cleared", "cleared": cleared, **refresh_cluster_crl()}
+
+
+@certbp.route("/revoke/<serial_hex>")
+class ClusterCertUnrevokeController(MethodView):
+    def delete(self, serial_hex):
+        """Un-revoke a single worker certificate by serial number (hex). Internal gateway only."""
+        if not remove_revoked_cert(serial_hex):
+            abort(404, message=f"Serial {serial_hex} is not revoked")
+        return {
+            "message": "Worker certificate un-revoked",
+            "serial_hex": serial_hex,
+            **refresh_cluster_crl(),
         }
 
 

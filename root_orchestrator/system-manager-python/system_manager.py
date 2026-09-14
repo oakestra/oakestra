@@ -14,8 +14,6 @@ from bson import json_util
 from ext_requests.certificates import (
     ensure_ca_files,
     ensure_server_files,
-    get_crl_path,
-    regenerate_root_crl,
 )
 from ext_requests.cluster_requests import get_cluster_session
 from ext_requests.jwt_generator_requests import get_public_key
@@ -78,6 +76,12 @@ create_admin()
 
 
 if GATEWAY_ENABLED:
+    from blueprints.certificates_blueprints import (
+        CRL_REFRESH_INTERVAL_HOURS,
+        refresh_root_crl,
+        write_root_crl_from_db,
+    )
+
     # Internal CA, server cert and CRL are only needed for the gateway's mTLS.
     ROOT_PUBLIC_ADDRESS = os.environ.get("ROOT_PUBLIC_ADDRESS") or ""
     _server_common_name = ROOT_PUBLIC_ADDRESS or "localhost"
@@ -88,9 +92,23 @@ if GATEWAY_ENABLED:
         alt_names=list(dict.fromkeys(_server_alt_names)),
         valid_days=365,
     )
-    if not get_crl_path().is_file():
-        if not regenerate_root_crl([]):
-            raise RuntimeError("Failed to write initial CRL — check CA key permissions and logs")
+    # Re-sign the CRL on every start so an expired or stale one never survives a restart.
+    if not write_root_crl_from_db():
+        raise RuntimeError("Failed to write the CRL — check CA key permissions and logs")
+
+    def _refresh_crl_periodically():
+        # The CRL expires 30 days after it is signed, so re-sign it regularly; the
+        # first run also makes an already-running Kong drop a stale in-memory CRL.
+        delay = 60
+        while True:
+            time.sleep(delay)
+            delay = CRL_REFRESH_INTERVAL_HOURS * 3600
+            try:
+                refresh_root_crl()
+            except Exception:
+                logger.exception("Periodic CRL refresh failed")
+
+    threading.Thread(target=_refresh_crl_periodically, daemon=True).start()
 
 MY_PORT = os.environ.get("MY_PORT") or 10000
 MY_PORT_GRPC = os.environ.get("MY_PORT_GRPC") or 50052

@@ -4,7 +4,7 @@ Runs as the entrypoint of the cluster_cert_bootstrap container, before Kong,
 mosquitto, cluster_manager and cluster_service_manager start (they depend on
 this container completing successfully).
 
-Two responsibilities:
+Responsibilities:
 
 1. If the cluster's mTLS material is missing, redeem the one-time
    CLUSTER_REGISTRATION_TOKEN against the root's public (TLS-only, no client
@@ -15,11 +15,19 @@ Two responsibilities:
    There is intentionally NO auto-generated fallback — fail fast with an
    actionable error if the operator has not provided fullchain.pem + privkey.pem.
 
-Server verification during bootstrap is controlled by ROOT_GATEWAY_TRUST:
-  "system"  -> system trust store (root gateway uses a BYO public cert)
-  <path>    -> a custom CA bundle
-  ""        -> TOFU: fetch the root CA over an unverified connection first,
-               then pin it for the actual token redemption (dev default).
+3. (Re-)sign cluster_revoked.crl with the cluster intermediate CA. mosquitto
+   refuses to start without it and rejects every client if it is stale.
+
+4. Issue cluster_mqtt.crt/key from the cluster intermediate CA: the MQTT client
+   identity of cluster_manager, cluster_service_manager and the mqtt healthcheck.
+
+Server verification of the root gateway follows ROOT_GATEWAY_TRUST, interpreted by
+config.parse_root_gateway_trust() exactly as in cluster_manager:
+  "system"   -> OS trust store (root gateway uses a publicly trusted BYO cert)
+  <path>     -> a CA bundle inside the container, e.g. /certs/root-gateway-ca.crt
+  ""         -> the internal root CA; bootstrap first fetches it over an unverified
+                connection (TOFU) because it does not exist yet
+  "insecure" -> no verification of the root gateway certificate
 """
 
 import logging
@@ -40,6 +48,7 @@ CLUSTER_CA_CERT_FILE = CERT_DIR / "cluster_ca.crt"
 CLUSTER_CA_KEY_FILE = CERT_DIR / "cluster_ca.key"
 PUBLIC_CERT_FILE = CERT_DIR / "public" / "fullchain.pem"
 PUBLIC_KEY_FILE = CERT_DIR / "public" / "privkey.pem"
+CLUSTER_CRL_FILE = CERT_DIR / "cluster_revoked.crl"
 
 # nginx in the kong:3.6 image runs as the kong user (UID/GID 1000); the public
 # gateway key must be readable by it. mosquitto and the service managers all
@@ -64,18 +73,12 @@ def _write(path: Path, content: str, mode: int) -> None:
     os.chmod(path, mode)
 
 
-def _resolve_verify(base_url: str):
-    trust = os.environ.get("ROOT_GATEWAY_TRUST", "")
-    if trust == "system":
-        return True
-    if trust and trust != "insecure":
-        return trust
-
-    # TOFU: no trust anchor yet — fetch the root CA over an unverified
-    # connection and pin it for the token redemption that follows.
+def _fetch_root_ca_tofu(base_url: str) -> None:
+    # No trust anchor yet: fetch the internal root CA over an unverified connection.
     logger.warning(
-        "ROOT_GATEWAY_TRUST not set — fetching root CA without server verification (TOFU). "
-        "Set ROOT_GATEWAY_TRUST=system if the root gateway uses a publicly trusted certificate."
+        "ROOT_GATEWAY_TRUST is empty — fetching the internal root CA without server "
+        "verification (TOFU). Set ROOT_GATEWAY_TRUST=system if the root gateway uses a "
+        "publicly trusted certificate."
     )
     import urllib3
 
@@ -84,7 +87,28 @@ def _resolve_verify(base_url: str):
     response.raise_for_status()
     _write(ROOT_CA_FILE, response.text, 0o644)
     logger.info("Fetched root CA via TOFU -> %s", ROOT_CA_FILE)
-    return str(ROOT_CA_FILE)
+
+
+def _resolve_verify(base_url: str):
+    """Turn ROOT_GATEWAY_TRUST into requests' `verify=` for the token redemption call."""
+    if not os.environ.get("ROOT_GATEWAY_TRUST", "").strip():
+        _fetch_root_ca_tofu(base_url)
+
+    import config
+
+    try:
+        verify = config.root_gateway_verify()
+    except ValueError as exc:
+        logger.error("%s", exc)
+        sys.exit(1)
+    if verify is False:
+        logger.warning(
+            "ROOT_GATEWAY_TRUST=insecure — the root gateway certificate is not verified."
+        )
+        import urllib3
+
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    return verify
 
 
 def redeem_cluster_token() -> None:
@@ -227,37 +251,69 @@ def _check_cert_expiry() -> bool:
         return True
 
 
-def _init_cluster_crl() -> None:
-    """Write an empty cluster CRL if one doesn't already exist.
+def _use_bootstrap_cert_paths() -> None:
+    # ext_requests.cluster_certificates locates the CA files via config, i.e. the
+    # environment; point it at this container's cert directory.
+    os.environ.setdefault("ROOT_CA_FILE", str(ROOT_CA_FILE))
+    os.environ.setdefault("CLUSTER_CA_CERT_FILE", str(CLUSTER_CA_CERT_FILE))
+    os.environ.setdefault("CLUSTER_CA_KEY_FILE", str(CLUSTER_CA_KEY_FILE))
 
-    Mosquitto's crlfile directive requires the file to be present at startup
-    even when no worker certs have been revoked yet.
+
+def write_cluster_crl() -> None:
+    """(Re-)sign the cluster CRL so mosquitto starts with a present, current list.
+
+    mosquitto refuses to start without the file and rejects every client if it is
+    expired or signed by a different CA key. Entries of an existing CRL signed by the
+    current cluster CA are carried over; cluster_manager re-syncs from MongoDB later.
     """
-    crl_path = CERT_DIR / "cluster_revoked.crl"
-    if crl_path.is_file():
-        return
-    try:
-        sys.path.insert(0, "/app")
-        from ext_requests.cluster_certificates import regenerate_cluster_crl
+    from cryptography import x509
+    from ext_requests.cluster_certificates import load_cluster_ca, regenerate_cluster_crl
 
-        if regenerate_cluster_crl([]):
-            logger.info("Wrote empty cluster CRL to %s", crl_path)
-        else:
-            logger.warning("Could not write empty cluster CRL — mosquitto may fail to start")
-    except Exception as exc:
-        logger.warning(
-            "CRL init failed (%s) — mosquitto may fail to start if crlfile is configured", exc
+    entries = []
+    if CLUSTER_CRL_FILE.is_file():
+        try:
+            intermediate_cert, _, _ = load_cluster_ca()
+            crl = x509.load_pem_x509_crl(CLUSTER_CRL_FILE.read_bytes())
+            if crl.is_signature_valid(intermediate_cert.public_key()):
+                entries = [(entry.serial_number, entry.revocation_date_utc) for entry in crl]
+            else:
+                logger.info(
+                    "Existing cluster CRL was signed by a previous cluster CA — starting empty."
+                )
+        except Exception as exc:
+            logger.warning("Could not read the existing cluster CRL (%s) — starting empty.", exc)
+
+    if not regenerate_cluster_crl(entries):
+        logger.error(
+            "Could not write %s — mosquitto cannot start without it. Check the cluster CA files.",
+            CLUSTER_CRL_FILE,
         )
+        sys.exit(1)
+    logger.info("Signed cluster CRL with %d revoked certificate(s).", len(entries))
+
+
+def issue_cluster_mqtt_identity() -> None:
+    from ext_requests.cluster_certificates import write_cluster_mqtt_identity
+
+    try:
+        cert_path = write_cluster_mqtt_identity(os.environ.get("CLUSTER_NAME") or "")
+    except Exception as exc:
+        logger.error("Could not issue the cluster MQTT client certificate: %s", exc)
+        sys.exit(1)
+    logger.info("Issued cluster MQTT client certificate %s", cert_path)
 
 
 def main() -> None:
+    # Before anything imports config: it reads the CA locations at import time.
+    _use_bootstrap_cert_paths()
     if all(path.is_file() for path in MTLS_FILES):
         logger.info("Cluster certificate material already present — skipping token redemption.")
         _check_cert_expiry()
     else:
         redeem_cluster_token()
     ensure_public_gateway_cert()
-    _init_cluster_crl()
+    write_cluster_crl()
+    issue_cluster_mqtt_identity()
     logger.info("Certificate bootstrap complete.")
 
 

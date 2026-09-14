@@ -337,7 +337,8 @@ if [[ "$OVERRIDE_FILES" == *"override-gateway.yml"* ]]; then
             echo ❌❌❌ Missing BYO public gateway certificate: "$CERT_DIR/$f"
             echo "    Provide a publicly trusted cert (e.g. Let's Encrypt) as"
             echo "    $CERT_DIR/public/fullchain.pem and privkey.pem."
-            echo "    If it is privately issued, also set ROOT_GATEWAY_TRUST to a CA bundle path."
+            echo "    If it is privately issued, also set ROOT_GATEWAY_TRUST to the CA bundle as a path"
+            echo "    inside the containers, e.g. /certs/<file> (put the file in $CERT_DIR)."
             exit 1
         fi
     done

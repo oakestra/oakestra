@@ -1,4 +1,5 @@
 import ipaddress
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -178,12 +179,32 @@ def regenerate_cluster_crl(revoked_serials: list) -> bool:
         pem = generate_cluster_crl(revoked_serials)
         crl_path = get_cluster_crl_path()
         crl_path.write_bytes(pem)
-        import os as _os
-
-        _os.chmod(crl_path, 0o644)
+        os.chmod(crl_path, 0o644)
         return True
     except Exception:
         return False
+
+
+def get_cluster_mqtt_identity_paths() -> tuple[Path, Path]:
+    base = Path(ROOT_CA_FILE).parent if ROOT_CA_FILE else Path("/certs")
+    return base / "cluster_mqtt.crt", base / "cluster_mqtt.key"
+
+
+def write_cluster_mqtt_identity(cluster_name: str) -> Path:
+    """Issue the MQTT client certificate used by this cluster's own services.
+
+    mosquitto CRL-checks client certificates against cluster_revoked.crl, which only the
+    cluster intermediate CA signs, so the root-issued cluster.crt would be rejected as an
+    MQTT client certificate. This identity is issued by the intermediate instead.
+    Returns the certificate path.
+    """
+    private_pem, fullchain_pem = generate_worker_cert(f"{cluster_name or 'cluster'}-mqtt")
+    cert_path, key_path = get_cluster_mqtt_identity_paths()
+    key_path.write_text(private_pem)
+    os.chmod(key_path, 0o600)
+    cert_path.write_text(fullchain_pem)
+    os.chmod(cert_path, 0o644)
+    return cert_path
 
 
 def generate_cluster_csr(common_name: str, alt_names: list) -> tuple:

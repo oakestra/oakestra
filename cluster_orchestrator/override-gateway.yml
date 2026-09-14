@@ -9,7 +9,8 @@ services:
   # CLUSTER_REGISTRATION_TOKEN against the root's /api/certs/cluster-bootstrap
   # endpoint. It also requires a BYO public gateway cert in /certs/public/
   # (a separate certificate system from the internal mTLS CA) and fails fast
-  # if absent.
+  # if absent. It also re-signs cluster_revoked.crl and issues cluster_mqtt.crt/key,
+  # the MQTT client identity of the cluster's own services.
   cluster_cert_bootstrap:
     image: cluster_manager
     build:
@@ -26,7 +27,7 @@ services:
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_ADDRESS=${CLUSTER_ADDRESS}
       - CLUSTER_REGISTRATION_TOKEN=${CLUSTER_REGISTRATION_TOKEN:-}
-      - ROOT_GATEWAY_TRUST=${ROOT_GATEWAY_TRUST:-system}
+      - ROOT_GATEWAY_TRUST=${ROOT_GATEWAY_TRUST-system}
     volumes:
       - ${CLUSTER_CERT_PATH:-./config/certs}:/certs
       - ./config/docker-update-ca-trust.sh:/docker-update-ca-trust.sh:ro
@@ -45,7 +46,7 @@ services:
       cluster_cert_bootstrap:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "mosquitto_sub -p 8883 --cafile /certs/ca.crt --cert /certs/cluster.crt --key /certs/cluster.key -t '$$SYS/#' -C 1 -W 3 || exit 1"]
+      test: ["CMD-SHELL", "mosquitto_sub -p 8883 --cafile /certs/ca.crt --cert /certs/cluster_mqtt.crt --key /certs/cluster_mqtt.key -t '$$SYS/#' -C 1 -W 3 || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 6
@@ -78,12 +79,16 @@ services:
       - ROOT_CA_FILE=/certs/ca.crt
       - CLUSTER_CA_CERT_FILE=/certs/cluster_ca.crt
       - CLUSTER_CA_KEY_FILE=/certs/cluster_ca.key
-      - ROOT_GATEWAY_TRUST=${ROOT_GATEWAY_TRUST:-system}
+      - ROOT_GATEWAY_TRUST=${ROOT_GATEWAY_TRUST-system}
       - MQTT_CERT=/certs
+      - MQTT_CERT_FILE=/certs/cluster_mqtt.crt
+      - MQTT_KEY_FILE=/certs/cluster_mqtt.key
       - MQTT_BROKER_PORT=8883
     depends_on:
       cluster_cert_bootstrap:
         condition: service_completed_successfully
+      mqtt:
+        condition: service_healthy
     ports: !reset []
 
   cluster_service_manager:
@@ -95,18 +100,20 @@ services:
     environment:
       - ROOT_SERVICE_MANAGER_PORT=${SYSTEM_MANAGER_GATEWAY_HTTPS_PORT:-443}
       - ROOT_SERVICE_MANAGER_USE_TLS=true
-      - MQTT_CERT_FILE=/certs/cluster.crt
-      - MQTT_KEY_FILE=/certs/cluster.key
+      - MQTT_CERT_FILE=/certs/cluster_mqtt.crt
+      - MQTT_KEY_FILE=/certs/cluster_mqtt.key
       - CLUSTER_ADDRESS=${CLUSTER_ADDRESS}
       - CLUSTER_CERT_FILE=/certs/cluster.crt
       - CLUSTER_KEY_FILE=/certs/cluster.key
       - ROOT_CA_FILE=/certs/ca.crt
-      - ROOT_GATEWAY_TRUST=${ROOT_GATEWAY_TRUST:-system}
+      - ROOT_GATEWAY_TRUST=${ROOT_GATEWAY_TRUST-system}
       - MQTT_CERT=/certs
       - MQTT_BROKER_PORT=8883
     depends_on:
       cluster_cert_bootstrap:
         condition: service_completed_successfully
+      mqtt:
+        condition: service_healthy
     ports: !reset []
 
   cluster_scheduler:

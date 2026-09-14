@@ -221,11 +221,11 @@ services:
         strip_path: false
 
       # CA lifecycle administration (JWT + Admin role in the application):
-      # /reset, /renew-server, /sign, /generate-client, /generate-cluster.
+      # /reset, /renew-server, /sign, /generate-client, /generate-cluster, /revoke.
       - name: sm-certs-admin-public
         paths:
           - /api/certs
-        methods: [POST, OPTIONS]
+        methods: [GET, POST, DELETE, OPTIONS]
         strip_path: false
 
   # Root service manager: user-facing read endpoint.
