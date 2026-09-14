@@ -15,6 +15,8 @@ protobuf>=4.25.2,<7.0.0
 flask-smorest==0.39.0
 flask-cors
 flask-swagger-ui
+cryptography==44.0.1
+docker~=7.0.0
 gunicorn==22.0.0
 # Oakestra shared libraries (oakestra_utils_library, resource_abstractor_client)
 # are installed from the local libraries/ folder, NOT from git. See the Dockerfile

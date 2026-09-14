@@ -4,9 +4,11 @@ import os
 import socket
 import threading
 import time
+from pathlib import Path
 
 import config
 import grpc
+import requests as http_requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from blueprints import blueprints
 from clients.mqtt_client import mqtt_init
@@ -27,6 +29,16 @@ from proto.clusterRegistration_pb2_grpc import register_clusterStub
 
 my_logger = configure_logging()
 logger = logging.getLogger("cluster_manager")
+
+if config.mtls_enabled():
+    # Validate ROOT_GATEWAY_TRUST while gunicorn loads the app: an unusable value then
+    # stops the container once ("Worker failed to boot") instead of crash-looping.
+    try:
+        config.root_gateway_grpc_root_certificates()
+    except (ValueError, OSError) as exc:
+        logger.critical("Invalid ROOT_GATEWAY_TRUST: %s", exc)
+        raise
+
 app = Flask(__name__)
 
 app.config["OPENAPI_VERSION"] = "3.0.2"
@@ -81,9 +93,161 @@ def background_job_send_aggregated_information_to_sm():
 # ........................................................................#
 
 
-def register_with_system_manager():
-    """Registers this cluster manager with the system manager using gRPC."""
+def _build_grpc_channel():
+    """Open the gRPC channel to system_manager.
 
+    If mTLS is enabled and the cert bundle is present, the channel is wrapped in
+    TLS with client-cert authentication. Otherwise falls back to insecure (today's
+    behaviour for the no-gateway compose path).
+    """
+    if config.mtls_enabled():
+        # Server trust follows ROOT_GATEWAY_TRUST (see config.py); "insecure" is rejected
+        # because gRPC cannot skip server verification.
+        ca_bytes = config.root_gateway_grpc_root_certificates()
+        with open(config.CLUSTER_KEY_FILE, "rb") as f:
+            key_bytes = f.read()
+        with open(config.CLUSTER_CERT_FILE, "rb") as f:
+            cert_bytes = f.read()
+        creds = grpc.ssl_channel_credentials(
+            root_certificates=ca_bytes,
+            private_key=key_bytes,
+            certificate_chain=cert_bytes,
+        )
+        logger.info("Opening secure gRPC channel to system_manager (mTLS)")
+        return grpc.secure_channel(config.SYSTEM_MANAGER_ADDR, creds)
+    logger.info("Opening insecure gRPC channel to system_manager")
+    return grpc.insecure_channel(config.SYSTEM_MANAGER_ADDR)
+
+
+def _refresh_cluster_certs() -> bool:
+    """Re-bootstrap cluster cert material using CLUSTER_REGISTRATION_TOKEN.
+
+    Called automatically when gRPC registration fails, so a stale cert bundle
+    (e.g. after a root CA rotation) is replaced without manual intervention.
+    Returns True if the cert files were successfully replaced.
+    """
+    token = os.environ.get("CLUSTER_REGISTRATION_TOKEN") or ""
+    if not token:
+        return False
+
+    root_url = os.environ.get("SYSTEM_MANAGER_URL") or ""
+    root_port = os.environ.get("SYSTEM_MANAGER_PORT") or "443"
+    cluster_name = config.MY_CHOSEN_CLUSTER_NAME or ""
+    cluster_ip = config.MY_CLUSTER_ADDRESS or ""
+
+    if not root_url or not cluster_name:
+        logger.error("Cannot refresh certs: SYSTEM_MANAGER_URL or CLUSTER_NAME not configured")
+        return False
+
+    base_url = f"https://{root_url}:{root_port}"
+    alt_names = [name for name in (cluster_ip,) if name]
+
+    logger.info("Attempting cert refresh from %s", base_url)
+    try:
+        resp = http_requests.post(
+            f"{base_url}/api/certs/cluster-bootstrap",
+            json={"token": token, "cluster_name": cluster_name, "alt_names": alt_names},
+            verify=config.root_gateway_verify(),
+            timeout=30,
+        )
+    except http_requests.exceptions.RequestException as e:
+        logger.error("Cert refresh failed — could not reach root: %s", e)
+        return False
+
+    if resp.status_code == 401:
+        logger.error("Cert refresh failed — token rejected (invalid, expired, or already used)")
+        return False
+    if resp.status_code != 200:
+        logger.error(
+            "Cert refresh failed — root returned %d: %s", resp.status_code, resp.text[:200]
+        )
+        return False
+
+    payload = resp.json()
+    cert_dir = Path(config.ROOT_CA_FILE).parent if config.ROOT_CA_FILE else Path("/certs")
+
+    def _write(path, content, mode):
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content)
+        os.chmod(p, mode)
+
+    _write(config.ROOT_CA_FILE, payload["root_ca"], 0o644)
+    _write(config.CLUSTER_CERT_FILE, payload["client_cert"], 0o644)
+    _write(config.CLUSTER_KEY_FILE, payload["client_key"], 0o600)
+    _write(config.CLUSTER_CA_CERT_FILE, payload["cluster_ca_cert"], 0o644)
+    _write(config.CLUSTER_CA_KEY_FILE, payload["cluster_ca_key"], 0o600)
+
+    logger.info("Cluster certificates refreshed in %s", cert_dir)
+    from blueprints.certificates_blueprints import refresh_cluster_crl
+    from ext_requests.cluster_certificates import write_cluster_mqtt_identity
+
+    # The MQTT identity and CRL must chain to / be signed by the new cluster CA.
+    write_cluster_mqtt_identity(cluster_name)
+    if refresh_cluster_crl()["mqtt_reloaded"]:
+        logger.info("MQTT broker reloaded with new certificates")
+    else:
+        logger.warning("Cert files updated but MQTT broker reload failed — restart mqtt manually")
+    return True
+
+
+def _try_register() -> bool:
+    """Attempt a single gRPC registration. Returns True on success."""
+    response = None
+    with _build_grpc_channel() as channel:
+        stub = register_clusterStub(channel)
+
+        try:
+            message = CS1Message()
+            message.hello_service_manager = json.dumps(
+                {
+                    "cluster_name": config.MY_CHOSEN_CLUSTER_NAME,
+                    "location": config.MY_CLUSTER_LOCATION,
+                }
+            )
+            response: SC1Message = stub.handle_init_greeting(
+                message, wait_for_ready=True, timeout=config.GRPC_REQUEST_TIMEOUT
+            )
+            logger.info(
+                "Received greeting message from System Manager: "
+                + str(response.hello_cluster_manager)
+            )
+        except grpc.RpcError as e:
+            logger.error(f"Error sending CS1 to System Manager: {e}")
+            return False
+
+        try:
+            message = CS2Message()
+            message.manager_port = int(config.MY_CLUSTER_PORT)
+            message.network_component_port = int(config.NETWORK_COMPONENT_PORT)
+            message.cluster_name = config.MY_CHOSEN_CLUSTER_NAME
+            message.cluster_location = config.MY_CLUSTER_LOCATION
+            message.cluster_address = config.MY_CLUSTER_ADDRESS
+
+            key_value_message = KeyValue()
+            message.cluster_info.append(key_value_message)
+
+            response: SC2Message = stub.handle_init_final(
+                message, wait_for_ready=True, timeout=config.GRPC_REQUEST_TIMEOUT
+            )
+            logger.info(f"Cluster ID received: {response.id}")
+        except grpc.RpcError as e:
+            logger.error(f"Error sending CS2 to System Manager: {e}")
+            return False
+
+    if response and response.id:
+        config.MY_ASSIGNED_CLUSTER_ID = response.id
+        logger.info("Received ID. Go ahead with Background Jobs")
+        prometheus_init_gauge_metrics(config.MY_ASSIGNED_CLUSTER_ID, app.logger)
+        background_job_send_aggregated_information_to_sm()
+        return True
+
+    logger.error("No ID received from System Manager.")
+    return False
+
+
+def register_with_system_manager():
+    """Register with the system manager, refreshing certs and retrying once on failure."""
     if not config.MY_CLUSTER_ADDRESS:
         raise RuntimeError(
             "CLUSTER_ADDRESS env var is not set. The root orchestrator needs the "
@@ -91,50 +255,58 @@ def register_with_system_manager():
             "IP/hostname the root can use to reach this host."
         )
 
-    with grpc.insecure_channel(config.SYSTEM_MANAGER_ADDR) as channel:
-        stub = register_clusterStub(channel)
+    if _try_register():
+        return
 
-        # Send initial greeting (CS1Message)
-        greeting = CS1Message()
-        greeting.hello_service_manager = json.dumps(
-            {
-                "cluster_name": config.MY_CHOSEN_CLUSTER_NAME,
-                "location": config.MY_CLUSTER_LOCATION,
-            }
-        )
-        sc1: SC1Message = stub.handle_init_greeting(
-            greeting, wait_for_ready=True, timeout=config.GRPC_REQUEST_TIMEOUT
-        )
-        logger.info(
-            "Received greeting message from System Manager: " + str(sc1.hello_cluster_manager)
-        )
+    # Failures raise so the worker exits and gunicorn retries registration.
+    token = os.environ.get("CLUSTER_REGISTRATION_TOKEN") or ""
+    if not token:
+        raise RuntimeError("gRPC registration with the System Manager failed")
 
-        # Send cluster details (CS2Message)
-        details = CS2Message()
-        details.manager_port = int(config.MY_PORT)
-        details.network_component_port = int(config.NETWORK_COMPONENT_PORT)
-        details.cluster_name = config.MY_CHOSEN_CLUSTER_NAME
-        details.cluster_location = config.MY_CLUSTER_LOCATION
-        details.cluster_address = config.MY_CLUSTER_ADDRESS
-        details.cluster_info.append(KeyValue())
-
-        sc2: SC2Message = stub.handle_init_final(
-            details, wait_for_ready=True, timeout=config.GRPC_REQUEST_TIMEOUT
-        )
-
-        if not sc2.id:
-            raise RuntimeError("Registration failed: no cluster id returned by root")
-
-        config.MY_ASSIGNED_CLUSTER_ID = sc2.id
-        logger.info(f"Cluster ID received: {sc2.id}. Go ahead with Background Jobs")
-        prometheus_init_gauge_metrics(config.MY_ASSIGNED_CLUSTER_ID, app.logger)
-        background_job_send_aggregated_information_to_sm()
+    logger.warning("gRPC registration failed — refreshing cluster certificates with provided token")
+    if not _refresh_cluster_certs():
+        raise RuntimeError("gRPC registration failed and the cluster cert refresh failed")
+    logger.info("Certificates refreshed, retrying gRPC registration")
+    if not _try_register():
+        raise RuntimeError("gRPC registration failed after refreshing cluster certificates")
 
 
 # ........... FINISH - register to System Manager with gRPC.................#
 # ..........................................................................#
 
 start_http_server(10001)  # start prometheus server
+
+
+_CERT_WARN_DAYS = 30
+
+
+def _check_cluster_cert_expiry():
+    """Log a warning/error if the mTLS client cert is near expiry or already expired."""
+    if not config.mtls_enabled():
+        return
+    if not config.CLUSTER_CERT_FILE:
+        return
+    try:
+        from pathlib import Path
+
+        from ext_requests.cluster_certificates import cert_expires_in
+
+        pem = Path(config.CLUSTER_CERT_FILE).read_text()
+        remaining = cert_expires_in(pem)
+        days = remaining.days
+        if remaining.total_seconds() <= 0:
+            logger.error(
+                "Cluster mTLS client certificate has EXPIRED. "
+                "Call POST /api/certs/renew or re-bootstrap with a new token."
+            )
+        elif days <= _CERT_WARN_DAYS:
+            logger.warning(
+                "Cluster mTLS client certificate expires in %d day(s). "
+                "Call POST /api/certs/renew before it expires.",
+                days,
+            )
+    except Exception as exc:
+        logger.warning("Could not check cluster cert expiry: %s", exc)
 
 
 def _register_in_background():
@@ -147,11 +319,31 @@ def _register_in_background():
     # failure, exit the worker so gunicorn respawns it and tries again.
     time.sleep(2)
     try:
+        _check_cluster_cert_expiry()
         register_with_system_manager()
     except Exception:
         logger.exception("Cluster registration failed; exiting worker for restart")
         os._exit(1)
 
+
+def _refresh_crl_periodically():
+    # The cluster CRL expires 30 days after it is signed, so re-sign it regularly;
+    # the first run also replaces a stale CRL left over from before a restart.
+    from blueprints.certificates_blueprints import refresh_cluster_crl
+
+    delay = 60
+    while True:
+        time.sleep(delay)
+        delay = config.CRL_REFRESH_INTERVAL_HOURS * 3600
+        try:
+            if not refresh_cluster_crl()["crl_regenerated"]:
+                logger.error("Periodic CRL refresh could not write the cluster CRL")
+        except Exception:
+            logger.exception("Periodic CRL refresh failed")
+
+
+if config.GATEWAY_ENABLED:
+    threading.Thread(target=_refresh_crl_periodically, daemon=True).start()
 
 threading.Thread(target=_register_in_background, daemon=True).start()
 

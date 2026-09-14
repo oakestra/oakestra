@@ -49,3 +49,4 @@ if [ $? -ne 0 ]; then
     fi
 
 echo ✅ Installation complete
+echo "ℹ️  For mTLS clusters: provision worker certs from the cluster's internal gateway."
