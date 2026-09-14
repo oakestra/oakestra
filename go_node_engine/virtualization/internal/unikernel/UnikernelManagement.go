@@ -592,9 +592,11 @@ func (r *UnikernelRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 				Logs:     logutils.GetLogs(domain.Name),
 				Runtime:  string(model.UNIKERNEL_RUNTIME),
 				Instance: domain.Instance,
+				Status:   model.SERVICE_RUNNING,
 			})
 
 		}
+		resourceList = append(resourceList, model.InstantiatingResources(model.UNIKERNEL_RUNTIME)...)
 		notifyHandler(resourceList)
 	}
 }

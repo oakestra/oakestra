@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from ext_requests.scheduler_requests import scheduler_request_deploy
 from oakestra_utils.types.statuses import (
@@ -14,18 +14,21 @@ from resource_abstractor_client import candidate_operations, job_operations
 logger = logging.getLogger("cluster_manager")
 
 
-def mark_inactive_as_failed(time_interval):
-    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=time_interval)).timestamp()
+def mark_inactive_as_failed(running_timeout, node_scheduled_timeout):
+    now = datetime.now(timezone.utc).timestamp()
+    running_cutoff = now - running_timeout
+    node_scheduled_cutoff = now - node_scheduled_timeout
+
+    # Pre-filter with the broadest cutoff so no potentially-stale instance is missed;
+    # per-status thresholds are applied below in Python.
+    max_cutoff = max(running_cutoff, node_scheduled_cutoff)
     query = {
         "instance_list": {
             "$elemMatch": {
-                "$or": [
-                    {"last_modified_timestamp": {"$lt": cutoff}},
-                ]
+                "last_modified_timestamp": {"$lt": max_cutoff},
             }
         }
     }
-
     jobs = job_operations.get_jobs(**query)
     if jobs is None:
         return
@@ -35,16 +38,25 @@ def mark_inactive_as_failed(time_interval):
 
         for instance in job["instance_list"]:
             job_status = convert_to_status(instance.get("status", None)) or LegacyStatus.LEGACY_0
+            timestamp = instance.get("last_modified_timestamp", now)
 
-            timestamp = instance.get(
-                "last_modified_timestamp", datetime.now(timezone.utc).timestamp()
+            stale = (
+                (
+                    job_status == PositiveSchedulingStatus.NODE_SCHEDULED
+                    and timestamp < node_scheduled_cutoff
+                )
+                or (
+                    job_status == PositiveSchedulingStatus.INSTANTIATION
+                    and timestamp < running_cutoff
+                )
+                or (
+                    timestamp < running_cutoff
+                    and job_status not in PositiveSchedulingStatus
+                    and job_status != DeploymentStatus.COMPLETED
+                )
             )
 
-            if (
-                timestamp < cutoff
-                and job_status not in PositiveSchedulingStatus
-                and job_status != DeploymentStatus.COMPLETED
-            ):
+            if stale:
                 update_instance(
                     job.get("_id"),
                     instance.get("instance_number"),
@@ -68,8 +80,8 @@ def mark_inactive_as_failed(time_interval):
     return
 
 
-def aggregate_info(time_interval):
-    mark_inactive_as_failed(time_interval)
+def aggregate_info(running_timeout, node_scheduled_timeout):
+    mark_inactive_as_failed(running_timeout, node_scheduled_timeout)
     jobs = job_operations.get_jobs() or []
 
     return [
@@ -135,10 +147,11 @@ def update_deployed_instance_job(job_name, instance_number, service, worker_id):
         return None
 
     job_id = jobs[0].get("_id")
+    reported_status = service.get("status", DeploymentStatus.UNKNOWN.value)
     update_status(
         job_id,
         int(instance_number),
-        DeploymentStatus.RUNNING.value,
+        reported_status,
         service.get("status_detail", None),
     )
     data = {
