@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -33,9 +35,37 @@ func (s *Store) DeleteCustomResourceByType(ctx context.Context, resourceType str
 }
 
 // CreateCustomResource registers a new custom-resource type definition,
-// dropping any client-supplied _id.
+// dropping any client-supplied _id. resource_type is validated here and
+// nowhere else: the instance routes only accept types that are already
+// registered, so this is the one place a bad name could get in.
 func (s *Store) CreateCustomResource(ctx context.Context, data bson.M) (bson.M, error) {
+	resourceType, _ := data["resource_type"].(string)
+	if err := validateResourceType(resourceType); err != nil {
+		return nil, err
+	}
 	return insertReturning(ctx, s.metaData, data)
+}
+
+// validateResourceType rejects resource_type values that would collide
+// with the meta_data definitions collection or misbehave as a MongoDB
+// collection name. Without this, POSTing {"resource_type":"meta_data"} lets
+// a later DELETE run DeleteMany({}) directly against meta_data, wiping
+// every other registered type definition; names with "$", a NUL byte, or a
+// "system." prefix are collection names MongoDB itself refuses, which would
+// otherwise surface as a raw driver error instead of a clean 400.
+func validateResourceType(name string) error {
+	switch {
+	case name == "":
+		return fmt.Errorf("%w: resource_type is required", ErrInvalidResourceType)
+	case name == metaDataCollectionName:
+		return fmt.Errorf("%w: %q is reserved for custom resource type definitions", ErrInvalidResourceType, name)
+	case strings.HasPrefix(name, "system."):
+		return fmt.Errorf("%w: %q uses the reserved \"system.\" prefix", ErrInvalidResourceType, name)
+	case strings.ContainsAny(name, "$\x00"):
+		return fmt.Errorf("%w: %q contains a character not allowed in a collection name", ErrInvalidResourceType, name)
+	default:
+		return nil
+	}
 }
 
 // FindResources lists instances of the given custom resource type matching
@@ -46,7 +76,7 @@ func (s *Store) FindResources(ctx context.Context, resourceType string, filter b
 
 // FindResourceByID looks up a single instance of resourceType by id.
 func (s *Store) FindResourceByID(ctx context.Context, resourceType, id string) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +102,7 @@ func (s *Store) UpdateResource(ctx context.Context, resourceType, id string, dat
 // DeleteResource removes an instance of resourceType by id, returning it as
 // deleted.
 func (s *Store) DeleteResource(ctx context.Context, resourceType, id string) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
 		return nil, err
 	}

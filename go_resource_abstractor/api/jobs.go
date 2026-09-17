@@ -65,11 +65,6 @@ func (s *Server) UpsertJob(c *gin.Context) {
 // GetJob implements GET /api/v1/jobs/{job_id}, optionally narrowed to jobs
 // that have a given instance_number.
 func (s *Server) GetJob(c *gin.Context, jobID openapi.JobID, params openapi.GetJobParams) {
-	if !isValidObjectID(jobID) {
-		abortBadRequest(c)
-		return
-	}
-
 	var instanceNumber *int
 	if n, present, err := queryInt("instance_number", params.InstanceNumber); err != nil {
 		abortInvalidQuery(c, "instance_number", err.Error())
@@ -114,11 +109,6 @@ func (s *Server) DeleteJob(c *gin.Context, jobID openapi.JobID) {
 
 // GetJobInstance implements GET /api/v1/jobs/{job_id}/{instance_id}.
 func (s *Server) GetJobInstance(c *gin.Context, jobID openapi.JobID, instanceNumber openapi.InstanceID) {
-	if !isValidObjectID(jobID) {
-		abortBadRequest(c)
-		return
-	}
-
 	result, err := s.store.FindJobInstance(c.Request.Context(), jobID, instanceNumber)
 	if abortOnError(c, err) {
 		return
@@ -165,11 +155,6 @@ func (s *Server) AppendJobInstance(c *gin.Context, jobID openapi.JobID, instance
 
 // PatchJobInstance implements PATCH /api/v1/jobs/{job_id}/{instance_id}.
 func (s *Server) PatchJobInstance(c *gin.Context, jobID openapi.JobID, instanceNumber openapi.InstanceID) {
-	if !isValidObjectID(jobID) {
-		abortBadRequest(c)
-		return
-	}
-
 	data, ok := bindJSONMap(c)
 	if !ok {
 		return
@@ -188,11 +173,6 @@ func (s *Server) PatchJobInstance(c *gin.Context, jobID openapi.JobID, instanceN
 
 // DeleteJobInstance implements DELETE /api/v1/jobs/{job_id}/{instance_id}.
 func (s *Server) DeleteJobInstance(c *gin.Context, jobID openapi.JobID, instanceNumber openapi.InstanceID) {
-	if !isValidObjectID(jobID) {
-		abortBadRequest(c)
-		return
-	}
-
 	updated, err := s.jobs.Delete(c.Request.Context(), jobID, func(ctx context.Context, _ string) (bson.M, error) {
 		return s.store.DeleteJobInstance(ctx, jobID, instanceNumber)
 	})

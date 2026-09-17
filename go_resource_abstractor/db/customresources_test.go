@@ -9,6 +9,32 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
+// Registering "meta_data" as a type used to point instance writes and the
+// cascading delete at the definitions collection itself.
+func TestCreateCustomResourceRejectsInvalidResourceType(t *testing.T) {
+	tests := []struct {
+		name string
+		data bson.M
+	}{
+		{"empty string", bson.M{"resource_type": ""}},
+		{"reserved meta_data name", bson.M{"resource_type": "meta_data"}},
+		{"system prefix", bson.M{"resource_type": "system.foo"}},
+		{"dollar sign", bson.M{"resource_type": "a$b"}},
+		{"nul byte", bson.M{"resource_type": "a\x00b"}},
+		{"missing field", bson.M{}},
+		{"non-string field", bson.M{"resource_type": 42}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			if _, err := testStore.CreateCustomResource(ctx, tt.data); !errors.Is(err, ErrInvalidResourceType) {
+				t.Errorf("CreateCustomResource(%v): got %v, want ErrInvalidResourceType", tt.data, err)
+			}
+		})
+	}
+}
+
 func TestCustomResourceDefinitionUniqueIndex(t *testing.T) {
 	ctx := context.Background()
 	resourceType := uniqueName("widget")

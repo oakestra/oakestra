@@ -49,7 +49,7 @@ func insertReturning(ctx context.Context, coll *mongo.Collection, data bson.M) (
 // find-by-hex-id-then-$set-and-return-after shape shared by every plain
 // *_db.py update function.
 func updateByID(ctx context.Context, coll *mongo.Collection, id string, data bson.M) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
 		return nil, err
 	}

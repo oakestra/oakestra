@@ -13,6 +13,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+// metaDataCollectionName is the custom_resources collection that stores
+// type definitions. It doubles as the reserved name validateResourceType
+// rejects for an instance type, so the two can't drift apart.
+const metaDataCollectionName = "meta_data"
+
 // Store bundles the collection handles the service operates on, the same
 // four collections db/mongodb_client.py's mongo_init sets up as module-level
 // globals.
@@ -49,7 +54,7 @@ func Connect(ctx context.Context, uri string) (*Store, error) {
 		apps:              client.Database("jobs").Collection("apps"),
 		jobs:              client.Database("jobs").Collection("jobs"),
 		hooks:             client.Database("hooks").Collection("hooks"),
-		metaData:          customResourcesDB.Collection("meta_data"),
+		metaData:          customResourcesDB.Collection(metaDataCollectionName),
 		customResourcesDB: customResourcesDB,
 	}
 
@@ -116,6 +121,10 @@ func (s *Store) ensureIndexes(ctx context.Context) error {
 // custom_resources database - the Go equivalent of Python's
 // db.db_custom_resources.db[resource_type]. It cannot reach the candidates,
 // jobs, hooks or apps collections, which live in separate MongoDB databases.
+//
+// resourceType is not validated here. Callers only reach this with a
+// registered type, and CreateCustomResource already ran
+// validateResourceType on it.
 func (s *Store) customResourceCollection(resourceType string) *mongo.Collection {
 	return s.customResourcesDB.Collection(resourceType)
 }

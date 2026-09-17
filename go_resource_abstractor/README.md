@@ -141,13 +141,21 @@ endpoints above:
 
 See [`../resource-abstractor/README.md`](../resource-abstractor/README.md) for the original
 service description; the endpoint shapes, MongoDB layout (four databases: `candidates`, `jobs`,
-`hooks`, `custom_resources`), and business logic are preserved here field-for-field, with two
+`hooks`, `custom_resources`), and business logic are preserved here field-for-field, with four
 deliberate bug fixes over the Python source (documented in code comments where they matter):
 
 - `GET /hooks/<id>` now actually finds the hook by its ObjectID (the Python service compared it
   as a raw string, so that lookup never matched).
 - `PUT /jobs/` fires webhooks under the `"jobs"` entity name on its update path, consistent with
   every other job route (the Python service used `"job"`, singular, there only).
+- A malformed id in a path parameter answers 400 on every route. The Python service (and the
+  first cut of this port) only pre-checked some routes; on the rest the id reached the driver and
+  the request 500'd.
+- Registering a custom resource type named `meta_data` is rejected with 400. Instances of a type
+  live in a collection named after the type, in the same database as the `meta_data` definitions
+  collection, so a type with that name pointed at the definitions themselves - deleting it wiped
+  every registered type. Names MongoDB refuses as collection names (`$`, NUL, `system.` prefix)
+  are rejected the same way instead of surfacing as driver errors.
 
 The one route not carried over is `/api/docs`, the Swagger UI page the Python service bundled.
 The spec it rendered is still served (see above); serving the UI itself would mean shipping its

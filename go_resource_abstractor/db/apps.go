@@ -17,7 +17,7 @@ func (s *Store) FindApps(ctx context.Context, filter bson.M) ([]bson.M, error) {
 // FindAppByID looks up a single application by id, additionally constrained
 // by extraFilter (e.g. userId from query params).
 func (s *Store) FindAppByID(ctx context.Context, id string, extraFilter bson.M) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +35,7 @@ func (s *Store) FindAppByID(ctx context.Context, id string, extraFilter bson.M) 
 
 // DeleteApp removes an application by id and returns the deleted document.
 func (s *Store) DeleteApp(ctx context.Context, id string) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
 		return nil, err
 	}

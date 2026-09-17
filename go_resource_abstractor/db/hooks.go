@@ -60,7 +60,7 @@ func (s *Store) WebhookURLsFor(ctx context.Context, entity string, event HookEve
 // {"_id": hook_id} with hook_id as a raw string - so GET /hooks/<id> can
 // never match there. Fixed here by decoding id as an ObjectID first.
 func (s *Store) FindHookByID(ctx context.Context, id string) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (s *Store) UpdateHook(ctx context.Context, id string, data bson.M) (bson.M,
 
 // DeleteHook removes a hook by id.
 func (s *Store) DeleteHook(ctx context.Context, id string) error {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
 		return err
 	}

@@ -88,8 +88,8 @@ func abortInvalidQuery(c *gin.Context, field, message string) {
 	abortInvalidInput(c, map[string]any{"query": map[string]any{field: []string{message}}})
 }
 
-// abortOnError maps a store error to the matching HTTP response (404 or 500)
-// and reports whether it aborted, so callers can write
+// abortOnError maps a store error to the matching HTTP response (400, 404,
+// or 500) and reports whether it aborted, so callers can write
 // `if abortOnError(c, err) { return }` instead of repeating the
 // isNotFound/abortNotFound/abortInternalError dance in every handler.
 func abortOnError(c *gin.Context, err error) bool {
@@ -98,6 +98,8 @@ func abortOnError(c *gin.Context, err error) bool {
 		return false
 	case isNotFound(err):
 		abortNotFound(c)
+	case errors.Is(err, db.ErrInvalidID):
+		abortBadRequest(c)
 	default:
 		abortInternalError(c, err)
 	}
