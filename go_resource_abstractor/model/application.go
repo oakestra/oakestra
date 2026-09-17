@@ -4,9 +4,13 @@ package model
 // Jobs. Unknown fields are stored and returned verbatim, in Extra.
 //
 // Every optional field is a pointer. Nil means absent, so it's omitted on
-// write and a PATCH leaves the stored value untouched. An explicit JSON
-// null decodes the same way. A non-nil pointer, even to a zero value or an
-// empty slice, is a real value and gets written.
+// write and a PATCH leaves the stored value untouched. A non-nil pointer,
+// even to a zero value or an empty slice, is a real value and gets written.
+//
+// An explicit JSON null leaves the pointer nil too, but is not the same as
+// an absent key: it's recorded in Extra (see decodePtr) and written back
+// out as a literal null, so a PATCH sending one $sets the stored field to
+// null rather than leaving it alone.
 type Application struct {
 	ID *string `json:"_id,omitempty" bson:"_id,omitempty"`
 

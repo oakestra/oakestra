@@ -7,9 +7,13 @@ package model
 // so they land here.
 //
 // Every optional field is a pointer. Nil means absent, so it's omitted on
-// write and a PATCH leaves the stored value untouched. An explicit JSON
-// null decodes the same way. A non-nil pointer, even to a zero value or an
-// empty slice, is a real value and gets written.
+// write and a PATCH leaves the stored value untouched. A non-nil pointer,
+// even to a zero value or an empty slice, is a real value and gets written.
+//
+// An explicit JSON null leaves the pointer nil too, but is not the same as
+// an absent key: it's recorded in Extra (see decodePtr) and written back
+// out as a literal null, so a PATCH sending one $sets the stored field to
+// null rather than leaving it alone.
 type Resource struct {
 	ID                *string `json:"_id,omitempty" bson:"_id,omitempty"`
 	CandidateName     *string `json:"candidate_name,omitempty" bson:"candidate_name,omitempty"`
@@ -105,10 +109,10 @@ func (r *Resource) UnmarshalJSON(data []byte) error {
 	decodePtr(d, "cpu_percent", &r.CPUPercent)
 	decodePtr(d, "memory_percent", &r.MemoryPercent)
 	decodePtr(d, "gpu_percent", &r.GPUPercent)
-	decodeValue(d, "aggregation_per_architecture", &r.AggregationPerArchitecture)
+	decodeAnyMap(d, "aggregation_per_architecture", &r.AggregationPerArchitecture)
 	decodePtr(d, "virtualization", &r.Virtualization)
 	decodePtr(d, "supported_addons", &r.SupportedAddons)
-	decodePtr(d, "csi_drivers", &r.CSIDrivers)
+	decodeAnySlice(d, "csi_drivers", &r.CSIDrivers)
 	decodePtr(d, "cpu_history", &r.CPUHistory)
 	decodePtr(d, "memory_history", &r.MemoryHistory)
 	decodePtr(d, "last_modified_timestamp", &r.LastModifiedTimestamp)

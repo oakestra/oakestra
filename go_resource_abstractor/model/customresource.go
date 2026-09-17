@@ -38,7 +38,7 @@ func (d *CustomResourceDefinition) UnmarshalJSON(data []byte) error {
 
 	decodePtr(f, "_id", &d.ID)
 	decodeValue(f, "resource_type", &d.ResourceType)
-	decodeValue(f, "schema", &d.Schema)
+	decodeAnyMap(f, "schema", &d.Schema)
 
 	return f.finish(&d.Extra)
 }
@@ -100,4 +100,32 @@ func (c *CustomResourceInstance) UnmarshalJSON(data []byte) error {
 	decodePtr(d, "_id", &c.ID)
 
 	return d.finish(&c.Extra)
+}
+
+// MarshalBSON builds the stored document by hand instead of letting the
+// driver reflect over CustomResourceInstance's struct tags. Without it a
+// body carrying an explicit "_id": null - which decodePtr records in
+// Extra - fails to marshal outright: the driver's inline-map codec refuses
+// any Extra key that names a struct field. See Job.MarshalBSON for the
+// full reasoning.
+func (c CustomResourceInstance) MarshalBSON() ([]byte, error) {
+	e := newBSONFieldEncoder(c.Extra)
+	encodeBSONPtr(e, "_id", c.ID)
+	return e.finish()
+}
+
+// UnmarshalBSON decodes a stored CustomResourceInstance through a shadow
+// type carrying the same fields but none of its methods (so the driver
+// doesn't recurse back in here), then records the document's explicit
+// nulls for named fields in Extra. See Job.UnmarshalBSON for why the
+// default codec can't do that second part itself.
+func (c *CustomResourceInstance) UnmarshalBSON(data []byte) error {
+	type customResourceInstanceAlias CustomResourceInstance
+	var alias customResourceInstanceAlias
+	if err := decodeBSONAlias(data, &alias); err != nil {
+		return err
+	}
+	*c = CustomResourceInstance(alias)
+	markBSONNulls[CustomResourceInstance](data, &c.Extra)
+	return nil
 }

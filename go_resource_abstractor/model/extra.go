@@ -190,6 +190,67 @@ func decodePtr[T any](d *fieldDecoder, key string, dst **T) {
 	*dst = &v
 }
 
+// decodeResolved pops key and decodes it the way decodeExtra decodes an
+// unknown field: through jsonutil, so a number nested inside keeps its
+// int-vs-float identity. decodeValue/decodePtr can't be used for a field
+// whose Go type bottoms out in `any` - plain encoding/json collapses every
+// number there to float64, so an integer would land in MongoDB as a double
+// while the same integer under an unknown key lands as an int64.
+//
+// Reports whether key was present and decoded; an explicit null is recorded
+// via markNull and reported as absent, leaving the typed field at its zero
+// value the way decodePtr does.
+func decodeResolved(d *fieldDecoder, key string) (any, bool) {
+	if d.err != nil {
+		return nil, false
+	}
+	raw, ok := d.fields[key]
+	if !ok {
+		return nil, false
+	}
+	delete(d.fields, key)
+	if string(raw) == "null" {
+		d.markNull(key)
+		return nil, false
+	}
+	v, err := decodeJSONValue(raw)
+	if err != nil {
+		d.err = fmt.Errorf("field %q: %w", key, err)
+		return nil, false
+	}
+	return v, true
+}
+
+// decodeAnyMap is decodeValue for a map[string]any field, routed through
+// decodeResolved. A value that isn't a JSON object fails with the same
+// decode error json.Unmarshal into a map would report.
+func decodeAnyMap(d *fieldDecoder, key string, dst *map[string]any) {
+	v, ok := decodeResolved(d, key)
+	if !ok {
+		return
+	}
+	m, isMap := v.(map[string]any)
+	if !isMap {
+		d.err = fmt.Errorf("field %q: cannot unmarshal %T into map[string]interface {}", key, v)
+		return
+	}
+	*dst = m
+}
+
+// decodeAnySlice is decodeAnyMap's counterpart for a *[]any field.
+func decodeAnySlice(d *fieldDecoder, key string, dst **[]any) {
+	v, ok := decodeResolved(d, key)
+	if !ok {
+		return
+	}
+	list, isList := v.([]any)
+	if !isList {
+		d.err = fmt.Errorf("field %q: cannot unmarshal %T into []interface {}", key, v)
+		return
+	}
+	*dst = &list
+}
+
 // finish decodes whatever fields no typed key has claimed into *extra, then
 // adds a nil entry for every key markNull recorded - a known field that
 // arrived as a literal null - so it survives the next MarshalJSON/BSON
