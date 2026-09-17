@@ -183,6 +183,19 @@ func decodeModel[T any](c *gin.Context, data map[string]any) (T, bool) {
 	return v, true
 }
 
+// bindModel binds the request body with bind and converts it into T. The
+// resource routes don't use it: they inspect and coerce the raw map via
+// abortIfInvalidResourceFields before decoding, so they need the two steps
+// apart.
+func bindModel[T any](c *gin.Context, bind func(*gin.Context) (map[string]any, bool)) (T, bool) {
+	data, ok := bind(c)
+	if !ok {
+		var zero T
+		return zero, false
+	}
+	return decodeModel[T](c, data)
+}
+
 // strOrEmpty dereferences an optional query parameter, mapping an absent one
 // to "". The generated parameter structs give a nil pointer for an absent
 // parameter and a pointer to "" for a present-but-empty one ("?ip="); both

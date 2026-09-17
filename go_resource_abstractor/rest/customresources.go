@@ -23,11 +23,7 @@ func (s *Server) ListCustomResourceDefinitions(c *gin.Context) {
 // registering a new resource type. resource_type is required; the service
 // enforces that plus the reserved-name/collection-name rules.
 func (s *Server) CreateCustomResourceDefinition(c *gin.Context) {
-	body, ok := bindOptionalJSONMap(c)
-	if !ok {
-		return
-	}
-	data, ok := decodeModel[model.CustomResourceDefinition](c, body)
+	data, ok := bindModel[model.CustomResourceDefinition](c, bindOptionalJSONMap)
 	if !ok {
 		return
 	}
@@ -80,11 +76,7 @@ func (s *Server) ListCustomResourceInstances(c *gin.Context, resourceType openap
 // /api/v1/custom-resources/{resource}, validating the body against the
 // type's stored JSON Schema.
 func (s *Server) CreateCustomResourceInstance(c *gin.Context, resourceType openapi.CustomResourceType) {
-	body, ok := bindOptionalJSONMap(c)
-	if !ok {
-		return
-	}
-	data, ok := decodeModel[model.CustomResourceInstance](c, body)
+	data, ok := bindModel[model.CustomResourceInstance](c, bindOptionalJSONMap)
 	if !ok {
 		return
 	}
@@ -112,11 +104,7 @@ func (s *Server) GetCustomResourceInstance(c *gin.Context, resourceType openapi.
 // /api/v1/custom-resources/{resource}/{id}, re-validating the body against
 // the type's stored JSON Schema.
 func (s *Server) PatchCustomResourceInstance(c *gin.Context, resourceType openapi.CustomResourceType, id openapi.ObjectID) {
-	body, ok := bindOptionalJSONMap(c)
-	if !ok {
-		return
-	}
-	data, ok := decodeModel[model.CustomResourceInstance](c, body)
+	data, ok := bindModel[model.CustomResourceInstance](c, bindOptionalJSONMap)
 	if !ok {
 		return
 	}

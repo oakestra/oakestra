@@ -24,11 +24,7 @@ func (s *Server) ListHooks(c *gin.Context) {
 // against the HookEvent enum openapi.yaml declares, the same check as the
 // OneOf validator on APIObjectPostHookSchema.events.
 func (s *Server) CreateHook(c *gin.Context) {
-	body, ok := bindOptionalJSONMap(c)
-	if !ok {
-		return
-	}
-	data, ok := decodeModel[model.Hook](c, body)
+	data, ok := bindModel[model.Hook](c, bindOptionalJSONMap)
 	if !ok {
 		return
 	}
@@ -64,11 +60,7 @@ func (s *Server) GetHook(c *gin.Context, id openapi.ObjectID) {
 // still rejected there. abstractor.Hooks.Update validates here too, with
 // the same 400 as CreateHook.
 func (s *Server) PatchHook(c *gin.Context, id openapi.ObjectID) {
-	body, ok := bindOptionalJSONMap(c)
-	if !ok {
-		return
-	}
-	data, ok := decodeModel[model.Hook](c, body)
+	data, ok := bindModel[model.Hook](c, bindOptionalJSONMap)
 	if !ok {
 		return
 	}

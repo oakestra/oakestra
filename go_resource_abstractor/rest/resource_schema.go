@@ -6,8 +6,6 @@ import (
 	"slices"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/oakestra/oakestra/go_resource_abstractor/abstractor"
 )
 
 // jsonKind is a coarse JSON value shape, used to check request bodies
@@ -111,12 +109,21 @@ var resourceFields = map[string]resourceFieldSpec{
 	"last_modified_timestamp":      {kind: kindFloat},
 }
 
+// validationError reports a single field-level validation failure.
+// abortIfInvalidResourceFields renders it as the API's
+// {"message": "Invalid input", "details": {...}} shape, which needs Field
+// and Message apart, so this deliberately isn't an error type.
+type validationError struct {
+	Field   string
+	Message string
+}
+
 // validateResourceFields checks data's recognized ResourceSchema fields
 // against their expected JSON shape, returning the first mismatch found (in
 // sorted-key order for determinism), or nil if every recognized field
 // matches. For accepted kindInteger fields it also mutates data in place,
 // replacing the float64 encoding/json produced with an int64.
-func validateResourceFields(data map[string]any) *abstractor.ValidationError {
+func validateResourceFields(data map[string]any) *validationError {
 	for _, key := range slices.Sorted(maps.Keys(data)) {
 		spec, known := resourceFields[key]
 		if !known {
@@ -128,38 +135,38 @@ func validateResourceFields(data map[string]any) *abstractor.ValidationError {
 			if spec.nullable {
 				continue
 			}
-			return &abstractor.ValidationError{Field: key, Message: fmt.Sprintf("field %q may not be null", key)}
+			return &validationError{Field: key, Message: fmt.Sprintf("field %q may not be null", key)}
 		}
 
 		switch {
 		case spec.kind == kindInteger:
 			n, ok := toInt64(v)
 			if !ok {
-				return &abstractor.ValidationError{Field: key, Message: fmt.Sprintf("field %q must be an integer", key)}
+				return &validationError{Field: key, Message: fmt.Sprintf("field %q must be an integer", key)}
 			}
 			data[key] = n
 
 		case spec.kind == kindFloat:
 			f, ok := toFloat64(v)
 			if !ok {
-				return &abstractor.ValidationError{Field: key, Message: fmt.Sprintf("field %q must be a %s", key, spec.kind)}
+				return &validationError{Field: key, Message: fmt.Sprintf("field %q must be a %s", key, spec.kind)}
 			}
 			data[key] = f
 
 		case spec.kind == kindList && spec.stringElements:
 			list, isList := v.([]any)
 			if !isList {
-				return &abstractor.ValidationError{Field: key, Message: fmt.Sprintf("field %q must be a %s", key, spec.kind)}
+				return &validationError{Field: key, Message: fmt.Sprintf("field %q must be a %s", key, spec.kind)}
 			}
 			for _, elem := range list {
 				if _, ok := elem.(string); !ok {
-					return &abstractor.ValidationError{Field: key, Message: fmt.Sprintf("field %q must be a list of strings", key)}
+					return &validationError{Field: key, Message: fmt.Sprintf("field %q must be a list of strings", key)}
 				}
 			}
 
 		default:
 			if !spec.kind.matches(v) {
-				return &abstractor.ValidationError{Field: key, Message: fmt.Sprintf("field %q must be a %s", key, spec.kind)}
+				return &validationError{Field: key, Message: fmt.Sprintf("field %q must be a %s", key, spec.kind)}
 			}
 		}
 	}

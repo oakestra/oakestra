@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/oakestra/oakestra/go_resource_abstractor/abstractor"
 	"github.com/oakestra/oakestra/go_resource_abstractor/internal/config"
@@ -132,7 +131,7 @@ func dialMongo(ctx context.Context, uri string) (*mongo.Client, error) {
 	connectCtx, cancel := context.WithTimeout(ctx, mongoConnectTimeout)
 	defer cancel()
 
-	client, err := mongo.Connect(options.Client().ApplyURI(uri))
+	client, err := mongo.Connect(abstractor.MongoClientOptions(uri))
 	if err != nil {
 		return nil, err
 	}

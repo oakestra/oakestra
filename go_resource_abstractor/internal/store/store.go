@@ -31,26 +31,34 @@ type Store struct {
 	customResourcesDB *mongo.Database // custom_resources, for dynamic per-type collections
 }
 
-// hexIDOptions makes a collection decode an ObjectID `_id` as its hex
-// string, matching model types' `ID *string` field. Without it, the
-// driver's default string codec refuses to decode an ObjectID into a
-// string at all.
-func hexIDOptions() options.Lister[options.CollectionOptions] {
-	return options.Collection().SetBSONOptions(&options.BSONOptions{ObjectIDAsHexString: true})
+// ClientOptions builds the driver options every client passed to New must
+// carry. ObjectIDAsHexString makes an ObjectID `_id` decode as its hex
+// string, matching model types' `ID *string` field; without it the driver's
+// default string codec refuses to decode an ObjectID into a string at all.
+//
+// It has to be set on the client rather than per collection: the v2 driver
+// builds an aggregation cursor from the client's BSONOptions, not the
+// collection's, so a collection-level setting silently never reaches
+// Aggregate results even though Find and friends pick it up.
+func ClientOptions(uri string) *options.ClientOptions {
+	return options.Client().
+		ApplyURI(uri).
+		SetBSONOptions(&options.BSONOptions{ObjectIDAsHexString: true})
 }
 
 // New wires up collection handles for client but doesn't dial, ping, or
-// create indexes. The caller owns client's lifecycle, including Disconnect;
-// call EnsureIndexes separately, typically right after New.
+// create indexes. client must have been built with ClientOptions. The caller
+// owns client's lifecycle, including Disconnect; call EnsureIndexes
+// separately, typically right after New.
 func New(client *mongo.Client) *Store {
 	customResourcesDB := client.Database("custom_resources")
 
 	return &Store{
-		candidates:        client.Database("candidates").Collection("candidates", hexIDOptions()),
-		apps:              client.Database("jobs").Collection("apps", hexIDOptions()),
-		jobs:              client.Database("jobs").Collection("jobs", hexIDOptions()),
-		hooks:             client.Database("hooks").Collection("hooks", hexIDOptions()),
-		metaData:          customResourcesDB.Collection(metaDataCollectionName, hexIDOptions()),
+		candidates:        client.Database("candidates").Collection("candidates"),
+		apps:              client.Database("jobs").Collection("apps"),
+		jobs:              client.Database("jobs").Collection("jobs"),
+		hooks:             client.Database("hooks").Collection("hooks"),
+		metaData:          customResourcesDB.Collection(metaDataCollectionName),
 		customResourcesDB: customResourcesDB,
 	}
 }
@@ -115,5 +123,5 @@ func (s *Store) EnsureIndexes(ctx context.Context) error {
 // resourceType isn't validated here: callers only reach this with a type
 // CreateCustomResource has already validated.
 func (s *Store) customResourceCollection(resourceType string) *mongo.Collection {
-	return s.customResourcesDB.Collection(resourceType, hexIDOptions())
+	return s.customResourcesDB.Collection(resourceType)
 }

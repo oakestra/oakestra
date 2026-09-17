@@ -29,8 +29,9 @@ func parseObjectID(id string) (bson.ObjectID, error) {
 // giving a document safe to use as a $set operand or the base of a fresh
 // insert. Centralizing the drop here means no write path can forget it.
 //
-// Field mapping is entirely v's own bson struct tags, including the
-// `,inline` Extra field every model type carries; this only adds the _id
+// Field mapping is entirely v's own BSON encoding - for the model types
+// that means their hand-written MarshalBSON, which merges the `,inline`
+// Extra field and re-injects explicitly-null keys; this only adds the _id
 // drop on top.
 func toSetDoc(v any) (bson.M, error) {
 	raw, err := bson.Marshal(v)
@@ -204,36 +205,24 @@ func deleteByID(ctx context.Context, coll *mongo.Collection, id string) error {
 	return err
 }
 
-// aggregateAll runs pipeline and decodes every result into T through
-// decodeHexID.
-//
-// Aggregate needs its own decode path: the v2 driver builds an aggregation
-// cursor from the client's BSONOptions instead of the collection's, so
-// hexIDOptions (which every collection handle here carries) never reaches
-// it, even though Find, FindOne, FindOneAndUpdate and FindOneAndDelete all
-// pick it up fine.
+// aggregateAll runs pipeline and decodes every result into T.
 func aggregateAll[T any](ctx context.Context, coll *mongo.Collection, pipeline mongo.Pipeline) ([]T, error) {
 	cursor, err := coll.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = cursor.Close(ctx) }()
 
 	results := []T{}
-	for cursor.Next(ctx) {
-		v, err := decodeHexID[T](cursor.Current)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, v)
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, err
 	}
-	return results, cursor.Err()
+	return results, nil
 }
 
 // decodeHexID decodes raw into T with ObjectIDAsHexString enabled, so an
-// ObjectID `_id` lands in T's `ID *string` field as its hex string. Used
-// wherever a document didn't come through a collection handle carrying
-// hexIDOptions: Aggregate results and insertDoc's locally built document.
+// ObjectID `_id` lands in T's `ID *string` field as its hex string. Needed
+// for insertDoc's locally built document, which never passes through the
+// client's decoder the way a query result does.
 func decodeHexID[T any](raw bson.Raw) (T, error) {
 	var v T
 	dec := bson.NewDecoder(bson.NewDocumentReader(bytes.NewReader(raw)))

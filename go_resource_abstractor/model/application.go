@@ -55,18 +55,11 @@ func (a *Application) UnmarshalJSON(data []byte) error {
 	return d.finish(&a.Extra)
 }
 
-// applicationBSONKeys are Application's known BSON field names; see
-// model/job.go's jobBSONKeys for why UnmarshalBSON needs this list.
-var applicationBSONKeys = []string{
-	"_id", "applicationID", "application_name", "application_namespace",
-	"application_desc", "userId", "microservices",
-}
-
 // MarshalBSON builds the stored document by hand instead of letting the
 // driver reflect over Application's struct tags, so a field decodePtr
-// recorded as explicitly null (see applicationBSONKeys) can be written
-// back as a literal null even though the typed field itself is nil, the
-// same as MarshalJSON does for a JSON response. See model/job.go's
+// recorded as explicitly null (see markBSONNulls) can be written back as a
+// literal null even though the typed field itself is nil, the same as
+// MarshalJSON does for a JSON response. See model/job.go's
 // Job.MarshalBSON for the full reasoning.
 func (a Application) MarshalBSON() ([]byte, error) {
 	e := newBSONFieldEncoder(a.Extra)
@@ -82,8 +75,8 @@ func (a Application) MarshalBSON() ([]byte, error) {
 
 // UnmarshalBSON decodes a stored Application through a shadow type carrying
 // the same fields but none of Application's methods, then records any of
-// applicationBSONKeys the document holds as an explicit null in Extra; see
-// model/job.go's Job.UnmarshalBSON.
+// Application's named fields the document holds as an explicit null in
+// Extra; see model/job.go's Job.UnmarshalBSON.
 func (a *Application) UnmarshalBSON(data []byte) error {
 	type applicationAlias Application
 	var alias applicationAlias
@@ -91,6 +84,6 @@ func (a *Application) UnmarshalBSON(data []byte) error {
 		return err
 	}
 	*a = Application(alias)
-	markBSONNulls(data, applicationBSONKeys, &a.Extra)
+	markBSONNulls[Application](data, &a.Extra)
 	return nil
 }

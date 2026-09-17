@@ -48,16 +48,11 @@ func (j *Job) UnmarshalJSON(data []byte) error {
 	return d.finish(&j.Extra)
 }
 
-// jobBSONKeys are Job's known BSON field names, the same set
-// MarshalBSON/UnmarshalBSON below and MarshalJSON/UnmarshalJSON above
-// operate on.
-var jobBSONKeys = []string{"_id", "job_name", "applicationID", "candidate", "instance_list"}
-
 // MarshalBSON builds the stored document by hand instead of letting the
 // driver reflect over Job's struct tags, so a field the Extra null-tracking
-// in decodePtr/markBSONNulls recorded as explicitly null (see jobBSONKeys)
-// can be written back as a literal null even though the typed field itself
-// is nil, the same as MarshalJSON does for a JSON response.
+// in decodePtr/markBSONNulls recorded as explicitly null can be written
+// back as a literal null even though the typed field itself is nil, the
+// same as MarshalJSON does for a JSON response.
 func (j Job) MarshalBSON() ([]byte, error) {
 	e := newBSONFieldEncoder(j.Extra)
 	encodeBSONPtr(e, "_id", j.ID)
@@ -70,7 +65,7 @@ func (j Job) MarshalBSON() ([]byte, error) {
 
 // UnmarshalBSON decodes a stored Job through a shadow type carrying the
 // same fields but none of Job's methods (avoiding recursion back into this
-// method), then records any of jobBSONKeys the document holds as an
+// method), then records any of Job's named fields the document holds as an
 // explicit null in Extra - the default codec's inline-map handling only
 // ever attaches a key it doesn't recognize as a named field there, so a
 // null stored for e.g. "candidate" would otherwise come back as a nil
@@ -83,7 +78,7 @@ func (j *Job) UnmarshalBSON(data []byte) error {
 		return err
 	}
 	*j = Job(alias)
-	markBSONNulls(data, jobBSONKeys, &j.Extra)
+	markBSONNulls[Job](data, &j.Extra)
 	return nil
 }
 
@@ -162,14 +157,6 @@ func (i *JobInstance) UnmarshalJSON(data []byte) error {
 	return d.finish(&i.Extra)
 }
 
-// jobInstanceBSONKeys are JobInstance's known BSON field names; see
-// jobBSONKeys.
-var jobInstanceBSONKeys = []string{
-	"instance_number", "worker_id", "status", "status_detail", "host_ip",
-	"host_port", "publicip", "cpu_percent", "memory_percent", "disk", "logs",
-	"last_modified_timestamp", "cpu_history", "memory_history",
-}
-
 // MarshalBSON builds the stored document by hand; see Job.MarshalBSON for
 // why. This is what makes UpdateJobInstance's null writes for an omitted
 // field (status, host_ip, ...) come back as "field": null on the next read
@@ -194,7 +181,7 @@ func (i JobInstance) MarshalBSON() ([]byte, error) {
 }
 
 // UnmarshalBSON decodes a stored JobInstance through a shadow type, then
-// records any of jobInstanceBSONKeys the document holds as an explicit
+// records any of JobInstance's named fields the document holds as an explicit
 // null in Extra; see Job.UnmarshalBSON.
 func (i *JobInstance) UnmarshalBSON(data []byte) error {
 	type jobInstanceAlias JobInstance
@@ -203,6 +190,6 @@ func (i *JobInstance) UnmarshalBSON(data []byte) error {
 		return err
 	}
 	*i = JobInstance(alias)
-	markBSONNulls(data, jobInstanceBSONKeys, &i.Extra)
+	markBSONNulls[JobInstance](data, &i.Extra)
 	return nil
 }

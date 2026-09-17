@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oakestra/oakestra/go_resource_abstractor/internal/jsonutil"
 	"github.com/oakestra/oakestra/go_resource_abstractor/model"
 )
 
@@ -80,17 +81,42 @@ func New(registry HookRegistry, connectTimeout, requestTimeout time.Duration, lo
 	}
 }
 
+// SyncURLs returns the webhook URLs registered for entity's pre_* event, so
+// a caller can skip building the hook payload when nothing is listening.
+//
+// A lookup failure is reported as "none registered", matching the fail-open
+// behavior of the dispatch itself.
+func (h *Hooks) SyncURLs(ctx context.Context, entity string, event model.HookEvent) []string {
+	urls, err := h.registry.WebhookURLsFor(ctx, entity, event)
+	if err != nil {
+		h.logger.Warn("hooks: failed to look up sync hooks", "entity", entity, "event", event, "error", err)
+		return nil
+	}
+	return urls
+}
+
+// RunSync POSTs data to each of urls in turn, threading the response of one
+// into the next, and returns the final (possibly transformed) payload to
+// persist. Callers get urls from SyncURLs. On any webhook failure the
+// payload passes through unchanged (fail open).
+func (h *Hooks) RunSync(ctx context.Context, urls []string, data map[string]any) map[string]any {
+	for _, url := range urls {
+		data = h.callWebhook(ctx, url, data)
+	}
+	return data
+}
+
 // PreCreate runs registered pre_create webhooks for entity against data,
 // synchronously, and returns the (possibly transformed) payload to persist.
 // On any webhook failure it returns the original data unchanged (fail
 // open).
 func (h *Hooks) PreCreate(ctx context.Context, entity string, data map[string]any) map[string]any {
-	return h.processSyncHook(ctx, entity, model.EventPreCreate, data)
+	return h.RunSync(ctx, h.SyncURLs(ctx, entity, model.EventPreCreate), data)
 }
 
 // PreUpdate runs registered pre_update webhooks for entity against data.
 func (h *Hooks) PreUpdate(ctx context.Context, entity string, data map[string]any) map[string]any {
-	return h.processSyncHook(ctx, entity, model.EventPreUpdate, data)
+	return h.RunSync(ctx, h.SyncURLs(ctx, entity, model.EventPreUpdate), data)
 }
 
 // PostCreate fires registered post_create webhooks for entity in the
@@ -129,19 +155,6 @@ func (h *Hooks) Close(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-func (h *Hooks) processSyncHook(ctx context.Context, entity string, event model.HookEvent, data map[string]any) map[string]any {
-	urls, err := h.registry.WebhookURLsFor(ctx, entity, event)
-	if err != nil {
-		h.logger.Warn("hooks: failed to look up sync hooks", "entity", entity, "event", event, "error", err)
-		return data
-	}
-
-	for _, url := range urls {
-		data = h.callWebhook(ctx, url, data)
-	}
-	return data
 }
 
 // fireAsync runs the registry lookup and every resulting webhook call in
@@ -210,8 +223,11 @@ func (h *Hooks) callWebhook(ctx context.Context, url string, data map[string]any
 		return data
 	}
 
+	// Decoded through jsonutil, not encoding/json: this payload goes straight
+	// back into the write path, so an integer the hook returned has to stay an
+	// integer instead of collapsing to float64 and landing in Mongo as a double.
 	var decoded map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+	if err := jsonutil.Decode(resp.Body, &decoded); err != nil {
 		// Non-JSON response body: keep the original data.
 		_, _ = io.Copy(io.Discard, resp.Body)
 		return data
