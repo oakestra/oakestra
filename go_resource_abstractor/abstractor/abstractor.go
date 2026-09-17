@@ -15,15 +15,25 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/oakestra/oakestra/go_resource_abstractor/internal/hooks"
 	"github.com/oakestra/oakestra/go_resource_abstractor/internal/store"
 )
 
+// MongoClientOptions builds the driver options a client passed to New must
+// carry, so an embedder outside this module can dial a compatible client
+// without reaching into internal packages. A client built any other way
+// fails to decode ObjectID `_id` fields into the model types' `ID *string`.
+func MongoClientOptions(uri string) *options.ClientOptions {
+	return store.ClientOptions(uri)
+}
+
 // Options configures a Service.
 type Options struct {
-	// Client is the caller's Mongo client. Service never dials, pings or
-	// disconnects it - that's the caller's responsibility.
+	// Client is the caller's Mongo client, built with MongoClientOptions.
+	// Service never dials, pings or disconnects it - that's the caller's
+	// responsibility.
 	Client *mongo.Client
 
 	// HookConnectTimeout / HookRequestTimeout bound outbound webhook calls;

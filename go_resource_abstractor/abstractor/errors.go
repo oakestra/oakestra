@@ -7,18 +7,15 @@ import (
 	"github.com/oakestra/oakestra/go_resource_abstractor/internal/store"
 )
 
-// Sentinel errors and the validation error type every sub-service can
-// return, re-exported from internal/errs so a library caller never needs to
-// import an internal package to check for them with errors.Is/errors.As.
+// Sentinel errors every sub-service can return, re-exported from
+// internal/errs so a library caller never needs to import an internal
+// package to check for them with errors.Is.
 var (
 	ErrNotFound            = errs.ErrNotFound
 	ErrInvalidID           = errs.ErrInvalidID
 	ErrInstanceExists      = errs.ErrInstanceExists
 	ErrInvalidResourceType = errs.ErrInvalidResourceType
 )
-
-// ValidationError reports a single field-level validation failure.
-type ValidationError = errs.ValidationError
 
 // IsValidID reports whether id is well-formed, for callers that answer a
 // malformed id differently from how they treat ErrInvalidID.

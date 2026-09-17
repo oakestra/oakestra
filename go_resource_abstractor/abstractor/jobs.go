@@ -55,21 +55,20 @@ func (j *Jobs) Create(ctx context.Context, data model.Job) (model.Job, error) {
 
 // Upsert updates the job named data.JobName if one exists, else creates it.
 //
-// job_name has no unique index: a real deployment may already have legacy
-// duplicate job names, which would make one fail to build. The
-// FindJobByName lookup and the create/update that follows also aren't
+// job_name has no unique index: a real deployment may already hold legacy
+// duplicate job names, so building one would fail against existing data.
+// The FindJobByName lookup and the create/update that follows also aren't
 // atomic, so two concurrent Upserts for a brand-new name can both take the
-// create branch and produce duplicates. Even an atomic upsert wouldn't fix
-// that, since which pre-hook fires (pre_create vs pre_update) depends on
-// whether a match exists, and that's a decision it can't make before it
-// runs.
+// create branch and produce duplicates. An atomic upsert wouldn't fix that
+// either: which pre-hook fires (pre_create vs pre_update) depends on
+// whether a match exists, which it only learns once it has run.
 func (j *Jobs) Upsert(ctx context.Context, data model.Job) (model.Job, error) {
 	if data.JobName != nil && *data.JobName != "" {
 		existing, err := j.store.FindJobByName(ctx, *data.JobName)
 		switch {
 		case err == nil:
-			// Not Update: pre_update isn't told which document matched by
-			// name, so data["_id"] stays unset.
+			// withID is false, unlike j.Update: pre_update isn't told which
+			// document matched by name, so data["_id"] stays unset.
 			return update(ctx, j.entity, *existing.ID, data, false, func(ctx context.Context, d model.Job) (model.Job, error) {
 				return j.store.UpdateJob(ctx, *existing.ID, d)
 			})

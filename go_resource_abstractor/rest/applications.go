@@ -36,11 +36,7 @@ func (s *Server) ListApplications(c *gin.Context, params openapi.ListApplication
 // CreateApplication implements POST /api/v1/applications. The store always
 // populates applicationID with the new document's own stringified _id.
 func (s *Server) CreateApplication(c *gin.Context) {
-	body, ok := bindJSONMap(c)
-	if !ok {
-		return
-	}
-	data, ok := decodeModel[model.Application](c, body)
+	data, ok := bindModel[model.Application](c, bindJSONMap)
 	if !ok {
 		return
 	}
@@ -68,11 +64,7 @@ func (s *Server) GetApplication(c *gin.Context, id openapi.ObjectID, params open
 
 // PatchApplication implements PATCH /api/v1/applications/{id}.
 func (s *Server) PatchApplication(c *gin.Context, id openapi.ObjectID) {
-	body, ok := bindJSONMap(c)
-	if !ok {
-		return
-	}
-	data, ok := decodeModel[model.Application](c, body)
+	data, ok := bindModel[model.Application](c, bindJSONMap)
 	if !ok {
 		return
 	}

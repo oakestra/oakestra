@@ -33,11 +33,7 @@ func (s *Server) ListJobs(c *gin.Context, params openapi.ListJobsParams) {
 
 // CreateJob implements POST /api/v1/jobs.
 func (s *Server) CreateJob(c *gin.Context) {
-	body, ok := bindJSONMap(c)
-	if !ok {
-		return
-	}
-	data, ok := decodeModel[model.Job](c, body)
+	data, ok := bindModel[model.Job](c, bindJSONMap)
 	if !ok {
 		return
 	}
@@ -54,11 +50,7 @@ func (s *Server) CreateJob(c *gin.Context) {
 // UpsertJob implements PUT /api/v1/jobs: update-by-job_name if a match
 // exists, else create.
 func (s *Server) UpsertJob(c *gin.Context) {
-	body, ok := bindJSONMap(c)
-	if !ok {
-		return
-	}
-	data, ok := decodeModel[model.Job](c, body)
+	data, ok := bindModel[model.Job](c, bindJSONMap)
 	if !ok {
 		return
 	}
@@ -94,11 +86,7 @@ func (s *Server) GetJob(c *gin.Context, jobID openapi.JobID, params openapi.GetJ
 
 // PatchJob implements PATCH /api/v1/jobs/{job_id}.
 func (s *Server) PatchJob(c *gin.Context, jobID openapi.JobID) {
-	body, ok := bindJSONMap(c)
-	if !ok {
-		return
-	}
-	data, ok := decodeModel[model.Job](c, body)
+	data, ok := bindModel[model.Job](c, bindJSONMap)
 	if !ok {
 		return
 	}
@@ -168,11 +156,7 @@ func (s *Server) AppendJobInstance(c *gin.Context, jobID openapi.JobID, instance
 
 // PatchJobInstance implements PATCH /api/v1/jobs/{job_id}/{instance_id}.
 func (s *Server) PatchJobInstance(c *gin.Context, jobID openapi.JobID, instanceNumber openapi.InstanceID) {
-	body, ok := bindJSONMap(c)
-	if !ok {
-		return
-	}
-	data, ok := decodeModel[model.JobInstance](c, body)
+	data, ok := bindModel[model.JobInstance](c, bindJSONMap)
 	if !ok {
 		return
 	}

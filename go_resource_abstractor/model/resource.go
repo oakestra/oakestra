@@ -116,19 +116,9 @@ func (r *Resource) UnmarshalJSON(data []byte) error {
 	return d.finish(&r.Extra)
 }
 
-// resourceBSONKeys are Resource's known BSON field names; see
-// model/job.go's jobBSONKeys for why UnmarshalBSON needs this list.
-var resourceBSONKeys = []string{
-	"_id", "candidate_name", "candidate_location", "ip", "port", "architecture",
-	"active", "active_nodes", "memory", "vcpus", "vgpus", "cpu_percent",
-	"memory_percent", "gpu_percent", "aggregation_per_architecture",
-	"virtualization", "supported_addons", "csi_drivers", "cpu_history",
-	"memory_history", "last_modified_timestamp",
-}
-
 // MarshalBSON builds the stored document by hand instead of letting the
 // driver reflect over Resource's struct tags, so a field decodePtr/
-// decodeValue recorded as explicitly null (see resourceBSONKeys) can be
+// decodeValue recorded as explicitly null (see markBSONNulls) can be
 // written back as a literal null even though the typed field itself is
 // nil/empty, the same as MarshalJSON does for a JSON response. See
 // model/job.go's Job.MarshalBSON for the full reasoning.
@@ -160,8 +150,8 @@ func (r Resource) MarshalBSON() ([]byte, error) {
 
 // UnmarshalBSON decodes a stored Resource through a shadow type carrying
 // the same fields but none of Resource's methods, then records any of
-// resourceBSONKeys the document holds as an explicit null in Extra; see
-// model/job.go's Job.UnmarshalBSON.
+// Resource's named fields the document holds as an explicit null in Extra;
+// see model/job.go's Job.UnmarshalBSON.
 func (r *Resource) UnmarshalBSON(data []byte) error {
 	type resourceAlias Resource
 	var alias resourceAlias
@@ -169,6 +159,6 @@ func (r *Resource) UnmarshalBSON(data []byte) error {
 		return err
 	}
 	*r = Resource(alias)
-	markBSONNulls(data, resourceBSONKeys, &r.Extra)
+	markBSONNulls[Resource](data, &r.Extra)
 	return nil
 }

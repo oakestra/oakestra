@@ -13,6 +13,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strings"
+	"sync"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
@@ -387,8 +390,37 @@ func decodeBSONAlias(data []byte, dst any) error {
 	return dec.Decode(dst)
 }
 
-// markBSONNulls records, in *extra, an explicit nil for every key in knownKeys
-// that raw's document holds as a literal BSON null.
+// bsonKeysCache memoizes bsonKeys per type, so the reflection walk happens
+// once per document type rather than on every decode.
+var bsonKeysCache sync.Map // reflect.Type -> []string
+
+// bsonKeys returns T's named BSON field names, read from its `bson` struct
+// tags. The `,inline` Extra field is skipped: it has no key of its own, and
+// the keys it carries are by definition the ones the struct doesn't name.
+//
+// Read from the tags rather than hand-listed per type: a forgotten entry
+// fails silently, the field just stops round-tripping explicit nulls.
+func bsonKeys[T any]() []string {
+	t := reflect.TypeFor[T]()
+	if cached, ok := bsonKeysCache.Load(t); ok {
+		return cached.([]string)
+	}
+
+	keys := make([]string, 0, t.NumField())
+	for i := range t.NumField() {
+		name, opts, _ := strings.Cut(t.Field(i).Tag.Get("bson"), ",")
+		if name == "" || name == "-" || strings.Contains(opts, "inline") {
+			continue
+		}
+		keys = append(keys, name)
+	}
+
+	bsonKeysCache.Store(t, keys)
+	return keys
+}
+
+// markBSONNulls records, in *extra, an explicit nil for every one of T's
+// named BSON fields that raw's document holds as a literal BSON null.
 //
 // A null value for a named field is consumed by that field during the
 // ordinary struct decode a type's UnmarshalBSON runs alongside this call -
@@ -397,9 +429,9 @@ func decodeBSONAlias(data []byte, dst any) error {
 // ever there, and the next MarshalBSON/MarshalJSON would drop it instead of
 // writing null back. This is BSON's counterpart to what decodePtr/
 // decodeValue already do for a JSON body.
-func markBSONNulls(raw []byte, knownKeys []string, extra *Extra) {
+func markBSONNulls[T any](raw []byte, extra *Extra) {
 	doc := bson.Raw(raw)
-	for _, key := range knownKeys {
+	for _, key := range bsonKeys[T]() {
 		val, err := doc.LookupErr(key)
 		if err != nil || val.Type != bson.TypeNull {
 			continue

@@ -74,13 +74,9 @@ func (h *Hook) UnmarshalJSON(data []byte) error {
 	return d.finish(&h.Extra)
 }
 
-// hookBSONKeys are Hook's known BSON field names; see model/job.go's
-// jobBSONKeys for why UnmarshalBSON needs this list.
-var hookBSONKeys = []string{"_id", "hook_name", "webhook_url", "entity", "events"}
-
 // MarshalBSON builds the stored document by hand instead of letting the
 // driver reflect over Hook's struct tags, so a field decodePtr recorded as
-// explicitly null (see hookBSONKeys) can be written back as a literal null
+// explicitly null (see markBSONNulls) can be written back as a literal null
 // even though the typed field itself is nil, the same as MarshalJSON does
 // for a JSON response. See model/job.go's Job.MarshalBSON for the full
 // reasoning.
@@ -95,8 +91,8 @@ func (h Hook) MarshalBSON() ([]byte, error) {
 }
 
 // UnmarshalBSON decodes a stored Hook through a shadow type carrying the
-// same fields but none of Hook's methods, then records any of hookBSONKeys
-// the document holds as an explicit null in Extra; see model/job.go's
+// same fields but none of Hook's methods, then records any of Hook's named
+// fields the document holds as an explicit null in Extra; see model/job.go's
 // Job.UnmarshalBSON.
 func (h *Hook) UnmarshalBSON(data []byte) error {
 	type hookAlias Hook
@@ -105,6 +101,6 @@ func (h *Hook) UnmarshalBSON(data []byte) error {
 		return err
 	}
 	*h = Hook(alias)
-	markBSONNulls(data, hookBSONKeys, &h.Extra)
+	markBSONNulls[Hook](data, &h.Extra)
 	return nil
 }

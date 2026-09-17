@@ -43,18 +43,12 @@ func (d *CustomResourceDefinition) UnmarshalJSON(data []byte) error {
 	return f.finish(&d.Extra)
 }
 
-// customResourceDefinitionBSONKeys are CustomResourceDefinition's known
-// BSON field names; see model/job.go's jobBSONKeys for why UnmarshalBSON
-// needs this list.
-var customResourceDefinitionBSONKeys = []string{"_id", "resource_type", "schema"}
-
 // MarshalBSON builds the stored document by hand instead of letting the
 // driver reflect over CustomResourceDefinition's struct tags, so a field
-// decodePtr/decodeValue recorded as explicitly null (see
-// customResourceDefinitionBSONKeys) can be written back as a literal null
-// even though the typed field itself is nil/empty, the same as MarshalJSON
-// does for a JSON response. See model/job.go's Job.MarshalBSON for the
-// full reasoning.
+// decodePtr/decodeValue recorded as explicitly null (see markBSONNulls) can
+// be written back as a literal null even though the typed field itself is
+// nil/empty, the same as MarshalJSON does for a JSON response. See
+// model/job.go's Job.MarshalBSON for the full reasoning.
 func (d CustomResourceDefinition) MarshalBSON() ([]byte, error) {
 	e := newBSONFieldEncoder(d.Extra)
 	encodeBSONPtr(e, "_id", d.ID)
@@ -65,7 +59,7 @@ func (d CustomResourceDefinition) MarshalBSON() ([]byte, error) {
 
 // UnmarshalBSON decodes a stored CustomResourceDefinition through a shadow
 // type carrying the same fields but none of CustomResourceDefinition's
-// methods, then records any of customResourceDefinitionBSONKeys the
+// methods, then records any of CustomResourceDefinition's named fields the
 // document holds as an explicit null in Extra; see model/job.go's
 // Job.UnmarshalBSON.
 func (d *CustomResourceDefinition) UnmarshalBSON(data []byte) error {
@@ -75,7 +69,7 @@ func (d *CustomResourceDefinition) UnmarshalBSON(data []byte) error {
 		return err
 	}
 	*d = CustomResourceDefinition(alias)
-	markBSONNulls(data, customResourceDefinitionBSONKeys, &d.Extra)
+	markBSONNulls[CustomResourceDefinition](data, &d.Extra)
 	return nil
 }
 

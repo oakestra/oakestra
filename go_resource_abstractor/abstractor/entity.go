@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/oakestra/oakestra/go_resource_abstractor/internal/hooks"
+	"github.com/oakestra/oakestra/go_resource_abstractor/model"
 )
 
 // entityHooks bundles a hook channel name ("jobs", "applications",
@@ -23,17 +24,20 @@ type entityHooks struct {
 func create[T any](ctx context.Context, e entityHooks, data T, fn func(context.Context, T) (T, error)) (T, error) {
 	var zero T
 
-	payload, err := toMap(data)
-	if err != nil {
-		return zero, err
+	// With no pre_create hook registered - the normal case - data goes to
+	// the store as-is, skipping the model->map->model round trip entirely.
+	if urls := e.dispatcher.SyncURLs(ctx, e.name, model.EventPreCreate); len(urls) > 0 {
+		payload, err := toMap(data)
+		if err != nil {
+			return zero, err
+		}
+		data, err = fromMap[T](e.dispatcher.RunSync(ctx, urls, payload))
+		if err != nil {
+			return zero, err
+		}
 	}
-	payload = e.dispatcher.PreCreate(ctx, e.name, payload)
 
-	transformed, err := fromMap[T](payload)
-	if err != nil {
-		return zero, err
-	}
-	created, err := fn(ctx, transformed)
+	created, err := fn(ctx, data)
 	if err != nil {
 		return zero, err
 	}
@@ -63,20 +67,23 @@ func update[In, Out any](
 ) (Out, error) {
 	var zero Out
 
-	payload, err := toMap(data)
-	if err != nil {
-		return zero, err
+	// Same short-circuit as create, and it matters more here: a worker's
+	// instance heartbeat is an update, so this runs on every report.
+	if urls := e.dispatcher.SyncURLs(ctx, e.name, model.EventPreUpdate); len(urls) > 0 {
+		payload, err := toMap(data)
+		if err != nil {
+			return zero, err
+		}
+		if withID {
+			payload["_id"] = id
+		}
+		data, err = fromMap[In](e.dispatcher.RunSync(ctx, urls, payload))
+		if err != nil {
+			return zero, err
+		}
 	}
-	if withID {
-		payload["_id"] = id
-	}
-	payload = e.dispatcher.PreUpdate(ctx, e.name, payload)
 
-	transformed, err := fromMap[In](payload)
-	if err != nil {
-		return zero, err
-	}
-	updated, err := fn(ctx, transformed)
+	updated, err := fn(ctx, data)
 	if err != nil {
 		return zero, err
 	}

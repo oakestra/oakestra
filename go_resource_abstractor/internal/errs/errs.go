@@ -1,12 +1,11 @@
-// Package errs holds the sentinel errors and error types internal/store and
-// internal/hooks return. They live in their own package, separate from
-// internal/store, so abstractor can re-export them for library callers by
-// depending on errs directly instead of on internal/store's import graph.
+// Package errs holds the sentinel errors internal/store and internal/hooks
+// return. They live here rather than in internal/store so that hooks, which
+// has no business knowing about the database driver, can return them without
+// importing the store package.
 package errs
 
 import (
 	"errors"
-	"fmt"
 )
 
 // ErrNotFound is returned by lookups that find no matching document.
@@ -27,15 +26,3 @@ var ErrInstanceExists = errors.New("job instance already exists or payload has n
 // collide with the meta_data definitions collection or misbehave as a
 // MongoDB collection name.
 var ErrInvalidResourceType = errors.New("invalid resource type")
-
-// ValidationError reports a single field-level validation failure. Callers
-// that need the API's {"message": "Invalid input", "details": {...}} shape
-// build it from Field/Message rather than parsing Error()'s text.
-type ValidationError struct {
-	Field   string
-	Message string
-}
-
-func (e *ValidationError) Error() string {
-	return fmt.Sprintf("%s: %s", e.Field, e.Message)
-}

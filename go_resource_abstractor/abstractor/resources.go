@@ -68,15 +68,15 @@ func (r *Resources) Create(ctx context.Context, data model.Resource) (model.Reso
 // creates it.
 //
 // candidate_name has no unique index, for the same reasons as Jobs.Upsert's
-// job_name: the lookup and the create/update aren't atomic, and legacy
-// duplicate names would break a unique index anyway.
+// job_name: legacy duplicate names would block building one, and the lookup
+// and the create/update aren't atomic.
 func (r *Resources) Upsert(ctx context.Context, data model.Resource) (model.Resource, error) {
 	if data.CandidateName != nil && *data.CandidateName != "" {
 		existing, err := r.store.FindCandidateByName(ctx, *data.CandidateName)
 		switch {
 		case err == nil:
-			// Not Update: pre_update isn't told which document matched by
-			// name, so data["_id"] stays unset.
+			// withID is false, unlike Report: pre_update isn't told which
+			// document matched by name, so data["_id"] stays unset.
 			return update(ctx, r.entity, *existing.ID, data, false, func(ctx context.Context, d model.Resource) (model.Resource, error) {
 				return r.store.UpdateCandidate(ctx, *existing.ID, d)
 			})

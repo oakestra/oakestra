@@ -11,12 +11,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/oakestra/oakestra/go_resource_abstractor/abstractor"
+	"github.com/oakestra/oakestra/go_resource_abstractor/internal/mongotest"
 )
 
 // testClient, testSvc and testRouter are shared by every test in this
@@ -43,36 +42,12 @@ func runTests(m *testing.M) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Overridable so CI can pin a different Mongo version.
-	image := "mongo:8.0"
-	if v := os.Getenv("MONGO_TEST_IMAGE"); v != "" {
-		image = v
-	}
-
-	container, err := mongodb.Run(ctx, image)
+	client, cleanup, err := mongotest.Start(ctx, abstractor.MongoClientOptions)
 	if err != nil {
-		log.Printf("failed to start mongodb container: %v", err)
+		log.Printf("failed to start mongodb: %v", err)
 		return 1
 	}
-	defer func() { _ = container.Terminate(context.Background()) }()
-
-	uri, err := container.ConnectionString(ctx)
-	if err != nil {
-		log.Printf("failed to get mongodb connection string: %v", err)
-		return 1
-	}
-
-	client, err := mongo.Connect(options.Client().ApplyURI(uri))
-	if err != nil {
-		log.Printf("failed to connect: %v", err)
-		return 1
-	}
-	defer func() { _ = client.Disconnect(context.Background()) }()
-
-	if err := client.Ping(ctx, nil); err != nil {
-		log.Printf("failed to ping mongo: %v", err)
-		return 1
-	}
+	defer cleanup()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -99,7 +74,7 @@ func runTests(m *testing.M) int {
 }
 
 func uniqueName(prefix string) string {
-	return prefix + "-" + bson.NewObjectID().Hex()
+	return mongotest.UniqueName(prefix)
 }
 
 func newObjectIDHex() string {
