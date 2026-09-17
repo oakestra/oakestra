@@ -267,7 +267,9 @@ Every optional field on a `model` type is a plain pointer (`*string`, `*int64`, 
 write sends and a partial update (`Jobs.Update`, `Apps.Update`, ...) leaves the stored field
 untouched. A non-nil pointer is a real value even when it points at a zero number or an empty
 slice, so `model.Ptr([]string{})` still round-trips as a present, empty array. An explicit JSON
-`null` on the wire is treated the same as an absent field.
+`null` on the wire leaves the pointer `nil` too, but is not the same as an absent field: it is
+remembered separately and written back as a literal `null`, so a partial update sending one
+`$set`s the stored field to null instead of leaving it alone.
 
 An embedder that still wants the HTTP surface - to keep serving `resource_abstractor_client`
 callers while also using the library directly - can mount `rest.NewHandler(svc, logger)` as an
