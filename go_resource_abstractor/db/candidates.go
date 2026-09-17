@@ -11,11 +11,6 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-// ErrNotFound is returned by lookups that find no matching document. It is
-// an alias for mongo.ErrNoDocuments so callers can use errors.Is against
-// either name.
-var ErrNotFound = mongo.ErrNoDocuments
-
 const (
 	// candidatesFreshnessInterval is the same window
 	// candidates_helper.py's CANDIDATES_FRESHNESS_INTERVAL uses: a candidate
@@ -89,7 +84,7 @@ func BuildCandidateFilter(query CandidateFilter) (bson.M, error) {
 		filter["last_modified_timestamp"] = bson.M{"$gt": FreshnessThreshold()}
 	}
 	if query.CandidateID != "" {
-		oid, err := bson.ObjectIDFromHex(query.CandidateID)
+		oid, err := parseObjectID(query.CandidateID)
 		if err != nil {
 			return nil, err
 		}
@@ -137,7 +132,7 @@ func (s *Store) FindCandidates(ctx context.Context, filter bson.M, resources []s
 // aggregation pipeline as FindCandidates (so it gets the computed `active`
 // field and canonical projection), returning ErrNotFound if none matches.
 func (s *Store) FindCandidateByID(ctx context.Context, id string) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +173,7 @@ func (s *Store) UpdateCandidate(ctx context.Context, id string, data bson.M) (bs
 // timestamps are refreshed, cpu/memory history entries are appended (capped
 // at the most recent 100 via $slice), and the rest of the payload is $set.
 func (s *Store) UpdateCandidateInformation(ctx context.Context, id string, data bson.M) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +212,7 @@ func (s *Store) UpdateCandidateInformation(ctx context.Context, id string, data 
 
 // DeleteCandidate removes a candidate document by id.
 func (s *Store) DeleteCandidate(ctx context.Context, id string) error {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
 		return err
 	}

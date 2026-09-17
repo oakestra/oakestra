@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -26,19 +27,21 @@ func (s *Server) ListCustomResourceDefinitions(c *gin.Context) {
 
 // CreateCustomResourceDefinition implements POST /api/v1/custom-resources,
 // registering a new resource type. resource_type is required, the same as the
-// spec's CustomResourceDefinition schema declares.
+// spec's CustomResourceDefinition schema declares; the store is what
+// actually enforces that plus the reserved-name/collection-name rules (see
+// db.validateResourceType).
 func (s *Server) CreateCustomResourceDefinition(c *gin.Context) {
 	data, ok := bindOptionalJSONMap(c)
 	if !ok {
 		return
 	}
-	if resourceType, _ := data["resource_type"].(string); resourceType == "" {
-		abortBadRequest(c)
-		return
-	}
 
 	created, err := s.store.CreateCustomResource(c.Request.Context(), bson.M(data))
 	if err != nil {
+		if errors.Is(err, db.ErrInvalidResourceType) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, openapi.Message{Message: err.Error()})
+			return
+		}
 		abortInternalError(c, err)
 		return
 	}

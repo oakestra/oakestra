@@ -44,7 +44,7 @@ func (s *Store) FindJobs(ctx context.Context, filter bson.M) ([]bson.M, error) {
 // FindJobByID looks up a single job by id, additionally constrained by
 // filter (e.g. the instance_list $elemMatch built by BuildJobFilter).
 func (s *Store) FindJobByID(ctx context.Context, id string, filter bson.M) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func (s *Store) ResolveJobCandidate(ctx context.Context, jobID string) (string, 
 
 // DeleteJob removes a job by id and returns the deleted document.
 func (s *Store) DeleteJob(ctx context.Context, id string) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (s *Store) CreateJob(ctx context.Context, data bson.M) (bson.M, error) {
 // jobs_db.find_job_instance. Returns ErrNotFound if the job doesn't exist or
 // has no such instance.
 func (s *Store) FindJobInstance(ctx context.Context, jobID string, instanceNumber int) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(jobID)
+	oid, err := parseObjectID(jobID)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func (s *Store) FindJobInstance(ctx context.Context, jobID string, instanceNumbe
 // nothing and mongo.ErrNoDocuments maps to ErrInstanceConflict below. A
 // separate read-then-write, like FindJobInstance, would leave a race window.
 func (s *Store) AppendJobInstance(ctx context.Context, jobID string, instanceNumber int, jobData bson.M) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(jobID)
+	oid, err := parseObjectID(jobID)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func asSlice(v any) []any {
 // and $sets the scalar status fields. Returns ErrNotFound if no instance
 // matches. Go port of jobs_db.update_job_instance.
 func (s *Store) UpdateJobInstance(ctx context.Context, jobID string, instanceNumber int, jobData bson.M) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(jobID)
+	oid, err := parseObjectID(jobID)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +269,7 @@ func (s *Store) UpdateJobInstance(ctx context.Context, jobID string, instanceNum
 // job itself doesn't exist (a no-op pull on an already-absent instance
 // still returns the job - same as jobs_db.delete_job_instance).
 func (s *Store) DeleteJobInstance(ctx context.Context, jobID string, instanceNumber int) (bson.M, error) {
-	oid, err := bson.ObjectIDFromHex(jobID)
+	oid, err := parseObjectID(jobID)
 	if err != nil {
 		return nil, err
 	}

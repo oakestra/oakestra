@@ -83,13 +83,7 @@ func (s *Server) PatchHook(c *gin.Context, id openapi.ObjectID) {
 
 // DeleteHook implements DELETE /api/v1/hooks/{id}.
 func (s *Server) DeleteHook(c *gin.Context, id openapi.ObjectID) {
-	if !isValidObjectID(id) {
-		abortBadRequest(c)
-		return
-	}
-
-	if err := s.store.DeleteHook(c.Request.Context(), id); err != nil {
-		abortInternalError(c, err)
+	if abortOnError(c, s.store.DeleteHook(c.Request.Context(), id)) {
 		return
 	}
 

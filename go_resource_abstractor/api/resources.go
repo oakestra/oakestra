@@ -28,11 +28,6 @@ func (s *Server) ListResources(c *gin.Context, params openapi.ListResourcesParam
 	ctx := c.Request.Context()
 
 	if jobID := queryString(params.JobId); jobID != "" {
-		if !isValidObjectID(jobID) {
-			abortBadRequest(c)
-			return
-		}
-
 		candidateID, err := s.store.ResolveJobCandidate(ctx, jobID)
 		if abortOnError(c, err) {
 			return
@@ -95,11 +90,6 @@ func (s *Server) UpsertResource(c *gin.Context) {
 
 // GetResource implements GET /api/v1/resources/{id}.
 func (s *Server) GetResource(c *gin.Context, id openapi.ObjectID) {
-	if !isValidObjectID(id) {
-		abortBadRequest(c)
-		return
-	}
-
 	candidate, err := s.store.FindCandidateByID(c.Request.Context(), id)
 	if abortOnError(c, err) {
 		return
@@ -136,19 +126,13 @@ func (s *Server) PatchResource(c *gin.Context, id openapi.ObjectID) {
 
 // DeleteResource implements DELETE /api/v1/resources/{id}.
 func (s *Server) DeleteResource(c *gin.Context, id openapi.ObjectID) {
-	if !isValidObjectID(id) {
-		abortBadRequest(c)
-		return
-	}
-
 	// DeleteCandidate only returns an error, not the deleted document, so
 	// Delete gets nil here and keys post_delete off the path id instead. A
 	// candidate that's already gone is not treated as an error.
 	_, err := s.resources.Delete(c.Request.Context(), id, func(ctx context.Context, id string) (bson.M, error) {
 		return nil, s.store.DeleteCandidate(ctx, id)
 	})
-	if err != nil {
-		abortInternalError(c, err)
+	if abortOnError(c, err) {
 		return
 	}
 
