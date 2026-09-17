@@ -75,7 +75,7 @@ func (r *ResourcesService) GetByID(ctx context.Context, id string) (*Resource, e
 // GetByName returns the candidate with the given candidate_name, or
 // ErrNotFound if none matches. Equivalent to Python's
 // get_candidate_by_name - note the Go resource abstractor's list filter
-// matches on "candidate_name" (see go_resource_abstractor/db/candidates.go),
+// matches on "candidate_name" (see go_resource_abstractor/internal/store/candidates.go),
 // unlike the Python service which used "cluster_name" for the same lookup.
 func (r *ResourcesService) GetByName(ctx context.Context, name string) (*Resource, error) {
 	params := collapseParams([]ResourceFilter{NamedCandidate(name)})

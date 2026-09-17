@@ -1,4 +1,4 @@
-module go_resource_abstractor
+module github.com/oakestra/oakestra/go_resource_abstractor
 
 go 1.24.0
 
