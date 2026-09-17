@@ -11,7 +11,7 @@ COPY . .
 # CGO_ENABLED=0 for a fully static binary (required by the distroless/static
 # runtime image below, which has no libc). -trimpath/-ldflags="-s -w" strip
 # debug info and local paths to keep the binary small.
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/resource_abstractor .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/resource_abstractor ./cmd/resource-abstractor
 
 FROM gcr.io/distroless/static-debian12:nonroot
 

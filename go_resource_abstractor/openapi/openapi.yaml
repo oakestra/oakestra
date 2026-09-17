@@ -1047,14 +1047,23 @@ components:
           description: Set server-side on creation to the document's own `_id`.
         application_name:
           type: string
+          nullable: true
+          description: |
+            Nullable because a `PATCH` sending an explicit `null` here $sets
+            the stored value to null rather than leaving it untouched (only
+            an absent key does that).
         application_namespace:
           type: string
+          nullable: true
         application_desc:
           type: string
+          nullable: true
         userId:
           type: string
+          nullable: true
         microservices:
           type: array
+          nullable: true
           items:
             type: string
 
@@ -1072,55 +1081,89 @@ components:
             - $ref: '#/components/schemas/ObjectID'
         job_name:
           type: string
-          description: Unique per deployment; the key `PUT /api/v1/jobs` upserts on.
+          nullable: true
+          description: |
+            Unique per deployment; the key `PUT /api/v1/jobs` upserts on.
+            Nullable because a `PATCH` sending an explicit `null` here $sets
+            the stored value to null rather than leaving it untouched (only
+            an absent key does that) - see `candidate`.
         applicationID:
           type: string
+          nullable: true
         candidate:
           type: string
-          description: Id of the candidate resource this job is placed on.
+          nullable: true
+          description: |
+            Id of the candidate resource this job is placed on. Nullable: a
+            `PATCH` body's `null` is written and read back as `null`,
+            distinct from omitting the field entirely, which leaves the
+            stored value alone.
         instance_list:
           type: array
+          nullable: true
           items:
             $ref: '#/components/schemas/JobInstance'
 
     JobInstance:
       type: object
-      description: One running copy of a job on one worker.
+      description: |
+        One running copy of a job on one worker.
+
+        cpu_percent, memory_percent, disk and host_port also accept a numeric
+        string on write, for compatibility with NodeEngine/cluster_manager
+        (which send them that way) and documents written by the older Python
+        service. The service always responds with a number.
       additionalProperties: true
       properties:
         instance_number:
           type: integer
+          nullable: true
         worker_id:
           type: string
+          nullable: true
         status:
           type: string
+          nullable: true
         status_detail:
           type: string
+          nullable: true
         host_ip:
           type: string
+          nullable: true
         host_port:
           type: integer
+          nullable: true
         publicip:
           type: string
+          nullable: true
         cpu_percent:
           type: number
           format: double
+          nullable: true
         memory_percent:
           type: number
           format: double
+          nullable: true
         disk:
           type: number
           format: double
+          nullable: true
         logs:
           type: string
+          nullable: true
         last_modified_timestamp:
           type: number
           format: double
+          nullable: true
           description: |
             Unix seconds. Unlike cpu_history/memory_history's timestamp
             (server-generated on every PATCH), this one is taken from the
             request body verbatim - the caller (cluster_manager) sets it
-            before sending.
+            before sending. `PATCH /jobs/{id}/{instance_id}` writes a
+            literal null for any of these fields the request body omits
+            (see internal/store/jobs.go's UpdateJobInstance), so every field
+            above is nullable in a response even though none of them are
+            required on write.
         cpu_history:
           type: array
           readOnly: true

@@ -48,8 +48,12 @@ type Application struct {
 	ID *ObjectID `json:"_id,omitempty"`
 
 	// ApplicationID Set server-side on creation to the document's own `_id`.
-	ApplicationID        *string                `json:"applicationID,omitempty"`
-	ApplicationDesc      *string                `json:"application_desc,omitempty"`
+	ApplicationID   *string `json:"applicationID,omitempty"`
+	ApplicationDesc *string `json:"application_desc,omitempty"`
+
+	// ApplicationName Nullable because a `PATCH` sending an explicit `null` here $sets
+	// the stored value to null rather than leaving it untouched (only
+	// an absent key does that).
 	ApplicationName      *string                `json:"application_name,omitempty"`
 	ApplicationNamespace *string                `json:"application_namespace,omitempty"`
 	Microservices        *[]string              `json:"microservices,omitempty"`
@@ -114,11 +118,17 @@ type Job struct {
 	ID            *ObjectID `json:"_id,omitempty"`
 	ApplicationID *string   `json:"applicationID,omitempty"`
 
-	// Candidate Id of the candidate resource this job is placed on.
+	// Candidate Id of the candidate resource this job is placed on. Nullable: a
+	// `PATCH` body's `null` is written and read back as `null`,
+	// distinct from omitting the field entirely, which leaves the
+	// stored value alone.
 	Candidate    *string        `json:"candidate,omitempty"`
 	InstanceList *[]JobInstance `json:"instance_list,omitempty"`
 
 	// JobName Unique per deployment; the key `PUT /api/v1/jobs` upserts on.
+	// Nullable because a `PATCH` sending an explicit `null` here $sets
+	// the stored value to null rather than leaving it untouched (only
+	// an absent key does that) - see `candidate`.
 	JobName              *string                `json:"job_name,omitempty"`
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
@@ -133,6 +143,11 @@ type JobHistorySample struct {
 }
 
 // JobInstance One running copy of a job on one worker.
+//
+// cpu_percent, memory_percent, disk and host_port also accept a numeric
+// string on write, for compatibility with NodeEngine/cluster_manager
+// (which send them that way) and documents written by the older Python
+// service. The service always responds with a number.
 type JobInstance struct {
 	CpuHistory     *[]JobHistorySample `json:"cpu_history,omitempty"`
 	CpuPercent     *float64            `json:"cpu_percent,omitempty"`
@@ -144,7 +159,11 @@ type JobInstance struct {
 	// LastModifiedTimestamp Unix seconds. Unlike cpu_history/memory_history's timestamp
 	// (server-generated on every PATCH), this one is taken from the
 	// request body verbatim - the caller (cluster_manager) sets it
-	// before sending.
+	// before sending. `PATCH /jobs/{id}/{instance_id}` writes a
+	// literal null for any of these fields the request body omits
+	// (see internal/store/jobs.go's UpdateJobInstance), so every field
+	// above is nullable in a response even though none of them are
+	// required on write.
 	LastModifiedTimestamp *float64               `json:"last_modified_timestamp,omitempty"`
 	Logs                  *string                `json:"logs,omitempty"`
 	MemoryHistory         *[]JobHistorySample    `json:"memory_history,omitempty"`

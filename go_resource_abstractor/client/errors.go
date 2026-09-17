@@ -21,7 +21,7 @@ var ErrNotFound = errors.New("resource abstractor: not found")
 // APIError is returned for any non-2xx response other than 404. It carries
 // the HTTP status code and, when the resource abstractor's error body could
 // be decoded, the server-provided message (see the {"message": "..."}
-// shape produced by go_resource_abstractor/api/common.go).
+// shape produced by go_resource_abstractor/rest/common.go).
 type APIError struct {
 	Method  string // HTTP method of the failed request, e.g. "GET".
 	Path    string // Request path, e.g. "/api/v1/jobs/123".

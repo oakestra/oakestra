@@ -29,7 +29,7 @@ footprint and lower request latency while preserving the exact HTTP contract, so
 ## Building and running
 
 ```bash
-go build -o resource_abstractor .
+go build -o resource_abstractor ./cmd/resource-abstractor
 
 export RESOURCE_ABSTRACTOR_PORT=11011
 export MONGO_URL=localhost
@@ -39,7 +39,7 @@ export MONGO_PORT=10007
 
 ### Tests
 
-The `api` and `db` packages test against a real MongoDB via
+The `rest`, `internal/store` and `abstractor` packages test against a real MongoDB via
 [testcontainers-go](https://golang.testcontainers.org/), so running the full suite needs Docker
 available locally or in CI.
 
@@ -47,12 +47,12 @@ available locally or in CI.
 go test ./...
 ```
 
-The `services` package does not: `services.Hooks` reaches storage through the one-method
-`HookRegistry` interface, so its tests substitute an in-memory registry and run without a
-container.
+`internal/hooks` and `model` do not need Docker: `hooks.Hooks` reaches storage through the
+one-method `HookRegistry` interface, so its tests substitute an in-memory registry, and `model`'s
+tests are pure JSON/BSON round-trips.
 
 ```bash
-go test ./services/    # no Docker required
+go test ./internal/hooks/ ./model/    # no Docker required
 ```
 
 The test MongoDB image defaults to `mongo:8.0` (matching the rest of Oakestra's deployment). On
@@ -87,7 +87,7 @@ nonroot user, minimal attack surface and image size.
 [`openapi/openapi.yaml`](openapi/openapi.yaml) is the contract, and it is the source of truth
 rather than documentation written after the fact:
 [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen) turns it into the route table, the
-typed path/query parameters, the response models, and a `ServerInterface` the handlers in `api/`
+typed path/query parameters, the response models, and a `ServerInterface` the handlers in `rest/`
 implement - so an endpoint that isn't in the spec doesn't exist, and one that is in the spec but
 unimplemented fails the build.
 
@@ -141,21 +141,41 @@ endpoints above:
 
 See [`../resource-abstractor/README.md`](../resource-abstractor/README.md) for the original
 service description; the endpoint shapes, MongoDB layout (four databases: `candidates`, `jobs`,
-`hooks`, `custom_resources`), and business logic are preserved here field-for-field, with four
+`hooks`, `custom_resources`), and business logic are preserved here field-for-field, with several
 deliberate bug fixes over the Python source (documented in code comments where they matter):
 
 - `GET /hooks/<id>` now actually finds the hook by its ObjectID (the Python service compared it
   as a raw string, so that lookup never matched).
 - `PUT /jobs/` fires webhooks under the `"jobs"` entity name on its update path, consistent with
   every other job route (the Python service used `"job"`, singular, there only).
-- A malformed id in a path parameter answers 400 on every route. The Python service (and the
-  first cut of this port) only pre-checked some routes; on the rest the id reached the driver and
-  the request 500'd.
-- Registering a custom resource type named `meta_data` is rejected with 400. Instances of a type
-  live in a collection named after the type, in the same database as the `meta_data` definitions
-  collection, so a type with that name pointed at the definitions themselves - deleting it wiped
-  every registered type. Names MongoDB refuses as collection names (`$`, NUL, `system.` prefix)
-  are rejected the same way instead of surfacing as driver errors.
+- A malformed id in a path parameter answers 400 on every route except `PATCH /resources/<id>`
+  and `GET /hooks/<id>`, which keep answering 404 (a deliberate, documented exception). The Python
+  service (and the first cut of this port) only pre-checked some routes; on the rest the id
+  reached the driver and the request 500'd.
+- Registering a custom resource type named `meta_data`, using a `system.` prefix, containing `$`
+  or a NUL byte, or longer than MongoDB's 120-byte collection-name limit is rejected with 400 -
+  and not just on registration: every operation under `/custom-resources/{resource}` re-validates
+  the name shape, not only create. Instances of a type live in a collection named after the type,
+  in the same database as the `meta_data` definitions collection, so a type with that name pointed
+  at the definitions themselves - deleting it wiped every registered type.
+- `GET /custom-resources/{resource}` rejects any filter query key starting with `$` (400) instead
+  of passing it through as a MongoDB filter verbatim - unvalidated, a key like `$where` would
+  otherwise reach the query as an operator.
+- A JSON value of the wrong type for a typed field (e.g. `{"job_name": 5}`, where `job_name` is a
+  string) now answers 400 instead of being stored verbatim the way the Python service, and every
+  field that isn't in `openapi.yaml`'s narrow set of validated ones, would. Typed fields decode via
+  `model`'s own `UnmarshalJSON` (see `rest/common.go`'s `decodeModel`), and a Go type mismatch
+  there is as malformed a request as invalid JSON, from the caller's point of view. Unknown fields
+  are unaffected - they still land in `Extra` and round-trip untouched regardless of their shape.
+- A synchronous (`pre_create`/`pre_update`) webhook whose response body doesn't decode into the
+  entity's model type - a JSON type mismatch on a typed field, most likely - now fails the write
+  with 500, instead of the transformed-but-invalid payload being stored verbatim the way a
+  `bson.M` write path would happily accept anything shaped like a document. The hook still runs
+  and its response is fetched exactly as before (see `internal/hooks`'s fail-open behavior for
+  network/non-2xx/non-JSON failures, which is unchanged); only a response that *is* valid JSON but
+  doesn't fit the model changes the outcome, since `abstractor`'s `fromMap` (see
+  `abstractor/convert.go`) now has to decode it back into a typed value before the write can
+  proceed.
 
 The one route not carried over is `/api/docs`, the Swagger UI page the Python service bundled.
 The spec it rendered is still served (see above); serving the UI itself would mean shipping its
@@ -165,11 +185,90 @@ static assets, or fetching them from a CDN that an edge deployment may not be ab
 
 ```
 go_resource_abstractor/
-├── main.go        # entrypoint: config -> mongo connect -> router -> graceful shutdown
-├── config/        # env var loading
-├── logger/        # log/slog setup
-├── openapi/       # openapi.yaml (the contract) + the code generated from it
-├── db/            # MongoDB access layer (one file per collection group)
-├── services/      # webhook dispatch (services.Hooks)
-└── api/           # HTTP handlers implementing openapi.ServerInterface
+├── cmd/resource-abstractor/  # entrypoint: config -> mongo connect -> abstractor.New -> rest.NewHandler -> graceful shutdown
+├── abstractor/                # PUBLIC library: typed CRUD + webhook choreography + validation (Service, Apps/Jobs/Resources/Hooks/CustomResources)
+├── model/                     # PUBLIC typed documents (Application, Job, Resource, Hook, CustomResource...), no gin/mongo-driver dependency in the public surface
+├── rest/                       # thin gin transport over abstractor.Service, implementing openapi.ServerInterface
+├── internal/store/            # MongoDB access layer (one file per collection group), typed in/out via model
+├── internal/hooks/            # webhook dispatcher (internal/hooks.Hooks), used by abstractor
+├── internal/config/           # env var loading + slog setup, used only by cmd/resource-abstractor
+├── internal/errs/             # sentinel errors and ValidationError shared by store/hooks/abstractor
+└── openapi/                   # openapi.yaml (the contract) + the code generated from it
 ```
+
+`abstractor` and `rest` are the two packages an external caller ever needs: `abstractor` for
+in-process use (see "Using as a library" below), `rest` to mount the same HTTP surface this
+binary serves standalone. Everything under `internal/` is a private implementation detail of
+`abstractor` and `cmd/resource-abstractor`.
+
+## Using as a library
+
+Once the root/cluster orchestrator is ported to Go, it can skip the HTTP hop entirely and call
+into `abstractor.Service` directly with a `*mongo.Client` it already owns:
+
+```go
+import (
+	"context"
+	"log/slog"
+	"time"
+
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	"github.com/oakestra/oakestra/go_resource_abstractor/abstractor"
+	"github.com/oakestra/oakestra/go_resource_abstractor/model"
+)
+
+func run(ctx context.Context) error {
+	// The caller dials and owns the client - abstractor.New never calls
+	// Connect, Ping or Disconnect on it.
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
+	if err != nil {
+		return err
+	}
+	defer client.Disconnect(context.Background())
+
+	svc, err := abstractor.New(abstractor.Options{
+		Client:             client,
+		HookConnectTimeout: 10 * time.Second,
+		HookRequestTimeout: 5 * time.Second,
+		Logger:             slog.Default(),
+	})
+	if err != nil {
+		return err
+	}
+	// Drains in-flight post_* webhooks; never touches client - Disconnect
+	// above is the caller's job, and should run after this returns.
+	defer svc.Close(context.Background())
+
+	if err := svc.EnsureIndexes(ctx); err != nil {
+		return err
+	}
+
+	job, err := svc.Jobs.Create(ctx, model.Job{JobName: model.Ptr("nginx")})
+	if err != nil {
+		return err
+	}
+	_ = job
+	return nil
+}
+```
+
+Every sub-service (`svc.Apps`, `svc.Jobs`, `svc.Resources`, `svc.Hooks`,
+`svc.CustomResources`) takes and returns `model` types - no `bson.M`, no gin. Pre/post webhook
+choreography, upsert-by-name, and the validation rules documented in code comments (resource type
+name validation, hook event validation, custom resource JSON Schema validation) all run the same
+way whether the call came from `rest` or directly from library code. Errors are the sentinels in
+`abstractor/errors.go` (`ErrNotFound`, `ErrInvalidID`, `ErrInvalidResourceType`, ...); check them
+with `errors.Is`.
+
+Every optional field on a `model` type is a plain pointer (`*string`, `*int64`, `*[]T`, ...);
+`model.Ptr(v)` builds one from a literal. `nil` means absent, so it's left out of the JSON a
+write sends and a partial update (`Jobs.Update`, `Apps.Update`, ...) leaves the stored field
+untouched. A non-nil pointer is a real value even when it points at a zero number or an empty
+slice, so `model.Ptr([]string{})` still round-trips as a present, empty array. An explicit JSON
+`null` on the wire is treated the same as an absent field.
+
+An embedder that still wants the HTTP surface - to keep serving `resource_abstractor_client`
+callers while also using the library directly - can mount `rest.NewHandler(svc, logger)` as an
+`http.Handler` in its own server instead of running this module's binary.

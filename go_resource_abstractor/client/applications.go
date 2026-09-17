@@ -2,8 +2,7 @@ package client
 
 import "context"
 
-// AppsService groups methods for the /api/v1/applications endpoints,
-// mirroring libraries/resource_abstractor_client/resource_abstractor_client/app_operations.py.
+// AppsService groups methods for the /api/v1/applications endpoints.
 type AppsService struct {
 	c *Client
 }
@@ -33,13 +32,13 @@ func InNamespace(namespace string) AppFilter {
 }
 
 // List returns applications matching every filter given, or all of them when
-// given none. Equivalent to Python's get_apps(**kwargs).
+// given none.
 func (a *AppsService) List(ctx context.Context, filters ...AppFilter) ([]Application, error) {
 	return list[Application](a.c.api.ListApplications(ctx, collapseParams(filters)))
 }
 
 // ListByUser returns applications owned by userID, additionally matching
-// filters. Equivalent to Python's get_user_apps.
+// filters.
 func (a *AppsService) ListByUser(ctx context.Context, userID string, filters ...AppFilter) ([]Application, error) {
 	// Set UserId on the built query rather than appending OfUser to filters,
 	// which would write into the caller's slice whenever it has the spare
@@ -50,23 +49,21 @@ func (a *AppsService) ListByUser(ctx context.Context, userID string, filters ...
 }
 
 // GetByNameAndNamespace returns the application identified by name and
-// namespace for userID, or ErrNotFound if none matches. Equivalent to
-// Python's get_app_by_name_and_namespace.
+// namespace for userID, or ErrNotFound if none matches.
 func (a *AppsService) GetByNameAndNamespace(ctx context.Context, name, namespace, userID string) (*Application, error) {
 	params := collapseParams([]AppFilter{NamedApp(name), InNamespace(namespace), OfUser(userID)})
 	return firstOf[Application](a.c.api.ListApplications(ctx, params))
 }
 
 // GetByID returns the application with the given id, scoped to userID.
-// Equivalent to Python's get_app_by_id.
 func (a *AppsService) GetByID(ctx context.Context, appID, userID string) (*Application, error) {
 	params := &GetApplicationParams{UserId: &userID}
 	return doc[Application](a.c.api.GetApplication(ctx, appID, params))
 }
 
 // Create creates a new application owned by userID. app's UserId field is
-// set to userID before sending, matching Python's create_app. Returns the
-// created document (with its assigned applicationID).
+// set to userID before sending. Returns the created document (with its
+// assigned applicationID).
 func (a *AppsService) Create(ctx context.Context, userID string, app Application) (*Application, error) {
 	// app is a copy already (it is passed by value), so overwriting UserId
 	// here cannot be seen by the caller. Its AdditionalProperties map is
@@ -76,7 +73,7 @@ func (a *AppsService) Create(ctx context.Context, userID string, app Application
 }
 
 // Update patches the application identified by appID. app's UserId field is
-// set to userID before sending, matching Python's update_app.
+// set to userID before sending.
 func (a *AppsService) Update(ctx context.Context, appID, userID string, app Application) (*Application, error) {
 	app.UserId = &userID
 	return doc[Application](a.c.api.PatchApplication(ctx, appID, app))
@@ -84,7 +81,7 @@ func (a *AppsService) Update(ctx context.Context, appID, userID string, app Appl
 
 // Delete removes the application identified by appID. The service answers
 // with the application as it was immediately before deletion; this discards
-// it, as the Python client does.
+// it.
 func (a *AppsService) Delete(ctx context.Context, appID string) error {
 	return Done(a.c.api.DeleteApplication(ctx, appID))
 }
