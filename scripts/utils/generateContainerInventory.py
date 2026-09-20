@@ -15,13 +15,13 @@ def quoted(value):
 
 def render_inventory(config, active_profiles=()):
     if not isinstance(config, dict):
-        raise ValueError("Compose configuration must be an object")
+        raise TypeError("Compose configuration must be an object")
     project = config.get("name")
     if not isinstance(project, str) or not project:
         raise ValueError("Compose configuration must have a project name")
     services = config.get("services")
     if not isinstance(services, dict):
-        raise ValueError("Compose configuration must contain services")
+        raise TypeError("Compose configuration must contain services")
     active_profiles = set(active_profiles)
     lines = [
         "# HELP oakestra_expected_container_replicas Desired replicas from resolved Compose configuration.",
@@ -30,13 +30,13 @@ def render_inventory(config, active_profiles=()):
     count = 0
     for name, service in sorted(services.items()):
         if not isinstance(service, dict):
-            raise ValueError(f"Service {name} must be an object")
+            raise TypeError(f"Service {name} must be an object")
         profiles = set(service.get("profiles", []))
         if profiles and "*" not in active_profiles and not profiles.intersection(active_profiles):
             continue
         labels = service.get("labels", {})
         if not isinstance(labels, dict):
-            raise ValueError("Use resolved Compose JSON, with labels represented as an object")
+            raise TypeError("Use resolved Compose JSON, with labels represented as an object")
         if str(labels.get("oakestra.monitoring.ignore", "false")).lower() == "true":
             continue
         if labels.get("oakestra.logging.collector") not in {"root", "cluster", "one-doc"}:
@@ -45,8 +45,10 @@ def render_inventory(config, active_profiles=()):
         if not isinstance(cluster_id, str) or not cluster_id:
             raise ValueError(f"Service {name} has no oakestra.cluster.id label")
         replicas = service.get("scale", service.get("deploy", {}).get("replicas", 1))
-        if isinstance(replicas, bool) or not isinstance(replicas, int) or replicas < 0:
-            raise ValueError(f"Service {name} has an invalid replica count")
+        if isinstance(replicas, bool) or not isinstance(replicas, int):
+            raise TypeError(f"Service {name} has a non-integer replica count")
+        if replicas < 0:
+            raise ValueError(f"Service {name} has a negative replica count")
         if not replicas:
             continue
         fields = {"cluster_id": cluster_id, "compose_service": name, "compose_project": project}
