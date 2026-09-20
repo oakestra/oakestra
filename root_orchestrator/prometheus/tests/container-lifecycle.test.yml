@@ -123,7 +123,7 @@ tests:
   - expr: oakestra:container_missing_replicas
     eval_time: 5m
     exp_samples: []
-- name: scrape reported Docker API error
+- name: recent Docker API error suppresses missing alerts
   interval: 15s
   input_series:
   - series: up{job="docker-state",instance="exporter:8080"}
@@ -135,11 +135,35 @@ tests:
   - series: oakestra_expected_container_replicas{job="node-exporter",cluster_id="root",compose_service="system_manager",compose_project="test"}
     values: 1+0x40
   - series: docker_exporter_scrape_errors_total{job="docker-state"}
-    values: 1+0x40
+    values: 0+0x4 1+0x35
   promql_expr_test:
   - expr: oakestra:container_missing_replicas
     eval_time: 5m
     exp_samples: []
+- name: Docker API error state recovers
+  interval: 15s
+  input_series:
+  - series: up{job="docker-state",instance="exporter:8080"}
+    values: 1+0x40
+  - series: up{job="node-exporter",instance="node:9100"}
+    values: 1+0x40
+  - series: node_textfile_scrape_error{job="node-exporter"}
+    values: 0+0x40
+  - series: oakestra_expected_container_replicas{job="node-exporter",cluster_id="root",compose_service="system_manager",compose_project="test"}
+    values: 1+0x40
+  - series: docker_exporter_scrape_errors_total{job="docker-state"}
+    values: 0 1+0x39
+  promql_expr_test:
+  - expr: oakestra:container_monitoring_ready
+    eval_time: 10m
+    exp_samples:
+    - labels: oakestra:container_monitoring_ready{}
+      value: 1
+  - expr: oakestra:container_missing_replicas
+    eval_time: 10m
+    exp_samples:
+    - labels: oakestra:container_missing_replicas{cluster_id="root",compose_service="system_manager",compose_project="test"}
+      value: 1
 - name: automatic restarts
   interval: 15s
   input_series:
