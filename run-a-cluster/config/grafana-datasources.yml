@@ -10,6 +10,7 @@ datasources:
     editable: true
     isDefault: true
     jsonData:
+      manageAlerts: false
       derivedFields:
         - name: "Search this ID across local Oakestra logs"
           matcherRegex: '\b([a-fA-F0-9]{24})\b'
