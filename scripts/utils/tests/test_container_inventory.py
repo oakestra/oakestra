@@ -68,15 +68,22 @@ class InventoryTests(unittest.TestCase):
         self.assertNotIn("PASSWORD", text)
         self.assertNotIn("do-not-export", text)
 
-    def test_invalid_input_fails_instead_of_emitting_partial_inventory(self):
+    def test_invalid_types_fail_instead_of_emitting_partial_inventory(self):
         for config in [
-            {},
             None,
             [],
+            {"name": "oakestra"},
             {"name": "oakestra", "services": {"bad": None}},
             {"name": "oakestra", "services": {"bad": service(labels=[])}},
             {"name": "oakestra", "services": {"bad": service(scale=True)}},
             {"name": "oakestra", "services": {"bad": service(scale="2")}},
+        ]:
+            with self.assertRaises(TypeError):
+                inventory.render_inventory(config)
+
+    def test_invalid_values_fail_instead_of_emitting_partial_inventory(self):
+        for config in [
+            {},
             {"name": "oakestra", "services": {"bad": service(deploy={"replicas": -1})}},
             {"name": "oakestra", "services": {"bad": service("")}},
         ]:
