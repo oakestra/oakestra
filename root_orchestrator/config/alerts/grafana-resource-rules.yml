@@ -1,0 +1,712 @@
+apiVersion: 1
+groups:
+- orgId: 1
+  name: Oakestra host resource alerts
+  folder: Oakestra
+  interval: 30s
+  rules:
+  - uid: oakestra-host-cpu-warning
+    title: Host CPU usage warning
+    condition: C
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: Prometheus
+      model:
+        datasource:
+          type: prometheus
+          uid: Prometheus
+        editorMode: code
+        expr: (100 * (1 - avg by (host_scope, instance) (rate(node_cpu_seconds_total{job="node-exporter", mode="idle"}[5m])))
+          >= scalar(oakestra_resource_alert_threshold_percent{job="node-exporter", resource="cpu", severity="warning"})) and
+          (100 * (1 - avg by (host_scope, instance) (rate(node_cpu_seconds_total{job="node-exporter", mode="idle"}[5m])))
+          < scalar(oakestra_resource_alert_threshold_percent{job="node-exporter", resource="cpu", severity="critical"}))
+        instant: true
+        range: false
+        intervalMs: 15000
+        maxDataPoints: 43200
+        refId: A
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params: []
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+        reducer: last
+        refId: B
+        type: reduce
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - -1
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - C
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: B
+        intervalMs: 1000
+        maxDataPoints: 43200
+        refId: C
+        type: threshold
+    noDataState: OK
+    execErrState: Error
+    for: 5m
+    keepFiringFor: 2m
+    annotations:
+      __dashboardUid__: oakestra-resources
+      __panelId__: '2'
+      summary: High host CPU usage on {{ $labels.host_scope }}
+      description: Host CPU usage is {{ printf "%.1f" $values.B.Value }}%, at or above the configured warning threshold for
+        five minutes.
+      runbook_url: https://prometheus.io/docs/guides/node-exporter/
+    labels:
+      category: resources
+      severity: warning
+      team: infrastructure
+    isPaused: false
+    notification_settings:
+      receiver: $OAKESTRA_ALERT_CONTACT_POINT
+      group_by:
+      - alertname
+      - host_scope
+      - instance
+      - mountpoint
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+    dashboardUid: oakestra-resources
+    panelId: 2
+  - uid: oakestra-host-cpu-critical
+    title: Host CPU usage critical
+    condition: C
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: Prometheus
+      model:
+        datasource:
+          type: prometheus
+          uid: Prometheus
+        editorMode: code
+        expr: 100 * (1 - avg by (host_scope, instance) (rate(node_cpu_seconds_total{job="node-exporter", mode="idle"}[5m])))
+          >= scalar(oakestra_resource_alert_threshold_percent{job="node-exporter", resource="cpu", severity="critical"})
+        instant: true
+        range: false
+        intervalMs: 15000
+        maxDataPoints: 43200
+        refId: A
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params: []
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+        reducer: last
+        refId: B
+        type: reduce
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - -1
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - C
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: B
+        intervalMs: 1000
+        maxDataPoints: 43200
+        refId: C
+        type: threshold
+    noDataState: OK
+    execErrState: Error
+    for: 2m
+    keepFiringFor: 2m
+    annotations:
+      __dashboardUid__: oakestra-resources
+      __panelId__: '2'
+      summary: Critical host CPU usage on {{ $labels.host_scope }}
+      description: Host CPU usage is {{ printf "%.1f" $values.B.Value }}%, at or above the configured critical threshold for
+        two minutes.
+      runbook_url: https://prometheus.io/docs/guides/node-exporter/
+    labels:
+      category: resources
+      severity: critical
+      team: infrastructure
+    isPaused: false
+    notification_settings:
+      receiver: $OAKESTRA_ALERT_CONTACT_POINT
+      group_by:
+      - alertname
+      - host_scope
+      - instance
+      - mountpoint
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+    dashboardUid: oakestra-resources
+    panelId: 2
+  - uid: oakestra-host-memory-warning
+    title: Host available memory warning
+    condition: C
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: Prometheus
+      model:
+        datasource:
+          type: prometheus
+          uid: Prometheus
+        editorMode: code
+        expr: (100 * node_memory_MemAvailable_bytes{job="node-exporter"} / node_memory_MemTotal_bytes{job="node-exporter"}
+          <= scalar(oakestra_resource_alert_threshold_percent{job="node-exporter", resource="memory_available", severity="warning"}))
+          and (100 * node_memory_MemAvailable_bytes{job="node-exporter"} / node_memory_MemTotal_bytes{job="node-exporter"}
+          > scalar(oakestra_resource_alert_threshold_percent{job="node-exporter", resource="memory_available", severity="critical"}))
+        instant: true
+        range: false
+        intervalMs: 15000
+        maxDataPoints: 43200
+        refId: A
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params: []
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+        reducer: last
+        refId: B
+        type: reduce
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - -1
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - C
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: B
+        intervalMs: 1000
+        maxDataPoints: 43200
+        refId: C
+        type: threshold
+    noDataState: OK
+    execErrState: Error
+    for: 5m
+    keepFiringFor: 2m
+    annotations:
+      __dashboardUid__: oakestra-resources
+      __panelId__: '4'
+      summary: Low available host memory on {{ $labels.host_scope }}
+      description: Available host memory is {{ printf "%.1f" $values.B.Value }}%, at or below the configured warning threshold
+        for five minutes.
+      runbook_url: https://prometheus.io/docs/guides/node-exporter/
+    labels:
+      category: resources
+      severity: warning
+      team: infrastructure
+    isPaused: false
+    notification_settings:
+      receiver: $OAKESTRA_ALERT_CONTACT_POINT
+      group_by:
+      - alertname
+      - host_scope
+      - instance
+      - mountpoint
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+    dashboardUid: oakestra-resources
+    panelId: 4
+  - uid: oakestra-host-memory-critical
+    title: Host available memory critical
+    condition: C
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: Prometheus
+      model:
+        datasource:
+          type: prometheus
+          uid: Prometheus
+        editorMode: code
+        expr: 100 * node_memory_MemAvailable_bytes{job="node-exporter"} / node_memory_MemTotal_bytes{job="node-exporter"}
+          <= scalar(oakestra_resource_alert_threshold_percent{job="node-exporter", resource="memory_available", severity="critical"})
+        instant: true
+        range: false
+        intervalMs: 15000
+        maxDataPoints: 43200
+        refId: A
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params: []
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+        reducer: last
+        refId: B
+        type: reduce
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - -1
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - C
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: B
+        intervalMs: 1000
+        maxDataPoints: 43200
+        refId: C
+        type: threshold
+    noDataState: OK
+    execErrState: Error
+    for: 2m
+    keepFiringFor: 2m
+    annotations:
+      __dashboardUid__: oakestra-resources
+      __panelId__: '4'
+      summary: Critical available host memory on {{ $labels.host_scope }}
+      description: Available host memory is {{ printf "%.1f" $values.B.Value }}%, at or below the configured critical threshold
+        for two minutes.
+      runbook_url: https://prometheus.io/docs/guides/node-exporter/
+    labels:
+      category: resources
+      severity: critical
+      team: infrastructure
+    isPaused: false
+    notification_settings:
+      receiver: $OAKESTRA_ALERT_CONTACT_POINT
+      group_by:
+      - alertname
+      - host_scope
+      - instance
+      - mountpoint
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+    dashboardUid: oakestra-resources
+    panelId: 4
+  - uid: oakestra-host-disk-warning
+    title: Host filesystem free space warning
+    condition: C
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: Prometheus
+      model:
+        datasource:
+          type: prometheus
+          uid: Prometheus
+        editorMode: code
+        expr: "((\n  100 * node_filesystem_avail_bytes{job=\"node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\"\
+          , mountpoint!~\"/run($|/).*\"}\n  / node_filesystem_size_bytes{job=\"node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\"\
+          , mountpoint!~\"/run($|/).*\"}\n)\nand on(host_scope, instance, device, mountpoint, fstype)\n  (node_filesystem_readonly{job=\"\
+          node-exporter\"} == 0)\nand on(host_scope, instance, device, mountpoint, fstype)\n  (node_filesystem_size_bytes{job=\"\
+          node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\", mountpoint!~\"/run($|/).*\"} > 0)) <= scalar(oakestra_resource_alert_threshold_percent{job=\"\
+          node-exporter\", resource=\"disk_free\", severity=\"warning\"}) and ((\n  100 * node_filesystem_avail_bytes{job=\"\
+          node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\", mountpoint!~\"/run($|/).*\"}\n  / node_filesystem_size_bytes{job=\"\
+          node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\", mountpoint!~\"/run($|/).*\"}\n)\nand on(host_scope,\
+          \ instance, device, mountpoint, fstype)\n  (node_filesystem_readonly{job=\"node-exporter\"} == 0)\nand on(host_scope,\
+          \ instance, device, mountpoint, fstype)\n  (node_filesystem_size_bytes{job=\"node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\"\
+          , mountpoint!~\"/run($|/).*\"} > 0)) > scalar(oakestra_resource_alert_threshold_percent{job=\"node-exporter\", resource=\"\
+          disk_free\", severity=\"critical\"})"
+        instant: true
+        range: false
+        intervalMs: 15000
+        maxDataPoints: 43200
+        refId: A
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params: []
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+        reducer: last
+        refId: B
+        type: reduce
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - -1
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - C
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: B
+        intervalMs: 1000
+        maxDataPoints: 43200
+        refId: C
+        type: threshold
+    noDataState: OK
+    execErrState: Error
+    for: 5m
+    keepFiringFor: 2m
+    annotations:
+      __dashboardUid__: oakestra-resources
+      __panelId__: '9'
+      summary: Low free space on {{ $labels.mountpoint }} ({{ $labels.host_scope }})
+      description: Filesystem {{ $labels.device }} mounted at {{ $labels.mountpoint }} has {{ printf "%.1f" $values.B.Value
+        }}% space available, at or below the configured warning threshold for five minutes.
+      runbook_url: https://prometheus.io/docs/guides/node-exporter/
+    labels:
+      category: resources
+      severity: warning
+      team: infrastructure
+    isPaused: false
+    notification_settings:
+      receiver: $OAKESTRA_ALERT_CONTACT_POINT
+      group_by:
+      - alertname
+      - host_scope
+      - instance
+      - mountpoint
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+    dashboardUid: oakestra-resources
+    panelId: 9
+  - uid: oakestra-host-disk-critical
+    title: Host filesystem free space critical
+    condition: C
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: Prometheus
+      model:
+        datasource:
+          type: prometheus
+          uid: Prometheus
+        editorMode: code
+        expr: "((\n  100 * node_filesystem_avail_bytes{job=\"node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\"\
+          , mountpoint!~\"/run($|/).*\"}\n  / node_filesystem_size_bytes{job=\"node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\"\
+          , mountpoint!~\"/run($|/).*\"}\n)\nand on(host_scope, instance, device, mountpoint, fstype)\n  (node_filesystem_readonly{job=\"\
+          node-exporter\"} == 0)\nand on(host_scope, instance, device, mountpoint, fstype)\n  (node_filesystem_size_bytes{job=\"\
+          node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\", mountpoint!~\"/run($|/).*\"} > 0)) <= scalar(oakestra_resource_alert_threshold_percent{job=\"\
+          node-exporter\", resource=\"disk_free\", severity=\"critical\"})"
+        instant: true
+        range: false
+        intervalMs: 15000
+        maxDataPoints: 43200
+        refId: A
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params: []
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+        reducer: last
+        refId: B
+        type: reduce
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - -1
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - C
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: B
+        intervalMs: 1000
+        maxDataPoints: 43200
+        refId: C
+        type: threshold
+    noDataState: OK
+    execErrState: Error
+    for: 2m
+    keepFiringFor: 2m
+    annotations:
+      __dashboardUid__: oakestra-resources
+      __panelId__: '9'
+      summary: Critical free space on {{ $labels.mountpoint }} ({{ $labels.host_scope }})
+      description: Filesystem {{ $labels.device }} mounted at {{ $labels.mountpoint }} has {{ printf "%.1f" $values.B.Value
+        }}% space available, at or below the configured critical threshold for two minutes.
+      runbook_url: https://prometheus.io/docs/guides/node-exporter/
+    labels:
+      category: resources
+      severity: critical
+      team: infrastructure
+    isPaused: false
+    notification_settings:
+      receiver: $OAKESTRA_ALERT_CONTACT_POINT
+      group_by:
+      - alertname
+      - host_scope
+      - instance
+      - mountpoint
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+    dashboardUid: oakestra-resources
+    panelId: 9
+  - uid: oakestra-host-resource-thresholds
+    title: Resource alert thresholds unavailable
+    condition: C
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 300
+        to: 0
+      datasourceUid: Prometheus
+      model:
+        datasource:
+          type: prometheus
+          uid: Prometheus
+        editorMode: code
+        expr: "(\n  up{job=\"node-exporter\"} == 1\n)\nunless on(host_scope, instance)\n(\n  count by (host_scope, instance)\
+          \ (\n    oakestra_resource_alert_threshold_percent{job=\"node-exporter\"}\n  ) == 6\n)"
+        instant: true
+        range: false
+        intervalMs: 15000
+        maxDataPoints: 43200
+        refId: A
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params: []
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: A
+        intervalMs: 1000
+        maxDataPoints: 43200
+        reducer: last
+        refId: B
+        type: reduce
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - -1
+            type: gt
+          operator:
+            type: and
+          query:
+            params:
+            - C
+          reducer:
+            params: []
+            type: last
+          type: query
+        datasource:
+          type: __expr__
+          uid: __expr__
+        expression: B
+        intervalMs: 1000
+        maxDataPoints: 43200
+        refId: C
+        type: threshold
+    noDataState: OK
+    execErrState: Error
+    for: 1m
+    keepFiringFor: 2m
+    annotations:
+      summary: Resource alert thresholds are unavailable on {{ $labels.host_scope }}
+      description: node_exporter is reachable, but the generated textfile does not expose all six validated resource thresholds.
+        Regenerate the monitoring inventory before relying on CPU, memory, or disk alerts.
+    labels:
+      category: resources
+      severity: error
+      team: infrastructure
+    isPaused: false
+    notification_settings:
+      receiver: $OAKESTRA_ALERT_CONTACT_POINT
+      group_by:
+      - alertname
+      - host_scope
+      - instance
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
