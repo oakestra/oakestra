@@ -58,7 +58,8 @@ _CONFIG_LEVELS = {
 def _safe_string(value: object) -> str:
     try:
         return str(value)
-    except Exception:
+    except Exception:  # noqa: BLE001
+        # User-defined string conversion must not break application logging.
         return f"<unserializable {type(value).__name__}>"
 
 
@@ -138,9 +139,10 @@ def _nest_source(_logger: WrappedLogger, _method_name: str, event_dict: EventDic
         "function": event_dict.pop("func_name", None),
         "line": event_dict.pop("lineno", None),
     }
-    if _LEVEL_NUMBERS.get(str(event_dict.get("level", "")).lower(), 0) >= logging.WARNING:
-        if all(value is not None for value in source.values()):
-            event_dict["source"] = source
+    if _LEVEL_NUMBERS.get(str(event_dict.get("level", "")).lower(), 0) >= logging.WARNING and all(
+        value is not None for value in source.values()
+    ):
+        event_dict["source"] = source
     return event_dict
 
 
