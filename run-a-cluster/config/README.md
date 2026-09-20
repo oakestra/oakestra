@@ -105,6 +105,8 @@ Only low-cardinality routing and severity values are indexed. Message text, logg
 
 Grafana automatically provisions [grafana-rules.yml](./alerts/grafana-rules.yml) and [grafana-contact-point.yml](./alerts/grafana-contact-point.yml). The Grafana-managed LogQL rule checks the local Loki every 30 seconds and creates one alert instance for each `cluster_id` and `compose_service`. Alloy's normalized `error` and `critical` levels are authoritative for every supported service, including structured Python records and MongoDB. A compatibility path runs only for records without a normalized level, excludes schema-v1 records, and matches recognizable legacy error headers, Python traceback headers, and Go panic or stack markers. Observability-service streams are excluded to prevent recursive alert noise.
 
+The Loki datasource has data source-managed rule handling disabled because these rules are stored and evaluated by Grafana, not by Loki's ruler. This does not disable LogQL alert queries.
+
 The rule waits one minute before firing and one minute before resolving after the two-minute query window becomes clear. Notifications are grouped by alert name, Cluster, and component, with a 30-second group wait and four-hour repeat interval. Both **Oakestra Alert Webhook** and **Oakestra Alert Email** are provisioned; choose the rule destination through `OAKESTRA_ALERT_CONTACT_POINT`. For a webhook, export a real URL before starting the deployment:
 
 ```bash
