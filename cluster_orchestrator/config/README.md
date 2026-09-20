@@ -20,7 +20,7 @@ Metrics are retained for at most seven days or 1 GB. Cluster Grafana reaches Pro
 
 For upgrades from the previous Cluster metrics layout, the Prometheus container is named `cluster_prometheus`. Normal bridge mode no longer publishes port `10009`; Grafana reaches Prometheus privately at `http://cluster_prometheus:9090`, and host-side checks can use `docker exec` as shown below. The host-network override exposes `127.0.0.1:10009` only to the Cluster host. Existing off-host scrapers that used `<cluster-address>:10009` must be reconfigured because public Prometheus access is intentionally no longer provided.
 
-The metrics stack requires rootful Linux Docker Engine 25 or newer on AMD64 or ARM64. Set `DOCKER_ROOT_DIR` for a non-default Docker data directory. The Docker socket and host filesystems are mounted read-only but remain sensitive; keep cAdvisor on loopback and do not expose node_exporter. Use `override-no-observe.yml` on unsupported hosts.
+The metrics stack requires rootful Linux Docker Engine 25 or newer on AMD64 or ARM64. Set `DOCKER_ROOT_DIR` for a non-default Docker data directory. When Docker uses its containerd snapshotter, cAdvisor also requires the socket selected by `CONTAINERD_SOCKET` (default `/run/containerd/containerd.sock`) to discover Docker containers. Both daemon sockets and the host filesystems are mounted read-only but remain sensitive; keep cAdvisor on loopback and do not expose node_exporter. Use `override-no-observe.yml` on unsupported hosts.
 
 ```bash
 docker exec cluster_prometheus promtool query instant http://127.0.0.1:9090 up

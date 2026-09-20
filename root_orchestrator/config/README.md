@@ -67,7 +67,7 @@ node_exporter shares the host network namespace so its network collector sees ph
 
 Prometheus keeps at most seven days or 1 GB, whichever limit is reached first. Prometheus and node_exporter have no published ports in the normal bridge deployment; Grafana reaches Prometheus over Docker networking through the provisioned `Prometheus` datasource. cAdvisor's diagnostic UI and raw metrics are available only from the host at `http://127.0.0.1:8081` and `http://127.0.0.1:8081/metrics`. The host-network override additionally exposes Prometheus only on `127.0.0.1:10010` so host-networked Grafana can still query it.
 
-The metrics stack supports rootful Linux Docker Engine 25 or newer on AMD64 and ARM64. Set `DOCKER_ROOT_DIR` when Docker stores data outside `/var/lib/docker`. cAdvisor receives read-only host mounts and a read-only Docker socket, but Docker socket access remains security-sensitive, so its diagnostic endpoint is bound to loopback and must not be rebound to a LAN or Tailscale address. Unsupported hosts must use `override-no-observe.yml`.
+The metrics stack supports rootful Linux Docker Engine 25 or newer on AMD64 and ARM64. Set `DOCKER_ROOT_DIR` when Docker stores data outside `/var/lib/docker`. When Docker uses its containerd snapshotter, cAdvisor also requires the socket selected by `CONTAINERD_SOCKET` (default `/run/containerd/containerd.sock`) to discover Docker containers. Both daemon sockets and the host filesystems are mounted read-only but remain security-sensitive, so cAdvisor's diagnostic endpoint is bound to loopback and must not be rebound to a LAN or Tailscale address. Unsupported hosts must use `override-no-observe.yml`.
 
 Check the scrape targets without exposing Prometheus:
 
