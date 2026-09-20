@@ -23,7 +23,7 @@ groups:
             (min(up{job="docker-state"}) == 1)
             and on () (min(up{job="node-exporter"}) == 1)
           )
-          unless on () (docker_exporter_scrape_errors_total{job="docker-state"} > 0)
+          unless on () (increase(docker_exporter_scrape_errors_total{job="docker-state"}[5m]) > 0)
           unless on () (node_textfile_scrape_error{job="node-exporter"} > 0)
       - record: oakestra:container_missing_replicas
         expr: |
