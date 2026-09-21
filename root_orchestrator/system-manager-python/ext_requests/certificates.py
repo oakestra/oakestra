@@ -10,7 +10,7 @@ from cryptography.x509.oid import ExtensionOID, NameOID
 
 DEFAULT_CERT_PATH = "/certs"
 DEFAULT_CA_COMMON_NAME = "Oakestra Root CA"
-DEFAULT_CA_VALID_DAYS = 365
+DEFAULT_CA_VALID_DAYS = 3650
 DEFAULT_KEY_SIZE = 3072
 
 KONG_CA_CERT_UUID = "cafe0000-0000-4000-8000-000000000000"
@@ -28,6 +28,16 @@ def get_ca_key_path() -> Path:
 
 def get_ca_cert_path() -> Path:
     return get_cert_path() / "ca.crt"
+
+
+def get_old_ca_cert_path() -> Path:
+    """The previous CA, kept only during a rotation grace period."""
+    return get_cert_path() / "ca.old.crt"
+
+
+def get_old_ca_key_path() -> Path:
+    """The previous CA's key, kept only during a rotation grace period to sign its CRL."""
+    return get_cert_path() / "ca.old.key"
 
 
 def get_server_key_path() -> Path:
@@ -93,6 +103,13 @@ def ensure_ca_files(
     if ca_files_exist():
         return False
     return regenerate_ca_files(common_name=common_name, valid_days=valid_days)
+
+
+def current_ca_cert_pem() -> str:
+    """PEM of the CA that signs new certs; during a rotation grace period ca.crt also
+    holds the old CA after it, so only the first cert is returned."""
+    ca_cert = x509.load_pem_x509_certificate(get_ca_cert_path().read_bytes())
+    return ca_cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
 
 
 def load_ca_material():
@@ -233,7 +250,8 @@ def generate_intermediate_ca(
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - timedelta(minutes=1))
-        .not_valid_after(now + timedelta(days=valid_days))
+        # Nothing it issues verifies past the root CA's expiry, so never claim longer.
+        .not_valid_after(min(now + timedelta(days=valid_days), ca_cert.not_valid_after_utc))
         .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
         .add_extension(
             x509.KeyUsage(
@@ -303,6 +321,20 @@ def regenerate_server_files(
     return True
 
 
+def reissue_server_files(valid_days: int = 365) -> bool:
+    """Re-sign the server key+cert with the current CA, keeping its name and SANs."""
+    cert = x509.load_pem_x509_certificate(get_server_cert_path().read_bytes())
+    common_name = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+    try:
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+        alt_names = [str(name.value) for name in san]
+    except x509.ExtensionNotFound:
+        alt_names = [common_name]
+    return regenerate_server_files(
+        common_name=common_name, alt_names=alt_names, valid_days=valid_days
+    )
+
+
 def ensure_server_files(
     common_name: str,
     alt_names: list[str],
@@ -326,14 +358,15 @@ def get_crl_path() -> Path:
     return get_cert_path() / "revoked.crl"
 
 
-def generate_root_crl(revoked_serials: list) -> bytes:
+def generate_root_crl(revoked_serials: list, ca_cert=None, ca_key=None) -> bytes:
     """Build and sign a CRL from a list of (serial_int, revoked_at) tuples.
 
     revoked_serials may be empty — an empty CRL is valid and signals that
-    revocation checking is active with nothing currently revoked.
-    Returns PEM bytes.
+    revocation checking is active with nothing currently revoked. Signed by the
+    current CA unless ca_cert/ca_key are given. Returns PEM bytes.
     """
-    ca_cert, ca_key = load_ca_material()
+    if ca_cert is None or ca_key is None:
+        ca_cert, ca_key = load_ca_material()
     now = datetime.now(timezone.utc)
 
     builder = (
@@ -358,9 +391,19 @@ def generate_root_crl(revoked_serials: list) -> bytes:
 
 
 def regenerate_root_crl(revoked_serials: list) -> bool:
-    """Regenerate /certs/revoked.crl from the given serial list. Returns True on success."""
+    """Regenerate /certs/revoked.crl from the given serial list. Returns True on success.
+
+    During a rotation grace period a second CRL signed by the old CA is appended:
+    with CRL checks on, OpenSSL rejects a cert whose issuer has no CRL in the file.
+    """
     try:
         pem = generate_root_crl(revoked_serials)
+        if get_old_ca_cert_path().is_file() and get_old_ca_key_path().is_file():
+            old_ca_cert = x509.load_pem_x509_certificate(get_old_ca_cert_path().read_bytes())
+            old_ca_key = serialization.load_pem_private_key(
+                get_old_ca_key_path().read_bytes(), password=None
+            )
+            pem += generate_root_crl(revoked_serials, old_ca_cert, old_ca_key)
         crl_path = get_crl_path()
         crl_path.write_bytes(pem)
         os.chmod(crl_path, 0o644)

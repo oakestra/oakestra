@@ -5,9 +5,9 @@ services:
   # * via the gateways
 
   # One-shot: provision the cluster's certificate material before anything
-  # that needs it starts. If the mTLS files are missing it redeems
-  # CLUSTER_REGISTRATION_TOKEN against the root's /api/certs/cluster-bootstrap
-  # endpoint. It also requires a BYO public gateway cert in /certs/public/
+  # that needs it starts. If the mTLS files are missing, or CLUSTER_REGISTRATION_TOKEN
+  # token unredeemed, it redeems the token against the root's
+  # /api/certs/cluster-bootstrap endpoint (a new token re-registers the cluster). It also requires a BYO public gateway cert in /certs/public/
   # (a separate certificate system from the internal mTLS CA) and fails fast
   # if absent. It also re-signs cluster_revoked.crl and issues cluster_mqtt.crt/key,
   # the MQTT client identity of the cluster's own services.
@@ -28,9 +28,11 @@ services:
       - CLUSTER_ADDRESS=${CLUSTER_ADDRESS}
       - CLUSTER_REGISTRATION_TOKEN=${CLUSTER_REGISTRATION_TOKEN:-}
       - ROOT_GATEWAY_TRUST=${ROOT_GATEWAY_TRUST-system}
+      - MQTT_CONTAINER_NAME=${MQTT_CONTAINER_NAME:-mqtt}
     volumes:
       - ${CLUSTER_CERT_PATH:-./config/certs}:/certs
       - ./config/docker-update-ca-trust.sh:/docker-update-ca-trust.sh:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: "no"
 
   mqtt:
@@ -65,7 +67,6 @@ services:
       - ./config/docker-update-ca-trust.sh:/docker-update-ca-trust.sh:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - CLUSTER_REGISTRATION_TOKEN=${CLUSTER_REGISTRATION_TOKEN:-}
       - SYSTEM_MANAGER_PORT=${SYSTEM_MANAGER_GATEWAY_HTTPS_PORT:-443}
       - MQTT_CONTAINER_NAME=${MQTT_CONTAINER_NAME:-mqtt}
       - SYSTEM_MANAGER_GRPC_PORT=${SYSTEM_MANAGER_GATEWAY_HTTPS_PORT:-443}

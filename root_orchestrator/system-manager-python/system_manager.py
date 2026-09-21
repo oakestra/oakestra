@@ -78,7 +78,11 @@ create_admin()
 if GATEWAY_ENABLED:
     from blueprints.certificates_blueprints import (
         CRL_REFRESH_INTERVAL_HOURS,
+        ROTATION_CHECK_INTERVAL_SECONDS,
+        complete_expired_ca_rotation,
         refresh_root_crl,
+        renew_server_cert_if_expiring,
+        warn_if_root_ca_expiring,
         write_root_crl_from_db,
     )
 
@@ -95,6 +99,8 @@ if GATEWAY_ENABLED:
     # Re-sign the CRL on every start so an expired or stale one never survives a restart.
     if not write_root_crl_from_db():
         raise RuntimeError("Failed to write the CRL — check CA key permissions and logs")
+    warn_if_root_ca_expiring()
+    renew_server_cert_if_expiring()
 
     def _refresh_crl_periodically():
         # The CRL expires 30 days after it is signed, so re-sign it regularly; the
@@ -105,10 +111,22 @@ if GATEWAY_ENABLED:
             delay = CRL_REFRESH_INTERVAL_HOURS * 3600
             try:
                 refresh_root_crl()
+                warn_if_root_ca_expiring()
+                renew_server_cert_if_expiring()
             except Exception:
                 logger.exception("Periodic CRL refresh failed")
 
     threading.Thread(target=_refresh_crl_periodically, daemon=True).start()
+
+    def _end_expired_ca_rotation_periodically():
+        while True:
+            try:
+                complete_expired_ca_rotation()
+            except Exception:
+                logger.exception("Checking the CA rotation grace period failed")
+            time.sleep(ROTATION_CHECK_INTERVAL_SECONDS)
+
+    threading.Thread(target=_end_expired_ca_rotation_periodically, daemon=True).start()
 
 MY_PORT = os.environ.get("MY_PORT") or 10000
 MY_PORT_GRPC = os.environ.get("MY_PORT_GRPC") or 50052

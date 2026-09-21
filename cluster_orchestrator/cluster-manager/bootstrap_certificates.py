@@ -6,10 +6,12 @@ this container completing successfully).
 
 Responsibilities:
 
-1. If the cluster's mTLS material is missing, redeem the one-time
-   CLUSTER_REGISTRATION_TOKEN against the root's public (TLS-only, no client
-   cert) /api/certs/cluster-bootstrap endpoint and write the five files:
-   ca.crt, cluster.crt, cluster.key, cluster_ca.crt, cluster_ca.key.
+1. If the cluster's mTLS material is missing, or CLUSTER_REGISTRATION_TOKEN is a
+   token that has not been redeemed yet, redeem it against the root's public
+   (TLS-only, no client cert) /api/certs/cluster-bootstrap endpoint and write the
+   five files: ca.crt, cluster.crt, cluster.key, cluster_ca.crt, cluster_ca.key.
+   Setting a new token re-registers the cluster: it gets a new intermediate CA, so
+   every worker must re-bootstrap afterwards.
 
 2. Verify that a BYO public gateway certificate is present in /certs/public/.
    There is intentionally NO auto-generated fallback — fail fast with an
@@ -21,6 +23,9 @@ Responsibilities:
 4. Issue cluster_mqtt.crt/key from the cluster intermediate CA: the MQTT client
    identity of cluster_manager, cluster_service_manager and the mqtt healthcheck.
 
+5. Issue mqtt_server.crt/key from the cluster intermediate CA: mosquitto's server
+   certificate, with CLUSTER_ADDRESS, mqtt and localhost as names.
+
 Server verification of the root gateway follows ROOT_GATEWAY_TRUST, interpreted by
 config.parse_root_gateway_trust() exactly as in cluster_manager:
   "system"   -> OS trust store (root gateway uses a publicly trusted BYO cert)
@@ -30,6 +35,7 @@ config.parse_root_gateway_trust() exactly as in cluster_manager:
   "insecure" -> no verification of the root gateway certificate
 """
 
+import hashlib
 import logging
 import os
 import sys
@@ -49,6 +55,7 @@ CLUSTER_CA_KEY_FILE = CERT_DIR / "cluster_ca.key"
 PUBLIC_CERT_FILE = CERT_DIR / "public" / "fullchain.pem"
 PUBLIC_KEY_FILE = CERT_DIR / "public" / "privkey.pem"
 CLUSTER_CRL_FILE = CERT_DIR / "cluster_revoked.crl"
+REDEEMED_TOKEN_FILE = CERT_DIR / "registration_token.sha256"  # Hash of last used token
 
 # nginx in the kong:3.6 image runs as the kong user (UID/GID 1000); the public
 # gateway key must be readable by it. mosquitto and the service managers all
@@ -111,8 +118,18 @@ def _resolve_verify(base_url: str):
     return verify
 
 
-def redeem_cluster_token() -> None:
-    token = os.environ.get("CLUSTER_REGISTRATION_TOKEN") or ""
+def _token_digest(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _is_new_token(token: str) -> bool:
+    try:
+        return REDEEMED_TOKEN_FILE.read_text().strip() != _token_digest(token)
+    except OSError:
+        return True
+
+
+def redeem_cluster_token(token: str) -> None:
     root_url = os.environ.get("SYSTEM_MANAGER_URL") or ""
     root_port = os.environ.get("SYSTEM_MANAGER_PORT") or "443"
     cluster_name = os.environ.get("CLUSTER_NAME") or ""
@@ -167,6 +184,7 @@ def redeem_cluster_token() -> None:
     _write(CLUSTER_KEY_FILE, payload["client_key"], 0o600)
     _write(CLUSTER_CA_CERT_FILE, payload["cluster_ca_cert"], 0o644)
     _write(CLUSTER_CA_KEY_FILE, payload["cluster_ca_key"], 0o600)
+    _write(REDEEMED_TOKEN_FILE, _token_digest(token), 0o600)
     logger.info("Wrote cluster certificate material to %s", CERT_DIR)
 
 
@@ -213,10 +231,10 @@ WARN_EXPIRY_DAYS = 30
 
 
 def _check_cert_expiry() -> bool:
-    """Return True if the cluster client cert is still usable.
+    """Return True if the cluster client cert has not yet expired.
 
-    Logs a warning if it expires within WARN_EXPIRY_DAYS, exits 1 if already
-    expired (forces re-bootstrap with a fresh token).
+    Logs a warning if it expires within WARN_EXPIRY_DAYS; cluster_manager renews it
+    automatically once it is running.
     """
     try:
         from datetime import datetime as _dt
@@ -231,17 +249,14 @@ def _check_cert_expiry() -> bool:
 
         if remaining.total_seconds() <= 0:
             logger.error(
-                "Cluster client certificate has expired (was valid until %s). "
-                "Re-bootstrap with a fresh token: set CLUSTER_REGISTRATION_TOKEN and restart.",
-                cert.not_valid_after_utc.isoformat(),
+                "Cluster client certificate expired on %s.", cert.not_valid_after_utc.isoformat()
             )
-            sys.exit(1)
+            return False
 
         if days <= WARN_EXPIRY_DAYS:
             logger.warning(
                 "Cluster client certificate expires in %d day(s) (%s). "
-                "Consider refreshing: POST /api/certs/renew on the cluster, "
-                "or re-bootstrap with a new token.",
+                "Certificate will be renewed.",
                 days,
                 cert.not_valid_after_utc.isoformat(),
             )
@@ -260,12 +275,7 @@ def _use_bootstrap_cert_paths() -> None:
 
 
 def write_cluster_crl() -> None:
-    """(Re-)sign the cluster CRL so mosquitto starts with a present, current list.
-
-    mosquitto refuses to start without the file and rejects every client if it is
-    expired or signed by a different CA key. Entries of an existing CRL signed by the
-    current cluster CA are carried over; cluster_manager re-syncs from MongoDB later.
-    """
+    """(Re-)sign the cluster CRL so mosquitto starts with a current list."""
     from cryptography import x509
     from ext_requests.cluster_certificates import load_cluster_ca, regenerate_cluster_crl
 
@@ -303,17 +313,64 @@ def issue_cluster_mqtt_identity() -> None:
     logger.info("Issued cluster MQTT client certificate %s", cert_path)
 
 
+def issue_mqtt_server_identity() -> None:
+    from ext_requests.cluster_certificates import write_mqtt_server_identity
+
+    try:
+        cert_path = write_mqtt_server_identity(
+            os.environ.get("CLUSTER_NAME") or "", os.environ.get("CLUSTER_ADDRESS") or ""
+        )
+    except Exception as exc:
+        logger.error("Could not issue the MQTT broker server certificate: %s", exc)
+        sys.exit(1)
+    logger.info("Issued MQTT broker server certificate %s", cert_path)
+
+
+def reload_running_services() -> None:
+    """Reload mosquitto and the external gateway"""
+    import docker
+
+    client = docker.from_env()
+    for name, reload in (
+        (os.environ.get("MQTT_CONTAINER_NAME") or "mqtt", lambda c: c.kill("HUP")),
+        (
+            os.environ.get("KONG_EXTERNAL_CONTAINER_NAME") or "cluster_kong_external",
+            lambda c: c.exec_run("kong reload"),
+        ),
+    ):
+        try:
+            container = client.containers.get(name)
+            if container.status == "running":
+                reload(container)
+                logger.info("Reloaded the running %s.", name)
+        except docker.errors.NotFound:
+            pass
+        except Exception as exc:
+            logger.error("Could not reload %s — restart it manually: %s", name, exc)
+
+
 def main() -> None:
     # Before anything imports config: it reads the CA locations at import time.
     _use_bootstrap_cert_paths()
-    if all(path.is_file() for path in MTLS_FILES):
-        logger.info("Cluster certificate material already present — skipping token redemption.")
-        _check_cert_expiry()
+    token = os.environ.get("CLUSTER_REGISTRATION_TOKEN") or ""
+    reregistered = False
+    if not all(path.is_file() for path in MTLS_FILES):
+        redeem_cluster_token(token)
+    elif token and _is_new_token(token):
+        logger.info("NEW CLUSTER_REGISTRATION_TOKEN — re-registering the cluster.")
+        redeem_cluster_token(token)
+        reregistered = True
     else:
-        redeem_cluster_token()
+        logger.info("Cluster certificate material already present — skipping token redemption.")
+        if not _check_cert_expiry():
+            logger.error("Re-register the cluster by setting a new CLUSTER_REGISTRATION_TOKEN.")
+            sys.exit(1)
     ensure_public_gateway_cert()
     write_cluster_crl()
     issue_cluster_mqtt_identity()
+    issue_mqtt_server_identity()
+    if reregistered:
+        reload_running_services()
     logger.info("Certificate bootstrap complete.")
 
 

@@ -189,3 +189,23 @@ func DeleteNamespaceForUnikernel(servicename string, instance int) error {
 	}
 	return nil
 }
+
+// ReconnectNetManagerMqtt asks NetManager to reconnect to the broker with the
+// certificate files read again, after the worker certificate was renewed.
+func ReconnectNetManagerMqtt() error {
+	response, err := httpClient.Post(
+		fmt.Sprintf("http://localhost:%d/mqtt/reconnect", model.GetNodeInfo().NetManagerPort),
+		"application/json",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = response.Body.Close()
+	}()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("NetManager MQTT reconnect failed, status code: %d", response.StatusCode)
+	}
+	return nil
+}

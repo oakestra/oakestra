@@ -4,11 +4,9 @@ import os
 import socket
 import threading
 import time
-from pathlib import Path
 
 import config
 import grpc
-import requests as http_requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from blueprints import blueprints
 from clients.mqtt_client import mqtt_init
@@ -31,8 +29,7 @@ my_logger = configure_logging()
 logger = logging.getLogger("cluster_manager")
 
 if config.mtls_enabled():
-    # Validate ROOT_GATEWAY_TRUST while gunicorn loads the app: an unusable value then
-    # stops the container once ("Worker failed to boot") instead of crash-looping.
+    # Validate ROOT_GATEWAY_TRUST
     try:
         config.root_gateway_grpc_root_certificates()
     except (ValueError, OSError) as exc:
@@ -101,8 +98,7 @@ def _build_grpc_channel():
     behaviour for the no-gateway compose path).
     """
     if config.mtls_enabled():
-        # Server trust follows ROOT_GATEWAY_TRUST (see config.py); "insecure" is rejected
-        # because gRPC cannot skip server verification.
+        # Load bootstrap certificates to build secure grpc channel
         ca_bytes = config.root_gateway_grpc_root_certificates()
         with open(config.CLUSTER_KEY_FILE, "rb") as f:
             key_bytes = f.read()
@@ -117,78 +113,6 @@ def _build_grpc_channel():
         return grpc.secure_channel(config.SYSTEM_MANAGER_ADDR, creds)
     logger.info("Opening insecure gRPC channel to system_manager")
     return grpc.insecure_channel(config.SYSTEM_MANAGER_ADDR)
-
-
-def _refresh_cluster_certs() -> bool:
-    """Re-bootstrap cluster cert material using CLUSTER_REGISTRATION_TOKEN.
-
-    Called automatically when gRPC registration fails, so a stale cert bundle
-    (e.g. after a root CA rotation) is replaced without manual intervention.
-    Returns True if the cert files were successfully replaced.
-    """
-    token = os.environ.get("CLUSTER_REGISTRATION_TOKEN") or ""
-    if not token:
-        return False
-
-    root_url = os.environ.get("SYSTEM_MANAGER_URL") or ""
-    root_port = os.environ.get("SYSTEM_MANAGER_PORT") or "443"
-    cluster_name = config.MY_CHOSEN_CLUSTER_NAME or ""
-    cluster_ip = config.MY_CLUSTER_ADDRESS or ""
-
-    if not root_url or not cluster_name:
-        logger.error("Cannot refresh certs: SYSTEM_MANAGER_URL or CLUSTER_NAME not configured")
-        return False
-
-    base_url = f"https://{root_url}:{root_port}"
-    alt_names = [name for name in (cluster_ip,) if name]
-
-    logger.info("Attempting cert refresh from %s", base_url)
-    try:
-        resp = http_requests.post(
-            f"{base_url}/api/certs/cluster-bootstrap",
-            json={"token": token, "cluster_name": cluster_name, "alt_names": alt_names},
-            verify=config.root_gateway_verify(),
-            timeout=30,
-        )
-    except http_requests.exceptions.RequestException as e:
-        logger.error("Cert refresh failed — could not reach root: %s", e)
-        return False
-
-    if resp.status_code == 401:
-        logger.error("Cert refresh failed — token rejected (invalid, expired, or already used)")
-        return False
-    if resp.status_code != 200:
-        logger.error(
-            "Cert refresh failed — root returned %d: %s", resp.status_code, resp.text[:200]
-        )
-        return False
-
-    payload = resp.json()
-    cert_dir = Path(config.ROOT_CA_FILE).parent if config.ROOT_CA_FILE else Path("/certs")
-
-    def _write(path, content, mode):
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content)
-        os.chmod(p, mode)
-
-    _write(config.ROOT_CA_FILE, payload["root_ca"], 0o644)
-    _write(config.CLUSTER_CERT_FILE, payload["client_cert"], 0o644)
-    _write(config.CLUSTER_KEY_FILE, payload["client_key"], 0o600)
-    _write(config.CLUSTER_CA_CERT_FILE, payload["cluster_ca_cert"], 0o644)
-    _write(config.CLUSTER_CA_KEY_FILE, payload["cluster_ca_key"], 0o600)
-
-    logger.info("Cluster certificates refreshed in %s", cert_dir)
-    from blueprints.certificates_blueprints import refresh_cluster_crl
-    from ext_requests.cluster_certificates import write_cluster_mqtt_identity
-
-    # The MQTT identity and CRL must chain to / be signed by the new cluster CA.
-    write_cluster_mqtt_identity(cluster_name)
-    if refresh_cluster_crl()["mqtt_reloaded"]:
-        logger.info("MQTT broker reloaded with new certificates")
-    else:
-        logger.warning("Cert files updated but MQTT broker reload failed — restart mqtt manually")
-    return True
 
 
 def _try_register() -> bool:
@@ -247,28 +171,20 @@ def _try_register() -> bool:
 
 
 def register_with_system_manager():
-    """Register with the system manager, refreshing certs and retrying once on failure."""
+    """Register with the system manager over grpc.
+
+    In gateway mode the channel uses mTLS. A cluster whose certificates were
+    rejected is re-registered by setting a new CLUSTER_REGISTRATION_TOKEN, which
+    cluster_cert_bootstrap redeems before this process starts.
+    """
     if not config.MY_CLUSTER_ADDRESS:
         raise RuntimeError(
-            "CLUSTER_ADDRESS env var is not set. The root orchestrator needs the "
-            "reachable IP of this cluster manager. Set CLUSTER_ADDRESS to the "
-            "IP/hostname the root can use to reach this host."
+            "CLUSTER_ADDRESS env var is not set. Set CLUSTER_ADDRESS to "
+            "IP/hostname from which this host is reachable by the root."
         )
 
-    if _try_register():
-        return
-
-    # Failures raise so the worker exits and gunicorn retries registration.
-    token = os.environ.get("CLUSTER_REGISTRATION_TOKEN") or ""
-    if not token:
-        raise RuntimeError("gRPC registration with the System Manager failed")
-
-    logger.warning("gRPC registration failed — refreshing cluster certificates with provided token")
-    if not _refresh_cluster_certs():
-        raise RuntimeError("gRPC registration failed and the cluster cert refresh failed")
-    logger.info("Certificates refreshed, retrying gRPC registration")
     if not _try_register():
-        raise RuntimeError("gRPC registration failed after refreshing cluster certificates")
+        raise RuntimeError("gRPC registration with the System Manager failed")
 
 
 # ........... FINISH - register to System Manager with gRPC.................#
@@ -281,7 +197,7 @@ _CERT_WARN_DAYS = 30
 
 
 def _check_cluster_cert_expiry():
-    """Log a warning/error if the mTLS client cert is near expiry or already expired."""
+    """Renew the mTLS client cert in-band when it is near expiry."""
     if not config.mtls_enabled():
         return
     if not config.CLUSTER_CERT_FILE:
@@ -289,6 +205,7 @@ def _check_cluster_cert_expiry():
     try:
         from pathlib import Path
 
+        from blueprints.certificates_blueprints import _renew_cluster_certs_in_band
         from ext_requests.cluster_certificates import cert_expires_in
 
         pem = Path(config.CLUSTER_CERT_FILE).read_text()
@@ -297,26 +214,128 @@ def _check_cluster_cert_expiry():
         if remaining.total_seconds() <= 0:
             logger.error(
                 "Cluster mTLS client certificate has EXPIRED. "
-                "Call POST /api/certs/renew or re-bootstrap with a new token."
+                "Re-register the cluster by setting a new CLUSTER_REGISTRATION_TOKEN."
             )
         elif days <= _CERT_WARN_DAYS:
             logger.warning(
                 "Cluster mTLS client certificate expires in %d day(s). "
-                "Call POST /api/certs/renew before it expires.",
+                "Certificates will be refreshed automatically.",
                 days,
             )
+            success, message = _renew_cluster_certs_in_band()
+            if success:
+                logger.info("Automatic cluster certificate renewal succeeded: %s", message)
+            else:
+                logger.error(
+                    "Automatic cluster certificate renewal FAILED: %s. "
+                    "Continuing with the current certificates (expire in %d day(s)).",
+                    message,
+                    days,
+                )
     except Exception as exc:
-        logger.warning("Could not check cluster cert expiry: %s", exc)
+        logger.error(
+            "Cluster certificate expiry check/renewal failed: %s. "
+            "Continuing with the current certificates.",
+            exc,
+        )
+    _warn_if_intermediate_expiring()
+    _check_mqtt_server_cert_expiry()
+    _check_cluster_mqtt_identity_expiry()
+
+
+def _check_mqtt_server_cert_expiry():
+    """Re-issue mosquitto's server cert from the intermediate when near expiry.
+
+    mosquitto reloads its server certificate on SIGHUP without dropping connections.
+    Skipped while workers migrate to a new intermediate; the migration's end re-issues it.
+    """
+    try:
+        from ext_requests.cluster_certificates import (
+            cert_expires_in,
+            get_mqtt_server_identity_paths,
+            get_old_cluster_ca_paths,
+            write_mqtt_server_identity,
+        )
+
+        if get_old_cluster_ca_paths()[0].is_file():
+            return
+        cert_path, _ = get_mqtt_server_identity_paths()
+        days = cert_expires_in(cert_path.read_text()).days
+        if days > _CERT_WARN_DAYS:
+            return
+        logger.warning("MQTT broker server certificate expires in %d day(s); re-issuing it.", days)
+        write_mqtt_server_identity(config.MY_CHOSEN_CLUSTER_NAME, config.MY_CLUSTER_ADDRESS)
+    except Exception as exc:
+        logger.error("Could not re-issue the MQTT broker server certificate: %s", exc)
+        return
+    config.reload_mqtt()
+
+
+# Replacing the intermediate CA means every worker must re-bootstrap, so warn early.
+_INTERMEDIATE_WARN_DAYS = 90
+
+
+def _warn_if_intermediate_expiring():
+    try:
+        from pathlib import Path
+
+        from ext_requests.cluster_certificates import cert_expires_in
+
+        days = cert_expires_in(Path(config.CLUSTER_CA_CERT_FILE).read_text()).days
+    except Exception as exc:
+        logger.error("Could not check the cluster intermediate CA expiry: %s", exc)
+        return
+    if days < 0:
+        logger.error(
+            "The cluster intermediate CA has EXPIRED — workers cannot connect to MQTT. "
+            'Replace it with POST /api/certs/renew {"renew_intermediate": true}, '
+            "then re-bootstrap every worker."
+        )
+    elif days <= _INTERMEDIATE_WARN_DAYS:
+        logger.warning(
+            "The cluster intermediate CA expires in %d day(s). Replace it with "
+            'POST /api/certs/renew {"renew_intermediate": true}, then re-bootstrap every '
+            "worker.",
+            days,
+        )
+
+
+def _check_cluster_mqtt_identity_expiry():
+    """Re-issue the cluster's own MQTT client cert from the intermediate when near expiry."""
+    try:
+        from ext_requests.cluster_certificates import (
+            cert_expires_in,
+            get_cluster_mqtt_identity_paths,
+            write_cluster_mqtt_identity,
+        )
+
+        cert_path, _ = get_cluster_mqtt_identity_paths()
+        days = cert_expires_in(cert_path.read_text()).days
+        if days > _CERT_WARN_DAYS:
+            return
+        logger.warning(
+            "Cluster MQTT client certificate expires in %d day(s); re-issuing it and "
+            "restarting the MQTT clients.",
+            days,
+        )
+        write_cluster_mqtt_identity(config.MY_CHOSEN_CLUSTER_NAME)
+    except Exception as exc:
+        logger.error("Could not re-issue the cluster MQTT client certificate: %s", exc)
+        return
+
+    config.restart_cluster_service_manager()
+    logger.warning("Restarting cluster_manager to load the new MQTT client certificate.")
+    os._exit(1)
+
+
+def _check_cluster_cert_expiry_periodically():
+    while True:
+        time.sleep(config.CERT_RENEW_CHECK_INTERVAL_HOURS * 3600)
+        _check_cluster_cert_expiry()
 
 
 def _register_in_background():
-    # The root probes GET /api/cluster/status on this cluster_manager during
-    # registration. That probe can only succeed once gunicorn's worker has
-    # entered its accept loop, which doesn't happen until load_wsgi (i.e. this
-    # module's top-level import) returns. So we MUST NOT block the import on
-    # the gRPC call — otherwise the root's probe deadlocks against our own
-    # startup. Give gunicorn a moment to start serving, then register. On
-    # failure, exit the worker so gunicorn respawns it and tries again.
+    # Wait until cluster manager has completed startup.
     time.sleep(2)
     try:
         _check_cluster_cert_expiry()
@@ -327,8 +346,6 @@ def _register_in_background():
 
 
 def _refresh_crl_periodically():
-    # The cluster CRL expires 30 days after it is signed, so re-sign it regularly;
-    # the first run also replaces a stale CRL left over from before a restart.
     from blueprints.certificates_blueprints import refresh_cluster_crl
 
     delay = 60
@@ -342,8 +359,21 @@ def _refresh_crl_periodically():
             logger.exception("Periodic CRL refresh failed")
 
 
+def _end_expired_worker_migration_periodically():
+    from blueprints.certificates_blueprints import end_expired_worker_migration
+
+    while True:
+        try:
+            end_expired_worker_migration()
+        except Exception:
+            logger.exception("Checking the worker migration deadline failed")
+        time.sleep(300)
+
+
 if config.GATEWAY_ENABLED:
     threading.Thread(target=_refresh_crl_periodically, daemon=True).start()
+    threading.Thread(target=_check_cluster_cert_expiry_periodically, daemon=True).start()
+    threading.Thread(target=_end_expired_worker_migration_periodically, daemon=True).start()
 
 threading.Thread(target=_register_in_background, daemon=True).start()
 

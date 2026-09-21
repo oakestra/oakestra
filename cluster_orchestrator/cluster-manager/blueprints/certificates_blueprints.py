@@ -1,27 +1,40 @@
 import logging
 import os
-from datetime import datetime, timezone
+import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import unquote
 
 import config
 import requests
+from cryptography import x509
+from cryptography.hazmat.primitives import serialization
+from cryptography.x509.oid import NameOID
 from ext_requests.cluster_certificates import (
+    cert_issued_by,
+    csr_common_name,
     generate_cluster_csr,
     generate_worker_cert,
+    get_old_cluster_ca_paths,
     get_root_ca_pem,
+    load_old_cluster_ca,
+    load_worker_csr,
     regenerate_cluster_crl,
     sign_worker_csr,
     write_cluster_mqtt_identity,
+    write_mqtt_server_identity,
 )
 from ext_requests.token_db import (
     clear_revoked_certs,
     consume_token,
     get_revoked_serials,
+    is_revoked,
     list_revoked_certs,
     prune_expired_revoked_certs,
     remove_revoked_cert,
     store_revoked_cert,
     store_token_hash,
+    store_worker_renewal,
 )
 from flask import Response, request
 from flask.views import MethodView
@@ -69,10 +82,17 @@ worker_bootstrap_schema = {
     "type": "object",
     "properties": {
         "token": {"type": "string"},
-        "common_name": {"type": "string"},
-        "alt_names": {"type": "array", "items": {"type": "string"}},
+        "csr": {"type": "string"},
     },
-    "required": ["token", "common_name"],
+    "required": ["token", "csr"],
+}
+
+worker_renew_schema = {
+    "type": "object",
+    "properties": {
+        "csr": {"type": "string"},
+    },
+    "required": ["csr"],
 }
 
 
@@ -125,9 +145,7 @@ class ClusterWorkerTokenController(MethodView):
     def post(self, *args, **kwargs):
         """Receive a one-time worker registration token hash from the root.
 
-        No app-level auth: the external gateway route is mTLS-guarded (only
-        the root, presenting its client cert, can reach it), and the internal
-        gateway is loopback-only.
+        This hash is used to validate incoming worker registration attemps.
         """
         content = request.get_json(silent=True) or {}
         token_hash = content.get("token_hash") or ""
@@ -153,26 +171,22 @@ class ClusterWorkerBootstrapController(MethodView):
     def post(self, *args, **kwargs):
         """Redeem a one-time worker token for a worker certificate.
 
-        Reachable without a client certificate — this is the bootstrap path
-        for a worker that has no trust material yet. The single-use,
-        short-lived token (minted at the root via POST /api/tokens/worker and
-        pushed here) is the only credential.
+        The worker sends a CSR, so its private key never leaves the worker. Returns the
+        certificate chain and the CA bundle used to verify the cluster.
         """
         content = request.get_json(silent=True) or {}
-        common_name = content.get("common_name") or ""
-        if not common_name.strip():
-            abort(400, message="common_name is required")
+        # Check the CSR before consuming the token, so a bad request does not burn it.
+        try:
+            common_name = csr_common_name(load_worker_csr(content.get("csr") or ""))
+        except ValueError as e:
+            abort(400, message=str(e))
 
         # Uniform 401 for missing/unknown/expired/reused tokens — no oracle.
         if consume_token(content.get("token") or "") is None:
             abort(401, message="invalid registration token")
 
         try:
-            private_pem, fullchain_pem = generate_worker_cert(
-                common_name=common_name,
-                alt_names=content.get("alt_names") or None,
-                valid_days=365,
-            )
+            fullchain_pem = sign_worker_csr(content["csr"])
             root_ca_pem = get_root_ca_pem()
         except FileNotFoundError:
             abort(409, message="Cluster intermediate CA material is not initialized")
@@ -180,11 +194,65 @@ class ClusterWorkerBootstrapController(MethodView):
             abort(400, message=f"Worker certificate generation failed: {str(e)}")
 
         logger.info(f"Worker bootstrap: issued certificate for '{common_name}'")
-        return {
-            "private_key": private_pem,
-            "certificate": fullchain_pem,
-            "root_ca": root_ca_pem,
-        }
+        return {"certificate": fullchain_pem, "root_ca": root_ca_pem}
+
+
+@certbp.route("/worker-renew")
+class ClusterWorkerRenewController(MethodView):
+    @certbp.arguments(schema=worker_renew_schema, location="json", validate=False, unknown=True)
+    def post(self, *args, **kwargs):
+        """Renew a worker certificate, authenticated by the worker's current certificate.
+
+        The external gateway verifies the client certificate and passes it on in the
+        X-Client-Cert header (replacing any header the client sent). The new certificate
+        keeps the presented certificate's name; the presented one is revoked once the
+        worker's heartbeat shows the new one in use.
+        """
+        try:
+            presented = x509.load_pem_x509_certificate(
+                unquote(request.headers.get("X-Client-Cert", "")).encode("utf-8")
+            )
+        except ValueError:
+            abort(401, message="Client certificate required")
+        # The gateway only checks the chain up to the root CA; this cluster must have issued it.
+        if not _issued_by_cluster_ca(presented):
+            abort(401, message="Client certificate was not issued by this cluster")
+        serial_hex = format(presented.serial_number, "x")
+        if is_revoked(serial_hex):
+            abort(401, message="Client certificate is revoked")
+        presented_names = presented.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+
+        content = request.get_json(silent=True) or {}
+        try:
+            csr = load_worker_csr(content.get("csr") or "")
+            if not presented_names or csr_common_name(csr) != presented_names[0].value:
+                abort(403, message="CSR name must match the client certificate")
+            fullchain_pem = sign_worker_csr(content["csr"])
+            root_ca_pem = get_root_ca_pem()
+        except FileNotFoundError:
+            abort(409, message="Cluster intermediate CA material is not initialized")
+        except ValueError as e:
+            abort(400, message=f"Worker certificate renewal failed: {str(e)}")
+
+        new_cert = x509.load_pem_x509_certificate(fullchain_pem.encode("utf-8"))
+        store_worker_renewal(
+            new_serial_hex=format(new_cert.serial_number, "x"),
+            old_serial_hex=serial_hex,
+            old_subject=presented.subject.rfc4514_string(),
+            old_not_after=presented.not_valid_after_utc,
+        )
+        logger.info("Worker renewal: issued certificate for '%s'", presented_names[0].value)
+        return {"certificate": fullchain_pem, "root_ca": root_ca_pem}
+
+
+def _issued_by_cluster_ca(cert) -> bool:
+    """Check the signature against the current or (during a migration) old intermediate."""
+    candidates = [Path(config.CLUSTER_CA_CERT_FILE).read_text()]
+    old = load_old_cluster_ca()
+    if old is not None:
+        candidates.append(old[0].public_bytes(serialization.Encoding.PEM).decode("utf-8"))
+    cert_pem = cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
+    return any(cert_issued_by(cert_pem, ca_pem) for ca_pem in candidates)
 
 
 cluster_refresh_schema = {
@@ -202,13 +270,8 @@ class ClusterCertRefreshController(MethodView):
     def post(self, *args, **kwargs):
         """Re-bootstrap the cluster's mTLS certificate material from the root.
 
-        Accepts a one-time cluster registration token (minted at the root via
-        POST /api/tokens/cluster). Rewrites all mTLS cert files in the
-        mounted cert directory without rotating the root CA. After this call,
-        restart mqtt, cluster_manager, and cluster_service_manager for the new
-        certificates to take effect.
-
-        Reachable via the internal gateway only.
+        Accepts a one-time cluster registration token. Rewrites all mTLS cluster cert
+        files in the mounted cert directory.
         """
         content = request.get_json(silent=True) or {}
         token = content.get("token") or ""
@@ -261,9 +324,11 @@ class ClusterCertRefreshController(MethodView):
         _write(config.CLUSTER_CA_KEY_FILE, payload["cluster_ca_key"], 0o600)
 
         logger.info("Cluster certificate material refreshed from root")
-        # The MQTT identity and CRL must chain to / be signed by the new cluster CA.
+        # The MQTT identities and CRL must chain to / be signed by the new cluster CA.
         write_cluster_mqtt_identity(cluster_name)
+        write_mqtt_server_identity(cluster_name, cluster_ip)
         mqtt_reloaded = refresh_cluster_crl()["mqtt_reloaded"]
+        kong_reloaded = config.reload_kong_external()
         return {
             "message": (
                 "Certificates refreshed and MQTT broker reloaded."
@@ -271,19 +336,29 @@ class ClusterCertRefreshController(MethodView):
                 else "Certificates refreshed. MQTT broker reload failed — restart mqtt manually."
             ),
             "mqtt_reloaded": mqtt_reloaded,
+            "kong_reloaded": kong_reloaded,
             "cert_dir": str(cert_dir),
         }
 
 
-def _renew_cluster_certs_in_band() -> tuple:
-    """Renew cluster mTLS material via the root's /api/certs/cluster-renew endpoint.
-
-    Uses the *current* cluster cert as the mTLS credential — valid as long as
-    the root's dual-CA grace period is active. Generates a fresh key + CSR,
-    sends it to the root, installs the new material, and reloads MQTT.
+def _renew_cluster_certs_in_band(renew_intermediate: bool = False) -> tuple:
+    """Renew cluster mTLS certs using current certs as authentication secret.
 
     Returns (success: bool, message: str).
     """
+    # Expiry checks, rotation detection and manual calls can all trigger a renewal.
+    if not _renew_lock.acquire(blocking=False):
+        return False, "A certificate renewal is already in progress"
+    try:
+        return _renew_cluster_certs(renew_intermediate)
+    finally:
+        _renew_lock.release()
+
+
+_renew_lock = threading.Lock()
+
+
+def _renew_cluster_certs(renew_intermediate: bool) -> tuple:
     root_url = os.environ.get("SYSTEM_MANAGER_URL") or ""
     root_port = os.environ.get("SYSTEM_MANAGER_PORT") or "443"
     cluster_name = config.MY_CHOSEN_CLUSTER_NAME or ""
@@ -301,7 +376,12 @@ def _renew_cluster_certs_in_band() -> tuple:
     try:
         resp = requests.post(
             f"{base_url}/api/certs/cluster-renew",
-            json={"csr": csr_pem, "alt_names": alt_names, "valid_days": 365},
+            json={
+                "csr": csr_pem,
+                "alt_names": alt_names,
+                "valid_days": 365,
+                "renew_intermediate": renew_intermediate,
+            },
             cert=(config.CLUSTER_CERT_FILE, config.CLUSTER_KEY_FILE),
             verify=config.root_gateway_verify(),
             timeout=30,
@@ -314,7 +394,20 @@ def _renew_cluster_certs_in_band() -> tuple:
     if resp.status_code != 200:
         return False, f"Root returned {resp.status_code}: {resp.text[:200]}"
 
-    payload = resp.json()
+    try:
+        payload = resp.json()
+        new_files = [
+            (config.CLUSTER_KEY_FILE, new_key_pem, 0o600),
+            (config.CLUSTER_CERT_FILE, payload["client_cert"], 0o644),
+            (config.ROOT_CA_FILE, payload["root_ca"], 0o644),
+        ]
+        if renew_intermediate:
+            new_files += [
+                (config.CLUSTER_CA_CERT_FILE, payload["cluster_ca_cert"], 0o644),
+                (config.CLUSTER_CA_KEY_FILE, payload["cluster_ca_key"], 0o600),
+            ]
+    except (ValueError, KeyError, TypeError) as e:
+        return False, f"Root returned an invalid renewal response: {e!r}"
     cert_dir = Path(config.ROOT_CA_FILE).parent if config.ROOT_CA_FILE else Path("/certs")
 
     def _write(path, content, mode):
@@ -323,22 +416,72 @@ def _renew_cluster_certs_in_band() -> tuple:
         p.write_text(content)
         os.chmod(p, mode)
 
-    _write(config.CLUSTER_KEY_FILE, new_key_pem, 0o600)
-    _write(config.CLUSTER_CERT_FILE, payload["client_cert"], 0o644)
-    _write(config.CLUSTER_CA_CERT_FILE, payload["cluster_ca_cert"], 0o644)
-    _write(config.CLUSTER_CA_KEY_FILE, payload["cluster_ca_key"], 0o600)
-    _write(config.ROOT_CA_FILE, payload["root_ca"], 0o644)
+    if renew_intermediate:
+        _keep_old_intermediate()
+    for path, content, mode in new_files:
+        _write(path, content, mode)
 
     logger.info("Cluster certificates renewed in-band in %s", cert_dir)
-    # The MQTT identity and CRL must chain to / be signed by the new cluster CA.
-    write_cluster_mqtt_identity(cluster_name)
+    if renew_intermediate:
+        # The client identity may move now: mosquitto accepts both intermediates until the
+        # workers have migrated. The broker's server cert moves when the migration ends.
+        write_cluster_mqtt_identity(cluster_name)
+    # Re-signs the CRL (with the new cluster CA if renewed) and reloads MQTT for the new root CA.
     mqtt_reloaded = refresh_cluster_crl()["mqtt_reloaded"]
-    msg = (
-        "Certificates renewed and MQTT broker reloaded."
-        if mqtt_reloaded
-        else "Certificates renewed. MQTT broker reload failed — restart mqtt manually."
-    )
+    # The external gateway verifies the root's calls against ca.crt, which may have changed.
+    kong_reloaded = config.reload_kong_external()
+    msg = "Certificates renewed."
+    if not mqtt_reloaded:
+        msg += " MQTT broker reload failed — restart mqtt manually."
+    if not kong_reloaded:
+        msg += " External gateway reload failed — restart cluster_kong_external manually."
     return True, msg
+
+
+def _keep_old_intermediate():
+    """Keep the replaced intermediate while workers migrate to the new one.
+
+    Until the deadline mosquitto accepts both intermediates, /worker-renew accepts certs
+    from either, and worker heartbeats trigger renewals onto the new one.
+    """
+    cert_path, key_path, expiry_path = get_old_cluster_ca_paths()
+    cert_path.write_text(Path(config.CLUSTER_CA_CERT_FILE).read_text())
+    os.chmod(cert_path, 0o644)
+    key_path.write_text(Path(config.CLUSTER_CA_KEY_FILE).read_text())
+    os.chmod(key_path, 0o600)
+    grace_ends = datetime.now(timezone.utc) + timedelta(
+        hours=config.INTERMEDIATE_GRACE_PERIOD_HOURS
+    )
+    expiry_path.write_text(grace_ends.isoformat())
+    logger.info("Workers migrate to the new cluster intermediate CA until %s", grace_ends)
+
+
+def end_expired_worker_migration() -> bool:
+    """Drop the old intermediate once the migration deadline has passed.
+
+    Moves the broker's server cert to the new intermediate and restarts the cluster's own
+    MQTT clients, which still hold the old identity and trust, by exiting this worker.
+    Workers that did not renew in time must re-bootstrap with a new token.
+    Returns False if there is no migration or it has not ended yet.
+    """
+    cert_path, key_path, expiry_path = get_old_cluster_ca_paths()
+    if not cert_path.is_file():
+        return False
+    grace_ends = datetime.fromisoformat(expiry_path.read_text().strip())
+    if datetime.now(timezone.utc) < grace_ends:
+        return False
+
+    for path in (cert_path, key_path, expiry_path):
+        path.unlink(missing_ok=True)
+    write_mqtt_server_identity(config.MY_CHOSEN_CLUSTER_NAME, config.MY_CLUSTER_ADDRESS)
+    refresh_cluster_crl()
+    logger.warning(
+        "Worker migration to the new cluster intermediate CA ended at %s. Workers that did "
+        "not renew must re-bootstrap with a new token. Restarting the MQTT clients.",
+        grace_ends.isoformat(),
+    )
+    config.restart_cluster_service_manager()
+    os._exit(1)
 
 
 @certbp.route("/renew")
@@ -346,13 +489,15 @@ class ClusterCertRenewController(MethodView):
     def post(self):
         """Renew this cluster's mTLS certificate material via in-band CSR.
 
-        Sends a CSR to the root's /api/certs/cluster-renew endpoint using the
-        current (old) client cert while the root's dual-CA grace period is
-        active. Installs the new cert material and reloads MQTT.
+        Pass {"renew_intermediate": true} to also replace the cluster intermediate CA;
+        workers must then re-bootstrap to reconnect to MQTT.
 
         Reachable via the internal gateway only.
         """
-        success, message = _renew_cluster_certs_in_band()
+        content = request.get_json(silent=True) or {}
+        success, message = _renew_cluster_certs_in_band(
+            renew_intermediate=content.get("renew_intermediate") is True
+        )
         if not success:
             abort(502, message=message)
         return {"message": message}
@@ -388,8 +533,6 @@ class ClusterCertRevokeController(MethodView):
         Records the cert's serial in the cluster revoked_certs collection,
         regenerates /certs/cluster_revoked.crl (signed by the cluster
         intermediate CA), and reloads MQTT so the updated CRL takes effect.
-
-        Reachable via the internal gateway only.
         """
         from cryptography import x509 as _x509
 
@@ -421,7 +564,7 @@ class ClusterCertRevokeController(MethodView):
         }
 
     def delete(self):
-        """Clear the revocation list, un-revoking every worker certificate. Internal gateway only."""
+        """Clear the revocation list, un-revoking every worker certificate."""
         cleared = clear_revoked_certs()
         return {"message": "Revocation list cleared", "cleared": cleared, **refresh_cluster_crl()}
 
@@ -429,7 +572,7 @@ class ClusterCertRevokeController(MethodView):
 @certbp.route("/revoke/<serial_hex>")
 class ClusterCertUnrevokeController(MethodView):
     def delete(self, serial_hex):
-        """Un-revoke a single worker certificate by serial number (hex). Internal gateway only."""
+        """Un-revoke a single worker certificate by serial number (hex)."""
         if not remove_revoked_cert(serial_hex):
             abort(404, message=f"Serial {serial_hex} is not revoked")
         return {

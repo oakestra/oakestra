@@ -62,21 +62,30 @@ services:
         plugins:
           - *mtls_guard
 
+      # Worker certificate renewal. cluster_manager binds the new cert to the presented
+      # one, so the verified client cert is passed on; set_header replaces any
+      # X-Client-Cert header the client sent itself.
+      - name: cm-worker-renew
+        protocols: [https]
+        paths:
+          - /api/certs/worker-renew
+        methods: [POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - name: pre-function
+            config:
+              access:
+                - |
+                  if ngx.var.ssl_client_verify ~= "SUCCESS" then
+                    return kong.response.exit(401, { message = "mTLS client certificate required" })
+                  end
+                  kong.service.request.set_header("X-Client-Cert", ngx.var.ssl_client_escaped_cert)
+
       # One-time worker token hashes pushed by the root.
       - name: cm-worker-token
         protocols: [https]
         paths:
           - /api/certs/worker-token
-        methods: [POST, OPTIONS]
-        strip_path: false
-        plugins:
-          - *mtls_guard
-
-      # In-band cert renewal pushed by the root after a CA rotation.
-      - name: cm-cert-renew
-        protocols: [https]
-        paths:
-          - /api/certs/renew
         methods: [POST, OPTIONS]
         strip_path: false
         plugins:

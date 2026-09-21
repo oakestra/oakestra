@@ -1,18 +1,25 @@
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 
 import requests
 from ext_requests.certificates import (
     KONG_CA_CERT_UUID,
+    cert_expires_in,
+    current_ca_cert_pem,
     ensure_ca_files,
     generate_intermediate_ca,
     generate_key_and_signed_cert,
     get_ca_cert_path,
+    get_ca_key_path,
+    get_old_ca_cert_path,
+    get_old_ca_key_path,
     get_server_cert_path,
     get_server_key_path,
     regenerate_ca_files,
     regenerate_root_crl,
     regenerate_server_files,
+    reissue_server_files,
     sign_csr_pem,
 )
 from ext_requests.registration_tokens_db import TOKEN_TYPE_CLUSTER, consume_registration_token
@@ -128,6 +135,47 @@ def _update_kong_certificate(old_ca_data: str = None) -> tuple[bool, str]:
 
 # CRLs are signed with a 30-day nextUpdate (see generate_root_crl); re-sign well before expiry.
 CRL_REFRESH_INTERVAL_HOURS = float(os.environ.get("CRL_REFRESH_INTERVAL_HOURS") or 24)
+# How long the old root CA stays trusted after POST /api/certs/rotate.
+ROTATION_GRACE_PERIOD_HOURS = float(os.environ.get("ROTATION_GRACE_PERIOD_HOURS") or 24)
+# How often system_manager checks whether the rotation grace period has ended.
+ROTATION_CHECK_INTERVAL_SECONDS = 300
+
+
+# Warn this long before the root CA expires
+ROOT_CA_WARN_DAYS = 90
+
+
+def warn_if_root_ca_expiring() -> None:
+    days = cert_expires_in(current_ca_cert_pem()).days
+    if days < 0:
+        logger.error(
+            "The root CA has EXPIRED — no cluster or worker certificate verifies. Rotate it "
+            "(POST /api/certs/rotate), then re-register all clusters."
+        )
+    elif days <= ROOT_CA_WARN_DAYS:
+        logger.warning(
+            "The root CA expires in %d day(s). Rotate it before then with POST /api/certs/rotate.",
+            days,
+        )
+
+
+# Renew the root's server.crt this long before it expires.
+SERVER_CERT_RENEW_DAYS = 30
+
+
+def renew_server_cert_if_expiring() -> None:
+    """Re-issue server.crt, the root's client certificate towards clusters, near expiry.
+
+    Skipped during a rotation grace period: clusters that have not renewed yet only
+    trust the old CA, and complete_ca_rotation() re-issues it when the period ends.
+    """
+    if get_old_ca_cert_path().is_file():
+        return
+    days = cert_expires_in(get_server_cert_path().read_text()).days
+    if days > SERVER_CERT_RENEW_DAYS:
+        return
+    logger.warning("Root server certificate expires in %d day(s); re-issuing it.", days)
+    reissue_server_files()
 
 
 def write_root_crl_from_db() -> bool:
@@ -443,6 +491,7 @@ rotate_ca_schema = {
     "properties": {
         "ca_common_name": {"type": "string"},
         "ca_valid_days": {"type": "integer", "minimum": 1},
+        "grace_period_hours": {"type": "number", "exclusiveMinimum": 0},
     },
 }
 
@@ -452,6 +501,7 @@ cluster_renew_schema = {
         "csr": {"type": "string"},
         "alt_names": {"type": "array", "items": {"type": "string"}},
         "valid_days": {"type": "integer", "minimum": 1},
+        "renew_intermediate": {"type": "boolean"},
     },
     "required": ["csr"],
 }
@@ -533,59 +583,74 @@ class CertificateAuthorityRotateController(Resource):
         """Rotate the root CA with a dual-CA grace period.
 
         Saves the old CA alongside the new one so Kong continues to accept
-        client certs signed by either CA. Each registered cluster is notified
-        to renew its cert via the in-band CSR path. Call POST /api/certs/rotate-complete
-        once all clusters have renewed to drop the old CA.
+        client certs signed by either CA. Clusters see the new CA in the response to
+        their next /api/information update and renew via the in-band CSR path.
+        The grace period ends automatically after grace_period_hours (default
+        ROTATION_GRACE_PERIOD_HOURS), or earlier via POST /api/certs/rotate-complete.
+        Clusters that have not renewed by then must be re-registered with a new token.
         """
         content = request.get_json(silent=True) or {}
+        grace_hours = float(content.get("grace_period_hours") or ROTATION_GRACE_PERIOD_HOURS)
+        rotated_at = datetime.now(timezone.utc)
 
         ca_path = get_ca_cert_path()
         old_ca_pem = ca_path.read_text() if ca_path.is_file() else None
+        old_ca_key = get_ca_key_path().read_bytes() if get_ca_key_path().is_file() else None
+
+        # OpenSSL finds a cert's issuer by subject name, and the certs issued here carry
+        # no Authority Key Identifier. Both CAs are trusted during the grace period, so
+        # they need different names or old-CA certs are checked against the new CA.
+        common_name = content.get("ca_common_name") or (
+            f"Oakestra Root CA {rotated_at:%Y-%m-%d %H:%M:%S}"
+        )
+        if old_ca_pem:
+            from cryptography import x509 as _x509
+            from cryptography.x509.oid import NameOID
+
+            old_ca = _x509.load_pem_x509_certificate(old_ca_pem.encode("utf-8"))
+            old_names = old_ca.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+            if old_names and old_names[0].value == common_name:
+                abort(400, {"message": "ca_common_name must differ from the current CA's name"})
 
         regenerate_ca_files(
             valid_days=int(content.get("ca_valid_days") or 3650),
-            common_name=content.get("ca_common_name") or "Oakestra Root CA",
+            common_name=common_name,
         )
         new_ca_pem = ca_path.read_text()
 
         # Write dual-CA bundle: nginx's ssl_client_certificate accepts a
         # concatenated PEM file and will verify client certs against either CA.
-        if old_ca_pem and old_ca_pem.strip() != new_ca_pem.strip():
-            old_ca_path = ca_path.parent / "ca.old.crt"
-            old_ca_path.write_text(old_ca_pem)
-            os.chmod(old_ca_path, 0o644)
+        if old_ca_pem and old_ca_key and old_ca_pem.strip() != new_ca_pem.strip():
+            get_old_ca_cert_path().write_text(old_ca_pem)
+            os.chmod(get_old_ca_cert_path(), 0o644)
+            get_old_ca_key_path().write_bytes(old_ca_key)
+            os.chmod(get_old_ca_key_path(), 0o600)
             ca_path.write_text(new_ca_pem + "\n" + old_ca_pem)
+            grace_ends = rotated_at + timedelta(hours=grace_hours)
+            _grace_expiry_path().write_text(grace_ends.isoformat())
             grace_period = True
         else:
+            grace_ends = None
             grace_period = False
 
-        # The old CRL was signed by the old CA key; after rotation it would be
-        # unverifiable once the old CA is removed. Write a fresh empty CRL signed
-        # by the new CA key now so Kong always has a valid, verifiable CRL.
-        # Old revocations are scoped to old-CA serial numbers and are meaningless
-        # for new-CA certs — they are cleared from the DB at rotate-complete.
-        regenerate_root_crl([])
+        # Re-sign the CRL with the new CA key, plus one signed by the old CA key while
+        # the grace period lasts, so certs from both CAs pass Kong's CRL check. Old-CA
+        # revocations stay in effect until rotate-complete clears them.
+        write_root_crl_from_db()
 
         kong_updated, kong_message = _update_kong_ca(new_ca_pem)
         reload_ok, reload_message = _reload_kong_nginx()
 
-        # Push renewal request to all registered clusters.
-        from ext_requests.cluster_requests import cluster_push_cert_renew
-        from resource_abstractor_client import candidate_operations
-
-        clusters = list(candidate_operations.get_candidates() or [])
-        renewal_results = cluster_push_cert_renew(clusters)
-
         return {
             "grace_period_active": grace_period,
+            "grace_period_ends": grace_ends.isoformat() if grace_ends else None,
             "kong_updated": kong_updated,
             "kong_status": kong_message,
             "kong_reloaded": reload_ok,
             "kong_reload_status": reload_message,
-            "cluster_renewal_results": renewal_results,
             "message": (
-                "CA rotated. Grace period active — old CA still accepted. "
-                "Call POST /api/certs/rotate-complete once all clusters have renewed."
+                "CA rotated. Grace period active — old CA still accepted until "
+                f"{grace_ends.isoformat()}. Clusters renew on their next information update."
                 if grace_period
                 else "CA rotated (no prior CA to carry forward)."
             ),
@@ -596,7 +661,7 @@ class CertificateAuthorityRotateController(Resource):
 class ClusterCertRenewController(Resource):
     @certbp.arguments(schema=cluster_renew_schema, location="json", validate=False, unknown=True)
     def post(self, *args, **kwargs):
-        """Sign a cluster's CSR with the current CA and return a new intermediate CA.
+        """Sign a cluster's CSR with the current CA.
 
         Protected by the Kong mTLS pre-function guard — the caller must present
         a valid client certificate (old CA still trusted during grace period).
@@ -609,6 +674,7 @@ class ClusterCertRenewController(Resource):
 
         alt_names = content.get("alt_names") or []
         valid_days = int(content.get("valid_days") or 365)
+        renew_intermediate = content.get("renew_intermediate") is True
 
         try:
             # Extract CN from the CSR subject to name the new intermediate CA.
@@ -618,24 +684,31 @@ class ClusterCertRenewController(Resource):
             cn_attrs = csr_obj.subject.get_attributes_for_oid(_x509.oid.NameOID.COMMON_NAME)
             common_name = cn_attrs[0].value if cn_attrs else "cluster"
 
-            client_cert = sign_csr_pem(csr_pem=csr_pem, valid_days=valid_days)
-            cluster_ca_key, cluster_ca_cert = generate_intermediate_ca(
-                common_name=common_name,
-                alt_names=alt_names or None,
-                valid_days=1825,
-            )
+            response = {
+                "client_cert": sign_csr_pem(csr_pem=csr_pem, valid_days=valid_days),
+                "root_ca": get_ca_cert_path().read_text(),
+            }
+            if renew_intermediate:
+                # The cluster trusts the old and new intermediate while its workers migrate,
+                # and OpenSSL matches certs and CRLs to their issuer by name, so the names
+                # must differ.
+                renewed_at = datetime.now(timezone.utc)
+                response["cluster_ca_key"], response["cluster_ca_cert"] = generate_intermediate_ca(
+                    common_name=f"{common_name} {renewed_at:%Y-%m-%d %H:%M:%S}",
+                    alt_names=alt_names or None,
+                    valid_days=1825,
+                )
         except FileNotFoundError:
             abort(409, {"message": "Root CA material not initialized"})
         except ValueError as e:
             abort(400, {"message": f"Certificate operation failed: {str(e)}"})
 
-        logger.info("Issued renewed cert material for cluster '%s' via in-band CSR", common_name)
-        return {
-            "client_cert": client_cert,
-            "cluster_ca_key": cluster_ca_key,
-            "cluster_ca_cert": cluster_ca_cert,
-            "root_ca": get_ca_cert_path().read_text(),
-        }
+        logger.info(
+            "Issued renewed cert material for cluster '%s' via in-band CSR (intermediate: %s)",
+            common_name,
+            "renewed" if renew_intermediate else "kept",
+        )
+        return response
 
 
 @certbp.route("/rotate-complete")
@@ -643,49 +716,81 @@ class CertificateRotateCompleteController(Resource):
     @jwt_required()
     @require_role(Role.ADMIN)
     def post(self):
-        """End the dual-CA grace period by removing the old CA from the bundle.
+        """End the dual-CA grace period early by removing the old CA from the bundle.
 
         Returns 409 if no grace period is active (ca.old.crt not present).
         After this call, only client certs signed by the new CA are accepted.
         """
-        ca_path = get_ca_cert_path()
-        old_ca_path = ca_path.parent / "ca.old.crt"
-
-        if not old_ca_path.is_file():
+        if not get_old_ca_cert_path().is_file():
             abort(409, {"message": "No grace period active — ca.old.crt not found"})
+        return complete_ca_rotation()
 
-        # Strip the old CA from the bundle: keep only the first cert in the file.
-        import re as _re
 
-        current_bundle = ca_path.read_text()
-        certs = _re.findall(
-            r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----",
-            current_bundle,
-            _re.DOTALL,
-        )
-        if certs:
-            ca_path.write_text(certs[0] + "\n")
+def _grace_expiry_path():
+    return get_ca_cert_path().parent / "ca.old.expiry"
 
-        old_ca_path.unlink()
 
-        # All old-CA certs are now untrusted at the CA level. Revocation records
-        # for them are stale — their serial numbers are scoped to the old CA and
-        # carrying them into the new CRL would be wrong. Clear and regenerate.
-        clear_revoked_certs()
-        regenerate_root_crl([])
+def complete_ca_rotation() -> dict:
+    """Drop the old CA from the trust bundle, ending the rotation grace period."""
+    ca_path = get_ca_cert_path()
 
-        kong_updated, kong_message = _update_kong_ca(ca_path.read_text())
-        reload_ok, reload_message = _reload_kong_nginx()
+    # Strip the old CA from the bundle: keep only the first cert in the file.
+    import re as _re
 
-        return {
-            "old_ca_removed": True,
-            "revoked_certs_cleared": True,
-            "kong_updated": kong_updated,
-            "kong_status": kong_message,
-            "kong_reloaded": reload_ok,
-            "kong_reload_status": reload_message,
-            "message": "Grace period ended — only new CA is now trusted.",
-        }
+    current_bundle = ca_path.read_text()
+    certs = _re.findall(
+        r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----",
+        current_bundle,
+        _re.DOTALL,
+    )
+    if certs:
+        ca_path.write_text(certs[0] + "\n")
+
+    get_old_ca_cert_path().unlink()
+    get_old_ca_key_path().unlink(missing_ok=True)
+    _grace_expiry_path().unlink(missing_ok=True)
+
+    # All old-CA certs are now untrusted at the CA level. Revocation records
+    # for them are stale — their serial numbers are scoped to the old CA and
+    # carrying them into the new CRL would be wrong. Clear and regenerate.
+    clear_revoked_certs()
+    regenerate_root_crl([])
+
+    # server.crt is the root's client certificate towards the clusters' gateways. Clusters
+    # that renewed during the grace period trust the new CA, so move it over now; the
+    # old-CA copy would stop working once clusters drop the old CA from their ca.crt.
+    reissue_server_files()
+
+    kong_updated, kong_message = _update_kong_ca(ca_path.read_text())
+    reload_ok, reload_message = _reload_kong_nginx()
+
+    return {
+        "old_ca_removed": True,
+        "revoked_certs_cleared": True,
+        "kong_updated": kong_updated,
+        "kong_status": kong_message,
+        "kong_reloaded": reload_ok,
+        "kong_reload_status": reload_message,
+        "message": "Grace period ended — only new CA is now trusted.",
+    }
+
+
+def complete_expired_ca_rotation() -> bool:
+    """End the rotation grace period if its deadline has passed. Returns True if it did."""
+    if not get_old_ca_cert_path().is_file():
+        return False
+    grace_ends = datetime.fromisoformat(_grace_expiry_path().read_text().strip())
+    if datetime.now(timezone.utc) < grace_ends:
+        return False
+
+    result = complete_ca_rotation()
+    logger.warning(
+        "CA rotation grace period ended at %s. "
+        "Clusters that did not renew must be re-registered with a new token. %s",
+        grace_ends.isoformat(),
+        result["kong_reload_status"],
+    )
+    return True
 
 
 @certbp.route("/public")

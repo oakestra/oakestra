@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"go_node_engine/config"
 	"go_node_engine/logger"
+	"go_node_engine/workercert"
 	"io"
 	"net/http"
 	"os"
@@ -18,10 +19,39 @@ import (
 // CERT_DIR is where the bootstrap stores the worker's certificate material.
 var CERT_DIR = path.Join("/etc", "oakestra", "certs")
 
-type workerBootstrapResponse struct {
-	PrivateKey  string `json:"private_key"`
+// issuedCert is the cluster's answer to a worker bootstrap or renewal.
+type issuedCert struct {
 	Certificate string `json:"certificate"`
 	RootCa      string `json:"root_ca"`
+}
+
+func readIssuedCert(body io.Reader) (issuedCert, error) {
+	issued := issuedCert{}
+	respBytes, err := io.ReadAll(body)
+	if err != nil {
+		return issued, err
+	}
+	if err := json.Unmarshal(respBytes, &issued); err != nil {
+		return issued, fmt.Errorf("invalid certificate response: %v", err)
+	}
+	if issued.Certificate == "" || issued.RootCa == "" {
+		return issued, fmt.Errorf("incomplete certificate response")
+	}
+	return issued, nil
+}
+
+// installCert writes the key, certificate chain and CA bundle, each atomically.
+func installCert(keyPath string, keyPEM []byte, certPath string, caPath string, issued issuedCert) error {
+	if err := workercert.WriteFileAtomic(keyPath, keyPEM, 0600); err != nil {
+		return err
+	}
+	if err := workercert.WriteFileAtomic(certPath, []byte(issued.Certificate), 0644); err != nil {
+		return err
+	}
+	if caPath == "" {
+		return nil
+	}
+	return workercert.WriteFileAtomic(caPath, []byte(issued.RootCa), 0644)
 }
 
 // WorkerBootstrap redeems a one-time registration token for worker
@@ -48,10 +78,14 @@ func WorkerBootstrap(cfg config.ConfFile) (config.ConfFile, error) {
 	if err != nil || hostname == "" {
 		hostname = "oakestra-worker"
 	}
+	// The key is generated here and never leaves the worker; the cluster signs the CSR.
+	keyPEM, csrPEM, err := workercert.GenerateKeyAndCSR(hostname, []string{hostname, "localhost"}, nil)
+	if err != nil {
+		return cfg, fmt.Errorf("generating worker key failed: %v", err)
+	}
 	body, err := json.Marshal(map[string]interface{}{
-		"token":       cfg.ClusterToken,
-		"common_name": hostname,
-		"alt_names":   []string{hostname, "localhost"},
+		"token": cfg.ClusterToken,
+		"csr":   string(csrPEM),
 	})
 	if err != nil {
 		return cfg, err
@@ -71,32 +105,16 @@ func WorkerBootstrap(cfg config.ConfFile) (config.ConfFile, error) {
 		return cfg, fmt.Errorf("worker bootstrap failed with status %d", resp.StatusCode)
 	}
 
-	respBytes, err := io.ReadAll(resp.Body)
+	issued, err := readIssuedCert(resp.Body)
 	if err != nil {
 		return cfg, err
-	}
-	bootstrap := workerBootstrapResponse{}
-	if err := json.Unmarshal(respBytes, &bootstrap); err != nil {
-		return cfg, fmt.Errorf("invalid worker bootstrap response: %v", err)
-	}
-	if bootstrap.PrivateKey == "" || bootstrap.Certificate == "" || bootstrap.RootCa == "" {
-		return cfg, fmt.Errorf("incomplete worker bootstrap response")
 	}
 
 	certPath := path.Join(CERT_DIR, "worker.crt")
 	keyPath := path.Join(CERT_DIR, "worker.key")
-	if err := os.MkdirAll(CERT_DIR, 0755); err != nil {
-		return cfg, err
-	}
-	if err := os.WriteFile(certPath, []byte(bootstrap.Certificate), 0644); err != nil {
-		return cfg, err
-	}
-	if err := os.WriteFile(keyPath, []byte(bootstrap.PrivateKey), 0600); err != nil {
-		return cfg, err
-	}
 	// The root CA is the trust anchor for both the cluster gateway (fallback
 	// cert) and the MQTT broker.
-	if err := os.WriteFile(caPath, []byte(bootstrap.RootCa), 0644); err != nil {
+	if err := installCert(keyPath, keyPEM, certPath, caPath, issued); err != nil {
 		return cfg, err
 	}
 

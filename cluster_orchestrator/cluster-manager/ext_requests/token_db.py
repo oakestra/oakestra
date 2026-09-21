@@ -35,7 +35,6 @@ def _revoked_certs_collection():
 
 
 def normalize_serial_hex(serial_hex: str) -> str:
-    # Accept "0A:1B", "0x0a1b" or upper case; records store format(serial, "x").
     return format(int(serial_hex.replace(":", ""), 16), "x")
 
 
@@ -94,6 +93,41 @@ def prune_expired_revoked_certs() -> int:
     """Remove entries for certificates that have expired; those are rejected on expiry alone."""
     now = datetime.now(timezone.utc)
     return _revoked_certs_collection().delete_many({"not_after": {"$lte": now}}).deleted_count
+
+
+def is_revoked(serial_hex: str) -> bool:
+    return _revoked_certs_collection().count_documents({"serial_hex": serial_hex}, limit=1) > 0
+
+
+_worker_renewals = None
+
+
+def _worker_renewals_collection():
+    global _worker_renewals
+    if _worker_renewals is None:
+        client = MongoClient(f"mongodb://{CLUSTER_MONGO_URL}:{CLUSTER_MONGO_PORT}/")
+        _worker_renewals = client["clusters"]["worker_cert_renewals"]
+        _worker_renewals.create_index("old_not_after", expireAfterSeconds=0)
+    return _worker_renewals
+
+
+def store_worker_renewal(
+    new_serial_hex: str, old_serial_hex: str, old_subject: str, old_not_after: datetime
+) -> None:
+    """Remember old cert, to revoke it once the new one is in use."""
+    _worker_renewals_collection().insert_one(
+        {
+            "new_serial_hex": new_serial_hex,
+            "old_serial_hex": old_serial_hex,
+            "old_subject": old_subject,
+            "old_not_after": old_not_after,
+        }
+    )
+
+
+def pop_worker_renewal(new_serial_hex: str):
+    """Return and remove the renewal that issued new_serial_hex, or None."""
+    return _worker_renewals_collection().find_one_and_delete({"new_serial_hex": new_serial_hex})
 
 
 def hash_worker_token(token: str) -> str:

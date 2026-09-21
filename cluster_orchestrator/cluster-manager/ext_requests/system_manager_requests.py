@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import time
 import traceback
 
 import config
@@ -82,9 +83,59 @@ def re_deploy_dead_jobs_routine():
 
 def send_aggregated_info(my_id, data):
     try:
-        _session.post(SYSTEM_MANAGER_ADDR + "/api/information/" + str(my_id), json=data)
+        resp = _session.post(SYSTEM_MANAGER_ADDR + "/api/information/" + str(my_id), json=data)
     except requests.exceptions.RequestException:
         logger.error("Calling System Manager /api/information not successful.")
+        return
+    if config.mtls_enabled() and resp.ok:
+        _renew_if_root_ca_rotated(resp)
+
+
+# Minimum time between renewal attempts triggered by a root CA rotation.
+_ROTATION_RENEW_RETRY_SECONDS = 300
+_last_rotation_renew_attempt = 0.0
+
+
+def _renew_if_root_ca_rotated(resp):
+    """Renew the client cert if the root reports a CA that did not sign it.
+
+    The root returns its current CA with every /api/information response; after a
+    rotation it no longer matches the issuer of this cluster's client cert.
+    """
+    global _last_rotation_renew_attempt
+    try:
+        root_ca = resp.json().get("root_ca")
+    except (ValueError, AttributeError):
+        return
+    if not root_ca:
+        return
+
+    from blueprints.certificates_blueprints import _renew_cluster_certs_in_band
+
+    from ext_requests.cluster_certificates import cert_issued_by
+
+    try:
+        with open(config.CLUSTER_CERT_FILE) as f:
+            if cert_issued_by(f.read(), root_ca):
+                return
+    except (OSError, ValueError) as e:
+        logger.error("Could not check the cluster certificate against the root CA: %s", e)
+        return
+
+    if time.monotonic() - _last_rotation_renew_attempt < _ROTATION_RENEW_RETRY_SECONDS:
+        return
+    _last_rotation_renew_attempt = time.monotonic()
+
+    logger.warning("Root CA was rotated — renewing cluster certificates and intermediate CA")
+    success, message = _renew_cluster_certs_in_band(renew_intermediate=True)
+    if success:
+        logger.info("Cluster certificate renewal after root CA rotation succeeded: %s", message)
+    else:
+        logger.error(
+            "Cluster certificate renewal after root CA rotation failed: %s. Retrying in %d s.",
+            message,
+            _ROTATION_RENEW_RETRY_SECONDS,
+        )
 
 
 def trigger_undeploy_and_re_deploy(service, instance):

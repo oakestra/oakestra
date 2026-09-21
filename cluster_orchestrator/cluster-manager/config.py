@@ -26,6 +26,12 @@ GRPC_REQUEST_TIMEOUT = 120
 GATEWAY_ENABLED = os.environ.get("GATEWAY_ENABLED", "").lower() in ("true", "1", "yes")
 # CRLs are signed with a 30-day nextUpdate; they are re-signed this often.
 CRL_REFRESH_INTERVAL_HOURS = float(os.environ.get("CRL_REFRESH_INTERVAL_HOURS") or 24)
+# How often the cluster's mTLS client cert is checked and renewed when near expiry.
+CERT_RENEW_CHECK_INTERVAL_HOURS = float(os.environ.get("CERT_RENEW_CHECK_INTERVAL_HOURS") or 24)
+# How long workers may keep using certs from a replaced intermediate while they renew.
+INTERMEDIATE_GRACE_PERIOD_HOURS = float(os.environ.get("INTERMEDIATE_GRACE_PERIOD_HOURS") or 24)
+# Renew worker certificates this long before they expire.
+WORKER_CERT_RENEW_DAYS = float(os.environ.get("WORKER_CERT_RENEW_DAYS") or 30)
 
 # mTLS configuration. When all three files are present and SYSTEM_MANAGER_USE_TLS is truthy,
 # cluster→root traffic (gRPC + REST) is wrapped in TLS with client-cert authentication.
@@ -141,6 +147,49 @@ def reload_mqtt() -> bool:
         import logging
 
         logging.getLogger("cluster_manager").error("Could not reload MQTT broker: %s", e)
+        return False
+
+
+KONG_EXTERNAL_CONTAINER_NAME = os.environ.get(
+    "KONG_EXTERNAL_CONTAINER_NAME", "cluster_kong_external"
+)
+
+
+def reload_kong_external() -> bool:
+    """Reload the external gateway so it re-reads ca.crt, which verifies the root's calls."""
+    try:
+        import docker
+
+        container = docker.from_env().containers.get(KONG_EXTERNAL_CONTAINER_NAME)
+        result = container.exec_run("kong reload")
+        if result.exit_code != 0:
+            raise RuntimeError(result.output.decode("utf-8", errors="replace").strip())
+        return True
+    except Exception as e:
+        import logging
+
+        logging.getLogger("cluster_manager").error("Could not reload the external gateway: %s", e)
+        return False
+
+
+CLUSTER_SERVICE_MANAGER_CONTAINER_NAME = os.environ.get(
+    "CLUSTER_SERVICE_MANAGER_CONTAINER_NAME", "cluster_service_manager"
+)
+
+
+def restart_cluster_service_manager() -> bool:
+    """Restart cluster_service_manager, e.g. so it loads a new MQTT client certificate."""
+    try:
+        import docker
+
+        docker.from_env().containers.get(CLUSTER_SERVICE_MANAGER_CONTAINER_NAME).restart()
+        return True
+    except Exception as e:
+        import logging
+
+        logging.getLogger("cluster_manager").error(
+            "Could not restart cluster_service_manager: %s", e
+        )
         return False
 
 
