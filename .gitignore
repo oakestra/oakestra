@@ -84,3 +84,6 @@ netmanager*
 **/proto/*_pb2.py
 **/proto/*_pb2.pyi
 **/proto/*_pb2_grpc.py
+
+# Pychache
+__pycache__/

@@ -31,24 +31,30 @@ services:
       
   # cluster-level mongoDB
   mongo_cluster:
-    image: mongo:8.0.4
+    image: mongo:8.0.32
     container_name: cluster_mongo
     hostname: cluster_mongo
     ports:
       - "10107:10107"
     volumes:
       - 'mongodb_cluster_data:/data/db'
+    # Check oakestra pr #586 for details on why this is needed.
+    environment:
+      - GLIBC_TUNABLES=glibc.pthread.rseq=1
     command: mongod --port 10107
 
   # cluster-level mongoDB
   mongo_clusternet:
-    image: mongo:8.0.4
+    image: mongo:8.0.32
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
     ports:
       - "10108:10108"
     volumes:
       - 'mongodb_cluster_net_data:/data/db'
+    # Check oakestra pr #586 for details on why this is needed. 
+    environment:
+      - GLIBC_TUNABLES=glibc.pthread.rseq=1
     command: mongod --port 10108
 
 
