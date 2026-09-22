@@ -108,7 +108,7 @@ func RegisterSelfToNetworkComponent() error {
 	if model.GetNodeInfo().NetManagerPort == 0 {
 		// if not network port specified, attempt using local socket
 		httpClient = &http.Client{
-			Timeout: time.Second * 10,
+			Timeout: time.Second * 15,
 			Transport: &http.Transport{
 				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 					return net.Dial("unix", model.GetNodeInfo().OverlaySocket)
@@ -185,6 +185,26 @@ func DeleteNamespaceForUnikernel(servicename string, instance int) error {
 	}
 	if response.StatusCode != 200 {
 		return fmt.Errorf("NetManager undeploy failed, status code: %d", response.StatusCode)
+	}
+	return nil
+}
+
+// ReconnectNetManagerMqtt asks NetManager to reconnect to the broker with the
+// certificate files read again, after the worker certificate was renewed.
+func ReconnectNetManagerMqtt() error {
+	response, err := httpClient.Post(
+		fmt.Sprintf("http://localhost:%d/mqtt/reconnect", model.GetNodeInfo().NetManagerPort),
+		"application/json",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = response.Body.Close()
+	}()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("NetManager MQTT reconnect failed, status code: %d", response.StatusCode)
 	}
 	return nil
 }

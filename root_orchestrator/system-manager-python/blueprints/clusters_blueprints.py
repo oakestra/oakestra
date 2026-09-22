@@ -8,6 +8,8 @@ from flask_smorest import Blueprint, abort
 from oakestra_utils.types.statuses import convert_to_status
 from resource_abstractor_client import candidate_operations
 from services.instance_management import update_job_status
+from utils.certificates import current_ca_cert_pem
+from utils.gateway import GATEWAY_ENABLED
 
 logger = logging.getLogger("system_manager")
 
@@ -120,6 +122,13 @@ class ClusterController(MethodView):
                 # cluster has outdated jobs, ask to undeploy
                 cluster_request_to_delete_job_by_ip(j.get("_id"), -1, cluster_id)
 
+        if GATEWAY_ENABLED:
+            # Clusters compare this with the issuer of their client cert and renew it
+            # themselves after a root CA rotation.
+            try:
+                return {"message": "ok", "root_ca": current_ca_cert_pem()}
+            except (OSError, ValueError) as e:
+                logger.error(f"Could not read the root CA for the cluster update response: {e}")
         return "ok"
 
 

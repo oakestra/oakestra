@@ -1,3 +1,5 @@
+from utils.gateway import GATEWAY_ENABLED
+
 from blueprints.applications_blueprints import applicationblp, applicationsblp
 from blueprints.authentication_blueprints import loginbp
 from blueprints.authorization_blueprints import permissionbp
@@ -23,3 +25,10 @@ blueprints = [
     clustersbp,
     organizationblp,
 ]
+
+if GATEWAY_ENABLED:
+    # Certificate and registration-token APIs only exist behind the gateway.
+    from blueprints.certificates_blueprints import certbp
+    from blueprints.registration_tokens_blueprints import tokensbp
+
+    blueprints += [certbp, tokensbp]

@@ -11,6 +11,7 @@ import grpc
 import requests
 from blueprints import blueprints
 from bson import json_util
+from ext_requests.cluster_requests import get_cluster_session
 from ext_requests.jwt_generator_requests import get_public_key
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import net_register_cluster
@@ -29,6 +30,11 @@ from proto.clusterRegistration_pb2_grpc import (
 )
 from resource_abstractor_client import candidate_operations
 from sm_logging import configure_logging
+from utils.certificates import (
+    ensure_ca_files,
+    ensure_server_files,
+)
+from utils.gateway import GATEWAY_ENABLED
 from utils.network import add_brackets_if_ipv6
 from werkzeug.utils import redirect, secure_filename
 
@@ -43,7 +49,9 @@ app = Flask(__name__)
 app.config["OPENAPI_VERSION"] = "3.0.2"
 app.config["API_TITLE"] = "Oakestra root api"
 app.config["API_VERSION"] = "v1"
-app.config["OPENAPI_URL_PREFIX"] = "/docs"
+# Behind the gateway only /api/* reaches system_manager, so the spec moves under /api.
+DOCS_URL_PREFIX = "/api/docs" if GATEWAY_ENABLED else "/docs"
+app.config["OPENAPI_URL_PREFIX"] = DOCS_URL_PREFIX
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["JWT_ALGORITHM"] = "RS256"
 app.config["JWT_PUBLIC_KEY"] = get_public_key()
@@ -66,6 +74,60 @@ socketio = SocketIO(
 mongo_init(app)
 create_admin()
 
+
+if GATEWAY_ENABLED:
+    from blueprints.certificates_blueprints import (
+        CRL_REFRESH_INTERVAL_HOURS,
+        ROTATION_CHECK_INTERVAL_SECONDS,
+        complete_expired_ca_rotation,
+        refresh_root_crl,
+        renew_server_cert_if_expiring,
+        warn_if_root_ca_expiring,
+        write_root_crl_from_db,
+    )
+
+    # Internal CA, server cert and CRL are only needed for the gateway's mTLS.
+    ROOT_PUBLIC_ADDRESS = os.environ.get("ROOT_PUBLIC_ADDRESS") or ""
+    _server_common_name = ROOT_PUBLIC_ADDRESS or "localhost"
+    _server_alt_names = [_server_common_name, "localhost", "system_manager"]
+    ensure_ca_files()
+    ensure_server_files(
+        common_name=_server_common_name,
+        alt_names=list(dict.fromkeys(_server_alt_names)),
+        valid_days=365,
+    )
+    # Re-sign the CRL on every start so an expired or stale one never survives a restart.
+    if not write_root_crl_from_db():
+        raise RuntimeError("Failed to write the CRL — check CA key permissions and logs")
+    warn_if_root_ca_expiring()
+    renew_server_cert_if_expiring()
+
+    def _refresh_crl_periodically():
+        # The CRL expires 30 days after it is signed, so re-sign it regularly; the
+        # first run also makes an already-running Kong drop a stale in-memory CRL.
+        delay = 60
+        while True:
+            time.sleep(delay)
+            delay = CRL_REFRESH_INTERVAL_HOURS * 3600
+            try:
+                refresh_root_crl()
+                warn_if_root_ca_expiring()
+                renew_server_cert_if_expiring()
+            except Exception:
+                logger.exception("Periodic CRL refresh failed")
+
+    threading.Thread(target=_refresh_crl_periodically, daemon=True).start()
+
+    def _end_expired_ca_rotation_periodically():
+        while True:
+            try:
+                complete_expired_ca_rotation()
+            except Exception:
+                logger.exception("Checking the CA rotation grace period failed")
+            time.sleep(ROTATION_CHECK_INTERVAL_SECONDS)
+
+    threading.Thread(target=_end_expired_ca_rotation_periodically, daemon=True).start()
+
 MY_PORT = os.environ.get("MY_PORT") or 10000
 MY_PORT_GRPC = os.environ.get("MY_PORT_GRPC") or 50052
 
@@ -82,7 +144,7 @@ api.spec.options["security"] = [{"bearerAuth": []}]
 
 # Swagger docs
 SWAGGER_URL = "/api/docs"
-API_URL = "/docs/openapi.json"
+API_URL = DOCS_URL_PREFIX + "/openapi.json"
 swaggerui_blueprint = get_swaggerui_blueprint(
     SWAGGER_URL,
     API_URL,
@@ -111,14 +173,19 @@ def _is_cluster_reachable(cluster_address, cluster_port):
     gRPC handshake reaches the root (the registration call happens at module
     import time, before the worker enters the accept loop).
     """
-    url = "http://{}:{}/api/cluster/status".format(
-        add_brackets_if_ipv6(cluster_address), cluster_port
+    if GATEWAY_ENABLED:
+        # Behind the gateway the advertised port is the cluster gateway's TLS listener.
+        scheme, probe = "https", get_cluster_session().get
+    else:
+        scheme, probe = "http", requests.get
+    url = "{}://{}:{}/api/cluster/status".format(
+        scheme, add_brackets_if_ipv6(cluster_address), cluster_port
     )
     deadline = time.monotonic() + CLUSTER_REACHABILITY_TOTAL_WINDOW
     last_exc = None
     while True:
         try:
-            resp = requests.get(url, timeout=CLUSTER_REACHABILITY_TIMEOUT)
+            resp = probe(url, timeout=CLUSTER_REACHABILITY_TIMEOUT)
             resp.raise_for_status()
             return True
         except requests.RequestException as exc:
