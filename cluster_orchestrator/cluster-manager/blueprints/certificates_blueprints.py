@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import unquote
@@ -341,16 +342,19 @@ class ClusterCertRefreshController(MethodView):
         }
 
 
-def _renew_cluster_certs_in_band(renew_intermediate: bool = False) -> tuple:
+def _renew_cluster_certs_in_band(
+    rotate_intermediate: bool = False, grace_hours: float | None = None
+) -> tuple:
     """Renew cluster mTLS certs using current certs as authentication secret.
 
-    Returns (success: bool, message: str).
+    grace_hours sets how long workers may migrate off a replaced intermediate; None uses
+    INTERMEDIATE_GRACE_PERIOD_HOURS. Returns (success: bool, message: str).
     """
     # Expiry checks, rotation detection and manual calls can all trigger a renewal.
     if not _renew_lock.acquire(blocking=False):
         return False, "A certificate renewal is already in progress"
     try:
-        return _renew_cluster_certs(renew_intermediate)
+        return _renew_cluster_certs(rotate_intermediate, grace_hours)
     finally:
         _renew_lock.release()
 
@@ -358,7 +362,7 @@ def _renew_cluster_certs_in_band(renew_intermediate: bool = False) -> tuple:
 _renew_lock = threading.Lock()
 
 
-def _renew_cluster_certs(renew_intermediate: bool) -> tuple:
+def _renew_cluster_certs(rotate_intermediate: bool, grace_hours: float | None = None) -> tuple:
     root_url = os.environ.get("SYSTEM_MANAGER_URL") or ""
     root_port = os.environ.get("SYSTEM_MANAGER_PORT") or "443"
     cluster_name = config.MY_CHOSEN_CLUSTER_NAME or ""
@@ -380,7 +384,7 @@ def _renew_cluster_certs(renew_intermediate: bool) -> tuple:
                 "csr": csr_pem,
                 "alt_names": alt_names,
                 "valid_days": 365,
-                "renew_intermediate": renew_intermediate,
+                "rotate_intermediate": rotate_intermediate,
             },
             cert=(config.CLUSTER_CERT_FILE, config.CLUSTER_KEY_FILE),
             verify=config.root_gateway_verify(),
@@ -401,7 +405,7 @@ def _renew_cluster_certs(renew_intermediate: bool) -> tuple:
             (config.CLUSTER_CERT_FILE, payload["client_cert"], 0o644),
             (config.ROOT_CA_FILE, payload["root_ca"], 0o644),
         ]
-        if renew_intermediate:
+        if rotate_intermediate:
             new_files += [
                 (config.CLUSTER_CA_CERT_FILE, payload["cluster_ca_cert"], 0o644),
                 (config.CLUSTER_CA_KEY_FILE, payload["cluster_ca_key"], 0o600),
@@ -416,13 +420,13 @@ def _renew_cluster_certs(renew_intermediate: bool) -> tuple:
         p.write_text(content)
         os.chmod(p, mode)
 
-    if renew_intermediate:
-        _keep_old_intermediate()
+    if rotate_intermediate:
+        _keep_old_intermediate(grace_hours)
     for path, content, mode in new_files:
         _write(path, content, mode)
 
     logger.info("Cluster certificates renewed in-band in %s", cert_dir)
-    if renew_intermediate:
+    if rotate_intermediate:
         # The client identity may move now: mosquitto accepts both intermediates until the
         # workers have migrated. The broker's server cert moves when the migration ends.
         write_cluster_mqtt_identity(cluster_name)
@@ -438,69 +442,138 @@ def _renew_cluster_certs(renew_intermediate: bool) -> tuple:
     return True, msg
 
 
-def _keep_old_intermediate():
+def _keep_old_intermediate(grace_hours: float | None = None):
     """Keep the replaced intermediate while workers migrate to the new one.
 
     Until the deadline mosquitto accepts both intermediates, /worker-renew accepts certs
     from either, and worker heartbeats trigger renewals onto the new one.
     """
+    if grace_hours is None:
+        grace_hours = config.INTERMEDIATE_GRACE_PERIOD_HOURS
     cert_path, key_path, expiry_path = get_old_cluster_ca_paths()
     cert_path.write_text(Path(config.CLUSTER_CA_CERT_FILE).read_text())
     os.chmod(cert_path, 0o644)
     key_path.write_text(Path(config.CLUSTER_CA_KEY_FILE).read_text())
     os.chmod(key_path, 0o600)
-    grace_ends = datetime.now(timezone.utc) + timedelta(
-        hours=config.INTERMEDIATE_GRACE_PERIOD_HOURS
-    )
+    grace_ends = datetime.now(timezone.utc) + timedelta(hours=grace_hours)
     expiry_path.write_text(grace_ends.isoformat())
     logger.info("Workers migrate to the new cluster intermediate CA until %s", grace_ends)
 
 
-def end_expired_worker_migration() -> bool:
-    """Drop the old intermediate once the migration deadline has passed.
+def complete_worker_migration(grace_ends=None) -> None:
+    """Drop the old intermediate, ending the worker migration.
 
     Moves the broker's server cert to the new intermediate and restarts the cluster's own
-    MQTT clients, which still hold the old identity and trust, by exiting this worker.
-    Workers that did not renew in time must re-bootstrap with a new token.
-    Returns False if there is no migration or it has not ended yet.
+    MQTT clients, which still hold the old identity and trust. Workers that did not renew
+    in time must re-bootstrap with a new token.
     """
     cert_path, key_path, expiry_path = get_old_cluster_ca_paths()
-    if not cert_path.is_file():
-        return False
-    grace_ends = datetime.fromisoformat(expiry_path.read_text().strip())
-    if datetime.now(timezone.utc) < grace_ends:
-        return False
-
     for path in (cert_path, key_path, expiry_path):
         path.unlink(missing_ok=True)
     write_mqtt_server_identity(config.MY_CHOSEN_CLUSTER_NAME, config.MY_CLUSTER_ADDRESS)
     refresh_cluster_crl()
     logger.warning(
-        "Worker migration to the new cluster intermediate CA ended at %s. Workers that did "
-        "not renew must re-bootstrap with a new token. Restarting the MQTT clients.",
-        grace_ends.isoformat(),
+        "Worker migration to the new cluster intermediate CA ended (deadline %s). Workers "
+        "that did not renew must re-bootstrap with a new token. Restarting the MQTT clients.",
+        grace_ends.isoformat() if grace_ends else "reached early",
     )
-    config.restart_cluster_service_manager()
-    os._exit(1)
+    _restart_mqtt_clients_soon()
+
+
+def _restart_mqtt_clients_soon() -> None:
+    """Restart both MQTT clients shortly, leaving time to answer the request first.
+
+    cluster_service_manager is restarted through docker; this worker exits and gunicorn
+    starts a new one, which reconnects with the new identity and trust.
+    """
+
+    def restart():
+        time.sleep(2)
+        config.restart_cluster_service_manager()
+        os._exit(1)
+
+    threading.Thread(target=restart, daemon=True).start()
+
+
+def end_expired_worker_migration() -> bool:
+    """End the worker migration if its deadline has passed. Returns True if it did."""
+    cert_path, _, expiry_path = get_old_cluster_ca_paths()
+    if not cert_path.is_file():
+        return False
+    grace_ends = datetime.fromisoformat(expiry_path.read_text().strip())
+    if datetime.now(timezone.utc) < grace_ends:
+        return False
+    complete_worker_migration(grace_ends)
+    return True
 
 
 @certbp.route("/renew")
 class ClusterCertRenewController(MethodView):
     def post(self):
-        """Renew this cluster's mTLS certificate material via in-band CSR.
+        """Renew this cluster's own mTLS certificate via in-band CSR.
 
-        Pass {"renew_intermediate": true} to also replace the cluster intermediate CA;
-        workers must then re-bootstrap to reconnect to MQTT.
+        The cluster intermediate CA is kept; use POST /api/certs/rotate to replace it.
+        Reachable via the internal gateway only.
+        """
+        success, message = _renew_cluster_certs_in_band()
+        if not success:
+            abort(502, message=message)
+        return {"message": message}
+
+
+@certbp.route("/rotate")
+class ClusterIntermediateRotateController(MethodView):
+    def post(self):
+        """Replace the cluster intermediate CA, keeping the old one while workers migrate.
+
+        The old intermediate stays trusted for grace_period_hours (default
+        INTERMEDIATE_GRACE_PERIOD_HOURS): mosquitto accepts certs from both, and each worker
+        is asked to renew through its heartbeat. Workers that have not renewed when the
+        migration ends must re-bootstrap with a new token. POST /api/certs/rotate-complete
+        ends it early.
+
+        grace_period_hours=0 rotates immediately (e.g. after an intermediate key compromise):
+        the old intermediate is never trusted again, every worker must re-bootstrap with a
+        new token, and cluster_manager and cluster_service_manager restart right after the
+        response.
 
         Reachable via the internal gateway only.
         """
         content = request.get_json(silent=True) or {}
+        try:
+            grace_hours = float(
+                content.get("grace_period_hours", config.INTERMEDIATE_GRACE_PERIOD_HOURS)
+            )
+        except (TypeError, ValueError):
+            abort(400, message="grace_period_hours must be a number")
+        if grace_hours < 0:
+            abort(400, message="grace_period_hours must not be negative")
+
         success, message = _renew_cluster_certs_in_band(
-            renew_intermediate=content.get("renew_intermediate") is True
+            rotate_intermediate=True, grace_hours=grace_hours
         )
         if not success:
             abort(502, message=message)
+        if grace_hours == 0:
+            complete_worker_migration()
+            message += " Worker migration skipped — only the new intermediate CA is trusted."
         return {"message": message}
+
+
+@certbp.route("/rotate-complete")
+class ClusterIntermediateRotateCompleteController(MethodView):
+    def post(self):
+        """End the worker migration early, dropping the previous intermediate CA.
+
+        Returns 409 if no migration is in progress. cluster_manager and
+        cluster_service_manager restart right after the response.
+
+        Reachable via the internal gateway only.
+        """
+        if not get_old_cluster_ca_paths()[0].is_file():
+            abort(409, message="No worker migration in progress")
+        complete_worker_migration()
+        return {"message": "Worker migration ended — only the new intermediate CA is trusted."}
 
 
 revoke_cert_schema = {

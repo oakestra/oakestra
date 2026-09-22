@@ -21,18 +21,10 @@ logger = logging.getLogger("system_manager")
 
 tokensbp = BlueprintExt("Registration tokens", "tokens", url_prefix="/api/tokens")
 
-cluster_token_schema = {
-    "type": "object",
-    "properties": {
-        "ttl_minutes": {"type": "integer", "minimum": 1},
-    },
-}
-
 worker_token_schema = {
     "type": "object",
     "properties": {
         "cluster_id": {"type": "string"},
-        "ttl_minutes": {"type": "integer", "minimum": 1},
     },
     "required": ["cluster_id"],
 }
@@ -53,16 +45,12 @@ def _root_public_address() -> str:
 
 @tokensbp.route("/cluster")
 class ClusterRegistrationTokenController(Resource):
-    @tokensbp.arguments(schema=cluster_token_schema, location="json", validate=False, unknown=True)
     @jwt_required()
     @require_any_role(Role.ADMIN, Role.INF_Provider)
     def post(self, *args, **kwargs):
-        content = request.get_json(silent=True) or {}
-
         token, expiry_date = create_registration_token(
             token_type=TOKEN_TYPE_CLUSTER,
             created_by=get_jwt_auth_identity(),
-            ttl_minutes=content.get("ttl_minutes"),
         )
 
         root_address = _root_public_address()
@@ -92,7 +80,7 @@ class WorkerRegistrationTokenController(Resource):
 
         # The token hash lives only at the target cluster, which validates
         # worker redemptions locally — the root keeps no copy.
-        token, token_hash, expiry_date = generate_token(content.get("ttl_minutes"))
+        token, token_hash, expiry_date = generate_token()
         try:
             response = cluster_push_worker_token(cluster, token_hash, expiry_date.isoformat())
         except requests.exceptions.RequestException as e:

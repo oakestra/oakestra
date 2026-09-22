@@ -221,7 +221,7 @@ services:
         strip_path: false
 
       # CA lifecycle administration (JWT + Admin role in the application):
-      # /reset, /renew-server, /sign, /generate-client, /generate-cluster, /revoke.
+      # /rotate, /rotate-complete, /renew, /sign, /generate-client, /generate-cluster, /revoke.
       - name: sm-certs-admin-public
         paths:
           - /api/certs

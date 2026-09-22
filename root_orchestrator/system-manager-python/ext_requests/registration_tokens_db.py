@@ -19,23 +19,20 @@ def hash_registration_token(token: str) -> str:
     return hashlib.pbkdf2_hmac("sha256", token.encode("ascii"), b"", 100000).hex()
 
 
-def generate_token(ttl_minutes: int = None) -> tuple[str, str, datetime]:
+def generate_token() -> tuple[str, str, datetime]:
     """Generate a one-time token without persisting it.
 
     Returns (token, token_hash, expiry_date). Used for worker tokens, whose
     hash is pushed to the target cluster instead of being stored at the root.
     """
-    ttl = int(ttl_minutes or DEFAULT_TOKEN_TTL_MINUTES)
     token = secrets.token_urlsafe(32)
-    expiry_date = datetime.now(timezone.utc) + timedelta(minutes=ttl)
+    expiry_date = datetime.now(timezone.utc) + timedelta(minutes=DEFAULT_TOKEN_TTL_MINUTES)
     return token, hash_registration_token(token), expiry_date
 
 
-def create_registration_token(
-    token_type: str, created_by: str, ttl_minutes: int = None
-) -> tuple[str, datetime]:
+def create_registration_token(token_type: str, created_by: str) -> tuple[str, datetime]:
     """Create and persist a one-time registration token. Returns (token, expiry_date)."""
-    token, token_hash, expiry_date = generate_token(ttl_minutes)
+    token, token_hash, expiry_date = generate_token()
     db.mongo_registration_tokens.insert_one(
         {
             "token_hash": token_hash,

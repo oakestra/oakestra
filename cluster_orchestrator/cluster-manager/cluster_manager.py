@@ -288,14 +288,12 @@ def _warn_if_intermediate_expiring():
     if days < 0:
         logger.error(
             "The cluster intermediate CA has EXPIRED — workers cannot connect to MQTT. "
-            'Replace it with POST /api/certs/renew {"renew_intermediate": true}, '
-            "then re-bootstrap every worker."
+            "Replace it with POST /api/certs/rotate, then re-bootstrap every worker."
         )
     elif days <= _INTERMEDIATE_WARN_DAYS:
         logger.warning(
             "The cluster intermediate CA expires in %d day(s). Replace it with "
-            'POST /api/certs/renew {"renew_intermediate": true}, then re-bootstrap every '
-            "worker.",
+            "POST /api/certs/rotate; workers then migrate to it automatically.",
             days,
         )
 

@@ -1047,7 +1047,7 @@ Only applies when the deployment uses `override-gateway.yml`. In gateway mode:
 
 - All external traffic enters through Kong: root `kong_external` (:443), cluster `cluster_kong_external` (:8443 TLS, :8080 cleartext). Internal admin gateways listen on loopback only: root `kong_internal` (127.0.0.1:8000), cluster `cluster_kong_internal` (127.0.0.1:8888).
 - The gateways present a **public server certificate** from `<certs>/public/fullchain.pem|privkey.pem` — a separate certificate system from the internal mTLS CA. It is **bring-your-own and required** (no auto-generated fallback); the init containers fail fast if it's missing.
-- **User endpoints** need no client certificate (app-level JWT auth). **Machine-to-machine routes** (cluster registration gRPC, `/api/information`, `/api/certs/cluster-renew` at the root; `/api/net/*`, `/api/node/register`, `/api/service`, `/api/result/deploy`, `/api/certs/worker-token`, `/api/certs/worker-renew` at the cluster) require an mTLS client certificate signed by the internal root CA — without one they return `401 mTLS client certificate required`. The cluster's `/api/certs/renew` and `/api/certs/refresh` are on the internal gateway only.
+- **User endpoints** need no client certificate (app-level JWT auth). **Machine-to-machine routes** (cluster registration gRPC, `/api/information`, `/api/certs/cluster-renew` at the root; `/api/net/*`, `/api/node/register`, `/api/service`, `/api/result/deploy`, `/api/certs/worker-token`, `/api/certs/worker-renew` at the cluster) require an mTLS client certificate signed by the internal root CA — without one they return `401 mTLS client certificate required`. The cluster's `/api/certs/renew`, `/api/certs/rotate`, `/api/certs/rotate-complete` and `/api/certs/refresh` are on the internal gateway only.
 - New clusters/workers obtain their certificates automatically with **one-time registration tokens** (default TTL 10 min, single use). Afterwards every certificate is renewed automatically — see 18.7 for the lifecycle and what stays manual.
 
 ### 18.1 Check the cert-init containers
@@ -1119,7 +1119,7 @@ curl -ks -X POST https://<ROOT_IP>/api/tokens/worker -H "Authorization: Bearer $
 | `POST /api/tokens/worker` returns 502 | Root cannot deliver the token hash to the cluster over mTLS | Check root→cluster connectivity (STEP 7.1) and that the cluster gateway is up with valid certs |
 | Bootstrap endpoint returns 401 | Token invalid, expired (TTL default 10 min), or already used (single-use) | Mint a fresh token |
 | Worker bootstrap returns 400 (`CSR parsing failed` / `CSR has no common name`) | NodeEngine and cluster_manager from different versions — the worker bootstrap sends a CSR (`token`, `csr`) and gets no private key back | Run matching NodeEngine and cluster versions |
-| TLS handshake fails on *any* route after `/api/certs/reset` | Peer still presents a cert signed by the old root CA — nginx rejects invalid client certs even in `optional` mode | Re-bootstrap the cluster/worker with a fresh token; restart `cluster_kong_external` after replacing the cluster's `ca.crt` |
+| TLS handshake fails on *any* route after a root CA rotation ended (`grace_period_hours: 0`, `rotate-complete`, or the deadline passed) | Peer still presents a cert signed by the old root CA — nginx rejects invalid client certs even in `optional` mode | Re-bootstrap the cluster/worker with a fresh token; restart `cluster_kong_external` after replacing the cluster's `ca.crt` |
 | `cert_init` / `cluster_cert_bootstrap` exits 1: "public gateway certificate not found" | No BYO public cert provided (required — there is no fallback) | Drop `public/fullchain.pem`+`privkey.pem` into `<certs>/public/` and restart |
 | Browser warns about untrusted cert | The BYO public cert is privately issued (not from a public CA) | Use a publicly trusted cert (e.g. Let's Encrypt), or install your CA into the client's trust store |
 | cluster_manager can't reach root: certificate verify failed | `ROOT_GATEWAY_TRUST` mismatch — default `system` but the BYO public cert is privately issued (not in the OS trust store) | Set `ROOT_GATEWAY_TRUST` to the CA-bundle path for that cert, as a path inside the container (e.g. `/certs/…`); same logic for `CLUSTER_GATEWAY_TRUST` on the root |
@@ -1137,7 +1137,7 @@ docker exec kong_external kong reload
 
 ### 18.6 Certificate revocation lists (CRLs)
 
-Kong (root, `revoked.crl`) and mosquitto (cluster, `cluster_revoked.crl`) reject **every** client certificate when their CRL is expired or was signed by a CA key that has since been replaced — even if nothing is revoked. CRLs are signed for 30 days. `system_manager` and `cluster_manager` re-sign them from MongoDB at startup and every `CRL_REFRESH_INTERVAL_HOURS` (default 24; the first refresh, which also reloads Kong/mosquitto, runs one minute after startup). `POST /api/certs/reset` clears all revocations and re-signs the root CRL. mosquitto only accepts MQTT client certificates issued by the cluster intermediate CA (the CRL's issuer), so the cluster's own services use `cluster_mqtt.crt` rather than the root-issued `cluster.crt`; a client certificate from any other issuer fails with `unable to get certificate CRL`.
+Kong (root, `revoked.crl`) and mosquitto (cluster, `cluster_revoked.crl`) reject **every** client certificate when their CRL is expired or was signed by a CA key that has since been replaced — even if nothing is revoked. CRLs are signed for 30 days. `system_manager` and `cluster_manager` re-sign them from MongoDB at startup and every `CRL_REFRESH_INTERVAL_HOURS` (default 24; the first refresh, which also reloads Kong/mosquitto, runs one minute after startup). Ending a root CA rotation clears all revocations and re-signs the root CRL. mosquitto only accepts MQTT client certificates issued by the cluster intermediate CA (the CRL's issuer), so the cluster's own services use `cluster_mqtt.crt` rather than the root-issued `cluster.crt`; a client certificate from any other issuer fails with `unable to get certificate CRL`.
 
 During a transition each CRL file holds **two** CRLs — one per trusted CA — because OpenSSL rejects a certificate whose issuer has no CRL: `revoked.crl` during a root CA rotation grace period (signed by the new and old root CA), `cluster_revoked.crl` while workers migrate to a new intermediate. `grep -c "BEGIN X509 CRL" <file>` shows 2 then, and 1 otherwise. The `openssl crl … -CAfile` check below only checks the first CRL in the file.
 
@@ -1167,7 +1167,7 @@ Every certificate below renews itself; the "Manual" column is all an operator ha
 | Root CA (root `ca.crt`/`ca.key`) | self | 10 years | No — warning from 90 days before expiry | `POST /api/certs/rotate` before it expires (see below) |
 | Root identity towards clusters (root `server.crt`) | root CA | 365 days | 30 days before expiry, and when a rotation ends | — |
 | Cluster client cert (cluster `cluster.crt`) | root CA | 365 days | 30 days before expiry (in-band CSR to `/api/certs/cluster-renew`), and right after a root CA rotation | — |
-| Cluster intermediate CA (cluster `cluster_ca.crt`/`.key`) | root CA | 5 years (never beyond the root CA) | After a root CA rotation — warning from 90 days before expiry otherwise | Replace it before it expires (see below) |
+| Cluster intermediate CA (cluster `cluster_ca.crt`/`.key`) | root CA | 5 years (never beyond the root CA) | Rotated after a root CA rotation — warning from 90 days before expiry otherwise | `POST /api/certs/rotate` on the cluster before it expires (see below) |
 | Cluster MQTT client identity (`cluster_mqtt.crt`) | intermediate | 365 days | 30 days before expiry; restarts `cluster_service_manager` and `cluster_manager` | — |
 | MQTT broker server cert (`mqtt_server.crt`) | intermediate | 365 days | 30 days before expiry, and when a worker migration ends; mosquitto reloads without dropping connections | — |
 | Worker cert (`/etc/oakestra/certs/worker.crt`) | intermediate | 365 days | `WORKER_CERT_RENEW_DAYS` (30) before expiry, or when issued by a replaced intermediate — triggered by the worker heartbeat. NodeEngine and NetManager then reconnect to the broker with the new files, without restarting | — |
@@ -1208,11 +1208,24 @@ Everything after that is automatic:
 4. After `INTERMEDIATE_GRACE_PERIOD_HOURS` the cluster drops the old intermediate, switches the broker cert and restarts its own MQTT clients.
 5. After `grace_period_hours` the root drops the old CA and re-issues `server.crt`. `POST /api/certs/rotate-complete` ends this early.
 
-Clusters offline for the whole root grace period, and workers offline for the whole migration, are locked out and need a new token (STEP 15). `POST /api/certs/reset` instead replaces the root CA **without** a grace period — every cluster and worker must re-register.
+Clusters offline for the whole root grace period, and workers offline for the whole migration, are locked out and need a new token (STEP 15). `{"grace_period_hours": 0}` instead replaces the root CA **without** a grace period (e.g. after a CA key compromise) — the old CA is never trusted again and every cluster and worker must re-register.
 
 **Replacing a cluster's intermediate CA** (cluster host, internal gateway; workers migrate automatically as in steps 3–4):
 ```bash
-curl -s -X POST http://localhost:8888/api/certs/renew -H "Content-Type: application/json" -d '{"renew_intermediate": true}'
+# Start the migration: the previous intermediate stays trusted until the deadline
+# (optional body {"grace_period_hours": N}, default INTERMEDIATE_GRACE_PERIOD_HOURS;
+# keep N well above 10 minutes so every worker is asked to renew in time)
+curl -s -X POST http://localhost:8888/api/certs/rotate
+# Compromised intermediate key: rotate without a migration. The old intermediate is
+# never trusted again, every worker must re-bootstrap with a new token, and
+# cluster_manager and cluster_service_manager restart right after the response
+curl -s -X POST http://localhost:8888/api/certs/rotate \
+  -H "Content-Type: application/json" -d '{"grace_period_hours": 0}'
+# Optional: end it early once every worker has renewed (cluster_manager and
+# cluster_service_manager restart right after the response)
+curl -s -X POST http://localhost:8888/api/certs/rotate-complete
+# Renew only the cluster's own client cert, keeping the intermediate
+curl -s -X POST http://localhost:8888/api/certs/renew
 ```
 
 **Failure modes:**

@@ -193,17 +193,6 @@ def refresh_root_crl() -> dict:
 
 # --------- ROUTES ---------
 
-create_ca_schema = {
-    "type": "object",
-    "properties": {
-        "common_name": {"type": "string"},
-        "alt_names": {"type": "array", "items": {"type": "string"}},
-        "server_valid_days": {"type": "integer", "minimum": 1},
-        "ca_common_name": {"type": "string"},
-        "ca_valid_days": {"type": "integer", "minimum": 1},
-    },
-}
-
 renew_server_schema = {
     "type": "object",
     "properties": {
@@ -256,69 +245,15 @@ cluster_bootstrap_schema = {
 }
 
 
-@certbp.route("/reset")
-class CertificateAuthorityResetController(Resource):
-    @jwt_required()
-    @require_role(Role.ADMIN)
-    def post(self):
-        """Rotate the internal CA + server cert."""
-        content = request.get_json(silent=True) or {}
-
-        # Generate new CA
-        old_ca_data = None
-        if get_ca_cert_path().exists():
-            old_ca_data = get_ca_cert_path().read_text()
-
-        ca_created = regenerate_ca_files(
-            valid_days=int(content.get("valid_days") or 3650),
-            common_name=content.get("ca_common_name") or "Oakestra Root CA",
-        )
-
-        server_common_name = content.get("common_name") or "localhost"
-        server_alt_names = content.get("alt_names") or [server_common_name]
-        server_created = regenerate_server_files(
-            common_name=server_common_name,
-            alt_names=server_alt_names,
-            valid_days=int(content.get("server_valid_days") or 365),
-        )
-
-        # Revocations belong to the replaced CA: clear them and re-sign an empty CRL with the new key.
-        revoked_cleared = clear_revoked_certs()
-        crl_ok = regenerate_root_crl([])
-
-        # Update Kong's client-verification CA
-        kong_updated, kong_message = _update_kong_certificate(old_ca_data)
-
-        # Reload kong nginx server with new certificates
-        reload_ok, reload_message = _reload_kong_nginx()
-
-        return {
-            "created": ca_created and server_created,
-            "ca_cert": str(get_ca_cert_path()),
-            "revoked_certs_cleared": revoked_cleared,
-            "crl_regenerated": crl_ok,
-            "server_cert": str(get_server_cert_path()),
-            "server_key": str(get_server_key_path()),
-            "kong_updated": kong_updated,
-            "kong_status": kong_message,
-            "kong_reloaded": reload_ok,
-            "kong_reload_status": reload_message,
-            "message": (
-                "CA and server certificate material ready, Kong gateway updated and reloaded"
-                if kong_updated and reload_ok
-                else "CA and server certificate material ready, but some Kong steps failed"
-            ),
-        }
-
-
-@certbp.route("/renew-server")
+@certbp.route("/renew")
 class CertificateServerRenewController(Resource):
     @jwt_required()
     @require_role(Role.ADMIN)
     def post(self):
-        if not get_ca_cert_path().exists():
-            abort(409, {"message": "CA material not initialized — call /reset first"})
+        """Re-issue the root's server.crt, its client certificate towards the clusters.
 
+        Also renewed automatically 30 days before expiry and when a CA rotation ends.
+        """
         content = request.get_json(silent=True) or {}
         server_common_name = content.get("common_name") or "localhost"
         server_alt_names = content.get("alt_names") or [server_common_name]
@@ -491,7 +426,7 @@ rotate_ca_schema = {
     "properties": {
         "ca_common_name": {"type": "string"},
         "ca_valid_days": {"type": "integer", "minimum": 1},
-        "grace_period_hours": {"type": "number", "exclusiveMinimum": 0},
+        "grace_period_hours": {"type": "number", "minimum": 0},
     },
 }
 
@@ -501,7 +436,7 @@ cluster_renew_schema = {
         "csr": {"type": "string"},
         "alt_names": {"type": "array", "items": {"type": "string"}},
         "valid_days": {"type": "integer", "minimum": 1},
-        "renew_intermediate": {"type": "boolean"},
+        "rotate_intermediate": {"type": "boolean"},
     },
     "required": ["csr"],
 }
@@ -588,9 +523,17 @@ class CertificateAuthorityRotateController(Resource):
         The grace period ends automatically after grace_period_hours (default
         ROTATION_GRACE_PERIOD_HOURS), or earlier via POST /api/certs/rotate-complete.
         Clusters that have not renewed by then must be re-registered with a new token.
+
+        grace_period_hours=0 rotates immediately (e.g. after a CA key compromise): the old
+        CA is never trusted again and every cluster must be re-registered with a new token.
         """
         content = request.get_json(silent=True) or {}
-        grace_hours = float(content.get("grace_period_hours") or ROTATION_GRACE_PERIOD_HOURS)
+        try:
+            grace_hours = float(content.get("grace_period_hours", ROTATION_GRACE_PERIOD_HOURS))
+        except (TypeError, ValueError):
+            abort(400, {"message": "grace_period_hours must be a number"})
+        if grace_hours < 0:
+            abort(400, {"message": "grace_period_hours must not be negative"})
         rotated_at = datetime.now(timezone.utc)
 
         ca_path = get_ca_cert_path()
@@ -617,6 +560,19 @@ class CertificateAuthorityRotateController(Resource):
             common_name=common_name,
         )
         new_ca_pem = ca_path.read_text()
+
+        if grace_hours == 0:
+            # No grace period: complete the rotation straight away, which also ends one
+            # still in progress, clears revocations and re-issues server.crt.
+            return {
+                **complete_ca_rotation(),
+                "grace_period_active": False,
+                "grace_period_ends": None,
+                "message": (
+                    "CA rotated without a grace period — only the new CA is trusted. "
+                    "Every cluster must be re-registered with a new token."
+                ),
+            }
 
         # Write dual-CA bundle: nginx's ssl_client_certificate accepts a
         # concatenated PEM file and will verify client certs against either CA.
@@ -674,7 +630,7 @@ class ClusterCertRenewController(Resource):
 
         alt_names = content.get("alt_names") or []
         valid_days = int(content.get("valid_days") or 365)
-        renew_intermediate = content.get("renew_intermediate") is True
+        rotate_intermediate = content.get("rotate_intermediate") is True
 
         try:
             # Extract CN from the CSR subject to name the new intermediate CA.
@@ -688,13 +644,13 @@ class ClusterCertRenewController(Resource):
                 "client_cert": sign_csr_pem(csr_pem=csr_pem, valid_days=valid_days),
                 "root_ca": get_ca_cert_path().read_text(),
             }
-            if renew_intermediate:
+            if rotate_intermediate:
                 # The cluster trusts the old and new intermediate while its workers migrate,
                 # and OpenSSL matches certs and CRLs to their issuer by name, so the names
                 # must differ.
-                renewed_at = datetime.now(timezone.utc)
+                rotated_at = datetime.now(timezone.utc)
                 response["cluster_ca_key"], response["cluster_ca_cert"] = generate_intermediate_ca(
-                    common_name=f"{common_name} {renewed_at:%Y-%m-%d %H:%M:%S}",
+                    common_name=f"{common_name} {rotated_at:%Y-%m-%d %H:%M:%S}",
                     alt_names=alt_names or None,
                     valid_days=1825,
                 )
@@ -706,7 +662,7 @@ class ClusterCertRenewController(Resource):
         logger.info(
             "Issued renewed cert material for cluster '%s' via in-band CSR (intermediate: %s)",
             common_name,
-            "renewed" if renew_intermediate else "kept",
+            "rotated" if rotate_intermediate else "kept",
         )
         return response
 
@@ -746,7 +702,7 @@ def complete_ca_rotation() -> dict:
     if certs:
         ca_path.write_text(certs[0] + "\n")
 
-    get_old_ca_cert_path().unlink()
+    get_old_ca_cert_path().unlink(missing_ok=True)
     get_old_ca_key_path().unlink(missing_ok=True)
     _grace_expiry_path().unlink(missing_ok=True)
 

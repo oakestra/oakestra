@@ -127,7 +127,7 @@ def _renew_if_root_ca_rotated(resp):
     _last_rotation_renew_attempt = time.monotonic()
 
     logger.warning("Root CA was rotated — renewing cluster certificates and intermediate CA")
-    success, message = _renew_cluster_certs_in_band(renew_intermediate=True)
+    success, message = _renew_cluster_certs_in_band(rotate_intermediate=True)
     if success:
         logger.info("Cluster certificate renewal after root CA rotation succeeded: %s", message)
     else:
