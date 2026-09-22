@@ -12,8 +12,8 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import config
-from ext_requests.cluster_certificates import cluster_ca_key_ids
-from ext_requests.token_db import pop_worker_renewal, store_revoked_cert
+from ext_requests.certificates_db import pop_worker_renewal, store_revoked_cert
+from utils.certificates import cluster_ca_key_ids
 
 logger = logging.getLogger("cluster_manager")
 

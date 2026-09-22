@@ -1,24 +1,20 @@
 import hashlib
 import logging
-import os
 from datetime import datetime, timezone
 
-from pymongo import MongoClient
+import ext_requests.mongodb_client as db
 
 logger = logging.getLogger("cluster_manager")
 
-CLUSTER_MONGO_URL = os.environ.get("CLUSTER_MONGO_URL", "localhost")
-CLUSTER_MONGO_PORT = os.environ.get("CLUSTER_MONGO_PORT", 10107)
-
 _worker_tokens = None
 _revoked_certs = None
+_worker_renewals = None
 
 
-def _collection():
+def _worker_tokens_collection():
     global _worker_tokens
     if _worker_tokens is None:
-        client = MongoClient(f"mongodb://{CLUSTER_MONGO_URL}:{CLUSTER_MONGO_PORT}/")
-        _worker_tokens = client["clusters"]["worker_tokens"]
+        _worker_tokens = db.get_collection("worker_tokens")
         # Mongo TTL monitor garbage-collects expired one-time tokens.
         _worker_tokens.create_index("expiry_date", expireAfterSeconds=0)
     return _worker_tokens
@@ -27,11 +23,63 @@ def _collection():
 def _revoked_certs_collection():
     global _revoked_certs
     if _revoked_certs is None:
-        client = MongoClient(f"mongodb://{CLUSTER_MONGO_URL}:{CLUSTER_MONGO_PORT}/")
-        _revoked_certs = client["clusters"]["revoked_certs"]
+        _revoked_certs = db.get_collection("revoked_certs")
         # TTL: 730 days (twice max cert validity)
         _revoked_certs.create_index("revoked_at", expireAfterSeconds=63072000)
     return _revoked_certs
+
+
+def _worker_renewals_collection():
+    global _worker_renewals
+    if _worker_renewals is None:
+        _worker_renewals = db.get_collection("worker_cert_renewals")
+        _worker_renewals.create_index("old_not_after", expireAfterSeconds=0)
+    return _worker_renewals
+
+
+# ---------------------------------------------------------------------------
+# Worker registration tokens
+# ---------------------------------------------------------------------------
+
+
+def hash_worker_token(token: str) -> str:
+    # Same recipe as the root's registration tokens: only hashes are stored.
+    return hashlib.pbkdf2_hmac("sha256", token.encode("ascii"), b"", 100000).hex()
+
+
+def store_token_hash(token_hash: str, expiry_date: datetime) -> None:
+    _worker_tokens_collection().insert_one(
+        {
+            "token_hash": token_hash,
+            "expiry_date": expiry_date,
+            "created_at": datetime.now(timezone.utc),
+        }
+    )
+
+
+def consume_token(token: str) -> dict:
+    """Redeem a one-time worker token. Returns the document, or None if invalid.
+
+    Delete-first semantics guarantee single use: even a token that turns out
+    to be expired is removed on its first presentation.
+    """
+    if not token:
+        return None
+    doc = _worker_tokens_collection().find_one_and_delete({"token_hash": hash_worker_token(token)})
+    if doc is None:
+        return None
+    expiry_date = doc["expiry_date"]
+    if expiry_date.tzinfo is None:
+        expiry_date = expiry_date.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) >= expiry_date:
+        logger.info("Rejected expired worker registration token")
+        return None
+    return doc
+
+
+# ---------------------------------------------------------------------------
+# Revoked certificates
+# ---------------------------------------------------------------------------
 
 
 def normalize_serial_hex(serial_hex: str) -> str:
@@ -99,16 +147,9 @@ def is_revoked(serial_hex: str) -> bool:
     return _revoked_certs_collection().count_documents({"serial_hex": serial_hex}, limit=1) > 0
 
 
-_worker_renewals = None
-
-
-def _worker_renewals_collection():
-    global _worker_renewals
-    if _worker_renewals is None:
-        client = MongoClient(f"mongodb://{CLUSTER_MONGO_URL}:{CLUSTER_MONGO_PORT}/")
-        _worker_renewals = client["clusters"]["worker_cert_renewals"]
-        _worker_renewals.create_index("old_not_after", expireAfterSeconds=0)
-    return _worker_renewals
+# ---------------------------------------------------------------------------
+# Worker certificate renewals
+# ---------------------------------------------------------------------------
 
 
 def store_worker_renewal(
@@ -128,38 +169,3 @@ def store_worker_renewal(
 def pop_worker_renewal(new_serial_hex: str):
     """Return and remove the renewal that issued new_serial_hex, or None."""
     return _worker_renewals_collection().find_one_and_delete({"new_serial_hex": new_serial_hex})
-
-
-def hash_worker_token(token: str) -> str:
-    # Same recipe as the root's registration tokens: only hashes are stored.
-    return hashlib.pbkdf2_hmac("sha256", token.encode("ascii"), b"", 100000).hex()
-
-
-def store_token_hash(token_hash: str, expiry_date: datetime) -> None:
-    _collection().insert_one(
-        {
-            "token_hash": token_hash,
-            "expiry_date": expiry_date,
-            "created_at": datetime.now(timezone.utc),
-        }
-    )
-
-
-def consume_token(token: str) -> dict:
-    """Redeem a one-time worker token. Returns the document, or None if invalid.
-
-    Delete-first semantics guarantee single use: even a token that turns out
-    to be expired is removed on its first presentation.
-    """
-    if not token:
-        return None
-    doc = _collection().find_one_and_delete({"token_hash": hash_worker_token(token)})
-    if doc is None:
-        return None
-    expiry_date = doc["expiry_date"]
-    if expiry_date.tzinfo is None:
-        expiry_date = expiry_date.replace(tzinfo=timezone.utc)
-    if datetime.now(timezone.utc) >= expiry_date:
-        logger.info("Rejected expired worker registration token")
-        return None
-    return doc

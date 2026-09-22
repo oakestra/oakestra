@@ -1,7 +1,6 @@
 import logging
 
 from bson import json_util
-from ext_requests.certificates import current_ca_cert_pem
 from ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from flask import request
 from flask.views import MethodView
@@ -9,6 +8,7 @@ from flask_smorest import Blueprint, abort
 from oakestra_utils.types.statuses import convert_to_status
 from resource_abstractor_client import candidate_operations
 from services.instance_management import update_job_status
+from utils.certificates import current_ca_cert_pem
 from utils.gateway import GATEWAY_ENABLED
 
 logger = logging.getLogger("system_manager")

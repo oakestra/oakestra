@@ -263,18 +263,10 @@ services:
 
   # Explicitly block endpoints that must not be reachable externally:
   # the scheduler callback (/api/result, no app-level auth), grafana,
-  # /api/certs/public (BYO cert upload — private key must not cross external TLS),
   # and a fallback deny for any unlisted API path.
   - name: system_manager_admin_block
     url: http://system_manager:10000
     routes:
-      # Block BYO public cert upload: the private key must not cross the external
-      # TLS termination point. More specific than /api/certs so Kong matches first.
-      - name: sm-block-certs-public
-        paths:
-          - /api/certs/public
-        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
-        strip_path: false
       # Fallback deny: any API path not matched by the explicit prefix allowlist above stays blocked.
       - name: sm-block-api-fallback
         paths:

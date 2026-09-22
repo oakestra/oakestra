@@ -238,6 +238,16 @@ def load_old_cluster_ca():
     return cert, key
 
 
+def issued_by_cluster_ca(cert) -> bool:
+    """Check the signature against intermediate CA"""
+    candidates = [Path(CLUSTER_CA_CERT_FILE).read_text()]
+    old = load_old_cluster_ca()
+    if old is not None:
+        candidates.append(old[0].public_bytes(serialization.Encoding.PEM).decode("utf-8"))
+    cert_pem = cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
+    return any(cert_issued_by(cert_pem, ca_pem) for ca_pem in candidates)
+
+
 def key_id(cert) -> str:
     """Hex key identifier of a CA cert, as found in the AKI of the certs it issues."""
     return x509.SubjectKeyIdentifier.from_public_key(cert.public_key()).digest.hex()

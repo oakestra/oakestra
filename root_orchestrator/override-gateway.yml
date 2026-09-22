@@ -258,7 +258,6 @@ services:
     image: kong/deck:v1.56.0
     container_name: kong_init
     volumes:
-      - ${ROOT_CERT_PATH:-./config/certs}:/certs:ro
       - ./config/kong/init-gateway.sh:/init-gateway.sh:ro
       - ./config/kong/external.yaml:/external.yaml:ro
       - ./config/kong/internal.yaml:/internal.yaml:ro

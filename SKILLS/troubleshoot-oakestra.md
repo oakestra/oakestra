@@ -1127,8 +1127,9 @@ curl -ks -X POST https://<ROOT_IP>/api/tokens/worker -H "Authorization: Bearer $
 ### 18.5 Kong gateway state
 
 ```bash
-# Verify the client-verification CA entity is loaded (UUID is fixed)
-docker exec kong_external curl -s http://localhost:8001/ca_certificates/cafe0000-0000-4000-8000-000000000000 | head -5
+# Client certs are verified by nginx against these files (not a Kong Admin API entity);
+# after changing either on disk, run `kong reload`
+docker exec kong_external printenv KONG_NGINX_PROXY_SSL_CLIENT_CERTIFICATE KONG_NGINX_PROXY_SSL_CRL
 # Check guarded routes carry the pre-function plugin
 docker exec kong_external curl -s http://localhost:8001/routes | python3 -c "import json,sys; [print(r['name']) for r in json.load(sys.stdin)['data']]"
 # Reload after replacing certificate files on disk
@@ -1172,7 +1173,7 @@ Every certificate below renews itself; the "Manual" column is all an operator ha
 | MQTT broker server cert (`mqtt_server.crt`) | intermediate | 365 days | 30 days before expiry, and when a worker migration ends; mosquitto reloads without dropping connections | — |
 | Worker cert (`/etc/oakestra/certs/worker.crt`) | intermediate | 365 days | `WORKER_CERT_RENEW_DAYS` (30) before expiry, or when issued by a replaced intermediate — triggered by the worker heartbeat. NodeEngine and NetManager then reconnect to the broker with the new files, without restarting | — |
 | CRLs (`revoked.crl`, `cluster_revoked.crl`) | root CA / intermediate | 30 days | Re-signed daily | — |
-| Public gateway certs (`public/*`) | your CA (BYO) | yours | No | Renew them yourself (`PUT /api/certs/public` on the root) |
+| Public gateway certs (`public/*`) | your CA (BYO) | yours | No | Renew them yourself: replace `fullchain.pem`/`privkey.pem` in `<certs>/public/`, `sudo chown 1000:1000` them (the kong user must read the key), then `docker exec kong_external kong reload` (root) or `cluster_kong_external` (cluster) |
 
 ```bash
 # Expiry and issuer of every certificate (run on the root/cluster host; worker files need sudo)

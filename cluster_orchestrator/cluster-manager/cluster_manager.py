@@ -171,12 +171,7 @@ def _try_register() -> bool:
 
 
 def register_with_system_manager():
-    """Register with the system manager over grpc.
-
-    In gateway mode the channel uses mTLS. A cluster whose certificates were
-    rejected is re-registered by setting a new CLUSTER_REGISTRATION_TOKEN, which
-    cluster_cert_bootstrap redeems before this process starts.
-    """
+    """Register with the system manager over grpc."""
     if not config.MY_CLUSTER_ADDRESS:
         raise RuntimeError(
             "CLUSTER_ADDRESS env var is not set. Set CLUSTER_ADDRESS to "
@@ -206,7 +201,7 @@ def _check_cluster_cert_expiry():
         from pathlib import Path
 
         from blueprints.certificates_blueprints import _renew_cluster_certs_in_band
-        from ext_requests.cluster_certificates import cert_expires_in
+        from utils.certificates import cert_expires_in
 
         pem = Path(config.CLUSTER_CERT_FILE).read_text()
         remaining = cert_expires_in(pem)
@@ -250,7 +245,7 @@ def _check_mqtt_server_cert_expiry():
     Skipped while workers migrate to a new intermediate; the migration's end re-issues it.
     """
     try:
-        from ext_requests.cluster_certificates import (
+        from utils.certificates import (
             cert_expires_in,
             get_mqtt_server_identity_paths,
             get_old_cluster_ca_paths,
@@ -279,7 +274,7 @@ def _warn_if_intermediate_expiring():
     try:
         from pathlib import Path
 
-        from ext_requests.cluster_certificates import cert_expires_in
+        from utils.certificates import cert_expires_in
 
         days = cert_expires_in(Path(config.CLUSTER_CA_CERT_FILE).read_text()).days
     except Exception as exc:
@@ -301,7 +296,7 @@ def _warn_if_intermediate_expiring():
 def _check_cluster_mqtt_identity_expiry():
     """Re-issue the cluster's own MQTT client cert from the intermediate when near expiry."""
     try:
-        from ext_requests.cluster_certificates import (
+        from utils.certificates import (
             cert_expires_in,
             get_cluster_mqtt_identity_paths,
             write_cluster_mqtt_identity,
@@ -333,7 +328,13 @@ def _check_cluster_cert_expiry_periodically():
 
 
 def _register_in_background():
-    # Wait until cluster manager has completed startup.
+    # The root probes GET /api/cluster/status on this cluster_manager during
+    # registration. That probe can only succeed once gunicorn's worker has
+    # entered its accept loop, which doesn't happen until load_wsgi (i.e. this
+    # module's top-level import) returns. So we MUST NOT block the import on
+    # the gRPC call — otherwise the root's probe deadlocks against our own
+    # startup. Give gunicorn a moment to start serving, then register. On
+    # failure, exit the worker so gunicorn respawns it and tries again
     time.sleep(2)
     try:
         _check_cluster_cert_expiry()

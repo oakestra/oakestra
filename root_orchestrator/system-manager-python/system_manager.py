@@ -11,10 +11,6 @@ import grpc
 import requests
 from blueprints import blueprints
 from bson import json_util
-from ext_requests.certificates import (
-    ensure_ca_files,
-    ensure_server_files,
-)
 from ext_requests.cluster_requests import get_cluster_session
 from ext_requests.jwt_generator_requests import get_public_key
 from ext_requests.mongodb_client import mongo_init
@@ -34,6 +30,10 @@ from proto.clusterRegistration_pb2_grpc import (
 )
 from resource_abstractor_client import candidate_operations
 from sm_logging import configure_logging
+from utils.certificates import (
+    ensure_ca_files,
+    ensure_server_files,
+)
 from utils.gateway import GATEWAY_ENABLED
 from utils.network import add_brackets_if_ipv6
 from werkzeug.utils import redirect, secure_filename

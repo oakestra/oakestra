@@ -111,8 +111,7 @@ def _renew_if_root_ca_rotated(resp):
         return
 
     from blueprints.certificates_blueprints import _renew_cluster_certs_in_band
-
-    from ext_requests.cluster_certificates import cert_issued_by
+    from utils.certificates import cert_issued_by
 
     try:
         with open(config.CLUSTER_CERT_FILE) as f:

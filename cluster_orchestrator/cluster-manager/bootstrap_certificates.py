@@ -57,9 +57,7 @@ PUBLIC_KEY_FILE = CERT_DIR / "public" / "privkey.pem"
 CLUSTER_CRL_FILE = CERT_DIR / "cluster_revoked.crl"
 REDEEMED_TOKEN_FILE = CERT_DIR / "registration_token.sha256"  # Hash of last used token
 
-# nginx in the kong:3.6 image runs as the kong user (UID/GID 1000); the public
-# gateway key must be readable by it. mosquitto and the service managers all
-# run as root, so only the kong-consumed public material needs this.
+# nginx in the kong:3.6 image runs as the kong user (UID/GID 1000)
 KONG_UID = 1000
 KONG_GID = 1000
 
@@ -267,7 +265,7 @@ def _check_cert_expiry() -> bool:
 
 
 def _use_bootstrap_cert_paths() -> None:
-    # ext_requests.cluster_certificates locates the CA files via config, i.e. the
+    # utils.certificates locates the CA files via config, i.e. the
     # environment; point it at this container's cert directory.
     os.environ.setdefault("ROOT_CA_FILE", str(ROOT_CA_FILE))
     os.environ.setdefault("CLUSTER_CA_CERT_FILE", str(CLUSTER_CA_CERT_FILE))
@@ -277,7 +275,7 @@ def _use_bootstrap_cert_paths() -> None:
 def write_cluster_crl() -> None:
     """(Re-)sign the cluster CRL so mosquitto starts with a current list."""
     from cryptography import x509
-    from ext_requests.cluster_certificates import load_cluster_ca, regenerate_cluster_crl
+    from utils.certificates import load_cluster_ca, regenerate_cluster_crl
 
     entries = []
     if CLUSTER_CRL_FILE.is_file():
@@ -303,7 +301,7 @@ def write_cluster_crl() -> None:
 
 
 def issue_cluster_mqtt_identity() -> None:
-    from ext_requests.cluster_certificates import write_cluster_mqtt_identity
+    from utils.certificates import write_cluster_mqtt_identity
 
     try:
         cert_path = write_cluster_mqtt_identity(os.environ.get("CLUSTER_NAME") or "")
@@ -314,7 +312,7 @@ def issue_cluster_mqtt_identity() -> None:
 
 
 def issue_mqtt_server_identity() -> None:
-    from ext_requests.cluster_certificates import write_mqtt_server_identity
+    from utils.certificates import write_mqtt_server_identity
 
     try:
         cert_path = write_mqtt_server_identity(

@@ -2,9 +2,22 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-import requests
-from ext_requests.certificates import (
-    KONG_CA_CERT_UUID,
+from ext_requests.certificates_db import (
+    TOKEN_TYPE_CLUSTER,
+    add_revoked_cert,
+    clear_revoked_certs,
+    consume_registration_token,
+    get_revoked_serials,
+    list_revoked_certs,
+    prune_expired_revoked_certs,
+    remove_revoked_cert,
+)
+from flask import request, send_file
+from flask_jwt_extended import jwt_required
+from flask_restful import Resource
+from flask_smorest import abort
+from roles.securityUtils import Role, require_role
+from utils.certificates import (
     cert_expires_in,
     current_ca_cert_pem,
     ensure_ca_files,
@@ -22,20 +35,6 @@ from ext_requests.certificates import (
     reissue_server_files,
     sign_csr_pem,
 )
-from ext_requests.registration_tokens_db import TOKEN_TYPE_CLUSTER, consume_registration_token
-from ext_requests.revoked_certs_db import (
-    add_revoked_cert,
-    clear_revoked_certs,
-    get_revoked_serials,
-    list_revoked_certs,
-    prune_expired_revoked_certs,
-    remove_revoked_cert,
-)
-from flask import request, send_file
-from flask_jwt_extended import jwt_required
-from flask_restful import Resource
-from flask_smorest import abort
-from roles.securityUtils import Role, require_role
 
 from blueprints.jwt_wrapper import BlueprintExt
 
@@ -43,9 +42,7 @@ logger = logging.getLogger("system_manager")
 
 certbp = BlueprintExt("Certificates", "certificates", url_prefix="/api/certs")
 
-KONG_ADMIN_URL = os.environ.get("KONG_ADMIN_URL", "http://kong_external:8001")
 KONG_CONTAINER_NAME = os.environ.get("KONG_CONTAINER_NAME", "kong_external")
-KONG_CA_CERT_NAME = "oakestra-ca-cert"
 
 
 def _reload_kong_nginx() -> tuple[bool, str]:
@@ -65,72 +62,6 @@ def _reload_kong_nginx() -> tuple[bool, str]:
     except Exception as e:
         logger.error(f"Could not reload kong: {e}")
         return False, f"Could not reload kong: {str(e)}"
-
-
-def _update_kong_ca(ca_data: str, old_ca_data: str = None) -> tuple[bool, str]:
-    """Update a CA in Kong via Admin API.
-
-    Returns: (success: bool, message: str)
-    """
-    try:
-        response = requests.put(
-            f"{KONG_ADMIN_URL}/ca_certificates/{KONG_CA_CERT_UUID}",
-            json={"cert": ca_data, "tags": ["oakestra-ca"]},
-            timeout=10,
-        )
-        if response.status_code in (200, 201):
-            return True, f"CA certificate updated (id: {KONG_CA_CERT_UUID})"
-
-        if response.status_code == 404:
-            response = requests.post(
-                f"{KONG_ADMIN_URL}/ca_certificates",
-                json={"id": KONG_CA_CERT_UUID, "cert": ca_data, "tags": ["oakestra-ca"]},
-                timeout=10,
-            )
-            if response.status_code in (200, 201):
-                return True, f"CA certificate created (id: {KONG_CA_CERT_UUID})"
-            return False, f"Failed to create CA: {response.status_code} - {response.text}"
-
-        return False, f"Failed to update CA: {response.status_code} - {response.text}"
-    except Exception as e:
-        import traceback
-
-        logger.error(f"Error updating CA: {traceback.format_exc()}")
-        return False, f"Error updating CA: {str(e)}"
-
-
-def _update_kong_certificate(old_ca_data: str = None) -> tuple[bool, str]:
-    """Update Kong's client-verification CA via the Admin API.
-
-    The gateway's *server* certificate lives in /certs/public/ and is a
-    separate, operator-managed (BYO) certificate system — Kong picks it up from
-    disk on reload, so only the internal CA entity needs an Admin API update
-    here.
-
-    Returns: (success: bool, message: str)
-    """
-    try:
-        ca_path = get_ca_cert_path()
-        if not ca_path.exists():
-            return False, "CA file not found"
-
-        ca_success, ca_msg = _update_kong_ca(ca_path.read_text(), old_ca_data)
-        if not ca_success:
-            logger.error(f"Failed to update CA certificate: {ca_msg}")
-            return False, f"CA certificate update failed: {ca_msg}"
-
-        logger.info(f"CA certificate: {ca_msg}")
-        return True, ca_msg
-
-    except requests.exceptions.ConnectionError:
-        logger.error("Cannot connect to Kong Admin API")
-        return False, "Cannot connect to Kong Admin API"
-    except requests.exceptions.Timeout:
-        logger.error("Kong Admin API request timed out")
-        return False, "Kong Admin API request timed out"
-    except Exception as e:
-        logger.error(f"Error updating Kong certificates: {str(e)}")
-        return False, f"Error updating Kong certificates: {str(e)}"
 
 
 # CRLs are signed with a 30-day nextUpdate (see generate_root_crl); re-sign well before expiry.
@@ -264,21 +195,18 @@ class CertificateServerRenewController(Resource):
             valid_days=int(content.get("valid_days") or 365),
         )
 
-        kong_updated, kong_message = _update_kong_certificate()
         reload_ok, reload_message = _reload_kong_nginx()
 
         return {
             "created": server_created,
             "server_cert": str(get_server_cert_path()),
             "server_key": str(get_server_key_path()),
-            "kong_updated": kong_updated,
-            "kong_status": kong_message,
             "kong_reloaded": reload_ok,
             "kong_reload_status": reload_message,
             "message": (
-                "Server certificate renewed, Kong gateway updated and reloaded"
-                if kong_updated and reload_ok
-                else "Server certificate renewed, but some Kong steps failed"
+                "Server certificate renewed and Kong gateway reloaded"
+                if reload_ok
+                else "Server certificate renewed, but the Kong reload failed"
             ),
         }
 
@@ -356,14 +284,7 @@ class ClusterBootstrapController(Resource):
         schema=cluster_bootstrap_schema, location="json", validate=False, unknown=True
     )
     def post(self, *args, **kwargs):
-        """Redeem a one-time cluster registration token for cert material.
-
-        Reachable without JWT or client certificate — this is the bootstrap
-        path for a cluster that has no trust material yet. The single-use,
-        short-lived token (minted via POST /api/tokens/cluster) is the only
-        credential. Returns the cluster's client identity, its intermediate
-        CA, and the root CA.
-        """
+        """Redeem a one-time cluster registration token for cert material"""
         content = request.get_json(silent=True) or {}
         token = content.get("token") or ""
         cluster_name = content.get("cluster_name") or ""
@@ -402,15 +323,6 @@ class ClusterBootstrapController(Resource):
             "root_ca": get_ca_cert_path().read_text(),
         }
 
-
-public_cert_schema = {
-    "type": "object",
-    "properties": {
-        "fullchain": {"type": "string"},
-        "private_key": {"type": "string"},
-    },
-    "required": ["fullchain", "private_key"],
-}
 
 revoke_cert_schema = {
     "type": "object",
@@ -594,14 +506,11 @@ class CertificateAuthorityRotateController(Resource):
         # revocations stay in effect until rotate-complete clears them.
         write_root_crl_from_db()
 
-        kong_updated, kong_message = _update_kong_ca(new_ca_pem)
         reload_ok, reload_message = _reload_kong_nginx()
 
         return {
             "grace_period_active": grace_period,
             "grace_period_ends": grace_ends.isoformat() if grace_ends else None,
-            "kong_updated": kong_updated,
-            "kong_status": kong_message,
             "kong_reloaded": reload_ok,
             "kong_reload_status": reload_message,
             "message": (
@@ -706,25 +615,18 @@ def complete_ca_rotation() -> dict:
     get_old_ca_key_path().unlink(missing_ok=True)
     _grace_expiry_path().unlink(missing_ok=True)
 
-    # All old-CA certs are now untrusted at the CA level. Revocation records
-    # for them are stale — their serial numbers are scoped to the old CA and
-    # carrying them into the new CRL would be wrong. Clear and regenerate.
+    # All old-CA CRL
     clear_revoked_certs()
     regenerate_root_crl([])
 
-    # server.crt is the root's client certificate towards the clusters' gateways. Clusters
-    # that renewed during the grace period trust the new CA, so move it over now; the
-    # old-CA copy would stop working once clusters drop the old CA from their ca.crt.
+    # update server certificate files for new CA
     reissue_server_files()
 
-    kong_updated, kong_message = _update_kong_ca(ca_path.read_text())
     reload_ok, reload_message = _reload_kong_nginx()
 
     return {
         "old_ca_removed": True,
         "revoked_certs_cleared": True,
-        "kong_updated": kong_updated,
-        "kong_status": kong_message,
         "kong_reloaded": reload_ok,
         "kong_reload_status": reload_message,
         "message": "Grace period ended — only new CA is now trusted.",
@@ -747,74 +649,6 @@ def complete_expired_ca_rotation() -> bool:
         result["kong_reload_status"],
     )
     return True
-
-
-@certbp.route("/public")
-class PublicGatewayCertController(Resource):
-    @certbp.arguments(schema=public_cert_schema, location="json", validate=False, unknown=True)
-    @jwt_required()
-    @require_role(Role.ADMIN)
-    def put(self, *args, **kwargs):
-        """Replace the BYO public gateway server certificate.
-
-        Writes fullchain.pem and privkey.pem to /certs/public/ then reloads
-        Kong so the new cert is served without a container restart.
-
-        Only reachable via the internal gateway — blocked on the external gateway
-        so the private key never crosses the public-facing TLS termination point.
-        """
-        content = request.get_json(silent=True) or {}
-        fullchain_pem = (content.get("fullchain") or "").strip()
-        private_key_pem = (content.get("private_key") or "").strip()
-
-        if not fullchain_pem or not private_key_pem:
-            abort(400, {"message": "fullchain and private_key are required"})
-
-        # Validate PEM and confirm the key matches the certificate.
-        try:
-            from cryptography import x509 as _x509
-            from cryptography.hazmat.primitives import serialization as _ser
-
-            cert = _x509.load_pem_x509_certificate(fullchain_pem.encode())
-            key = _ser.load_pem_private_key(private_key_pem.encode(), password=None)
-
-            cert_pub = cert.public_key().public_bytes(
-                _ser.Encoding.PEM, _ser.PublicFormat.SubjectPublicKeyInfo
-            )
-            key_pub = key.public_key().public_bytes(
-                _ser.Encoding.PEM, _ser.PublicFormat.SubjectPublicKeyInfo
-            )
-            if cert_pub != key_pub:
-                abort(400, {"message": "private_key does not match the certificate"})
-        except ValueError as exc:
-            abort(400, {"message": f"Invalid PEM material: {exc}"})
-
-        public_dir = get_ca_cert_path().parent / "public"
-        public_dir.mkdir(parents=True, exist_ok=True)
-        fullchain_path = public_dir / "fullchain.pem"
-        privkey_path = public_dir / "privkey.pem"
-
-        fullchain_path.write_text(fullchain_pem + "\n")
-        os.chmod(fullchain_path, 0o644)
-        privkey_path.write_text(private_key_pem + "\n")
-        os.chmod(privkey_path, 0o600)
-
-        # Kong (nginx) runs as UID/GID 1000 in the kong:3.6 image.
-        try:
-            os.chown(public_dir, 1000, 1000)
-            os.chown(fullchain_path, 1000, 1000)
-            os.chown(privkey_path, 1000, 1000)
-        except PermissionError:
-            logger.warning("Could not chown /certs/public to kong user — reload may fail")
-
-        reload_ok, reload_message = _reload_kong_nginx()
-        logger.info("Public gateway certificate updated; kong reload: %s", reload_message)
-
-        return {
-            "message": "Public gateway certificate updated",
-            "kong_reloaded": reload_ok,
-            "kong_reload_status": reload_message,
-        }
 
 
 @certbp.route("/generate-cluster")

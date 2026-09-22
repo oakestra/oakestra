@@ -2,12 +2,12 @@ import logging
 import os
 
 import requests
-from ext_requests.cluster_requests import cluster_push_worker_token
-from ext_requests.registration_tokens_db import (
+from ext_requests.certificates_db import (
     TOKEN_TYPE_CLUSTER,
     create_registration_token,
     generate_token,
 )
+from ext_requests.cluster_requests import cluster_push_worker_token
 from flask import request
 from flask_jwt_extended import jwt_required
 from flask_restful import Resource

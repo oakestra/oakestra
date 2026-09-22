@@ -13,8 +13,6 @@ NETWORK_COMPONENT_PORT = os.environ.get("CLUSTER_SERVICE_MANAGER_GATEWAY_PORT") 
 )
 
 
-# `or ""` keeps this module importable in contexts where the gRPC env vars
-# are absent (e.g. the cluster_cert_bootstrap one-shot container).
 SYSTEM_MANAGER_ADDR = (
     (os.environ.get("SYSTEM_MANAGER_URL") or "")
     + ":"

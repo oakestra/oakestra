@@ -107,7 +107,6 @@ func RegisterSelfToNetworkComponent() error {
 
 	if model.GetNodeInfo().NetManagerPort == 0 {
 		// if not network port specified, attempt using local socket
-		// use a longer timeout: the /register handler initialises MQTT + subnet acquisition
 		httpClient = &http.Client{
 			Timeout: time.Second * 15,
 			Transport: &http.Transport{

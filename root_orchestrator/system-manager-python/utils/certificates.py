@@ -13,8 +13,6 @@ DEFAULT_CA_COMMON_NAME = "Oakestra Root CA"
 DEFAULT_CA_VALID_DAYS = 3650
 DEFAULT_KEY_SIZE = 3072
 
-KONG_CA_CERT_UUID = "cafe0000-0000-4000-8000-000000000000"
-
 
 def get_cert_path() -> Path:
     cert_path = Path(os.environ.get("CERT_PATH") or DEFAULT_CERT_PATH)
