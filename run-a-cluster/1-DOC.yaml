@@ -479,7 +479,10 @@ services:
   addons_monitor:
     image: ghcr.io/oakestra/oakestra/addons_monitor:latest
     container_name: addons_monitor
-    build: ../addons_engine/addons-monitor/
+    build:
+      context: ../addons_engine/addons-monitor/
+      additional_contexts:
+        - libraries=../libraries
     labels: *root-log-labels
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
