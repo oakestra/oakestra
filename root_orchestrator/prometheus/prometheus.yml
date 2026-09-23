@@ -3,6 +3,9 @@ global:
   scrape_timeout: 10s
   evaluation_interval: 15s
 
+rule_files:
+  - /etc/prometheus/container-lifecycle-rules.yml
+
 scrape_configs:
   - job_name: prometheus
     static_configs:
@@ -30,4 +33,28 @@ scrape_configs:
       - source_labels: [container_label_oakestra_cluster_id]
         target_label: cluster_id
       - regex: "container_label_.+"
+        action: labeldrop
+
+  - job_name: docker-state
+    static_configs:
+      - targets: ["root_docker_state_exporter:8080"]
+        labels:
+          host_scope: root
+    metric_relabel_configs:
+      - source_labels: [__name__, container_label_oakestra_logging_collector]
+        regex: 'docker_container_(state|restarts_total|health|exit_code);|docker_exporter_scrape_(duration_seconds|errors_total);|docker_container_labels;root'
+        action: keep
+      - source_labels: [container_label_oakestra_monitoring_ignore]
+        regex: '(?i:true)'
+        action: drop
+      - source_labels: [container_label_com_docker_compose_service]
+        regex: '(.+)'
+        target_label: compose_service
+      - source_labels: [container_label_oakestra_cluster_id]
+        regex: '(.+)'
+        target_label: cluster_id
+      - source_labels: [container_label_com_docker_compose_project]
+        regex: '(.+)'
+        target_label: compose_project
+      - regex: 'container_label_.+'
         action: labeldrop

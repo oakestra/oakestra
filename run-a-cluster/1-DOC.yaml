@@ -398,6 +398,7 @@ services:
       - "9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/container-lifecycle-rules.yml:/etc/prometheus/container-lifecycle-rules.yml:ro
       - prometheus_data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -423,6 +424,34 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  docker_state_exporter:
+    image: ghcr.io/davidborzek/docker-exporter:0.7.0@sha256:62824ac948a3c5555e92b2f5c319a2eac71f116a76ca3c3e345604943a349525
+    container_name: docker_state_exporter
+    hostname: docker_state_exporter
+    labels: *shared-log-labels
+    user: "0:0"
+    command:
+      - --container-label=com.docker.compose.service
+      - --container-label=com.docker.compose.project
+      - --container-label=oakestra.cluster.id
+      - --container-label=oakestra.logging.collector
+      - --container-label=oakestra.monitoring.ignore
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - metrics
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    memswap_limit: 64m
+    cpus: 0.25
+    pids_limit: 128
+    restart: unless-stopped
+    logging: *default-logging
+
   node_exporter:
     image: quay.io/prometheus/node-exporter:v1.12.1
     pull_policy: always
@@ -437,7 +466,9 @@ services:
       - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/containers/storage/.+)($$|/)
       - --web.listen-address=${ONE_DOC_METRICS_GATEWAY:-172.30.252.1}:9100
       - --web.max-requests=5
+      - --collector.textfile.directory=/etc/node_exporter/textfile
     volumes:
+      - ./config/container-inventory:/etc/node_exporter/textfile:ro
       - type: bind
         source: /proc
         target: /host/proc
@@ -553,6 +584,7 @@ services:
       - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml
       - ./config/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml
       - ./config/alerts/grafana-rules.yml:/etc/grafana/provisioning/alerting/oakestra-rules.yml:ro
+      - ./config/alerts/grafana-container-rules.yml:/etc/grafana/provisioning/alerting/oakestra-containers.yml:ro
       - ./config/alerts/grafana-contact-point.yml:/etc/grafana/provisioning/alerting/oakestra-contact-point.yml:ro
       - ./config/dashboards:/var/lib/grafana/dashboards
     logging: *default-logging
