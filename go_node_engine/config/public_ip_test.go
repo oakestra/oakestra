@@ -12,11 +12,11 @@ func TestParsePublicIPMode(t *testing.T) {
 		want   PublicIPMode
 		isAuto bool
 	}{
-		{name: "false", in: "false", want: PUBLIC_IP_FALSE},
-		{name: "auto", in: "auto", want: PUBLIC_IP_AUTO, isAuto: true},
-		{name: "legacy true", in: "true", want: PUBLIC_IP_AUTO, isAuto: true},
+		{name: "false", in: "false", want: PublicIPFalse},
+		{name: "auto", in: "auto", want: PublicIPAuto, isAuto: true},
+		{name: "legacy true", in: "true", want: PublicIPAuto, isAuto: true},
 		{name: "custom ip", in: "1.2.3.4", want: PublicIPMode("1.2.3.4")},
-		{name: "trimmed false", in: " false ", want: PUBLIC_IP_FALSE},
+		{name: "trimmed false", in: " false ", want: PublicIPFalse},
 	}
 
 	for _, tt := range tests {
@@ -38,9 +38,9 @@ func TestPublicIPModeUnmarshalCompatibility(t *testing.T) {
 		raw  string
 		want PublicIPMode
 	}{
-		{name: "bool true", raw: `{"public_ip":true}`, want: PUBLIC_IP_AUTO},
-		{name: "bool false", raw: `{"public_ip":false}`, want: PUBLIC_IP_FALSE},
-		{name: "string auto", raw: `{"public_ip":"auto"}`, want: PUBLIC_IP_AUTO},
+		{name: "bool true", raw: `{"public_ip":true}`, want: PublicIPAuto},
+		{name: "bool false", raw: `{"public_ip":false}`, want: PublicIPFalse},
+		{name: "string auto", raw: `{"public_ip":"auto"}`, want: PublicIPAuto},
 		{name: "string custom", raw: `{"public_ip":"203.0.113.9"}`, want: PublicIPMode("203.0.113.9")},
 	}
 

@@ -29,8 +29,12 @@ repos:
       pass_filenames: false
       always_run: true
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.14.2
+  rev: v0.15.22
   hooks:
     - id: ruff-check
       stages: [pre-commit]
       files: \.py$
+    - id: ruff-format
+      stages: [pre-commit]
+      files: \.py$
+      args: [--check]
