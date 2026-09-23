@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from bson.objectid import ObjectId
 
@@ -113,7 +113,7 @@ def append_job_instance(job_id, instance_number, job_data):
 def update_job_instance(job_id, instance_number, job_data):
     job_data.pop("_id", None)
 
-    current_time = datetime.now().isoformat()
+    current_time = datetime.now(timezone.utc).isoformat()
     cpu_update = {"value": job_data.get("cpu_percent"), "timestamp": current_time}
     memory_update = {"value": job_data.get("memory_percent"), "timestamp": current_time}
 

@@ -133,8 +133,14 @@ func deployHandler(client mqtt.Client, msg mqtt.Message, runtimeManager *virtual
 		logger.ErrorLogger().Printf("ERROR: unable to unmarshal cluster orch request: %v", err)
 		return
 	}
+	// Without this, a long image pull looks like a dead worker to the cluster.
+	service.Status = model.SERVICE_INSTANTIATION
+	ReportServiceStatus(service)
+	model.TrackInstantiating(service)
+
 	//handle deployment in background
 	go func() {
+		defer model.UntrackInstantiating(service.Sname, service.Instance)
 		runtime := runtimeManager.GetRuntime(model.RuntimeType(service.Runtime))
 		err = runtime.Deploy(service, ReportServiceStatus)
 		service.Status = model.SERVICE_CREATED
@@ -195,10 +201,7 @@ func ReportServiceResources(services []model.Resources) {
 	type ServiceResources struct {
 		Services []model.Resources `json:"services"`
 	}
-	reportStatusStruct := ServiceResources{
-		Services: services,
-	}
-	jsonmsg, err := json.Marshal(reportStatusStruct)
+	jsonmsg, err := json.Marshal(ServiceResources{Services: services})
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR: unable to report services resources: %v", err)
 	}

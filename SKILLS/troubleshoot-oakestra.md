@@ -240,7 +240,9 @@ docker exec mongo mongosh --port 10007 --eval "
 
 **What to look for:**
 - Clusters/nodes with zero available CPU/memory despite real resources → resource abstractor not syncing
-- Jobs stuck in `CLUSTER_SCHEDULED` or `NODE_SCHEDULED` for a long time → worker not acknowledging deployment
+- Jobs stuck in `CLUSTER_SCHEDULED` or `NODE_SCHEDULED` for more than 15 s → worker not acknowledging deployment (node dead or MQTT lost). The cluster will mark them FAILED and reschedule automatically.
+- Jobs stuck in `INSTANTIATION` for more than 30 s without heartbeats → worker died during image pull / container creation. Will be marked FAILED and rescheduled automatically.
+- Jobs stuck in `INSTANTIATION` indefinitely with fresh heartbeats → normal for large images; wait for the image pull to finish.
 - Jobs stuck in `CREATING` → NodeEngine issue on worker
 - No clusters registered despite cluster being started → cluster_manager cannot reach system_manager
 
@@ -632,9 +634,12 @@ docker compose build --no-cache system_manager
 docker compose pull
 ```
 
-Check `LIB_BRANCH` env var — it controls which branch of the `libraries` package is used during build:
+The shared `libraries/` packages (`oakestra_utils_library`, `resource_abstractor_client`) are built from the repo-local `libraries/` folder via a Buildx named build context — not from a remote git repo, and there is no `LIB_BRANCH` env var. If a build fails on these libraries, check that:
 ```bash
-echo $LIB_BRANCH  # Should match the Oakestra version being deployed
+# The libraries build context resolves (declared in docker-compose.yml as additional_contexts):
+ls libraries/oakestra_utils_library libraries/resource_abstractor_client
+# BuildKit/Buildx is enabled (named build contexts require it — default on modern Docker):
+docker buildx version
 ```
 
 ---

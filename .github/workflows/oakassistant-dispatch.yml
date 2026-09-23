@@ -1,0 +1,16 @@
+name: AI Fix Dispatcher
+on:
+  issues:
+    types: [assigned]
+  pull_request_target:
+    types: [assigned,review_requested]
+  issue_comment:
+    types: [created]
+
+jobs:
+  call:
+    uses: oakestra/.github/.github/workflows/oakassistant.yml@main
+    secrets: inherit
+    with:
+      bot_username: OakAssistant
+      environment_name: OakAssistant

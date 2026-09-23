@@ -11,11 +11,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /hostpath-csi .
 
 # ─── Runtime stage ───────────────────────────────────────────────────────────
-FROM alpine:3.21
-
-# The plugin performs Linux bind-mounts via syscall; no extra tools needed.
-# util-linux is included only for diagnostic convenience (findmnt, umount).
-RUN apk add --no-cache util-linux
+FROM gcr.io/distroless/static-debian12:latest@sha256:61b7ccecebc7c474a531717de80a94709d20547cdcdaf740c25876f2a8e38b44
 
 COPY --from=builder /hostpath-csi /usr/local/bin/hostpath-csi
 
