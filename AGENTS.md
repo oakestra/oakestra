@@ -36,7 +36,7 @@ oakestra/
 │   ├── StartOakestraRoot.sh    # Root only
 │   ├── StartOakestraCluster.sh # Cluster only
 │   └── InstallOakestraWorker.sh# Worker binary installer
-├── run-a-cluster/              # Compose-based multi-machine deployment (root-orchestrator.yml + 1-DOC.yaml)
+├── run-a-cluster/              # Compose-based 1-DOC deployment (1-DOC.yaml + shared config)
 ├── hack/                       # Platform-specific workarounds (e.g. rpi4b-mongo override)
 └── SKILLS/
     └── troubleshoot-oakestra.md # AI troubleshooting skill (keep this in sync)
