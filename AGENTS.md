@@ -145,6 +145,7 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | `override-images-only.yml` | Forces pre-built images, skips local builds. |
 | `override-local-service-manager.yml` | Builds service manager from local source. |
 | `override-custom-service-manager-version.yml` | Pins `oakestra-net` service manager images to a specific version (e.g. `alpha-v0.4.403`). Useful for testing against a particular `oakestra-net` release. |
+| `override-go-resource-abstractor.yml` | Swaps the resource abstractor for the Go port (`go_resource_abstractor/`) instead of the Python `resource-abstractor/`. Same port/API/env; drop-in. Exists in both `root_orchestrator/` and `cluster_orchestrator/`. |
 
 ---
 
