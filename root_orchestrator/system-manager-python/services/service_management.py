@@ -74,12 +74,15 @@ def create_services_of_app(username, data, force=False):
             # Inform network plugin about the new service
             net_inform_service_deploy(service, str(last_service_id))
             deployed_services.append({"service_name": service["service_name"], "status": 200})
-        except Exception:
+        except Exception as e:
+            logger.error(
+                f"net_inform_service_deploy failed for service '{service['service_name']}': {e}"
+            )
             delete_service(username, str(last_service_id))
             failed_services.append(
                 {
                     "service_name": service["service_name"],
-                    "message": "failed to deploy service",
+                    "message": f"failed to deploy service: {e}",
                     "status": 500,
                 }
             )

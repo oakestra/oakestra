@@ -10,9 +10,9 @@ import (
 const LOG_SIZE = 1024
 
 // reads the last 100 bytes of the logfile of a container
-func GetLogs(serviceID string) string {
+func GetLogs(taskId string) string {
 
-	file, err := os.Open(fmt.Sprintf("%s/%s", model.GetNodeInfo().LogDirectory, serviceID))
+	file, err := os.Open(fmt.Sprintf("%s/%s", model.GetNodeInfo().LogDirectory, taskId))
 	if err != nil {
 		logger.ErrorLogger().Printf("%v", err)
 		return ""

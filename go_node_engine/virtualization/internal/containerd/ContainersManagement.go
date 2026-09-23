@@ -2,6 +2,8 @@ package containerd
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base32"
 	"fmt"
 	"go_node_engine/csi"
 	"go_node_engine/logger"
@@ -15,6 +17,7 @@ import (
 	"maps"
 	"os"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -72,6 +75,8 @@ const CONTAINERD_CONFIG_PATH = "/etc/containerd/config.toml"
 
 // Max container cleanup duration
 const CLEANUP_TIMEOUT = 5 * time.Second
+
+const TASK_ID_LABEL = "io.oakestra.taskid"
 
 // GetContainerdRuntime returns the container runtime client
 func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
@@ -365,10 +370,12 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// -- add oci SpecOpts to containerOpts
 	containerOpts = append(containerOpts, ctd.WithNewSpec(specOpts...))
 
+	containerOpts = append(containerOpts, ctd.WithAdditionalContainerLabels(map[string]string{TASK_ID_LABEL: taskId}))
+
 	// Create the container
 	container, err := r.containerClient.NewContainer(
 		ctx,
-		taskId,
+		convertTaskIdToContainerId(taskId),
 		containerOpts...,
 	)
 	if err != nil {
@@ -412,6 +419,9 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// if Overlay mode is active then attach network to the task
 	if model.GetNodeInfo().Overlay {
 		taskpid := int(task.Pid())
+		// In the network attachment code path below, we don't need to implement any special handling
+		// for the container ID, even though it's different from taskId, because of convertTaskIdToContainerId.
+		// That is, because the network attachment is pid-based (via taskpid param).
 		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
@@ -559,6 +569,12 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 				continue
 			}
 
+			taskId, ok := containerMetadata.Labels[TASK_ID_LABEL]
+			if !ok {
+				logger.WarnLogger().Printf("Unable to fetch task id for container %s", container.ID())
+				continue
+			}
+
 			currentsnapshotter := r.containerClient.SnapshotService(containerMetadata.Snapshotter)
 			usage, err := currentsnapshotter.Usage(r.ctx, containerMetadata.SnapshotKey)
 			if err != nil {
@@ -569,10 +585,10 @@ func (r *ContainerRuntime) ResourceMonitoring(every time.Duration, notifyHandler
 				Cpu:      fmt.Sprintf("%f", cpuUsage),
 				Memory:   fmt.Sprintf("%f", memUsage),
 				Disk:     fmt.Sprintf("%d", usage.Size),
-				Sname:    taskid.ExtractServiceName(container.ID()),
+				Sname:    taskid.ExtractServiceName(taskId),
 				Runtime:  string(model.CONTAINER_RUNTIME),
-				Logs:     logutils.GetLogs(container.ID()),
-				Instance: taskid.ExtractInstanceNumber(container.ID()),
+				Logs:     logutils.GetLogs(taskId),
+				Instance: taskid.ExtractInstanceNumber(taskId),
 				Status:   r.taskStatus(task),
 			})
 		}
@@ -767,6 +783,58 @@ func killTask(ctx context.Context, task ctd.Task, container ctd.Container) error
 
 	logger.ErrorLogger().Printf("Task %s terminated", task.ID())
 	return nil
+}
+
+const containerIdMaxLen = 76
+
+var (
+	containerIdHashEncoding = base32.NewEncoding(
+		"abcdefghijklmnopqrstuvwxyz234567",
+	).WithPadding(base32.NoPadding)
+
+	invalidContainerIdChars = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
+	containerIdSeparators   = regexp.MustCompile(`[._-]+`)
+)
+
+// convertTaskIdToContainerId converts taskId into a valid containerd identifier.
+// See // See https://github.com/containerd/containerd/blob/v1.7.28/identifiers/validate.go.
+// The generated identifier:
+//   - is at most 76 characters long;
+//   - contains only ASCII letters, digits, dots, underscores, and hyphens;
+//   - starts and ends with an ASCII letter or digit;
+//   - contains no consecutive separators;
+//   - uses lowercase characters in its readable prefix; and
+//   - includes a 100-bit base32-encoded prefix of the SHA-256 hash of the
+//     original task ID to make collisions unlikely.
+//
+// Invalid characters are removed and runs of separators are normalized to a
+// single dot. If no readable prefix remains, the hash alone is returned.
+func convertTaskIdToContainerId(taskId string) string {
+	hashBytes := sha256.Sum256([]byte(taskId))
+	// At this point hashString is 52 characters long which is too long to be useful, so we truncate it.
+	// This should still make collisions very unlikely.
+	hashString := containerIdHashEncoding.EncodeToString(hashBytes[:])[:20]
+
+	safeTaskId := strings.ToLower(
+		invalidContainerIdChars.ReplaceAllString(taskId, ""),
+	)
+	safeTaskId = containerIdSeparators.ReplaceAllString(safeTaskId, ".")
+	safeTaskId = strings.Trim(safeTaskId, "._-")
+
+	maxPrefixLen := containerIdMaxLen - len(hashString) - 1
+	if len(safeTaskId) > maxPrefixLen {
+		safeTaskId = safeTaskId[:maxPrefixLen]
+	}
+
+	// Truncation may leave a separator at the end of the readable prefix.
+	safeTaskId = strings.TrimRight(safeTaskId, "._-")
+
+	// This ensures the container id doesn't end up being '.<hash>' which would be an illegal start with a separator.
+	if safeTaskId == "" {
+		return hashString
+	}
+
+	return safeTaskId + "." + hashString
 }
 
 // gpuInfo holds GPU device information for sorting

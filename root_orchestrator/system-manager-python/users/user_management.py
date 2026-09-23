@@ -26,8 +26,8 @@ def user_add(username, data, organization_id):
 
 
 def user_get_all():
-    return mongo_get_user()
+    return list(mongo_get_user())
 
 
 def user_get_all_from_Organization(organization_id):
-    return mongo_get_user_by_organization_id(organization_id)
+    return list(mongo_get_user_by_organization_id(organization_id))

@@ -29,6 +29,6 @@ class UserPermissionController(MethodView):
         user = user_get_roles(username, organization_id)
         logger.debug(user)
         if user is not None:
-            return {"roles": user["roles"]}
+            return {"roles": user.get("roles", [])}
         else:
             return abort(404, {"message": "User does not exist."})
