@@ -14,7 +14,9 @@ COPY --from=libraries . /libraries
 
 # Install appropriate requirements
 RUN pip install -r requirements.txt --no-cache-dir \
-    && pip install --no-cache-dir /libraries/resource_abstractor_client /libraries/oakestra_utils_library \
+    && pip install --no-cache-dir /libraries/resource_abstractor_client \
+        /libraries/oakestra_utils_library \
+        /libraries/oakestra_logging \
     && rm /requirements.txt
 
 COPY . /
@@ -34,10 +36,11 @@ ENV NET_PLUGIN_URL=localhost
 ENV NET_PLUGIN_PORT=10100
 
 ENV LOG_LEVEL=INFO
+ENV OAKESTRA_SERVICE_NAME=system_manager
 
 ENV MY_PORT=10000
 
 EXPOSE 10000
 EXPOSE 50052
 
-CMD gunicorn --bind [::]:${MY_PORT} system_manager:app
+CMD gunicorn --bind [::]:${MY_PORT} --logger-class oakestra_logging.gunicorn.StructuredGunicornLogger system_manager:app

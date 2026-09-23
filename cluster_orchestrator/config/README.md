@@ -7,3 +7,5 @@ Each Cluster runs its own `cluster_alloy`, `cluster_loki`, and `cluster_grafana`
 The Cluster Alloy diagnostic UI is available only from the Cluster host at `http://127.0.0.1:12346`.
 
 The Cluster identity in Loki's `cluster_id` label is the configured `CLUSTER_NAME`. The Root-assigned database ID does not exist yet when Compose creates the services. Existing dashboards remain compatible through the `container_name`, `job`, and `logstream` aliases.
+
+Python services use the versioned JSON contract documented by the shared [`oakestra_logging`](../../libraries/oakestra_logging/) package. Alloy collects these structured records together with raw Go and third-party output.

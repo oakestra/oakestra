@@ -1,7 +1,10 @@
 import json
-import logging
+
+from oakestra_logging import get_logger
 
 from sla.sla_versions import sla_validator_by_version
+
+logger = get_logger(__name__)
 
 
 class SLAFormatError(BaseException):
@@ -21,6 +24,12 @@ def parse_sla_json(sla):
     validation_result = validator(json_data)
     if validation_result is None or validation_result is True:
         return json_data
-    else:
-        logging.log(logging.ERROR, validation_result)
-        raise SLAFormatError(validation_result)
+    logger.warning(
+        "SLA validation failed",
+        event_name="sla.validation.failed",
+        sla_version=version,
+        validation_error_count=(
+            len(validation_result) if hasattr(validation_result, "__len__") else 1
+        ),
+    )
+    raise SLAFormatError(validation_result)

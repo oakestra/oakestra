@@ -1,9 +1,9 @@
-import logging
 import os
 
 import requests
+from oakestra_logging import get_logger
 
-logger = logging.getLogger("cluster_manager")
+logger = get_logger(__name__)
 
 SERVICE_MANAGER_ADDR = (
     "http://"
@@ -21,7 +21,11 @@ def network_notify_deployment(job_id, job):
             json={"job_name": job["job_name"]},
         )
     except requests.exceptions.RequestException:
-        logger.error("Calling Service Manager /api/net/deployment not successful.")
+        logger.exception(
+            "Service Manager deployment notification failed",
+            event_name="network.deployment.notification_failed",
+            job_id=job_id,
+        )
 
 
 def network_notify_migration(job_id, job):
