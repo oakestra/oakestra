@@ -1,6 +1,5 @@
-import json
-
 from db import jobs_db as apps_db
+from flask import jsonify
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
@@ -23,13 +22,13 @@ class ApplicationFilterSchema(Schema):
 class ApplicationsController(MethodView):
     @applicationsblp.arguments(ApplicationFilterSchema, location="query")
     def get(self, query={}):
-        return json.dumps(list(apps_db.find_apps(query)), default=str)
+        return jsonify(list(apps_db.find_apps(query)))
 
     @pre_post_hook("applications")
     def post(self, data, *args, **kwargs):
         result = apps_db.create_app(data)
 
-        return json.dumps(result, default=str)
+        return jsonify(result)
 
 
 @applicationsblp.route("/<app_id>")
@@ -38,18 +37,18 @@ class ApplicationController(MethodView):
     def get(self, query, *args, **kwargs):
         app_id = kwargs.get("app_id")
 
-        return json.dumps(apps_db.find_app_by_id(app_id, query), default=str)
+        return jsonify(apps_db.find_app_by_id(app_id, query))
 
     @pre_post_hook("applications", with_param_id="app_id")
     def delete(self, *args, **kwargs):
         app_id = kwargs.get("app_id")
         result = apps_db.delete_app(app_id)
 
-        return json.dumps(result, default=str)
+        return jsonify(result)
 
     @pre_post_hook("applications", with_param_id="app_id")
     def patch(self, data, *args, **kwargs):
         app_id = kwargs.get("app_id")
         result = apps_db.update_app(app_id, data)
 
-        return json.dumps(result, default=str)
+        return jsonify(result)
