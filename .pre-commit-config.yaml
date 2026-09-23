@@ -54,6 +54,22 @@ repos:
       stages: [pre-commit]
       files: ^go_resource_abstractor/openapi/.*\.yaml$
       pass_filenames: false
+    # Third generation target reading the same spec: the Python client's transport
+    # layer (libraries/resource_abstractor_client/resource_abstractor_client/openapi/).
+    # Each pre-commit hook runs in its own isolated environment, so ruff has to be
+    # listed here too - it's openapi-python-client's own post-generation formatting
+    # step (see libraries/resource_abstractor_client/openapi/config.yaml), run as a
+    # subprocess that needs a `ruff` executable on PATH, not just importable.
+    - id: generate-openapi-resource-abstractor-client-python
+      name: Generate Python resource abstractor client (go_resource_abstractor spec changed)
+      language: python
+      additional_dependencies:
+        - openapi-python-client==0.29.0
+        - ruff==0.15.22
+      entry: python scripts/generate_python_client.py
+      stages: [pre-commit]
+      files: ^go_resource_abstractor/openapi/.*\.yaml$
+      pass_filenames: false
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.15.22
   hooks:

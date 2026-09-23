@@ -4,6 +4,7 @@ target-version = "py310"
 exclude = [
     ".github/*",
     "**/proto",
+    "libraries/resource_abstractor_client/resource_abstractor_client/openapi",
 ]
 [tool.ruff.lint]
 extend-select = [

@@ -55,3 +55,51 @@ jobs:
         working-directory: root_orchestrator/system-manager-python
         run: |
           coverage html -d tests/coverage
+
+  # Same suite, against the Go port instead of the Python resource-abstractor - the
+  # client library is now generated from go_resource_abstractor's own spec (see
+  # libraries/resource_abstractor_client/README.md), so this is what actually proves
+  # the two abstractors agree end to end rather than just independently passing their
+  # own tests.
+  test-go-resource-abstractor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.10"
+
+      - name: Install pytest
+        working-directory: root_orchestrator/system-manager-python
+        run: |
+          pip install pytest coverage
+
+      - name: Install dependencies
+        working-directory: root_orchestrator/system-manager-python
+        run: |
+          pip install -r requirements.txt --no-cache-dir
+
+      - name: Install local Oakestra libraries
+        working-directory: root_orchestrator/system-manager-python
+        run: |
+          pip install --no-cache-dir ../../libraries/resource_abstractor_client ../../libraries/oakestra_utils_library
+
+      - name: Generate protobuf files
+        working-directory: root_orchestrator/system-manager-python
+        run: |
+          python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/clusterRegistration.proto
+
+      - name: Run containers
+        working-directory: root_orchestrator/
+        run: |
+          docker compose -f docker-compose.yml -f override-go-resource-abstractor.yml up root_resource_abstractor -d
+
+      - name: Run test suite
+        working-directory: root_orchestrator/system-manager-python
+        run: |
+          coverage run -m pytest
