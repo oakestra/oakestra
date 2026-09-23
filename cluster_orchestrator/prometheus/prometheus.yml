@@ -1,20 +1,39 @@
-# my global config
 global:
-  scrape_interval: 5s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
-  evaluation_interval: 5s # Evaluate rules every 15 seconds. The default is every 1 minute.
-  # scrape_timeout is set to the global default (10s).
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
 
-# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
-rule_files:
-#   - "first_rules.yml"
-#   - "second_rules.yml"
-
-# A scrape configuration containing exactly one endpoint to scrape:
-# Here it's Prometheus itself.
 scrape_configs:
-  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
-  - job_name: 'prometheus'
-    # metrics_path defaults to '/metrics'
-    # scheme defaults to 'http'.
+  - job_name: prometheus
     static_configs:
-    - targets: ['cluster_manager:10001']
+      - targets: ["cluster_prometheus:9090"]
+        labels:
+          host_scope: cluster
+
+  - job_name: node-exporter
+    static_configs:
+      - targets: ["host.metrics.internal:9100"]
+        labels:
+          host_scope: cluster
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cluster_cadvisor:8080"]
+        labels:
+          host_scope: cluster
+    metric_relabel_configs:
+      - source_labels: [container_label_oakestra_logging_collector]
+        regex: cluster
+        action: keep
+      - source_labels: [container_label_com_docker_compose_service]
+        target_label: compose_service
+      - source_labels: [container_label_oakestra_cluster_id]
+        target_label: cluster_id
+      - regex: "container_label_.+"
+        action: labeldrop
+
+  - job_name: cluster-manager
+    static_configs:
+      - targets: ["cluster_manager:10001"]
+        labels:
+          host_scope: cluster

@@ -187,11 +187,11 @@ loki.process "oakestra" {
 		}
 	}
 
-	// Grafana, Loki, Alloy, and Prometheus emit logfmt. Parsing only these known
+	// Grafana, Loki, Alloy, Prometheus, and node_exporter emit logfmt. Parsing only these known
 	// emitters reads the real top-level level field instead of matching text
 	// embedded later in a message or query.
 	stage.match {
-		selector = `{compose_service=~"alloy|cluster_alloy|grafana|cluster_grafana|loki|cluster_loki|prometheus"}`
+		selector = `{compose_service=~"alloy|cluster_alloy|grafana|cluster_grafana|loki|cluster_loki|prometheus|node_exporter"}`
 
 		stage.logfmt {
 			mapping = {

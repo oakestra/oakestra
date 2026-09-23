@@ -28,7 +28,15 @@ services:
     pull_policy: always
 
   prometheus:
-    image: prom/prometheus
+    image: prom/prometheus:v3.13.2-distroless
+    pull_policy: always
+
+  node_exporter:
+    image: quay.io/prometheus/node-exporter:v1.12.1
+    pull_policy: always
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.5
     pull_policy: always
 
   cluster_grafana:
