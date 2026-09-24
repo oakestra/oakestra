@@ -1,6 +1,7 @@
 [Unit]
 Description=Oakestra NodeEngine Service
-After=network.target
+After=network.target netmanager.service
+Wants=netmanager.service
 StartLimitIntervalSec=10
 [Service]
 Type=simple

@@ -509,7 +509,35 @@ Check that:
 - `MQTT_BROKER_PORT` = 10003
 - `CLUSTER_SERVICE_MANAGER_URL` and port 10110 are accessible
 
-### 9.5 Worker → Cluster Connectivity
+### 9.4b P2P Mode Detection and Diagnostics
+
+Workers can run **standalone in p2p mode** (no cluster). Detect it first — cluster
+connectivity checks (9.5) do not apply to p2p workers.
+
+```bash
+# Is this worker in p2p mode?
+grep -o '"mode":"[^"]*"' /etc/oakestra/conf.json 2>/dev/null
+
+# P2P health: membership, network-wide services, local control API
+curl -s --unix-socket /etc/netmanager/netmanager.sock http://localhost/p2p/members | head
+curl -s http://127.0.0.1:50105/ctrl/services | head
+NodeEngine services ls 2>/dev/null
+NodeEngine members 2>/dev/null
+
+# P2P ports that must be open between workers:
+#   50103/udp (overlay tunnel) · 50104/udp+tcp (gossip) ·
+#   50105/tcp (control API)    · 50106/tcp (enrollment, TLS)
+
+# P2P credentials/state locations
+ls /etc/oakestra/p2p/ 2>/dev/null          # creds.json, node.crt/key, tokens.json
+ls /var/lib/oakestra/ 2>/dev/null          # deployments.json, custodian/, ipam.json
+```
+
+Common p2p failures: wrong/expired join token (enrollment log line "rejected join"),
+gossip PSK mismatch ("no installed keys could decrypt the message" in netmanager.log),
+control API not up (daemon not started with `--p2p`).
+
+### 9.5 Worker → Cluster Connectivity (cluster mode only)
 
 ```bash
 # Can worker reach MQTT?

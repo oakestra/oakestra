@@ -102,6 +102,33 @@ Root Orchestrator  (1 per deployment)
 | `NodeEngine` | This repo (`go_node_engine/`) | Runs on Linux workers. Connects to cluster via MQTT (10003). Receives deployment commands, manages containers/unikernels/VMs. Exposes CLI: `NodeEngine status`, `NodeEngine conf`, `NodeEngine logs`, `NodeEngine stop`. |
 | `NetManager` | `github.com/oakestra/oakestra-net` | Handles P2P overlay networking between workers (port 50103). Paired with NodeEngine. |
 
+### P2P Mode (clusterless workers)
+
+Workers can alternatively run **standalone in a peer-to-peer mesh** — no root or cluster
+orchestrator. Full design: `P2P_MODE_IMPLEMENTATION_PLAN.md` (repo parent directory).
+
+- **Start**: `NodeEngine -d --p2p --init` (genesis) or `NodeEngine -d --p2p --join <ip:50106>
+  --token <tok> --ca-hash sha256:<pin>` (join; the command is printed by `NodeEngine addp2p`
+  on any member). Bare `--p2p` re-joins with stored creds. Switch modes with
+  `NodeEngine config mode p2p|cluster <ip>` (drains workloads first).
+- **Deploy**: `NodeEngine deploy <sla.json>` (same SLA format as the root API) runs a
+  **bid round** across the mesh (quorum `ceil(N/SIGMA)`, SIGMA=4 default, 30s timeout;
+  tune via `NodeEngine config sched`) and places each service via `bestRandomFit`.
+  `--local` skips bidding. Lifecycle: `services ls|logs|inspect`, `members`, `undeploy`, `drain`.
+- **Networking**: every node uses the same fixed local subnet (10.18.0.0/26) — the per-node
+  subnet request to root/cluster is **deprecated** (endpoints now return the fixed subnet).
+  Instance IPs come from a per-node /24 block in 10.30.0.0/16. Membership + service registry
+  ride SWIM gossip (`hashicorp/memberlist`), PSK-encrypted (AES-GCM).
+- **Resilience**: SLAs replicate to k=3 HRW custodians (host + 2 backups); on host death the
+  primary live custodian reschedules (a generation counter resolves reboot-vs-failover
+  races); unschedulable jobs park as PENDING and retry on node-join / interval.
+- **Security**: no CA — self-signed node certs + a roster of member fingerprints; single-use
+  join tokens (default 1h TTL); `NodeEngine revoke <uuid>` drops a member from the roster.
+- **Ports**: 50103 overlay tunnel (unchanged) · 50104 gossip · 50105 node control API ·
+  50106 enrollment (TLS).
+- **oak CLI**: when `/etc/oakestra/conf.json` has `mode=p2p`, `oak app` / `oak service`
+  auto-resolve to the local worker (`127.0.0.1:50105`) instead of a root orchestrator.
+
 ---
 
 ## Key Communication Flows
