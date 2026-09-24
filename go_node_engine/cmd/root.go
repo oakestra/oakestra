@@ -30,6 +30,12 @@ var (
 	// Addons
 	imageBuilder        bool
 	flopsLearnerSupport bool
+	// P2P mode
+	p2pMode   bool
+	p2pInit   bool
+	p2pJoin   string
+	p2pToken  string
+	p2pCaHash string
 )
 
 var CONF_DIR = path.Join("/etc", "oakestra")
@@ -49,12 +55,25 @@ func init() {
 	// Addons
 	rootCmd.Flags().BoolVar(&imageBuilder, "image-builder", false, "Checks if the host has QEMU (apt's qemu-user-static) installed for building multi-platform images.")
 	rootCmd.Flags().BoolVar(&flopsLearnerSupport, "flops-learner", false, "Enables the ML-data-server sidecar for data collection for FLOps learners.")
+	// P2P mode
+	rootCmd.Flags().BoolVar(&p2pMode, "p2p", false, "Start the worker in peer-to-peer mode (no cluster orchestrator)")
+	rootCmd.Flags().BoolVar(&p2pInit, "init", false, "Genesis: create a brand-new p2p network on this node")
+	rootCmd.Flags().StringVar(&p2pJoin, "join", "", "P2P enrollment bootstrap address ip:port (from 'addp2p')")
+	rootCmd.Flags().StringVar(&p2pToken, "token", "", "P2P single-use join token")
+	rootCmd.Flags().StringVar(&p2pCaHash, "ca-hash", "", "P2P trust-anchor pin (sha256:...) verified on first contact")
 }
 
 func nodeEngineDaemonManager() error {
 	if _, err := os.Stat(CONF_FILE); err != nil {
 		err := defaultConfig()
 		if err != nil {
+			return err
+		}
+	}
+
+	if p2pMode {
+		// P2P mode: persist mode + join params and skip cluster-address handling
+		if err := applyP2PStartup(p2pInit, p2pJoin, p2pToken, p2pCaHash); err != nil {
 			return err
 		}
 	}
@@ -90,6 +109,9 @@ func nodeEngineDaemonManager() error {
 			return err
 		}
 	}
+
+	// enable at boot so the daemon (and its persisted deployments) survive a reboot
+	_ = exec.Command("systemctl", "enable", "nodeengine").Run()
 
 	// start the node engine daemon systemctl daemon
 	cmd := exec.Command("systemctl", "start", "nodeengine")
