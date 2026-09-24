@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go_node_engine/config"
 	"go_node_engine/model"
+	"go_node_engine/p2p"
 	"net"
 	"net/http"
 	"sync"
@@ -15,6 +17,12 @@ import (
 type registerRequest struct {
 	ClientId       string `json:"client_id"`
 	ClusterAddress string `json:"cluster_address"`
+	// P2P mode fields. Mode "" or "cluster" => cluster mode.
+	Mode        string   `json:"mode,omitempty"`
+	GossipKey   string   `json:"gossip_key,omitempty"`
+	Seeds       []string `json:"seeds,omitempty"`
+	GossipPort  int      `json:"gossip_port,omitempty"`
+	ControlPort int      `json:"control_port,omitempty"`
 }
 
 type connectNetworkRequest struct {
@@ -100,6 +108,23 @@ func RegisterSelfToNetworkComponent() error {
 		ClientId:       model.GetNodeInfo().Id,
 		ClusterAddress: model.GetNodeInfo().ClusterAddress,
 	}
+
+	// In p2p mode, hand the NetManager the gossip parameters instead of a cluster address
+	// The NetManager then starts the p2p membership + registry resolver.
+	if cfg, err := config.GetConfFileManager().Get(); err == nil && cfg.NodeModeOrDefault() == config.MODE_P2P {
+		request.Mode = "p2p"
+		request.ClientId = cfg.NodeUUID
+		request.GossipPort = cfg.P2P.GossipPort
+		request.ControlPort = p2p.DefaultControlPort
+		seeds := cfg.P2P.BootstrapPeers
+		// The gossip PSK and seed list come from enrollment/genesis.
+		if creds, ok := p2p.LoadCreds(); ok {
+			request.GossipKey = creds.GossipKey
+			seeds = append(seeds, creds.Seeds...)
+		}
+		request.Seeds = seeds
+	}
+
 	jsonReq, err := json.Marshal(request)
 	if err != nil {
 		return err
