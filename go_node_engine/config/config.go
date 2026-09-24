@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +32,8 @@ const (
 
 type ConfFile struct {
 	ConfVersion     string           `json:"conf_version"`
+	Mode            NodeMode         `json:"mode"`
+	NodeUUID        string           `json:"node_uuid"`
 	ClusterAddress  string           `json:"cluster_address"`
 	ClusterSSL      bool             `json:"cluster_ssl"`
 	ClusterPort     int              `json:"cluster_port"`
@@ -40,9 +43,75 @@ type ConfFile struct {
 	NetPort         int              `json:"overlay_network_port"`
 	CertFile        string           `json:"mqtt_cert_file"`
 	KeyFile         string           `json:"mqtt_key_file"`
+	P2P             P2PConfig        `json:"p2p"`
 	Addons          []Addon          `json:"addons"`
 	Virtualizations []Virtualization `json:"virtualizations"`
 	CSIDrivers      []CSIDriverType  `json:"csi_drivers"`
+}
+
+// NodeMode selects whether the worker attaches to a cluster orchestrator or runs
+// in the decentralised peer-to-peer mesh.
+type NodeMode string
+
+const (
+	MODE_CLUSTER NodeMode = "cluster"
+	MODE_P2P     NodeMode = "p2p"
+)
+
+// ParseNodeMode normalises a user-provided mode string, defaulting to cluster mode.
+func ParseNodeMode(mode string) NodeMode {
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case string(MODE_P2P):
+		return MODE_P2P
+	default:
+		return MODE_CLUSTER
+	}
+}
+
+// P2PConfig holds all peer-to-peer mode parameters.
+// The gossip PSK keyring and the data-plane AEAD key are obtained at enrollment
+// and stored under /etc/oakestra/p2p/ — they are NOT kept in this JSON.
+type P2PConfig struct {
+	BootstrapPeers   []string      `json:"bootstrap_peers"`          // optional static seeds "ip:port"
+	Discovery        string        `json:"discovery"`                // "mdns" (default) | "static" | "both"
+	NodeCert         string        `json:"node_cert"`                // this node's self-signed cert
+	NodeKey          string        `json:"node_key"`                 // this node's private key (never leaves node)
+	GossipPort       int           `json:"gossip_port"`              // default 50104
+	EnrollPort       int           `json:"enroll_port"`              // TLS enrollment endpoint, default 50106
+	ServiceIPBlock   string        `json:"service_ip_block"`         // claimed /24 in 10.30.0.0/16
+	SchedSigma       int           `json:"sched_sigma"`              // quorum divisor, default 4
+	SchedTimeoutSec  int           `json:"sched_timeout_sec"`        // bid-round timeout, default 30
+	SchedRetryMaxSec int           `json:"sched_retry_max_sec"`      // PENDING retry backoff cap, default 300
+	ReplicaFactor    int           `json:"replica_factor"`           // SLA custodians per job, default 3
+	Pending          PendingEnroll `json:"pending_enroll,omitempty"` // one-shot join params (cleared after enrollment)
+}
+
+// PendingEnroll carries one-shot enrollment parameters from the boot/config command
+// to the daemon, which runs the enrollment handshake and clears them.
+type PendingEnroll struct {
+	Init   bool   `json:"init"`    // genesis: create a new network
+	Join   string `json:"join"`    // enrollment bootstrap address ip:port
+	Token  string `json:"token"`   // single-use join token
+	CaHash string `json:"ca_hash"` // trust-anchor pin (sha256:...)
+}
+
+// HasPendingEnroll reports whether the node still needs to run enrollment.
+func (p P2PConfig) HasPendingEnroll() bool {
+	return p.Pending.Init || p.Pending.Join != ""
+}
+
+// GenDefaultP2PConfig returns the P2P defaults. These are inert while Mode=cluster.
+func GenDefaultP2PConfig() P2PConfig {
+	return P2PConfig{
+		BootstrapPeers:   []string{},
+		Discovery:        "mdns",
+		GossipPort:       50104,
+		EnrollPort:       50106,
+		SchedSigma:       4,
+		SchedTimeoutSec:  30,
+		SchedRetryMaxSec: 300,
+		ReplicaFactor:    3,
+	}
 }
 
 type PublicIPMode string
@@ -178,6 +247,7 @@ func (c *ConfFile) Write(new ConfFile) error {
 func GenDefaultConfig() ConfFile {
 	return ConfFile{
 		ConfVersion:    "1.0",
+		Mode:           MODE_CLUSTER,
 		ClusterAddress: "0.0.0.0",
 		ClusterPort:    10100,
 		ClusterSSL:     false,
@@ -185,6 +255,7 @@ func GenDefaultConfig() ConfFile {
 		OverlayNetwork: AUTO_OAK_NETWORK,
 		PublicIp:       PUBLIC_IP_FALSE,
 		NetPort:        0,
+		P2P:            GenDefaultP2PConfig(),
 		Virtualizations: []Virtualization{
 			{
 				Name:    "containerd",
@@ -194,4 +265,25 @@ func GenDefaultConfig() ConfFile {
 			},
 		},
 	}
+}
+
+// GenerateNodeUUID returns a random RFC-4122-ish v4 UUID string. Used to give a
+// p2p node a stable identity in place of the cluster-assigned id.
+func GenerateNodeUUID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant 10
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
+}
+
+// Mode returns the configured node mode, defaulting to cluster if unset (back-compat
+// with configs written before p2p mode existed).
+func (c ConfFile) NodeModeOrDefault() NodeMode {
+	if c.Mode == "" {
+		return MODE_CLUSTER
+	}
+	return c.Mode
 }
