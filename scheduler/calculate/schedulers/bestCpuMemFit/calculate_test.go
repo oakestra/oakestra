@@ -3,6 +3,7 @@ package bestCpuMemFit
 import (
 	"encoding/json"
 	"errors"
+	"scheduler/calculate/schedulers/cpumem"
 	"scheduler/calculate/schedulers/interfaces"
 	"testing"
 
@@ -11,28 +12,28 @@ import (
 
 func TestCalculateConstraints(t *testing.T) {
 	var algorithm BestCpuMemFit
-	job1 := CpuMemResources{
+	job1 := cpumem.Resources{
 		Constraints:    nil,
 		Id:             "1",
 		Virtualization: []string{"docker"},
 		AvailableMem:   500,
 		AvailableCPU:   1,
 	}
-	job2 := CpuMemResources{
+	job2 := cpumem.Resources{
 		Constraints:    nil,
 		Id:             "2",
 		Virtualization: []string{"docker"},
 		AvailableMem:   5000,
 		AvailableCPU:   20,
 	}
-	job3 := CpuMemResources{
+	job3 := cpumem.Resources{
 		Constraints:    nil,
 		Id:             "3",
 		Virtualization: []string{"unikernel"},
 		AvailableMem:   500,
 		AvailableCPU:   1,
 	}
-	cluster1 := CpuMemResources{
+	cluster1 := cpumem.Resources{
 		Constraints:    nil,
 		Id:             "1",
 		Virtualization: []string{"docker"},
@@ -40,7 +41,7 @@ func TestCalculateConstraints(t *testing.T) {
 		AvailableCPU:   4,
 		CPUPercent:     10,
 	}
-	cluster2 := CpuMemResources{
+	cluster2 := cpumem.Resources{
 		Constraints:    nil,
 		Id:             "2",
 		Virtualization: []string{"docker"},
@@ -48,7 +49,7 @@ func TestCalculateConstraints(t *testing.T) {
 		AvailableCPU:   4,
 		CPUPercent:     20,
 	}
-	cluster3 := CpuMemResources{
+	cluster3 := cpumem.Resources{
 		Constraints:    nil,
 		Id:             "3",
 		Virtualization: []string{"unikernel"},
@@ -56,7 +57,7 @@ func TestCalculateConstraints(t *testing.T) {
 		AvailableCPU:   8,
 		CPUPercent:     10,
 	}
-	cluster4 := CpuMemResources{
+	cluster4 := cpumem.Resources{
 		Constraints:    nil,
 		Id:             "4",
 		Virtualization: []string{"docker", "unikernel"},
@@ -64,7 +65,7 @@ func TestCalculateConstraints(t *testing.T) {
 		AvailableCPU:   8,
 		CPUPercent:     5,
 	}
-	cluster5 := CpuMemResources{
+	cluster5 := cpumem.Resources{
 		Constraints:    nil,
 		Id:             "5",
 		Virtualization: []string{"docker"},
@@ -73,7 +74,7 @@ func TestCalculateConstraints(t *testing.T) {
 		CPUPercent:     10,
 		CSIDrivers:     []string{"nfs.csi.k8s.io"},
 	}
-	cluster6 := CpuMemResources{
+	cluster6 := cpumem.Resources{
 		Constraints:    nil,
 		Id:             "6",
 		Virtualization: []string{"docker"},
@@ -83,42 +84,42 @@ func TestCalculateConstraints(t *testing.T) {
 		CSIDrivers:     []string{"nfs.csi.k8s.io", "rbd.csi.ceph.com"},
 	}
 
-	jobWithCSI := CpuMemResources{
+	jobWithCSI := cpumem.Resources{
 		Constraints:    nil,
 		Id:             "csi-job",
 		Virtualization: []string{"docker"},
 		AvailableMem:   500,
 		AvailableCPU:   1,
-		Volumes: []VolumeSpec{
+		Volumes: []cpumem.VolumeSpec{
 			{VolumeID: "vol-1", CSIDriver: "nfs.csi.k8s.io", MountPath: "/data"},
 		},
 	}
-	jobWithUnknownCSI := CpuMemResources{
+	jobWithUnknownCSI := cpumem.Resources{
 		Constraints:    nil,
 		Id:             "csi-job-missing",
 		Virtualization: []string{"docker"},
 		AvailableMem:   500,
 		AvailableCPU:   1,
-		Volumes: []VolumeSpec{
+		Volumes: []cpumem.VolumeSpec{
 			{VolumeID: "vol-2", CSIDriver: "unknown.csi.driver", MountPath: "/data"},
 		},
 	}
 
 	var tests = []struct {
 		name       string
-		job        CpuMemResources
-		candidates []CpuMemResources
-		res        CpuMemResources
+		job        cpumem.Resources
+		candidates []cpumem.Resources
+		res        cpumem.Resources
 		error      error
 	}{
-		{"Docker best fit", job1, []CpuMemResources{cluster1, cluster2, cluster3}, cluster1, nil},
-		{"Unikernel best fit", job3, []CpuMemResources{cluster1, cluster2, cluster3}, cluster3, nil},
-		{"Docker best fit dual cluster", job1, []CpuMemResources{cluster1, cluster2, cluster3, cluster4}, cluster4, nil},
-		{"Unikernel best fit dual cluster", job3, []CpuMemResources{cluster1, cluster2, cluster3, cluster4}, cluster4, nil},
-		{"Docker no capacity", job2, []CpuMemResources{cluster1, cluster2, cluster3, cluster4}, cluster1, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.NoActiveClusterWithCapacity}},
+		{"Docker best fit", job1, []cpumem.Resources{cluster1, cluster2, cluster3}, cluster1, nil},
+		{"Unikernel best fit", job3, []cpumem.Resources{cluster1, cluster2, cluster3}, cluster3, nil},
+		{"Docker best fit dual cluster", job1, []cpumem.Resources{cluster1, cluster2, cluster3, cluster4}, cluster4, nil},
+		{"Unikernel best fit dual cluster", job3, []cpumem.Resources{cluster1, cluster2, cluster3, cluster4}, cluster4, nil},
+		{"Docker no capacity", job2, []cpumem.Resources{cluster1, cluster2, cluster3, cluster4}, cluster1, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.NoActiveClusterWithCapacity}},
 		// CSI driver matching
-		{"CSI driver available", jobWithCSI, []CpuMemResources{cluster1, cluster5, cluster6}, cluster6, nil},
-		{"CSI driver not available", jobWithUnknownCSI, []CpuMemResources{cluster1, cluster5, cluster6}, cluster1, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.NoActiveClusterWithCapacity}},
+		{"CSI driver available", jobWithCSI, []cpumem.Resources{cluster1, cluster5, cluster6}, cluster6, nil},
+		{"CSI driver not available", jobWithUnknownCSI, []cpumem.Resources{cluster1, cluster5, cluster6}, cluster1, interfaces.SchedulingError{NegativeSchedulingStatus: interfaces.NoActiveClusterWithCapacity}},
 	}
 
 	for _, tt := range tests {
@@ -144,7 +145,7 @@ func TestCsiDriversUnmarshal(t *testing.T) {
 	t.Run("flat string array (root level)", func(t *testing.T) {
 		raw := `{"_id":"c1","virtualization":["docker"],"memory":2000,"vcpus":4,"cpu_percent":10,
 			"csi_drivers":["nfs.csi.k8s.io","rbd.csi.ceph.com"]}`
-		var r CpuMemResources
+		var r cpumem.Resources
 		if err := json.Unmarshal([]byte(raw), &r); err != nil {
 			t.Fatalf("UnmarshalJSON error: %v", err)
 		}
@@ -158,7 +159,7 @@ func TestCsiDriversUnmarshal(t *testing.T) {
 				{"csi_driver_name":"nfs.csi.k8s.io","csi_driver_endpoint":"/other/path"},
 				{"csi_driver_name":"rbd.csi.ceph.com","csi_driver_endpoint":"/var/lib/ceph.sock"}
 			]}`
-		var r CpuMemResources
+		var r cpumem.Resources
 		if err := json.Unmarshal([]byte(raw), &r); err != nil {
 			t.Fatalf("UnmarshalJSON error: %v", err)
 		}
@@ -171,7 +172,7 @@ func TestCsiDriversUnmarshal(t *testing.T) {
 			"volumes":[
 				{"volume_id":"vol-1","csi_driver":"nfs.csi.k8s.io","mount_path":"/data","config":{"server":"192.168.1.1"}}
 			]}`
-		var r CpuMemResources
+		var r cpumem.Resources
 		if err := json.Unmarshal([]byte(raw), &r); err != nil {
 			t.Fatalf("UnmarshalJSON error: %v", err)
 		}
@@ -193,7 +194,7 @@ func TestCsiDriversUnmarshal(t *testing.T) {
 func TestFilterWithObjectFormatCSIDrivers(t *testing.T) {
 	// Worker candidate whose csi_drivers arrived as objects and were normalised
 	// to strings during UnmarshalJSON.
-	workerWithNFS := CpuMemResources{
+	workerWithNFS := cpumem.Resources{
 		Id:             "w1",
 		Virtualization: []string{"docker"},
 		AvailableMem:   2000,
@@ -201,15 +202,15 @@ func TestFilterWithObjectFormatCSIDrivers(t *testing.T) {
 		CPUPercent:     10,
 		CSIDrivers:     []string{"nfs.csi.k8s.io"},
 	}
-	jobNeedingNFS := CpuMemResources{
+	jobNeedingNFS := cpumem.Resources{
 		Id:             "j1",
 		Virtualization: []string{"docker"},
 		AvailableMem:   500,
 		AvailableCPU:   1,
-		Volumes:        []VolumeSpec{{VolumeID: "v1", CSIDriver: "nfs.csi.k8s.io"}},
+		Volumes:        []cpumem.VolumeSpec{{VolumeID: "v1", CSIDriver: "nfs.csi.k8s.io"}},
 	}
 	var algorithm BestCpuMemFit
-	res, err := algorithm.Calculate(jobNeedingNFS, []CpuMemResources{workerWithNFS})
+	res, err := algorithm.Calculate(jobNeedingNFS, []cpumem.Resources{workerWithNFS})
 	if err != nil {
 		t.Fatalf("unexpected scheduling error: %v", err)
 	}
