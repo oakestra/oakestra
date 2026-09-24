@@ -163,7 +163,7 @@ collect:
 		}
 	}
 
-	// Decide via bestRandomFit — random among the best band (plan §1.5 step 6, §1.6).
+	// Decide via bestrandomfit — random among the best band (plan §1.5 step 6, §1.6).
 	req := scheduling.Requirements{Runtime: job.Service.Runtime, Memory: float64(job.Service.Memory), Vcpus: float64(job.Service.Vcpus)}
 	for len(positives) > 0 {
 		winnerUUID, ok := scheduling.PickHost(req, positives, 0)

@@ -11,6 +11,10 @@ on:
     types:
       - requested
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   trigger-awx-job:
     name: Trigger Testbed Oneshot Execution ${{ github.event.workflow_run.head_branch }}
@@ -18,6 +22,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Resolve the fork repository to pass to the `awx-deploy` action.
+      - name: Resolve fork repository
+        id: fork
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          pulls=$(gh api --paginate "repos/${REPO}/pulls?state=open&per_page=100")
+
+          # Prefer an exact head-SHA match; fall back to the head branch name.
+          fork_repo=$(jq -r --arg sha "$HEAD_SHA" \
+            'first(.[] | select(.head.sha == $sha) | .head.repo.full_name) // empty' <<<"$pulls")
+          if [ -z "$fork_repo" ]; then
+            fork_repo=$(jq -r --arg ref "$HEAD_BRANCH" \
+              'first(.[] | select(.head.ref == $ref) | .head.repo.full_name) // empty' <<<"$pulls")
+          fi
+          if [ -z "$fork_repo" ]; then
+            echo "No open PR matched sha=${HEAD_SHA} branch=${HEAD_BRANCH}; falling back to ${REPO}"
+            fork_repo="${REPO}"
+          fi
+          echo "Resolved fork repo: $fork_repo"
+          echo "fork_repo=$fork_repo" >> "$GITHUB_OUTPUT"
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
@@ -37,4 +67,5 @@ jobs:
           AWX_TEMPLATE_ID: 18 # Job Workflow Template ID for Oneshot Testbed Execution
           PR_BRANCH: ${{ github.event.workflow_run.head_branch }}
           PR_USER: ${{ github.event.workflow_run.head_commit.author.name }}
+          FORK_REPO: ${{ steps.fork.outputs.fork_repo }}
           PR_COMMIT: HEAD

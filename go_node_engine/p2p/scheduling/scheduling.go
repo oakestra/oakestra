@@ -1,11 +1,11 @@
-// Package scheduling adapts the shared scheduler's bestRandomFit algorithm for use by
+// Package scheduling adapts the shared scheduler's bestrandomfit algorithm for use by
 // the node engine's p2p bid round (plan §1.5 step 6, §1.6). The node engine collects
 // positive bids from peers and calls PickHost to select one at random among the best.
 package scheduling
 
 import (
-	"scheduler/calculate/schedulers/bestRandomFit"
-	"scheduler/calculate/schedulers/cpumem"
+	"scheduler/calculate/schedulers/bestrandomfit"
+	"scheduler/calculate/schedulers/placement"
 )
 
 // Requirements are the placement constraints distilled from an SLA service.
@@ -23,33 +23,33 @@ type Bid struct {
 	CpuPct   float64 // current cpu utilisation %
 }
 
-// PickHost selects a host among positive bids using bestRandomFit — random among the
+// PickHost selects a host among positive bids using bestrandomfit — random among the
 // best-scoring band. Returns the chosen node UUID; ok=false if none qualify.
 func PickHost(req Requirements, bids []Bid, tolerance float64) (nodeUUID string, ok bool) {
 	if len(bids) == 0 {
 		return "", false
 	}
-	job := cpumem.Resources{
+	job := bestrandomfit.Resources{BaseResources: placement.BaseResources{
 		Virtualization: []string{req.Runtime},
 		AvailableMem:   req.Memory,
 		AvailableCPU:   req.Vcpus,
-	}
-	candidates := make([]cpumem.Resources, len(bids))
+	}}
+	candidates := make([]bestrandomfit.Resources, len(bids))
 	for i, b := range bids {
-		candidates[i] = cpumem.Resources{
-			Id:             b.NodeUUID,
+		candidates[i] = bestrandomfit.Resources{BaseResources: placement.BaseResources{
+			ID:             b.NodeUUID,
 			Virtualization: []string{req.Runtime},
 			AvailableMem:   b.Mem,
 			AvailableCPU:   b.Vcpus,
 			CPUPercent:     b.CpuPct,
-		}
+		}}
 	}
 	if tolerance <= 0 {
-		tolerance = bestRandomFit.DefaultTolerance
+		tolerance = bestrandomfit.DefaultTolerance
 	}
-	chosen, err := bestRandomFit.BestRandomFit{Tolerance: tolerance}.Calculate(job, candidates)
+	chosen, err := bestrandomfit.Scheduler{Tolerance: tolerance}.Calculate(job, candidates)
 	if err != nil {
 		return "", false
 	}
-	return chosen.Id, true
+	return chosen.ID(), true
 }

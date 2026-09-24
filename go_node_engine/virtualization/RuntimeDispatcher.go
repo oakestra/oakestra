@@ -6,8 +6,11 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/util/iotools"
 
-	// make sure crosvm runtime is initialized, as it is not in the virtualization module
+	// make sure all runtimes are initialized
+	_ "go_node_engine/virtualization/internal/containerd"
 	_ "go_node_engine/virtualization/internal/crosvm"
+	_ "go_node_engine/virtualization/internal/unikernel"
+
 	virtrt "go_node_engine/virtualization/internal/runtime"
 )
 

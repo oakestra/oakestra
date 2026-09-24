@@ -15,8 +15,9 @@ import (
 )
 
 type registerRequest struct {
-	ClientId       string `json:"client_id"`
-	ClusterAddress string `json:"cluster_address"`
+	ClientId          string `json:"client_id"`
+	ClusterAddress    string `json:"cluster_address"`
+	NodePublicAddress string `json:"node_public_address"`
 	// P2P mode fields. Mode "" or "cluster" => cluster mode.
 	Mode        string   `json:"mode,omitempty"`
 	GossipKey   string   `json:"gossip_key,omitempty"`
@@ -103,20 +104,26 @@ func DetachNetworkFromTask(servicename string, instance int) error {
 }
 
 // RegisterSelfToNetworkComponent registers the node to the network component
-func RegisterSelfToNetworkComponent() error {
+func RegisterSelfToNetworkComponent(configs config.ConfFile) error {
+	publicIp := ""
+	if !configs.PublicIp.IsAuto() && !configs.PublicIp.IsDisabled() {
+		publicIp = configs.PublicIp.Value()
+	}
+
 	request := registerRequest{
-		ClientId:       model.GetNodeInfo().Id,
-		ClusterAddress: model.GetNodeInfo().ClusterAddress,
+		ClientId:          model.GetNodeInfo().Id,
+		ClusterAddress:    model.GetNodeInfo().ClusterAddress,
+		NodePublicAddress: publicIp,
 	}
 
 	// In p2p mode, hand the NetManager the gossip parameters instead of a cluster address
 	// The NetManager then starts the p2p membership + registry resolver.
-	if cfg, err := config.GetConfFileManager().Get(); err == nil && cfg.NodeModeOrDefault() == config.MODE_P2P {
+	if configs.NodeModeOrDefault() == config.MODE_P2P {
 		request.Mode = "p2p"
-		request.ClientId = cfg.NodeUUID
-		request.GossipPort = cfg.P2P.GossipPort
+		request.ClientId = configs.NodeUUID
+		request.GossipPort = configs.P2P.GossipPort
 		request.ControlPort = p2p.DefaultControlPort
-		seeds := cfg.P2P.BootstrapPeers
+		seeds := configs.P2P.BootstrapPeers
 		// The gossip PSK and seed list come from enrollment/genesis.
 		if creds, ok := p2p.LoadCreds(); ok {
 			request.GossipKey = creds.GossipKey

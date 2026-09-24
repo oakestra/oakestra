@@ -44,8 +44,7 @@ var (
 		Use:   "sched",
 		Short: "Show or tune the p2p bid-round parameters (SIGMA, timeout)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mgr := config.GetConfFileManager()
-			conf, err := mgr.Get()
+			conf, err := config.Read()
 			if err != nil {
 				return err
 			}
@@ -56,7 +55,7 @@ var (
 				conf.P2P.SchedTimeoutSec = schedTimeout
 			}
 			if schedSigma > 0 || schedTimeout > 0 {
-				if err := mgr.Write(conf); err != nil {
+				if err := config.Write(conf); err != nil {
 					return err
 				}
 			}
@@ -111,8 +110,7 @@ func applyP2PStartup(initNet bool, join, token, caHash string) error {
 		return errors.New("--init and --join are mutually exclusive")
 	}
 
-	mgr := config.GetConfFileManager()
-	conf, err := mgr.Get()
+	conf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -149,7 +147,7 @@ func applyP2PStartup(initNet bool, join, token, caHash string) error {
 		CaHash: caHash,
 	}
 
-	if err := mgr.Write(conf); err != nil {
+	if err := config.Write(conf); err != nil {
 		return err
 	}
 	fmt.Printf("Worker configured for P2P mode 🟢 (node %s)\n", conf.NodeUUID)
@@ -157,8 +155,7 @@ func applyP2PStartup(initNet bool, join, token, caHash string) error {
 }
 
 func applyClusterMode(address string, port int) error {
-	mgr := config.GetConfFileManager()
-	conf, err := mgr.Get()
+	conf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -170,7 +167,7 @@ func applyClusterMode(address string, port int) error {
 	conf.Mode = config.MODE_CLUSTER
 	conf.ClusterAddress = address
 	conf.ClusterPort = port
-	if err := mgr.Write(conf); err != nil {
+	if err := config.Write(conf); err != nil {
 		return err
 	}
 	restartWorkerServices()
@@ -206,7 +203,7 @@ func restartWorkerServices() {
 }
 
 func showMode() error {
-	conf, err := config.GetConfFileManager().Get()
+	conf, err := config.Read()
 	if err != nil {
 		return err
 	}

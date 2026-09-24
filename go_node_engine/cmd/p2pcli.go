@@ -202,7 +202,7 @@ var (
 			if err := requireP2PMode(); err != nil {
 				return err
 			}
-			conf, err := config.GetConfFileManager().Get()
+			conf, err := config.Read()
 			if err != nil {
 				return err
 			}
@@ -327,7 +327,7 @@ func init() {
 }
 
 func requireP2PMode() error {
-	conf, err := config.GetConfFileManager().Get()
+	conf, err := config.Read()
 	if err != nil {
 		return err
 	}
@@ -349,7 +349,7 @@ var (
 
 func ctrlClientAndScheme() (*http.Client, string) {
 	ctrlOnce.Do(func() {
-		if conf, err := config.GetConfFileManager().Get(); err == nil && conf.NodeUUID != "" {
+		if conf, err := config.Read(); err == nil && conf.NodeUUID != "" {
 			ctrlHTTP, ctrlScheme = p2pnode.NewMemberHTTPClient(conf.NodeUUID, nil, 90*time.Second)
 			return
 		}

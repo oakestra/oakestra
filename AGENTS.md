@@ -4,7 +4,7 @@
 
 Oakestra is a **lightweight orchestration platform for edge computing**. Unlike Kubernetes or K3s, which were designed for cloud-grade machines, Oakestra targets heterogeneous, resource-constrained edge devices. The entire root + cluster stack runs in ~1 GB RAM. A worker node needs only 100 MB RAM and 50 MB disk.
 
-The platform orchestrates containerised workloads (Docker, containerd) and unikernels across a two-level hierarchy: **root → clusters → workers**. Applications are described via SLA (Service Level Agreement) JSON documents that encode resource constraints, placement preferences, and networking requirements. The scheduler places each microservice on the best-fit worker using a pluggable algorithm (default: `bestCpuMemFit`).
+The platform orchestrates containerised workloads (Docker, containerd) and unikernels across a two-level hierarchy: **root → clusters → workers**. Applications are described via SLA (Service Level Agreement) JSON documents that encode resource constraints, placement preferences, and networking requirements. The scheduler places each microservice on the best-fit worker using a pluggable algorithm (default: `cpumemfit.Scheduler`).
 
 Current develop version: see `version.txt`.
 
@@ -36,7 +36,7 @@ oakestra/
 │   ├── StartOakestraRoot.sh    # Root only
 │   ├── StartOakestraCluster.sh # Cluster only
 │   └── InstallOakestraWorker.sh# Worker binary installer
-├── run-a-cluster/              # Compose-based multi-machine deployment (root-orchestrator.yml + 1-DOC.yaml)
+├── run-a-cluster/              # Compose-based 1-DOC deployment (1-DOC.yaml + shared config)
 ├── hack/                       # Platform-specific workarounds (e.g. rpi4b-mongo override)
 └── SKILLS/
     └── troubleshoot-oakestra.md # AI troubleshooting skill (keep this in sync)
@@ -113,7 +113,7 @@ orchestrator. Full design: `P2P_MODE_IMPLEMENTATION_PLAN.md` (repo parent direct
   `NodeEngine config mode p2p|cluster <ip>` (drains workloads first).
 - **Deploy**: `NodeEngine deploy <sla.json>` (same SLA format as the root API) runs a
   **bid round** across the mesh (quorum `ceil(N/SIGMA)`, SIGMA=4 default, 30s timeout;
-  tune via `NodeEngine config sched`) and places each service via `bestRandomFit`.
+  tune via `NodeEngine config sched`) and places each service via `bestrandomfit`.
   `--local` skips bidding. Lifecycle: `services ls|logs|inspect`, `members`, `undeploy`, `drain`.
 - **Networking**: every node uses the same fixed local subnet (10.18.0.0/26) — the per-node
   subnet request to root/cluster is **deprecated** (endpoints now return the fixed subnet).
@@ -247,15 +247,19 @@ export OAKESTRA_VERSION=develop
 
 ## Shared Libraries
 
-- `libraries/oakestra_utils_library` — Python enums for job statuses (`DeploymentStatus`, `PositiveSchedulingStatus`, `NegativeSchedulingStatus`). Imported by system_manager and cluster_manager. Branch used during build is controlled by the `LIB_BRANCH` build arg (defaults to `develop`).
+- `libraries/oakestra_utils_library` — Python enums for job statuses (`DeploymentStatus`, `PositiveSchedulingStatus`, `NegativeSchedulingStatus`). Imported by system_manager and cluster_manager.
 - `libraries/resource_abstractor_client` — Python HTTP client for resource-abstractor. Reads `RESOURCE_ABSTRACTOR_URL` and `RESOURCE_ABSTRACTOR_PORT` from env.
+
+**These libraries are always built from this repo's local `libraries/` folder — never fetched from a remote git repo.** Consumers wire them in as follows:
+- **Docker builds** — the service's `docker-compose.yml` exposes `libraries/` as a named build context (`additional_contexts: libraries=../libraries`); the Dockerfile does `COPY --from=libraries . /libraries` and `pip install`s them. CI (`docker/build-push-action`) passes the same via `build-contexts: libraries=./libraries`.
+- **Local dev / tests** — `pip install ./libraries/oakestra_utils_library ./libraries/resource_abstractor_client` (the VS Code `install-*-dependencies` tasks already do this). The `requirements.txt` files no longer list the libraries.
 
 ---
 
 ## Gotchas
 
 - **Host networking breaks container DNS.** When using `override-network-host.yml`, containers can't resolve each other by name — set all env vars to IPs, not container names.
-- **`LIB_BRANCH` on feature branches.** The `oakestra_utils_library` and `resource_abstractor_client` Docker build arg `LIB_BRANCH` defaults to `develop`. If your branch adds library changes, set `LIB_BRANCH` to your branch name or images will build against stale library code.
+- **Shared libraries are always local.** `oakestra_utils_library` and `resource_abstractor_client` are built from this repo's `libraries/` folder (see the Shared Libraries section) — there is no `LIB_BRANCH` build arg any more, and nothing is fetched from a remote git repo. Edit the code in `libraries/` and rebuild; changes take effect immediately, no push required. Docker builds need BuildKit/Buildx (named build contexts) — already the default in the compose files, CI, and VS Code tasks.
 - **eventlet monkey-patching.** Both `system_manager` and `cluster_manager` use eventlet. Monkey-patching must happen before Flask/pymongo imports — don't reorder the top of entry-point files.
 - **Scheduler is the same binary for root and cluster** — differentiated only by env vars (`SCHEDULER_TYPE`, Redis URL/password). Keep deployment-specific logic out of the binary.
 
@@ -265,7 +269,7 @@ export OAKESTRA_VERSION=develop
 
 1. **Lightweight first.** The whole orchestrator stack targets ~1 GB RAM. Avoid pulling in heavy dependencies or adding services without strong justification.
 2. **Two-level hierarchy is intentional.** Root handles multi-cluster global placement; cluster handles per-worker placement. Keep concerns separated — root doesn't talk to workers directly, cluster doesn't bypass root for scheduling decisions.
-3. **Pluggable scheduling.** The scheduler binary is shared between root and cluster, differing only via env vars. New algorithms should implement the `interfaces.Algorithm` interface in `scheduler/calculate/schedulers/`.
+3. **Pluggable scheduling.** The scheduler binary is shared between root and cluster, differing only via env vars. New algorithms should implement the `placement.Algorithm` interface in `scheduler/calculate/schedulers/placement/`.
 4. **Stateless services, stateful DBs.** Services (schedulers, managers) are designed to restart cleanly. State lives in MongoDB and Redis. Don't add in-process state that survives restarts without an explicit persistence story.
 5. **Override-based configuration.** Don't bake deployment-specific config into docker-compose.yml. Add a new `override-*.yml` file instead.
 6. **The network plugin is external.** `oakestra-net` (`root_service_manager`, `cluster_service_manager`) is a separate repository. Changes to network behavior need PRs there, not here.
