@@ -1,0 +1,187 @@
+[
+  {
+    "method": "POST",
+    "rule": "/api/application/",
+    "requires_auth": true
+  },
+  {
+    "method": "DELETE",
+    "rule": "/api/application/<appid>",
+    "requires_auth": true
+  },
+  {
+    "method": "GET",
+    "rule": "/api/application/<appid>",
+    "requires_auth": true
+  },
+  {
+    "method": "PUT",
+    "rule": "/api/application/<appid>",
+    "requires_auth": true
+  },
+  {
+    "method": "GET",
+    "rule": "/api/applications/",
+    "requires_auth": true
+  },
+  {
+    "method": "GET",
+    "rule": "/api/applications/<userid>",
+    "requires_auth": true
+  },
+  {
+    "method": "POST",
+    "rule": "/api/auth/login",
+    "requires_auth": false
+  },
+  {
+    "method": "POST",
+    "rule": "/api/auth/refresh",
+    "requires_auth": true
+  },
+  {
+    "method": "POST",
+    "rule": "/api/auth/register",
+    "requires_auth": true
+  },
+  {
+    "method": "GET",
+    "rule": "/api/clusters/",
+    "requires_auth": false
+  },
+  {
+    "method": "GET",
+    "rule": "/api/clusters/active",
+    "requires_auth": false
+  },
+  {
+    "method": "POST",
+    "rule": "/api/information/<clusterid>",
+    "requires_auth": false
+  },
+  {
+    "method": "GET",
+    "rule": "/api/organization/",
+    "requires_auth": true
+  },
+  {
+    "method": "POST",
+    "rule": "/api/organization/",
+    "requires_auth": true
+  },
+  {
+    "method": "DELETE",
+    "rule": "/api/organization/<organizationid>",
+    "requires_auth": true
+  },
+  {
+    "method": "PUT",
+    "rule": "/api/organization/<organizationid>",
+    "requires_auth": true
+  },
+  {
+    "method": "GET",
+    "rule": "/api/permission/<username>",
+    "requires_auth": true
+  },
+  {
+    "method": "POST",
+    "rule": "/api/result/deploy",
+    "requires_auth": false
+  },
+  {
+    "method": "POST",
+    "rule": "/api/service/",
+    "requires_auth": true
+  },
+  {
+    "method": "DELETE",
+    "rule": "/api/service/<serviceid>",
+    "requires_auth": true
+  },
+  {
+    "method": "GET",
+    "rule": "/api/service/<serviceid>",
+    "requires_auth": true
+  },
+  {
+    "method": "PUT",
+    "rule": "/api/service/<serviceid>",
+    "requires_auth": true
+  },
+  {
+    "method": "POST",
+    "rule": "/api/service/<serviceid>/instance",
+    "requires_auth": true
+  },
+  {
+    "method": "DELETE",
+    "rule": "/api/service/<serviceid>/instance/<instance_number>",
+    "requires_auth": true
+  },
+  {
+    "method": "GET",
+    "rule": "/api/services/",
+    "requires_auth": true
+  },
+  {
+    "method": "GET",
+    "rule": "/api/services/<appid>",
+    "requires_auth": true
+  },
+  {
+    "method": "POST",
+    "rule": "/api/user/",
+    "requires_auth": false
+  },
+  {
+    "method": "PUT",
+    "rule": "/api/user/",
+    "requires_auth": false
+  },
+  {
+    "method": "DELETE",
+    "rule": "/api/user/<username>",
+    "requires_auth": true
+  },
+  {
+    "method": "GET",
+    "rule": "/api/user/<username>",
+    "requires_auth": true
+  },
+  {
+    "method": "POST",
+    "rule": "/api/user/<username>",
+    "requires_auth": true
+  },
+  {
+    "method": "PUT",
+    "rule": "/api/user/<username>",
+    "requires_auth": true
+  },
+  {
+    "method": "GET",
+    "rule": "/api/users/",
+    "requires_auth": true
+  },
+  {
+    "method": "GET",
+    "rule": "/api/users/<organization_id>",
+    "requires_auth": true
+  },
+  {
+    "method": "GET",
+    "rule": "/docs/openapi.json",
+    "requires_auth": false
+  },
+  {
+    "method": "GET",
+    "rule": "/frontend/uploader",
+    "requires_auth": false
+  },
+  {
+    "method": "POST",
+    "rule": "/frontend/uploader",
+    "requires_auth": false
+  }
+]

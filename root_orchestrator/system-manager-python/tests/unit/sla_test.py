@@ -3,7 +3,7 @@ import unittest
 
 from sla.versioned_sla_parser import SLAFormatError, parse_sla_json
 
-TEST_SLAS_PATH = pathlib.Path.cwd() / "tests" / "service_level_agreements"
+TEST_SLAS_PATH = pathlib.Path(__file__).parents[1] / "service_level_agreements"
 
 
 # Note: helper functions for unit tests need to start with a different prefix than "test_"

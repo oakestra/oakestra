@@ -1,21 +1,15 @@
 import copy
-import sys
-import unittest
 from unittest.mock import MagicMock
 
-import mongomock as mongomock
+import mongomock
 import pymongo
 from ext_requests import mongodb_client, organization_db, user_db
 
-sys.modules["ext_requests.net_plugin_requests"] = unittest.mock.Mock()
-net_plugin = sys.modules["ext_requests.net_plugin_requests"]
-net_plugin.net_inform_service_deploy = MagicMock()
-
 
 @mongomock.patch(servers=(("localhost", 10007),))
-def test_add_organization():
+def test_add_organization(monkeypatch):
     # SETUP
-    mockdb()
+    mockdb(monkeypatch)
 
     orga = {
         "name": "root",
@@ -38,9 +32,9 @@ def test_add_organization():
 
 
 @mongomock.patch(servers=(("localhost", 10007),))
-def test_add_user_to_orga():
+def test_add_user_to_orga(monkeypatch):
     # SETUP
-    mockdb()
+    mockdb(monkeypatch)
 
     user_db.create_admin()
     user = user_db.mongo_get_user_by_name("Admin")
@@ -58,9 +52,9 @@ def test_add_user_to_orga():
 
 
 @mongomock.patch(servers=(("localhost", 10007),))
-def test_get_organization():
+def test_get_organization(monkeypatch):
     # SETUP
-    mockdb()
+    mockdb(monkeypatch)
 
     user_db.create_admin()
     orga = organization_db.mongo_get_organization_by_name("root")
@@ -72,9 +66,9 @@ def test_get_organization():
 
 
 @mongomock.patch(servers=(("localhost", 10007),))
-def test_update_organization():
+def test_update_organization(monkeypatch):
     # SETUP
-    mockdb()
+    mockdb(monkeypatch)
 
     user_db.create_admin()
     orga = organization_db.mongo_get_organization_by_name("root")
@@ -89,9 +83,9 @@ def test_update_organization():
 
 
 @mongomock.patch(servers=(("localhost", 10007),))
-def test_delete_role_entrys():
+def test_delete_role_entrys(monkeypatch):
     # SETUP
-    mockdb()
+    mockdb(monkeypatch)
 
     user_db.create_admin()
     user = user_db.mongo_get_user_by_name("Admin")
@@ -105,9 +99,10 @@ def test_delete_role_entrys():
     assert orga["member"] == []
 
 
-def mockdb():
-    mongodb_client.mongo_users = pymongo.MongoClient("mongodb://localhost:10007/users").db["user"]
-    mongodb_client.mongo_organization = pymongo.MongoClient("mongodb://localhost:10007/users").db[
-        "organization"
-    ]
-    mongodb_client.app = MagicMock()
+def mockdb(monkeypatch):
+    # monkeypatch, not plain assignment: these are module globals the component suite
+    # relies on, and they must be restored once the test is done.
+    client = pymongo.MongoClient("mongodb://localhost:10007/users")
+    monkeypatch.setattr(mongodb_client, "mongo_users", client.db["user"])
+    monkeypatch.setattr(mongodb_client, "mongo_organization", client.db["organization"])
+    monkeypatch.setattr(mongodb_client, "app", MagicMock())
