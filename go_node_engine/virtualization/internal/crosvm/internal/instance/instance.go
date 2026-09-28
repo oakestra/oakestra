@@ -406,7 +406,7 @@ func (i *Instance) waitForExit(cmd *exec.Cmd, startNum uint32) {
 				}
 			}
 
-			logger.ErrorLogger(msgBuilder.String())
+			logger.ErrorLogger("%s", msgBuilder.String())
 		} else {
 			logger.ErrorLogger("unexpected error when trying to run instance %q: %v", i.id, runErr)
 		}

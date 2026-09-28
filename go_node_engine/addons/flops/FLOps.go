@@ -20,7 +20,7 @@ func HandleFLOpsDataManager() {
 	cmd := exec.Command("docker", "ps", "-a", "--format", "{{.Names}}")
 	output, err := cmd.Output()
 	if err != nil {
-		logger.FatalErrorLogger("Error:", err)
+		logger.FatalErrorLogger("Error: %v", err)
 		return
 	}
 

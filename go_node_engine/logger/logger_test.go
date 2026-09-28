@@ -2,15 +2,30 @@ package logger
 
 import (
 	"bytes"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 )
 
+// captureOutput redirects the stdout and stderr loggers into buffers for the duration of the test.
+func captureOutput(t *testing.T, level slog.Level) (out, errOut *bytes.Buffer) {
+	t.Helper()
+	origStdout, origStderr := stdout, stderr
+	t.Cleanup(func() { stdout, stderr = origStdout, origStderr })
+
+	out, errOut = &bytes.Buffer{}, &bytes.Buffer{}
+	testOpts := &slog.HandlerOptions{AddSource: true, Level: level}
+	stdout = slog.New(slog.NewTextHandler(out, testOpts))
+	stderr = slog.New(slog.NewTextHandler(errOut, testOpts))
+	return out, errOut
+}
+
 // TestFatalErrorLogger_LogsAndExits verifies that FatalErrorLogger
-// logs an error message and exits with status code 1.
+// logs an error message to stderr and exits with status code 1.
 func TestFatalErrorLogger_LogsAndExits(t *testing.T) {
 	// FatalErrorLogger calls os.Exit(1), so we need to test it in a subprocess
 	if os.Getenv("TEST_FATAL") == "1" {
@@ -23,8 +38,8 @@ func TestFatalErrorLogger_LogsAndExits(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestFatalErrorLogger_LogsAndExits")
 	cmd.Env = append(os.Environ(), "TEST_FATAL=1")
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
 
 	err := cmd.Run()
 
@@ -38,46 +53,47 @@ func TestFatalErrorLogger_LogsAndExits(t *testing.T) {
 	}
 
 	// Verify error message was logged
-	output := stderr.String()
+	output := stderrBuf.String()
 	if !strings.Contains(output, "test fatal message: arg") {
 		t.Errorf("Expected log message in stderr, got: %s", output)
 	}
 }
 
-// TestLoggerFunctions tests that all logger functions work without panicking
+// TestLoggerFunctions verifies that INFO/DEBUG go to stdout and WARN/ERROR go to stderr.
 func TestLoggerFunctions(t *testing.T) {
-	// Capture output to verify it works
-	var buf bytes.Buffer
-	original := slog.Default().Handler()
+	out, errOut := captureOutput(t, slog.LevelDebug)
 
-	// Create a test logger that writes to our buffer
-	testHandler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
-	testLogger := slog.New(testHandler)
-
-	// Temporarily replace the default logger
-	// Note: This affects global state, but it's okay for tests
-	// We'll restore it after
-	slog.SetDefault(testLogger)
-	defer slog.SetDefault(slog.New(original))
-
-	// Test all functions - they should not panic
 	InfoLogger("info test: %s", "arg1")
-	WarnLogger("warn test: %s", "arg2")
-	ErrorLogger("error test: %s", "arg3")
-	DebugLogger("debug test: %s", "arg4")
+	DebugLogger("debug test: %s", "arg2")
+	WarnLogger("warn test: %s", "arg3")
+	ErrorLogger("error test: %s", "arg4")
 
-	// Verify output contains our messages
-	output := buf.String()
-	if !strings.Contains(output, "info test: arg1") {
-		t.Errorf("Expected info message in output")
+	for _, msg := range []string{"info test: arg1", "debug test: arg2"} {
+		if !strings.Contains(out.String(), msg) || strings.Contains(errOut.String(), msg) {
+			t.Errorf("Expected %q only in stdout, got stdout=%q stderr=%q", msg, out, errOut)
+		}
 	}
-	if !strings.Contains(output, "warn test: arg2") {
-		t.Errorf("Expected warn message in output")
+	for _, msg := range []string{"warn test: arg3", "error test: arg4"} {
+		if !strings.Contains(errOut.String(), msg) || strings.Contains(out.String(), msg) {
+			t.Errorf("Expected %q only in stderr, got stdout=%q stderr=%q", msg, out, errOut)
+		}
 	}
-	if !strings.Contains(output, "error test: arg3") {
-		t.Errorf("Expected error message in output")
+}
+
+// TestLoggerSource verifies that each record's source is the exact file:line of the
+// logger call, not a line inside the logger package, for both stdout and stderr.
+func TestLoggerSource(t *testing.T) {
+	out, errOut := captureOutput(t, slog.LevelInfo)
+
+	InfoLogger("info source test")
+	_, file, infoLine, _ := runtime.Caller(0) // the line right after the InfoLogger call
+	ErrorLogger("error source test")
+	_, _, errorLine, _ := runtime.Caller(0) // the line right after the ErrorLogger call
+
+	if want := fmt.Sprintf("source=%s:%d", file, infoLine-1); !strings.Contains(out.String(), want) {
+		t.Errorf("Expected %q in stdout, got: %s", want, out)
 	}
-	if !strings.Contains(output, "debug test: arg4") {
-		t.Errorf("Expected debug message in output")
+	if want := fmt.Sprintf("source=%s:%d", file, errorLine-1); !strings.Contains(errOut.String(), want) {
+		t.Errorf("Expected %q in stderr, got: %s", want, errOut)
 	}
 }

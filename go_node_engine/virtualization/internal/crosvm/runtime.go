@@ -116,7 +116,7 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 	_, _ = fmt.Fprintf(&infoMsg, "  > runtime directory: %s\n", runtimeDirPath)
 	_, _ = fmt.Fprintf(&infoMsg, "  > state directory: %s\n", stateDirPath)
 	_, _ = fmt.Fprintf(&infoMsg, "  > cache directory: %s\n", cacheDirPath)
-	logger.InfoLogger(infoMsg.String())
+	logger.InfoLogger("%s", infoMsg.String())
 
 	return &Runtime{
 		error: nil,

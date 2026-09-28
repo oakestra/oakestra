@@ -2,111 +2,81 @@ package logger
 
 import (
 	"bytes"
+	"fmt"
 	"log/slog"
+	"runtime"
 	"strings"
 	"testing"
 )
 
-// TestDebugMode verifies that DebugLogger respects the debug level setting
-func TestDebugMode(t *testing.T) {
-	// Save original default logger
-	original := slog.Default()
-	defer slog.SetDefault(original)
-
-	// Test 1: At INFO level, DebugLogger should not output
-	var buf1 bytes.Buffer
-	handler1 := slog.NewTextHandler(&buf1, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+// captureOutput redirects the stdout and stderr loggers into buffers for the duration of the
+// test. The buffers use the package level, so Init(true) still applies.
+func captureOutput(t *testing.T) (out, errOut *bytes.Buffer) {
+	t.Helper()
+	origStdout, origStderr := stdout, stderr
+	t.Cleanup(func() {
+		stdout, stderr = origStdout, origStderr
+		level.Set(slog.LevelInfo)
 	})
-	logger1 := slog.New(handler1)
 
-	slog.SetDefault(logger1)
+	out, errOut = &bytes.Buffer{}, &bytes.Buffer{}
+	stdout = slog.New(slog.NewTextHandler(out, opts))
+	stderr = slog.New(slog.NewTextHandler(errOut, opts))
+	return out, errOut
+}
 
-	DebugLogger("should not appear")
+// TestInitDebug verifies that DebugLogger only outputs after Init(true) is called
+func TestInitDebug(t *testing.T) {
+	out, _ := captureOutput(t)
 
-	if strings.Contains(buf1.String(), "should not appear") {
-		t.Error("DebugLogger should not output at INFO level")
+	DebugLogger("before Init(true)")
+	if strings.Contains(out.String(), "before Init(true)") {
+		t.Error("DebugLogger should not output before Init(true)")
 	}
 
-	// Test 2: At DEBUG level, DebugLogger should output
-	var buf2 bytes.Buffer
-	handler2 := slog.NewTextHandler(&buf2, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	})
-	logger2 := slog.New(handler2)
-
-	slog.SetDefault(logger2)
-	DebugLogger("should appear")
-
-	if !strings.Contains(buf2.String(), "should appear") {
-		t.Error("DebugLogger should output at DEBUG level")
+	Init(true)
+	DebugLogger("after Init(true)")
+	if !strings.Contains(out.String(), "after Init(true)") {
+		t.Errorf("DebugLogger should output after Init(true), got: %s", out)
 	}
 }
 
-// TestInitDebug verifies that Init(true) works without panicking
-func TestInitDebug(t *testing.T) {
-	// Save original default logger
-	original := slog.Default()
-	defer slog.SetDefault(original)
-
-	// Set up a logger at INFO level
-	var buf1 bytes.Buffer
-	handler1 := slog.NewTextHandler(&buf1, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	})
-	logger1 := slog.New(handler1)
-	slog.SetDefault(logger1)
-
-	// Debug should not appear at INFO level
-	DebugLogger("before Init")
-	if strings.Contains(buf1.String(), "before Init") {
-		t.Error("DebugLogger should not output before Init")
-	}
-
-	// Call Init(true) - this creates a new default logger with DEBUG level
-	// Note: Init(true) writes to os.Stdout, so we can't capture it in a buffer
-	// But we can verify it doesn't panic
+// TestLoggerFunctions verifies that INFO/DEBUG go to stdout and WARN/ERROR go to stderr.
+func TestLoggerFunctions(t *testing.T) {
+	out, errOut := captureOutput(t)
 	Init(true)
 
-	// Verify Init(true) completed without panic (we got here)
-	// The actual debug output goes to os.Stdout which is expected
+	InfoLogger("info test: %s", "arg1")
+	DebugLogger("debug test: %s", "arg2")
+	WarnLogger("warn test: %s", "arg3")
+	ErrorLogger("error test: %s", "arg4")
 
-	// Restore
-	slog.SetDefault(original)
+	for _, msg := range []string{"info test: arg1", "debug test: arg2"} {
+		if !strings.Contains(out.String(), msg) || strings.Contains(errOut.String(), msg) {
+			t.Errorf("Expected %q only in stdout, got stdout=%q stderr=%q", msg, out, errOut)
+		}
+	}
+	for _, msg := range []string{"warn test: arg3", "error test: arg4"} {
+		if !strings.Contains(errOut.String(), msg) || strings.Contains(out.String(), msg) {
+			t.Errorf("Expected %q only in stderr, got stdout=%q stderr=%q", msg, out, errOut)
+		}
+	}
 }
 
-// TestLoggerFunctions tests that all logger functions work without panicking
-func TestLoggerFunctions(t *testing.T) {
-	// Save original default logger
-	original := slog.Default()
-	defer slog.SetDefault(original)
+// TestLoggerSource verifies that each record's source is the exact file:line of the
+// logger call, not a line inside the logger package, for both stdout and stderr.
+func TestLoggerSource(t *testing.T) {
+	out, errOut := captureOutput(t)
 
-	// Create a test logger that writes to our buffer
-	var buf bytes.Buffer
-	testHandler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
-	testLogger := slog.New(testHandler)
+	InfoLogger("info source test")
+	_, file, infoLine, _ := runtime.Caller(0) // the line right after the InfoLogger call
+	ErrorLogger("error source test")
+	_, _, errorLine, _ := runtime.Caller(0) // the line right after the ErrorLogger call
 
-	// Temporarily replace the default logger
-	slog.SetDefault(testLogger)
-
-	// Test all functions - they should not panic
-	InfoLogger("info test: %s", "arg1")
-	WarnLogger("warn test: %s", "arg2")
-	ErrorLogger("error test: %s", "arg3")
-	DebugLogger("debug test: %s", "arg4")
-
-	// Verify output contains our messages
-	output := buf.String()
-	if !strings.Contains(output, "info test: arg1") {
-		t.Errorf("Expected info message in output, got: %s", output)
+	if want := fmt.Sprintf("source=%s:%d", file, infoLine-1); !strings.Contains(out.String(), want) {
+		t.Errorf("Expected %q in stdout, got: %s", want, out)
 	}
-	if !strings.Contains(output, "warn test: arg2") {
-		t.Errorf("Expected warn message in output, got: %s", output)
-	}
-	if !strings.Contains(output, "error test: arg3") {
-		t.Errorf("Expected error message in output, got: %s", output)
-	}
-	if !strings.Contains(output, "debug test: arg4") {
-		t.Errorf("Expected debug message in output, got: %s", output)
+	if want := fmt.Sprintf("source=%s:%d", file, errorLine-1); !strings.Contains(errOut.String(), want) {
+		t.Errorf("Expected %q in stderr, got: %s", want, errOut)
 	}
 }
