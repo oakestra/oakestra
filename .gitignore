@@ -87,3 +87,11 @@ netmanager*
 
 # Pychache
 __pycache__/
+
+# Python test and coverage output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+test-results.xml
+.pytest_cache/
