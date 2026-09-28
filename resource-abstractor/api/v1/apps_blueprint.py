@@ -49,10 +49,8 @@ class ApplicationController(MethodView):
     @pre_post_hook("applications", with_param_id="app_id")
     def patch(self, data, *args, **kwargs):
         app_id = kwargs.get("app_id")
-        # pre_post_hook doesn't work with @arguments, so no query schema here
         user_filter = {"userId": request.args["userId"]} if "userId" in request.args else {}
         result = apps_db.update_app(app_id, data, user_filter)
-        # otherwise pre_post_hook fires post_update hooks for an app we never updated
         if result is None:
             abort(404, message="Application not found")
 
