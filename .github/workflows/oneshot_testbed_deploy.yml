@@ -1,0 +1,153 @@
+name: Testbed Oneshot - Deployment
+
+# Runs the oneshot testbed for a PR and reports the result as the `testbed/oneshot` commit status.
+# Started either by `oneshot_testbed_workflow_run.yml` after a maintainer approval, or manually
+# (workflow_dispatch needs write access) to re-run the testbed without re-approving.
+# The PR code is not checked out here, AWX pulls it on the testbed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull request number to run the testbed for'
+        required: true
+        type: number
+  workflow_call:
+    inputs:
+      pr_number:
+        required: true
+        type: number
+      head_sha:
+        description: 'Commit to test. Defaults to the current head of the PR.'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      TOWER_HOST:
+        required: true
+      TOWER_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  testbed:
+    name: Testbed Oneshot Execution (PR #${{ inputs.pr_number }})
+    runs-on: ubuntu-latest
+    # awx-deploy times out after 2h
+    timeout-minutes: 150
+    # Max one running + one queued run per PR. No cancelling, the AWX job would keep running anyway.
+    concurrency:
+      group: testbed-oneshot-pr-${{ inputs.pr_number }}
+      cancel-in-progress: false
+    env:
+      STATUS_CONTEXT: testbed/oneshot
+    steps:
+      - name: Resolve pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          REQUESTED_SHA: ${{ inputs.head_sha }}
+        run: |
+          set -euo pipefail
+          pr=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}")
+
+          if [ "$(jq -r '.state' <<<"$pr")" != "open" ]; then
+            echo "::error::PR #${PR_NUMBER} is not open."
+            exit 1
+          fi
+
+          head_sha=$(jq -r '.head.sha' <<<"$pr")
+          sha="${REQUESTED_SHA:-$head_sha}"
+          # The testbed can't check out an old fork commit and falls back to the branch tip,
+          # so we'd end up testing code pushed after the approval.
+          if [ "$sha" != "$head_sha" ]; then
+            echo "::error::PR #${PR_NUMBER} moved to ${head_sha} after ${sha} was approved. Re-approve or dispatch this workflow manually."
+            exit 1
+          fi
+
+          # The branch name ends up in shell tasks on the testbed hosts and git allows things
+          # like $ ( ) ; ` in it, so only allow safe characters.
+          branch=$(jq -r '.head.ref' <<<"$pr")
+          if ! [[ "$branch" =~ ^[A-Za-z0-9._/+-]+$ ]]; then
+            echo "::error::Branch name of PR #${PR_NUMBER} contains characters the testbed does not accept. Allowed: A-Z a-z 0-9 . _ / + -"
+            exit 1
+          fi
+
+          # head.repo is null if the fork was deleted
+          fork_repo=$(jq -r --arg repo "$REPO" '.head.repo.full_name // $repo' <<<"$pr")
+
+          {
+            echo "sha=${sha}"
+            echo "branch=${branch}"
+            echo "fork_repo=${fork_repo}"
+            echo "user=$(jq -r '.user.login' <<<"$pr")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set testbed status to pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ steps.pr.outputs.sha }}
+          ACTOR: ${{ github.triggering_actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api -X POST "repos/${REPO}/statuses/${SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Testbed run in progress (started by ${ACTOR})" \
+            -f target_url="$RUN_URL" > /dev/null
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: ./.github/actions/awx-deploy
+
+      - name: Testbed Oneshot Execution
+        id: deploy
+        uses: ./.github/actions/awx-deploy
+        env:
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
+        with:
+          AWX_URL: ${{ secrets.TOWER_HOST }}
+          AWX_TOKEN: ${{ secrets.TOWER_TOKEN }}
+          AWX_TEMPLATE_ID: 18 # Job Workflow Template ID for Oneshot Testbed Execution
+          PR_BRANCH: ${{ steps.pr.outputs.branch }}
+          PR_USER: ${{ steps.pr.outputs.user }}
+          FORK_REPO: ${{ steps.pr.outputs.fork_repo }}
+          PR_COMMIT: ${{ steps.pr.outputs.sha }}
+
+      # Also on failure/cancel, otherwise the status stays pending
+      - name: Report testbed status
+        if: always() && steps.pr.outputs.sha != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ steps.pr.outputs.sha }}
+          OUTCOME: ${{ steps.deploy.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          case "$OUTCOME" in
+            success) state=success; description="Testbed run passed" ;;
+            failure) state=failure; description="Testbed run failed" ;;
+            *)       state=error;   description="Testbed run did not complete (${OUTCOME:-skipped})" ;;
+          esac
+          gh api -X POST "repos/${REPO}/statuses/${SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="$RUN_URL" > /dev/null
