@@ -1,0 +1,10 @@
+[run]
+omit =
+    .venv/*
+    tests/*
+    proto/*_pb2*.py
+
+[report]
+show_missing = true
+# Set just below current coverage so a drop fails CI. Bump it when coverage goes up.
+fail_under = 84
