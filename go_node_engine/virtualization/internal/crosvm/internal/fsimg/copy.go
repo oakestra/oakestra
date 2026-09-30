@@ -48,32 +48,32 @@ func CopySquashFsIntoExt4Img(squashfsPath string, ext4Path string, mountDirPath 
 	}
 	defer iotools.RemoveOrWarn(mountDirPath)
 
-	logger.InfoLogger().Printf("mounting ext4 image at %q to %q", ext4Path, mountDirPath)
+	logger.InfoLogger("mounting ext4 image at %q to %q", ext4Path, mountDirPath)
 
 	mountCmd := exec.Command(mountExecPath, "-t", "ext4", "-o", "loop", ext4Path, mountDirPath)
 	if err := mountCmd.Run(); err != nil {
-		logger.ErrorLogger().Printf("failed to run mount command: %v", err)
+		logger.ErrorLogger("failed to run mount command: %v", err)
 		return fmt.Errorf("failed to run mount command: %w", err)
 	}
 	defer func() {
 		umountCmd := exec.Command(umountExecPath, "-d", mountDirPath)
 		if err := umountCmd.Run(); err != nil {
-			logger.WarnLogger().Printf("failed to run umount command: %v", err)
+			logger.WarnLogger("failed to run umount command: %v", err)
 		}
 	}()
 
-	logger.InfoLogger().Printf("copying squashfs contents of %q to ext4 mount at %q", squashfsPath, mountDirPath)
+	logger.InfoLogger("copying squashfs contents of %q to ext4 mount at %q", squashfsPath, mountDirPath)
 
 	if err := UnpackFromSquashFsImg(squashfsPath, mountDirPath); err != nil {
-		logger.ErrorLogger().Printf("failed to unpack squashfs image: %v", err)
+		logger.ErrorLogger("failed to unpack squashfs image: %v", err)
 		return fmt.Errorf("failed to unpack squashfs image: %w", err)
 	}
 
 	if err := os.Chmod(mountDirPath, 0o755); err != nil {
-		logger.ErrorLogger().Printf("failed to set root directory permissions in image: %v", err)
+		logger.ErrorLogger("failed to set root directory permissions in image: %v", err)
 		return fmt.Errorf("failed to set root directory permissions in image: %w", err)
 	}
 
-	logger.InfoLogger().Printf("successfully copied squashfs contents of %q into ext4 image at %q", squashfsPath, ext4Path)
+	logger.InfoLogger("successfully copied squashfs contents of %q into ext4 image at %q", squashfsPath, ext4Path)
 	return nil
 }

@@ -7,6 +7,6 @@ import (
 
 func CloseOrWarn(closer io.Closer, name string) {
 	if err := closer.Close(); err != nil {
-		logger.WarnLogger().Printf("failed to close %q: %v", name, err)
+		logger.WarnLogger("failed to close %q: %v", name, err)
 	}
 }
