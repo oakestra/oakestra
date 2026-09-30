@@ -10,7 +10,7 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.NEW_RELEASE_TOKEN }}
@@ -25,7 +25,7 @@ jobs:
       
       - name: Push changes
         # https://github.com/EndBug/add-and-commit
-        uses: EndBug/add-and-commit@v9
+        uses: EndBug/add-and-commit@v11
         with:
           committer_name: GitHub Actions
           committer_email: actions@github.com
