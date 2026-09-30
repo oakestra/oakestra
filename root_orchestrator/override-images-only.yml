@@ -58,4 +58,8 @@ services:
   jwt_generator:
     image: ghcr.io/oakestra/oakestra/jwt-generator:latest
     pull_policy: always
+
+  dashboard:
+    image: ghcr.io/oakestra/dashboard:latest
+    pull_policy: always
     
