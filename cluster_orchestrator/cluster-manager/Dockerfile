@@ -18,7 +18,9 @@ COPY --from=libraries . /libraries
 
 # Install appropriate requirements
 RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir /libraries/oakestra_utils_library /libraries/resource_abstractor_client
+    && pip install --no-cache-dir /libraries/oakestra_utils_library \
+        /libraries/resource_abstractor_client \
+        /libraries/oakestra_logging
 
 COPY . /
 
@@ -47,5 +49,6 @@ ENV MQTT_BROKER_PORT=10003
 ENV MY_PORT=10100
 
 ENV LOG_LEVEL=INFO
+ENV OAKESTRA_SERVICE_NAME=cluster_manager
 
-CMD gunicorn --bind [::]:${MY_PORT} cluster_manager:app
+CMD gunicorn --bind [::]:${MY_PORT} --logger-class oakestra_logging.gunicorn.StructuredGunicornLogger cluster_manager:app

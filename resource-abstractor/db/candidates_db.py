@@ -1,9 +1,12 @@
 from datetime import datetime, timezone
 
 from bson.objectid import ObjectId
+from oakestra_logging import get_logger
 
 import db.mongodb_client as db
 from db.candidates_helper import get_freshness_threshold
+
+logger = get_logger(__name__)
 
 HISTORY_SLICE_SIZE = -100
 CANONICAL_RESOURCES = [
@@ -62,7 +65,11 @@ def find_candidates(filter, resources=None):
         resources = [r.strip() for r in resources.split(",") if r.strip()]
         request.update(resources)
 
-    print("Request: ", request, flush=True)
+    logger.debug(
+        "Building candidate projection",
+        event_name="candidates.projection.built",
+        requested_fields=sorted(request),
+    )
 
     projection = {field: 1 for field in request}
     pipeline.append({"$project": projection})
