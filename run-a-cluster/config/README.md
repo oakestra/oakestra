@@ -62,8 +62,6 @@ A 1-DOC deployment runs one Prometheus, one node_exporter, and one cAdvisor beca
 
 node_exporter shares the host network namespace so its network collector sees physical host interfaces rather than only a container `eth0`; it does not share the host PID namespace. Its listener is restricted to the private internal metrics-network gateway, and the process has read-only host mounts, no Linux capabilities, and `no-new-privileges`.
 
-The direct [`root-orchestrator.yml`](../root-orchestrator.yml) deployment uses the separate `prometheus-root.yml` configuration and the same Root-local ownership model as the source Compose deployment.
-
 Prometheus keeps at most seven days or 1 GB. Grafana accesses it through the provisioned `Prometheus` datasource, while node_exporter remains internal. cAdvisor's diagnostic UI and raw metrics are available only from the host at `http://127.0.0.1:8081` and `http://127.0.0.1:8081/metrics`. The metrics stack requires rootful Linux Docker Engine 25 or newer on AMD64 or ARM64. Set `DOCKER_ROOT_DIR` for a custom Docker data directory and use `override-no-observe.yml` on unsupported hosts. When Docker uses its containerd snapshotter, cAdvisor also requires the socket selected by `CONTAINERD_SOCKET` (default `/run/containerd/containerd.sock`) to discover Docker containers. Both daemon sockets and the host filesystems are mounted read-only but remain security-sensitive, so cAdvisor's port must remain loopback-only.
 
 ```bash
