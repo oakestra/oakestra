@@ -19,10 +19,8 @@ groups:
           type: prometheus
           uid: Prometheus
         editorMode: code
-        expr: (100 * (1 - avg by (host_scope, instance) (rate(node_cpu_seconds_total{job="node-exporter", mode="idle"}[5m])))
-          >= scalar(oakestra_resource_alert_threshold_percent{job="node-exporter", resource="cpu", severity="warning"})) and
-          (100 * (1 - avg by (host_scope, instance) (rate(node_cpu_seconds_total{job="node-exporter", mode="idle"}[5m])))
-          < scalar(oakestra_resource_alert_threshold_percent{job="node-exporter", resource="cpu", severity="critical"}))
+        expr: |
+          (100 * (1 - avg by (host_scope, instance) (rate(node_cpu_seconds_total{job="node-exporter", mode="idle"}[5m]))) >= scalar(oakestra_resource_alert_threshold_percent{job="node-exporter", resource="cpu", severity="warning"}))
         instant: true
         range: false
         intervalMs: 15000
@@ -219,10 +217,8 @@ groups:
           type: prometheus
           uid: Prometheus
         editorMode: code
-        expr: (100 * node_memory_MemAvailable_bytes{job="node-exporter"} / node_memory_MemTotal_bytes{job="node-exporter"}
-          <= scalar(oakestra_resource_alert_threshold_percent{job="node-exporter", resource="memory_available", severity="warning"}))
-          and (100 * node_memory_MemAvailable_bytes{job="node-exporter"} / node_memory_MemTotal_bytes{job="node-exporter"}
-          > scalar(oakestra_resource_alert_threshold_percent{job="node-exporter", resource="memory_available", severity="critical"}))
+        expr: |
+          (100 * node_memory_MemAvailable_bytes{job="node-exporter"} / node_memory_MemTotal_bytes{job="node-exporter"} <= scalar(oakestra_resource_alert_threshold_percent{job="node-exporter", resource="memory_available", severity="warning"}))
         instant: true
         range: false
         intervalMs: 15000
@@ -419,18 +415,15 @@ groups:
           type: prometheus
           uid: Prometheus
         editorMode: code
-        expr: "((\n  100 * node_filesystem_avail_bytes{job=\"node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\"\
-          , mountpoint!~\"/run($|/).*\"}\n  / node_filesystem_size_bytes{job=\"node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\"\
-          , mountpoint!~\"/run($|/).*\"}\n)\nand on(host_scope, instance, device, mountpoint, fstype)\n  (node_filesystem_readonly{job=\"\
-          node-exporter\"} == 0)\nand on(host_scope, instance, device, mountpoint, fstype)\n  (node_filesystem_size_bytes{job=\"\
-          node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\", mountpoint!~\"/run($|/).*\"} > 0)) <= scalar(oakestra_resource_alert_threshold_percent{job=\"\
-          node-exporter\", resource=\"disk_free\", severity=\"warning\"}) and ((\n  100 * node_filesystem_avail_bytes{job=\"\
-          node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\", mountpoint!~\"/run($|/).*\"}\n  / node_filesystem_size_bytes{job=\"\
-          node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\", mountpoint!~\"/run($|/).*\"}\n)\nand on(host_scope,\
-          \ instance, device, mountpoint, fstype)\n  (node_filesystem_readonly{job=\"node-exporter\"} == 0)\nand on(host_scope,\
-          \ instance, device, mountpoint, fstype)\n  (node_filesystem_size_bytes{job=\"node-exporter\", fstype!~\"rootfs|tmpfs|overlay|squashfs|autofs\"\
-          , mountpoint!~\"/run($|/).*\"} > 0)) > scalar(oakestra_resource_alert_threshold_percent{job=\"node-exporter\", resource=\"\
-          disk_free\", severity=\"critical\"})"
+        expr: |
+          ((
+            100 * node_filesystem_avail_bytes{job="node-exporter", fstype!~"rootfs|tmpfs|overlay|squashfs|autofs", mountpoint!~"/run($|/).*"}
+            / node_filesystem_size_bytes{job="node-exporter", fstype!~"rootfs|tmpfs|overlay|squashfs|autofs", mountpoint!~"/run($|/).*"}
+          )
+          and on(host_scope, instance, device, mountpoint, fstype)
+            (node_filesystem_readonly{job="node-exporter"} == 0)
+          and on(host_scope, instance, device, mountpoint, fstype)
+            (node_filesystem_size_bytes{job="node-exporter", fstype!~"rootfs|tmpfs|overlay|squashfs|autofs", mountpoint!~"/run($|/).*"} > 0)) <= scalar(oakestra_resource_alert_threshold_percent{job="node-exporter", resource="disk_free", severity="warning"})
         instant: true
         range: false
         intervalMs: 15000
