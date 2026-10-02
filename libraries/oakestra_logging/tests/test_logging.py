@@ -4,7 +4,7 @@ from importlib.resources import files
 
 import jsonschema
 import pytest
-from oakestra_logging import configure_logging, get_logger
+from oakestra_logging import configure_logging, exception_context, get_logger
 from oakestra_logging.config import configure_gunicorn_loggers
 
 
@@ -142,6 +142,63 @@ def test_sensitive_context_is_recursively_redacted(capsys):
         "oauth_token_value": "[REDACTED]",
         "nested": {"accessToken": "[REDACTED]"},
     }
+
+
+def test_exception_context_keeps_reason_without_traceback(capsys):
+    configure_logging("test_service")
+    get_logger(__name__).warning(
+        "Retrying request", **exception_context(ConnectionError("Connection refused"))
+    )
+
+    [record] = records(capsys)
+    assert record["level"] == "warning"
+    assert record["context"] == {
+        "error_type": "ConnectionError",
+        "error_message": "Connection refused",
+    }
+    assert "exception" not in record
+    jsonschema.Draft202012Validator(log_schema()).validate(record)
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Request failed for https://alice:private-password@example.com/hooks?token=private-token",
+        "Max retries exceeded with url: /hooks?api_key=private-token",
+        "Authorization: Bearer private-token",
+        "password='private-password' token=private-token",
+        '{"credentials": "private-token", "api_key": "private-password"}',
+    ],
+)
+def test_exception_context_redacts_common_credentials(message):
+    context = exception_context(RuntimeError(message))
+
+    assert context["error_type"] == "RuntimeError"
+    assert "private-password" not in context["error_message"]
+    assert "private-token" not in context["error_message"]
+    assert "[REDACTED]" in context["error_message"]
+
+
+def test_exception_traceback_redacts_url_secrets(capsys):
+    configure_logging("test_service")
+    message = "Request failed for https://alice:private-password@example.com/?token=private-token"
+    try:
+        raise RuntimeError(message)
+    except RuntimeError:
+        get_logger(__name__).exception("Request failed")
+
+    [record] = records(capsys)
+    assert "private-password" not in json.dumps(record)
+    assert "private-token" not in json.dumps(record)
+    assert "example.com" in record["exception"]["message"]
+    assert "Traceback" in record["exception"]["stacktrace"]
+
+
+def test_exception_context_bounds_long_messages():
+    context = exception_context(RuntimeError("x" * 10000))
+
+    assert len(context["error_message"]) == 2048 + len("[TRUNCATED]")
+    assert context["error_message"].endswith("[TRUNCATED]")
 
 
 def test_every_sensitive_key_family_is_case_insensitively_redacted(capsys):

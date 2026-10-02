@@ -155,6 +155,29 @@ Do not use `error` merely because an HTTP client returned a normal user-facing 4
 
 ### Log exceptions once
 
+For a recoverable failure that does not need a traceback, include its type and
+diagnostic message with `exception_context()`:
+
+```python
+from oakestra_logging import exception_context
+
+try:
+    call_dependency()
+except ConnectionError as exc:
+    logger.warning(
+        "Dependency request failed; retrying",
+        event_name="dependency.request.retry",
+        **exception_context(exc),
+    )
+```
+
+The helper keeps the warning level and adds `context.error_type` and
+`context.error_message`, with messages limited to 2,048 characters. It masks URL
+credentials, URL query strings, Basic/Bearer credentials, and common sensitive
+`key=value` or `key: value` forms. The same text masking applies to the shared
+exception renderer. This does not recognize every possible secret: do not
+construct exceptions containing full payloads, credentials, or user records.
+
 Inside an exception handler, use `logger.exception()` when the traceback is useful. The package stores the exception type, message, and stack trace in one `exception` object and emits one JSON line.
 
 ```python

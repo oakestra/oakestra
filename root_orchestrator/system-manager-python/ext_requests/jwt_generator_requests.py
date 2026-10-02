@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 import requests
 from flask_jwt_extended.typing import ExpiresDelta, Fresh
-from oakestra_logging import get_logger
+from oakestra_logging import exception_context, get_logger
 
 JWT_GENERATOR_ADDR = (
     "http://"
@@ -78,7 +78,7 @@ def get_public_key():
             logger.warning(
                 "JWT public-key request returned an error; retrying",
                 event_name="jwt.public_key.retry",
-                error_type=type(exc).__name__,
+                **exception_context(exc),
                 retry_delay_seconds=5,
             )
             time.sleep(5)
@@ -86,7 +86,7 @@ def get_public_key():
             logger.warning(
                 "JWT public-key request failed; retrying",
                 event_name="jwt.public_key.retry",
-                error_type=type(exc).__name__,
+                **exception_context(exc),
                 retry_delay_seconds=5,
             )
             time.sleep(5)

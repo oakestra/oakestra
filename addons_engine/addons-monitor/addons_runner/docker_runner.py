@@ -1,7 +1,7 @@
 import os
 
 import docker
-from oakestra_logging import get_logger
+from oakestra_logging import exception_context, get_logger
 
 logger = get_logger(__name__)
 
@@ -76,7 +76,7 @@ class DockerRunner:
                 "Failed to remove image",
                 event_name="addon.image.remove_failed",
                 image=image_name,
-                error_type=type(exc).__name__,
+                **exception_context(exc),
             )
             return False
 
