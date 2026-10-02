@@ -41,7 +41,7 @@ def create_services_of_app(username, data, force=False):
     logger.debug(
         "Creating application services",
         event_name="services.create.started",
-        application_count=len(applications),
+        application_count=len(applications) if isinstance(applications, list) else 0,
     )
     try:
         parse_sla_json(data)

@@ -129,3 +129,20 @@ def test_service_creation_logs_validation_failure_once(capsys):
     assert len(output.splitlines()) == 1
     assert json.loads(output)["event"] == "sla.validation.failed"
     assert "private-payload" not in output
+
+
+@pytest.mark.parametrize("applications", [None, 42, "invalid", {}])
+def test_invalid_applications_reaches_sla_validation(capsys, applications):
+    configure_logging("system_manager", level="DEBUG")
+    sample = Path(__file__).parent / "service_level_agreements" / "sla_correct_1.json"
+    sla = json.loads(sample.read_text())
+    sla["applications"] = applications
+
+    response, status = create_services_of_app("test-user", sla)
+
+    assert status == 422
+    assert isinstance(response["message"], SLAFormatError)
+    records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    started = next(record for record in records if record.get("event") == "services.create.started")
+    assert started["context"]["application_count"] == 0
+    assert sum(record.get("event") == "sla.validation.failed" for record in records) == 1
