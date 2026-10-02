@@ -54,6 +54,32 @@ _CONFIG_LEVELS = {
     "CRITICAL": logging.CRITICAL,
 }
 
+_URL_USERINFO = re.compile(r"(https?://)[^\s/@]+@", re.IGNORECASE)
+_URL_QUERY = re.compile(r"((?:https?://|/)[^\s?\"'<>]*)\?[^\s\"'<>]*")
+_AUTH_VALUE = re.compile(r"\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+", re.IGNORECASE)
+_SECRET_VALUE = re.compile(
+    r"(?P<key>[\"']?(?:access[_-]?token|refresh[_-]?token|api[_-]?key|"
+    r"password|passwd|secret|token|authorization|cookie|credentials|private[_-]?key)"
+    r"[\"']?\s*[:=]\s*)"
+    r"(?:\"(?:[^\"\\]|\\.)*\"|'(?:[^'\\]|\\.)*'|[^\s,;}]+)",
+    re.IGNORECASE,
+)
+
+
+def _redact_diagnostic_text(value: object) -> str:
+    text = _URL_USERINFO.sub(r"\1[REDACTED]@", _safe_string(value))
+    text = _URL_QUERY.sub(r"\1?[REDACTED]", text)
+    text = _AUTH_VALUE.sub(r"\1 [REDACTED]", text)
+    return _SECRET_VALUE.sub(lambda match: match["key"] + REDACTED, text)
+
+
+def exception_context(exception: BaseException) -> dict[str, str]:
+    """Summarize a failure without a traceback, masking common credential syntax."""
+    message = _redact_diagnostic_text(exception)
+    if len(message) > 2048:
+        message = message[:2048] + "[TRUNCATED]"
+    return {"error_type": type(exception).__name__, "error_message": message}
+
 
 def _safe_string(value: object) -> str:
     try:
@@ -117,7 +143,7 @@ def _normalise_exception(
     if not isinstance(exc_info, tuple) or len(exc_info) != 3 or exc_info[1] is None:
         event_dict["exception"] = {
             "type": "UnknownException",
-            "message": _safe_string(exc_info),
+            "message": _redact_diagnostic_text(exc_info),
             "stacktrace": "",
         }
         return event_dict
@@ -125,10 +151,12 @@ def _normalise_exception(
     exception_type, exception, exception_traceback = exc_info
     event_dict["exception"] = {
         "type": getattr(exception_type, "__name__", _safe_string(exception_type)),
-        "message": _safe_string(exception),
-        "stacktrace": "".join(
-            traceback.format_exception(exception_type, exception, exception_traceback)
-        ).rstrip(),
+        "message": exception_context(exception)["error_message"],
+        "stacktrace": _redact_diagnostic_text(
+            "".join(
+                traceback.format_exception(exception_type, exception, exception_traceback)
+            ).rstrip()
+        ),
     }
     return event_dict
 

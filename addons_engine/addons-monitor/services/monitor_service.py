@@ -5,7 +5,7 @@ from enum import Enum
 
 import requests
 from addons_runner.runner_types import RunnerTypes, get_runner
-from oakestra_logging import get_logger
+from oakestra_logging import exception_context, get_logger
 
 logger = get_logger(__name__)
 
@@ -69,7 +69,7 @@ class AddonsMonitor:
             logger.warning(
                 "Failed to retrieve addons from Addons Manager",
                 event_name="addons.query.failed",
-                error_type=type(exc).__name__,
+                **exception_context(exc),
             )
             return []
 
