@@ -50,3 +50,17 @@ Cluster Grafana provisions the same Grafana-managed error and stacktrace rule ag
 The Loki datasource has data source-managed rule handling disabled because these rules are stored and evaluated by Grafana, not by Loki's ruler. This does not disable LogQL alert queries.
 
 Both **Oakestra Alert Webhook** and **Oakestra Alert Email** are provisioned. Select one with `OAKESTRA_ALERT_CONTACT_POINT`, configure either `OAKESTRA_ALERT_WEBHOOK_URL` or the `OAKESTRA_ALERT_EMAIL_TO` plus `OAKESTRA_ALERT_SMTP_*` variables, and recreate `cluster_grafana`. Inspect or test both destinations under **Alerting → Notification configuration → Contact points**. A controlled test can emit `ERROR manual-alert-test` through `/proc/1/fd/2` in `cluster_manager`; the alert must carry that Cluster's name and `compose_service=cluster_manager`, transition from **Pending** to **Firing**, and later recover to **Normal**. See the [Root configuration documentation](../../root_orchestrator/config/README.md#provisioned-log-alerting) for the complete environment examples, pattern, notification grouping, and test procedure.
+
+## Container lifecycle alerts
+
+The local `docker_state_exporter` supplies Docker state and automatic restart counters to Prometheus. Grafana provisions alerts for missing running replicas and recent automatic restarts, identified by `cluster_id`, `compose_service`, and `compose_project`. Separate rules report unavailable monitoring and missing desired-state inventory. These alerts reuse the existing webhook/email contact points; they do not replace application health checks.
+
+Startup scripts generate the expected-container inventory from the resolved Compose configuration using Python 3. With manual Compose commands, generate it before startup and regenerate it after intentional service, profile, or replica changes. Use the same Compose files, project, profiles, environment, and overrides for inventory generation and deployment:
+
+```bash
+docker compose -f cluster_orchestrator/docker-compose.yml config --format json |
+  python3 scripts/utils/generateContainerInventory.py \
+    --output cluster_orchestrator/config/container-inventory/containers.prom
+```
+
+The exporter is internal, resource-limited, and disabled by `override-no-observe.yml`; its Docker socket access remains security-sensitive even with a read-only mount. A healthy deployment returns `1` for `oakestra:container_monitoring_ready` and `0` for every `oakestra:container_missing_replicas` and `oakestra:container_restarts_5m` series. Missing-container, monitoring-unavailable, and missing-inventory conditions wait one minute before firing; automatic restart-counter increases have no pending delay. Manual restarts and container recreation are not automatic restart-policy events, and a running container is not proof that its application is responsive.

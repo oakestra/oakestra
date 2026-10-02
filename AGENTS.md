@@ -68,6 +68,7 @@ Root Orchestrator  (1 per deployment)
 | `root_redis` | Redis | 6379 (pw: `rootRedis`) | Job queue (asynq) for root_scheduler. |
 | `root_prometheus` | Prometheus 3.13.2 | 9090 (internal) | Stores Root-host and Root-container metrics locally with 7-day/1-GB retention. |
 | `root_node_exporter` | node_exporter 1.12.1 | 9100 (internal) | Exposes Root-host CPU, memory, filesystem, disk, and network metrics. |
+| `root_docker_state_exporter` | Docker exporter 0.7.0 | 8080 (internal) | Supplies container state and automatic restart counters; expected replicas come from Compose inventory through node_exporter. |
 | `root_cadvisor` | cAdvisor 0.60.5 | 8081 (loopback) | Exposes per-container resources for Oakestra-labelled Root containers and a host-local diagnostic UI. |
 | `grafana` | Grafana | 3000 | Dashboards. |
 | `loki` | Loki | 3100 | Log aggregation. |
@@ -95,6 +96,7 @@ Root Orchestrator  (1 per deployment)
 | `cluster_addons_dashboard` | Python | 11203 | Cluster addons UI. |
 | `cluster_prometheus` | Prometheus 3.13.2 | 9090 (internal) | Stores Cluster-host, Cluster-container, and cluster_manager metrics locally with 7-day/1-GB retention. |
 | `cluster_node_exporter` | node_exporter 1.12.1 | 9100 (internal) | Exposes Cluster-host CPU, memory, filesystem, disk, and network metrics. |
+| `cluster_docker_state_exporter` | Docker exporter 0.7.0 | 8080 (internal) | Supplies Cluster container lifecycle observations for Grafana alerts. |
 | `cluster_cadvisor` | cAdvisor 0.60.5 | 8082 (loopback) | Exposes per-container resources for Oakestra-labelled Cluster containers and a host-local diagnostic UI. |
 | `cluster_grafana` | Grafana | 3001 | Cluster dashboards. |
 | `cluster_loki` | Loki | 3101 | Cluster log aggregation. |
@@ -145,7 +147,7 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | `override-no-network.yml` | Disables the network plugin (root/cluster service managers). |
 | `override-no-addons.yml` | Removes addons subsystem from root. |
 | `override-no-dashboard.yml` | Removes frontend dashboard from root. |
-| `override-no-observe.yml` | Removes Grafana, Loki, Alloy, Prometheus, node_exporter, and cAdvisor. |
+| `override-no-observe.yml` | Removes Grafana, Loki, Alloy, Prometheus, node_exporter, cAdvisor, and docker_state_exporter. |
 | `override-mosquitto-auth.yml` | Enables MQTT authentication (workers need credentials). |
 | `override-images-only.yml` | Forces pre-built images, skips local builds. |
 | `override-local-service-manager.yml` | Builds service manager from local source. |
@@ -240,6 +242,7 @@ export OAKESTRA_VERSION=develop
 
 - **Host networking breaks container DNS.** When using `override-network-host.yml`, containers can't resolve each other by name — set all env vars to IPs, not container names.
 - **Shared libraries are always local.** Internal Python packages are built from this repo's `libraries/` folder (see the Shared Libraries section); they are not fetched from a remote Git repository. Edit the local library and rebuild. Docker builds use BuildKit/Buildx named contexts, which are already configured in Compose, CI, and VS Code tasks.
+- **Container lifecycle inventory.** Startup generates expected replicas from resolved Compose JSON with host Python 3. Manual Compose deployments must regenerate `config/container-inventory/containers.prom` with the same project, profiles, and overrides after topology changes. Missing or invalid inventory is an alert condition. 1-DOC uses one `docker_state_exporter`; standalone names are `root_docker_state_exporter` and `cluster_docker_state_exporter`. Its private Docker socket access is privileged despite the read-only mount.
 - **Metrics compatibility.** The metrics stack requires rootful Linux Docker Engine 25+ on AMD64 or ARM64. Core Oakestra can run on older supported Docker versions with `override-no-observe.yml`.
 - **Metrics stay local.** Standalone Root and Cluster Prometheus instances store only their host's data. 1-DOC uses one exporter pair and one Prometheus for the shared physical host. cAdvisor container series use `cluster_id` and `compose_service`; host-wide series use `host_scope`.
 - **Host network counters need the host network namespace.** node_exporter has host networking but no host PID namespace or capabilities. Its listener is restricted to the private metrics-network gateway and must not be changed to `0.0.0.0`.
