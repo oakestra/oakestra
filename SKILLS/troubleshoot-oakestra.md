@@ -671,6 +671,11 @@ docker buildx version
 
 For containers showing problems, do a deep log analysis:
 
+Grafana, Loki, and Alloy are excluded from centralized log collection by default
+through `oakestra.logging.enabled: "false"`. Inspect their Docker logs directly;
+their absence from Loki does not indicate a collector failure. A Compose
+override can set the label to `"true"` for centralized diagnostics.
+
 ```bash
 # Full logs for a specific container (replace <name>)
 docker logs <name> 2>&1

@@ -211,7 +211,9 @@ services:
     image: grafana/grafana
     hostname: cluster_grafana
     container_name: cluster_grafana
-    labels: *cluster-log-labels
+    labels:
+      <<: *cluster-log-labels
+      oakestra.logging.enabled: "false"
     ports:
       - 3001:3000
     volumes:
@@ -223,7 +225,9 @@ services:
   cluster_loki:
     container_name: cluster_loki
     image: grafana/loki:2.9.2
-    labels: *cluster-log-labels
+    labels:
+      <<: *cluster-log-labels
+      oakestra.logging.enabled: "false"
     ports:
       - 127.0.0.1:3101:3101
     volumes:
@@ -236,7 +240,9 @@ services:
   cluster_alloy:
     image: grafana/alloy:v1.17.0
     container_name: cluster_alloy
-    labels: *cluster-log-labels
+    labels:
+      <<: *cluster-log-labels
+      oakestra.logging.enabled: "false"
     ports:
       - 127.0.0.1:12346:12345
     environment:
