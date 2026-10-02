@@ -35,6 +35,8 @@ docker exec cluster_prometheus promtool query instant http://127.0.0.1:9090 prom
 
 ## Provisioned resources dashboard
 
+The CPU overview gauge and Top-N CPU ranking use a fixed one-minute rate window at the selected range's end. CPU trend panels adapt their rate window to graph resolution; widening the time range does not turn the overview or ranking into a long-range average.
+
 Cluster Grafana automatically loads the version-controlled [`[Oakestra] Resources`](./dashboards/resources-dashboard.json) dashboard. Its host panels show CPU usage, memory used and available, root-filesystem usage, filesystem usage by mountpoint, and disk read/write throughput from node_exporter. They always describe this Cluster's physical host and are not affected by container filters.
 
 The container panels show cAdvisor CPU and working-set memory trends plus top-N consumers. **Cluster**, **Source**, and **Component** filter only these panels; **Source** defaults to every Oakestra-managed container stored in the Cluster-local Prometheus. Container CPU is core percentage: `100%` means one fully occupied CPU core, so an aggregated service may exceed `100%` on a multicore host. Working set is cgroup usage minus inactive file cache; it can still include active cache and is not application heap or RSS. Links between Resources, Logs, and Log Statistics preserve compatible filters and the time range. Metrics remain Cluster-local. Quick ranges stop at seven days, matching time retention; the 1-GB size-retention limit can shorten available history, and WAL and active-head data also consume disk space.

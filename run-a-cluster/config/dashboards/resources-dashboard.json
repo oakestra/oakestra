@@ -71,7 +71,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Current non-idle CPU usage averaged across all host CPU cores.",
+      "description": "Non-idle CPU usage over the last minute, averaged across all host CPU cores.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -132,7 +132,7 @@
             "uid": "Prometheus"
           },
           "editorMode": "code",
-          "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{job=\"node-exporter\", mode=\"idle\"}[$__rate_interval])))",
+          "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{job=\"node-exporter\", mode=\"idle\"}[1m])))",
           "instant": true,
           "range": false,
           "refId": "A",
@@ -987,7 +987,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Selected services ranked by recent CPU usage. 100% represents one fully used CPU core.",
+      "description": "Selected services ranked by CPU usage over the last minute, independent of the dashboard time range. 100% represents one fully used CPU core.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1039,7 +1039,7 @@
             "uid": "Prometheus"
           },
           "editorMode": "code",
-          "expr": "topk(${top_n:raw}, 100 * sum by (cluster_id, compose_service) (rate(container_cpu_usage_seconds_total{job=\"cadvisor\", cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\"}[$__rate_interval])))",
+          "expr": "topk(${top_n:raw}, 100 * sum by (cluster_id, compose_service) (rate(container_cpu_usage_seconds_total{job=\"cadvisor\", cluster_id=~\"${cluster_id:regex}\", compose_service=~\"${source_scope:raw}\", compose_service=~\"${compose_service:regex}\"}[1m])))",
           "instant": true,
           "legendFormat": "{{cluster_id}} / {{compose_service}}",
           "range": false,
