@@ -40,6 +40,12 @@ def insert_job(microservice):
 
 
 def create_services_of_app(username, data, force=False):
+    applications = data.get("applications", []) if isinstance(data, dict) else []
+    logger.debug(
+        "Creating application services",
+        event_name="services.create.started",
+        application_count=len(applications) if isinstance(applications, list) else 0,
+    )
     try:
         parse_sla_json(data)
     except SLAFormatError as e:
