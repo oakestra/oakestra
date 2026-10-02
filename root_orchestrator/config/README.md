@@ -237,6 +237,8 @@ docker exec system_manager sh -c 'printf "panic: manual-legacy-alert-test\n" > /
 
 ## Container lifecycle alerts
 
+Startup generates inventory only when the resolved deployment includes `docker_state_exporter`. Older releases without lifecycle monitoring continue with a warning and no inventory; a deployment with monitoring enabled still aborts if its matching generator is missing or inventory generation fails.
+
 The local `docker_state_exporter` supplies Docker state and automatic restart counters to Prometheus. Grafana provisions alerts for missing running replicas and recent automatic restarts, identified by `cluster_id`, `compose_service`, and `compose_project`. Separate rules report unavailable monitoring and missing desired-state inventory. These alerts reuse the existing webhook/email contact points; they do not replace application health checks.
 
 Startup scripts generate the expected-container inventory from the resolved Compose configuration using Python 3. With manual Compose commands, generate it before startup and regenerate it after intentional service, profile, or replica changes. Use the same Compose files, project, profiles, environment, and overrides for inventory generation and deployment:
