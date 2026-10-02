@@ -96,7 +96,11 @@ class OrganizationController(MethodView):
                 "name": new_org.get("name"),
                 "member": new_org.get("member", []),
             }
-            logger.info(f"Organization created with ID: {new_id}")
+            logger.info(
+                "Organization created",
+                event_name="organization.created",
+                organization_id=new_id,
+            )
             return response_org
         except ConnectionError as e:
             abort(404, {"message": e})
