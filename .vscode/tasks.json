@@ -141,31 +141,31 @@
         {
             "label": "install-resource-abstractor-dependencies",
             "type": "shell",
-            "command": "python3 -m venv ${workspaceRoot}/resource-abstractor/.venv && ${workspaceRoot}/resource-abstractor/.venv/bin/pip install -r ${workspaceRoot}/resource-abstractor/requirements.txt",
+            "command": "python3 -m venv ${workspaceRoot}/resource-abstractor/.venv && ${workspaceRoot}/resource-abstractor/.venv/bin/pip install -r ${workspaceRoot}/resource-abstractor/requirements.txt && ${workspaceRoot}/resource-abstractor/.venv/bin/pip install ${workspaceRoot}/libraries/oakestra_logging",
             "problemMatcher": []
         },
         {
             "label": "install-jwt-generator-dependencies",
             "type": "shell",
-            "command": "python3 -m venv ${workspaceRoot}/root_orchestrator/jwt-generator/.venv && ${workspaceRoot}/root_orchestrator/jwt-generator/.venv/bin/pip install -r ${workspaceRoot}/root_orchestrator/jwt-generator/requirements.txt",
+            "command": "python3 -m venv ${workspaceRoot}/root_orchestrator/jwt-generator/.venv && ${workspaceRoot}/root_orchestrator/jwt-generator/.venv/bin/pip install -r ${workspaceRoot}/root_orchestrator/jwt-generator/requirements.txt && ${workspaceRoot}/root_orchestrator/jwt-generator/.venv/bin/pip install ${workspaceRoot}/libraries/oakestra_logging",
             "problemMatcher": []
         },
         {
             "label": "install-addons-manager-dependencies",
             "type": "shell",
-            "command": "python3 -m venv ${workspaceRoot}/addons_engine/addons-manager/.venv && ${workspaceRoot}/addons_engine/addons-manager/.venv/bin/pip install -r ${workspaceRoot}/addons_engine/addons-manager/requirements.txt",
+            "command": "python3 -m venv ${workspaceRoot}/addons_engine/addons-manager/.venv && ${workspaceRoot}/addons_engine/addons-manager/.venv/bin/pip install -r ${workspaceRoot}/addons_engine/addons-manager/requirements.txt && ${workspaceRoot}/addons_engine/addons-manager/.venv/bin/pip install ${workspaceRoot}/libraries/oakestra_logging",
             "problemMatcher": []
         },
         {
             "label": "install-addons-monitor-dependencies",
             "type": "shell",
-            "command": "python3 -m venv ${workspaceRoot}/addons_engine/addons-monitor/.venv && ${workspaceRoot}/addons_engine/addons-monitor/.venv/bin/pip install -r ${workspaceRoot}/addons_engine/addons-monitor/requirements.txt",
+            "command": "python3 -m venv ${workspaceRoot}/addons_engine/addons-monitor/.venv && ${workspaceRoot}/addons_engine/addons-monitor/.venv/bin/pip install -r ${workspaceRoot}/addons_engine/addons-monitor/requirements.txt && ${workspaceRoot}/addons_engine/addons-monitor/.venv/bin/pip install ${workspaceRoot}/libraries/oakestra_logging",
             "problemMatcher": []
         },
         {
             "label": "install-marketplace-manager-dependencies",
             "type": "shell",
-            "command": "python3 -m venv ${workspaceRoot}/addons_marketplace/marketplace-manager/.venv && ${workspaceRoot}/addons_marketplace/marketplace-manager/.venv/bin/pip install -r ${workspaceRoot}/addons_marketplace/marketplace-manager/requirements.txt",
+            "command": "python3 -m venv ${workspaceRoot}/addons_marketplace/marketplace-manager/.venv && ${workspaceRoot}/addons_marketplace/marketplace-manager/.venv/bin/pip install -r ${workspaceRoot}/addons_marketplace/marketplace-manager/requirements.txt && ${workspaceRoot}/addons_marketplace/marketplace-manager/.venv/bin/pip install ${workspaceRoot}/libraries/oakestra_logging",
             "problemMatcher": []
         },
         {
