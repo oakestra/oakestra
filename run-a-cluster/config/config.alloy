@@ -14,6 +14,12 @@ discovery.relabel "oakestra" {
 	targets = discovery.docker.oakestra.targets
 
 	rule {
+		source_labels = ["__meta_docker_container_label_oakestra_logging_enabled"]
+		regex         = "false"
+		action        = "drop"
+	}
+
+	rule {
 		source_labels = ["__meta_docker_container_name"]
 		regex         = "/(.*)"
 		target_label  = "container"

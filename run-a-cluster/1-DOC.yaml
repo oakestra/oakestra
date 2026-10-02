@@ -400,7 +400,9 @@ services:
     pull_policy: always
     hostname: grafana
     container_name: grafana
-    labels: *shared-log-labels
+    labels:
+      <<: *shared-log-labels
+      oakestra.logging.enabled: "false"
     ports:
       - 3000:3000
     volumes:
@@ -414,7 +416,9 @@ services:
     container_name: loki
     pull_policy: always
     image: grafana/loki:2.9.2
-    labels: *shared-log-labels
+    labels:
+      <<: *shared-log-labels
+      oakestra.logging.enabled: "false"
     ports:
       - 127.0.0.1:3100:3100
     volumes:
@@ -429,7 +433,9 @@ services:
     image: grafana/alloy:v1.17.0
     pull_policy: always
     container_name: alloy
-    labels: *shared-log-labels
+    labels:
+      <<: *shared-log-labels
+      oakestra.logging.enabled: "false"
     ports:
       - 127.0.0.1:12345:12345
     environment:

@@ -118,7 +118,9 @@ services:
     image: grafana/grafana
     hostname: grafana
     container_name: grafana
-    labels: *root-log-labels
+    labels:
+      <<: *root-log-labels
+      oakestra.logging.enabled: "false"
     ports:
       - 3000:3000
     volumes:
@@ -130,7 +132,9 @@ services:
   loki:
     container_name: loki
     image: grafana/loki:2.9.2
-    labels: *root-log-labels
+    labels:
+      <<: *root-log-labels
+      oakestra.logging.enabled: "false"
     ports:
       - 127.0.0.1:3100:3100
     volumes:
@@ -145,7 +149,9 @@ services:
   alloy:
     image: grafana/alloy:v1.17.0
     container_name: alloy
-    labels: *root-log-labels
+    labels:
+      <<: *root-log-labels
+      oakestra.logging.enabled: "false"
     ports:
       - 127.0.0.1:12345:12345
     environment:
