@@ -2,7 +2,7 @@ import threading
 
 import docker
 from db import marketplace_db
-from oakestra_logging import get_logger
+from oakestra_logging import exception_context, get_logger
 
 logger = get_logger(__name__)
 
@@ -36,7 +36,7 @@ def verify_addon(addon_id, addon):
                 "Failed to pull addon image",
                 event_name="addon.image.pull_failed",
                 image=image,
-                error_type=type(exc).__name__,
+                **exception_context(exc),
             )
             marketplace_db.update_addon(
                 addon_id, {"status": marketplace_db.StatusEnum.VERIFICATION_FAILED.value}
@@ -51,7 +51,7 @@ def verify_addon(addon_id, addon):
                 "Failed to remove verification image",
                 event_name="addon.image.remove_failed",
                 image_id=image_id,
-                error_type=type(exc).__name__,
+                **exception_context(exc),
             )
 
 

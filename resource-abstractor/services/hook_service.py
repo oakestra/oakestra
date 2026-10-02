@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 
 from db import hooks_db
 from flask import request
-from oakestra_logging import get_logger
+from oakestra_logging import exception_context, get_logger
 from requests import exceptions, post
 
 logger = get_logger(__name__)
@@ -49,7 +49,7 @@ def call_webhook(url, data):
             "Webhook request failed",
             event_name="webhook.request.failed",
             webhook_host=webhook_host,
-            error_type=type(exc).__name__,
+            **exception_context(exc),
         )
 
     # if request fails the original data is returned
