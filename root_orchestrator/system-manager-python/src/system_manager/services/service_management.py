@@ -43,11 +43,6 @@ def create_services_of_app(username, data, force=False):
     try:
         parse_sla_json(data)
     except SLAFormatError as e:
-        logger.warning(
-            "SLA validation failed",
-            event_name="service.sla.invalid",
-            error_type=type(e).__name__,
-        )
         return {"message": str(e)}, 422
 
     app_id = data.get("applications")[0]["applicationID"]
