@@ -1,0 +1,92 @@
+// Discover every container explicitly assigned to this orchestrator's collector.
+// ALLOY_COLLECTOR_ID prevents Root and Cluster Alloy instances on the same Docker
+// daemon from collecting each other's logs.
+discovery.docker "oakestra" {
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "5s"
+
+	filter {
+		name   = "label"
+		values = ["oakestra.logging.collector=" + sys.env("ALLOY_COLLECTOR_ID")]
+	}
+}
+
+discovery.relabel "oakestra" {
+	targets = discovery.docker.oakestra.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container_name"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "compose_service"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_oakestra_cluster_id"]
+		target_label  = "cluster_id"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_logging_jobname"]
+		target_label  = "job"
+	}
+}
+
+// loki.source.docker adds this meta label per entry, after discovery has
+// finished. Keep its rule separate so discovery is not repeated.
+discovery.relabel "docker_stream" {
+	targets = []
+
+	rule {
+		source_labels = ["__meta_docker_container_log_stream"]
+		target_label  = "logstream"
+	}
+}
+
+loki.source.docker "oakestra" {
+	host             = "unix:///var/run/docker.sock"
+	targets          = discovery.relabel.oakestra.output
+	labels           = {}
+	relabel_rules    = discovery.relabel.docker_stream.rules
+	refresh_interval = "5s"
+	forward_to       = [loki.process.oakestra.receiver]
+}
+
+loki.process "oakestra" {
+	stage.json {
+		expressions = {
+			level    = "level",
+			service  = "service",
+			filename = "filename",
+		}
+	}
+
+	stage.regex {
+		expression = "(?P<level>[^\\[\\]]+?)(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}) (?P<service>[^:]+) (?P<file>[^:]+):(?P<line>\\d+)\\] (?P<message>.+)"
+	}
+
+	stage.labels {
+		values = {
+			level   = "",
+			service = "",
+		}
+	}
+
+	forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+	endpoint {
+		url = sys.env("LOKI_URL")
+	}
+}
