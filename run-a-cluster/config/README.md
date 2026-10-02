@@ -86,6 +86,14 @@ loki.source.docker "oakestra" {
 
 More Docker metadata is available, but labels such as full container IDs, container IPs, and source-line numbers are deliberately not indexed to avoid unnecessary label churn and cardinality.
 
+The shared `grafana`, `loki`, and `alloy` services opt out of log collection with
+`oakestra.logging.enabled: "false"`. Alloy drops them before reading their
+logs; use `docker compose -f 1-DOC.yaml logs grafana loki alloy` from
+`run-a-cluster/` for local diagnostics. To collect one of these services in
+Loki, set its label to `"true"` in a Compose override and recreate the service.
+The [Root configuration documentation](../../root_orchestrator/config/README.md)
+shows the override format. Collector-scope and identity labels remain intact.
+
 #### Labels granularity
 The existing JSON and Oakestra default-format extraction is preserved with Alloy's `loki.process` stages:
 
