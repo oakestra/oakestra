@@ -62,7 +62,7 @@ case "$repo_folder" in
         config_files="prometheus/prometheus.yml prometheus/prometheus-host.yml mosquitto/mosquitto.conf $common_config_files"
         ;;
     run-a-cluster)
-        config_files="prometheus/prometheus.yml prometheus/prometheus-root.yml mosquitto/mosquitto.conf $common_config_files"
+        config_files="prometheus/prometheus.yml mosquitto/mosquitto.conf $common_config_files"
         ;;
     *)
         echo "Error: unsupported configuration folder: $repo_folder"
