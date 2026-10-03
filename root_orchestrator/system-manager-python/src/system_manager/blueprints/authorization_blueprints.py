@@ -31,4 +31,4 @@ class UserPermissionController(MethodView):
         if user is not None:
             return {"roles": user.get("roles", [])}
         else:
-            return abort(404, {"message": "User does not exist."})
+            return abort(404, message="User does not exist.")

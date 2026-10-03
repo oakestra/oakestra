@@ -3,7 +3,7 @@ import logging
 import os
 from datetime import datetime
 
-from flask import abort
+from flask_smorest import abort
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from ..ext_requests import organization_db, user_db
@@ -62,7 +62,7 @@ def user_login(content):
             content["organization_name"]
         )
         if organization_struct is None:
-            abort(404, {"message": "Found no organization with this name"})
+            abort(404, message="Found no organization with this name")
     else:
         organization_struct = organization_db.mongo_get_organization_by_name("root")
 

@@ -42,26 +42,26 @@ class OrganizationControllerDelete(MethodView):
     @require_role(Role.ADMIN)
     def delete(self, organizationid, *args, **kwargs):
         if organizationid == "undefined" or not organizationid:
-            abort(400, {"message": "Invalid organization ID provided."})
+            abort(400, message="Invalid organization ID provided.")
         try:
             res = delete_organization(organizationid)
             if res:
                 return {"message": "Organization deleted"}
             else:
-                abort(501, {"message": "Organization could not be deleted"})
+                abort(501, message="Organization could not be deleted")
         except ConnectionError as e:
-            abort(404, {"message": e})
+            abort(404, message=e)
 
     @jwt_required()
     @require_role(Role.ADMIN)
     def put(self, organizationid, *args, **kwargs):
         if organizationid == "undefined" or not organizationid:
-            abort(400, {"message": "Invalid organization ID provided."})
+            abort(400, message="Invalid organization ID provided.")
         try:
             update_organization(organizationid, request.get_json())
             return {"message": "Organization is updated"}
         except ConnectionError as e:
-            abort(404, {"message": e})
+            abort(404, message=str(e))
 
 
 @organizationblp.route("/")
@@ -76,7 +76,7 @@ class OrganizationController(MethodView):
             return get_all_organizations()
         except Exception as e:
             logger.error(e)
-            return abort(404, {"message": e})
+            return abort(404, message=e)
 
     @organizationblp.response(
         200, SchemaWrapper(organization_schema), content_type="application/json"
@@ -97,4 +97,4 @@ class OrganizationController(MethodView):
             logger.info(f"Organization created with ID: {new_id}")
             return response_org
         except ConnectionError as e:
-            abort(404, {"message": e})
+            abort(404, message=str(e))

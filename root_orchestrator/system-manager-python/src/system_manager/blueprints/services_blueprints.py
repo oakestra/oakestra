@@ -48,7 +48,7 @@ class ServiceController(MethodView):
         if job is not None:
             return jsonify(job)
         else:
-            return abort(404, "not found")
+            return abort(404, message="not found")
 
     @jwt_auth_required()
     @serviceblp.response(200, content_type="application/json")
@@ -63,9 +63,9 @@ class ServiceController(MethodView):
             if service_management.delete_service(username, serviceid):
                 return jsonify({"message": "Job deleted"})
             else:
-                abort(500, "Job not deleted")
+                abort(500, message="Job not deleted")
         except ConnectionError as e:
-            abort(500, str(e))
+            abort(500, message=str(e))
 
     @serviceblp.arguments(
         schema=sla_schema.sla_schema, location="json", validate=False, unknown=True
@@ -88,7 +88,7 @@ class ServiceController(MethodView):
                 abort(status, result)
             return {}
         except ConnectionError as e:
-            abort(404, {"message": e})
+            abort(404, message=str(e))
 
 
 @serviceblp.route("/")
@@ -114,9 +114,9 @@ class ServiceControllerPost(MethodView):
                 return jsonify(result)
             except Exception as e:
                 logging.log(logging.ERROR, e)
-                abort(400, {"message": "The given SLA was not formatted correctly"})
+                abort(400, message="The given SLA was not formatted correctly")
         logging.log(logging.ERROR, "POST service no data found")
-        abort(404, {"message": "/api/deploy request without a yaml file\n"})
+        abort(404, message="/api/deploy request without a yaml file")
 
 
 @servicesblp.route("/<appid>")

@@ -50,10 +50,10 @@ class UserLoginController(MethodView):
         content = request.get_json()
         logger.debug(content)
         if content is None:
-            abort(403, {"message": "No credentials provided"})
+            abort(403, message="No credentials provided")
         resp = user_login(content)
         if resp == {}:
-            abort(401, {"message": "invalid username or password"})
+            abort(401, message="invalid username or password")
         return resp
 
 
@@ -76,5 +76,5 @@ class TokenRefreshController(Resource):
         identity = get_jwt_auth_identity()
         token = user_token_refresh(identity)
         if token == {}:
-            abort(404, {"message": "User does not exists"})
+            abort(404, message="User does not exists")
         return token

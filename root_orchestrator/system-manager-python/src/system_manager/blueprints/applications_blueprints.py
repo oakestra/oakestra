@@ -58,7 +58,7 @@ class ApplicationController(MethodView):
                 abort(code, result)
             return result
         except Exception as e:
-            return abort(404, {"message": str(e)})
+            return abort(404, message=str(e))
 
     @jwt_required()
     def delete(self, appid, *args, **kwargs):
@@ -68,9 +68,9 @@ class ApplicationController(MethodView):
             if res:
                 return jsonify({"message": "Application Deleted"})
             else:
-                abort(501, {"message": "User could not be deleted"})
+                abort(501, message="User could not be deleted")
         except ConnectionError as e:
-            abort(404, {"message": str(e)})
+            abort(404, message=str(e))
 
     @jwt_required()
     def put(self, appid, *args, **kwargs):
@@ -79,7 +79,7 @@ class ApplicationController(MethodView):
             update_app(appid, current_user, request.get_json())
             return jsonify({"message": "Application is updated"})
         except ConnectionError as e:
-            abort(404, {"message": str(e)})
+            abort(404, message=str(e))
 
 
 @applicationblp.route("/")
@@ -110,7 +110,7 @@ class MultipleApplicationControllerUser(Resource):
         organization_id = get_jwt_organization()
         user = mongo_get_user_by_name(current_user, organization_id)
         if userid != str(user["_id"]):
-            abort(401, {"message": "Unauthorized"})
+            abort(401, message="Unauthorized")
         result, code = get_user_apps(current_user)
         if code != 200:
             abort(code, result)

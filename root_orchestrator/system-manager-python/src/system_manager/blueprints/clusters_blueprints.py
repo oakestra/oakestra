@@ -112,7 +112,7 @@ class ClusterController(MethodView):
         updated_cluster = candidate_operations.update_candidate_information(cluster_id, data)
         if updated_cluster is None:
             logger.error("Could not update cluster")
-            return abort(400, "Updating cluster failed")
+            return abort(400, message="Updating cluster failed")
 
         # TODO(GB): fire an event to react to the cluster update
         # and move this logic somewhere else.
