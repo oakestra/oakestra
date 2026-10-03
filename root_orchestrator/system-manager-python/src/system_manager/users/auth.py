@@ -17,6 +17,11 @@ logger = logging.getLogger("system_manager")
 
 
 def user_register(content, organization_id):
+    logger.info(
+        "Registering user with name: %s in organization with id: %s",
+        content["name"],
+        organization_id,
+    )
     if len(content["name"]) > 0 and len(content["password"]) > 0:
         existing_user = user_db.mongo_get_user_by_name(content["name"])
         if existing_user is not None:
@@ -31,8 +36,7 @@ def user_register(content, organization_id):
 
         if mail_user != "":
             (mail.RegistrationMailFactory(content)).send_mail()
-
-        return user
+        return user, 201
     else:
         return {"message": "Invalid information"}, 404
 

@@ -9,8 +9,8 @@ sla_schema = {
                 "type": "object",
                 "properties": {
                     "applicationID": {"type": "string"},  # was integer
-                    "application_name": {"type": "string", "pattern": "^[a-zA-Z0-9]{1,30}$"},
-                    "application_namespace": {"type": "string", "pattern": "^[a-zA-Z0-9]{1,30}$"},
+                    "application_name": {"type": "string", "pattern": "^[a-zA-Z0-9]{1,32}$"},
+                    "application_namespace": {"type": "string", "pattern": "^[a-zA-Z0-9]{1,32}$"},
                     "application_desc": {"type": "string"},
                     "microservices": {
                         "type": "array",
@@ -23,11 +23,11 @@ sla_schema = {
                                 },  # disabling this for now
                                 "microservice_name": {
                                     "type": "string",
-                                    "pattern": "^[a-zA-Z0-9]{1,30}$",
+                                    "pattern": "^[a-zA-Z0-9]{1,32}$",
                                 },
                                 "microservice_namespace": {
                                     "type": "string",
-                                    "pattern": "^[a-zA-Z0-9]{1,30}$",
+                                    "pattern": "^[a-zA-Z0-9]{1,32}$",
                                 },
                                 "virtualization": {"type": "string"},
                                 "volumes": {

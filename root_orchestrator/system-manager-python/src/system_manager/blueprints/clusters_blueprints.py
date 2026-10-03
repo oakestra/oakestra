@@ -1,7 +1,6 @@
 import logging
 
-from bson import json_util
-from flask import request
+from flask import jsonify, request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from oakestra_utils.types.statuses import convert_to_status
@@ -64,9 +63,15 @@ class ClustersController(MethodView):
                 candidate_operations.get_candidates(resources="last_modified_timestamp,active"),
             )
         )
+
+        for c in clusters:
+            if "_id" in c:
+                c["_id"] = str(c["_id"])
+
         if clusters is None:
             return abort(500, "Getting clusters failed")
-        return json_util.dumps(clusters)
+
+        return jsonify(clusters)
 
 
 @clustersbp.route("/active")
@@ -82,7 +87,8 @@ class ActiveClustersController(MethodView):
         )
         if clusters is None:
             return abort(500, "Getting clusters failed")
-        return json_util.dumps(clusters)
+
+        return jsonify(clusters)
 
 
 @clusterinfo.route("/<clusterid>")
