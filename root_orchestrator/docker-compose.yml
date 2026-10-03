@@ -11,10 +11,8 @@ services:
   system_manager:
     image: system_manager
     build:
-      context: system-manager-python/
-      additional_contexts:
-        # Oakestra shared libraries are built from the repo-local libraries/ folder.
-        - libraries=../libraries
+      context: ../
+      dockerfile: root_orchestrator/system-manager-python/Dockerfile
     hostname: system_manager
     container_name: system_manager
     labels:
