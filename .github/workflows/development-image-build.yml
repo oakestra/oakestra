@@ -77,6 +77,7 @@ jobs:
   ### Dynamic matrix for spawning multiple build jobs
   build:
     needs: [ gather-modified-files ]
+    if: ${{ needs.gather-modified-files.outputs.matrix != '[]' }}
     runs-on: ubuntu-latest
     env:
         # Use docker.io for Docker Hub if empty
