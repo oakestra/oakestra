@@ -43,7 +43,6 @@ jobs:
 
       - name: Run step if matching changed files are detected
         id: folders
-        if: steps.changed-files.outputs.any_changed == 'true'  
         env:
           DETECTED_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
