@@ -5,10 +5,17 @@ from flask import jsonify, request
 from flask.views import MethodView
 from flask_restful import Resource
 from flask_smorest import Blueprint, abort
-from roles.securityUtils import Role, get_jwt_auth_identity, jwt_auth_required, require_role
+from roles.securityUtils import (
+    Role,
+    get_jwt_auth_identity,
+    jwt_auth_required,
+    require_role,
+)
 from services import service_management
 
 from blueprints.schema_wrapper import SchemaWrapper
+
+logger = logging.getLogger("system_manager")
 
 # ........ Functions for job management ...............#
 # ......................................................#
@@ -109,13 +116,14 @@ class ServiceControllerPost(MethodView):
             try:
                 username = get_jwt_auth_identity()
                 result, status = service_management.create_services_of_app(username, data)
+            except Exception as e:  # noqa: BLE001
+                logger.error(e)
+                abort(400, {"message": "The given SLA was not formatted correctly"})
+            else:
                 if status != 200:
                     abort(status, result)
                 return jsonify(result)
-            except Exception as e:
-                logging.log(logging.ERROR, e)
-                abort(400, {"message": "The given SLA was not formatted correctly"})
-        logging.log(logging.ERROR, "POST service no data found")
+        logger.log(logging.ERROR, "POST service no data found")
         abort(404, {"message": "/api/deploy request without a yaml file\n"})
 
 
