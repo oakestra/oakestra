@@ -67,9 +67,12 @@ jobs:
           done
           
           # Deduplicate array and format as JSON
-          unique_values=($(printf "%s\n" "${value[@]}" | sort -u))
-          output="value=$(printf '%s\n' "${unique_values[@]}" | jq -R . | jq -s -c .)"
-          echo "$output" >> $GITHUB_OUTPUT
+          if [ ${#value[@]} -eq 0 ]; then
+            echo 'value=[]' >> "$GITHUB_OUTPUT"
+          else
+            output=$(printf '%s\n' "${value[@]}" | sort -u | jq -R . | jq -s -c .)
+            echo "value=$output" >> "$GITHUB_OUTPUT"
+          fi
                   
   ### Dynamic matrix for spawning multiple build jobs
   build:
