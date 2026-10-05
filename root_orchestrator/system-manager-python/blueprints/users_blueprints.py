@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import current_app, jsonify, request
 from flask.views import MethodView
@@ -106,7 +106,7 @@ class UserResetPasswordController(MethodView):
         username = content["username"]
         domain = content["domain"]
         expires = current_app.config["RESET_TOKEN_EXPIRES"]
-        expiry_date = datetime.now() + expires
+        expiry_date = datetime.now(timezone.utc) + expires
         reset_token = secrets.token_urlsafe()
 
         return jsonify(
