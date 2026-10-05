@@ -1,11 +1,11 @@
 name: Testbed Oneshot - Multiple Scenarios Test Deployment
 
-# Starts the testbed (`oneshot_testbed_deploy.yml`) when a maintainer approves a PR.
-# `oneshot_testbed_approval.yml` only acts as the trigger, because workflows started by a review
-# on a fork PR don't get secrets.
-# This gets triggered for every review, not only approvals, and a fork PR can modify the
-# approval workflow. That's why the approval is checked again here via the API.
-# To re-run the testbed without re-approving, start `oneshot_testbed_deploy.yml` manually.
+# Starts `oneshot_testbed_deploy.yml` when a maintainer approves a PR. The review only triggers
+# `oneshot_testbed_approval.yml`, since review workflows on fork PRs get no secrets.
+# This runs for every review and a fork PR can modify the approval workflow, so the approval is
+# checked again here via the API.
+# Merging develop into an approved PR re-runs the testbed via `oneshot_testbed_sync.yml`.
+# For anything else, re-approve or start `oneshot_testbed_deploy.yml` manually.
 
 on:
   workflow_run:
@@ -42,9 +42,8 @@ jobs:
           set -euo pipefail
           echo "approved=false" >> "$GITHUB_OUTPUT"
 
-          # workflow_run.pull_requests is empty for fork PRs.
-          # Not `head -n1`: it closes the pipe early, gh gets SIGPIPE on the next page and
-          # pipefail fails the step.
+          # workflow_run.pull_requests is empty for fork PRs. sed instead of `head -n1`, which
+          # closes the pipe early and fails gh with SIGPIPE.
           pr_number=$(gh api --paginate "repos/${REPO}/pulls?state=open&per_page=100" \
             --jq ".[] | select(.head.sha == \"${HEAD_SHA}\" and .head.repo.full_name == \"${HEAD_REPO}\") | .number" \
             | sed -n 1p)
@@ -53,9 +52,9 @@ jobs:
             exit 0
           fi
 
-          # The event doesn't say which review triggered us, so take the latest one from before
-          # this run was created (10s slack for clock skew). Later reviews have their own run,
-          # and a comment right after an approval would otherwise hide it.
+          # The event doesn't say which review triggered this run, so take the latest one from
+          # before the run was created (10s slack for clock skew). Otherwise a comment right
+          # after the approval would hide it.
           latest=$(gh api --paginate "repos/${REPO}/pulls/${pr_number}/reviews?per_page=100" \
             --jq '.[] | {user: .user.login, state, commit_id, submitted_at}' \
             | jq -s --arg created "$RUN_CREATED_AT" '
@@ -73,9 +72,8 @@ jobs:
             echo "Latest review on PR #${pr_number} is '${state:-none}', not an approval; skipping."
             exit 0
           fi
-          # The fork controls the trigger workflow and can make it fire on `edited` too. Editing
-          # an older review leaves the approval as the latest one, so without an age limit the
-          # author could re-run the testbed forever off a single approval.
+          # A fork can make the trigger fire on `edited` too. Without an age limit, editing an
+          # old review would re-run the testbed off the same approval forever.
           if [ "${age%.*}" -gt 600 ]; then
             echo "Approval by ${reviewer} was submitted ${age}s before this run, not a new approval; skipping."
             exit 0

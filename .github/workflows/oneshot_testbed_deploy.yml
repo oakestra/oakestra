@@ -1,8 +1,8 @@
 name: Testbed Oneshot - Deployment
 
 # Runs the oneshot testbed for a PR and reports the result as the `testbed/oneshot` commit status.
-# Started either by `oneshot_testbed_workflow_run.yml` after a maintainer approval, or manually
-# (workflow_dispatch needs write access) to re-run the testbed without re-approving.
+# Started after an approval (`oneshot_testbed_workflow_run.yml`), after merging develop into an
+# approved PR (`oneshot_testbed_sync.yml`) or manually, which needs write access.
 # The PR code is not checked out here, AWX pulls it on the testbed.
 
 on:
@@ -64,15 +64,15 @@ jobs:
 
           head_sha=$(jq -r '.head.sha' <<<"$pr")
           sha="${REQUESTED_SHA:-$head_sha}"
-          # The testbed can't check out an old fork commit and falls back to the branch tip,
-          # so we'd end up testing code pushed after the approval.
+          # The testbed falls back to the branch tip for old fork commits, which would test
+          # code pushed after the approval.
           if [ "$sha" != "$head_sha" ]; then
             echo "::error::PR #${PR_NUMBER} moved to ${head_sha} after ${sha} was approved. Re-approve or dispatch this workflow manually."
             exit 1
           fi
 
-          # The branch name ends up in shell tasks on the testbed hosts and git allows things
-          # like $ ( ) ; ` in it, so only allow safe characters.
+          # The branch name ends up in shell tasks on the testbed hosts, and git allows
+          # $ ( ) ; ` in it.
           branch=$(jq -r '.head.ref' <<<"$pr")
           if ! [[ "$branch" =~ ^[A-Za-z0-9._/+-]+$ ]]; then
             echo "::error::Branch name of PR #${PR_NUMBER} contains characters the testbed does not accept. Allowed: A-Z a-z 0-9 . _ / + -"

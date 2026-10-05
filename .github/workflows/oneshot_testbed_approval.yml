@@ -1,9 +1,7 @@
 name: Testbed Oneshot - Intermediate Approval Check
 
-# Only used as the trigger for `oneshot_testbed_workflow_run.yml`, which listens for this
-# workflow by name, so don't rename it.
-# Fork PRs can edit this file, so don't put secrets or checks in here. The approval is checked
-# in `oneshot_testbed_workflow_run.yml`.
+# Trigger for `oneshot_testbed_workflow_run.yml`, which listens for this name, so don't rename it.
+# Fork PRs can edit this file, so no secrets or checks here.
 
 on:
   pull_request_review:
