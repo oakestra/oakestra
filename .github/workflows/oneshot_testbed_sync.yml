@@ -1,0 +1,161 @@
+name: Testbed Oneshot - Re-run After Base Merge
+
+# Re-runs the testbed when develop gets merged into an approved PR, so that doesn't need a new
+# approval.
+#
+# pull_request_target runs this file from develop with secrets, and a fork can't change it.
+# Never check out or run PR code here, the PR commits are only fetched to compare trees.
+#
+# Every commit after the approved one has to be a merge of a develop commit that matches a clean
+# automatic merge. Conflict resolutions, extra commits, rebases or edits inside a merge commit
+# still need a new approval (or a manual run of `oneshot_testbed_deploy.yml`).
+
+on:
+  pull_request_target:
+    types: [synchronize]
+    branches: [develop]
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  authorize:
+    name: Verify approval still covers the PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      approved: ${{ steps.verify.outputs.approved }}
+    steps:
+      - name: Find standing maintainer approval
+        id: review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          echo "approved_sha=" >> "$GITHUB_OUTPUT"
+
+          # Latest review per user, comments ignored. Dismissing the approval stops the re-runs.
+          reviews=$(gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/reviews?per_page=100" \
+            --jq '.[] | {user: .user.login, state, commit_id, submitted_at}' \
+            | jq -s 'map(select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED"))
+                     | group_by(.user) | map(max_by(.submitted_at))')
+
+          approved_sha=""
+          approved_at=""
+          reviewer=""
+          while IFS=$'\t' read -r user state commit_id submitted_at; do
+            # Anyone can review a public PR, only reviewers with write access count
+            permission=$(gh api "repos/${REPO}/collaborators/${user}/permission" --jq '.permission' || echo none)
+            case "$permission" in
+              admin|write) ;;
+              *) continue ;;
+            esac
+            if [ "$state" = "CHANGES_REQUESTED" ]; then
+              echo "${user} requested changes on PR #${PR_NUMBER}; not re-running the testbed."
+              exit 0
+            fi
+            if [ "$state" = "APPROVED" ] && [[ "$submitted_at" > "$approved_at" ]]; then
+              approved_sha="$commit_id"
+              approved_at="$submitted_at"
+              reviewer="$user"
+            fi
+          done < <(jq -r '.[] | [.user, .state, .commit_id, .submitted_at] | @tsv' <<<"$reviews")
+
+          if [ -z "$approved_sha" ]; then
+            echo "PR #${PR_NUMBER} has no standing approval from a maintainer; nothing to do."
+            exit 0
+          fi
+          echo "Latest approval: ${reviewer} at ${approved_sha}."
+          echo "approved_sha=${approved_sha}" >> "$GITHUB_OUTPUT"
+
+      # Blobless because the full history is ~1 GB. merge-tree fetches missing blobs on demand,
+      # which works without credentials since the repo is public.
+      - name: Checkout base branch history
+        if: steps.review.outputs.approved_sha != ''
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Check the update only merges the base branch
+        id: verify
+        if: steps.review.outputs.approved_sha != ''
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          APPROVED_SHA: ${{ steps.review.outputs.approved_sha }}
+        run: |
+          set -euo pipefail
+          echo "approved=false" >> "$GITHUB_OUTPUT"
+
+          # refs/pull/N/head also exists for fork PRs
+          git fetch --no-tags --filter=blob:none origin \
+            "+refs/pull/${PR_NUMBER}/head:refs/remotes/pr/head" \
+            "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          if [ "$(git rev-parse refs/remotes/pr/head)" != "$HEAD_SHA" ]; then
+            echo "PR #${PR_NUMBER} moved past ${HEAD_SHA} already; the newer push has its own run."
+            exit 0
+          fi
+
+          reject() {
+            echo "$1"
+            echo "Not re-running the testbed automatically, PR #${PR_NUMBER} needs a new approval."
+            exit 0
+          }
+
+          # Follow first parents from the new head back to the approved commit
+          commit="$HEAD_SHA"
+          merges=0
+          while [ "$commit" != "$APPROVED_SHA" ]; do
+            merges=$((merges + 1))
+            if [ "$merges" -gt 20 ]; then
+              reject "Approved commit ${APPROVED_SHA} is not within 20 merges of ${HEAD_SHA}."
+            fi
+
+            read -r -a parents <<<"$(git rev-list --parents -n 1 "$commit")"
+            if [ "${#parents[@]}" -ne 3 ]; then
+              reject "${commit} is not a merge commit."
+            fi
+            first="${parents[1]}"
+            second="${parents[2]}"
+
+            if ! git merge-base --is-ancestor "$second" "refs/remotes/origin/${BASE_REF}"; then
+              reject "${commit} merges ${second}, which is not on ${BASE_REF}."
+            fi
+            # A conflict resolution or a tree mismatch means code nobody reviewed
+            if ! expected=$(git merge-tree --write-tree --no-messages "$first" "$second"); then
+              reject "${commit} had merge conflicts."
+            fi
+            if [ "$expected" != "$(git rev-parse "${commit}^{tree}")" ]; then
+              reject "${commit} differs from a clean merge of ${first} and ${second}."
+            fi
+
+            commit="$first"
+          done
+
+          if [ "$merges" -eq 0 ]; then
+            echo "Head is the approved commit itself; the approval run already covers it."
+            exit 0
+          fi
+
+          echo "${HEAD_SHA} only merges ${BASE_REF} into the approved ${APPROVED_SHA} (${merges} merge(s))."
+          echo "approved=true" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Testbed
+    needs: authorize
+    if: needs.authorize.outputs.approved == 'true'
+    uses: ./.github/workflows/oneshot_testbed_deploy.yml
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      head_sha: ${{ github.event.pull_request.head.sha }}
+    secrets:
+      TOWER_HOST: ${{ secrets.TOWER_HOST }}
+      TOWER_TOKEN: ${{ secrets.TOWER_TOKEN }}
