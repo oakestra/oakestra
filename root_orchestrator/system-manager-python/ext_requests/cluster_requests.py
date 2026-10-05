@@ -17,16 +17,16 @@ def cluster_request_status(cluster_id):
         logger.error("Calling Cluster Orchestrator /status not successful.")
 
 
-def cluster_request_to_deploy(cluster_id, job_id, instance_number):
+def cluster_request_to_deploy(cluster_id, job_id, instance_number) -> bool:
     cluster = candidate_operations.get_candidate_by_id(cluster_id)
     if cluster is None:
         logger.error(f"Cluster with {cluster_id} not found.")
-        return
+        return False
 
     job = job_operations.get_job_instance(job_id, instance_number)
     if job is None:
         logger.error(f"Job with {job_id} not found.")
-        return
+        return False
 
     try:
         logger.debug(
@@ -45,8 +45,10 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
         job["_id"] = str(job["_id"])
         logger.info(f"Deploy request to {cluster_addr}")
         requests.post(cluster_addr, json=job, timeout=10)
+        return True
     except Exception as e:
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} not successful: {e}")
+        return False
 
 
 def cluster_request_to_delete_job(job_id, instance_number):

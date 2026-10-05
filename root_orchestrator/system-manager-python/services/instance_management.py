@@ -8,7 +8,12 @@ from ext_requests.net_plugin_requests import (
     net_inform_instance_undeploy,
 )
 from ext_requests.scheduler_requests import scheduler_request_deploy
-from oakestra_utils.types.statuses import PositiveSchedulingStatus, Status, convert_to_status
+from oakestra_utils.types.statuses import (
+    DeploymentStatus,
+    PositiveSchedulingStatus,
+    Status,
+    convert_to_status,
+)
 from resource_abstractor_client import app_operations, candidate_operations, job_operations
 
 logger = logging.getLogger("system_manager")
@@ -139,7 +144,29 @@ def instance_scale_up_scheduled_handler(job_id, cluster_id):
         instance_list=instance_list,
     )
 
-    # inform network component
-    net_inform_instance_deploy(str(job_id), instance_number, cluster_id)
+    try:
+        # inform network component
+        net_inform_instance_deploy(str(job_id), instance_number, cluster_id)
+    except Exception:
+        instance_info["status"] = DeploymentStatus.FAILED
+        update_job_status_and_instances(
+            job_id=job_id,
+            status=DeploymentStatus.FAILED,
+            next_instance_progressive_number=instance_number, # no need to increment instance_number again
+            instance_list=instance_list,
+        )
+        # don't re-raise, the caller doesn't expect an exception for its current behavior
+        return
 
-    cluster_request_to_deploy(cluster_id, job_id, instance_number)
+    if not cluster_request_to_deploy(cluster_id, job_id, instance_number):
+        instance_info["status"] = DeploymentStatus.FAILED
+        update_job_status_and_instances(
+            job_id=job_id,
+            status=DeploymentStatus.FAILED,
+            next_instance_progressive_number=instance_number,  # no need to increment instance_number again
+            instance_list=instance_list,
+        )
+        try:
+            net_inform_instance_undeploy(str(job_id), instance_number)
+        except Exception:
+            logger.warning("Failed to undeploy network for failed instance.")
