@@ -1,0 +1,119 @@
+name: Go Resource Abstractor Tests
+
+on:
+  push:
+    paths:
+      - 'go_resource_abstractor/**'
+  pull_request:
+    paths:
+      - 'go_resource_abstractor/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: go_resource_abstractor
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go_resource_abstractor/go.mod
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      # openapi/openapi.gen.go is generated from openapi/openapi.yaml and
+      # committed, so that building the service never has to run a code
+      # generator. This catches the spec and the generated code drifting apart
+      # - i.e. someone editing one and not regenerating the other.
+      - name: Check generated OpenAPI code is up to date
+        env:
+          # oapi-codegen's go:generate pin can require a newer Go than this
+          # module's go.mod - let the toolchain auto-fetch it for codegen
+          # only, overriding setup-go's default GOTOOLCHAIN=local.
+          GOTOOLCHAIN: auto
+        run: |
+          go generate ./openapi
+          if ! git diff --exit-code -- openapi/openapi.gen.go; then
+            echo "openapi/openapi.gen.go is out of date."
+            echo "Run 'go generate ./openapi' in go_resource_abstractor/ and commit the result."
+            exit 1
+          fi
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      # Tests spin up real MongoDB containers via testcontainers-go (the
+      # ubuntu-latest runner ships Docker pre-installed and running), using
+      # mongo:8.0 by default to match the version root/cluster docker-compose
+      # deploy in production.
+      - name: Run test suite
+        run: go test ./... -v
+
+  client-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: go_resource_abstractor/client
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go_resource_abstractor/client/go.mod
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      # openapi/openapi.gen.go here is generated from the *server's*
+      # openapi/openapi.yaml - one spec, two generation targets - and is
+      # committed for the same reason. This catches the client half drifting
+      # from the spec, which a spec edit that only regenerated the server
+      # would cause.
+      - name: Check generated OpenAPI client code is up to date
+        env:
+          # oapi-codegen's go:generate pin can require a newer Go than this
+          # module's go.mod - let the toolchain auto-fetch it for codegen
+          # only, overriding setup-go's default GOTOOLCHAIN=local.
+          GOTOOLCHAIN: auto
+        run: |
+          go generate ./openapi
+          if ! git diff --exit-code -- openapi/openapi.gen.go; then
+            echo "client/openapi/openapi.gen.go is out of date."
+            echo "Run 'go generate ./openapi' in go_resource_abstractor/client/ and commit the result."
+            exit 1
+          fi
+
+      - name: Build client module
+        run: go build ./...
+
+      - name: Vet client module
+        run: go vet ./...
+
+      - name: Run client module test suite
+        run: go test ./... -v

@@ -1,0 +1,19 @@
+# oapi-codegen configuration. Run `go generate ./openapi` after editing
+# openapi.yaml; see the go:generate directive in spec.go.
+package: openapi
+output: openapi.gen.go
+
+output-options:
+  skip-prune: true
+
+generate:
+  # Models for every schema in components/schemas.
+  models: true
+  # gin server, not strict-server: strict binds bodies into typed structs,
+  # which would drop the unknown fields we need to store verbatim (see
+  # "Schemaless documents" in openapi.yaml). Plain gin only binds
+  # path/query params and leaves bodies to the handlers.
+  gin-server: true
+  # No embedded-spec: avoids pulling in kin-openapi just to serve
+  # /docs/openapi.json. spec.go already does that with go:embed + a
+  # yaml->json conversion, keeping us within the lightweight-first budget.
