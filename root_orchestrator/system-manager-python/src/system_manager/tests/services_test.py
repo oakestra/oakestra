@@ -1,10 +1,10 @@
 import copy
-import os
-from unittest.mock import ANY, patch
+from unittest.mock import ANY, Mock, patch
 
 import pytest
 from resource_abstractor_client import app_operations, job_operations
 
+from ..services import service_management
 from ..services.service_management import (
     create_services_of_app,
     delete_service,
@@ -16,12 +16,22 @@ from ..services.service_management import (
 )
 from .utils import get_first_app, get_full_random_sla_app
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-
 resource_abstractor = "http://localhost:11011"
 
 
-def test_create_service_with_app(net_deploy_mock):
+@pytest.fixture(autouse=True)
+def net_plugin(monkeypatch):
+    plugin = Mock()
+    monkeypatch.setattr(
+        service_management, "net_inform_service_deploy", plugin.net_inform_service_deploy
+    )
+    monkeypatch.setattr(
+        service_management, "net_inform_service_undeploy", plugin.net_inform_service_undeploy
+    )
+    return plugin
+
+
+def test_create_service_with_app(net_plugin):
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
         new=str(resource_abstractor),
@@ -52,7 +62,7 @@ def test_create_service_with_app(net_deploy_mock):
             sla_first_app["application_namespace"],
             "Admin",
         )
-        net_deploy_mock.assert_called_with(last_service, ANY)
+        net_plugin.net_inform_service_deploy.assert_called_with(last_service, ANY)
         assert len(result["microservices"]) == len(sla_first_app["microservices"])
 
 
