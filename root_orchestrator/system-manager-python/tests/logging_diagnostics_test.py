@@ -1,12 +1,30 @@
 import json
+import logging
 from pathlib import Path
 
 import pytest
 import requests
+import structlog
 from ext_requests import cluster_requests
 from oakestra_logging import configure_logging
 from services.service_management import create_services_of_app
 from sla.versioned_sla_parser import SLAFormatError, parse_sla_json
+
+
+@pytest.fixture(autouse=True)
+def restore_logging_configuration():
+    root = logging.getLogger()
+    handlers = root.handlers[:]
+    level = root.level
+    config = structlog.get_config()
+    configured = structlog.is_configured()
+    yield
+    root.handlers[:] = handlers
+    root.setLevel(level)
+    if configured:
+        structlog.configure(**config)
+    else:
+        structlog.reset_defaults()
 
 
 @pytest.mark.parametrize(
