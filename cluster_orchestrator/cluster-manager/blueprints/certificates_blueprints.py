@@ -4,12 +4,11 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import unquote
 
 import config
 import requests
+from bson import ObjectId
 from cryptography import x509
-from cryptography.x509.oid import NameOID
 from ext_requests.certificates_db import (
     clear_revoked_certs,
     consume_token,
@@ -27,12 +26,12 @@ from flask import Response, request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from utils.certificates import (
-    csr_common_name,
+    ClientCertError,
+    client_cert_worker,
     generate_cluster_csr,
     generate_worker_cert,
     get_old_cluster_ca_paths,
     get_root_ca_pem,
-    issued_by_cluster_ca,
     load_worker_csr,
     regenerate_cluster_crl,
     sign_worker_csr,
@@ -53,21 +52,38 @@ certbp = Blueprint(
 generate_worker_schema = {
     "type": "object",
     "properties": {
-        "common_name": {"type": "string"},
-        "alt_names": {"type": "array", "items": {"type": "string"}},
+        "node_id": {"type": "string"},
         "valid_days": {"type": "integer", "minimum": 1},
     },
-    "required": ["common_name"],
 }
 
 sign_csr_schema = {
     "type": "object",
     "properties": {
         "csr": {"type": "string"},
+        "node_id": {"type": "string"},
         "valid_days": {"type": "integer", "minimum": 1},
     },
     "required": ["csr"],
 }
+
+mint_worker_token_schema = {
+    "type": "object",
+    "properties": {
+        "node_id": {"type": "string"},
+    },
+}
+
+
+def _node_id(content: dict) -> str:
+    """The node_id in a request body (an existing worker), or a new one."""
+    node_id = content.get("node_id")
+    if not node_id:
+        return str(ObjectId())
+    if not ObjectId.is_valid(node_id):
+        abort(400, message="node_id is not a valid id")
+    return str(ObjectId(node_id))
+
 
 worker_token_schema = {
     "type": "object",
@@ -131,18 +147,13 @@ class ClusterRootCaController(MethodView):
 class ClusterGenerateWorkerController(MethodView):
     @certbp.arguments(schema=generate_worker_schema, location="json", validate=False, unknown=True)
     def post(self, *args, **kwargs):
+        """Generate a key and certificate for a worker: node_id, or a new worker without it."""
         content = request.get_json(silent=True) or {}
-        common_name = content.get("common_name")
-        if not common_name:
-            abort(400, message="common_name is required")
-
-        alt_names = content.get("alt_names") or None
+        node_id = _node_id(content)
         valid_days = int(content.get("valid_days") or 365)
 
         try:
-            private_pem, fullchain_pem = generate_worker_cert(
-                common_name=common_name, alt_names=alt_names, valid_days=valid_days
-            )
+            private_pem, fullchain_pem = generate_worker_cert(node_id, valid_days=valid_days)
             root_ca_pem = get_root_ca_pem()
         except FileNotFoundError:
             abort(409, message="Cluster intermediate CA material is not initialized")
@@ -150,6 +161,7 @@ class ClusterGenerateWorkerController(MethodView):
             abort(400, message=f"Worker certificate generation failed: {str(e)}")
 
         return {
+            "node_id": node_id,
             "private_key": private_pem,
             "certificate": fullchain_pem,
             "root_ca": root_ca_pem,
@@ -184,13 +196,20 @@ class ClusterWorkerTokenController(MethodView):
 
 @certbp.route("/mint-worker-token")
 class ClusterMintWorkerTokenController(MethodView):
-    def post(self):
+    @certbp.arguments(
+        schema=mint_worker_token_schema, location="json", validate=False, unknown=True
+    )
+    def post(self, *args, **kwargs):
         """Mint a one-time worker registration token at this cluster, without the root.
 
         The token is redeemed at /api/certs/worker-bootstrap like a root-issued one and
-        expires after REGISTRATION_TOKEN_TTL_MINUTES. Reachable via the internal gateway only.
+        expires after REGISTRATION_TOKEN_TTL_MINUTES. Pass the node_id of an existing worker
+        to re-provision it; otherwise the redeeming worker gets a new id. Reachable via the
+        internal gateway only.
         """
-        token, expiry_date = create_worker_token(config.REGISTRATION_TOKEN_TTL_MINUTES)
+        content = request.get_json(silent=True) or {}
+        node_id = _node_id(content) if content.get("node_id") else None
+        token, expiry_date = create_worker_token(config.REGISTRATION_TOKEN_TTL_MINUTES, node_id)
         logger.info("Minted worker registration token (expires %s)", expiry_date.isoformat())
 
         cluster_address = config.MY_CLUSTER_ADDRESS
@@ -212,29 +231,33 @@ class ClusterWorkerBootstrapController(MethodView):
     def post(self, *args, **kwargs):
         """Redeem a one-time worker token for a worker certificate.
 
-        The worker sends a CSR, so its private key never leaves the worker. Returns the
-        certificate chain and the CA bundle used to verify the cluster.
+        The worker sends a CSR, so its private key never leaves the worker; only that key is
+        taken from it. The certificate is issued for the worker's id: the one bound to the
+        token, or a new one. The worker registers under it. Returns the certificate chain,
+        the CA bundle used to verify the cluster, and the id.
         """
         content = request.get_json(silent=True) or {}
         # Check the CSR before consuming the token, so a bad request does not burn it.
         try:
-            common_name = csr_common_name(load_worker_csr(content.get("csr") or ""))
+            load_worker_csr(content.get("csr") or "")
         except ValueError as e:
             abort(400, message=str(e))
 
-        if consume_token(content.get("token") or "") is None:
+        token_doc = consume_token(content.get("token") or "")
+        if token_doc is None:
             abort(401, message="invalid registration token")
+        node_id = token_doc.get("node_id") or str(ObjectId())
 
         try:
-            fullchain_pem = sign_worker_csr(content["csr"])
+            fullchain_pem = sign_worker_csr(content["csr"], node_id)
             root_ca_pem = get_root_ca_pem()
         except FileNotFoundError:
             abort(409, message="Cluster intermediate CA material is not initialized")
         except ValueError as e:
             abort(400, message=f"Worker certificate generation failed: {str(e)}")
 
-        logger.info(f"Worker bootstrap: issued certificate for '{common_name}'")
-        return {"certificate": fullchain_pem, "root_ca": root_ca_pem}
+        logger.info("Worker bootstrap: issued certificate for node %s", node_id)
+        return {"certificate": fullchain_pem, "root_ca": root_ca_pem, "node_id": node_id}
 
 
 @certbp.route("/worker-renew")
@@ -243,29 +266,16 @@ class ClusterWorkerRenewController(MethodView):
     def post(self, *args, **kwargs):
         """Renew a worker certificate, authenticated by the worker's current certificate.
 
-        The new certificate keeps the presented certificate's name; the presented one is revoked
-        once the worker's heartbeat shows the new one in use.
+        The new certificate is for the presented certificate's node id: only the CSR's public
+        key is used. The presented one is revoked once the worker's heartbeat shows the new
+        one in use.
         """
-        try:
-            presented = x509.load_pem_x509_certificate(
-                unquote(request.headers.get("X-Client-Cert", "")).encode("utf-8")
-            )
-        except ValueError:
-            abort(401, message="Client certificate required")
-        # The gateway only checks the chain up to the root CA; this cluster must have issued it.
-        if not issued_by_cluster_ca(presented):
-            abort(401, message="Client certificate was not issued by this cluster")
+        presented, node_id = verified_worker(request.headers.get("X-Client-Cert"))
         serial_hex = format(presented.serial_number, "x")
-        if is_revoked(serial_hex):
-            abort(401, message="Client certificate is revoked")
-        presented_names = presented.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
 
         content = request.get_json(silent=True) or {}
         try:
-            csr = load_worker_csr(content.get("csr") or "")
-            if not presented_names or csr_common_name(csr) != presented_names[0].value:
-                abort(403, message="CSR name must match the client certificate")
-            fullchain_pem = sign_worker_csr(content["csr"])
+            fullchain_pem = sign_worker_csr(content.get("csr") or "", node_id)
             root_ca_pem = get_root_ca_pem()
         except FileNotFoundError:
             abort(409, message="Cluster intermediate CA material is not initialized")
@@ -279,8 +289,24 @@ class ClusterWorkerRenewController(MethodView):
             old_subject=presented.subject.rfc4514_string(),
             old_not_after=presented.not_valid_after_utc,
         )
-        logger.info("Worker renewal: issued certificate for '%s'", presented_names[0].value)
+        logger.info("Worker renewal: issued certificate for node %s", node_id)
         return {"certificate": fullchain_pem, "root_ca": root_ca_pem}
+
+
+def verified_worker(client_cert_header) -> tuple:
+    """(cert, node_id) of the worker cert the external gateway forwarded; aborts if there is none.
+
+    Also rejects revoked certs.
+    """
+    try:
+        presented, node_id = client_cert_worker(client_cert_header)
+    except ClientCertError as e:
+        abort(e.status, message=str(e))
+    except (FileNotFoundError, ValueError) as e:
+        abort(409, message=f"Cluster certificate material unusable: {e}")
+    if is_revoked(format(presented.serial_number, "x")):
+        abort(401, message="Client certificate is revoked")
+    return presented, node_id
 
 
 @certbp.route("/refresh")
@@ -302,16 +328,15 @@ class ClusterCertRefreshController(MethodView):
         cluster_name = config.MY_CHOSEN_CLUSTER_NAME or ""
         cluster_ip = config.MY_CLUSTER_ADDRESS or ""
 
-        if not root_url or not cluster_name:
-            abort(500, message="SYSTEM_MANAGER_URL and CLUSTER_NAME must be configured")
+        if not root_url:
+            abort(500, message="SYSTEM_MANAGER_URL must be configured")
 
         base_url = f"https://{root_url}:{root_port}"
-        alt_names = [name for name in (cluster_ip,) if name]
 
         try:
             resp = requests.post(
                 f"{base_url}/api/certs/cluster-bootstrap",
-                json={"token": token, "cluster_name": cluster_name, "alt_names": alt_names},
+                json={"token": token, "cluster_name": cluster_name},
                 verify=config.root_gateway_verify(),
                 timeout=30,
             )
@@ -344,8 +369,8 @@ class ClusterCertRefreshController(MethodView):
 
         logger.info("Cluster certificate material refreshed from root")
         # The MQTT identities and CRL must chain to / be signed by the new cluster CA.
-        write_cluster_mqtt_identity(cluster_name)
-        write_mqtt_server_identity(cluster_name, cluster_ip)
+        write_cluster_mqtt_identity()
+        write_mqtt_server_identity(cluster_ip)
         mqtt_reloaded = refresh_cluster_crl()["mqtt_reloaded"]
         kong_reloaded = config.reload_kong_external()
         return {
@@ -383,16 +408,13 @@ _renew_lock = threading.Lock()
 def _renew_cluster_certs(rotate_intermediate: bool, grace_hours: float | None = None) -> tuple:
     root_url = os.environ.get("SYSTEM_MANAGER_URL") or ""
     root_port = os.environ.get("SYSTEM_MANAGER_PORT") or "443"
-    cluster_name = config.MY_CHOSEN_CLUSTER_NAME or ""
-    cluster_ip = config.MY_CLUSTER_ADDRESS or ""
 
-    if not root_url or not cluster_name:
-        return False, "SYSTEM_MANAGER_URL and CLUSTER_NAME must be configured"
+    if not root_url:
+        return False, "SYSTEM_MANAGER_URL must be configured"
     if not config.mtls_enabled():
         return False, "mTLS is not enabled — cannot renew in-band"
 
-    alt_names = [n for n in (cluster_ip, cluster_name, "mqtt", "localhost") if n]
-    new_key_pem, csr_pem = generate_cluster_csr(cluster_name, alt_names)
+    new_key_pem, csr_pem = generate_cluster_csr()
 
     base_url = f"https://{root_url}:{root_port}"
     try:
@@ -400,7 +422,6 @@ def _renew_cluster_certs(rotate_intermediate: bool, grace_hours: float | None = 
             f"{base_url}/api/certs/cluster-renew",
             json={
                 "csr": csr_pem,
-                "alt_names": alt_names,
                 "valid_days": 365,
                 "rotate_intermediate": rotate_intermediate,
             },
@@ -447,7 +468,7 @@ def _renew_cluster_certs(rotate_intermediate: bool, grace_hours: float | None = 
     if rotate_intermediate:
         # MQTT accepts both intermediates until the workers have migrated. The broker's server
         # cert moves when the migration ends.
-        write_cluster_mqtt_identity(cluster_name)
+        write_cluster_mqtt_identity()
     # Re-signs the CRL (with the new cluster CA if renewed) and reloads MQTT for the new root CA.
     mqtt_reloaded = refresh_cluster_crl()["mqtt_reloaded"]
     # The external gateway verifies the root's calls against ca.crt, which may have changed.
@@ -488,7 +509,7 @@ def complete_worker_migration(grace_ends=None) -> None:
     cert_path, key_path, expiry_path = get_old_cluster_ca_paths()
     for path in (cert_path, key_path, expiry_path):
         path.unlink(missing_ok=True)
-    write_mqtt_server_identity(config.MY_CHOSEN_CLUSTER_NAME, config.MY_CLUSTER_ADDRESS)
+    write_mqtt_server_identity(config.MY_CLUSTER_ADDRESS)
     refresh_cluster_crl()
     logger.warning(
         "Worker migration to the new cluster intermediate CA ended (deadline %s). Workers "
@@ -663,14 +684,20 @@ class ClusterCertUnrevokeController(MethodView):
 class ClusterSignCsrController(MethodView):
     @certbp.arguments(schema=sign_csr_schema, location="json", validate=False, unknown=True)
     def post(self, *args, **kwargs):
+        """Sign a CSR as a worker certificate: for node_id, or a new worker without it.
+
+        Only the CSR's public key is used.
+        """
         content = request.get_json(silent=True) or {}
         csr_pem = content.get("csr") or ""
         if not csr_pem.strip():
             abort(400, message="csr is required")
+        node_id = _node_id(content)
 
         try:
             fullchain_pem = sign_worker_csr(
                 csr_pem=csr_pem,
+                node_id=node_id,
                 valid_days=int(content.get("valid_days") or 365),
             )
         except FileNotFoundError:
@@ -678,4 +705,4 @@ class ClusterSignCsrController(MethodView):
         except ValueError as e:
             abort(400, message=f"Invalid CSR format: {str(e)}")
 
-        return {"certificate": fullchain_pem}
+        return {"certificate": fullchain_pem, "node_id": node_id}

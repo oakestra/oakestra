@@ -10,8 +10,11 @@ _format_version: "3.0"
 #                    Each carries a pre-function guard that rejects requests
 #                    without a verified client certificate; the guard also
 #                    rejects requests on the cleartext :8080 listener
-#                    (ssl_client_verify is empty there). The first guarded
-#                    route defines the YAML anchor (&mtls_guard).
+#                    (ssl_client_verify is empty there). It passes the verified
+#                    certificate on in X-Client-Cert, for the backend to
+#                    identify the caller (set_header replaces any X-Client-Cert
+#                    the client sent). The first guarded route defines the YAML
+#                    anchor (&mtls_guard).
 #   * Public Routes — read-only status/docs, the CA download, the token-gated
 #                     worker bootstrap, and explicitly blocked endpoints.
 
@@ -41,6 +44,7 @@ services:
                   if ngx.var.ssl_client_verify ~= "SUCCESS" then
                     return kong.response.exit(401, { message = "mTLS client certificate required" })
                   end
+                  kong.service.request.set_header("X-Client-Cert", ngx.var.ssl_client_escaped_cert)
 
       # Deploy/undeploy commands from the root.
       - name: cm-service-instance
@@ -62,9 +66,7 @@ services:
         plugins:
           - *mtls_guard
 
-      # Worker certificate renewal. cluster_manager binds the new cert to the presented
-      # one, so the verified client cert is passed on; set_header replaces any
-      # X-Client-Cert header the client sent itself.
+      # Worker certificate renewal. cluster_manager binds the new cert to the presented one.
       - name: cm-worker-renew
         protocols: [https]
         paths:
@@ -72,14 +74,7 @@ services:
         methods: [POST, OPTIONS]
         strip_path: false
         plugins:
-          - name: pre-function
-            config:
-              access:
-                - |
-                  if ngx.var.ssl_client_verify ~= "SUCCESS" then
-                    return kong.response.exit(401, { message = "mTLS client certificate required" })
-                  end
-                  kong.service.request.set_header("X-Client-Cert", ngx.var.ssl_client_escaped_cert)
+          - *mtls_guard
 
       # One-time worker token hashes pushed by the root.
       - name: cm-worker-token
@@ -129,8 +124,16 @@ services:
   # ======================================================================
 
   # Cluster-manager public surface (read-only + token-gated bootstrap).
+  # X-Client-Cert is only ever set by the gateway after verifying a client cert,
+  # so a client-supplied one is dropped.
   - name: cluster_manager_public
     url: http://cluster_manager:10100
+    plugins:
+      - name: pre-function
+        config:
+          access:
+            - |
+              kong.service.request.clear_header("X-Client-Cert")
     routes:
       - name: cm-cluster-status
         paths:

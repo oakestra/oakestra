@@ -1,9 +1,11 @@
 import ipaddress
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import unquote
 
-from config import CLUSTER_CA_CERT_FILE, CLUSTER_CA_KEY_FILE, ROOT_CA_FILE
+from config import CLUSTER_CA_CERT_FILE, CLUSTER_CA_KEY_FILE, CLUSTER_CERT_FILE, ROOT_CA_FILE
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
@@ -47,9 +49,88 @@ def _normalize_pem(pem_data: str, expected_type: str) -> str:
     return pem_str
 
 
+# Identities are SPIFFE IDs in a URI SAN, always set by the issuer (the root issues the
+# cluster's own client cert):
+#   spiffe://oakestra/cluster/<cluster_id>                the cluster (cluster.crt)
+#   spiffe://oakestra/cluster/<cluster_id>/worker/<id>    a worker of this cluster
+#   spiffe://oakestra/cluster/<cluster_id>/mqtt-client    this cluster's own MQTT clients
+#   spiffe://oakestra/cluster/<cluster_id>/mqtt-broker    this cluster's MQTT broker
+SPIFFE_PREFIX = "spiffe://oakestra"
+_OBJECT_ID = re.compile(r"[0-9a-f]{24}")
+_WORKER_ID = re.compile(rf"{SPIFFE_PREFIX}/cluster/([0-9a-f]{{24}})/worker/([0-9a-f]{{24}})")
+_CLUSTER_ID = re.compile(rf"{SPIFFE_PREFIX}/cluster/([0-9a-f]{{24}})")
+
+
+def spiffe_id(cert: x509.Certificate):
+    """The cert's SPIFFE ID, or None unless it carries exactly one URI SAN."""
+    try:
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    except x509.ExtensionNotFound:
+        return None
+    uris = san.get_values_for_type(x509.UniformResourceIdentifier)
+    return uris[0] if len(uris) == 1 else None
+
+
+def cert_worker_ids(cert: x509.Certificate):
+    """(cluster_id, node_id) of a worker cert, or None for any other identity."""
+    match = _WORKER_ID.fullmatch(spiffe_id(cert) or "")
+    return match.groups() if match else None
+
+
+class ClientCertError(Exception):
+    """A forwarded client certificate does not identify an allowed caller."""
+
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
+
+
+def client_cert_worker(client_cert_header) -> tuple:
+    """(cert, node_id) of the worker cert the external gateway verified and forwarded.
+
+    client_cert_header is the URL-encoded PEM the gateway puts in X-Client-Cert. Raises
+    ClientCertError unless it is a worker cert issued by this cluster. The gateway accepts
+    any chain to the root CA, including other clusters' workers and the root's own cert.
+    Revocation is not checked here.
+    """
+    try:
+        presented = x509.load_pem_x509_certificate(
+            unquote(client_cert_header or "").encode("utf-8")
+        )
+    except ValueError:
+        raise ClientCertError(401, "Client certificate required")
+    if not issued_by_cluster_ca(presented):
+        raise ClientCertError(401, "Client certificate was not issued by this cluster")
+    ids = cert_worker_ids(presented)
+    # A cluster could also sign a foreign worker id with its own intermediate.
+    if ids is None or ids[0] != own_cluster_id():
+        raise ClientCertError(403, "Client certificate is not a worker certificate of this cluster")
+    return presented, ids[1]
+
+
+def own_cluster_id() -> str:
+    """This cluster's id, from the client certificate the root issued it."""
+    if not CLUSTER_CERT_FILE or not Path(CLUSTER_CERT_FILE).is_file():
+        raise FileNotFoundError("Cluster client certificate is missing")
+    cert = x509.load_pem_x509_certificate(Path(CLUSTER_CERT_FILE).read_bytes())
+    match = _CLUSTER_ID.fullmatch(spiffe_id(cert) or "")
+    if not match:
+        raise ValueError("Cluster client certificate does not carry a cluster id")
+    return match.group(1)
+
+
+def worker_spiffe_id(node_id: str) -> str:
+    if not _OBJECT_ID.fullmatch(node_id or ""):
+        raise ValueError(f"Invalid node id: {node_id!r}")
+    return f"{SPIFFE_PREFIX}/cluster/{own_cluster_id()}/worker/{node_id}"
+
+
 def _build_san(alt_names):
     san_list = []
     for name in alt_names:
+        if name.startswith(SPIFFE_PREFIX):
+            san_list.append(x509.UniformResourceIdentifier(name))
+            continue
         try:
             san_list.append(x509.IPAddress(ipaddress.ip_address(name)))
         except ValueError:
@@ -61,25 +142,39 @@ def _sign_with_intermediate(builder, intermediate_key):
     return builder.sign(private_key=intermediate_key, algorithm=hashes.SHA256())
 
 
-def generate_worker_cert(
-    common_name: str, alt_names=None, valid_days: int = 365
-) -> tuple[str, str]:
-    """Generate an RSA private key and a worker leaf certificate signed by the cluster intermediate CA.
-
-    Returns (private_key_pem, fullchain_pem) where fullchain is leaf || intermediate.
-    """
+def _new_key():
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=DEFAULT_KEY_SIZE)
-    fullchain_pem = _issue_leaf(private_key.public_key(), common_name, alt_names, valid_days)
     private_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.TraditionalOpenSSL,
         encryption_algorithm=serialization.NoEncryption(),
     ).decode("utf-8")
+    return private_key, private_pem
+
+
+def generate_worker_cert(node_id: str, valid_days: int = 365) -> tuple[str, str]:
+    """Generate an RSA private key and a worker certificate for node_id.
+
+    Returns (private_key_pem, fullchain_pem) where fullchain is leaf || intermediate.
+    """
+    private_key, private_pem = _new_key()
+    fullchain_pem = _issue_leaf(
+        private_key.public_key(),
+        common_name=node_id,
+        alt_names=[worker_spiffe_id(node_id)],
+        valid_days=valid_days,
+        extended_key_usages=[ExtendedKeyUsageOID.CLIENT_AUTH],
+    )
     return private_pem, fullchain_pem
 
 
-def _issue_leaf(public_key, common_name: str, alt_names, valid_days: int) -> str:
-    """Sign a client+server leaf for public_key with the intermediate. Returns leaf || intermediate."""
+def _issue_leaf(
+    public_key, common_name: str, alt_names, valid_days: int, extended_key_usages: list
+) -> str:
+    """Sign a leaf for public_key with the intermediate. Returns leaf || intermediate.
+
+    Every name and extension is set here; nothing comes from the requester.
+    """
     intermediate_cert, intermediate_key, _ = load_cluster_ca()
 
     now = datetime.now(timezone.utc)
@@ -111,15 +206,7 @@ def _issue_leaf(public_key, common_name: str, alt_names, valid_days: int) -> str
             ),
             critical=True,
         )
-        .add_extension(
-            x509.ExtendedKeyUsage(
-                [
-                    x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH,
-                    x509.oid.ExtendedKeyUsageOID.SERVER_AUTH,
-                ]
-            ),
-            critical=False,
-        )
+        .add_extension(x509.ExtendedKeyUsage(extended_key_usages), critical=False)
         .add_extension(
             x509.SubjectKeyIdentifier.from_public_key(public_key),
             critical=False,
@@ -280,7 +367,7 @@ def get_cluster_mqtt_identity_paths() -> tuple[Path, Path]:
     return base / "cluster_mqtt.crt", base / "cluster_mqtt.key"
 
 
-def write_cluster_mqtt_identity(cluster_name: str) -> Path:
+def write_cluster_mqtt_identity() -> Path:
     """Issue the MQTT client certificate used by this cluster's own services.
 
     mosquitto CRL-checks client certificates against cluster_revoked.crl, which only the
@@ -288,7 +375,14 @@ def write_cluster_mqtt_identity(cluster_name: str) -> Path:
     MQTT client certificate. This identity is issued by the intermediate instead.
     Returns the certificate path.
     """
-    private_pem, fullchain_pem = generate_worker_cert(f"{cluster_name or 'cluster'}-mqtt")
+    private_key, private_pem = _new_key()
+    fullchain_pem = _issue_leaf(
+        private_key.public_key(),
+        common_name="mqtt-client",
+        alt_names=[f"{SPIFFE_PREFIX}/cluster/{own_cluster_id()}/mqtt-client"],
+        valid_days=365,
+        extended_key_usages=[ExtendedKeyUsageOID.CLIENT_AUTH],
+    )
     return _write_identity(get_cluster_mqtt_identity_paths(), private_pem, fullchain_pem)
 
 
@@ -297,11 +391,19 @@ def get_mqtt_server_identity_paths() -> tuple[Path, Path]:
     return base / "mqtt_server.crt", base / "mqtt_server.key"
 
 
-def write_mqtt_server_identity(cluster_name: str, cluster_address: str) -> Path:
-    """Issue the MQTT broker's server certificate from the cluster intermediate CA."""
-    alt_names = [name for name in (cluster_address, "mqtt", "localhost") if name]
-    private_pem, fullchain_pem = generate_worker_cert(
-        f"{cluster_name or 'cluster'}-mqtt-broker", alt_names
+def write_mqtt_server_identity(cluster_address: str) -> Path:
+    """Issue the MQTT broker's server certificate from the cluster intermediate CA.
+
+    The only serverAuth certificate the intermediate issues.
+    """
+    private_key, private_pem = _new_key()
+    fullchain_pem = _issue_leaf(
+        private_key.public_key(),
+        common_name="mqtt-broker",
+        alt_names=[f"{SPIFFE_PREFIX}/cluster/{own_cluster_id()}/mqtt-broker"]
+        + [name for name in (cluster_address, "mqtt", "localhost") if name],
+        valid_days=365,
+        extended_key_usages=[ExtendedKeyUsageOID.SERVER_AUTH],
     )
     return _write_identity(get_mqtt_server_identity_paths(), private_pem, fullchain_pem)
 
@@ -315,54 +417,17 @@ def _write_identity(paths: tuple[Path, Path], private_pem: str, fullchain_pem: s
     return cert_path
 
 
-def generate_cluster_csr(common_name: str, alt_names: list) -> tuple:
+def generate_cluster_csr() -> tuple:
     """Generate a new RSA private key and CSR for cluster client cert renewal.
 
-    The CSR includes clientAuth + serverAuth EKUs so the signed cert can be
-    used both as an mTLS client identity (cluster→root) and as a server cert
-    (root→cluster callbacks).
+    The root takes only the public key from it: the renewed cert keeps the identity of
+    the cert the renewal is authenticated with.
 
     Returns (private_key_pem, csr_pem).
     """
-    key = rsa.generate_private_key(public_exponent=65537, key_size=DEFAULT_KEY_SIZE)
-    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
-
-    san_list = []
-    for name in alt_names or []:
-        try:
-            san_list.append(x509.IPAddress(ipaddress.ip_address(name)))
-        except ValueError:
-            san_list.append(x509.DNSName(name))
-
-    builder = x509.CertificateSigningRequestBuilder().subject_name(subject)
-    if san_list:
-        builder = builder.add_extension(x509.SubjectAlternativeName(san_list), critical=False)
-    builder = builder.add_extension(
-        x509.KeyUsage(
-            digital_signature=True,
-            content_commitment=False,
-            key_encipherment=True,
-            data_encipherment=False,
-            key_agreement=False,
-            key_cert_sign=False,
-            crl_sign=False,
-            encipher_only=False,
-            decipher_only=False,
-        ),
-        critical=True,
-    )
-    builder = builder.add_extension(
-        x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH, ExtendedKeyUsageOID.SERVER_AUTH]),
-        critical=False,
-    )
-
-    csr = builder.sign(key, hashes.SHA256())
-
-    key_pem = key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption(),
-    ).decode("utf-8")
+    key, key_pem = _new_key()
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, own_cluster_id())])
+    csr = x509.CertificateSigningRequestBuilder().subject_name(subject).sign(key, hashes.SHA256())
     csr_pem = csr.public_bytes(serialization.Encoding.PEM).decode("utf-8")
     return key_pem, csr_pem
 
@@ -381,25 +446,17 @@ def load_worker_csr(csr_pem: str):
     return csr
 
 
-def csr_common_name(csr) -> str:
-    names = csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
-    if not names or not names[0].value.strip():
-        raise ValueError("CSR has no common name")
-    return names[0].value
+def sign_worker_csr(csr_pem: str, node_id: str, valid_days: int = 365) -> str:
+    """Sign a worker CSR for node_id with the cluster intermediate CA. Returns fullchain PEM.
 
-
-def sign_worker_csr(csr_pem: str, valid_days: int = 365) -> str:
-    """Sign a worker CSR with the cluster intermediate CA. Returns fullchain PEM.
-
-    Only the CSR's key, common name and DNS/IP names are used; every other extension
-    is set here, so a CSR cannot ask for a CA certificate or other key usages.
+    Only the CSR's public key is used. The certificate is a clientAuth leaf named after
+    node_id, whatever names, key usages or CA flag the CSR asks for.
     """
     csr = load_worker_csr(csr_pem)
-    alt_names = []
-    try:
-        san = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
-        alt_names = [str(name) for name in san.get_values_for_type(x509.DNSName)]
-        alt_names += [str(ip) for ip in san.get_values_for_type(x509.IPAddress)]
-    except x509.ExtensionNotFound:
-        pass
-    return _issue_leaf(csr.public_key(), csr_common_name(csr), alt_names or None, valid_days)
+    return _issue_leaf(
+        csr.public_key(),
+        common_name=node_id,
+        alt_names=[worker_spiffe_id(node_id)],
+        valid_days=valid_days,
+        extended_key_usages=[ExtendedKeyUsageOID.CLIENT_AUTH],
+    )

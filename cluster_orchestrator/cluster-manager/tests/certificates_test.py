@@ -6,6 +6,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
+from urllib.parse import quote
 
 import bootstrap_certificates
 import config
@@ -80,13 +81,18 @@ class BootstrapResolveVerifyTest(RootGatewayTrustTestCase):
 # ---------------------------------------------------------------------------
 
 
-def make_cert(name, issuer=None, days=365):
+CLUSTER_ID = "65d200f3812caeb85e21ee19"
+OTHER_CLUSTER_ID = "65d200f3812caeb85e21ee12"
+NODE_ID = "65d200f3812caeb85e21ee55"
+
+
+def make_cert(name, issuer=None, days=365, uri=None, ca=True):
     """Return (cert, key); self-signed unless issuer=(cert, key) is given."""
     key = ec.generate_private_key(ec.SECP256R1())
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
     issuer_cert, issuer_key = issuer or (None, key)
     now = datetime.now(timezone.utc)
-    cert = (
+    builder = (
         x509.CertificateBuilder()
         .subject_name(subject)
         .issuer_name(issuer_cert.subject if issuer_cert else subject)
@@ -94,10 +100,26 @@ def make_cert(name, issuer=None, days=365):
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - timedelta(minutes=1))
         .not_valid_after(now + timedelta(days=days))
-        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
-        .sign(issuer_key, hashes.SHA256())
+        .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True)
     )
-    return cert, key
+    if uri:
+        builder = builder.add_extension(
+            x509.SubjectAlternativeName([x509.UniformResourceIdentifier(uri)]), critical=False
+        )
+    return builder.sign(issuer_key, hashes.SHA256()), key
+
+
+def worker_uri(cluster_id=CLUSTER_ID, node_id=NODE_ID):
+    return f"spiffe://oakestra/cluster/{cluster_id}/worker/{node_id}"
+
+
+def uris(cert):
+    san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    return san.get_values_for_type(x509.UniformResourceIdentifier)
+
+
+def usages(cert):
+    return list(cert.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value)
 
 
 def make_csr(common_name=None, extensions=()):
@@ -133,11 +155,17 @@ class ClusterCaTestCase(unittest.TestCase):
         self.intermediate = make_cert("cluster", self.root, days=30)
         write_ca(self.dir / "cluster_ca.crt", self.dir / "cluster_ca.key", self.intermediate)
         write_ca(self.dir / "root.crt", self.dir / "root.key", self.root)
+        # The cluster's own client cert, which carries its id.
+        cluster_cert = make_cert(
+            CLUSTER_ID, self.root, uri=f"spiffe://oakestra/cluster/{CLUSTER_ID}", ca=False
+        )
+        write_ca(self.dir / "cluster.crt", self.dir / "cluster.key", cluster_cert)
 
         patcher = mock.patch.multiple(
             certificates,
             CLUSTER_CA_CERT_FILE=str(self.dir / "cluster_ca.crt"),
             CLUSTER_CA_KEY_FILE=str(self.dir / "cluster_ca.key"),
+            CLUSTER_CERT_FILE=str(self.dir / "cluster.crt"),
             ROOT_CA_FILE=str(self.dir / "root.crt"),
         )
         patcher.start()
@@ -151,9 +179,9 @@ class ClusterCaTestCase(unittest.TestCase):
 
 
 class SignWorkerCsrTest(ClusterCaTestCase):
-    def test_csr_cannot_request_ca_or_extra_usages(self):
+    def test_csr_cannot_choose_identity_ca_or_usages(self):
         csr = make_csr(
-            "worker-1",
+            "other-worker",
             [
                 x509.BasicConstraints(ca=True, path_length=None),
                 x509.KeyUsage(
@@ -167,45 +195,127 @@ class SignWorkerCsrTest(ClusterCaTestCase):
                     encipher_only=False,
                     decipher_only=False,
                 ),
-                x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CODE_SIGNING]),
+                x509.ExtendedKeyUsage(
+                    [ExtendedKeyUsageOID.SERVER_AUTH, ExtendedKeyUsageOID.CODE_SIGNING]
+                ),
                 x509.SubjectAlternativeName(
                     [
-                        x509.DNSName("worker-1.local"),
+                        x509.DNSName("mqtt"),
                         x509.IPAddress(ipaddress.ip_address("10.0.0.5")),
+                        x509.UniformResourceIdentifier("spiffe://oakestra/root"),
                     ]
                 ),
             ],
         )
 
-        leaf, chain_ca = x509.load_pem_x509_certificates(certificates.sign_worker_csr(csr).encode())
+        leaf, chain_ca = x509.load_pem_x509_certificates(
+            certificates.sign_worker_csr(csr, NODE_ID).encode()
+        )
 
         extensions = leaf.extensions
         self.assertFalse(extensions.get_extension_for_class(x509.BasicConstraints).value.ca)
         key_usage = extensions.get_extension_for_class(x509.KeyUsage).value
         self.assertFalse(key_usage.key_cert_sign)
         self.assertFalse(key_usage.crl_sign)
-        self.assertEqual(
-            list(extensions.get_extension_for_class(x509.ExtendedKeyUsage).value),
-            [ExtendedKeyUsageOID.CLIENT_AUTH, ExtendedKeyUsageOID.SERVER_AUTH],
-        )
-        # The name and SANs are what the CSR may choose.
-        self.assertEqual(leaf.subject.rfc4514_string(), "CN=worker-1")
+        # A worker is only ever a client: it must not be able to pose as the broker.
+        self.assertEqual(usages(leaf), [ExtendedKeyUsageOID.CLIENT_AUTH])
+        # The issuer names the worker; the CSR's names are ignored.
+        self.assertEqual(leaf.subject.rfc4514_string(), f"CN={NODE_ID}")
         san = extensions.get_extension_for_class(x509.SubjectAlternativeName).value
-        self.assertEqual(san.get_values_for_type(x509.DNSName), ["worker-1.local"])
-        self.assertEqual(
-            san.get_values_for_type(x509.IPAddress), [ipaddress.ip_address("10.0.0.5")]
-        )
+        self.assertEqual(list(san), [x509.UniformResourceIdentifier(worker_uri())])
         leaf.verify_directly_issued_by(self.intermediate[0])
         self.assertEqual(chain_ca, self.intermediate[0])
 
     def test_validity_is_capped_at_intermediate_expiry(self):
-        fullchain = certificates.sign_worker_csr(make_csr("worker-1"), valid_days=365)
+        fullchain = certificates.sign_worker_csr(make_csr("worker-1"), NODE_ID, valid_days=365)
         leaf = x509.load_pem_x509_certificate(fullchain.encode())
         self.assertLessEqual(leaf.not_valid_after_utc, self.intermediate[0].not_valid_after_utc)
 
-    def test_csr_without_common_name_is_rejected(self):
-        with self.assertRaisesRegex(ValueError, "no common name"):
-            certificates.sign_worker_csr(make_csr())
+    def test_invalid_node_id_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Invalid node id"):
+            certificates.sign_worker_csr(make_csr("worker-1"), "../root")
+
+
+class ClusterIdentityTest(ClusterCaTestCase):
+    def test_own_cluster_id_comes_from_the_cluster_cert(self):
+        self.assertEqual(certificates.own_cluster_id(), CLUSTER_ID)
+
+    def test_worker_ids(self):
+        worker = make_cert("w", self.intermediate, uri=worker_uri(), ca=False)[0]
+        self.assertEqual(certificates.cert_worker_ids(worker), (CLUSTER_ID, NODE_ID))
+
+    def test_other_identities_are_not_workers(self):
+        for uri in (
+            f"spiffe://oakestra/cluster/{CLUSTER_ID}",
+            f"spiffe://oakestra/cluster/{CLUSTER_ID}/mqtt-client",
+            "spiffe://oakestra/root",
+            worker_uri() + "/extra",
+        ):
+            cert = make_cert("x", self.intermediate, uri=uri, ca=False)[0]
+            self.assertIsNone(certificates.cert_worker_ids(cert), uri)
+
+    def test_mqtt_client_is_client_only(self):
+        cert_path = certificates.write_cluster_mqtt_identity()
+        cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
+        self.assertEqual(usages(cert), [ExtendedKeyUsageOID.CLIENT_AUTH])
+        self.assertEqual(uris(cert), [f"spiffe://oakestra/cluster/{CLUSTER_ID}/mqtt-client"])
+
+    def test_mqtt_broker_is_server_only(self):
+        cert_path = certificates.write_mqtt_server_identity("10.0.0.1")
+        cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
+        self.assertEqual(usages(cert), [ExtendedKeyUsageOID.SERVER_AUTH])
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+        self.assertEqual(
+            san.get_values_for_type(x509.UniformResourceIdentifier),
+            [f"spiffe://oakestra/cluster/{CLUSTER_ID}/mqtt-broker"],
+        )
+        self.assertEqual(san.get_values_for_type(x509.DNSName), ["mqtt", "localhost"])
+        self.assertEqual(
+            san.get_values_for_type(x509.IPAddress), [ipaddress.ip_address("10.0.0.1")]
+        )
+
+
+class ClientCertWorkerTest(ClusterCaTestCase):
+    """The checks behind /api/node/register and /api/certs/worker-renew."""
+
+    def verify(self, cert):
+        return certificates.client_cert_worker(
+            quote(cert.public_bytes(serialization.Encoding.PEM).decode())
+        )
+
+    def assert_rejected(self, cert, status):
+        with self.assertRaises(certificates.ClientCertError) as raised:
+            self.verify(cert)
+        self.assertEqual(raised.exception.status, status)
+
+    def test_accepts_a_worker_of_this_cluster(self):
+        worker = make_cert("w", self.intermediate, uri=worker_uri(), ca=False)[0]
+        self.assertEqual(self.verify(worker)[1], NODE_ID)
+
+    def test_rejects_a_worker_of_another_cluster(self):
+        # Chains to the root, so the gateway lets it through.
+        other_intermediate = make_cert("other-cluster", self.root)
+        worker = make_cert("w", other_intermediate, uri=worker_uri(OTHER_CLUSTER_ID), ca=False)[0]
+        self.assert_rejected(worker, 401)
+
+    def test_rejects_a_root_issued_cert(self):
+        cluster = make_cert("c", self.root, uri=f"spiffe://oakestra/cluster/{CLUSTER_ID}")[0]
+        self.assert_rejected(cluster, 401)
+
+    def test_rejects_a_foreign_worker_id_from_this_intermediate(self):
+        worker = make_cert("w", self.intermediate, uri=worker_uri(OTHER_CLUSTER_ID), ca=False)[0]
+        self.assert_rejected(worker, 403)
+
+    def test_rejects_non_worker_identities(self):
+        mqtt_client = make_cert(
+            "m", self.intermediate, uri=f"spiffe://oakestra/cluster/{CLUSTER_ID}/mqtt-client"
+        )[0]
+        self.assert_rejected(mqtt_client, 403)
+
+    def test_requires_a_client_cert(self):
+        with self.assertRaises(certificates.ClientCertError) as raised:
+            certificates.client_cert_worker(None)
+        self.assertEqual(raised.exception.status, 401)
 
 
 class IssuedByClusterCaTest(ClusterCaTestCase):
@@ -293,6 +403,14 @@ class ConsumeTokenTest(unittest.TestCase):
         self.store("token", timedelta(minutes=-1))
         self.assertIsNone(certificates_db.consume_token("token"))
         self.assertEqual(self.tokens.docs, [])
+
+    def test_token_carries_the_node_id_it_reprovisions(self):
+        token, _ = certificates_db.create_worker_token(10, node_id=NODE_ID)
+        self.assertEqual(certificates_db.consume_token(token)["node_id"], NODE_ID)
+
+    def test_new_worker_token_has_no_node_id(self):
+        token, _ = certificates_db.create_worker_token(10)
+        self.assertNotIn("node_id", certificates_db.consume_token(token))
 
 
 if __name__ == "__main__":

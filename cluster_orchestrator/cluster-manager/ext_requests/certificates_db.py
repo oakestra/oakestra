@@ -48,21 +48,27 @@ def hash_worker_token(token: str) -> str:
     return hashlib.pbkdf2_hmac("sha256", token.encode("ascii"), b"", 100000).hex()
 
 
-def store_token_hash(token_hash: str, expiry_date: datetime) -> None:
-    _worker_tokens_collection().insert_one(
-        {
-            "token_hash": token_hash,
-            "expiry_date": expiry_date,
-            "created_at": datetime.now(timezone.utc),
-        }
-    )
+def store_token_hash(token_hash: str, expiry_date: datetime, node_id: str = None) -> None:
+    """Store a one-time worker token's hash.
+
+    node_id, if given, is the existing worker the token re-provisions; otherwise the
+    redeeming worker gets a new id.
+    """
+    doc = {
+        "token_hash": token_hash,
+        "expiry_date": expiry_date,
+        "created_at": datetime.now(timezone.utc),
+    }
+    if node_id:
+        doc["node_id"] = node_id
+    _worker_tokens_collection().insert_one(doc)
 
 
-def create_worker_token(ttl_minutes: float) -> tuple[str, datetime]:
+def create_worker_token(ttl_minutes: float, node_id: str = None) -> tuple[str, datetime]:
     """Mint a one-time worker token locally. Returns (token, expiry_date); only its hash is kept."""
     token = secrets.token_urlsafe(32)
     expiry_date = datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes)
-    store_token_hash(hash_worker_token(token), expiry_date)
+    store_token_hash(hash_worker_token(token), expiry_date, node_id)
     return token, expiry_date
 
 

@@ -1,7 +1,9 @@
 import ipaddress
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import unquote
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -13,6 +15,53 @@ DEFAULT_CERT_PATH = "/certs"
 DEFAULT_CA_COMMON_NAME = "Oakestra Root CA"
 DEFAULT_CA_VALID_DAYS = 3650
 DEFAULT_KEY_SIZE = 3072
+
+# Every CA subject is chosen here, never by a requester, and carries one of these markers.
+# The gateway tells "issued directly by the root CA" from "issued by a cluster CA" by them.
+ROOT_CA_MARKER = "oakestra-root-ca"
+CLUSTER_CA_MARKER = "oakestra-cluster-ca"
+
+# Identities are SPIFFE IDs in a URI SAN, always set by the issuer:
+#   spiffe://oakestra/root                               the root (server.crt)
+#   spiffe://oakestra/cluster/<cluster_id>               a cluster's client cert
+#   spiffe://oakestra/cluster/<cluster_id>/worker/<id>   a worker (issued by the cluster)
+#   spiffe://oakestra/client/<name>                      an admin-issued client cert
+SPIFFE_PREFIX = "spiffe://oakestra"
+ROOT_SPIFFE_ID = f"{SPIFFE_PREFIX}/root"
+_OBJECT_ID = re.compile(r"[0-9a-f]{24}")
+_CLIENT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+
+
+def cluster_spiffe_id(cluster_id: str) -> str:
+    if not _OBJECT_ID.fullmatch(cluster_id or ""):
+        raise ValueError(f"Invalid cluster id: {cluster_id!r}")
+    return f"{SPIFFE_PREFIX}/cluster/{cluster_id}"
+
+
+def client_spiffe_id(name: str) -> str:
+    if not _CLIENT_NAME.fullmatch(name or ""):
+        raise ValueError("Client name must be 1-64 letters, digits, '.', '_' or '-'")
+    return f"{SPIFFE_PREFIX}/client/{name}"
+
+
+def spiffe_id(cert: x509.Certificate):
+    """The cert's SPIFFE ID, or None unless it carries exactly one URI SAN."""
+    try:
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    except x509.ExtensionNotFound:
+        return None
+    uris = san.get_values_for_type(x509.UniformResourceIdentifier)
+    return uris[0] if len(uris) == 1 else None
+
+
+def cert_cluster_id(cert: x509.Certificate):
+    """The cluster id of a cluster client cert, or None for any other identity."""
+    identity = spiffe_id(cert) or ""
+    prefix = f"{SPIFFE_PREFIX}/cluster/"
+    if not identity.startswith(prefix):
+        return None
+    cluster_id = identity[len(prefix) :]
+    return cluster_id if _OBJECT_ID.fullmatch(cluster_id) else None
 
 
 def get_cert_path() -> Path:
@@ -58,7 +107,12 @@ def regenerate_ca_files(
     """Force-generate a new CA key+cert, overwriting any existing material."""
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=DEFAULT_KEY_SIZE)
     now = datetime.now(timezone.utc)
-    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
+    subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, ROOT_CA_MARKER),
+            x509.NameAttribute(NameOID.COMMON_NAME, common_name),
+        ]
+    )
 
     certificate = (
         x509.CertificateBuilder()
@@ -153,7 +207,7 @@ def load_csr(csr_pem: str) -> x509.CertificateSigningRequest:
 def _build_san(alt_names: list[str]) -> x509.SubjectAlternativeName:
     san_list = []
     for name in alt_names:
-        if name.startswith("spiffe://"):
+        if name.startswith(SPIFFE_PREFIX):
             san_list.append(x509.UniformResourceIdentifier(name))
             continue
         try:
@@ -265,24 +319,32 @@ def generate_key_and_signed_cert(
     return private_pem, cert_pem
 
 
-def generate_intermediate_ca(
-    common_name: str,
-    alt_names: list[str],
-    valid_days: int,
-) -> tuple[str, str]:
+def generate_intermediate_ca(cluster_id: str, valid_days: int) -> tuple[str, str]:
     """Generate an RSA private key and an intermediate CA certificate signed by the root CA.
 
     The intermediate cert has CA:TRUE with path_length=0 (cannot itself sign further CAs)
     and KeyUsage(keyCertSign, cRLSign). No ExtendedKeyUsage is set on the intermediate so
     it can issue both serverAuth and clientAuth leaves.
 
+    The subject is fixed: the cluster marker plus a name made of the cluster id and the
+    issue time. The time keeps a replacement's name distinct from the one it replaces:
+    while both are trusted, OpenSSL matches certs and CRLs to their issuer by name.
+
     Returns (private_key_pem, certificate_pem).
     """
+    cluster_spiffe_id(cluster_id)  # validates the id
     ca_cert, ca_key = load_ca_material()
 
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=DEFAULT_KEY_SIZE)
     now = datetime.now(timezone.utc)
-    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
+    subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, CLUSTER_CA_MARKER),
+            x509.NameAttribute(
+                NameOID.COMMON_NAME, f"Oakestra Cluster CA {cluster_id} {now:%Y-%m-%d %H:%M:%S}"
+            ),
+        ]
+    )
 
     builder = (
         x509.CertificateBuilder()
@@ -318,15 +380,6 @@ def generate_intermediate_ca(
         )
     )
 
-    if alt_names:
-        san_list = []
-        for name in alt_names:
-            try:
-                san_list.append(x509.IPAddress(ipaddress.ip_address(name)))
-            except ValueError:
-                san_list.append(x509.DNSName(name))
-        builder = builder.add_extension(x509.SubjectAlternativeName(san_list), critical=False)
-
     certificate = builder.sign(private_key=ca_key, algorithm=hashes.SHA256())
 
     private_pem = private_key.private_bytes(
@@ -343,11 +396,15 @@ def regenerate_server_files(
     alt_names: list[str],
     valid_days: int,
 ) -> bool:
-    """Force-generate a new server key+cert signed by the current CA, overwriting any existing material."""
+    """Force-generate a new server key+cert signed by the current CA, overwriting any existing material.
+
+    It always carries the root's identity: it is the root's client cert towards clusters.
+    """
     # serverAuth + clientAuth so the same cert can be presented when root calls clusters back.
     private_pem, cert_pem = generate_key_and_signed_cert(
         common_name=common_name,
-        alt_names=alt_names,
+        alt_names=[ROOT_SPIFFE_ID]
+        + [name for name in alt_names if not name.startswith(SPIFFE_PREFIX)],
         valid_days=valid_days,
         extended_key_usages=[ExtendedKeyUsageOID.SERVER_AUTH, ExtendedKeyUsageOID.CLIENT_AUTH],
     )
@@ -400,6 +457,38 @@ def issued_by_root_ca(cert: x509.Certificate) -> bool:
             continue
         return True
     return False
+
+
+class ClientCertError(Exception):
+    """A forwarded client certificate does not identify an allowed caller."""
+
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
+
+
+def client_cert_cluster_id(client_cert_header) -> str:
+    """The cluster id of the client cert the external gateway verified and forwarded.
+
+    client_cert_header is the URL-encoded PEM the gateway puts in X-Client-Cert. Raises
+    ClientCertError unless it is a cluster client cert signed directly by the root CA: the
+    gateway accepts any chain to the root CA, so a cert a cluster signed with its own
+    intermediate (or the intermediate itself, whose key the cluster holds) gets this far.
+    """
+    try:
+        presented = x509.load_pem_x509_certificate(
+            unquote(client_cert_header or "").encode("utf-8")
+        )
+    except ValueError:
+        raise ClientCertError(401, "Client certificate required")
+    if is_ca_cert(presented):
+        raise ClientCertError(401, "A CA certificate is not a client certificate")
+    if not issued_by_root_ca(presented):
+        raise ClientCertError(401, "Client certificate was not issued by the root CA")
+    cluster_id = cert_cluster_id(presented)
+    if cluster_id is None:
+        raise ClientCertError(403, "Client certificate is not a cluster certificate")
+    return cluster_id
 
 
 def is_ca_cert(cert: x509.Certificate) -> bool:

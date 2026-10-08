@@ -31,6 +31,8 @@ from proto.clusterRegistration_pb2_grpc import (
 from resource_abstractor_client import candidate_operations
 from sm_logging import configure_logging
 from utils.certificates import (
+    ClientCertError,
+    client_cert_cluster_id,
     ensure_ca_files,
     ensure_server_files,
 )
@@ -197,6 +199,20 @@ def _is_cluster_reachable(cluster_address, cluster_port):
     return False
 
 
+def _registering_cluster_id(context) -> str:
+    """The id in the client certificate the external gateway verified and forwarded."""
+    metadata = dict(context.invocation_metadata())
+    try:
+        return client_cert_cluster_id(metadata.get("x-client-cert"))
+    except ClientCertError as e:
+        status = (
+            grpc.StatusCode.UNAUTHENTICATED
+            if e.status == 401
+            else grpc.StatusCode.PERMISSION_DENIED
+        )
+        context.abort(status, str(e))
+
+
 class ClusterRegistrationServicer(register_clusterServicer):
     def handle_init_greeting(self, request, context):
         logger.info("gRPC - Cluster_Manager connected: {}".format(context.peer()))
@@ -221,6 +237,10 @@ class ClusterRegistrationServicer(register_clusterServicer):
                 "cluster_address is required",
             )
 
+        # Behind the gateway the cluster's id was chosen when its registration token was
+        # minted and is carried by its client certificate; the cluster registers under it.
+        cluster_id = _registering_cluster_id(context) if GATEWAY_ENABLED else None
+
         cluster_port = str(message["manager_port"])
         logger.info("Cluster address: {} port: {}".format(cluster_address, cluster_port))
 
@@ -242,6 +262,8 @@ class ClusterRegistrationServicer(register_clusterServicer):
             "candidate_location": message["cluster_location"],
             "candidate_name": message["cluster_name"],
         }
+        if cluster_id:
+            cluster_data["_id"] = cluster_id
 
         logger.info("Cluster data: {}".format(cluster_data))
         cluster = candidate_operations.create_candidate(cluster_data)

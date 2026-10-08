@@ -1,6 +1,7 @@
 import logging
 import os
 
+import config
 from bson import json_util
 from flask import Response, request
 from flask.views import MethodView
@@ -30,6 +31,14 @@ class ServiceController(MethodView):
     def post(self):
         logger.debug("Incoming Request /api/node/register - to register node")
         data = request.json  # get POST body
+        # The worker's id is never the caller's to choose.
+        data.pop("_id", None)
+        if config.GATEWAY_ENABLED:
+            # Certificate APIs only exist behind the gateway.
+            from blueprints.certificates_blueprints import verified_worker
+
+            # Behind the gateway the id was chosen when the worker's certificate was issued.
+            _, data["_id"] = verified_worker(request.headers.get("X-Client-Cert"))
         data["candidate_name"] = data.get("host", "")
         logger.debug("Candidate Name: " + data.get("candidate_name"))
         worker = candidate_operations.create_candidate(data)

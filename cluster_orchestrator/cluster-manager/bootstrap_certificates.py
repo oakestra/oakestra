@@ -131,7 +131,6 @@ def redeem_cluster_token(token: str) -> None:
     root_url = os.environ.get("SYSTEM_MANAGER_URL") or ""
     root_port = os.environ.get("SYSTEM_MANAGER_PORT") or "443"
     cluster_name = os.environ.get("CLUSTER_NAME") or ""
-    cluster_ip = os.environ.get("CLUSTER_ADDRESS") or ""
 
     if not token:
         logger.error(
@@ -151,11 +150,10 @@ def redeem_cluster_token(token: str) -> None:
     base_url = f"https://{root_url}:{root_port}"
     verify = _resolve_verify(base_url)
 
-    alt_names = [name for name in (cluster_ip,) if name]
     logger.info("Redeeming cluster registration token at %s", base_url)
     response = requests.post(
         f"{base_url}/api/certs/cluster-bootstrap",
-        json={"token": token, "cluster_name": cluster_name, "alt_names": alt_names},
+        json={"token": token, "cluster_name": cluster_name},
         verify=verify,
         timeout=REQUEST_TIMEOUT,
     )
@@ -183,7 +181,9 @@ def redeem_cluster_token(token: str) -> None:
     _write(CLUSTER_CA_CERT_FILE, payload["cluster_ca_cert"], 0o644)
     _write(CLUSTER_CA_KEY_FILE, payload["cluster_ca_key"], 0o600)
     _write(REDEEMED_TOKEN_FILE, _token_digest(token), 0o600)
-    logger.info("Wrote cluster certificate material to %s", CERT_DIR)
+    logger.info(
+        "Wrote certificate material for cluster %s to %s", payload.get("cluster_id"), CERT_DIR
+    )
 
 
 def _make_kong_readable() -> None:
@@ -268,6 +268,7 @@ def _use_bootstrap_cert_paths() -> None:
     # utils.certificates locates the CA files via config, i.e. the
     # environment; point it at this container's cert directory.
     os.environ.setdefault("ROOT_CA_FILE", str(ROOT_CA_FILE))
+    os.environ.setdefault("CLUSTER_CERT_FILE", str(CLUSTER_CERT_FILE))
     os.environ.setdefault("CLUSTER_CA_CERT_FILE", str(CLUSTER_CA_CERT_FILE))
     os.environ.setdefault("CLUSTER_CA_KEY_FILE", str(CLUSTER_CA_KEY_FILE))
 
@@ -304,7 +305,7 @@ def issue_cluster_mqtt_identity() -> None:
     from utils.certificates import write_cluster_mqtt_identity
 
     try:
-        cert_path = write_cluster_mqtt_identity(os.environ.get("CLUSTER_NAME") or "")
+        cert_path = write_cluster_mqtt_identity()
     except Exception as exc:
         logger.error("Could not issue the cluster MQTT client certificate: %s", exc)
         sys.exit(1)
@@ -315,9 +316,7 @@ def issue_mqtt_server_identity() -> None:
     from utils.certificates import write_mqtt_server_identity
 
     try:
-        cert_path = write_mqtt_server_identity(
-            os.environ.get("CLUSTER_NAME") or "", os.environ.get("CLUSTER_ADDRESS") or ""
-        )
+        cert_path = write_mqtt_server_identity(os.environ.get("CLUSTER_ADDRESS") or "")
     except Exception as exc:
         logger.error("Could not issue the MQTT broker server certificate: %s", exc)
         sys.exit(1)

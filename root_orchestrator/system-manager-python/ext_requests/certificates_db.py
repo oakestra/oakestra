@@ -34,13 +34,19 @@ def generate_token() -> tuple[str, str, datetime]:
     return token, hash_registration_token(token), expiry_date
 
 
-def create_registration_token(token_type: str, created_by: str) -> tuple[str, datetime]:
-    """Create and persist a one-time registration token. Returns (token, expiry_date)."""
+def create_registration_token(
+    token_type: str, created_by: str, cluster_id: str
+) -> tuple[str, datetime]:
+    """Create and persist a one-time registration token. Returns (token, expiry_date).
+
+    cluster_id is the id the redeeming cluster's certificate is issued for.
+    """
     token, token_hash, expiry_date = generate_token()
     db.mongo_registration_tokens.insert_one(
         {
             "token_hash": token_hash,
             "type": token_type,
+            "cluster_id": cluster_id,
             "created_by": created_by,
             "created_at": datetime.now(timezone.utc),
             "expiry_date": expiry_date,

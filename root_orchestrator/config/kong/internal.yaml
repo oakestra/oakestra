@@ -20,7 +20,6 @@ services:
           - /api/certs/ca.crt
           - /api/certs/sign
           - /api/certs/generate-client
-          - /api/certs/generate-cluster
           - /api/certs/renew
           - /api/application
           - /api/application/

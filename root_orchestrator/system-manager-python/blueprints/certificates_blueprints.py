@@ -1,10 +1,7 @@
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from urllib.parse import unquote
 
-from cryptography import x509
-from cryptography.x509.oid import NameOID
 from ext_requests.certificates_db import (
     TOKEN_TYPE_CLUSTER,
     add_revoked_cert,
@@ -21,8 +18,11 @@ from flask_restful import Resource
 from flask_smorest import abort
 from roles.securityUtils import Role, require_role
 from utils.certificates import (
-    cert_alt_names,
+    ClientCertError,
     cert_expires_in,
+    client_cert_cluster_id,
+    client_spiffe_id,
+    cluster_spiffe_id,
     current_ca_cert_pem,
     ensure_ca_files,
     generate_intermediate_ca,
@@ -33,8 +33,6 @@ from utils.certificates import (
     get_old_ca_key_path,
     get_server_cert_path,
     get_server_key_path,
-    is_ca_cert,
-    issued_by_root_ca,
     regenerate_ca_files,
     regenerate_root_crl,
     regenerate_server_files,
@@ -144,7 +142,6 @@ sign_csr_schema = {
     "properties": {
         "csr": {"type": "string"},
         "common_name": {"type": "string"},
-        "alt_names": {"type": "array", "items": {"type": "string"}},
         "valid_days": {"type": "integer", "minimum": 1},
     },
     "required": ["csr", "common_name"],
@@ -155,18 +152,6 @@ generate_client_schema = {
     "type": "object",
     "properties": {
         "common_name": {"type": "string"},
-        "alt_names": {"type": "array", "items": {"type": "string"}},
-        "valid_days": {"type": "integer", "minimum": 1},
-    },
-    "required": ["common_name"],
-}
-
-
-generate_cluster_schema = {
-    "type": "object",
-    "properties": {
-        "common_name": {"type": "string"},
-        "alt_names": {"type": "array", "items": {"type": "string"}},
         "valid_days": {"type": "integer", "minimum": 1},
     },
     "required": ["common_name"],
@@ -178,9 +163,8 @@ cluster_bootstrap_schema = {
     "properties": {
         "token": {"type": "string"},
         "cluster_name": {"type": "string"},
-        "alt_names": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["token", "cluster_name"],
+    "required": ["token"],
 }
 
 
@@ -239,24 +223,23 @@ class CertificateSigningController(Resource):
     @jwt_required()
     @require_role(Role.ADMIN)
     def post(self, *args, **kwargs):
-        """Sign a CSR as a client certificate.
+        """Sign a CSR as an ad-hoc client certificate.
 
-        Only the CSR's public key is used: the name and SANs come from the request body,
-        and the certificate is always a clientAuth leaf.
+        Only the CSR's public key is used. The certificate is a clientAuth leaf for the
+        identity spiffe://oakestra/client/<common_name>, which no machine-to-machine route
+        accepts.
         """
         content = request.get_json(silent=True) or {}
         csr_pem = content.get("csr") or ""
         common_name = content.get("common_name") or ""
         if not csr_pem.strip():
             abort(400, {"message": "csr is required"})
-        if not common_name.strip():
-            abort(400, {"message": "common_name is required"})
 
         try:
             signed_certificate = sign_csr_pem(
                 csr_pem=csr_pem,
                 common_name=common_name,
-                alt_names=list(content.get("alt_names") or []),
+                alt_names=[client_spiffe_id(common_name)],
                 valid_days=int(content.get("valid_days") or 365),
             )
         except FileNotFoundError:
@@ -273,17 +256,20 @@ class CertificateClientGenerateController(Resource):
     @jwt_required()
     @require_role(Role.ADMIN)
     def post(self, *args, **kwargs):
-        content = request.get_json(silent=True) or {}
-        common_name = content.get("common_name")
-        if not common_name:
-            abort(400, {"message": "common_name is required"})
+        """Generate a key and an ad-hoc client certificate.
 
-        alt_names = list(content.get("alt_names") or [])
+        The certificate is a clientAuth leaf for the identity
+        spiffe://oakestra/client/<common_name>, which no machine-to-machine route accepts.
+        """
+        content = request.get_json(silent=True) or {}
+        common_name = content.get("common_name") or ""
         valid_days = int(content.get("valid_days") or 365)
 
         try:
             private_pem, cert_pem = generate_key_and_signed_cert(
-                common_name=common_name, alt_names=alt_names, valid_days=valid_days
+                common_name=common_name,
+                alt_names=[client_spiffe_id(common_name)],
+                valid_days=valid_days,
             )
         except FileNotFoundError:
             abort(409, {"message": "CA material not initialized"})
@@ -293,6 +279,18 @@ class CertificateClientGenerateController(Resource):
         return {"private_key": private_pem, "certificate": cert_pem}
 
 
+def _issue_cluster_material(cluster_id: str) -> tuple[str, str, str, str]:
+    """A cluster's client cert and intermediate CA, as (key, cert, ca_key, ca_cert) PEMs.
+
+    The client cert is clientAuth only: the cluster never serves TLS with it.
+    """
+    client_key, client_cert = generate_key_and_signed_cert(
+        common_name=cluster_id, alt_names=[cluster_spiffe_id(cluster_id)], valid_days=365
+    )
+    cluster_ca_key, cluster_ca_cert = generate_intermediate_ca(cluster_id, valid_days=1825)
+    return client_key, client_cert, cluster_ca_key, cluster_ca_cert
+
+
 @certbp.route("/cluster-bootstrap")
 class ClusterBootstrapController(Resource):
     @certbp.arguments(
@@ -300,33 +298,34 @@ class ClusterBootstrapController(Resource):
     )
     def post(self, *args, **kwargs):
         """Redeem a one-time cluster registration token for cert material"""
+        """Redeem a one-time cluster registration token for cert material.
+
+        The certificates are issued for the cluster id bound to the token.
+        """
         content = request.get_json(silent=True) or {}
         token = content.get("token") or ""
         cluster_name = content.get("cluster_name") or ""
-        if not cluster_name.strip():
-            abort(400, {"message": "cluster_name is required"})
 
         # Uniform 401 for missing/unknown/expired/reused tokens — no oracle.
-        if consume_registration_token(token, TOKEN_TYPE_CLUSTER) is None:
+        token_doc = consume_registration_token(token, TOKEN_TYPE_CLUSTER)
+        if token_doc is None or not token_doc.get("cluster_id"):
             abort(401, {"message": "invalid registration token"})
+        cluster_id = token_doc["cluster_id"]
 
         try:
-            # A client certificate only: the cluster never serves TLS with it.
-            client_key, client_cert = generate_key_and_signed_cert(
-                common_name=cluster_name, alt_names=[cluster_name], valid_days=365
-            )
-            cluster_ca_key, cluster_ca_cert = generate_intermediate_ca(
-                common_name=cluster_name,
-                alt_names=content.get("alt_names") or None,
-                valid_days=1825,
+            client_key, client_cert, cluster_ca_key, cluster_ca_cert = _issue_cluster_material(
+                cluster_id
             )
         except FileNotFoundError:
             abort(409, {"message": "Root CA material not initialized"})
         except ValueError as e:
             abort(400, {"message": f"Certificate generation failed: {str(e)}"})
 
-        logger.info(f"Cluster bootstrap: issued certificates for '{cluster_name}'")
+        logger.info(
+            f"Cluster bootstrap: issued certificates for cluster {cluster_id} '{cluster_name}'"
+        )
         return {
+            "cluster_id": cluster_id,
             "client_key": client_key,
             "client_cert": client_cert,
             "cluster_ca_key": cluster_ca_key,
@@ -542,29 +541,11 @@ class ClusterCertRenewController(Resource):
         """Renew a cluster's client certificate, authenticated by its current certificate.
 
         The external gateway forwards the verified client certificate (X-Client-Cert); during
-        a rotation grace period it may be signed by the old CA. The new certificate keeps the
-        presented certificate's name and SANs: only the CSR's public key is used. With
+        a rotation grace period it may be signed by the old CA. The new certificate is for
+        the presented certificate's cluster id: only the CSR's public key is used. With
         rotate_intermediate, a new intermediate CA for the same cluster is issued as well.
         """
-        try:
-            presented = x509.load_pem_x509_certificate(
-                unquote(request.headers.get("X-Client-Cert", "")).encode("utf-8")
-            )
-        except ValueError:
-            abort(401, {"message": "Client certificate required"})
-        # A cluster also holds its intermediate CA's key, which the root signed too.
-        if is_ca_cert(presented):
-            abort(401, {"message": "A CA certificate is not a client certificate"})
-        try:
-            # Kong accepts any chain to the root CA; only a cert the root signed itself counts.
-            if not issued_by_root_ca(presented):
-                abort(401, {"message": "Client certificate was not issued by the root CA"})
-        except FileNotFoundError:
-            abort(409, {"message": "Root CA material not initialized"})
-        presented_names = presented.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
-        if not presented_names:
-            abort(401, {"message": "Client certificate has no common name"})
-        common_name = presented_names[0].value
+        cluster_id = verified_cluster_id(request.headers.get("X-Client-Cert"))
 
         content = request.get_json(silent=True) or {}
         csr_pem = content.get("csr") or ""
@@ -580,21 +561,17 @@ class ClusterCertRenewController(Resource):
             response = {
                 "client_cert": sign_csr_pem(
                     csr_pem=csr_pem,
-                    common_name=common_name,
-                    alt_names=cert_alt_names(presented),
+                    common_name=cluster_id,
+                    alt_names=[cluster_spiffe_id(cluster_id)],
                     valid_days=valid_days,
                 ),
                 "root_ca": get_ca_cert_path().read_text(),
             }
             if rotate_intermediate:
-                # The cluster trusts the old and new intermediate while its workers migrate,
-                # and OpenSSL matches certs and CRLs to their issuer by name, so the names
-                # must differ.
-                rotated_at = datetime.now(timezone.utc)
+                # The cluster trusts the old and new intermediate while its workers migrate;
+                # generate_intermediate_ca gives the new one a distinct name.
                 response["cluster_ca_key"], response["cluster_ca_cert"] = generate_intermediate_ca(
-                    common_name=f"{common_name} {rotated_at:%Y-%m-%d %H:%M:%S}",
-                    alt_names=None,
-                    valid_days=1825,
+                    cluster_id, valid_days=1825
                 )
         except FileNotFoundError:
             abort(409, {"message": "Root CA material not initialized"})
@@ -602,11 +579,21 @@ class ClusterCertRenewController(Resource):
             abort(400, {"message": f"Certificate operation failed: {str(e)}"})
 
         logger.info(
-            "Issued renewed cert material for cluster '%s' via in-band CSR (intermediate: %s)",
-            common_name,
+            "Issued renewed cert material for cluster %s via in-band CSR (intermediate: %s)",
+            cluster_id,
             "rotated" if rotate_intermediate else "kept",
         )
         return response
+
+
+def verified_cluster_id(client_cert_header) -> str:
+    """The cluster id of the client cert the external gateway forwarded; aborts if there is none."""
+    try:
+        return client_cert_cluster_id(client_cert_header)
+    except ClientCertError as e:
+        abort(e.status, {"message": str(e)})
+    except FileNotFoundError:
+        abort(409, {"message": "Root CA material not initialized"})
 
 
 @certbp.route("/rotate-complete")
@@ -682,35 +669,3 @@ def complete_expired_ca_rotation() -> bool:
         result["kong_reload_status"],
     )
     return True
-
-
-@certbp.route("/generate-cluster")
-class CertificateClusterGenerateController(Resource):
-    @certbp.arguments(schema=generate_cluster_schema, location="json", validate=False, unknown=True)
-    @jwt_required()
-    @require_role(Role.ADMIN)
-    def post(self, *args, **kwargs):
-        content = request.get_json(silent=True) or {}
-        common_name = content.get("common_name")
-        if not common_name:
-            abort(400, {"message": "common_name is required"})
-
-        alt_names = content.get("alt_names") or None
-        valid_days = int(content.get("valid_days") or 1825)
-
-        try:
-            private_pem, cert_pem = generate_intermediate_ca(
-                common_name=common_name, alt_names=alt_names, valid_days=valid_days
-            )
-        except FileNotFoundError:
-            abort(409, {"message": "Root CA material not initialized"})
-        except ValueError as e:
-            abort(400, {"message": f"Intermediate CA generation failed: {str(e)}"})
-
-        root_ca = get_ca_cert_path().read_text()
-
-        return {
-            "private_key": private_pem,
-            "certificate": cert_pem,
-            "root_ca": root_ca,
-        }

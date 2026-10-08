@@ -2,6 +2,7 @@ import logging
 import os
 
 import requests
+from bson import ObjectId
 from ext_requests.certificates_db import (
     TOKEN_TYPE_CLUSTER,
     create_registration_token,
@@ -20,6 +21,13 @@ from blueprints.jwt_wrapper import BlueprintExt
 logger = logging.getLogger("system_manager")
 
 tokensbp = BlueprintExt("Registration tokens", "tokens", url_prefix="/api/tokens")
+
+cluster_token_schema = {
+    "type": "object",
+    "properties": {
+        "cluster_id": {"type": "string"},
+    },
+}
 
 worker_token_schema = {
     "type": "object",
@@ -45,17 +53,36 @@ def _root_public_address() -> str:
 
 @tokensbp.route("/cluster")
 class ClusterRegistrationTokenController(Resource):
+    @tokensbp.arguments(schema=cluster_token_schema, location="json", validate=False, unknown=True)
     @jwt_required()
     @require_any_role(Role.ADMIN, Role.INF_Provider)
     def post(self, *args, **kwargs):
+        """Mint a one-time cluster registration token.
+
+        The cluster's id is chosen now and bound to the token: the certificate the token
+        is redeemed for carries it, and the cluster registers under it. Pass the cluster_id
+        of an existing cluster to re-provision that cluster instead of adding a new one.
+        """
+        content = request.get_json(silent=True) or {}
+        cluster_id = content.get("cluster_id")
+        if cluster_id:
+            if not ObjectId.is_valid(cluster_id):
+                abort(400, message="cluster_id is not a valid id")
+            if candidate_operations.get_candidate_by_id(cluster_id) is None:
+                abort(404, message=f"Cluster {cluster_id} not found")
+        else:
+            cluster_id = str(ObjectId())
+
         token, expiry_date = create_registration_token(
             token_type=TOKEN_TYPE_CLUSTER,
             created_by=get_jwt_auth_identity(),
+            cluster_id=cluster_id,
         )
 
         root_address = _root_public_address()
         return {
             "token": token,
+            "cluster_id": cluster_id,
             "expires_at": expiry_date.isoformat(),
             "root_address": root_address,
             "root_port": 443,

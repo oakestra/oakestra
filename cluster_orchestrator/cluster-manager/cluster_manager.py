@@ -160,6 +160,17 @@ def _try_register() -> bool:
             return False
 
     if response and response.id:
+        if config.GATEWAY_ENABLED:
+            from utils.certificates import own_cluster_id
+
+            # Behind the gateway the root registers the cluster under its certificate's id.
+            if response.id != own_cluster_id():
+                logger.error(
+                    "System Manager assigned id %s, but this cluster's certificate is for %s.",
+                    response.id,
+                    own_cluster_id(),
+                )
+                return False
         config.MY_ASSIGNED_CLUSTER_ID = response.id
         logger.info("Received ID. Go ahead with Background Jobs")
         prometheus_init_gauge_metrics(config.MY_ASSIGNED_CLUSTER_ID, app.logger)
@@ -259,7 +270,7 @@ def _check_mqtt_server_cert_expiry():
         if days > _CERT_WARN_DAYS:
             return
         logger.warning("MQTT broker server certificate expires in %d day(s); re-issuing it.", days)
-        write_mqtt_server_identity(config.MY_CHOSEN_CLUSTER_NAME, config.MY_CLUSTER_ADDRESS)
+        write_mqtt_server_identity(config.MY_CLUSTER_ADDRESS)
     except Exception as exc:
         logger.error("Could not re-issue the MQTT broker server certificate: %s", exc)
         return
@@ -311,7 +322,7 @@ def _check_cluster_mqtt_identity_expiry():
             "restarting the MQTT clients.",
             days,
         )
-        write_cluster_mqtt_identity(config.MY_CHOSEN_CLUSTER_NAME)
+        write_cluster_mqtt_identity()
     except Exception as exc:
         logger.error("Could not re-issue the cluster MQTT client certificate: %s", exc)
         return

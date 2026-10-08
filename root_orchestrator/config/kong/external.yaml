@@ -7,8 +7,11 @@ _format_version: "3.0"
 # Routes are grouped into two sections:
 #   * mTLS Routes  — machine-to-machine (cluster -> root). Each carries a
 #                    pre-function guard that rejects requests without a
-#                    verified client certificate. The first guarded route
-#                    defines the YAML anchor (&mtls_guard); the rest reuse it.
+#                    verified client certificate and passes that certificate on
+#                    in X-Client-Cert, for the backend to identify the caller
+#                    (set_header replaces any X-Client-Cert the client sent).
+#                    The first guarded route defines the YAML anchor
+#                    (&mtls_guard); the rest reuse it.
 #   * Public Routes — user-facing (no client cert; app-level JWT auth),
 #                     token-gated bootstrap, and explicitly blocked endpoints.
 
@@ -36,6 +39,7 @@ services:
                   if ngx.var.ssl_client_verify ~= "SUCCESS" then
                     return kong.response.exit(401, { message = "mTLS client certificate required" })
                   end
+                  kong.service.request.set_header("X-Client-Cert", ngx.var.ssl_client_escaped_cert)
 
   # Machine-to-machine REST surface (cluster_manager -> system_manager).
   - name: system_manager_m2m
@@ -52,8 +56,6 @@ services:
 
       # In-band cluster cert renewal: cluster sends a CSR while its old cert is
       # still trusted (during the dual-CA grace period after POST /api/certs/rotate).
-      # system_manager keeps the presented cert's identity, so the verified client
-      # cert is passed on; set_header replaces any X-Client-Cert the client sent itself.
       - name: cluster-renew-external
         protocols: [https]
         paths:
@@ -61,14 +63,7 @@ services:
         methods: [POST, OPTIONS]
         strip_path: false
         plugins:
-          - name: pre-function
-            config:
-              access:
-                - |
-                  if ngx.var.ssl_client_verify ~= "SUCCESS" then
-                    return kong.response.exit(401, { message = "mTLS client certificate required" })
-                  end
-                  kong.service.request.set_header("X-Client-Cert", ngx.var.ssl_client_escaped_cert)
+          - *mtls_guard
 
   # Machine-to-machine surface for the root networking plugin
   # (cluster_service_manager -> root_service_manager).
@@ -238,7 +233,7 @@ services:
         strip_path: false
 
       # CA lifecycle administration (JWT + Admin role in the application):
-      # /rotate, /rotate-complete, /renew, /sign, /generate-client, /generate-cluster, /revoke.
+      # /rotate, /rotate-complete, /renew, /sign, /generate-client, /revoke.
       - name: sm-certs-admin-public
         paths:
           - /api/certs
