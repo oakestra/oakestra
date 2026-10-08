@@ -27,6 +27,7 @@ from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from utils.certificates import (
     ClientCertError,
+    client_cert_root,
     client_cert_worker,
     generate_cluster_csr,
     generate_worker_cert,
@@ -174,8 +175,10 @@ class ClusterWorkerTokenController(MethodView):
     def post(self, *args, **kwargs):
         """Receive a one-time worker registration token hash from the root.
 
-        This hash is used to validate incoming worker registration attemps.
+        This hash is used to validate incoming worker registration attemps. Only the root
+        may push one: whoever does can mint worker certificates for this cluster.
         """
+        require_root_caller()
         content = request.get_json(silent=True) or {}
         token_hash = content.get("token_hash") or ""
         expiry_raw = content.get("expiry_date") or ""
@@ -291,6 +294,16 @@ class ClusterWorkerRenewController(MethodView):
         )
         logger.info("Worker renewal: issued certificate for node %s", node_id)
         return {"certificate": fullchain_pem, "root_ca": root_ca_pem}
+
+
+def require_root_caller() -> None:
+    """Abort unless the request carries the root's client cert, as forwarded by the gateway."""
+    try:
+        client_cert_root(request.headers.get("X-Client-Cert"))
+    except ClientCertError as e:
+        abort(e.status, message=str(e))
+    except FileNotFoundError:
+        abort(409, message="Root CA file is missing")
 
 
 def verified_worker(client_cert_header) -> tuple:

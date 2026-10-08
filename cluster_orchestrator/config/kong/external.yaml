@@ -7,16 +7,36 @@ _format_version: "3.0"
 #
 # Routes are grouped into two sections:
 #   * mTLS Routes  — machine-to-machine (root -> cluster, worker -> cluster).
-#                    Each carries a pre-function guard that rejects requests
-#                    without a verified client certificate; the guard also
-#                    rejects requests on the cleartext :8080 listener
-#                    (ssl_client_verify is empty there). It passes the verified
-#                    certificate on in X-Client-Cert, for the backend to
-#                    identify the caller (set_header replaces any X-Client-Cert
-#                    the client sent). The first guarded route defines the YAML
-#                    anchor (&mtls_guard).
+#                    Each carries a pre-function guard that identifies the
+#                    caller by its verified client certificate and admits one
+#                    role only: &root_guard or &worker_guard (see below). Both
+#                    reject requests on the cleartext :8080 listener
+#                    (ssl_client_verify is empty there) and pass the
+#                    certificate on in X-Client-Cert; cluster_manager then
+#                    checks a worker acts for itself and belongs to this cluster.
 #   * Public Routes — read-only status/docs, the CA download, the token-gated
 #                     worker bootstrap, and explicitly blocked endpoints.
+#
+# Caller identity. Client certs are verified against the root CA with depth 2, so
+# the root, every cluster and every cluster's workers all have a valid chain: the
+# chain alone says nothing about who the caller is. Every cert carries exactly
+# one SPIFFE ID in a URI SAN, set by its issuer, and every CA subject carries an
+# OU marker the root chose:
+#   spiffe://oakestra/root                          issued by the root CA
+#   spiffe://oakestra/cluster/<id>                  issued by the root CA
+#   spiffe://oakestra/cluster/<id>/worker/<id>      issued by a cluster CA
+# A cluster holds its intermediate's key and can put any SPIFFE ID in certs it
+# signs, so an ID only counts when the issuer marker matches it. The &identify
+# chunk extracts both into kong.ctx.shared.caller; the role chunk checks them.
+# Which cluster issued a worker cert is checked by cluster_manager, which knows
+# its own intermediate. Lua modules a pre-function may load are listed in
+# KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES (override-gateway.yml).
+#
+# Callers: the root (system_manager, root_service_manager, with server.crt) calls
+# /api/service, /api/certs/worker-token and /api/net/job/update; workers
+# (NodeEngine) call /api/node/register and /api/certs/worker-renew. The cluster
+# scheduler's /api/result/deploy and cluster_manager's /api/net/deployment calls
+# stay inside the cluster and are not exposed.
 
 services:
   # ======================================================================
@@ -32,39 +52,38 @@ services:
         protocols: [https]
         paths:
           - /api/node/register
-          - /api/node/register/
         methods: [POST, OPTIONS]
         strip_path: false
         plugins:
-          - &mtls_guard
+          - &worker_guard
             name: pre-function
             config:
               access:
-                - |
+                - &identify |
                   if ngx.var.ssl_client_verify ~= "SUCCESS" then
                     return kong.response.exit(401, { message = "mTLS client certificate required" })
                   end
+                  local crt = require("resty.openssl.x509").new(ngx.var.ssl_client_raw_cert)
+                  local uris = {}
+                  local san = crt:get_subject_alt_name()
+                  if san then
+                    for kind, value in san:each() do
+                      if kind == "URI" then uris[#uris + 1] = value end
+                    end
+                  end
+                  local issuer
+                  for kind, attribute in crt:get_issuer_name():each() do
+                    if kind == "OU" and attribute.blob == "oakestra-root-ca" then issuer = "root" end
+                    if kind == "OU" and attribute.blob == "oakestra-cluster-ca" then issuer = "cluster" end
+                  end
+                  kong.ctx.shared.caller = { id = #uris == 1 and uris[1] or "", issuer = issuer }
                   kong.service.request.set_header("X-Client-Cert", ngx.var.ssl_client_escaped_cert)
-
-      # Deploy/undeploy commands from the root.
-      - name: cm-service-instance
-        protocols: [https]
-        paths:
-          - /api/service
-          - /api/service/
-        methods: [POST, DELETE, OPTIONS]
-        strip_path: false
-        plugins:
-          - *mtls_guard
-
-      - name: cm-result-deploy
-        protocols: [https]
-        paths:
-          - /api/result/deploy
-        methods: [POST, OPTIONS]
-        strip_path: false
-        plugins:
-          - *mtls_guard
+                - |
+                  local caller = kong.ctx.shared.caller
+                  if caller.issuer ~= "cluster"
+                    or not caller.id:match("^spiffe://oakestra/cluster/[0-9a-f]+/worker/[0-9a-f]+$") then
+                    return kong.response.exit(403, { message = "caller not permitted on this route" })
+                  end
 
       # Worker certificate renewal. cluster_manager binds the new cert to the presented one.
       - name: cm-worker-renew
@@ -74,7 +93,26 @@ services:
         methods: [POST, OPTIONS]
         strip_path: false
         plugins:
-          - *mtls_guard
+          - *worker_guard
+
+      # Deploy/undeploy commands from the root.
+      - name: cm-service-instance
+        protocols: [https]
+        paths:
+          - /api/service/
+        methods: [POST, DELETE, OPTIONS]
+        strip_path: false
+        plugins:
+          - &root_guard
+            name: pre-function
+            config:
+              access:
+                - *identify
+                - |
+                  local caller = kong.ctx.shared.caller
+                  if caller.issuer ~= "root" or caller.id ~= "spiffe://oakestra/root" then
+                    return kong.response.exit(403, { message = "caller not permitted on this route" })
+                  end
 
       # One-time worker token hashes pushed by the root.
       - name: cm-worker-token
@@ -84,9 +122,9 @@ services:
         methods: [POST, OPTIONS]
         strip_path: false
         plugins:
-          - *mtls_guard
+          - *root_guard
 
-  # Cluster service manager machine-to-machine surface (NetManager / root).
+  # Cluster service manager machine-to-machine surface (root_service_manager).
   - name: cluster_service_manager_m2m
     url: http://cluster_service_manager:10110
     routes:
@@ -94,30 +132,10 @@ services:
         protocols: [https]
         paths:
           - /api/net/job/update
-          - /api/net/job/update/
         methods: [POST, OPTIONS]
         strip_path: false
         plugins:
-          - *mtls_guard
-
-      - name: csm-deploy-service
-        protocols: [https]
-        paths:
-          - /api/net/deployment
-        methods: [POST, OPTIONS]
-        strip_path: false
-        plugins:
-          - *mtls_guard
-
-      - name: csm-delete-service
-        protocols: [https]
-        paths:
-          - /api/net/deployment
-          - /api/net/deployment/
-        methods: [DELETE, OPTIONS]
-        strip_path: false
-        plugins:
-          - *mtls_guard
+          - *root_guard
 
   # ======================================================================
   # Public Routes (no client certificate)

@@ -138,38 +138,3 @@ def cluster_request_to_delete_job_by_ip(job_id, instance_number, cluster_id):
     except Exception as e:
         logger.error(e)
         logger.error(f"Calling Cluster Orchestrator {cluster_addr} job by ip not successful.")
-
-
-def cluster_request_to_replicate_up(cluster_obj, job_obj, int_replicas):
-    cluster_addr = _cluster_base(cluster_obj) + "/api/replicate/"
-    try:
-        get_cluster_session().post(
-            cluster_addr, json={"job": job_obj, "int_replicas": int_replicas}, timeout=10
-        )
-        return 1
-    except requests.exceptions.RequestException:
-        logger.error(f"Calling Cluster Orchestrator {cluster_addr} /api/replicate not successful.")
-
-
-def cluster_request_to_replicate_down(cluster_obj, job_obj, int_replicas):
-    cluster_addr = _cluster_base(cluster_obj) + "/api/replicate/"
-    try:
-        get_cluster_session().post(
-            cluster_addr, json={"job": job_obj, "int_replicas": int_replicas}, timeout=10
-        )
-        return 1
-    except requests.exceptions.RequestException:
-        logger.error(f"Calling Cluster Orchestrator {cluster_addr} /api/replicate not successful.")
-
-
-def cluster_request_to_move_within_cluster(cluster_obj, job_id, node_from, node_to):
-    cluster_addr = _cluster_base(cluster_obj) + "/api/move/"
-    try:
-        get_cluster_session().post(
-            cluster_addr,
-            json={"job": job_id, "node_from": node_from, "node_to": node_to},
-            timeout=10,
-        )
-        return 1
-    except requests.exceptions.RequestException:
-        logger.error(f"Calling Cluster Orchestrator {cluster_addr} /api/move not successful.")

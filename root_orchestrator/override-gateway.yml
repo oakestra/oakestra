@@ -198,8 +198,12 @@ services:
       - KONG_SSL_CERT_KEY=/certs/public/privkey.pem
       - KONG_NGINX_PROXY_SSL_CLIENT_CERTIFICATE=/certs/ca.crt
       - KONG_NGINX_PROXY_SSL_VERIFY_CLIENT=optional
-      - KONG_NGINX_PROXY_SSL_VERIFY_DEPTH=1
+      # 0: only certs the root CA signed directly (clusters). Certs from a cluster's
+      # intermediate CA (workers) fail the handshake; depth 1 would admit them.
+      - KONG_NGINX_PROXY_SSL_VERIFY_DEPTH=0
       - KONG_NGINX_PROXY_SSL_CRL=/certs/revoked.crl
+      # The m2m route guards (config/kong/external.yaml) read the client cert's identity.
+      - KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES=resty.openssl.x509
       - KONG_LOG_LEVEL=info
     volumes:
       - ${ROOT_CERT_PATH:-./config/certs}:/certs:ro

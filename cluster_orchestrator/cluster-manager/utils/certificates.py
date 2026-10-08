@@ -108,6 +108,32 @@ def client_cert_worker(client_cert_header) -> tuple:
     return presented, ids[1]
 
 
+ROOT_SPIFFE_ID = f"{SPIFFE_PREFIX}/root"
+
+
+def client_cert_root(client_cert_header) -> None:
+    """Raise ClientCertError unless the forwarded client cert is the root's own.
+
+    That is a leaf with the root's SPIFFE ID, signed directly by a trusted root CA (both
+    during a rotation): a cluster could put the root's ID in a cert from its intermediate.
+    """
+    try:
+        presented = x509.load_pem_x509_certificate(
+            unquote(client_cert_header or "").encode("utf-8")
+        )
+    except ValueError:
+        raise ClientCertError(401, "Client certificate required")
+    if spiffe_id(presented) != ROOT_SPIFFE_ID:
+        raise ClientCertError(403, "Client certificate is not the root's")
+    for root_ca in x509.load_pem_x509_certificates(Path(ROOT_CA_FILE).read_bytes()):
+        try:
+            presented.verify_directly_issued_by(root_ca)
+            return
+        except (ValueError, TypeError, InvalidSignature):
+            continue
+    raise ClientCertError(403, "Client certificate is not the root's")
+
+
 def own_cluster_id() -> str:
     """This cluster's id, from the client certificate the root issued it."""
     if not CLUSTER_CERT_FILE or not Path(CLUSTER_CERT_FILE).is_file():

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from unittest import mock
 from urllib.parse import quote
 
-from blueprints import certificates_blueprints
+from blueprints import certificates_blueprints, clusters_blueprints
 from blueprints.certificates_blueprints import ClusterCertRenewController
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -369,6 +369,54 @@ class ClusterBootstrapTest(RootCaTestCase):
             with self.assertRaises(HTTPException) as raised:
                 self.bootstrap(token_doc)
             self.assertEqual(raised.exception.code, 401)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/information/<cluster_id>
+# ---------------------------------------------------------------------------
+
+
+class ClusterInformationTest(RootCaTestCase):
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.object(clusters_blueprints, "GATEWAY_ENABLED", True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        # Stops the handler right after the identity check.
+        patcher = mock.patch.object(
+            clusters_blueprints.candidate_operations,
+            "update_candidate_information",
+            return_value=None,
+        )
+        self.update = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def post(self, cluster_id, client_cert=None):
+        headers = {"X-Client-Cert": quote(client_cert)} if client_cert else {}
+        with Flask(__name__).test_request_context(
+            f"/api/information/{cluster_id}", method="POST", json={"jobs": []}, headers=headers
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                clusters_blueprints.ClusterController().post(clusterid=cluster_id)
+        return raised.exception.code
+
+    def cluster_cert(self, cluster_id):
+        return certificates.generate_key_and_signed_cert(
+            cluster_id, [certificates.cluster_spiffe_id(cluster_id)], 30
+        )[1]
+
+    def test_a_cluster_may_update_itself(self):
+        # 400 is the patched update failing, i.e. the identity check passed.
+        self.assertEqual(self.post(CLUSTER_ID, self.cluster_cert(CLUSTER_ID)), 400)
+        self.update.assert_called_once()
+
+    def test_a_cluster_may_not_update_another(self):
+        self.assertEqual(self.post(OTHER_CLUSTER_ID, self.cluster_cert(CLUSTER_ID)), 403)
+        self.update.assert_not_called()
+
+    def test_requires_a_cluster_cert(self):
+        self.assertEqual(self.post(CLUSTER_ID), 401)
+        self.update.assert_not_called()
 
 
 if __name__ == "__main__":

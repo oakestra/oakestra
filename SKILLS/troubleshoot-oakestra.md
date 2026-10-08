@@ -174,6 +174,9 @@ docker logs <exited_container_name> 2>&1 | tail -50
 | `grace period ended … must be re-registered` (system_manager) / `Worker migration … ended` (cluster_manager) | A root CA rotation or intermediate replacement finished; clusters/workers that did not renew in time are locked out and need a new token (STEP 18.7) |
 | `certificate signature failure` / `unable to get certificate CRL` / `unable to get local issuer certificate` (Kong or mosquitto logs, gateway mode) | Client cert chains to a CA that is no longer trusted, or no CRL for its issuer is loaded — typically a peer that missed a rotation/migration deadline (STEP 18.6, 18.7) |
 | `Worker certificate renewal failed` (NodeEngine log) | Worker could not renew over `/api/certs/worker-renew`; it keeps its current cert and the cluster asks again every 10 min (STEP 18.7) |
+| `403 caller not permitted on this route` (from Kong, gateway mode) | The client cert is valid but belongs to the wrong role for that route — e.g. a worker cert on a root-only route, or a cert whose SPIFFE ID does not match its issuer. See the caller → route table in STEP 18 |
+| `A cluster may only update its own information` (system_manager) / `not a worker certificate of this cluster` (cluster_manager) | The caller's certificate is for another cluster/worker than the one in the request — a misconfigured or misbehaving peer (STEP 18) |
+| `System Manager assigned id … but this cluster's certificate is for …` (cluster_manager) | The cluster registered with a certificate whose cluster id differs from what the root returned — cert material from another cluster in the cert directory. Re-bootstrap with a fresh token (STEP 18.4) |
 
 ---
 
@@ -221,6 +224,14 @@ docker exec cluster_cert_bootstrap env 2>/dev/null | grep -E "CLUSTER_REGISTRATI
 - `REGISTRATION_TOKEN_TTL_MINUTES` (root, default 10) controls how long minted registration tokens stay valid
 - Certificate lifecycle knobs (all optional): `ROTATION_GRACE_PERIOD_HOURS` (root, default 24) — how long the old root CA stays trusted after `/api/certs/rotate`; `CERT_RENEW_CHECK_INTERVAL_HOURS` (cluster, default 24) — how often cluster certs are checked for expiry; `INTERMEDIATE_GRACE_PERIOD_HOURS` (cluster, default 24) — how long workers may migrate after the intermediate CA is replaced, **must stay well above 10 minutes** (workers are asked to renew at most every 10 min); `WORKER_CERT_RENEW_DAYS` (cluster, default 30) — renew worker certs this long before expiry
 - `MQTT_CONTAINER_NAME`, `KONG_EXTERNAL_CONTAINER_NAME`, `CLUSTER_SERVICE_MANAGER_CONTAINER_NAME` (cluster, defaults `mqtt`, `cluster_kong_external`, `cluster_service_manager`): containers cluster_manager and the bootstrap reload or restart after a renewal via the docker socket — only change them if the containers were renamed
+
+```bash
+# The external gateways' route guards read the client cert's identity in Lua
+docker exec kong_external printenv KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES KONG_NGINX_PROXY_SSL_VERIFY_DEPTH
+docker exec cluster_kong_external printenv KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES KONG_NGINX_PROXY_SSL_VERIFY_DEPTH
+```
+- `KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES` must be `resty.openssl.x509` on both external gateways. Without it every machine-to-machine route fails with a 500 and Kong logs `require 'resty.openssl.x509' not allowed within sandbox`
+- `KONG_NGINX_PROXY_SSL_VERIFY_DEPTH` is `0` at the root (only certs the root CA signed directly, i.e. clusters) and `2` at the cluster (workers present leaf + intermediate)
 
 ---
 
@@ -1047,7 +1058,20 @@ Only applies when the deployment uses `override-gateway.yml`. In gateway mode:
 
 - All external traffic enters through Kong: root `kong_external` (:443), cluster `cluster_kong_external` (:8443 TLS, :8080 cleartext). Internal admin gateways listen on loopback only: root `kong_internal` (127.0.0.1:8000), cluster `cluster_kong_internal` (127.0.0.1:8888).
 - The gateways present a **public server certificate** from `<certs>/public/fullchain.pem|privkey.pem` — a separate certificate system from the internal mTLS CA. It is **bring-your-own and required** (no auto-generated fallback); the init containers fail fast if it's missing.
-- **User endpoints** need no client certificate (app-level JWT auth). **Machine-to-machine routes** (cluster registration gRPC, `/api/information`, `/api/certs/cluster-renew` at the root; `/api/net/*`, `/api/node/register`, `/api/service`, `/api/result/deploy`, `/api/certs/worker-token`, `/api/certs/worker-renew` at the cluster) require an mTLS client certificate signed by the internal root CA — without one they return `401 mTLS client certificate required`. The cluster's `/api/certs/renew`, `/api/certs/rotate`, `/api/certs/rotate-complete`, `/api/certs/refresh` and `/api/certs/mint-worker-token` are on the internal gateway only.
+- **User endpoints** need no client certificate (app-level JWT auth). **Machine-to-machine routes** require an mTLS client certificate **of the right role** — without one they return `401 mTLS client certificate required`, with one of another role `403 caller not permitted on this route`. The cluster's `/api/certs/renew`, `/api/certs/rotate`, `/api/certs/rotate-complete`, `/api/certs/refresh` and `/api/certs/mint-worker-token` are on the internal gateway only.
+- **Identity.** Every internal certificate carries exactly one SPIFFE ID (URI SAN), always set by the issuer — never taken from a CSR: `spiffe://oakestra/root` (root `server.crt`), `spiffe://oakestra/cluster/<cluster_id>` (`cluster.crt`), `spiffe://oakestra/cluster/<cluster_id>/worker/<node_id>` (worker cert, CN = node id), `…/mqtt-client` and `…/mqtt-broker` (the cluster's own MQTT certs), `spiffe://oakestra/client/<name>` (admin `/api/certs/sign` and `/generate-client`; accepted by no machine route). Root and cluster ids are chosen when the registration token is minted / redeemed, and the cluster or worker registers under the id in its certificate. Only the broker cert has `serverAuth`; all others are client-only. CA subjects carry an OU marker the root sets: `oakestra-root-ca` (root CA) and `oakestra-cluster-ca` (intermediates, named `Oakestra Cluster CA <cluster_id> <time>`). The gateways only trust an id when the issuer marker matches it: a cluster holds its intermediate's key and could put any id into certs it signs.
+
+| Gateway | Route | Only accepted from | Also checked by the backend |
+|---|---|---|---|
+| root | gRPC `register_cluster` | cluster | registers under the cert's cluster id |
+| root | `POST /api/information/<id>` | cluster | `<id>` must be the caller's cluster id |
+| root | `POST /api/certs/cluster-renew` | cluster | new cert keeps the caller's cluster id |
+| root | `GET /api/net/subnet`, `POST /api/net/service/net_deploy_status`, `GET /api/net/service/[ip/]<x>/instances`, `DELETE /api/net/interest/<name>` | cluster | — (root_service_manager, oakestra-net) |
+| cluster | `POST/DELETE /api/service/<job>/<instance>`, `POST /api/certs/worker-token` | root | cert must be signed directly by the root CA |
+| cluster | `POST /api/net/job/update` | root | — (cluster_service_manager, oakestra-net) |
+| cluster | `POST /api/node/register`, `POST /api/certs/worker-renew` | worker | issued by *this* cluster's intermediate, not revoked; registers/renews under the cert's node id |
+
+Every other `/api/*` path returns 403 on the external gateways — including `/api/result/deploy` and `/api/net/deployment` on the cluster and the remaining `/api/net/*` endpoints on the root, which are only called inside each orchestrator.
 - New clusters/workers obtain their certificates automatically with **one-time registration tokens** (default TTL 10 min, single use). Afterwards every certificate is renewed automatically — see 18.7 for the lifecycle and what stays manual.
 
 ### 18.1 Check the cert-init containers
@@ -1081,6 +1105,13 @@ Only while a transition is running: root `ca.old.crt ca.old.key ca.old.expiry` (
 
 On workers, NetManager's `/etc/netmanager/netcfg.json` `MqttCert`/`MqttKey`/`MqttCa` should point at the NodeEngine-bootstrapped files in `/etc/oakestra/certs/` (worker.crt, worker.key, ca.crt).
 
+```bash
+# Identity (SPIFFE ID) and usages of a certificate — each must carry exactly one URI SAN
+openssl x509 -in cluster_orchestrator/config/certs/cluster.crt -noout -subject -issuer -ext subjectAltName,extendedKeyUsage
+sudo openssl x509 -in /etc/oakestra/certs/worker.crt -noout -subject -issuer -ext subjectAltName,extendedKeyUsage
+```
+The cluster id in `cluster.crt` must match the cluster's id in `GET /api/clusters`; a worker's node id (its CN) must match its id in the cluster's node list.
+
 ### 18.3 Smoke-test the TLS split
 
 ```bash
@@ -1092,6 +1123,9 @@ curl -ks -o /dev/null -w "%{http_code}\n" -X POST https://<ROOT_IP>/api/informat
 curl -ks -o /dev/null -w "%{http_code}\n" -X POST https://<CLUSTER_ADDRESS>:8443/api/node/register
 # Cleartext listener on the cluster must also reject machine routes (401)
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://<CLUSTER_ADDRESS>:8080/api/node/register
+# A valid cert of the wrong role -> must return 403 (here: a worker cert on a root-only route)
+sudo curl -ks -o /dev/null -w "%{http_code}\n" -X POST https://<CLUSTER_ADDRESS>:8443/api/certs/worker-token \
+  --cert /etc/oakestra/certs/worker.crt --key /etc/oakestra/certs/worker.key
 ```
 
 ### 18.4 Registration token flow
@@ -1099,7 +1133,9 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://<CLUSTER_ADDRESS>:8080/a
 ```bash
 # 1. Login as Admin and mint a cluster token (also via dashboard/CLI)
 TOKEN_JSON=$(curl -ks -X POST https://<ROOT_IP>/api/tokens/cluster -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" -d '{}')
-echo "$TOKEN_JSON"   # contains token, expires_at, suggested_command
+echo "$TOKEN_JSON"   # contains token, cluster_id (chosen now), expires_at, suggested_command
+#    To re-provision an existing cluster under its id instead of adding a new one:
+#    -d '{"cluster_id": "<id from /api/clusters>"}'
 
 # 2. Start the cluster with the one-liner from suggested_command, e.g.:
 # CLUSTER_REGISTRATION_TOKEN=<token> SYSTEM_MANAGER_URL=<root> CLUSTER_NAME=c1 CLUSTER_LOCATION=48.1,11.6,1000 ./StartOakestraCluster.sh
@@ -1107,7 +1143,9 @@ echo "$TOKEN_JSON"   # contains token, expires_at, suggested_command
 # 3. Mint a worker token for a registered cluster
 curl -ks -X POST https://<ROOT_IP>/api/tokens/worker -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" -d '{"cluster_id": "<id from /api/clusters>"}'
 
-#    ...or, on the cluster host, mint one locally without the root (internal gateway only):
+#    ...or, on the cluster host, mint one locally without the root (internal gateway only).
+#    The redeeming worker gets a new node id; pass -H "Content-Type: application/json"
+#    -d '{"node_id": "<id>"}' to re-provision an existing worker under its id instead.
 curl -s -X POST http://localhost:8888/api/certs/mint-worker-token
 
 # 4. Register the worker with the returned one-liner:
@@ -1121,7 +1159,8 @@ curl -s -X POST http://localhost:8888/api/certs/mint-worker-token
 | `POST /api/tokens/worker` returns 404 | cluster_id not registered yet | Wait for cluster registration (check root logs for "Cluster ID received"), use the id from `GET /api/clusters` |
 | `POST /api/tokens/worker` returns 502 | Root cannot deliver the token hash to the cluster over mTLS | Check root→cluster connectivity (STEP 7.1) and that the cluster gateway is up with valid certs |
 | Bootstrap endpoint returns 401 | Token invalid, expired (TTL default 10 min), or already used (single-use) | Mint a fresh token |
-| Worker bootstrap returns 400 (`CSR parsing failed` / `CSR has no common name`) | NodeEngine and cluster_manager from different versions — the worker bootstrap sends a CSR (`token`, `csr`) and gets no private key back | Run matching NodeEngine and cluster versions |
+| Worker bootstrap returns 400 (`CSR parsing failed` / `CSR signature is invalid`) | NodeEngine and cluster_manager from different versions — the worker bootstrap sends a CSR (`token`, `csr`) and gets no private key back. Only the CSR's public key is used; the cluster chooses the name | Run matching NodeEngine and cluster versions |
+| Worker registration or renewal returns 403 `not a worker certificate of this cluster` | The worker presents a cert from another cluster (e.g. it was moved to a new cluster without re-bootstrapping) | Mint a token at the new cluster and re-bootstrap the worker |
 | TLS handshake fails on *any* route after a root CA rotation ended (`grace_period_hours: 0`, `rotate-complete`, or the deadline passed) | Peer still presents a cert signed by the old root CA — nginx rejects invalid client certs even in `optional` mode | Re-bootstrap the cluster/worker with a fresh token; restart `cluster_kong_external` after replacing the cluster's `ca.crt` |
 | `cert_init` / `cluster_cert_bootstrap` exits 1: "public gateway certificate not found" | No BYO public cert provided (required — there is no fallback) | Drop `public/fullchain.pem`+`privkey.pem` into `<certs>/public/` and restart |
 | Browser warns about untrusted cert | The BYO public cert is privately issued (not from a public CA) | Use a publicly trusted cert (e.g. Let's Encrypt), or install your CA into the client's trust store |

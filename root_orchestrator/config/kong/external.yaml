@@ -5,19 +5,39 @@ _format_version: "3.0"
 # root CA only *optionally* (KONG_NGINX_PROXY_SSL_VERIFY_CLIENT=optional).
 #
 # Routes are grouped into two sections:
-#   * mTLS Routes  — machine-to-machine (cluster -> root). Each carries a
-#                    pre-function guard that rejects requests without a
-#                    verified client certificate and passes that certificate on
-#                    in X-Client-Cert, for the backend to identify the caller
-#                    (set_header replaces any X-Client-Cert the client sent).
-#                    The first guarded route defines the YAML anchor
-#                    (&mtls_guard); the rest reuse it.
+#   * mTLS Routes  — machine-to-machine; clusters are the only callers. Each
+#                    carries the &cluster_guard pre-function (defined on the
+#                    first route), which identifies the caller by its verified
+#                    client certificate and admits only clusters (see below).
+#                    It passes the certificate on in X-Client-Cert; backends
+#                    then check the caller acts for itself, e.g. that it posts
+#                    /api/information only for its own cluster id.
 #   * Public Routes — user-facing (no client cert; app-level JWT auth),
 #                     token-gated bootstrap, and explicitly blocked endpoints.
+#
+# Caller identity. Client certs are verified against the root CA, which also signs
+# every cluster's intermediate CA, so a cert's chain alone says nothing about who
+# the caller is. Every cert carries exactly one SPIFFE ID in a URI SAN, set by its
+# issuer, and every CA subject carries an OU marker the root chose:
+#   spiffe://oakestra/root                          issued by the root CA
+#   spiffe://oakestra/cluster/<id>                  issued by the root CA
+#   spiffe://oakestra/cluster/<id>/worker/<id>      issued by a cluster CA
+# A cluster holds its intermediate's key and can put any SPIFFE ID in certs it
+# signs, so an ID only counts when the issuer marker matches it. The &identify
+# chunk extracts both into kong.ctx.shared.caller; &cluster_only then checks them.
+# Lua modules a pre-function may load are listed in
+# KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES (override-gateway.yml).
+#
+# Clusters call (cluster_manager and cluster_service_manager, with cluster.crt):
+#   gRPC register_cluster, POST /api/information/<id>, POST /api/certs/cluster-renew,
+#   GET /api/net/subnet, POST /api/net/service/net_deploy_status,
+#   GET /api/net/service/<name>/instances, GET /api/net/service/ip/<ip>/instances,
+#   DELETE /api/net/interest/<name>.
+# Every other root_service_manager endpoint is called from inside the root only.
 
 services:
   # ======================================================================
-  # mTLS Routes (client certificate required)
+  # mTLS Routes (cluster client certificate required)
   # ======================================================================
 
   # External gRPC entrypoint for cluster registration.
@@ -31,15 +51,35 @@ services:
         paths:
           - /clusterRegistration.register_cluster
         plugins:
-          - &mtls_guard
+          - &cluster_guard
             name: pre-function
             config:
               access:
-                - |
+                - &identify |
                   if ngx.var.ssl_client_verify ~= "SUCCESS" then
                     return kong.response.exit(401, { message = "mTLS client certificate required" })
                   end
+                  local crt = require("resty.openssl.x509").new(ngx.var.ssl_client_raw_cert)
+                  local uris = {}
+                  local san = crt:get_subject_alt_name()
+                  if san then
+                    for kind, value in san:each() do
+                      if kind == "URI" then uris[#uris + 1] = value end
+                    end
+                  end
+                  local issuer
+                  for kind, attribute in crt:get_issuer_name():each() do
+                    if kind == "OU" and attribute.blob == "oakestra-root-ca" then issuer = "root" end
+                    if kind == "OU" and attribute.blob == "oakestra-cluster-ca" then issuer = "cluster" end
+                  end
+                  kong.ctx.shared.caller = { id = #uris == 1 and uris[1] or "", issuer = issuer }
                   kong.service.request.set_header("X-Client-Cert", ngx.var.ssl_client_escaped_cert)
+                - |
+                  local caller = kong.ctx.shared.caller
+                  if caller.issuer ~= "root"
+                    or not caller.id:match("^spiffe://oakestra/cluster/[0-9a-f]+$") then
+                    return kong.response.exit(403, { message = "caller not permitted on this route" })
+                  end
 
   # Machine-to-machine REST surface (cluster_manager -> system_manager).
   - name: system_manager_m2m
@@ -47,12 +87,13 @@ services:
     routes:
       # Aggregated resource/job updates pushed by cluster managers.
       - name: sm-information-m2m
+        protocols: [https]
         paths:
-          - /api/information
-        methods: [GET, POST, OPTIONS]
+          - /api/information/
+        methods: [POST, OPTIONS]
         strip_path: false
         plugins:
-          - *mtls_guard
+          - *cluster_guard
 
       # In-band cluster cert renewal: cluster sends a CSR while its old cert is
       # still trusted (during the dual-CA grace period after POST /api/certs/rotate).
@@ -63,7 +104,7 @@ services:
         methods: [POST, OPTIONS]
         strip_path: false
         plugins:
-          - *mtls_guard
+          - *cluster_guard
 
   # Machine-to-machine surface for the root networking plugin
   # (cluster_service_manager -> root_service_manager).
@@ -71,45 +112,37 @@ services:
     url: http://root_service_manager:10099
     routes:
       - name: rsm-subnet-m2m
+        protocols: [https]
         paths:
           - /api/net/subnet
-          - /api/net/subnet/
         methods: [GET, OPTIONS]
         strip_path: false
         plugins:
-          - *mtls_guard
-      - name: rsm-service-m2m
-        paths:
-          - /api/net/service
-          - /api/net/service/
-        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
-        strip_path: false
-        plugins:
-          - *mtls_guard
+          - *cluster_guard
       - name: rsm-service-deploy-status-m2m
+        protocols: [https]
         paths:
           - /api/net/service/net_deploy_status
-          - /api/net/service/net_deploy_status/
-        methods: [GET, POST, OPTIONS]
-        strip_path: false
-        plugins:
-          - *mtls_guard
-      - name: rsm-job-update-m2m
-        paths:
-          - /api/net/job/update
-          - /api/net/job/update/
         methods: [POST, OPTIONS]
         strip_path: false
         plugins:
-          - *mtls_guard
-      - name: rsm-interest-m2m
+          - *cluster_guard
+      - name: rsm-service-instances-m2m
+        protocols: [https]
         paths:
-          - /api/net/interest
-          - /api/net/interest/
-        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+          - ~/api/net/service/(ip/)?[^/]+/instances$
+        methods: [GET, OPTIONS]
         strip_path: false
         plugins:
-          - *mtls_guard
+          - *cluster_guard
+      - name: rsm-interest-m2m
+        protocols: [https]
+        paths:
+          - /api/net/interest/
+        methods: [DELETE, OPTIONS]
+        strip_path: false
+        plugins:
+          - *cluster_guard
 
   # ======================================================================
   # Public Routes (no client certificate)

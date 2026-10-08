@@ -318,6 +318,42 @@ class ClientCertWorkerTest(ClusterCaTestCase):
         self.assertEqual(raised.exception.status, 401)
 
 
+class ClientCertRootTest(ClusterCaTestCase):
+    """The check behind /api/service and /api/certs/worker-token."""
+
+    def check(self, cert):
+        certificates.client_cert_root(quote(cert.public_bytes(serialization.Encoding.PEM).decode()))
+
+    def assert_rejected(self, cert):
+        with self.assertRaises(certificates.ClientCertError) as raised:
+            self.check(cert)
+        self.assertEqual(raised.exception.status, 403)
+
+    def test_accepts_the_root(self):
+        self.check(make_cert("root", self.root, uri="spiffe://oakestra/root", ca=False)[0])
+
+    def test_accepts_the_root_during_a_rotation(self):
+        new_root = make_cert("root-2")
+        # The dual-CA bundle the root hands out while both CAs are trusted.
+        bundle = (
+            new_root[0].public_bytes(serialization.Encoding.PEM)
+            + (self.dir / "root.crt").read_bytes()
+        )
+        (self.dir / "root.crt").write_bytes(bundle)
+        self.check(make_cert("root", self.root, uri="spiffe://oakestra/root", ca=False)[0])
+
+    def test_rejects_the_root_id_from_a_cluster_ca(self):
+        # This cluster's own intermediate could sign one.
+        forged = make_cert("root", self.intermediate, uri="spiffe://oakestra/root", ca=False)[0]
+        self.assert_rejected(forged)
+
+    def test_rejects_clusters(self):
+        cluster = make_cert(
+            "c", self.root, uri=f"spiffe://oakestra/cluster/{OTHER_CLUSTER_ID}", ca=False
+        )[0]
+        self.assert_rejected(cluster)
+
+
 class IssuedByClusterCaTest(ClusterCaTestCase):
     def test_accepts_current_and_old_intermediate(self):
         old = self.start_migration()
