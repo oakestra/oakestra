@@ -813,7 +813,7 @@ Mint a new cluster token at the root and restart the cluster with it — `cluste
 This issues a new intermediate CA, so re-bootstrap every worker of that cluster afterwards (see the next fix).
 
 ### Fix: Worker locked out (missed an intermediate migration, or its cert expired)
-Mint a worker token (`POST /api/tokens/worker`, STEP 18.4) and re-register the worker: `sudo NodeEngine -a <cluster_address> -p 8443 -s --token <token>`. The worker generates a new key and CSR; the old files are replaced.
+Mint a worker token (`POST /api/tokens/worker` at the root, or `POST http://localhost:8888/api/certs/mint-worker-token` on the cluster host, STEP 18.4) and re-register the worker: `sudo NodeEngine -a <cluster_address> -p 8443 -s --token <token>`. The worker generates a new key and CSR; the old files are replaced.
 
 ---
 
@@ -1047,7 +1047,7 @@ Only applies when the deployment uses `override-gateway.yml`. In gateway mode:
 
 - All external traffic enters through Kong: root `kong_external` (:443), cluster `cluster_kong_external` (:8443 TLS, :8080 cleartext). Internal admin gateways listen on loopback only: root `kong_internal` (127.0.0.1:8000), cluster `cluster_kong_internal` (127.0.0.1:8888).
 - The gateways present a **public server certificate** from `<certs>/public/fullchain.pem|privkey.pem` — a separate certificate system from the internal mTLS CA. It is **bring-your-own and required** (no auto-generated fallback); the init containers fail fast if it's missing.
-- **User endpoints** need no client certificate (app-level JWT auth). **Machine-to-machine routes** (cluster registration gRPC, `/api/information`, `/api/certs/cluster-renew` at the root; `/api/net/*`, `/api/node/register`, `/api/service`, `/api/result/deploy`, `/api/certs/worker-token`, `/api/certs/worker-renew` at the cluster) require an mTLS client certificate signed by the internal root CA — without one they return `401 mTLS client certificate required`. The cluster's `/api/certs/renew`, `/api/certs/rotate`, `/api/certs/rotate-complete` and `/api/certs/refresh` are on the internal gateway only.
+- **User endpoints** need no client certificate (app-level JWT auth). **Machine-to-machine routes** (cluster registration gRPC, `/api/information`, `/api/certs/cluster-renew` at the root; `/api/net/*`, `/api/node/register`, `/api/service`, `/api/result/deploy`, `/api/certs/worker-token`, `/api/certs/worker-renew` at the cluster) require an mTLS client certificate signed by the internal root CA — without one they return `401 mTLS client certificate required`. The cluster's `/api/certs/renew`, `/api/certs/rotate`, `/api/certs/rotate-complete`, `/api/certs/refresh` and `/api/certs/mint-worker-token` are on the internal gateway only.
 - New clusters/workers obtain their certificates automatically with **one-time registration tokens** (default TTL 10 min, single use). Afterwards every certificate is renewed automatically — see 18.7 for the lifecycle and what stays manual.
 
 ### 18.1 Check the cert-init containers
@@ -1106,6 +1106,9 @@ echo "$TOKEN_JSON"   # contains token, expires_at, suggested_command
 
 # 3. Mint a worker token for a registered cluster
 curl -ks -X POST https://<ROOT_IP>/api/tokens/worker -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" -d '{"cluster_id": "<id from /api/clusters>"}'
+
+#    ...or, on the cluster host, mint one locally without the root (internal gateway only):
+curl -s -X POST http://localhost:8888/api/certs/mint-worker-token
 
 # 4. Register the worker with the returned one-liner:
 # sudo NodeEngine -a <cluster_address> -p 8443 -s --token <token>

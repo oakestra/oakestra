@@ -16,6 +16,7 @@ services:
           - /api/certs/
           - /api/certs/ca.crt
           - /api/certs/generate-worker
+          - /api/certs/mint-worker-token
           - /api/certs/sign
           - /api/docs
           - /docs

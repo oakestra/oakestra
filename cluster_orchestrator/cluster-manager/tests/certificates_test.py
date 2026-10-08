@@ -282,6 +282,13 @@ class ConsumeTokenTest(unittest.TestCase):
         self.assertIsNotNone(certificates_db.consume_token("token"))
         self.assertIsNone(certificates_db.consume_token("token"))
 
+    def test_minted_token_is_redeemable_once(self):
+        token, expiry = certificates_db.create_worker_token(10)
+        self.assertGreater(expiry, datetime.now(timezone.utc))
+        self.assertNotIn(token, str(self.tokens.docs))
+        self.assertIsNotNone(certificates_db.consume_token(token))
+        self.assertIsNone(certificates_db.consume_token(token))
+
     def test_expired_token_is_rejected_and_removed(self):
         self.store("token", timedelta(minutes=-1))
         self.assertIsNone(certificates_db.consume_token("token"))

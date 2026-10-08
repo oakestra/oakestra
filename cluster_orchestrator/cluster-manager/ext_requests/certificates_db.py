@@ -1,6 +1,7 @@
 import hashlib
 import logging
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, timedelta, timezone
 
 import ext_requests.mongodb_client as db
 
@@ -55,6 +56,14 @@ def store_token_hash(token_hash: str, expiry_date: datetime) -> None:
             "created_at": datetime.now(timezone.utc),
         }
     )
+
+
+def create_worker_token(ttl_minutes: float) -> tuple[str, datetime]:
+    """Mint a one-time worker token locally. Returns (token, expiry_date); only its hash is kept."""
+    token = secrets.token_urlsafe(32)
+    expiry_date = datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes)
+    store_token_hash(hash_worker_token(token), expiry_date)
+    return token, expiry_date
 
 
 def consume_token(token: str) -> dict:

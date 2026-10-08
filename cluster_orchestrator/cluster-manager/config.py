@@ -28,6 +28,8 @@ CRL_REFRESH_INTERVAL_HOURS = float(os.environ.get("CRL_REFRESH_INTERVAL_HOURS") 
 CERT_RENEW_CHECK_INTERVAL_HOURS = float(os.environ.get("CERT_RENEW_CHECK_INTERVAL_HOURS") or 24)
 # How long workers may keep using certs from a replaced intermediate while they renew.
 INTERMEDIATE_GRACE_PERIOD_HOURS = float(os.environ.get("INTERMEDIATE_GRACE_PERIOD_HOURS") or 24)
+# Lifetime of worker tokens minted at the cluster (POST /api/certs/mint-worker-token).
+REGISTRATION_TOKEN_TTL_MINUTES = float(os.environ.get("REGISTRATION_TOKEN_TTL_MINUTES") or 10)
 # Renew worker certificates this long before they expire.
 WORKER_CERT_RENEW_DAYS = float(os.environ.get("WORKER_CERT_RENEW_DAYS") or 30)
 

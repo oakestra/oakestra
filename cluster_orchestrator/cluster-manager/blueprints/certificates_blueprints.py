@@ -13,6 +13,7 @@ from cryptography.x509.oid import NameOID
 from ext_requests.certificates_db import (
     clear_revoked_certs,
     consume_token,
+    create_worker_token,
     get_revoked_serials,
     is_revoked,
     list_revoked_certs,
@@ -179,6 +180,30 @@ class ClusterWorkerTokenController(MethodView):
         store_token_hash(token_hash, expiry_date)
         logger.info("Stored worker registration token (expires %s)", expiry_date.isoformat())
         return "", 204
+
+
+@certbp.route("/mint-worker-token")
+class ClusterMintWorkerTokenController(MethodView):
+    def post(self):
+        """Mint a one-time worker registration token at this cluster, without the root.
+
+        The token is redeemed at /api/certs/worker-bootstrap like a root-issued one and
+        expires after REGISTRATION_TOKEN_TTL_MINUTES. Reachable via the internal gateway only.
+        """
+        token, expiry_date = create_worker_token(config.REGISTRATION_TOKEN_TTL_MINUTES)
+        logger.info("Minted worker registration token (expires %s)", expiry_date.isoformat())
+
+        cluster_address = config.MY_CLUSTER_ADDRESS
+        cluster_port = config.MY_CLUSTER_PORT
+        return {
+            "token": token,
+            "expires_at": expiry_date.isoformat(),
+            "cluster_address": cluster_address,
+            "cluster_port": cluster_port,
+            "suggested_command": (
+                f"sudo NodeEngine -a {cluster_address} -p {cluster_port} -s --token {token}"
+            ),
+        }
 
 
 @certbp.route("/worker-bootstrap")
