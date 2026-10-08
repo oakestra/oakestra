@@ -1,7 +1,10 @@
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+from urllib.parse import unquote
 
+from cryptography import x509
+from cryptography.x509.oid import NameOID
 from ext_requests.certificates_db import (
     TOKEN_TYPE_CLUSTER,
     add_revoked_cert,
@@ -18,6 +21,7 @@ from flask_restful import Resource
 from flask_smorest import abort
 from roles.securityUtils import Role, require_role
 from utils.certificates import (
+    cert_alt_names,
     cert_expires_in,
     current_ca_cert_pem,
     ensure_ca_files,
@@ -29,6 +33,8 @@ from utils.certificates import (
     get_old_ca_key_path,
     get_server_cert_path,
     get_server_key_path,
+    is_ca_cert,
+    issued_by_root_ca,
     regenerate_ca_files,
     regenerate_root_crl,
     regenerate_server_files,
@@ -137,9 +143,11 @@ sign_csr_schema = {
     "type": "object",
     "properties": {
         "csr": {"type": "string"},
+        "common_name": {"type": "string"},
+        "alt_names": {"type": "array", "items": {"type": "string"}},
         "valid_days": {"type": "integer", "minimum": 1},
     },
-    "required": ["csr"],
+    "required": ["csr", "common_name"],
 }
 
 
@@ -231,14 +239,24 @@ class CertificateSigningController(Resource):
     @jwt_required()
     @require_role(Role.ADMIN)
     def post(self, *args, **kwargs):
+        """Sign a CSR as a client certificate.
+
+        Only the CSR's public key is used: the name and SANs come from the request body,
+        and the certificate is always a clientAuth leaf.
+        """
         content = request.get_json(silent=True) or {}
         csr_pem = content.get("csr") or ""
+        common_name = content.get("common_name") or ""
         if not csr_pem.strip():
             abort(400, {"message": "csr is required"})
+        if not common_name.strip():
+            abort(400, {"message": "common_name is required"})
 
         try:
             signed_certificate = sign_csr_pem(
                 csr_pem=csr_pem,
+                common_name=common_name,
+                alt_names=list(content.get("alt_names") or []),
                 valid_days=int(content.get("valid_days") or 365),
             )
         except FileNotFoundError:
@@ -261,9 +279,6 @@ class CertificateClientGenerateController(Resource):
             abort(400, {"message": "common_name is required"})
 
         alt_names = list(content.get("alt_names") or [])
-        for name in (common_name, "mqtt", "localhost"):
-            if name not in alt_names:
-                alt_names.append(name)
         valid_days = int(content.get("valid_days") or 365)
 
         try:
@@ -295,14 +310,10 @@ class ClusterBootstrapController(Resource):
         if consume_registration_token(token, TOKEN_TYPE_CLUSTER) is None:
             abort(401, {"message": "invalid registration token"})
 
-        client_alt_names = list(content.get("alt_names") or [])
-        for name in (cluster_name, "mqtt", "localhost"):
-            if name not in client_alt_names:
-                client_alt_names.append(name)
-
         try:
+            # A client certificate only: the cluster never serves TLS with it.
             client_key, client_cert = generate_key_and_signed_cert(
-                common_name=cluster_name, alt_names=client_alt_names, valid_days=365
+                common_name=cluster_name, alt_names=[cluster_name], valid_days=365
             )
             cluster_ca_key, cluster_ca_cert = generate_intermediate_ca(
                 common_name=cluster_name,
@@ -346,12 +357,14 @@ cluster_renew_schema = {
     "type": "object",
     "properties": {
         "csr": {"type": "string"},
-        "alt_names": {"type": "array", "items": {"type": "string"}},
         "valid_days": {"type": "integer", "minimum": 1},
         "rotate_intermediate": {"type": "boolean"},
     },
     "required": ["csr"],
 }
+
+# Upper bound for the validity a cluster may ask for when renewing its client cert.
+CLUSTER_CERT_MAX_VALID_DAYS = 365
 
 
 @certbp.route("/revoke")
@@ -526,31 +539,51 @@ class CertificateAuthorityRotateController(Resource):
 class ClusterCertRenewController(Resource):
     @certbp.arguments(schema=cluster_renew_schema, location="json", validate=False, unknown=True)
     def post(self, *args, **kwargs):
-        """Sign a cluster's CSR with the current CA.
+        """Renew a cluster's client certificate, authenticated by its current certificate.
 
-        Protected by the Kong mTLS pre-function guard — the caller must present
-        a valid client certificate (old CA still trusted during grace period).
-        No JWT required; the mTLS credential is the authentication.
+        The external gateway forwards the verified client certificate (X-Client-Cert); during
+        a rotation grace period it may be signed by the old CA. The new certificate keeps the
+        presented certificate's name and SANs: only the CSR's public key is used. With
+        rotate_intermediate, a new intermediate CA for the same cluster is issued as well.
         """
+        try:
+            presented = x509.load_pem_x509_certificate(
+                unquote(request.headers.get("X-Client-Cert", "")).encode("utf-8")
+            )
+        except ValueError:
+            abort(401, {"message": "Client certificate required"})
+        # A cluster also holds its intermediate CA's key, which the root signed too.
+        if is_ca_cert(presented):
+            abort(401, {"message": "A CA certificate is not a client certificate"})
+        try:
+            # Kong accepts any chain to the root CA; only a cert the root signed itself counts.
+            if not issued_by_root_ca(presented):
+                abort(401, {"message": "Client certificate was not issued by the root CA"})
+        except FileNotFoundError:
+            abort(409, {"message": "Root CA material not initialized"})
+        presented_names = presented.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        if not presented_names:
+            abort(401, {"message": "Client certificate has no common name"})
+        common_name = presented_names[0].value
+
         content = request.get_json(silent=True) or {}
         csr_pem = content.get("csr") or ""
         if not csr_pem.strip():
             abort(400, {"message": "csr is required"})
-
-        alt_names = content.get("alt_names") or []
-        valid_days = int(content.get("valid_days") or 365)
+        try:
+            valid_days = min(int(content.get("valid_days") or 365), CLUSTER_CERT_MAX_VALID_DAYS)
+        except (TypeError, ValueError):
+            abort(400, {"message": "valid_days must be an integer"})
         rotate_intermediate = content.get("rotate_intermediate") is True
 
         try:
-            # Extract CN from the CSR subject to name the new intermediate CA.
-            from cryptography import x509 as _x509
-
-            csr_obj = _x509.load_pem_x509_csr(csr_pem.encode("utf-8"))
-            cn_attrs = csr_obj.subject.get_attributes_for_oid(_x509.oid.NameOID.COMMON_NAME)
-            common_name = cn_attrs[0].value if cn_attrs else "cluster"
-
             response = {
-                "client_cert": sign_csr_pem(csr_pem=csr_pem, valid_days=valid_days),
+                "client_cert": sign_csr_pem(
+                    csr_pem=csr_pem,
+                    common_name=common_name,
+                    alt_names=cert_alt_names(presented),
+                    valid_days=valid_days,
+                ),
                 "root_ca": get_ca_cert_path().read_text(),
             }
             if rotate_intermediate:
@@ -560,7 +593,7 @@ class ClusterCertRenewController(Resource):
                 rotated_at = datetime.now(timezone.utc)
                 response["cluster_ca_key"], response["cluster_ca_cert"] = generate_intermediate_ca(
                     common_name=f"{common_name} {rotated_at:%Y-%m-%d %H:%M:%S}",
-                    alt_names=alt_names or None,
+                    alt_names=None,
                     valid_days=1825,
                 )
         except FileNotFoundError:

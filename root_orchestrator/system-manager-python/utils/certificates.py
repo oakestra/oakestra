@@ -4,9 +4,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import ExtensionOID, NameOID
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 DEFAULT_CERT_PATH = "/certs"
 DEFAULT_CA_COMMON_NAME = "Oakestra Root CA"
@@ -135,9 +136,8 @@ def _normalize_pem(pem_data: str, expected_type: str) -> str:
     return pem_str
 
 
-def sign_csr_pem(csr_pem: str, valid_days: int) -> str:
-    ca_cert, ca_key = load_ca_material()
-
+def load_csr(csr_pem: str) -> x509.CertificateSigningRequest:
+    """Parse a CSR and check it was signed by the key it carries."""
     try:
         normalized_csr = _normalize_pem(csr_pem, "CERTIFICATE REQUEST")
         csr = x509.load_pem_x509_csr(normalized_csr.encode("utf-8"))
@@ -145,29 +145,96 @@ def sign_csr_pem(csr_pem: str, valid_days: int) -> str:
         raise ValueError(f"CSR parsing failed: {str(ve)}")
     except Exception as e:
         raise ValueError(f"Failed to load CSR: {str(e)}")
+    if not csr.is_signature_valid:
+        raise ValueError("CSR signature is invalid")
+    return csr
+
+
+def _build_san(alt_names: list[str]) -> x509.SubjectAlternativeName:
+    san_list = []
+    for name in alt_names:
+        if name.startswith("spiffe://"):
+            san_list.append(x509.UniformResourceIdentifier(name))
+            continue
+        try:
+            san_list.append(x509.IPAddress(ipaddress.ip_address(name)))
+        except ValueError:
+            san_list.append(x509.DNSName(name))
+    return x509.SubjectAlternativeName(san_list)
+
+
+def _issue_leaf(
+    public_key,
+    common_name: str,
+    alt_names: list[str],
+    valid_days: int,
+    extended_key_usages: list,
+) -> str:
+    """Sign a leaf certificate for public_key with the root CA. Returns its PEM.
+
+    Every name and extension is set here. Nothing comes from the requester, so a CSR
+    cannot ask for a CA certificate, other key usages or another identity.
+    """
+    ca_cert, ca_key = load_ca_material()
     now = datetime.now(timezone.utc)
 
     builder = (
         x509.CertificateBuilder()
-        .subject_name(csr.subject)
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)]))
         .issuer_name(ca_cert.subject)
-        .public_key(csr.public_key())
+        .public_key(public_key)
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - timedelta(minutes=1))
-        .not_valid_after(now + timedelta(days=valid_days))
-    )
-
-    csr_extension_oids = {extension.oid for extension in csr.extensions}
-    if ExtensionOID.BASIC_CONSTRAINTS not in csr_extension_oids:
-        builder = builder.add_extension(
-            x509.BasicConstraints(ca=False, path_length=None), critical=True
+        # Nothing verifies past the root CA's expiry, so never claim longer.
+        .not_valid_after(min(now + timedelta(days=valid_days), ca_cert.not_valid_after_utc))
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=True,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
         )
-
-    for extension in csr.extensions:
-        builder = builder.add_extension(extension.value, extension.critical)
+        .add_extension(x509.ExtendedKeyUsage(extended_key_usages), critical=False)
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_cert.public_key()),
+            critical=False,
+        )
+    )
+    if alt_names:
+        builder = builder.add_extension(_build_san(alt_names), critical=False)
 
     certificate = builder.sign(private_key=ca_key, algorithm=hashes.SHA256())
     return certificate.public_bytes(serialization.Encoding.PEM).decode("utf-8")
+
+
+def sign_csr_pem(
+    csr_pem: str,
+    common_name: str,
+    alt_names: list[str],
+    valid_days: int,
+    extended_key_usages: list = None,
+) -> str:
+    """Sign the CSR's public key with the given identity; only the key is taken from the CSR.
+
+    extended_key_usages defaults to clientAuth only.
+    """
+    csr = load_csr(csr_pem)
+    return _issue_leaf(
+        csr.public_key(),
+        common_name=common_name,
+        alt_names=alt_names,
+        valid_days=valid_days,
+        extended_key_usages=extended_key_usages or [ExtendedKeyUsageOID.CLIENT_AUTH],
+    )
 
 
 def generate_key_and_signed_cert(
@@ -178,40 +245,16 @@ def generate_key_and_signed_cert(
 ) -> tuple[str, str]:
     """Generate an RSA private key and a certificate signed by the CA.
 
-    Returns (private_key_pem, certificate_pem).
+    extended_key_usages defaults to clientAuth only. Returns (private_key_pem, certificate_pem).
     """
-    # Ensure CA exists
-    ca_cert, ca_key = load_ca_material()
-
-    # Generate private key
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=DEFAULT_KEY_SIZE)
-
-    # Build subject
-    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
-
-    # Build CSR with optional SANs
-    csr_builder = x509.CertificateSigningRequestBuilder().subject_name(subject)
-    if alt_names:
-        san_list = []
-        for name in alt_names:
-            try:
-                san_list.append(x509.IPAddress(ipaddress.ip_address(name)))
-            except ValueError:
-                san_list.append(x509.DNSName(name))
-        csr_builder = csr_builder.add_extension(
-            x509.SubjectAlternativeName(san_list), critical=False
-        )
-
-    if extended_key_usages:
-        csr_builder = csr_builder.add_extension(
-            x509.ExtendedKeyUsage(extended_key_usages), critical=False
-        )
-
-    csr = csr_builder.sign(private_key, hashes.SHA256())
-
-    # Sign CSR using CA material via existing sign function
-    csr_pem = csr.public_bytes(serialization.Encoding.PEM).decode("utf-8")
-    cert_pem = sign_csr_pem(csr_pem=csr_pem, valid_days=valid_days)
+    cert_pem = _issue_leaf(
+        private_key.public_key(),
+        common_name=common_name,
+        alt_names=alt_names,
+        valid_days=valid_days,
+        extended_key_usages=extended_key_usages or [ExtendedKeyUsageOID.CLIENT_AUTH],
+    )
 
     private_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
@@ -306,10 +349,7 @@ def regenerate_server_files(
         common_name=common_name,
         alt_names=alt_names,
         valid_days=valid_days,
-        extended_key_usages=[
-            x509.oid.ExtendedKeyUsageOID.SERVER_AUTH,
-            x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH,
-        ],
+        extended_key_usages=[ExtendedKeyUsageOID.SERVER_AUTH, ExtendedKeyUsageOID.CLIENT_AUTH],
     )
 
     get_server_key_path().write_text(private_pem)
@@ -323,11 +363,7 @@ def reissue_server_files(valid_days: int = 365) -> bool:
     """Re-sign the server key+cert with the current CA, keeping its name and SANs."""
     cert = x509.load_pem_x509_certificate(get_server_cert_path().read_bytes())
     common_name = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
-    try:
-        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
-        alt_names = [str(name.value) for name in san]
-    except x509.ExtensionNotFound:
-        alt_names = [common_name]
+    alt_names = cert_alt_names(cert) or [common_name]
     return regenerate_server_files(
         common_name=common_name, alt_names=alt_names, valid_days=valid_days
     )
@@ -350,6 +386,40 @@ def cert_expires_in(cert_pem: str) -> "timedelta":
     """Return how long until the certificate expires (negative if already expired)."""
     cert = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
     return cert.not_valid_after_utc - datetime.now(timezone.utc)
+
+
+def issued_by_root_ca(cert: x509.Certificate) -> bool:
+    """Check the cert was signed directly by a trusted root CA.
+
+    A cert issued by a cluster intermediate chains to the root too, but is not accepted here.
+    """
+    for ca_cert in x509.load_pem_x509_certificates(get_ca_cert_path().read_bytes()):
+        try:
+            cert.verify_directly_issued_by(ca_cert)
+        except (ValueError, TypeError, InvalidSignature):
+            continue
+        return True
+    return False
+
+
+def is_ca_cert(cert: x509.Certificate) -> bool:
+    try:
+        return cert.extensions.get_extension_for_class(x509.BasicConstraints).value.ca
+    except x509.ExtensionNotFound:
+        return False
+
+
+def cert_alt_names(cert: x509.Certificate) -> list[str]:
+    """The cert's DNS, IP and URI SANs as strings, in the form _build_san accepts."""
+    try:
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    except x509.ExtensionNotFound:
+        return []
+    return [
+        str(name.value)
+        for name in san
+        if isinstance(name, (x509.DNSName, x509.IPAddress, x509.UniformResourceIdentifier))
+    ]
 
 
 def get_crl_path() -> Path:

@@ -165,4 +165,11 @@ services:
           - /root-addons-dashboard
         strip_path: true
 
-plugins: []
+plugins:
+  # Backends trust X-Client-Cert as set by the external gateway after verifying a
+  # client cert; nothing on this gateway may supply it.
+  - name: pre-function
+    config:
+      access:
+        - |
+          kong.service.request.clear_header("X-Client-Cert")
