@@ -31,7 +31,7 @@ func StartApiServer() error {
 	asynqClient = asynq.NewClient(redisOpt)
 	defer func() {
 		if err := asynqClient.Close(); err != nil {
-			logger.ErrorLogger().Printf("could not close asynq client: %v", err)
+			logger.ErrorLogger("could not close asynq client: %v", err)
 		}
 	}()
 
@@ -49,7 +49,7 @@ func getStatus(c *gin.Context) {
 func enqueue(c *gin.Context) {
 	body, err := c.GetRawData()
 	if err != nil {
-		logger.ErrorLogger().Printf("Received bad request: %v", err)
+		logger.ErrorLogger("Received bad request: %v", err)
 		c.Status(http.StatusBadRequest)
 		return
 	}
@@ -57,10 +57,10 @@ func enqueue(c *gin.Context) {
 	task := asynq.NewTask(TaskTypeScheduler, body)
 	info, err := asynqClient.Enqueue(task)
 	if err != nil {
-		logger.ErrorLogger().Printf("Task enqueue error: %v", err)
+		logger.ErrorLogger("Task enqueue error: %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
-	logger.InfoLogger().Printf("Task enqueued: ID=%s, Type=%s, Queue=%s, Payload=%s",
+	logger.InfoLogger("Task enqueued: ID=%s, Type=%s, Queue=%s, Payload=%s",
 		info.ID, info.Type, info.Queue, string(info.Payload))
 }

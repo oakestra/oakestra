@@ -48,18 +48,18 @@ func DeployFailed(jobID, status string) error {
 func doPost(payload any) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
-		logger.ErrorLogger().Println("Could not marshal deployment request")
+		logger.ErrorLogger("Could not marshal deployment request")
 		return err
 	}
 
 	resp, err := managerClient.Post(deployURL, "application/json", bytes.NewBuffer(data))
 	if err != nil {
-		logger.ErrorLogger().Println("Could not send deployment request")
+		logger.ErrorLogger("Could not send deployment request")
 		return err
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			logger.ErrorLogger().Printf("Could not close response body: %v", err)
+			logger.ErrorLogger("Could not close response body: %v", err)
 		}
 	}()
 
@@ -67,6 +67,6 @@ func doPost(payload any) error {
 		return fmt.Errorf("manager returned HTTP %d", resp.StatusCode)
 	}
 
-	logger.DebugLogger().Printf("Deployment request %s to url %s", string(data), deployURL)
+	logger.DebugLogger("Deployment request %s to url %s", string(data), deployURL)
 	return nil
 }

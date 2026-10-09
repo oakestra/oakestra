@@ -66,16 +66,16 @@ func formatInterestedResources(interestedResources []string) string {
 
 func AvailableResources[T placement.Candidate](data *[]T, requestParameters map[string]string, interestedResources []string) error {
 	url := resourceBaseURL + formatQuery(requestParameters, interestedResources)
-	logger.DebugLogger().Printf("Request URL: %v", url)
+	logger.DebugLogger("Request URL: %v", url)
 
 	resp, err := resourceClient.Get(url)
 	if err != nil {
-		logger.ErrorLogger().Println("Error fetching resources")
+		logger.ErrorLogger("Error fetching resources")
 		return err
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			logger.ErrorLogger().Println("Error closing body")
+			logger.ErrorLogger("Error closing body")
 		}
 	}()
 
@@ -84,7 +84,7 @@ func AvailableResources[T placement.Candidate](data *[]T, requestParameters map[
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(data); err != nil {
-		logger.ErrorLogger().Println("Error decoding body")
+		logger.ErrorLogger("Error decoding body")
 		return err
 	}
 

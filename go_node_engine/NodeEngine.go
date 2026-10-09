@@ -7,6 +7,6 @@ import (
 
 func main() {
 	if err := cmd.Execute(); err != nil {
-		logger.ErrorLogger().Printf("NodeEngine error executing: %v", err)
+		logger.ErrorLogger("NodeEngine error executing: %v", err)
 	}
 }
