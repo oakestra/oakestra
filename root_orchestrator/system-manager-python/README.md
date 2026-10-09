@@ -29,7 +29,7 @@ For how to use the endpoints, look in `gitlab.lrz.de/cm/2020-mehdi-masters-thesi
 
 ## Built With
 
-Python3.8 
+Python3.10
   - bson
   - Flask
   - Flask_PyMongo

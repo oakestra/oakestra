@@ -19,7 +19,7 @@ A virtualenv will be started and the component will start up.
 
 ## Built With
 
-Python 3.8
+Python 3.10
 - flask
 - flask_pymongo
 - flask-smorest

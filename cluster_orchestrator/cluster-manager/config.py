@@ -13,3 +13,7 @@ SYSTEM_MANAGER_ADDR = (
     os.environ.get("SYSTEM_MANAGER_URL") + ":" + os.environ.get("SYSTEM_MANAGER_GRPC_PORT")
 )
 GRPC_REQUEST_TIMEOUT = 120
+
+AGGREGATION_INTERVAL = int(os.environ.get("AGGREGATION_INTERVAL", 15))
+# seconds; deploy command sent but no worker ACK yet
+NODE_SCHEDULED_TIMEOUT = int(os.environ.get("NODE_SCHEDULED_TIMEOUT", 15))

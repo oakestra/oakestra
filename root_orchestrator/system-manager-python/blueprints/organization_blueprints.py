@@ -2,7 +2,6 @@
 # ......................................................#
 import logging
 
-from bson import json_util
 from flask import request
 from flask.views import MethodView
 from flask_jwt_extended import jwt_required
@@ -30,8 +29,9 @@ organizationblp = Blueprint(
 organization_schema = {
     "type": "object",
     "properties": {
+        "_id": {"type": "string"},
         "name": {"type": "string"},
-        "member": {"type": "array", "items": {"type": "string"}},
+        "member": {"type": "array", "items": {"type": "object"}},
     },
 }
 
@@ -41,6 +41,8 @@ class OrganizationControllerDelete(MethodView):
     @jwt_required()
     @require_role(Role.ADMIN)
     def delete(self, organizationid, *args, **kwargs):
+        if organizationid == "undefined" or not organizationid:
+            abort(400, {"message": "Invalid organization ID provided."})
         try:
             res = delete_organization(organizationid)
             if res:
@@ -53,6 +55,8 @@ class OrganizationControllerDelete(MethodView):
     @jwt_required()
     @require_role(Role.ADMIN)
     def put(self, organizationid, *args, **kwargs):
+        if organizationid == "undefined" or not organizationid:
+            abort(400, {"message": "Invalid organization ID provided."})
         try:
             update_organization(organizationid, request.get_json())
             return {"message": "Organization is updated"}
@@ -69,7 +73,7 @@ class OrganizationController(MethodView):
     @require_role(Role.ADMIN)
     def get(self, *args, **kwargs):
         try:
-            return json_util.dumps(get_all_organizations())
+            return get_all_organizations()
         except Exception as e:
             logger.error(e)
             return abort(404, {"message": e})
@@ -81,6 +85,16 @@ class OrganizationController(MethodView):
     @require_role(Role.ADMIN)
     def post(self, *args, **kwargs):
         try:
-            return json_util.dumps(add_organization(request.get_json()))
+            new_org = request.get_json()
+            new_id = add_organization(new_org)
+            new_org["_id"] = new_id
+
+            response_org = {
+                "_id": new_id,
+                "name": new_org.get("name"),
+                "member": new_org.get("member", []),
+            }
+            logger.info(f"Organization created with ID: {new_id}")
+            return response_org
         except ConnectionError as e:
             abort(404, {"message": e})

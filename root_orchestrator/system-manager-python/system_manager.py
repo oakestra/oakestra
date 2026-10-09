@@ -10,7 +10,6 @@ from pathlib import Path
 import grpc
 import requests
 from blueprints import blueprints
-from bson import json_util
 from ext_requests.jwt_generator_requests import get_public_key
 from ext_requests.mongodb_client import mongo_init
 from ext_requests.net_plugin_requests import net_register_cluster
@@ -29,6 +28,7 @@ from proto.clusterRegistration_pb2_grpc import (
 )
 from resource_abstractor_client import candidate_operations
 from sm_logging import configure_logging
+from utils.json_encoder import MongoJSONEncoder
 from utils.network import add_brackets_if_ipv6
 from werkzeug.utils import redirect, secure_filename
 
@@ -39,6 +39,7 @@ UPLOAD_FOLDER = "files"
 ALLOWED_EXTENSIONS = {"txt", "json", "yml"}
 
 app = Flask(__name__)
+app.json_encoder = MongoJSONEncoder
 
 app.config["OPENAPI_VERSION"] = "3.0.2"
 app.config["API_TITLE"] = "Oakestra root api"
@@ -226,7 +227,7 @@ def upload_file():
             filename = secure_filename(file.filename)
             file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
             response = {"path": str(Path(filename).absolute())}
-            return str(json_util.dumps(response))
+            return response
     return """
     <!doctype html>
     <h1>Not a valid request</h1>

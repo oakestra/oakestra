@@ -39,7 +39,7 @@ def mongo_delete_organization(organization_id):
     logger.info("MONGODB - delete organization...")
     db.mongo_organization.find_one_and_delete({"_id": ObjectId(organization_id)})
     logger.info("MONGODB - organization deleted")
-    return db.mongo_organization.find()
+    return list(db.mongo_organization.find())
 
 
 def mongo_get_organization_by_name(organization_name):

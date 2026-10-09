@@ -1,4 +1,4 @@
-from _datetime import datetime
+from datetime import datetime, timezone
 
 from bson.objectid import ObjectId
 
@@ -6,7 +6,7 @@ CANDIDATES_FRESHNESS_INTERVAL = 30
 
 
 def get_freshness_threshold():
-    now_timestamp = datetime.now().timestamp()
+    now_timestamp = datetime.now(timezone.utc).timestamp()
     return now_timestamp - CANDIDATES_FRESHNESS_INTERVAL
 
 

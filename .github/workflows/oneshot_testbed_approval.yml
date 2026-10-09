@@ -16,12 +16,49 @@ jobs:
     name: Waiting Termination of Testbed Oneshot Execution Workflow
     if: ${{ github.event.review.state == 'approved' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
+        # The testbed execution can be triggered/re-run several times, leaving multiple
+        # check runs with the same name on `develop`. We only care about the most recent
+        # one, so we track the run that this approval just triggered and report only its
+        # outcome (instead of requiring every historical run to be a success).
         - name: Testbed Oneshot Execution - Waiting cycle
-          uses: lewagon/wait-on-check-action@v1.3.4
-          with:
-              ref: develop
-              check-name: Trigger Testbed Oneshot Execution ${{ github.event.pull_request.head.ref }}
-              repo-token: ${{ secrets.GITHUB_TOKEN }}
-              wait-interval: 20
-              allowed-conclusions: success
+          env:
+              GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              REPO: ${{ github.repository }}
+              REF: develop
+              CHECK_NAME: Trigger Testbed Oneshot Execution ${{ github.event.pull_request.head.ref }}
+              WAIT_INTERVAL: '20'
+          run: |
+              set -euo pipefail
+
+              # Phase 1: wait until the freshly-triggered run shows up (queued/in_progress)
+              # and capture its id, so we follow that exact run and ignore older ones.
+              echo "Waiting for a new '${CHECK_NAME}' run to start on ${REF}..."
+              target_id=""
+              while [ -z "$target_id" ]; do
+                target_id=$(gh api "repos/${REPO}/commits/${REF}/check-runs" --paginate \
+                  --jq "[.check_runs[] | select(.name == \"${CHECK_NAME}\" and .status != \"completed\")] | sort_by(.started_at) | last | .id // empty")
+                if [ -z "$target_id" ]; then
+                  echo "  no in-progress run yet; retrying in ${WAIT_INTERVAL}s..."
+                  sleep "$WAIT_INTERVAL"
+                fi
+              done
+              echo "Tracking check run id=${target_id}"
+
+              # Phase 2: wait for that specific run to complete and report only its conclusion.
+              while true; do
+                run=$(gh api "repos/${REPO}/check-runs/${target_id}")
+                status=$(echo "$run" | jq -r '.status')
+                conclusion=$(echo "$run" | jq -r '.conclusion')
+                echo "  status=${status} conclusion=${conclusion}"
+                if [ "$status" = "completed" ]; then
+                  if [ "$conclusion" = "success" ]; then
+                    echo "Latest testbed run succeeded."
+                    exit 0
+                  fi
+                  echo "Latest testbed run concluded with '${conclusion}'."
+                  exit 1
+                fi
+                sleep "$WAIT_INTERVAL"
+              done

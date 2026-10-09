@@ -23,7 +23,8 @@ def net_inform_service_deploy(job, job_id):
     logger.debug(request_addr)
 
     logger.debug(f"Inform service deploy with id {job_id}")
-    r = requests.post(request_addr, json={"deployment_descriptor": job, "_id": job_id}, timeout=10)
+    payload = {"deployment_descriptor": job, "_id": job_id}
+    r = requests.post(request_addr, json=payload, timeout=10)
     r.raise_for_status()
 
 

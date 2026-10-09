@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from bson.objectid import ObjectId
 
@@ -80,7 +80,7 @@ def find_candidate_by_name(candidate_name):
 
 
 def update_timestamp(data):
-    datetime_now = datetime.now()
+    datetime_now = datetime.now(timezone.utc)
 
     if "_id" in data:
         data.pop("_id")

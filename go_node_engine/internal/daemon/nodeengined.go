@@ -33,9 +33,8 @@ func main() {
 		return
 	}
 
-	configManager := config.GetConfFileManager()
 	var err error
-	configs, err = configManager.Get()
+	configs, err = config.Read()
 	if err != nil {
 		logger.ErrorLogger().Fatal(err)
 	}
@@ -82,7 +81,7 @@ func main() {
 
 	// enable overlay network if required
 	switch configs.OverlayNetwork {
-	case config.AUTO_OAK_NETWORK:
+	case config.AutoOakNetwork:
 		logger.InfoLogger().Printf("Looking for local NetManager socket.")
 		cmd := exec.Command("systemctl", "start", "netmanager")
 		_ = cmd.Run()
@@ -103,7 +102,7 @@ func main() {
 		// wait for systemctl to start the netmanager service
 		logger.InfoLogger().Printf("Waiting for NetManager to start...")
 		time.Sleep(5 * time.Second)
-		err := requests.RegisterSelfToNetworkComponent()
+		err := requests.RegisterSelfToNetworkComponent(configs)
 		if err != nil {
 			logger.ErrorLogger().Fatalf("Error registering to NetManager: %v", err)
 		}

@@ -140,7 +140,7 @@ def aggregate_workers(workers):
     return result
 
 
-def aggregate_info(time_interval):
+def aggregate_info():
     workers = candidate_operations.get_candidates(active=True)
 
     if workers is None:

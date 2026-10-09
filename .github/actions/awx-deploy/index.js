@@ -1,22 +1,22 @@
-const core = require('@actions/core');
-const axios = require('axios');
-const https = require('https');
-const sslRootCAs = require('ssl-root-cas');
+import * as core from '@actions/core';
+import axios from 'axios';
+import https from 'https';
+import sslRootCAs from 'ssl-root-cas';
 
+https.globalAgent.options.ca = sslRootCAs.create();
+
+const POLL_INTERVAL_MS = 60_000;
+const TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 async function triggerAWX() {
   try {
-
-    // Add SSL root CAs to the global HTTPS agent
-    https.globalAgent.options.ca = sslRootCAs.create();
-
-
     const awxUrl = core.getInput('AWX_URL');
     const token = core.getInput('AWX_TOKEN');
     const workflowTemplateId = core.getInput('AWX_TEMPLATE_ID');
     const pullRequestBranch = core.getInput('PR_BRANCH');
     const pullRequestCommit = core.getInput('PR_COMMIT');
     const pullRequestUser = core.getInput('PR_USER');
+    const forkRepo = core.getInput('FORK_REPO');
 
     const headers = {
       'Authorization': `Bearer ${token}`,
@@ -28,42 +28,42 @@ async function triggerAWX() {
       oak_repo_commit: pullRequestCommit,
       oak_branch: pullRequestBranch, //compatibility with oak custom workflow
       oak_commit: pullRequestCommit, //compatibility with oak custom workflow
-      pr_fork_user: pullRequestUser
+      pr_fork_user: pullRequestUser,
+      pr_fork_repo: forkRepo //compatibility for PRs coming from forks
     };
 
-    // Print the URL, template ID, branch, and commit
-    console.log(`🌱 Branch: ${pullRequestBranch}`);
-    console.log(`#️⃣ Commit: ${pullRequestCommit}`);
-    console.log(`👷 PR Commit Author: ${pullRequestUser}`);
+    core.info(`🌱 Branch: ${pullRequestBranch}`);
+    core.info(`#️⃣ Commit: ${pullRequestCommit}`);
+    core.info(`👷 PR Commit Author: ${pullRequestUser}`);
 
     // Step 1: Trigger the workflow job template
     const jobLaunchUrl = `https://${awxUrl}/api/v2/workflow_job_templates/${workflowTemplateId}/launch/`;
     const response = await axios.post(jobLaunchUrl, { extra_vars: extraVars }, { headers });
 
-    const jobId = response.data.workflow_job;  // ID of the launched job
+    const jobId = response.data.workflow_job;
+    core.info(`🆔 Execution ID: ${jobId}`);
 
-    console.log(`🆔 Execution ID: ${jobId}`);
-
-    // Step 2: Poll the job status
+    // Step 2: Poll the job status until terminal state or timeout
     const jobStatusUrl = `https://${awxUrl}/api/v2/workflow_jobs/${jobId}/`;
-    let status = '';
+    const deadline = Date.now() + TIMEOUT_MS;
 
-    while (true) {
+    while (Date.now() < deadline) {
       const jobResponse = await axios.get(jobStatusUrl, { headers });
-      status = jobResponse.data.status;
+      const status = jobResponse.data.status;
 
-      console.log(`⚙️ Current job status: ${status} ⏳`);
+      core.info(`⚙️ Current job status: ${status} ⏳`);
 
       if (status === 'successful') {
-        console.log('🎉 ✅ 🎉  Tests passed successfully! 🎉 ✅ 🎉');
+        core.info('🎉 ✅ 🎉  Tests passed successfully! 🎉 ✅ 🎉');
         return;
       } else if (['failed', 'error', 'canceled'].includes(status)) {
         throw new Error(` 🔴 Tests execution failed with status: ${status} 🔴 `);
       }
 
-      // Wait for 1 minute before checking the status again
-      await new Promise(resolve => setTimeout(resolve, 60000));
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
     }
+
+    throw new Error('Timed out waiting for AWX job to reach a terminal state');
 
   } catch (error) {
     core.setFailed(`Action failed: ${error.message}`);

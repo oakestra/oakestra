@@ -22,10 +22,12 @@ SYSTEM_MANAGER_ADDR = (
 )
 
 
-def send_aggregated_info_to_sm(my_id, time_interval):
+def send_aggregated_info_to_sm(my_id, running_timeout, node_scheduled_timeout):
     try:
-        data = resource_aggregation.aggregate_info(time_interval)
-        data.update({"jobs": job_management.aggregate_info(time_interval)})
+        data = resource_aggregation.aggregate_info()
+        data.update(
+            {"jobs": job_management.aggregate_info(running_timeout, node_scheduled_timeout)}
+        )
         logger.debug("sending aggregated info to system manager: %s", data)
         threading.Thread(group=None, target=send_aggregated_info, args=(my_id, data)).start()
         prometheus_set_metrics(data)

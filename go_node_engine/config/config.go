@@ -7,14 +7,18 @@ import (
 	"go_node_engine/logger"
 	"os"
 	"strings"
+	"sync"
 )
 
 const (
-	DEFAULT_LOG_DIR  = "/tmp"
-	AUTO_OAK_NETWORK = "default"
-	PUBLIC_IP_FALSE  = PublicIPMode("false")
-	PUBLIC_IP_AUTO   = PublicIPMode("auto")
+	DefaultLogDir  = "/tmp"
+	AutoOakNetwork = "default"
+	PublicIPFalse  = PublicIPMode("false")
+	PublicIPAuto   = PublicIPMode("auto")
+)
 
+// Need to use a variable for the config path so that tests can override it
+var (
 	confDir  = "/etc/oakestra"
 	confPath = "/etc/oakestra/conf.json"
 )
@@ -50,10 +54,10 @@ type PublicIPMode string
 func ParsePublicIPMode(mode string) PublicIPMode {
 	normalized := strings.TrimSpace(strings.ToLower(mode))
 	switch normalized {
-	case "", string(PUBLIC_IP_FALSE):
-		return PUBLIC_IP_FALSE
-	case string(PUBLIC_IP_AUTO), "true":
-		return PUBLIC_IP_AUTO
+	case "", string(PublicIPFalse):
+		return PublicIPFalse
+	case string(PublicIPAuto), "true":
+		return PublicIPAuto
 	default:
 		return PublicIPMode(strings.TrimSpace(mode))
 	}
@@ -65,21 +69,21 @@ func (m PublicIPMode) normalized() string {
 
 func (m PublicIPMode) IsDisabled() bool {
 	normalized := m.normalized()
-	return normalized == "" || normalized == string(PUBLIC_IP_FALSE)
+	return normalized == "" || normalized == string(PublicIPFalse)
 }
 
 func (m PublicIPMode) IsAuto() bool {
 	normalized := m.normalized()
-	return normalized == string(PUBLIC_IP_AUTO) || normalized == "true"
+	return normalized == string(PublicIPAuto) || normalized == "true"
 }
 
 func (m PublicIPMode) Value() string {
 	normalized := m.normalized()
-	if normalized == "" || normalized == string(PUBLIC_IP_FALSE) {
-		return string(PUBLIC_IP_FALSE)
+	if normalized == "" || normalized == string(PublicIPFalse) {
+		return string(PublicIPFalse)
 	}
-	if normalized == string(PUBLIC_IP_AUTO) || normalized == "true" {
-		return string(PUBLIC_IP_AUTO)
+	if normalized == string(PublicIPAuto) || normalized == "true" {
+		return string(PublicIPAuto)
 	}
 	return strings.TrimSpace(string(m))
 }
@@ -92,10 +96,10 @@ func (m *PublicIPMode) UnmarshalJSON(data []byte) error {
 	var boolMode bool
 	if err := json.Unmarshal(data, &boolMode); err == nil {
 		if boolMode {
-			*m = PUBLIC_IP_AUTO
+			*m = PublicIPAuto
 			return nil
 		}
-		*m = PUBLIC_IP_FALSE
+		*m = PublicIPFalse
 		return nil
 	}
 
@@ -115,10 +119,10 @@ type Addon struct {
 }
 
 type Virtualization struct {
-	Name    string   `json:"virutalizaiton_name"`
-	Runtime string   `json:"virutalizaiton_runtime"`
-	Active  bool     `json:"virutalizaiton_active"`
-	Config  []string `json:"virutalizaiton_config"`
+	Name    string   `json:"virtualization_name"`
+	Runtime string   `json:"virtualization_runtime"`
+	Active  bool     `json:"virtualization_active"`
+	Config  []string `json:"virtualization_config"`
 }
 
 // CSIDriverType describes a locally available CSI plugin endpoint.
@@ -131,40 +135,47 @@ type CSIDriverType struct {
 	Endpoint string `json:"csi_driver_endpoint"`
 }
 
-type ConfFileManager interface {
-	Get() (ConfFile, error)
-	Write(ConfFile) error
-}
+// mu serializes all reads and writes to confPath within this process.
+var mu sync.Mutex
 
-func GetConfFileManager() ConfFileManager {
-	f := ConfFile{}
-	return &f
-}
+// Read loads the node configuration from /etc/oakestra/conf.json. If the file
+// is missing or empty it writes and returns the default configuration.
+func Read() (ConfFile, error) {
+	mu.Lock()
+	defer mu.Unlock()
 
-func (c *ConfFile) Get() (ConfFile, error) {
 	data, err := os.ReadFile(confPath)
 	if errors.Is(err, os.ErrNotExist) || (err == nil && len(data) == 0) {
 		logger.InfoLogger().Printf("Config file missing or empty, using default configuration")
-		def := GenDefaultConfig()
-		return def, c.Write(def)
+		def := Default()
+		return def, writeLocked(def)
 	}
 	if err != nil {
-		return *c, err
+		return ConfFile{}, err
 	}
 
 	var clusterConf ConfFile
 	if err := json.Unmarshal(data, &clusterConf); err != nil {
 		logger.ErrorLogger().Printf("Error reading configuration: %v, resetting the file\n", err)
-		if resetErr := c.Write(GenDefaultConfig()); resetErr != nil {
-			return *c, resetErr
+		if resetErr := writeLocked(Default()); resetErr != nil {
+			return ConfFile{}, resetErr
 		}
-		return *c, err
+		return ConfFile{}, err
 	}
 	return clusterConf, nil
 }
 
-func (c *ConfFile) Write(new ConfFile) error {
-	data, err := json.Marshal(new)
+// Write persists the given node configuration to /etc/oakestra/conf.json,
+// overwriting any existing content.
+func Write(conf ConfFile) error {
+	mu.Lock()
+	defer mu.Unlock()
+	return writeLocked(conf)
+}
+
+// writeLocked assumes mu is already held by the caller.
+func writeLocked(conf ConfFile) error {
+	data, err := json.Marshal(conf)
 	if err != nil {
 		return err
 	}
@@ -175,15 +186,17 @@ func (c *ConfFile) Write(new ConfFile) error {
 	return os.WriteFile(confPath, data, 0644)
 }
 
-func GenDefaultConfig() ConfFile {
+// Default returns the built-in node configuration used when no config file
+// exists yet or an existing one cannot be parsed.
+func Default() ConfFile {
 	return ConfFile{
 		ConfVersion:    "1.0",
 		ClusterAddress: "0.0.0.0",
 		ClusterPort:    10100,
 		ClusterSSL:     false,
-		AppLogs:        DEFAULT_LOG_DIR,
-		OverlayNetwork: AUTO_OAK_NETWORK,
-		PublicIp:       PUBLIC_IP_FALSE,
+		AppLogs:        DefaultLogDir,
+		OverlayNetwork: AutoOakNetwork,
+		PublicIp:       PublicIPFalse,
 		NetPort:        0,
 		Virtualizations: []Virtualization{
 			{
