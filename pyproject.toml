@@ -1,3 +1,15 @@
+[project]
+name = "oakestra"
+version = "0.0.0"
+requires-python = ">=3.10.13"
+
+[tool.uv.workspace]
+members = [
+    "cluster_orchestrator/cluster-manager",
+    "root_orchestrator/system-manager-python",
+    "libraries/*",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"
@@ -11,5 +23,10 @@ extend-select = [
     "I",  # isort
 ]
 ignore = [
-    "TD003",  # missing-todo-link. Ignored because we don't require adding tickets to TODOs
+    "TD003",  # missing to-do link: ignored because we don't require adding tickets to to-dos
+    "TD002",  # missing to-do author: ignored because we don't specify authors for all to-dos currently
+    "BLE001", # blind "Exception" catch: ignored because we currently rely on this a lot
+    "EXE002", # executable script without shebang: ignored because we don't really expect it to be executed directly
+    "LOG015", # direct use of root-logger: ignored because root system-manager relies on it a lot -> TODO: we should fix this
+    "DTZ005", # datetime.now() without timezone: ignored because root system-manager relies on it -> TODO: we should fix this
 ]

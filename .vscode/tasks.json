@@ -129,43 +129,43 @@
         {
             "label": "install-cluster-manager-dependencies",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/cluster_orchestrator/cluster-manager/requirements.txt && ${command:python.interpreterPath} -m pip install ${workspaceRoot}/libraries/oakestra_utils_library ${workspaceRoot}/libraries/resource_abstractor_client" ,
+            "command": "uv sync --package cluster-manager",
             "problemMatcher": []
         },
         {
             "label": "install-root-manager-dependencies",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/root_orchestrator/system-manager-python/requirements.txt && ${command:python.interpreterPath} -m pip install ${workspaceRoot}/libraries/oakestra_utils_library ${workspaceRoot}/libraries/resource_abstractor_client" ,
+            "command": "uv sync --package system-manager",
             "problemMatcher": []
         },
         {
             "label": "install-resource-abstractor-dependencies",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/resource-abstractor/requirements.txt",
+            "command": "python3 -m venv ${workspaceRoot}/resource-abstractor/.venv && ${workspaceRoot}/resource-abstractor/.venv/bin/pip install -r ${workspaceRoot}/resource-abstractor/requirements.txt",
             "problemMatcher": []
         },
         {
             "label": "install-jwt-generator-dependencies",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/root_orchestrator/jwt-generator/requirements.txt",
+            "command": "python3 -m venv ${workspaceRoot}/root_orchestrator/jwt-generator/.venv && ${workspaceRoot}/root_orchestrator/jwt-generator/.venv/bin/pip install -r ${workspaceRoot}/root_orchestrator/jwt-generator/requirements.txt",
             "problemMatcher": []
         },
         {
             "label": "install-addons-manager-dependencies",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/addons_engine/addons-manager/requirements.txt",
+            "command": "python3 -m venv ${workspaceRoot}/addons_engine/addons-manager/.venv && ${workspaceRoot}/addons_engine/addons-manager/.venv/bin/pip install -r ${workspaceRoot}/addons_engine/addons-manager/requirements.txt",
             "problemMatcher": []
         },
         {
             "label": "install-addons-monitor-dependencies",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/addons_engine/addons-monitor/requirements.txt",
+            "command": "python3 -m venv ${workspaceRoot}/addons_engine/addons-monitor/.venv && ${workspaceRoot}/addons_engine/addons-monitor/.venv/bin/pip install -r ${workspaceRoot}/addons_engine/addons-monitor/requirements.txt",
             "problemMatcher": []
         },
         {
             "label": "install-marketplace-manager-dependencies",
             "type": "shell",
-            "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/addons_marketplace/marketplace-manager/requirements.txt",
+            "command": "python3 -m venv ${workspaceRoot}/addons_marketplace/marketplace-manager/.venv && ${workspaceRoot}/addons_marketplace/marketplace-manager/.venv/bin/pip install -r ${workspaceRoot}/addons_marketplace/marketplace-manager/requirements.txt",
             "problemMatcher": []
         },
         {
