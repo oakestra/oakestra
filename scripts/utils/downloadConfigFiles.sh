@@ -1,6 +1,6 @@
 #!/bin/bash
 
-config_files="prometheus/prometheus.yml mosquitto/mosquitto.conf config/grafana-dashboards.yml config/grafana-datasources.yml config/loki.yml config/config.alloy config/alerts/grafana-rules.yml config/alerts/grafana-contact-point.yml config/dashboards/dashboard.json config/dashboards/logs-dashboard.json"
+config_files="prometheus/prometheus.yml mosquitto/mosquitto.conf config/grafana-dashboards.yml config/grafana-datasources.yml config/loki.yml config/config.alloy config/alerts/grafana-rules.yml config/alerts/grafana-contact-point.yml config/dashboards/logs-dashboard.json config/dashboards/log-statistics-dashboard.json"
 repo_folder=$1
 repo_branch=$2
 
@@ -8,6 +8,9 @@ mkdir -p config/alerts 2> /dev/null
 mkdir -p config/dashboards 2> /dev/null
 mkdir prometheus 2> /dev/null
 mkdir mosquitto 2> /dev/null
+
+# Remove the retired combined logs and statistics dashboard.
+rm -f config/dashboards/dashboard.json
 
 for config_file in ${config_files}; do
     rm $config_file 2> /dev/null
