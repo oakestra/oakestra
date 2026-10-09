@@ -41,6 +41,12 @@ services:
   # Observability Stack
   grafana:
     network_mode: host
+    environment:
+      - PROMETHEUS_URL=http://127.0.0.1:10010
+
+  prometheus:
+    ports:
+      - 127.0.0.1:10010:9090
 
   loki:
     network_mode: host
