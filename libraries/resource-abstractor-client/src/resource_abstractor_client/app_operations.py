@@ -37,9 +37,9 @@ def create_app(user_id, data):
 
 
 def update_app(app_id, user_id, data):
+    # Don't put userId in the body, that would make the caller the new owner.
     request_address = f"{APPS_API}/{app_id}"
-    data["userId"] = user_id
-    return make_request(patch, request_address, json=data)
+    return make_request(patch, request_address, params={"userId": user_id}, json=data)
 
 
 def delete_app(app_id):

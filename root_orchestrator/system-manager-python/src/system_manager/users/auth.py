@@ -164,7 +164,7 @@ def user_create_password_reset_request(username, domain, reset_token, expiration
     )
 
     email = {
-        "link": "http://" + domain + "/resetPassword/" + reset_token_hash,
+        "link": "http://" + domain + "/resetPassword/" + reset_token,
         "expiry_delta": expiration,
     }
 
