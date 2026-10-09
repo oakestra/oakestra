@@ -1,7 +1,7 @@
 from db import jobs_db as apps_db
-from flask import jsonify
+from flask import jsonify, request
 from flask.views import MethodView
-from flask_smorest import Blueprint
+from flask_smorest import Blueprint, abort
 from marshmallow import Schema, fields
 from services.hook_service import pre_post_hook
 
@@ -49,6 +49,9 @@ class ApplicationController(MethodView):
     @pre_post_hook("applications", with_param_id="app_id")
     def patch(self, data, *args, **kwargs):
         app_id = kwargs.get("app_id")
-        result = apps_db.update_app(app_id, data)
+        user_filter = {"userId": request.args["userId"]} if "userId" in request.args else {}
+        result = apps_db.update_app(app_id, data, user_filter)
+        if result is None:
+            abort(404, message="Application not found")
 
         return jsonify(result)
