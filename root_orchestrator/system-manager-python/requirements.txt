@@ -23,7 +23,9 @@ grpcio-tools~=1.75.1
 protobuf>=4.25.2,<7.0.0
 cryptography==44.0.1
 gunicorn==22.0.0
-# Oakestra shared libraries (resource_abstractor_client, oakestra_utils_library)
+# Oakestra shared libraries (resource_abstractor_client, oakestra_utils_library,
+# oakestra_logging)
 # are installed from the local libraries/ folder, NOT from git. See the Dockerfile
 # and CI. For local dev install them with:
-#   pip install ../../libraries/resource_abstractor_client ../../libraries/oakestra_utils_library
+#   pip install ../../libraries/resource_abstractor_client \
+#     ../../libraries/oakestra_utils_library ../../libraries/oakestra_logging

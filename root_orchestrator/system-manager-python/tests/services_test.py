@@ -1,18 +1,10 @@
 import copy
-import os
-import sys
-from unittest.mock import ANY, MagicMock, Mock, patch
+from unittest.mock import ANY, Mock, patch
 
+import pytest
 from resource_abstractor_client import app_operations, job_operations
-
-from tests.utils import get_first_app, get_full_random_sla_app
-
-sys.modules["ext_requests.net_plugin_requests"] = Mock()
-net_plugin = sys.modules["ext_requests.net_plugin_requests"]
-net_plugin.net_inform_service_deploy = MagicMock()
-
-# we ignore E402 because we need to import the service_management module after the mock
-from services.service_management import (  # noqa: E402
+from services import service_management
+from services.service_management import (
     create_services_of_app,
     delete_service,
     generate_db_structure,
@@ -22,12 +14,24 @@ from services.service_management import (  # noqa: E402
     user_services,
 )
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
+from tests.utils import get_first_app, get_full_random_sla_app
 
 resource_abstractor = "http://localhost:11011"
 
 
-def test_create_service_with_app():
+@pytest.fixture(autouse=True)
+def net_plugin(monkeypatch):
+    plugin = Mock()
+    monkeypatch.setattr(
+        service_management, "net_inform_service_deploy", plugin.net_inform_service_deploy
+    )
+    monkeypatch.setattr(
+        service_management, "net_inform_service_undeploy", plugin.net_inform_service_undeploy
+    )
+    return plugin
+
+
+def test_create_service_with_app(net_plugin):
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
         new=str(resource_abstractor),
