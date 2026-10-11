@@ -5,6 +5,7 @@ import requests
 from network.utils import sanitize
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
+from utils import client_identity
 
 NOTIFY_INTEREST_ENDPOINT = "/api/net/job/update"
 
@@ -26,6 +27,8 @@ CLUSTER_GATEWAY_TRUST = os.environ.get("CLUSTER_GATEWAY_TRUST", "")
 
 
 def _mtls_enabled() -> bool:
+    if not client_identity.GATEWAY_ENABLED:
+        return False
     return all(
         path and os.path.isfile(path) for path in (ROOT_CERT_FILE, ROOT_KEY_FILE, ROOT_CA_FILE)
     )
