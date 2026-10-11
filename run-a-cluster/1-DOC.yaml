@@ -57,7 +57,7 @@ services:
 
   # MongoDB in Root Orchestrator
   mongo_root:
-    image: mongo:8.0
+    image: mongo:8.0.32
     pull_policy: always
     container_name: mongo
     hostname: mongo
@@ -67,11 +67,14 @@ services:
       - "10007"
     volumes:
       - 'mongodb_data:/mongodb'
+    # Check oakestra pr #586 for details on why this is needed.
+    environment:
+      - GLIBC_TUNABLES=glibc.pthread.rseq=1
     command: mongod --port 10007
 
   # cluster-level mongoDB
   mongo_rootnet:
-    image: mongo:8.0
+    image: mongo:8.0.32
     pull_policy: always
     container_name: mongo_net
     hostname: mongo_net
@@ -83,6 +86,9 @@ services:
       - "10008"
     volumes:
       - 'mongodb_net_data:/mongodb'
+    # Check oakestra pr #586 for details on why this is needed.
+    environment:
+      - GLIBC_TUNABLES=glibc.pthread.rseq=1
     command: mongod --port 10008
     logging: *default-logging
 
@@ -207,7 +213,7 @@ services:
 
   # cluster-level mongoDB
   mongo_cluster:
-    image: mongo:8.0
+    image: mongo:8.0.32
     pull_policy: always
     container_name: cluster_mongo
     hostname: cluster_mongo
@@ -217,11 +223,14 @@ services:
       - "10107"
     volumes:
       - 'mongodb_cluster_data:/mongodb'
+    # Check oakestra pr #586 for details on why this is needed.
+    environment:
+      - GLIBC_TUNABLES=glibc.pthread.rseq=1
     command: mongod --port 10107
 
   # cluster-level mongoDB
   mongo_clusternet:
-    image: mongo:8.0
+    image: mongo:8.0.32
     pull_policy: always
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
@@ -231,6 +240,9 @@ services:
       - "10108"
     volumes:
       - 'mongodb_cluster_net_data:/mongodb'
+    # Check oakestra pr #586 for details on why this is needed.
+    environment:
+      - GLIBC_TUNABLES=glibc.pthread.rseq=1
     command: mongod --port 10108
 
 

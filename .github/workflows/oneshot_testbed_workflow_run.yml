@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Resolve the fork repository to pass to the `awx-deploy` action.
       - name: Resolve fork repository

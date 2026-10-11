@@ -22,11 +22,11 @@ def delete_app(app_id):
     return db.mongo_apps.find_one_and_delete(filter)
 
 
-def update_app(app_id, data):
+def update_app(app_id, data, extra_filter=None):
     data.pop("_id", None)
 
     return db.mongo_apps.find_one_and_update(
-        {"_id": ObjectId(app_id)},
+        {**(extra_filter or {}), "_id": ObjectId(app_id)},
         {"$set": data},
         return_document=True,
     )

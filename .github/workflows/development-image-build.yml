@@ -17,14 +17,14 @@ jobs:
       matrix: ${{ steps.folders.outputs.value }}
     steps:
       - name: Run
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Get all matching changed files
         id: changed-files
-        uses: tj-actions/changed-files@v44
+        uses: tj-actions/changed-files@v47
         with:
           since_last_remote_commit: true 
           files: |
@@ -80,14 +80,14 @@ jobs:
         value: ${{fromJSON(needs.gather-modified-files.outputs.matrix)}}
     steps:      
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@79abd3f86f79a9d68a23c75a09a9a85889262adf
+        uses: docker/setup-buildx-action@v4
 
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@v3
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |
@@ -95,7 +95,7 @@ jobs:
   
       - name: Set up QEMU
         id: qemu
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v4
         with:
             image: tonistiigi/binfmt:latest
             platforms: all
@@ -105,7 +105,7 @@ jobs:
         env:
             DOCKERFILE_CONTEXT: ${{ matrix.value }}
         id: build-and-push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
             context: |
                 ${{format('./{0}/', matrix.value)}}
