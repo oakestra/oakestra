@@ -62,7 +62,7 @@ def test_create_service_with_app(net_plugin):
             sla_first_app["application_namespace"],
             "Admin",
         )
-        net_plugin.net_inform_service_deploy.assert_called_with(last_service, ANY)
+        net_plugin.deploy.assert_called_with(last_service, ANY)
         assert len(result["microservices"]) == len(sla_first_app["microservices"])
 
 
