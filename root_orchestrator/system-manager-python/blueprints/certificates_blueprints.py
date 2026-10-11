@@ -208,7 +208,7 @@ class CertificateAuthorityFileController(Resource):
     def get(self):
         ensure_ca_files()
         if not get_ca_cert_path().exists():
-            abort(404, {"message": "CA certificate not found"})
+            abort(404, message="CA certificate not found")
         return send_file(
             get_ca_cert_path(),
             mimetype="application/x-pem-file",
@@ -233,7 +233,7 @@ class CertificateSigningController(Resource):
         csr_pem = content.get("csr") or ""
         common_name = content.get("common_name") or ""
         if not csr_pem.strip():
-            abort(400, {"message": "csr is required"})
+            abort(400, message="csr is required")
 
         try:
             signed_certificate = sign_csr_pem(
@@ -243,9 +243,9 @@ class CertificateSigningController(Resource):
                 valid_days=int(content.get("valid_days") or 365),
             )
         except FileNotFoundError:
-            abort(409, {"message": "CA material not initialized"})
+            abort(409, message="CA material not initialized")
         except ValueError as e:
-            abort(400, {"message": f"Invalid CSR format: {str(e)}"})
+            abort(400, message=f"Invalid CSR format: {str(e)}")
 
         return {"certificate": signed_certificate}
 
@@ -272,9 +272,9 @@ class CertificateClientGenerateController(Resource):
                 valid_days=valid_days,
             )
         except FileNotFoundError:
-            abort(409, {"message": "CA material not initialized"})
+            abort(409, message="CA material not initialized")
         except ValueError as e:
-            abort(400, {"message": f"Certificate generation failed: {str(e)}"})
+            abort(400, message=f"Certificate generation failed: {str(e)}")
 
         return {"private_key": private_pem, "certificate": cert_pem}
 
@@ -309,7 +309,7 @@ class ClusterBootstrapController(Resource):
         # Uniform 401 for missing/unknown/expired/reused tokens — no oracle.
         token_doc = consume_registration_token(token, TOKEN_TYPE_CLUSTER)
         if token_doc is None or not token_doc.get("cluster_id"):
-            abort(401, {"message": "invalid registration token"})
+            abort(401, message="invalid registration token")
         cluster_id = token_doc["cluster_id"]
 
         try:
@@ -317,9 +317,9 @@ class ClusterBootstrapController(Resource):
                 cluster_id
             )
         except FileNotFoundError:
-            abort(409, {"message": "Root CA material not initialized"})
+            abort(409, message="Root CA material not initialized")
         except ValueError as e:
-            abort(400, {"message": f"Certificate generation failed: {str(e)}"})
+            abort(400, message=f"Certificate generation failed: {str(e)}")
 
         logger.info(
             f"Cluster bootstrap: issued certificates for cluster {cluster_id} '{cluster_name}'"
@@ -390,12 +390,12 @@ class CertificateRevokeController(Resource):
         content = request.get_json(silent=True) or {}
         cert_pem = content.get("cert_pem") or ""
         if not cert_pem.strip():
-            abort(400, {"message": "cert_pem is required"})
+            abort(400, message="cert_pem is required")
 
         try:
             cert = _x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
         except Exception as e:
-            abort(400, {"message": f"Invalid certificate PEM: {e}"})
+            abort(400, message=f"Invalid certificate PEM: {e}")
 
         serial_hex = format(cert.serial_number, "x")
         cert_subject = cert.subject.rfc4514_string()
@@ -430,7 +430,7 @@ class CertificateUnrevokeController(Resource):
         """Un-revoke a single certificate by serial number (hex, as listed by GET /revoke)."""
         serial_hex = kwargs["serial_hex"]
         if not remove_revoked_cert(serial_hex):
-            abort(404, {"message": f"Serial {serial_hex} is not revoked"})
+            abort(404, message=f"Serial {serial_hex} is not revoked")
         return {"message": "Certificate un-revoked", "serial_hex": serial_hex, **refresh_root_crl()}
 
 
@@ -455,9 +455,9 @@ class CertificateAuthorityRotateController(Resource):
         try:
             grace_hours = float(content.get("grace_period_hours", ROTATION_GRACE_PERIOD_HOURS))
         except (TypeError, ValueError):
-            abort(400, {"message": "grace_period_hours must be a number"})
+            abort(400, message="grace_period_hours must be a number")
         if grace_hours < 0:
-            abort(400, {"message": "grace_period_hours must not be negative"})
+            abort(400, message="grace_period_hours must not be negative")
         rotated_at = datetime.now(timezone.utc)
 
         ca_path = get_ca_cert_path()
@@ -477,7 +477,7 @@ class CertificateAuthorityRotateController(Resource):
             old_ca = _x509.load_pem_x509_certificate(old_ca_pem.encode("utf-8"))
             old_names = old_ca.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
             if old_names and old_names[0].value == common_name:
-                abort(400, {"message": "ca_common_name must differ from the current CA's name"})
+                abort(400, message="ca_common_name must differ from the current CA's name")
 
         regenerate_ca_files(
             valid_days=int(content.get("ca_valid_days") or 3650),
@@ -550,11 +550,11 @@ class ClusterCertRenewController(Resource):
         content = request.get_json(silent=True) or {}
         csr_pem = content.get("csr") or ""
         if not csr_pem.strip():
-            abort(400, {"message": "csr is required"})
+            abort(400, message="csr is required")
         try:
             valid_days = min(int(content.get("valid_days") or 365), CLUSTER_CERT_MAX_VALID_DAYS)
         except (TypeError, ValueError):
-            abort(400, {"message": "valid_days must be an integer"})
+            abort(400, message="valid_days must be an integer")
         rotate_intermediate = content.get("rotate_intermediate") is True
 
         try:
@@ -574,9 +574,9 @@ class ClusterCertRenewController(Resource):
                     cluster_id, valid_days=1825
                 )
         except FileNotFoundError:
-            abort(409, {"message": "Root CA material not initialized"})
+            abort(409, message="Root CA material not initialized")
         except ValueError as e:
-            abort(400, {"message": f"Certificate operation failed: {str(e)}"})
+            abort(400, message=f"Certificate operation failed: {str(e)}")
 
         logger.info(
             "Issued renewed cert material for cluster %s via in-band CSR (intermediate: %s)",
@@ -591,9 +591,9 @@ def verified_cluster_id(client_cert_header) -> str:
     try:
         return client_cert_cluster_id(client_cert_header)
     except ClientCertError as e:
-        abort(e.status, {"message": str(e)})
+        abort(e.status, message=str(e))
     except FileNotFoundError:
-        abort(409, {"message": "Root CA material not initialized"})
+        abort(409, message="Root CA material not initialized")
 
 
 @certbp.route("/rotate-complete")
@@ -607,7 +607,7 @@ class CertificateRotateCompleteController(Resource):
         After this call, only client certs signed by the new CA are accepted.
         """
         if not get_old_ca_cert_path().is_file():
-            abort(409, {"message": "No grace period active — ca.old.crt not found"})
+            abort(409, message="No grace period active — ca.old.crt not found")
         return complete_ca_rotation()
 
 
