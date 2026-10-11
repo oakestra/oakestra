@@ -42,6 +42,9 @@ services:
       - ROOT_CA_FILE=/certs/ca.crt
       - CLUSTER_GATEWAY_PORT=${CLUSTER_GATEWAY_PORT:-8443}
       - CLUSTER_GATEWAY_TRUST=${CLUSTER_GATEWAY_TRUST:-system}
+      # Behind the gateway, cluster calls carry the caller's verified cert (X-Client-Cert),
+      # which root_service_manager checks against the cluster the request concerns.
+      - GATEWAY_ENABLED=true
     ports: !reset []
 
   root_redis:
