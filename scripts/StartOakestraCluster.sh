@@ -296,6 +296,33 @@ if sudo docker ps -a | grep oakestra/cluster >/dev/null 2>&1; then
     fi
 fi
 
+# Generate desired state before startup, using the same project and overrides.
+if [[ ",${OVERRIDE_FILES:-}," != *override-no-observe* ]]; then
+    monitoring_services=$(eval "sudo -E docker compose -f ${COMPOSE_FILE} ${OAK_OVERRIDES} config --services") || {
+        echo "Error: failed to resolve Compose services; startup cancelled."
+        exit 1
+    }
+    if printf '%s\n' "$monitoring_services" | grep -Fxq docker_state_exporter; then
+        inventory_generator=./generateContainerInventory.py
+        if [ -f ../scripts/utils/generateContainerInventory.py ]; then
+            inventory_generator=../scripts/utils/generateContainerInventory.py
+        fi
+        if [ ! -f "$inventory_generator" ]; then
+            echo "Error: container monitoring requires generateContainerInventory.py; download matching configuration files."
+            exit 1
+        fi
+        if ! (set -o pipefail
+            eval "sudo -E docker compose -f ${COMPOSE_FILE} ${OAK_OVERRIDES} config --format json" |
+                python3 "$inventory_generator" --output config/container-inventory/containers.prom
+        ); then
+            echo "Error: failed to generate the expected-container inventory; startup cancelled."
+            exit 1
+        fi
+    else
+        echo "Warning: this deployment has no container lifecycle monitoring; skipping inventory generation."
+    fi
+fi
+
 command_exec="sudo -E docker compose -f ${COMPOSE_FILE} ${OAK_OVERRIDES} up ${BUILD_FLAG} -d"
 echo executing "$command_exec"
 
