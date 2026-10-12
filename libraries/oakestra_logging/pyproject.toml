@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oakestra-logging"
+version = "0.1.0"
+description = "Shared structured logging configuration for Oakestra Python services"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "structlog==26.1.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "jsonschema>=4.4",
+    "pytest>=7",
+]
+
+[tool.setuptools.package-data]
+oakestra_logging = ["schema/*.json"]
