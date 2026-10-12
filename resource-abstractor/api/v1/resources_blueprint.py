@@ -99,9 +99,26 @@ class AllResourcesController(MethodView):
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
     def put(self, data, **kwargs):
+        """Create or update a candidate.
+
+        With an _id the candidate is matched by it and created with it if missing: behind
+        the gateway, ids are chosen before a cluster or worker registers. Without one it is
+        matched by candidate_name.
+        """
         resource_name = data.get("candidate_name")
         client_ip = request.remote_addr
         logger.debug(f"PUT /api/v1/resources - Client: {client_ip}, Data: {data}")
+
+        candidate_id = data.get("_id")
+        if candidate_id:
+            if not ObjectId.is_valid(candidate_id):
+                raise exceptions.BadRequest()
+            data["_id"] = ObjectId(candidate_id)
+            if candidates_db.find_candidate_by_id(candidate_id):
+                return perform_update(
+                    "resources", candidates_db.update_candidate, candidate_id, data
+                )
+            return perform_create("resources", candidates_db.create_candidate, data)
 
         candidate = candidates_db.find_candidate_by_name(resource_name)
         if candidate:
