@@ -18,7 +18,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --locked
+        run: uv sync --locked --package system-manager
 
       - name: Generate protobuf files
         working-directory: root_orchestrator/system-manager-python
@@ -43,4 +43,4 @@ jobs:
       - name: Run test suite
         working-directory: root_orchestrator/system-manager-python
         run: |
-          uv run --with pytest pytest
+          uv run --no-sync --with pytest pytest
