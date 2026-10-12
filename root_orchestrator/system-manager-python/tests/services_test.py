@@ -143,7 +143,7 @@ def test_create_invalid_service_namespace():
     assert code == 422
 
 
-def test_delete_service():
+def test_delete_service(net_plugin):
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
         new=str(resource_abstractor),
@@ -176,6 +176,7 @@ def test_delete_service():
         # ASSERT
         assert result
         assert not resultNone
+        net_plugin.undeploy.assert_called_once_with(service_to_be_deleted)
         db_app_after_deletion = app_operations.get_app_by_name_and_namespace(
             sla_first_app["application_name"],
             sla_first_app["application_namespace"],
