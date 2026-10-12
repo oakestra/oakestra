@@ -12,19 +12,15 @@ repos:
   hooks:
     - id: generate-protobuf-on-commit
       name: Generate protobuf files (proto changed)
-      language: python
-      additional_dependencies:
-        - grpcio-tools~=1.75.1
-      entry: python scripts/generate_protos.py
+      language: system
+      entry: python3 scripts/generate_protos.py
       stages: [pre-commit]
       files: \.proto$
       pass_filenames: false
     - id: generate-protobuf-on-checkout
       name: Generate protobuf files (after checkout/merge)
-      language: python
-      additional_dependencies:
-        - grpcio-tools~=1.75.1
-      entry: python scripts/generate_protos.py
+      language: system
+      entry: python3 scripts/generate_protos.py
       stages: [post-checkout, post-merge]
       pass_filenames: false
       always_run: true

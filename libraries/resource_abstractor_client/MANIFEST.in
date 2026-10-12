@@ -1,2 +1,0 @@
-graft resource_abstractor_client
-global-include *.py

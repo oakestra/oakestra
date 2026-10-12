@@ -33,10 +33,9 @@
             "type": "debugpy",
             "request": "launch",
             "python": "${command:python.interpreterPath}",
-            "program": "${workspaceRoot}/root_orchestrator/system-manager-python/system_manager.py",
+            "program": "${workspaceRoot}/root_orchestrator/system-manager-python/src/system_manager/main.py",
             "console": "integratedTerminal",
             "env": {
-                "PYTHONPATH": "${workspaceRoot}/libraries/oakestra_utils_library:${workspaceRoot}/libraries/resource_abstractor_client:${env:PYTHONPATH}",
                 "ROOT_MONGO_URL": "0.0.0.0",
                 "LOG_LEVEL": "INFO",
                 "ROOT_MONGO_PORT": "10007",
@@ -74,7 +73,7 @@
             "name": "Debug Root Resource Abstractor",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/resource-abstractor/.venv/bin/python",
             "program": "${workspaceRoot}/resource-abstractor/resource_abstractor.py",
             "console": "integratedTerminal",
             "env": {
@@ -89,7 +88,7 @@
             "name": "Debug JWT Generator",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/root_orchestrator/jwt-generator/.venv/bin/python",
             "program": "${workspaceRoot}/root_orchestrator/jwt-generator/jwt_generator.py",
             "console": "integratedTerminal",
             "env": {
@@ -102,7 +101,7 @@
             "name": "Debug Root Addons Manager",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/addons_engine/addons-manager/.venv/bin/python",
             "program": "${workspaceRoot}/addons_engine/addons-manager/addons_manager.py",
             "console": "integratedTerminal",
             "env": {
@@ -117,7 +116,7 @@
             "name": "Debug Root Addons Monitor",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/addons_engine/addons-monitor/.venv/bin/python",
             "program": "${workspaceRoot}/addons_engine/addons-monitor/addons_monitor.py",
             "console": "integratedTerminal",
             "env": {
@@ -132,7 +131,7 @@
             "name": "Debug Marketplace Manager",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/addons_marketplace/marketplace-manager/.venv/bin/python",
             "program": "${workspaceRoot}/addons_marketplace/marketplace-manager/marketplace_manager.py",
             "console": "integratedTerminal",
             "env": {
@@ -147,11 +146,10 @@
             "type": "debugpy",
             "request": "launch",
             "python": "${command:python.interpreterPath}",
-            "program": "${workspaceRoot}/cluster_orchestrator/cluster-manager/cluster_manager.py",
+            "program": "${workspaceRoot}/cluster_orchestrator/cluster-manager/src/cluster_manager/main.py",
             "console": "integratedTerminal",
             "env": {
                 "PATH": "${env:PATH}:/usr/local/go/bin",
-                "PYTHONPATH": "${workspaceRoot}/libraries/oakestra_utils_library:${workspaceRoot}/libraries/resource_abstractor_client:${env:PYTHONPATH}",
                 "FLASK_ENV": "development",
                 "FLASK_DEBUG": "True",
                 "MQTT_BROKER_URL": "0.0.0.0",
@@ -199,7 +197,7 @@
             "name": "Debug Cluster Resource Abstractor",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/resource-abstractor/.venv/bin/python",
             "program": "${workspaceRoot}/resource-abstractor/resource_abstractor.py",
             "console": "integratedTerminal",
             "env": {
@@ -214,7 +212,7 @@
             "name": "Debug Cluster Addons Manager",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/addons_engine/addons-manager/.venv/bin/python",
             "program": "${workspaceRoot}/addons_engine/addons-manager/addons_manager.py",
             "console": "integratedTerminal",
             "env": {
@@ -229,7 +227,7 @@
             "name": "Debug Cluster Addons Monitor",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/addons_engine/addons-monitor/.venv/bin/python",
             "program": "${workspaceRoot}/addons_engine/addons-monitor/addons_monitor.py",
             "console": "integratedTerminal",
             "env": {
@@ -265,7 +263,7 @@
             "name": "Cleanup Dev Environment",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceRoot}/cluster_orchestrator/cluster-manager/logs/cm_logging.py",
+            "program": "${workspaceRoot}/cluster_orchestrator/cluster-manager/src/cluster_manager/app_logging.py",
             "console": "integratedTerminal",
             "preLaunchTask": "cleanup-debug-env"
         }
