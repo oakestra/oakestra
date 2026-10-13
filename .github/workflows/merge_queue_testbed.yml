@@ -78,18 +78,18 @@ jobs:
         run: echo "branch=${HEAD_REF#refs/heads/}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node.js
-        if: github.event_name == 'merge_group' && vars.TESTBED_DRY_RUN != 'true'
+        if: github.event_name == 'merge_group'
         uses: actions/setup-node@v6
         with:
           node-version: '24'
 
       - name: Install dependencies
-        if: github.event_name == 'merge_group' && vars.TESTBED_DRY_RUN != 'true'
+        if: github.event_name == 'merge_group'
         run: npm install
         working-directory: ./.github/actions/awx-deploy
 
       - name: Testbed execution
-        if: github.event_name == 'merge_group' && vars.TESTBED_DRY_RUN != 'true'
+        if: github.event_name == 'merge_group'
         uses: ./.github/actions/awx-deploy
         env:
           NODE_TLS_REJECT_UNAUTHORIZED: '0'
@@ -102,13 +102,3 @@ jobs:
           PR_COMMIT: ${{ github.event.merge_group.head_sha }}
           PR_USER: ${{ github.actor }}
           FORK_REPO: ${{ github.repository }}
-
-      # For trying the queue in a sandbox repo without AWX.
-      - name: Testbed execution (dry run)
-        if: github.event_name == 'merge_group' && vars.TESTBED_DRY_RUN == 'true'
-        run: |
-          sleep 60
-          if [ -e .testbed-fail ]; then
-            echo "::error::.testbed-fail exists in this merge group"
-            exit 1
-          fi
