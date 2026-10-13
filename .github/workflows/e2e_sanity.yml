@@ -1,0 +1,114 @@
+name: E2E Sanity
+
+on:
+  pull_request:
+    branches:
+      - develop
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-sanity-${{ github.ref }}
+  # Queued merge_group runs must finish, otherwise the queue entry fails.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  sanity:
+    name: Sanity (1 root, 1 cluster, 1 worker)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # Root and cluster compose files both declare the "oakestra" network. A
+      # shared project name lets the second `up` adopt it instead of tripping
+      # over the project label of the first.
+      COMPOSE_PROJECT_NAME: oakestra
+      CLUSTER_NAME: ci-cluster
+      CLUSTER_LOCATION: 0,0,1000
+    steps:
+      - uses: actions/checkout@v7
+
+      # Containers reach the root through the host IP, exactly like real
+      # deployments wire SYSTEM_MANAGER_URL, so localhost would not work.
+      - name: Detect runner IP
+        run: |
+          ip=$(hostname -I | awk '{print $1}')
+          echo "Runner IP: $ip"
+          {
+            echo "SYSTEM_MANAGER_URL=$ip"
+            echo "CLUSTER_ADDRESS=$ip"
+          } >> "$GITHUB_ENV"
+
+      - name: Start root orchestrator
+        working-directory: root_orchestrator
+        env:
+          COMPOSE_FILE: docker-compose.yml:override-no-addons.yml:override-no-observe.yml:override-no-dashboard.yml
+        run: docker compose up -d --build
+
+      - name: Start cluster orchestrator
+        working-directory: cluster_orchestrator
+        env:
+          COMPOSE_FILE: docker-compose.yml:override-no-addons.yml:override-no-observe.yml
+        run: docker compose up -d --build
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go_node_engine/go.mod
+          cache-dependency-path: go_node_engine/go.sum
+
+      # Output names match what build/install.sh expects next to itself.
+      - name: Build NodeEngine
+        working-directory: go_node_engine
+        run: |
+          env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-X 'go_node_engine/cmd.Version=${{ github.sha }}'" -o build/NodeEngine_amd64 NodeEngine.go
+          env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/nodeengined_amd64 internal/daemon/nodeengined.go
+
+      # The runner already ships containerd as a systemd unit, so install.sh
+      # only enables it and installs the binaries and the nodeengine unit.
+      - name: Install NodeEngine
+        working-directory: go_node_engine/build
+        run: sudo bash ./install.sh amd64
+
+      # The overlay network needs NetManager from the oakestra-net repo, which
+      # is out of scope for this basic check.
+      - name: Configure NodeEngine
+        run: |
+          sudo NodeEngine config cluster "$CLUSTER_ADDRESS"
+          sudo NodeEngine config network off
+
+      # The unit restarts only every 30s on failure, so make sure the cluster
+      # manager answers before the first handshake attempt.
+      - name: Wait for cluster manager
+        run: timeout 180 bash -c 'until curl -s -o /dev/null http://localhost:10100/; do sleep 2; done'
+
+      - name: Start NodeEngine
+        run: sudo systemctl start nodeengine
+
+      - name: Check cluster and worker registered at root
+        env:
+          EXPECTED_CLUSTER_NAME: ${{ env.CLUSTER_NAME }}
+          EXPECTED_NODES: "1"
+        run: .github/e2e-sanity/check_cluster.sh
+
+      - name: Collect debug info
+        if: failure()
+        run: |
+          mkdir -p debug
+          docker ps -a > debug/docker-ps.txt 2>&1 || true
+          for c in $(docker ps -aq); do
+            name=$(docker inspect --format '{{.Name}}' "$c" | tr -d '/')
+            docker logs "$c" > "debug/container-$name.log" 2>&1 || true
+          done
+          sudo journalctl -u nodeengine --no-pager 2>&1 | cat > debug/nodeengine-journal.log || true
+          sudo cp /var/log/oakestra/*.log debug/ 2>/dev/null || true
+          sudo chown -R "$USER" debug
+
+      - name: Upload debug info
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-sanity-debug
+          path: debug/
+          if-no-files-found: ignore

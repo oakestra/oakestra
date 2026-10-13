@@ -1,0 +1,114 @@
+name: Testbed (Merge Queue)
+
+# Pull requests only run the fast checks. The AWX testbed runs once per PR in
+# the merge queue on develop. Set the queue to build one entry at a time
+# ("Maximum pull requests to build" = 1) so runs never overlap on the testbed
+# hosts.
+#
+# The pull_request trigger is only there so the required check also reports on
+# PRs. It passes right away.
+#
+# In the queue the job waits for E2E Sanity first, so a broken PR fails before
+# AWX starts.
+#
+# Secrets are available because merge group refs live in this repo and only
+# maintainers can enqueue a PR.
+
+on:
+  pull_request:
+    branches: [develop]
+  merge_group:
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  testbed:
+    # Required status check, the name must be the same on both events.
+    name: Testbed (AWX)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    # Also keeps other workflows that use the testbed hosts from overlapping.
+    # PRs get a unique group so they never wait behind a real run.
+    concurrency:
+      group: ${{ github.event_name == 'merge_group' && 'awx-testbed' || format('testbed-noop-{0}', github.run_id) }}
+      cancel-in-progress: false
+    steps:
+      - name: Skip on pull requests
+        if: github.event_name == 'pull_request'
+        run: echo "The testbed runs in the merge queue, nothing to do on pull requests."
+
+      # Workflows of a merge group start in parallel. Waiting for sanity here
+      # makes a broken PR fail in minutes instead of after an AWX run. The check
+      # name must match the job in e2e_sanity.yml.
+      - name: Wait for E2E Sanity
+        if: github.event_name == 'merge_group'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.event.merge_group.head_sha }}
+          SANITY_CHECK: Sanity (1 root, 1 cluster, 1 worker)
+        run: |
+          deadline=$((SECONDS + 45 * 60))
+          while true; do
+            conclusion=$(gh api "repos/${GH_REPO}/commits/${SHA}/check-runs?filter=latest" \
+              --jq ".check_runs[] | select(.name == \"${SANITY_CHECK}\") | .conclusion // \"pending\"" \
+              | head -n1)
+            case "${conclusion:-missing}" in
+              success) echo "E2E Sanity passed"; break ;;
+              pending | missing) echo "[${SECONDS}s] E2E Sanity: ${conclusion:-not started yet}" ;;
+              *) echo "::error::E2E Sanity ended with '${conclusion}', skipping the testbed"; exit 1 ;;
+            esac
+            if ((SECONDS >= deadline)); then
+              echo "::error::Timed out waiting for E2E Sanity"
+              exit 1
+            fi
+            sleep 20
+          done
+
+      - uses: actions/checkout@v7
+        if: github.event_name == 'merge_group'
+
+      - name: Resolve merge group branch
+        if: github.event_name == 'merge_group'
+        id: ref
+        env:
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+        run: echo "branch=${HEAD_REF#refs/heads/}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        if: github.event_name == 'merge_group' && vars.TESTBED_DRY_RUN != 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        if: github.event_name == 'merge_group' && vars.TESTBED_DRY_RUN != 'true'
+        run: npm install
+        working-directory: ./.github/actions/awx-deploy
+
+      - name: Testbed execution
+        if: github.event_name == 'merge_group' && vars.TESTBED_DRY_RUN != 'true'
+        uses: ./.github/actions/awx-deploy
+        env:
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
+        with:
+          AWX_URL: ${{ secrets.TOWER_HOST }}
+          AWX_TOKEN: ${{ secrets.TOWER_TOKEN }}
+          AWX_TEMPLATE_ID: 18 # Job Workflow Template ID for Oneshot Testbed Execution
+          PR_BRANCH: ${{ steps.ref.outputs.branch }}
+          # The clone role finds the commit via git ls-remote, so HEAD would not work here.
+          PR_COMMIT: ${{ github.event.merge_group.head_sha }}
+          PR_USER: ${{ github.actor }}
+          FORK_REPO: ${{ github.repository }}
+
+      # For trying the queue in a sandbox repo without AWX.
+      - name: Testbed execution (dry run)
+        if: github.event_name == 'merge_group' && vars.TESTBED_DRY_RUN == 'true'
+        run: |
+          sleep 60
+          if [ -e .testbed-fail ]; then
+            echo "::error::.testbed-fail exists in this merge group"
+            exit 1
+          fi

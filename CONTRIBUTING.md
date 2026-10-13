@@ -38,3 +38,17 @@ python scripts/generate_protos.py
 ```
 
 This requires `grpcio-tools` to be installed (`pip install grpcio-tools`).
+
+## Pull request checks and the merge queue
+
+Every pull request into `develop` runs the fast checks on GitHub-hosted runners:
+linting, unit tests and a basic sanity check (`E2E Sanity`) that builds the root
+and cluster orchestrators from your branch, starts a NodeEngine and verifies
+that the cluster and the worker register. These need no secrets, so they also
+run for pull requests from forks.
+
+The full AWX testbed only runs in the merge queue. Once a pull request is
+approved and its checks are green, a maintainer adds it to the queue with
+"Merge when ready". Queued pull requests are tested one at a time against the
+latest develop plus the pull requests ahead of them. A pull request that breaks
+the testbed is removed from the queue and the next one is tested.

@@ -1,6 +1,12 @@
 name: Root System Manager Test
 
-on: push
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+  merge_group:
 
 jobs:
   test:
