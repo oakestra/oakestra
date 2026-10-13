@@ -44,7 +44,8 @@ This requires `grpcio-tools` to be installed (`pip install grpcio-tools`).
 Every pull request into `develop` runs the fast checks on GitHub-hosted runners:
 linting, unit tests and a basic sanity check (`E2E Sanity`) that builds the root
 and cluster orchestrators from your branch, starts a NodeEngine and verifies
-that the cluster and the worker register. These need no secrets, so they also
+that the cluster and the worker register and that a simple container can be
+deployed to the worker and removed again. These need no secrets, so they also
 run for pull requests from forks.
 
 The full AWX testbed only runs in the merge queue. Once a pull request is

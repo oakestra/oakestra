@@ -92,6 +92,9 @@ jobs:
           EXPECTED_NODES: "1"
         run: .github/e2e-sanity/check_cluster.sh
 
+      - name: Deploy and undeploy a service
+        run: .github/e2e-sanity/check_deployment.sh
+
       - name: Collect debug info
         if: failure()
         run: |
@@ -102,6 +105,10 @@ jobs:
             docker logs "$c" > "debug/container-$name.log" 2>&1 || true
           done
           sudo journalctl -u nodeengine --no-pager 2>&1 | cat > debug/nodeengine-journal.log || true
+          {
+            sudo ctr -n oakestra containers ls
+            sudo ctr -n oakestra tasks ls
+          } > debug/containerd.txt 2>&1 || true
           sudo cp /var/log/oakestra/*.log debug/ 2>/dev/null || true
           sudo chown -R "$USER" debug
 
