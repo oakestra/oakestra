@@ -1,9 +1,11 @@
 name: Testbed Oneshot - Multiple Scenarios Test Deployment
 
-# The testbed execution is triggered after the PR approval is validated by `oneshot_testbed_approval.yml`.
-# The action execute a custom action `awx-deploy` to trigger the deployment on Ansible AWX.
-# The action waits for the deployment to complete before reporting the outcome.
-# The success/failure of the deployment is reported back to the PR by the `oneshot_testbed_approval.yml` action.
+# Starts `oneshot_testbed_deploy.yml` when a maintainer approves a PR. The review only triggers
+# `oneshot_testbed_approval.yml`, since review workflows on fork PRs get no secrets.
+# This runs for every review and a fork PR can modify the approval workflow, so the approval is
+# checked again here via the API.
+# Merging develop into an approved PR re-runs the testbed via `oneshot_testbed_sync.yml`.
+# For anything else, re-approve or start `oneshot_testbed_deploy.yml` manually.
 
 on:
   workflow_run:
@@ -14,58 +16,100 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  statuses: write
 
 jobs:
-  trigger-awx-job:
-    name: Trigger Testbed Oneshot Execution ${{ github.event.workflow_run.head_branch }}
+  authorize:
+    name: Verify maintainer approval
+    # A fork PR could add a workflow with the same name but a different trigger
+    if: github.event.workflow_run.event == 'pull_request_review'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      approved: ${{ steps.check.outputs.approved }}
+      pr_number: ${{ steps.check.outputs.pr_number }}
+      head_sha: ${{ steps.check.outputs.head_sha }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      # Resolve the fork repository to pass to the `awx-deploy` action.
-      - name: Resolve fork repository
-        id: fork
+      - name: Verify maintainer approval
+        id: check
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          RUN_CREATED_AT: ${{ github.event.workflow_run.created_at }}
         run: |
           set -euo pipefail
-          pulls=$(gh api --paginate "repos/${REPO}/pulls?state=open&per_page=100")
+          echo "approved=false" >> "$GITHUB_OUTPUT"
 
-          # Prefer an exact head-SHA match; fall back to the head branch name.
-          fork_repo=$(jq -r --arg sha "$HEAD_SHA" \
-            'first(.[] | select(.head.sha == $sha) | .head.repo.full_name) // empty' <<<"$pulls")
-          if [ -z "$fork_repo" ]; then
-            fork_repo=$(jq -r --arg ref "$HEAD_BRANCH" \
-              'first(.[] | select(.head.ref == $ref) | .head.repo.full_name) // empty' <<<"$pulls")
+          # workflow_run.pull_requests is empty for fork PRs. sed instead of `head -n1`, which
+          # closes the pipe early and fails gh with SIGPIPE.
+          pr_number=$(gh api --paginate "repos/${REPO}/pulls?state=open&per_page=100" \
+            --jq ".[] | select(.head.sha == \"${HEAD_SHA}\" and .head.repo.full_name == \"${HEAD_REPO}\") | .number" \
+            | sed -n 1p)
+          if [ -z "$pr_number" ]; then
+            echo "No open PR with head ${HEAD_REPO}@${HEAD_SHA}; nothing to do."
+            exit 0
           fi
-          if [ -z "$fork_repo" ]; then
-            echo "No open PR matched sha=${HEAD_SHA} branch=${HEAD_BRANCH}; falling back to ${REPO}"
-            fork_repo="${REPO}"
+
+          # The event doesn't say which review triggered this run, so take the latest one from
+          # before the run was created (10s slack for clock skew). Otherwise a comment right
+          # after the approval would hide it.
+          latest=$(gh api --paginate "repos/${REPO}/pulls/${pr_number}/reviews?per_page=100" \
+            --jq '.[] | {user: .user.login, state, commit_id, submitted_at}' \
+            | jq -s --arg created "$RUN_CREATED_AT" '
+                ($created | fromdateiso8601) as $t
+                | map(select(.submitted_at != null)
+                      | .age = ($t - (.submitted_at | fromdateiso8601))
+                      | select(.age >= -10))
+                | last // empty')
+          state=$(jq -r '.state // empty' <<<"$latest")
+          reviewer=$(jq -r '.user // empty' <<<"$latest")
+          commit_id=$(jq -r '.commit_id // empty' <<<"$latest")
+          age=$(jq -r '.age // empty' <<<"$latest")
+
+          if [ "$state" != "APPROVED" ]; then
+            echo "Latest review on PR #${pr_number} is '${state:-none}', not an approval; skipping."
+            exit 0
           fi
-          echo "Resolved fork repo: $fork_repo"
-          echo "fork_repo=$fork_repo" >> "$GITHUB_OUTPUT"
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
+          # A fork can make the trigger fire on `edited` too. Without an age limit, editing an
+          # old review would re-run the testbed off the same approval forever.
+          if [ "${age%.*}" -gt 600 ]; then
+            echo "Approval by ${reviewer} was submitted ${age}s before this run, not a new approval; skipping."
+            exit 0
+          fi
+          # Approval has to be for the current commit
+          if [ "$commit_id" != "$HEAD_SHA" ]; then
+            echo "Approval by ${reviewer} is for ${commit_id}, PR head is ${HEAD_SHA}; skipping."
+            exit 0
+          fi
 
-      - name: Install dependencies
-        run: npm install
-        working-directory: ./.github/actions/awx-deploy
+          # Anyone can approve a public PR, so check the reviewer has write access
+          # (`permission` reports maintain as write)
+          permission=$(gh api "repos/${REPO}/collaborators/${reviewer}/permission" --jq '.permission' || echo none)
+          case "$permission" in
+            admin|write) ;;
+            *)
+              echo "Reviewer ${reviewer} has '${permission}' access, not write; skipping."
+              exit 0
+              ;;
+          esac
 
-      - name: Testbed Oneshot Execution ${{ github.event.workflow_run.head_branch }}
-        uses: ./.github/actions/awx-deploy
-        env:
-          NODE_TLS_REJECT_UNAUTHORIZED: '0'
-        with:
-          AWX_URL: ${{ secrets.TOWER_HOST }}
-          AWX_TOKEN: ${{ secrets.TOWER_TOKEN }}
-          AWX_TEMPLATE_ID: 18 # Job Workflow Template ID for Oneshot Testbed Execution
-          PR_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          PR_USER: ${{ github.event.workflow_run.head_commit.author.name }}
-          FORK_REPO: ${{ steps.fork.outputs.fork_repo }}
-          PR_COMMIT: HEAD
+          echo "PR #${pr_number} approved by ${reviewer} at ${HEAD_SHA}."
+          {
+            echo "approved=true"
+            echo "pr_number=${pr_number}"
+            echo "head_sha=${HEAD_SHA}"
+          } >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Testbed
+    needs: authorize
+    if: needs.authorize.outputs.approved == 'true'
+    uses: ./.github/workflows/oneshot_testbed_deploy.yml
+    with:
+      pr_number: ${{ fromJSON(needs.authorize.outputs.pr_number) }}
+      head_sha: ${{ needs.authorize.outputs.head_sha }}
+    secrets:
+      TOWER_HOST: ${{ secrets.TOWER_HOST }}
+      TOWER_TOKEN: ${{ secrets.TOWER_TOKEN }}
