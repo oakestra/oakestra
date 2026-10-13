@@ -4,11 +4,11 @@ services:
     pull_policy: always
 
   mongo_root:
-    image: mongo:8.0
+    image: mongo:8.0.32
     pull_policy: always
 
   mongo_rootnet:
-    image: mongo:8.0
+    image: mongo:8.0.32
     pull_policy: always
 
   root_service_manager:
@@ -57,5 +57,9 @@ services:
 
   jwt_generator:
     image: ghcr.io/oakestra/oakestra/jwt-generator:latest
+    pull_policy: always
+
+  dashboard:
+    image: ghcr.io/oakestra/dashboard:latest
     pull_policy: always
     

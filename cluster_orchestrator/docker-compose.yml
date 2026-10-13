@@ -31,24 +31,30 @@ services:
       
   # cluster-level mongoDB
   mongo_cluster:
-    image: mongo:8.0
+    image: mongo:8.0.32
     container_name: cluster_mongo
     hostname: cluster_mongo
     ports:
       - "10107:10107"
     volumes:
       - 'mongodb_cluster_data:/data/db'
+    # Check oakestra pr #586 for details on why this is needed.
+    environment:
+      - GLIBC_TUNABLES=glibc.pthread.rseq=1
     command: mongod --port 10107
 
   # cluster-level mongoDB
   mongo_clusternet:
-    image: mongo:8.0
+    image: mongo:8.0.32
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
     ports:
       - "10108:10108"
     volumes:
       - 'mongodb_cluster_net_data:/data/db'
+    # Check oakestra pr #586 for details on why this is needed. 
+    environment:
+      - GLIBC_TUNABLES=glibc.pthread.rseq=1
     command: mongod --port 10108
 
 
@@ -86,8 +92,9 @@ services:
     image: cluster_manager
     build:
       context: cluster-manager/
-      args:
-        - LIB_BRANCH=${LIB_BRANCH:-develop}
+      additional_contexts:
+        # Oakestra shared libraries are built from the repo-local libraries/ folder.
+        - libraries=../libraries
     container_name: cluster_manager
     labels:
       logging: "cluster_promtail"
@@ -117,6 +124,8 @@ services:
       - CLUSTER_NAME=${CLUSTER_NAME}
       - CLUSTER_LOCATION=${CLUSTER_LOCATION}
       - CLUSTER_ADDRESS=${CLUSTER_ADDRESS}
+      - AGGREGATION_INTERVAL=${AGGREGATION_INTERVAL:-15}
+      - NODE_SCHEDULED_TIMEOUT=${NODE_SCHEDULED_TIMEOUT:-15}
     depends_on:
       - mongo_cluster
       - mqtt
