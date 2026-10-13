@@ -92,7 +92,7 @@ jobs:
           EXPECTED_NODES: "1"
         run: .github/e2e-sanity/check_cluster.sh
 
-      - name: Deploy and undeploy a service
+      - name: Deploy, scale and remove services
         run: .github/e2e-sanity/check_deployment.sh
 
       - name: Collect debug info
