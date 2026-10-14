@@ -73,7 +73,7 @@ func GetRegistry() *Registry {
 func (r *Registry) InitFromConfig(conf config.ConfFile) {
 	for _, driverConf := range conf.CSIDrivers {
 		if err := r.Register(driverConf); err != nil {
-			logger.ErrorLogger().Printf("[CSI] Failed to register plugin %q (%s): %v",
+			logger.ErrorLogger("[CSI] Failed to register plugin %q (%s): %v",
 				driverConf.Name, driverConf.Endpoint, err)
 		}
 	}
@@ -82,7 +82,7 @@ func (r *Registry) InitFromConfig(conf config.ConfFile) {
 // Register probes a single CSI plugin endpoint and, on success, adds it to the
 // registry.
 func (r *Registry) Register(cfg config.CSIDriverType) error {
-	logger.InfoLogger().Printf("[CSI] Probing plugin at %s", cfg.Endpoint)
+	logger.InfoLogger("[CSI] Probing plugin at %s", cfg.Endpoint)
 
 	conn, err := dialPlugin(cfg.Endpoint)
 	if err != nil {
@@ -114,7 +114,7 @@ func (r *Registry) Register(cfg config.CSIDriverType) error {
 	}
 	p.DriverName = info.GetName()
 	p.DriverVersion = info.GetVendorVersion()
-	logger.InfoLogger().Printf("[CSI] Plugin info: name=%s version=%s", p.DriverName, p.DriverVersion)
+	logger.InfoLogger("[CSI] Plugin info: name=%s version=%s", p.DriverName, p.DriverVersion)
 
 	// Use discovered name if config did not specify one
 	if cfg.Name == "" {
@@ -131,7 +131,7 @@ func (r *Registry) Register(cfg config.CSIDriverType) error {
 	for _, cap := range capsResp.GetCapabilities() {
 		if cap.GetRpc().GetType() == csipb.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME {
 			p.StageUnstageRequired = true
-			logger.InfoLogger().Printf("[CSI] Plugin %s requires STAGE_UNSTAGE_VOLUME", p.DriverName)
+			logger.InfoLogger("[CSI] Plugin %s requires STAGE_UNSTAGE_VOLUME", p.DriverName)
 		}
 	}
 
@@ -139,7 +139,7 @@ func (r *Registry) Register(cfg config.CSIDriverType) error {
 	r.plugins[p.DriverName] = p
 	r.mu.Unlock()
 
-	logger.InfoLogger().Printf("[CSI] Plugin %s registered (stageUnstage=%v)",
+	logger.InfoLogger("[CSI] Plugin %s registered (stageUnstage=%v)",
 		p.DriverName, p.StageUnstageRequired)
 	return nil
 }
@@ -171,7 +171,7 @@ func (r *Registry) StopAll() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for name, p := range r.plugins {
-		logger.InfoLogger().Printf("[CSI] Closing connection to plugin %s", name)
+		logger.InfoLogger("[CSI] Closing connection to plugin %s", name)
 		p.Close()
 	}
 	r.plugins = make(map[string]*Plugin)

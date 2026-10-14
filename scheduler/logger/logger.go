@@ -2,35 +2,58 @@
 package logger
 
 import (
-	"io"
-	"log"
+	"context"
+	"fmt"
+	"log/slog"
 	"os"
+	"runtime"
+	"time"
 )
 
-// Loggers are initialised to safe defaults at package load time so that
-// library code can log without requiring an explicit Init call. Debug output
-// is discarded unless Init is called with debug=true.
 var (
-	infoLogger  = log.New(os.Stdout, "INFO-", log.Ldate|log.Ltime|log.Lshortfile)
-	errorLogger = log.New(os.Stderr, "ERROR-", log.Ldate|log.Ltime|log.Lshortfile)
-	debugLogger = log.New(io.Discard, "DEBUG-", log.Ldate|log.Ltime|log.Lshortfile)
+	level  = new(slog.LevelVar) // INFO by default, lowered to DEBUG by Init(true)
+	opts   = &slog.HandlerOptions{AddSource: true, Level: level}
+	stdout = slog.New(slog.NewTextHandler(os.Stdout, opts))
+	stderr = slog.New(slog.NewTextHandler(os.Stderr, opts))
 )
 
-// Init reconfigures the debug logger. Call once from main. If debug is true,
-// debug output is written to stdout instead of being discarded.
+// Init configures the loggers. Call once from main. If debug is true, the level is
+// lowered to DEBUG, which allows DebugLogger messages to be output.
 func Init(debug bool) {
-	debugOut := io.Discard
 	if debug {
-		debugOut = os.Stdout
+		level.Set(slog.LevelDebug)
 	}
-	debugLogger = log.New(debugOut, "DEBUG-", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
-// InfoLogger returns the info logger.
-func InfoLogger() *log.Logger { return infoLogger }
+// InfoLogger logs an info level message to stdout with the given format and arguments
+func InfoLogger(format string, args ...any) {
+	logf(stdout, slog.LevelInfo, format, args...)
+}
 
-// ErrorLogger returns the error logger.
-func ErrorLogger() *log.Logger { return errorLogger }
+// WarnLogger logs a warning level message to stderr with the given format and arguments
+func WarnLogger(format string, args ...any) {
+	logf(stderr, slog.LevelWarn, format, args...)
+}
 
-// DebugLogger returns the debug logger.
-func DebugLogger() *log.Logger { return debugLogger }
+// ErrorLogger logs an error level message to stderr with the given format and arguments
+func ErrorLogger(format string, args ...any) {
+	logf(stderr, slog.LevelError, format, args...)
+}
+
+// DebugLogger logs a debug level message to stdout with the given format and arguments.
+// Messages are only output after Init(true) has been called.
+func DebugLogger(format string, args ...any) {
+	logf(stdout, slog.LevelDebug, format, args...)
+}
+
+// logf attributes the record to the wrapper's caller so AddSource reports the right file:line.
+func logf(l *slog.Logger, level slog.Level, format string, args ...any) {
+	ctx := context.Background()
+	if !l.Enabled(ctx, level) {
+		return
+	}
+	var pcs [1]uintptr
+	runtime.Callers(3, pcs[:]) // skip runtime.Callers, logf and the exported wrapper
+	r := slog.NewRecord(time.Now(), level, fmt.Sprintf(format, args...), pcs[0])
+	_ = l.Handler().Handle(ctx, r)
+}

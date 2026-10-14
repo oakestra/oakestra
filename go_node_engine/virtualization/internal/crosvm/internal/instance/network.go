@@ -21,7 +21,7 @@ func setupNetwork(service model.Service) (*networkConfig, error) {
 	}
 
 	if err := requests.CreateNetworkNamespaceForUnikernel(service.Sname, service.Instance, service.Ports); err != nil {
-		logger.ErrorLogger().Printf("network creation failed: %v", err)
+		logger.ErrorLogger("network creation failed: %v", err)
 		return nil, err
 	}
 
@@ -43,7 +43,7 @@ func teardownNetwork(service model.Service) error {
 	}
 
 	if err := requests.DeleteNamespaceForUnikernel(service.Sname, service.Instance); err != nil {
-		logger.ErrorLogger().Printf("network deletion failed: %v", err)
+		logger.ErrorLogger("network deletion failed: %v", err)
 		return err
 	}
 

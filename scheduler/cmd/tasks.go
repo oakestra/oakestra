@@ -39,15 +39,15 @@ func StartTaskQueueServer() error {
 func scheduleRequestHandler(ctx context.Context, t *asynq.Task) error {
 	jobData := activeScheduler.JobData()
 
-	logger.DebugLogger().Printf("Received payload: %v", string(t.Payload()))
+	logger.DebugLogger("Received payload: %v", string(t.Payload()))
 	if err := json.Unmarshal(t.Payload(), &jobData); err != nil {
-		logger.ErrorLogger().Printf("Could not unmarshal job data: %v", err)
+		logger.ErrorLogger("Could not unmarshal job data: %v", err)
 		return err
 	}
-	logger.DebugLogger().Printf("Received job data: %v", jobData)
+	logger.DebugLogger("Received job data: %v", jobData)
 
 	if err := calculate.PerformSchedulingRequest(jobData, activeScheduler); err != nil {
-		logger.ErrorLogger().Printf("Could not schedule job: %v", err)
+		logger.ErrorLogger("Could not schedule job: %v", err)
 		return err
 	}
 	return nil

@@ -59,14 +59,14 @@ func NewStore(dirPath string, sources ...Source) (*Store, error) {
 	defaultSource := sources[0]
 
 	if err := os.Mkdir(dirPath, 0o700); err != nil && !os.IsExist(err) {
-		logger.ErrorLogger().Printf("failed to create store directory %q: %v", dirPath, err)
+		logger.ErrorLogger("failed to create store directory %q: %v", dirPath, err)
 		return nil, err
 	}
 
-	logger.InfoLogger().Printf("initializing store at %q", dirPath)
+	logger.InfoLogger("initializing store at %q", dirPath)
 	images, err := restoreImages(dirPath)
 	if err != nil {
-		logger.ErrorLogger().Printf("failed to restore images: %v", err)
+		logger.ErrorLogger("failed to restore images: %v", err)
 		return nil, err
 	}
 
@@ -77,7 +77,7 @@ func NewStore(dirPath string, sources ...Source) (*Store, error) {
 		totalSize += img.Size
 	}
 
-	logger.InfoLogger().Printf("restored %d images, total %d bytes", len(images), totalSize)
+	logger.InfoLogger("restored %d images, total %d bytes", len(images), totalSize)
 
 	p := &Store{
 		dirPath:       dirPath,
@@ -111,16 +111,16 @@ func (s *Store) Retrieve(ref string, dstDirPath string, rootfsSize int64) (*Imag
 
 	tmpDirPath, err := iotools.CreateLargeTempDir("image")
 	if err != nil {
-		logger.ErrorLogger().Printf("failed to create temporary directory for %q: %v", ref, err)
+		logger.ErrorLogger("failed to create temporary directory for %q: %v", ref, err)
 		return nil, err
 	}
 
-	logger.InfoLogger().Printf("retrieving image %q to %q...", id, tmpDirPath)
+	logger.InfoLogger("retrieving image %q to %q...", id, tmpDirPath)
 	if err = source.Retrieve(id, tmpDirPath); err != nil {
 		iotools.RemoveAllOrWarn(tmpDirPath)
 		return nil, err
 	}
-	logger.InfoLogger().Printf("retrieved image %q to %q", id, tmpDirPath)
+	logger.InfoLogger("retrieved image %q to %q", id, tmpDirPath)
 
 	img, err = CreateImageFromDir(tmpDirPath)
 	if err != nil {
@@ -128,12 +128,12 @@ func (s *Store) Retrieve(ref string, dstDirPath string, rootfsSize int64) (*Imag
 		return nil, err
 	}
 
-	logger.InfoLogger().Printf("copying image %q to destination %q...", id, dstDirPath)
+	logger.InfoLogger("copying image %q to destination %q...", id, dstDirPath)
 	if err := copyImageFilesToDst(tmpDirPath, dstDirPath, rootfsSize, img.HasInitrd); err != nil {
 		iotools.RemoveAllOrWarn(tmpDirPath)
 		return nil, err
 	}
-	logger.InfoLogger().Printf("copied image %q to destination %q", id, dstDirPath)
+	logger.InfoLogger("copied image %q to destination %q", id, dstDirPath)
 
 	go s.moveIntoCache(ref, img, tmpDirPath, imageDirPath)
 
@@ -143,11 +143,11 @@ func (s *Store) Retrieve(ref string, dstDirPath string, rootfsSize int64) (*Imag
 // Remove deletes every file of the cache and the cache directory itself.
 // After Remove returns, the Store cannot not be used anymore and calls on it will result in undefined behavior.
 func (s *Store) Remove() error {
-	logger.InfoLogger().Printf("removing cache at %q", s.dirPath)
+	logger.InfoLogger("removing cache at %q", s.dirPath)
 
 	imageEntries, err := os.ReadDir(s.dirPath)
 	if err != nil {
-		logger.ErrorLogger().Printf("failed to read directory %q: %v", s.dirPath, err)
+		logger.ErrorLogger("failed to read directory %q: %v", s.dirPath, err)
 		return err
 	}
 
@@ -157,13 +157,13 @@ func (s *Store) Remove() error {
 		imageDirPath := filepath.Join(s.dirPath, imageDirName)
 
 		if !isImageDir(imageDirPath) {
-			logger.WarnLogger().Printf("while removing store, found non-image directory %q, ignoring", imageDirPath)
+			logger.WarnLogger("while removing store, found non-image directory %q, ignoring", imageDirPath)
 			skippedEntry = true
 			continue
 		}
 
 		if err := os.RemoveAll(imageDirPath); err != nil {
-			logger.WarnLogger().Printf("while removing store, failed to remove image directory %q: %v", imageDirPath, err)
+			logger.WarnLogger("while removing store, failed to remove image directory %q: %v", imageDirPath, err)
 			skippedEntry = true
 			continue
 		}
@@ -171,7 +171,7 @@ func (s *Store) Remove() error {
 
 	if !skippedEntry {
 		if err := os.Remove(s.dirPath); err != nil {
-			logger.ErrorLogger().Printf("failed to remove store directory %q: %v", s.dirPath, err)
+			logger.ErrorLogger("failed to remove store directory %q: %v", s.dirPath, err)
 			return err
 		}
 	}
@@ -198,13 +198,13 @@ func (s *Store) retrieveFromCache(
 	if err := copyImageFilesToDst(imageDirPath, dstDirPath, rootfsSize, img.HasInitrd); err != nil {
 		// allow the cache to recover if a file of an entry was deleted, by pretending it wasn't cached
 		if os.IsNotExist(err) {
-			logger.WarnLogger().Printf("missing file for cached entry %q, restoring: %v", ref, err)
+			logger.WarnLogger("missing file for cached entry %q, restoring: %v", ref, err)
 			return false, nil, nil
 		}
 		return true, nil, err
 	}
 
-	logger.InfoLogger().Printf("cache hit for %q -> %q", ref, imageDirPath)
+	logger.InfoLogger("cache hit for %q -> %q", ref, imageDirPath)
 
 	return true, img, nil
 }
@@ -232,11 +232,11 @@ func (s *Store) moveIntoCache(ref string, img *Image, tmpDirPath string, imageDi
 		var errnoErr syscall.Errno
 		if ok := errors.As(err, &errnoErr); ok && errnoErr == 18 {
 			if err := iotools.CopyDir(tmpDirPath, imageDirPath); err != nil {
-				logger.ErrorLogger().Printf("failed to copy image %q into cache directory %q, it will be re-fetched the next time it is used: %v", imageDirPath, ref, err)
+				logger.ErrorLogger("failed to copy image %q into cache directory %q, it will be re-fetched the next time it is used: %v", imageDirPath, ref, err)
 				return
 			}
 		} else {
-			logger.ErrorLogger().Printf("failed to move image %q into cache directory %q, it will be re-fetched the next time it is used: %v", imageDirPath, ref, err)
+			logger.ErrorLogger("failed to move image %q into cache directory %q, it will be re-fetched the next time it is used: %v", imageDirPath, ref, err)
 			return
 		}
 	}
@@ -248,7 +248,7 @@ func (s *Store) moveIntoCache(ref string, img *Image, tmpDirPath string, imageDi
 	s.images[img.Key] = img
 	s.totalSize += img.Size
 
-	logger.InfoLogger().Printf("moved image %q into cache at %q, total size is now %d bytes", ref, imageDirPath, s.totalSize)
+	logger.InfoLogger("moved image %q into cache at %q, total size is now %d bytes", ref, imageDirPath, s.totalSize)
 }
 
 // parseRef takes an image reference and splits it into its source and id parts
@@ -314,7 +314,7 @@ func convertIdToKey(source Source, id string) string {
 func restoreImages(dirPath string) ([]Image, error) {
 	imageEntries, err := os.ReadDir(dirPath)
 	if err != nil {
-		logger.ErrorLogger().Printf("failed to read store directory %q: %v", dirPath, err)
+		logger.ErrorLogger("failed to read store directory %q: %v", dirPath, err)
 		return nil, err
 	}
 
@@ -324,7 +324,7 @@ func restoreImages(dirPath string) ([]Image, error) {
 		imageDirPath := filepath.Join(dirPath, imageDirName)
 
 		if !isImageDir(imageDirPath) {
-			logger.WarnLogger().Printf("while initializing store, found non-image directory %q, ignoring", imageDirPath)
+			logger.WarnLogger("while initializing store, found non-image directory %q, ignoring", imageDirPath)
 			continue
 		}
 

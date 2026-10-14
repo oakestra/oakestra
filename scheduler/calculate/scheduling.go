@@ -31,7 +31,7 @@ func getInterestedResources[C placement.Candidate](candidate C) []string {
 
 	fields := collectJSONFields(t)
 
-	logger.DebugLogger().Printf("Interested resources: %v", fields)
+	logger.DebugLogger("Interested resources: %v", fields)
 	interestedResourcesCache.Store(t, fields)
 	return fields
 }
@@ -75,18 +75,18 @@ func PerformSchedulingRequest[J placement.Job, C placement.Candidate](job J, alg
 	if err != nil {
 		return err
 	}
-	logger.DebugLogger().Printf("Available Resources: %v", candidates)
+	logger.DebugLogger("Available Resources: %v", candidates)
 
 	chosen, err := algorithm.Calculate(job, candidates)
 	if err != nil {
 		var schedulingError placement.SchedulingError
 		if errors.As(err, &schedulingError) {
-			logger.ErrorLogger().Printf("Scheduling failed: Sending status %v to manager", err)
+			logger.ErrorLogger("Scheduling failed: Sending status %v to manager", err)
 			err = manager.DeployFailed(job.ID(), schedulingError.Error())
 		}
 		return err
 	}
 
-	logger.InfoLogger().Printf("Scheduled job %s to candidate %s", job.ID(), chosen.ID())
+	logger.InfoLogger("Scheduled job %s to candidate %s", job.ID(), chosen.ID())
 	return manager.DeploySuccess(job.ID(), chosen.ID())
 }
