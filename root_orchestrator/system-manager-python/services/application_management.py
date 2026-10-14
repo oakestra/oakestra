@@ -69,12 +69,9 @@ def register_app(applications, userid):
 
 def update_app(appid, userid, fields):
     # TODO(GB): fields validation before update
-    app_data = {
-        "application_name": fields.get("application_name"),
-        "application_namespace": fields.get("application_namespace"),
-        "application_desc": fields.get("application_desc", ""),
-        "microservices": fields.get("microservices"),
-    }
+    # The resource-abstractor PATCHes whatever we send, so only pass on what the caller sent
+    updatable = ("application_name", "application_namespace", "application_desc", "microservices")
+    app_data = {key: fields[key] for key in updatable if key in fields}
     return app_operations.update_app(appid, userid, app_data)
 
 
