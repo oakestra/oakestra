@@ -127,7 +127,7 @@ The folowwing format is encoded in the `standard` format. As a `logging` wrapper
 The following call:
 ```python
 ctx = {"url": url, "headers": headers, "data": data}
-logger.info("HTTP POST request sent", extra={'context': ctx})
+logger.info("HTTP POST request sent", extra={"context": ctx})
 ```
 That generate the following log line:
 ```bash
