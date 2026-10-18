@@ -1,9 +1,10 @@
 from bson import ObjectId
-from flask.json import JSONEncoder
+from flask.json.provider import DefaultJSONProvider
 
 
-class MongoJSONEncoder(JSONEncoder):
-    def default(self, obj):
+class MongoJSONProvider(DefaultJSONProvider):
+    @staticmethod
+    def default(obj):
         if isinstance(obj, ObjectId):
             return str(obj)
-        return super().default(obj)
+        return DefaultJSONProvider.default(obj)

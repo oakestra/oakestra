@@ -28,7 +28,7 @@ from proto.clusterRegistration_pb2_grpc import (
 )
 from resource_abstractor_client import candidate_operations
 from sm_logging import configure_logging
-from utils.json_encoder import MongoJSONEncoder
+from utils.json_encoder import MongoJSONProvider
 from utils.network import add_brackets_if_ipv6
 from werkzeug.utils import redirect, secure_filename
 
@@ -39,7 +39,6 @@ UPLOAD_FOLDER = "files"
 ALLOWED_EXTENSIONS = {"txt", "json", "yml"}
 
 app = Flask(__name__)
-app.json_encoder = MongoJSONEncoder
 
 app.config["OPENAPI_VERSION"] = "3.0.2"
 app.config["API_TITLE"] = "Oakestra root api"
@@ -65,6 +64,9 @@ socketio = SocketIO(
     cors_allowed_origins="*",
 )
 mongo_init(app)
+# Has to come after mongo_init: PyMongo(app) installs its own provider, which turns
+# ObjectIds into {"$oid": ...} and would break clients expecting plain strings.
+app.json = MongoJSONProvider(app)
 create_admin()
 
 MY_PORT = os.environ.get("MY_PORT") or 10000
