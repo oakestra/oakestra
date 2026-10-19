@@ -4,51 +4,65 @@ import (
 	"sync"
 )
 
-type stringSlice struct {
-	slice []string
-	mutex sync.Mutex
+type genericSlice[T comparable] struct {
+	data  []T
+	mutex sync.RWMutex
 }
 
-type StringSlice interface {
-	Add(elem string)
-	RemoveElem(elem string)
+type Slice[T comparable] interface {
+	Add(elem T)
+	RemoveElem(elem T)
 	Remove(index int)
-	Find(elem string) int
-	Get() []string
-	Exists(elem string) bool
+	Find(elem T) int
+	Get() []T
+	Exists(elem T) bool
 }
 
-func NewStringSlice() StringSlice {
-	return &stringSlice{
-		slice: make([]string, 0),
-		mutex: sync.Mutex{},
+func NewSlice[T comparable]() Slice[T] {
+	return &genericSlice[T]{
+		data: make([]T, 0),
 	}
 }
 
-func (s *stringSlice) Add(elem string) {
+func (s *genericSlice[T]) Add(elem T) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.slice = append(s.slice, elem)
+	s.data = append(s.data, elem)
 }
 
-func (s *stringSlice) Remove(index int) {
+func (s *genericSlice[T]) Remove(index int) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	if index >= 0 && index < len(s.slice) {
-		s.slice[index] = s.slice[len(s.slice)-1]
-		s.slice = s.slice[:len(s.slice)-1]
-	}
+	s.removeLocked(index)
 }
 
-func (s *stringSlice) RemoveElem(elem string) {
-	position := s.Find(elem)
-	s.Remove(position)
-}
-
-func (s *stringSlice) Find(elem string) int {
+func (s *genericSlice[T]) RemoveElem(elem T) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	for index, currentElem := range s.slice {
+	s.removeLocked(s.findLocked(elem))
+}
+
+func (s *genericSlice[T]) Find(elem T) int {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.findLocked(elem)
+}
+
+func (s *genericSlice[T]) Exists(elem T) bool {
+	return s.Find(elem) >= 0
+}
+
+func (s *genericSlice[T]) Get() []T {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	result := make([]T, len(s.data))
+	copy(result, s.data)
+	return result
+}
+
+// caller must hold at least a read lock
+func (s *genericSlice[T]) findLocked(elem T) int {
+	for index, currentElem := range s.data {
 		if currentElem == elem {
 			return index
 		}
@@ -56,10 +70,10 @@ func (s *stringSlice) Find(elem string) int {
 	return -1
 }
 
-func (s *stringSlice) Exists(elem string) bool {
-	return s.Find(elem) >= 0
-}
-
-func (s *stringSlice) Get() []string {
-	return s.slice
+// caller must hold the write lock; swaps the target with the last element to avoid shifting
+func (s *genericSlice[T]) removeLocked(index int) {
+	if index >= 0 && index < len(s.data) {
+		s.data[index] = s.data[len(s.data)-1]
+		s.data = s.data[:len(s.data)-1]
+	}
 }

@@ -3,7 +3,7 @@ package utils
 import "testing"
 
 func TestStringSlice_Add(t *testing.T) {
-	s := NewStringSlice()
+	s := NewSlice[string]()
 	s.Add("test")
 	slice := s.Get()
 	for _, s := range slice {
@@ -15,7 +15,7 @@ func TestStringSlice_Add(t *testing.T) {
 }
 
 func TestStringSlice_Exists(t *testing.T) {
-	s := NewStringSlice()
+	s := NewSlice[string]()
 	s.Add("test")
 	if s.Exists("mario") {
 		t.Error("mario should not be in the slice")
@@ -26,7 +26,7 @@ func TestStringSlice_Exists(t *testing.T) {
 }
 
 func TestStringSlice_Find(t *testing.T) {
-	s := NewStringSlice()
+	s := NewSlice[string]()
 	s.Add("0")
 	s.Add("1")
 	index := s.Find("0")
@@ -40,7 +40,7 @@ func TestStringSlice_Find(t *testing.T) {
 }
 
 func TestStringSlice_Remove(t *testing.T) {
-	s := NewStringSlice()
+	s := NewSlice[string]()
 	s.Add("m")
 	s.Remove(0)
 	if len(s.Get()) > 0 {
@@ -49,7 +49,7 @@ func TestStringSlice_Remove(t *testing.T) {
 }
 
 func TestStringSlice_Remove2(t *testing.T) {
-	s := NewStringSlice()
+	s := NewSlice[string]()
 	s.Add("a")
 	s.Add("m")
 	s.Add("n")
@@ -63,7 +63,7 @@ func TestStringSlice_Remove2(t *testing.T) {
 }
 
 func TestStringSlice_RemoveElem(t *testing.T) {
-	s := NewStringSlice()
+	s := NewSlice[string]()
 	s.Add("a")
 	s.Add("m")
 	s.Add("n")
