@@ -1,15 +1,13 @@
 import copy
 import os
 import sys
-from unittest.mock import ANY, MagicMock, Mock, patch
+from unittest.mock import ANY, patch
 
 from resource_abstractor_client import app_operations, job_operations
 
 from .utils import get_first_app, get_full_random_sla_app
 
-sys.modules["system_manager.ext_requests.net_plugin_requests"] = Mock()
 net_plugin = sys.modules["system_manager.ext_requests.net_plugin_requests"]
-net_plugin.net_inform_service_deploy = MagicMock()
 
 # we ignore E402 because we need to import the service_management module after the mock
 from ..services.service_management import (  # noqa: E402

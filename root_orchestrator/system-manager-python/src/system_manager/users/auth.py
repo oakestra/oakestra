@@ -1,7 +1,7 @@
 import hashlib
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask_smorest import abort
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -183,7 +183,7 @@ def user_change_password_with_reset_request(reset_token, new_password):
     if token is not None:
         user_db.mongo_delete_password_reset_token(token["_id"])
 
-    if token is None or datetime.now() >= token["expiry_date"]:
+    if token is None or datetime.now(timezone.utc) >= token["expiry_date"]:
         return {"message": "Link expired! Please request a new one!"}, 400
     else:
         user = user_db.mongo_get_user_by_id(token["user_id"])
