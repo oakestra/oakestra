@@ -67,9 +67,6 @@ def create_refresh_token_route():
     additional_claims = request.json.get("additional_claims", None)
     additional_headers = request.json.get("additional_headers", None)
 
-    if expires_delta is not None:
-        expires_delta = timedelta(minutes=expires_delta)
-
     refresh_token = create_refresh_token(
         identity=identity,
         expires_delta=expires_delta,
