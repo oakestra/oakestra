@@ -1,8 +1,7 @@
-import logging
-
+from oakestra_logging import get_logger
 from resource_abstractor_client import candidate_operations
 
-logger = logging.getLogger("cluster_manager")
+logger = get_logger(__name__)
 
 CLUSTER_FIELDS = {"_id", "ip", "port", "candidate_name", "candidate_location"}
 

@@ -9,10 +9,10 @@ For more details checkout out the [openapi.json](./api/v1/openapi.json)
 
 ## Start Marketplace manager.
 
-Run the service by running 
+From this directory, build with the local shared libraries supplied as a named context:
 
-```
-$ docker build -t marketplace_manager .
+```bash
+$ docker build --build-context libraries=../../libraries -t marketplace_manager .
 $ docker run marketplace_manager -p 11102:11102
 ```
 

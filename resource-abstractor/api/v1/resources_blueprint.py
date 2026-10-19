@@ -1,5 +1,3 @@
-import logging
-
 from bson import ObjectId
 from db import candidates_db
 from db.candidates_helper import build_filter
@@ -8,10 +6,11 @@ from flask import jsonify, request
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import INCLUDE, Schema, fields
+from oakestra_logging import get_logger
 from services.hook_service import perform_create, perform_update, pre_post_hook
 from werkzeug import exceptions
 
-logger = logging.getLogger("resource_abstractor")
+logger = get_logger(__name__)
 
 resourcesblp = Blueprint("Resources", "resources", url_prefix="/api/v1/resources")
 
@@ -77,7 +76,11 @@ class AllResourcesController(MethodView):
         filter = build_filter(query)
 
         if request.args.get("resources"):
-            print("Resources: ", request.args.get("resources"), flush=True)
+            logger.debug(
+                "Applying resource projection",
+                event_name="resources.projection.requested",
+                requested_fields=request.args.get("resources").split(","),
+            )
             res = list(candidates_db.find_candidates(filter, request.args.get("resources")))
         else:
             res = list(candidates_db.find_candidates(filter))
@@ -92,16 +95,23 @@ class AllResourcesController(MethodView):
     @resourcesblp.response(201, ResourceSchema, content_type="application/json")
     @pre_post_hook("resources")
     def post(self, data, **kwargs):
-        client_ip = request.remote_addr
-        logger.debug(f"POST /api/v1/resources - Client: {client_ip}, Data: {data}")
+        logger.debug(
+            "Creating resource",
+            event_name="resource.create.requested",
+            supplied_fields=sorted(data),
+        )
         return candidates_db.create_candidate(data)
 
     @resourcesblp.arguments(ResourceSchema(unknown=INCLUDE), location="json")
     @resourcesblp.response(200, ResourceSchema, content_type="application/json")
     def put(self, data, **kwargs):
         resource_name = data.get("candidate_name")
-        client_ip = request.remote_addr
-        logger.debug(f"PUT /api/v1/resources - Client: {client_ip}, Data: {data}")
+        logger.debug(
+            "Replacing resource",
+            event_name="resource.replace.requested",
+            resource_name=resource_name,
+            supplied_fields=sorted(data),
+        )
 
         candidate = candidates_db.find_candidate_by_name(resource_name)
         if candidate:
@@ -123,9 +133,10 @@ class ResourceController(MethodView):
         if candidate is None:
             raise exceptions.NotFound()
 
-        client_ip = request.remote_addr
         logger.debug(
-            f"GET /api/v1/resources/{resource_id} - Client: {client_ip}, Result: {candidate}"
+            "Retrieved resource",
+            event_name="resource.retrieved",
+            resource_id=resource_id,
         )
         return candidate
 
@@ -134,8 +145,12 @@ class ResourceController(MethodView):
     @pre_post_hook("resources", with_param_id="resource_id")
     def patch(self, data, **kwargs):
         resource_id = kwargs.get("resource_id")
-        client_ip = request.remote_addr
-        logger.debug(f"PATCH /api/v1/resources/{resource_id} - Client: {client_ip}, Data: {data}")
+        logger.debug(
+            "Updating resource",
+            event_name="resource.update.requested",
+            resource_id=resource_id,
+            supplied_fields=sorted(data),
+        )
 
         if not ObjectId.is_valid(resource_id):
             raise exceptions.NotFound

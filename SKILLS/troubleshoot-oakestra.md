@@ -156,6 +156,21 @@ For containers that exited:
 docker logs <exited_container_name> 2>&1 | tail -50
 ```
 
+Oakestra-owned Python application records and standard-library logging records emitted after
+configuration use schema-v1 JSON. Gunicorn messages are also structured in current images. Flask
+development-server banners, subprocesses, and dependencies that write directly to stdout or stderr
+may still produce raw lines; Docker only captures those streams. To inspect schema-v1 records:
+
+```bash
+docker logs --tail 200 system_manager 2>&1 | jq -R 'fromjson? | select(.schema_version == 1)'
+docker logs --tail 200 cluster_manager 2>&1 | jq -R 'fromjson? | select(.schema_version == 1)'
+```
+
+Each structured record must contain `timestamp`, `level`, `service`, `logger`, and `message`.
+Error records may contain a single `exception` object; they should not emit a second traceback
+line. If Python application lines are plain text, verify the image version and the
+`OAKESTRA_SERVICE_NAME`/`LOG_LEVEL` environment variables.
+
 **Common error patterns and what they mean:**
 
 | Pattern | Likely Cause |
@@ -183,7 +198,7 @@ Check that critical env vars were correctly injected into each container:
 
 ```bash
 # Root Orchestrator critical vars
-docker exec system_manager env 2>/dev/null | grep -E "ROOT_MONGO|ROOT_SCHEDULER|RESOURCE_ABSTRACTOR|NET_PLUGIN|JWT" || echo "system_manager not running"
+docker exec system_manager env 2>/dev/null | grep -E "ROOT_MONGO|ROOT_SCHEDULER|RESOURCE_ABSTRACTOR|NET_PLUGIN|JWT|OAKESTRA_SERVICE_NAME|LOG_LEVEL" || echo "system_manager not running"
 
 docker exec root_scheduler env 2>/dev/null | grep -E "MANAGER_URL|RESOURCE_ABSTRACTOR|REDIS_ADDR" || echo "root_scheduler not running"
 
@@ -657,10 +672,10 @@ docker compose build --no-cache system_manager
 docker compose pull
 ```
 
-The shared `libraries/` packages (`oakestra_utils_library`, `resource_abstractor_client`) are built from the repo-local `libraries/` folder via a Buildx named build context — not from a remote git repo, and there is no `LIB_BRANCH` env var. If a build fails on these libraries, check that:
+The shared `libraries/` packages (`oakestra_utils_library`, `resource_abstractor_client`, and `oakestra_logging`) are built from the repo-local `libraries/` folder via a Buildx named build context, not from a remote Git repository. If a build fails on these libraries, check that:
 ```bash
 # The libraries build context resolves (declared in docker-compose.yml as additional_contexts):
-ls libraries/oakestra_utils_library libraries/resource_abstractor_client
+ls libraries/oakestra_utils_library libraries/resource_abstractor_client libraries/oakestra_logging
 # BuildKit/Buildx is enabled (named build contexts require it — default on modern Docker):
 docker buildx version
 ```
