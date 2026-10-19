@@ -1,0 +1,56 @@
+groups:
+  - name: oakestra-container-lifecycle
+    interval: 15s
+    rules:
+      - record: oakestra:container_labels
+        expr: |
+          max by (instance, name, cluster_id, compose_service, compose_project) (
+            docker_container_labels{job="docker-state",cluster_id!="",compose_service!="",compose_project!=""}
+          )
+      - record: oakestra:container_state
+        expr: |
+          docker_container_state{job="docker-state"}
+          * on (instance, name) group_left (cluster_id, compose_service, compose_project)
+          oakestra:container_labels
+      - record: oakestra:container_restarts_total
+        expr: |
+          docker_container_restarts_total{job="docker-state"}
+          * on (instance, name) group_left (cluster_id, compose_service, compose_project)
+          oakestra:container_labels
+      - record: oakestra:container_monitoring_ready
+        expr: |
+          (
+            (min(up{job="docker-state"}) == 1)
+            and on () (min(up{job="node-exporter"}) == 1)
+          )
+          unless on () (increase(docker_exporter_scrape_errors_total{job="docker-state"}[5m]) > 0)
+          unless on () (node_textfile_scrape_error{job="node-exporter"} > 0)
+      - record: oakestra:container_missing_replicas
+        expr: |
+          clamp_min(
+            max by (cluster_id, compose_service, compose_project) (
+              oakestra_expected_container_replicas{job="node-exporter"}
+            )
+            - on (cluster_id, compose_service, compose_project)
+            (
+              sum by (cluster_id, compose_service, compose_project) (
+                oakestra:container_state{state="running"} == 1
+              )
+              or on (cluster_id, compose_service, compose_project)
+              (
+                0 * max by (cluster_id, compose_service, compose_project) (
+                  oakestra_expected_container_replicas{job="node-exporter"}
+                )
+              )
+            ),
+            0
+          )
+          and on () oakestra:container_monitoring_ready
+      - record: oakestra:container_restarts_5m
+        expr: |
+          sum by (cluster_id, compose_service, compose_project) (
+            increase(oakestra:container_restarts_total[5m])
+          )
+          and on (cluster_id, compose_service, compose_project)
+            oakestra_expected_container_replicas{job="node-exporter"}
+          and on () oakestra:container_monitoring_ready
