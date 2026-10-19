@@ -6,11 +6,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ git lib
 
 COPY requirements.txt /
 
-# Install appropriate requirements
-ARG LIB_BRANCH=develop
-ENV LIB_BRANCH=${LIB_BRANCH}
+# Oakestra shared libraries are pulled from the repo-local libraries/ folder via the
+# "libraries" named build context (see docker-compose.yml / CI), not from a remote git repo.
+# DL3022 is ignored below: "libraries" is a BuildKit named build context, not a FROM stage.
+# hadolint ignore=DL3022
+COPY --from=libraries . /libraries
 
-RUN pip install -r requirements.txt --no-cache-dir && rm /requirements.txt
+# Install appropriate requirements
+RUN pip install -r requirements.txt --no-cache-dir \
+    && pip install --no-cache-dir /libraries/resource_abstractor_client /libraries/oakestra_utils_library \
+    && rm /requirements.txt
 
 COPY . /
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go_node_engine/config"
 	"go_node_engine/model"
 	"net"
 	"net/http"
@@ -13,8 +14,9 @@ import (
 )
 
 type registerRequest struct {
-	ClientId       string `json:"client_id"`
-	ClusterAddress string `json:"cluster_address"`
+	ClientId          string `json:"client_id"`
+	ClusterAddress    string `json:"cluster_address"`
+	NodePublicAddress string `json:"node_public_address"`
 }
 
 type connectNetworkRequest struct {
@@ -95,10 +97,16 @@ func DetachNetworkFromTask(servicename string, instance int) error {
 }
 
 // RegisterSelfToNetworkComponent registers the node to the network component
-func RegisterSelfToNetworkComponent() error {
+func RegisterSelfToNetworkComponent(configs config.ConfFile) error {
+	publicIp := ""
+	if !configs.PublicIp.IsAuto() && !configs.PublicIp.IsDisabled() {
+		publicIp = configs.PublicIp.Value()
+	}
+
 	request := registerRequest{
-		ClientId:       model.GetNodeInfo().Id,
-		ClusterAddress: model.GetNodeInfo().ClusterAddress,
+		ClientId:          model.GetNodeInfo().Id,
+		ClusterAddress:    model.GetNodeInfo().ClusterAddress,
+		NodePublicAddress: publicIp,
 	}
 	jsonReq, err := json.Marshal(request)
 	if err != nil {

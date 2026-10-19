@@ -7,9 +7,9 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/scheduler ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/scheduler ./cmd
 
-FROM debian:bullseye-slim
+FROM gcr.io/distroless/static-debian12:latest@sha256:61b7ccecebc7c474a531717de80a94709d20547cdcdaf740c25876f2a8e38b44
 
 COPY --from=build-stage /bin/scheduler /scheduler
 
@@ -20,4 +20,4 @@ ENV REDIS_ADDR=redis://:rootRedis@redis:6379
 
 ENV DEBUG=False
 
-ENTRYPOINT ["./scheduler"]
+ENTRYPOINT ["/scheduler"]
