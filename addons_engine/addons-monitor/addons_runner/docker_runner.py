@@ -2,6 +2,7 @@ import logging
 import os
 
 import docker
+from docker_image_management import pull_image
 
 ORCHESTRATION_PLANE = os.environ.get("ORCHESTRATION_PLANE") or "root"
 
@@ -89,6 +90,15 @@ class DockerRunner:
         )
         one_network = service["networks"][0]
         image = service.get("image")
+
+        # containers.run() does an implicit unauthenticated pull when the
+        # image isn't local — that breaks private registries. Pull with auth
+        # first so containers.run() finds the image already cached.
+        try:
+            pull_image(self._client, image)
+        except docker.errors.DockerException as e:
+            logging.warning(f"Failed to pull {image} before run", exc_info=e)
+            raise
 
         created_container = self._client.containers.run(
             image,
