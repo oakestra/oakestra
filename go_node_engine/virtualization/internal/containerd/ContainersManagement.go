@@ -11,6 +11,7 @@ import (
 	"go_node_engine/model/gpu"
 	"go_node_engine/requests"
 	"go_node_engine/util/taskid"
+	"go_node_engine/virtualization/internal/containerd/nvidia"
 	"go_node_engine/virtualization/internal/logutils"
 	virtrt "go_node_engine/virtualization/internal/runtime"
 	"iter"
@@ -24,15 +25,14 @@ import (
 	"sync"
 	"time"
 
-	ctd "github.com/containerd/containerd"
 	runcoptions "github.com/containerd/containerd/api/types/runc/options"
-	"github.com/containerd/containerd/cio"
-	"github.com/containerd/containerd/containers"
-	"github.com/containerd/containerd/contrib/nvidia"
-	"github.com/containerd/containerd/namespaces"
-	"github.com/containerd/containerd/oci"
-	"github.com/containerd/containerd/plugin"
-	docker_remote "github.com/containerd/containerd/remotes/docker"
+	ctd "github.com/containerd/containerd/v2/client"
+	"github.com/containerd/containerd/v2/core/containers"
+	docker_remote "github.com/containerd/containerd/v2/core/remotes/docker"
+	"github.com/containerd/containerd/v2/pkg/cio"
+	"github.com/containerd/containerd/v2/pkg/namespaces"
+	"github.com/containerd/containerd/v2/pkg/oci"
+	"github.com/containerd/containerd/v2/plugins"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/shirou/gopsutil/docker"
@@ -78,9 +78,15 @@ const CLEANUP_TIMEOUT = 5 * time.Second
 
 const TASK_ID_LABEL = "io.oakestra.taskid"
 
+const CONTAINERD_SOCKET = "/run/containerd/containerd.sock"
+
+func snapshotKey(taskId string) string {
+	return fmt.Sprintf("%s-snapshotter", taskId)
+}
+
 // GetContainerdRuntime returns the container runtime client
 func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
-	client, err := ctd.New("/run/containerd/containerd.sock")
+	client, err := ctd.New(CONTAINERD_SOCKET)
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to start the container engine: %v\n", err)
 		return &ContainerRuntime{}
@@ -288,6 +294,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 
 	revert := func(err error) {
 		service.StatusDetail = fmt.Sprintf("Container failed to start: %v", err)
+		r.releaseVolumes(taskId)
 		startup <- false
 		errorchan <- err
 		r.channelLock.Lock()
@@ -299,19 +306,23 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	containerOpts := []ctd.NewContainerOpts{}
 	// -- if custom runtime selected, add it to the container
 	if service.Runtime != string(model.CONTAINER_RUNTIME) {
-		if strings.Contains("io.containerd", service.Runtime) {
+		if strings.HasPrefix(service.Runtime, "io.containerd") {
 			containerOpts = append(containerOpts, ctd.WithRuntime(service.Runtime, &runcoptions.Options{}))
 		} else {
 			path, err := exec.LookPath(service.Runtime)
-			logger.InfoLogger().Printf("Using custom runtime %s", path)
 			if err != nil {
+				// Don't carry on without a BinaryName, the shim would just use runc and
+				// the service would lose the isolation it asked for (e.g. gVisor).
 				logger.ErrorLogger().Printf("ERROR: unable to find runtime %s, %v", service.Runtime, err)
+				revert(err)
+				return
 			}
-			containerOpts = append(containerOpts, ctd.WithRuntime(plugin.RuntimeRuncV2, &runcoptions.Options{BinaryName: path}))
+			logger.InfoLogger().Printf("Using custom runtime %s", path)
+			containerOpts = append(containerOpts, ctd.WithRuntime(plugins.RuntimeRuncV2, &runcoptions.Options{BinaryName: path}))
 		}
 	}
 	// -- add custom snapshotter
-	containerOpts = append(containerOpts, ctd.WithNewSnapshot(fmt.Sprintf("%s-snapshotter", taskId), image))
+	containerOpts = append(containerOpts, ctd.WithNewSnapshot(snapshotKey(taskId), image))
 	// -- add image
 	containerOpts = append(containerOpts, ctd.WithImage(image))
 
@@ -384,9 +395,16 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 
 	//	start task with /tmp/taskid default log directory
+	// The container exists from here on, so failures need to remove it. Otherwise the
+	// "<taskId>-snapshotter" snapshot sticks around and redeploys fail with "already exists".
+	revertContainer := func(err error) {
+		_ = r.removeContainer(container)
+		revert(err)
+	}
+
 	file, err := os.OpenFile(fmt.Sprintf("%s/%s", model.GetNodeInfo().LogDirectory, taskId), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		revert(err)
+		revertContainer(err)
 		return
 	}
 	//defer file.Close()
@@ -400,8 +418,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR: containerd task creation failure: %v", err)
-		_ = container.Delete(ctx)
-		revert(err)
+		revertContainer(err)
 		return
 	}
 	defer func(ctx context.Context, task ctd.Task) {
@@ -412,7 +429,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	exitStatusC, err := task.Wait(ctx)
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR: containerd task wait failure: %v", err)
-		revert(err)
+		revertContainer(err)
 		return
 	}
 
@@ -425,7 +442,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 		err = requests.AttachNetworkToTask(taskpid, service.Sname, service.Instance, service.Ports)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to attach network interface to the task: %v", err)
-			revert(err)
+			revertContainer(err)
 			return
 		}
 	}
@@ -433,7 +450,7 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	// execute the image's task
 	if err := task.Start(ctx); err != nil {
 		logger.ErrorLogger().Printf("ERROR: containerd task start failure: %v", err)
-		revert(err)
+		revertContainer(err)
 		return
 	}
 
@@ -441,27 +458,14 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	startup <- true
 
 	// wait for manual task kill or task finish
-	var exitStatus ctd.ExitStatus
 	select {
-	case exitStatus = <-exitStatusC:
-		// natural exit, fall through to cleanup below
-	case <-*killChannel:
-		// kill requested
-		service.Status = model.SERVICE_DEAD
-		if model.GetNodeInfo().Overlay {
-			_ = requests.DetachNetworkFromTask(service.Sname, service.Instance)
+	case exitStatus := <-exitStatusC:
+		if exitStatus.ExitCode() == 0 && service.OneShot {
+			service.Status = model.SERVICE_COMPLETED
+		} else {
+			service.Status = model.SERVICE_DEAD
 		}
-		r.channelLock.Lock()
-		delete(r.killQueue, taskId)
-		r.channelLock.Unlock()
-		_ = r.removeContainer(container)
-		statusChangeNotificationHandler(service)
-		return
-	}
-
-	if exitStatus.ExitCode() == 0 && service.OneShot {
-		service.Status = model.SERVICE_COMPLETED
-	} else {
+	case <-*killChannel:
 		service.Status = model.SERVICE_DEAD
 	}
 
@@ -475,7 +479,13 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	r.channelLock.Unlock()
 	_ = r.removeContainer(container)
 
-	// CSI teardown: unpublish + unstage volumes after the container has been removed.
+	// CSI teardown has to wait until the container is removed.
+	r.releaseVolumes(taskId)
+	statusChangeNotificationHandler(service)
+}
+
+// releaseVolumes unpublishes and unstages the CSI volumes mounted for taskId, if any.
+func (r *ContainerRuntime) releaseVolumes(taskId string) {
 	r.channelLock.Lock()
 	mv, hasMounts := r.mountedVolumes[taskId]
 	delete(r.mountedVolumes, taskId)
@@ -483,7 +493,6 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	if hasMounts {
 		csi.UnmountVolumes(mv)
 	}
-	statusChangeNotificationHandler(service)
 }
 
 func getTotalCpuUsageByPid(pid int32) (float64, error) {
@@ -797,7 +806,7 @@ var (
 )
 
 // convertTaskIdToContainerId converts taskId into a valid containerd identifier.
-// See // See https://github.com/containerd/containerd/blob/v1.7.28/identifiers/validate.go.
+// See https://github.com/containerd/containerd/blob/v2.3.7/pkg/identifiers/validate.go.
 // The generated identifier:
 //   - is at most 76 characters long;
 //   - contains only ASCII letters, digits, dots, underscores, and hyphens;
