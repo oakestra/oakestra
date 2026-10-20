@@ -89,7 +89,9 @@ func WithGPUs(opts ...Opts) oci.SpecOpts {
 		if s.Hooks == nil {
 			s.Hooks = &specs.Hooks{}
 		}
-		s.Hooks.Prestart = append(s.Hooks.Prestart, specs.Hook{
+		// Prestart is deprecated, but containerd's contrib/nvidia still uses it and
+		// older runc versions don't run CreateRuntime hooks.
+		s.Hooks.Prestart = append(s.Hooks.Prestart, specs.Hook{ //nolint:staticcheck
 			Path: c.OCIHookPath,
 			Args: append([]string{
 				"containerd",
