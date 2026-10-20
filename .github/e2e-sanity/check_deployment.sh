@@ -25,6 +25,20 @@ APP_NS=ci
 SERVICE_NAME=sleeper
 SERVICE_NS=ci
 
+# Taken from the library in this checkout so a new rejection reason doesn't
+# need an edit here. The library is stdlib only, so no pip install needed.
+UTILS_LIBRARY="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/libraries/oakestra_utils_library"
+NEGATIVE_SCHEDULING_STATUSES=$(python3 -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+from oakestra_utils.types.statuses import NegativeSchedulingStatus
+print("\n".join(s.value for s in NegativeSchedulingStatus))
+' "$UTILS_LIBRARY")
+[[ -n "$NEGATIVE_SCHEDULING_STATUSES" ]] || {
+  echo "FAIL: no NegativeSchedulingStatus values found in ${UTILS_LIBRARY}" >&2
+  exit 1
+}
+
 token=""
 
 fail() {
@@ -114,19 +128,12 @@ instance_count_is() {
   [[ "$count" == "$expected" ]]
 }
 
-# Keep in sync with NegativeSchedulingStatus in oakestra_utils_library.
 rejected_by_scheduler() {
   local service_id=$1
   local status
   status=$(api GET "/api/service/${service_id}" 2>/dev/null | jq -r '.status // "-"') || return 1
   echo "[${SECONDS}s] job status '${status}'"
-  case "$status" in
-    TargetClusterNotFound | TargetClusterNotActive | TargetClusterNoCapacity | \
-      NoActiveClusterWithCapacity | NO_WORKER_CAPACITY | NO_QUALIFIED_WORKER_FOUND | NO_NODE_FOUND)
-      return 0
-      ;;
-  esac
-  return 1
+  grep -Fxq -- "$status" <<<"$NEGATIVE_SCHEDULING_STATUSES"
 }
 
 service_gone_at_root() {
