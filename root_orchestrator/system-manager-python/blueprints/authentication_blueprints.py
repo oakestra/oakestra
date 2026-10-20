@@ -39,10 +39,6 @@ register_schema = {
 }
 
 
-# ......... Functions fot the Authentication ...........#
-# ......................................................#
-
-
 @loginbp.route("/login")
 class UserLoginController(MethodView):
     @loginbp.arguments(schema=login_schema, location="json", validate=False, unknown=True)
