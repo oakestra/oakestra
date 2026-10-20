@@ -270,11 +270,10 @@ def _check_mqtt_server_cert_expiry():
         if days > _CERT_WARN_DAYS:
             return
         logger.warning("MQTT broker server certificate expires in %d day(s); re-issuing it.", days)
+        # mosquitto reloads itself when the file changes.
         write_mqtt_server_identity(config.MY_CLUSTER_ADDRESS)
     except Exception as exc:
         logger.error("Could not re-issue the MQTT broker server certificate: %s", exc)
-        return
-    config.reload_mqtt()
 
 
 # Replacing the intermediate CA means every worker must re-bootstrap, so warn early.

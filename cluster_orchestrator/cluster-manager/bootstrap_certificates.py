@@ -73,9 +73,11 @@ REQUEST_TIMEOUT = 30
 
 
 def _write(path: Path, content: str, mode: int) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content)
-    os.chmod(path, mode)
+    # Atomic: on a re-registration mosquitto and cluster_kong_external are running and
+    # reload themselves as soon as the files change.
+    from utils.files import write_file_atomic
+
+    write_file_atomic(path, content, mode)
 
 
 def _fetch_root_ca_tofu(base_url: str) -> None:
@@ -323,40 +325,16 @@ def issue_mqtt_server_identity() -> None:
     logger.info("Issued MQTT broker server certificate %s", cert_path)
 
 
-def reload_running_services() -> None:
-    """Reload mosquitto and the external gateway"""
-    import docker
-
-    client = docker.from_env()
-    for name, reload in (
-        (os.environ.get("MQTT_CONTAINER_NAME") or "mqtt", lambda c: c.kill("HUP")),
-        (
-            os.environ.get("KONG_EXTERNAL_CONTAINER_NAME") or "cluster_kong_external",
-            lambda c: c.exec_run("kong reload"),
-        ),
-    ):
-        try:
-            container = client.containers.get(name)
-            if container.status == "running":
-                reload(container)
-                logger.info("Reloaded the running %s.", name)
-        except docker.errors.NotFound:
-            pass
-        except Exception as exc:
-            logger.error("Could not reload %s — restart it manually: %s", name, exc)
-
-
 def main() -> None:
     # Before anything imports config: it reads the CA locations at import time.
     _use_bootstrap_cert_paths()
     token = os.environ.get("CLUSTER_REGISTRATION_TOKEN") or ""
-    reregistered = False
     if not all(path.is_file() for path in MTLS_FILES):
         redeem_cluster_token(token)
     elif token and _is_new_token(token):
+        # A running mosquitto and cluster_kong_external pick up the new files themselves.
         logger.info("NEW CLUSTER_REGISTRATION_TOKEN — re-registering the cluster.")
         redeem_cluster_token(token)
-        reregistered = True
     else:
         logger.info("Cluster certificate material already present — skipping token redemption.")
         if not _check_cert_expiry():
@@ -366,8 +344,6 @@ def main() -> None:
     write_cluster_crl()
     issue_cluster_mqtt_identity()
     issue_mqtt_server_identity()
-    if reregistered:
-        reload_running_services()
     logger.info("Certificate bootstrap complete.")
 
 

@@ -9,7 +9,6 @@ services:
     command: ["sh", "-c", "exec gunicorn --bind [::]:$$MY_PORT system_manager:app"]
     volumes:
       - ${ROOT_CERT_PATH:-./config/certs}:/certs
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./config/docker-update-ca-trust.sh:/docker-update-ca-trust.sh:ro
     environment:
       - ROOT_CERT_FILE=/certs/server.crt
@@ -184,7 +183,15 @@ services:
     image: kong:3.6
     container_name: kong_external
     hostname: kong_external
+    # Reloads Kong when ca.crt, revoked.crl or the public cert change on disk, so
+    # system_manager only writes the files. The command is the image's own
+    # entrypoint and command.
+    entrypoint: ["/bin/sh", "/cert-watch.sh"]
+    command: ["/docker-entrypoint.sh", "kong", "docker-start"]
     environment:
+      - CERT_WATCH_FILES=/certs/ca.crt /certs/revoked.crl /certs/public/fullchain.pem /certs/public/privkey.pem
+      - CERT_WATCH_ACTION=command
+      - CERT_WATCH_COMMAND=kong reload
       - KONG_DATABASE=postgres
       - KONG_PG_HOST=kong_db_external
       - KONG_PG_USER=kong
@@ -210,6 +217,7 @@ services:
       - KONG_LOG_LEVEL=info
     volumes:
       - ${ROOT_CERT_PATH:-./config/certs}:/certs:ro
+      - ./config/cert-watch.sh:/cert-watch.sh:ro
     ports:
       - "443:8443"    # HTTPS — public
     expose:

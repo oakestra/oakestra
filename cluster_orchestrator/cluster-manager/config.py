@@ -128,61 +128,20 @@ def cluster_ca_enabled() -> bool:
     )
 
 
-MQTT_CONTAINER_NAME = os.environ.get("MQTT_CONTAINER_NAME", "mqtt")
+def restart_cluster_service_manager() -> bool:
+    """Restart cluster_service_manager, e.g. so it loads a new MQTT client certificate.
 
-
-def reload_mqtt() -> bool:
-    """Send SIGHUP to the mosquitto broker so it reloads its TLS certificates.
-
-    Mosquitto 2.0 re-reads cert files on SIGHUP without dropping connections.
+    Its container restarts the service when mqtt_clients.restart changes
+    (config/cert-watch.sh), within about 15 seconds.
     """
     try:
-        import docker
+        from datetime import datetime, timezone
+        from pathlib import Path
 
-        client = docker.from_env()
-        container = client.containers.get(MQTT_CONTAINER_NAME)
-        container.kill("HUP")
-        return True
-    except Exception as e:
-        import logging
+        from utils.files import write_file_atomic
 
-        logging.getLogger("cluster_manager").error("Could not reload MQTT broker: %s", e)
-        return False
-
-
-KONG_EXTERNAL_CONTAINER_NAME = os.environ.get(
-    "KONG_EXTERNAL_CONTAINER_NAME", "cluster_kong_external"
-)
-
-
-def reload_kong_external() -> bool:
-    """Reload the external gateway so it re-reads ca.crt, which verifies the root's calls."""
-    try:
-        import docker
-
-        container = docker.from_env().containers.get(KONG_EXTERNAL_CONTAINER_NAME)
-        result = container.exec_run("kong reload")
-        if result.exit_code != 0:
-            raise RuntimeError(result.output.decode("utf-8", errors="replace").strip())
-        return True
-    except Exception as e:
-        import logging
-
-        logging.getLogger("cluster_manager").error("Could not reload the external gateway: %s", e)
-        return False
-
-
-CLUSTER_SERVICE_MANAGER_CONTAINER_NAME = os.environ.get(
-    "CLUSTER_SERVICE_MANAGER_CONTAINER_NAME", "cluster_service_manager"
-)
-
-
-def restart_cluster_service_manager() -> bool:
-    """Restart cluster_service_manager, e.g. so it loads a new MQTT client certificate."""
-    try:
-        import docker
-
-        docker.from_env().containers.get(CLUSTER_SERVICE_MANAGER_CONTAINER_NAME).restart()
+        marker = Path(ROOT_CA_FILE).parent / "mqtt_clients.restart"
+        write_file_atomic(marker, datetime.now(timezone.utc).isoformat() + "\n", 0o644)
         return True
     except Exception as e:
         import logging

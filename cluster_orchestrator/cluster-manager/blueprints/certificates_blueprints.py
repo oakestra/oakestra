@@ -39,6 +39,7 @@ from utils.certificates import (
     write_cluster_mqtt_identity,
     write_mqtt_server_identity,
 )
+from utils.files import write_file_atomic
 
 logger = logging.getLogger("cluster_manager")
 
@@ -368,32 +369,25 @@ class ClusterCertRefreshController(MethodView):
 
         cert_dir = Path(config.ROOT_CA_FILE).parent if config.ROOT_CA_FILE else Path("/certs")
 
-        def _write(path, content, mode):
-            p = Path(path)
-            p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(content)
-            os.chmod(p, mode)
-
-        _write(config.ROOT_CA_FILE, payload["root_ca"], 0o644)
-        _write(config.CLUSTER_CERT_FILE, payload["client_cert"], 0o644)
-        _write(config.CLUSTER_KEY_FILE, payload["client_key"], 0o600)
-        _write(config.CLUSTER_CA_CERT_FILE, payload["cluster_ca_cert"], 0o644)
-        _write(config.CLUSTER_CA_KEY_FILE, payload["cluster_ca_key"], 0o600)
+        write_file_atomic(config.ROOT_CA_FILE, payload["root_ca"], 0o644)
+        write_file_atomic(config.CLUSTER_CERT_FILE, payload["client_cert"], 0o644)
+        write_file_atomic(config.CLUSTER_KEY_FILE, payload["client_key"], 0o600)
+        write_file_atomic(config.CLUSTER_CA_CERT_FILE, payload["cluster_ca_cert"], 0o644)
+        write_file_atomic(config.CLUSTER_CA_KEY_FILE, payload["cluster_ca_key"], 0o600)
 
         logger.info("Cluster certificate material refreshed from root")
         # The MQTT identities and CRL must chain to / be signed by the new cluster CA.
+        # mosquitto and cluster_kong_external reload themselves when the files change.
         write_cluster_mqtt_identity()
         write_mqtt_server_identity(cluster_ip)
-        mqtt_reloaded = refresh_cluster_crl()["mqtt_reloaded"]
-        kong_reloaded = config.reload_kong_external()
+        crl_ok = refresh_cluster_crl()["crl_regenerated"]
         return {
             "message": (
-                "Certificates refreshed and MQTT broker reloaded."
-                if mqtt_reloaded
-                else "Certificates refreshed. MQTT broker reload failed — restart mqtt manually."
+                "Certificates refreshed."
+                if crl_ok
+                else "Certificates refreshed, but the cluster CRL could not be re-signed."
             ),
-            "mqtt_reloaded": mqtt_reloaded,
-            "kong_reloaded": kong_reloaded,
+            "crl_regenerated": crl_ok,
             "cert_dir": str(cert_dir),
         }
 
@@ -466,32 +460,21 @@ def _renew_cluster_certs(rotate_intermediate: bool, grace_hours: float | None = 
         return False, f"Root returned an invalid renewal response: {e!r}"
     cert_dir = Path(config.ROOT_CA_FILE).parent if config.ROOT_CA_FILE else Path("/certs")
 
-    def _write(path, content, mode):
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content)
-        os.chmod(p, mode)
-
     if rotate_intermediate:
         _keep_old_intermediate(grace_hours)
     for path, content, mode in new_files:
-        _write(path, content, mode)
+        write_file_atomic(path, content, mode)
 
     logger.info("Cluster certificates renewed in-band in %s", cert_dir)
     if rotate_intermediate:
         # MQTT accepts both intermediates until the workers have migrated. The broker's server
         # cert moves when the migration ends.
         write_cluster_mqtt_identity()
-    # Re-signs the CRL (with the new cluster CA if renewed) and reloads MQTT for the new root CA.
-    mqtt_reloaded = refresh_cluster_crl()["mqtt_reloaded"]
-    # The external gateway verifies the root's calls against ca.crt, which may have changed.
-    kong_reloaded = config.reload_kong_external()
-    msg = "Certificates renewed."
-    if not mqtt_reloaded:
-        msg += " MQTT broker reload failed — restart mqtt manually."
-    if not kong_reloaded:
-        msg += " External gateway reload failed — restart cluster_kong_external manually."
-    return True, msg
+    # Re-signs the CRL with the new cluster CA if renewed. mosquitto (CRL, new root CA) and
+    # the external gateway (ca.crt, which verifies the root's calls) reload themselves.
+    if not refresh_cluster_crl()["crl_regenerated"]:
+        return True, "Certificates renewed, but the cluster CRL could not be re-signed."
+    return True, "Certificates renewed."
 
 
 def _keep_old_intermediate(grace_hours: float | None = None):
@@ -503,10 +486,8 @@ def _keep_old_intermediate(grace_hours: float | None = None):
     if grace_hours is None:
         grace_hours = config.INTERMEDIATE_GRACE_PERIOD_HOURS
     cert_path, key_path, expiry_path = get_old_cluster_ca_paths()
-    cert_path.write_text(Path(config.CLUSTER_CA_CERT_FILE).read_text())
-    os.chmod(cert_path, 0o644)
-    key_path.write_text(Path(config.CLUSTER_CA_KEY_FILE).read_text())
-    os.chmod(key_path, 0o600)
+    write_file_atomic(cert_path, Path(config.CLUSTER_CA_CERT_FILE).read_text(), 0o644)
+    write_file_atomic(key_path, Path(config.CLUSTER_CA_KEY_FILE).read_text(), 0o600)
     grace_ends = datetime.now(timezone.utc) + timedelta(hours=grace_hours)
     expiry_path.write_text(grace_ends.isoformat())
     logger.info("Workers migrate to the new cluster intermediate CA until %s", grace_ends)
@@ -535,8 +516,9 @@ def complete_worker_migration(grace_ends=None) -> None:
 def _restart_mqtt_clients_soon() -> None:
     """Restart both MQTT clients shortly, leaving time to answer the request first.
 
-    cluster_service_manager is restarted through docker; this worker exits and gunicorn
-    starts a new one, which reconnects with the new identity and trust.
+    cluster_service_manager is restarted by its container (config/cert-watch.sh); this
+    worker exits and gunicorn starts a new one, which reconnects with the new identity
+    and trust.
     """
 
     def restart():
@@ -625,10 +607,9 @@ class ClusterIntermediateRotateCompleteController(MethodView):
 
 
 def refresh_cluster_crl() -> dict:
-    """Drop entries for expired certs, rewrite the cluster CRL from the database and reload MQTT."""
+    """Drop entries for expired certs and rewrite the cluster CRL from the database."""
     prune_expired_revoked_certs()
-    crl_ok = regenerate_cluster_crl(get_revoked_serials())
-    return {"crl_regenerated": crl_ok, "mqtt_reloaded": config.reload_mqtt() if crl_ok else False}
+    return {"crl_regenerated": regenerate_cluster_crl(get_revoked_serials())}
 
 
 @certbp.route("/revoke")

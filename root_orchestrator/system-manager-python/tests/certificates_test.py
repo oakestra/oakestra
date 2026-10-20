@@ -419,5 +419,31 @@ class ClusterInformationTest(RootCaTestCase):
         self.update.assert_not_called()
 
 
+# ---------------------------------------------------------------------------
+# Revocation
+# ---------------------------------------------------------------------------
+
+
+class RevocationTest(RootCaTestCase):
+    def test_rejects_certs_the_root_crl_cannot_revoke(self):
+        # The gateway only checks the root CRL for certs the root CA signed directly.
+        leaf = self.make_intermediate_issued_leaf(CLUSTER_URI)
+        with self.assertRaises(HTTPException) as raised:
+            certificates_blueprints.check_revocable(leaf)
+        self.assertEqual(raised.exception.code, 400)
+
+    def test_keeps_the_previous_crl_when_key_and_cert_do_not_match(self):
+        certificates.regenerate_root_crl([])
+        previous = certificates.get_crl_path().read_bytes()
+        # ca.crt replaced without its key: a CRL signed with the old key would make
+        # Kong reject every client certificate.
+        ca_key = certificates.get_ca_key_path().read_bytes()
+        certificates.regenerate_ca_files(valid_days=30, common_name="Oakestra Root CA 2")
+        certificates.get_ca_key_path().write_bytes(ca_key)
+
+        self.assertFalse(certificates.regenerate_root_crl([]))
+        self.assertEqual(certificates.get_crl_path().read_bytes(), previous)
+
+
 if __name__ == "__main__":
     unittest.main()

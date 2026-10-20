@@ -33,11 +33,14 @@ from utils.certificates import (
     get_old_ca_key_path,
     get_server_cert_path,
     get_server_key_path,
+    is_ca_cert,
+    issued_by_root_ca,
     regenerate_ca_files,
     regenerate_root_crl,
     regenerate_server_files,
     reissue_server_files,
     sign_csr_pem,
+    write_file_atomic,
 )
 
 from blueprints.jwt_wrapper import BlueprintExt
@@ -46,26 +49,8 @@ logger = logging.getLogger("system_manager")
 
 certbp = BlueprintExt("Certificates", "certificates", url_prefix="/api/certs")
 
-KONG_CONTAINER_NAME = os.environ.get("KONG_CONTAINER_NAME", "kong_external")
-
-
-def _reload_kong_nginx() -> tuple[bool, str]:
-    """Send kong reload (nginx SIGHUP) so the updated cert files are picked up without a restart."""
-    try:
-        import docker
-
-        client = docker.from_env()
-        container = client.containers.get(KONG_CONTAINER_NAME)
-        result = container.exec_run("kong reload")
-        output = result.output.decode("utf-8", errors="replace").strip()
-        if result.exit_code == 0:
-            logger.info(f"kong reload succeeded: {output}")
-            return True, "kong_external reloaded"
-        logger.error(f"kong reload exited {result.exit_code}: {output}")
-        return False, f"kong reload failed (exit {result.exit_code}): {output}"
-    except Exception as e:
-        logger.error(f"Could not reload kong: {e}")
-        return False, f"Could not reload kong: {str(e)}"
+# Certificate files are only written here: kong_external reloads itself when ca.crt or
+# revoked.crl change on disk (config/cert-watch.sh), within about 15 seconds.
 
 
 # CRLs are signed with a 30-day nextUpdate (see generate_root_crl); re-sign well before expiry.
@@ -120,10 +105,8 @@ def write_root_crl_from_db() -> bool:
 
 
 def refresh_root_crl() -> dict:
-    """Rewrite the CRL from the database and reload Kong so the new CRL takes effect."""
-    crl_ok = write_root_crl_from_db()
-    reload_ok, reload_msg = _reload_kong_nginx() if crl_ok else (False, "CRL was not written")
-    return {"crl_regenerated": crl_ok, "kong_reloaded": reload_ok, "kong_reload_status": reload_msg}
+    """Rewrite the CRL from the database; Kong reloads itself when the file changes."""
+    return {"crl_regenerated": write_root_crl_from_db()}
 
 
 # --------- ROUTES ---------
@@ -187,19 +170,11 @@ class CertificateServerRenewController(Resource):
             valid_days=int(content.get("valid_days") or 365),
         )
 
-        reload_ok, reload_message = _reload_kong_nginx()
-
         return {
             "created": server_created,
             "server_cert": str(get_server_cert_path()),
             "server_key": str(get_server_key_path()),
-            "kong_reloaded": reload_ok,
-            "kong_reload_status": reload_message,
-            "message": (
-                "Server certificate renewed and Kong gateway reloaded"
-                if reload_ok
-                else "Server certificate renewed, but the Kong reload failed"
-            ),
+            "message": "Server certificate renewed",
         }
 
 
@@ -380,9 +355,10 @@ class CertificateRevokeController(Resource):
     def post(self, *args, **kwargs):
         """Revoke a cluster client certificate by PEM.
 
-        Records the cert's serial number in the revoked_certs collection,
-        regenerates /certs/revoked.crl (signed by the root CA), and reloads
-        Kong nginx so the updated CRL takes effect immediately.
+        Records the cert's serial number in the revoked_certs collection and
+        regenerates /certs/revoked.crl (signed by the root CA); Kong reloads itself
+        when the file changes. Only unexpired leaf certs the root CA issued can be
+        revoked here: the CRL has no effect on any other certificate.
         """
         from cryptography import x509 as _x509
         from flask_jwt_extended import get_jwt_identity
@@ -396,6 +372,7 @@ class CertificateRevokeController(Resource):
             cert = _x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
         except Exception as e:
             abort(400, message=f"Invalid certificate PEM: {e}")
+        check_revocable(cert)
 
         serial_hex = format(cert.serial_number, "x")
         cert_subject = cert.subject.rfc4514_string()
@@ -420,6 +397,19 @@ class CertificateRevokeController(Resource):
         """Clear the revocation list, un-revoking every certificate."""
         cleared = clear_revoked_certs()
         return {"message": "Revocation list cleared", "cleared": cleared, **refresh_root_crl()}
+
+
+def check_revocable(cert) -> None:
+    """Abort with 400 unless the root CRL can revoke cert."""
+    if is_ca_cert(cert):
+        abort(400, message="A CA certificate cannot be revoked; rotate the CA instead")
+    if not issued_by_root_ca(cert):
+        abort(
+            400,
+            message="Certificate was not issued by the root CA, so the root CRL cannot revoke it",
+        )
+    if cert.not_valid_after_utc <= datetime.now(timezone.utc):
+        abort(400, message="Certificate has already expired; the gateway rejects it anyway")
 
 
 @certbp.route("/revoke/<serial_hex>")
@@ -501,11 +491,9 @@ class CertificateAuthorityRotateController(Resource):
         # Write dual-CA bundle: nginx's ssl_client_certificate accepts a
         # concatenated PEM file and will verify client certs against either CA.
         if old_ca_pem and old_ca_key and old_ca_pem.strip() != new_ca_pem.strip():
-            get_old_ca_cert_path().write_text(old_ca_pem)
-            os.chmod(get_old_ca_cert_path(), 0o644)
-            get_old_ca_key_path().write_bytes(old_ca_key)
-            os.chmod(get_old_ca_key_path(), 0o600)
-            ca_path.write_text(new_ca_pem + "\n" + old_ca_pem)
+            write_file_atomic(get_old_ca_cert_path(), old_ca_pem, 0o644)
+            write_file_atomic(get_old_ca_key_path(), old_ca_key, 0o600)
+            write_file_atomic(ca_path, new_ca_pem + "\n" + old_ca_pem, 0o644)
             grace_ends = rotated_at + timedelta(hours=grace_hours)
             _grace_expiry_path().write_text(grace_ends.isoformat())
             grace_period = True
@@ -516,15 +504,12 @@ class CertificateAuthorityRotateController(Resource):
         # Re-sign the CRL with the new CA key, plus one signed by the old CA key while
         # the grace period lasts, so certs from both CAs pass Kong's CRL check. Old-CA
         # revocations stay in effect until rotate-complete clears them.
-        write_root_crl_from_db()
-
-        reload_ok, reload_message = _reload_kong_nginx()
+        crl_ok = write_root_crl_from_db()
 
         return {
             "grace_period_active": grace_period,
             "grace_period_ends": grace_ends.isoformat() if grace_ends else None,
-            "kong_reloaded": reload_ok,
-            "kong_reload_status": reload_message,
+            "crl_regenerated": crl_ok,
             "message": (
                 "CA rotated. Grace period active — old CA still accepted until "
                 f"{grace_ends.isoformat()}. Clusters renew on their next information update."
@@ -629,7 +614,7 @@ def complete_ca_rotation() -> dict:
         _re.DOTALL,
     )
     if certs:
-        ca_path.write_text(certs[0] + "\n")
+        write_file_atomic(ca_path, certs[0] + "\n", 0o644)
 
     get_old_ca_cert_path().unlink(missing_ok=True)
     get_old_ca_key_path().unlink(missing_ok=True)
@@ -637,18 +622,15 @@ def complete_ca_rotation() -> dict:
 
     # All old-CA CRL
     clear_revoked_certs()
-    regenerate_root_crl([])
+    crl_ok = regenerate_root_crl([])
 
     # update server certificate files for new CA
     reissue_server_files()
 
-    reload_ok, reload_message = _reload_kong_nginx()
-
     return {
         "old_ca_removed": True,
         "revoked_certs_cleared": True,
-        "kong_reloaded": reload_ok,
-        "kong_reload_status": reload_message,
+        "crl_regenerated": crl_ok,
         "message": "Grace period ended — only new CA is now trusted.",
     }
 
@@ -661,11 +643,10 @@ def complete_expired_ca_rotation() -> bool:
     if datetime.now(timezone.utc) < grace_ends:
         return False
 
-    result = complete_ca_rotation()
+    complete_ca_rotation()
     logger.warning(
         "CA rotation grace period ended at %s. "
-        "Clusters that did not renew must be re-registered with a new token. %s",
+        "Clusters that did not renew must be re-registered with a new token.",
         grace_ends.isoformat(),
-        result["kong_reload_status"],
     )
     return True

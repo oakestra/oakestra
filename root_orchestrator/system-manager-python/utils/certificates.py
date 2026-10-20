@@ -96,6 +96,16 @@ def get_server_cert_path() -> Path:
     return get_cert_path() / "server.crt"
 
 
+def write_file_atomic(path: Path, data, mode: int) -> None:
+    """Replace path with data in one step, so a reader never sees a half-written file."""
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    tmp_path.write_bytes(data)
+    os.chmod(tmp_path, mode)
+    os.replace(tmp_path, path)
+
+
 def ca_files_exist() -> bool:
     return get_ca_key_path().is_file() and get_ca_cert_path().is_file()
 
@@ -135,16 +145,18 @@ def regenerate_ca_files(
     )
 
     get_cert_path()
-    get_ca_key_path().write_bytes(
+    write_file_atomic(
+        get_ca_key_path(),
         private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption(),
-        )
+        ),
+        0o600,
     )
-    os.chmod(get_ca_key_path(), 0o600)
-    get_ca_cert_path().write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
-    os.chmod(get_ca_cert_path(), 0o644)
+    write_file_atomic(
+        get_ca_cert_path(), certificate.public_bytes(serialization.Encoding.PEM), 0o644
+    )
     return True
 
 
@@ -409,10 +421,8 @@ def regenerate_server_files(
         extended_key_usages=[ExtendedKeyUsageOID.SERVER_AUTH, ExtendedKeyUsageOID.CLIENT_AUTH],
     )
 
-    get_server_key_path().write_text(private_pem)
-    os.chmod(get_server_key_path(), 0o600)
-    get_server_cert_path().write_text(cert_pem)
-    os.chmod(get_server_cert_path(), 0o644)
+    write_file_atomic(get_server_key_path(), private_pem, 0o600)
+    write_file_atomic(get_server_cert_path(), cert_pem, 0o644)
     return True
 
 
@@ -544,7 +554,18 @@ def generate_root_crl(revoked_serials: list, ca_cert=None, ca_key=None) -> bytes
         builder = builder.add_revoked_certificate(revoked)
 
     crl = builder.sign(private_key=ca_key, algorithm=hashes.SHA256())
-    return crl.public_bytes(serialization.Encoding.PEM)
+    pem = crl.public_bytes(serialization.Encoding.PEM)
+    check_crl(pem, ca_cert)
+    return pem
+
+
+def check_crl(crl_pem: bytes, ca_cert: x509.Certificate) -> None:
+    """Raise ValueError unless crl_pem is a current CRL that ca_cert verifies."""
+    crl = x509.load_pem_x509_crl(crl_pem)
+    if crl.issuer != ca_cert.subject or not crl.is_signature_valid(ca_cert.public_key()):
+        raise ValueError(f"CRL does not verify against CA '{ca_cert.subject.rfc4514_string()}'")
+    if crl.next_update_utc is None or crl.next_update_utc <= datetime.now(timezone.utc):
+        raise ValueError("CRL is already expired")
 
 
 def regenerate_root_crl(revoked_serials: list) -> bool:
@@ -552,6 +573,7 @@ def regenerate_root_crl(revoked_serials: list) -> bool:
 
     During a rotation grace period a second CRL signed by the old CA is appended:
     with CRL checks on, OpenSSL rejects a cert whose issuer has no CRL in the file.
+    On failure the previous CRL file is left in place.
     """
     try:
         pem = generate_root_crl(revoked_serials)
@@ -561,9 +583,7 @@ def regenerate_root_crl(revoked_serials: list) -> bool:
                 get_old_ca_key_path().read_bytes(), password=None
             )
             pem += generate_root_crl(revoked_serials, old_ca_cert, old_ca_key)
-        crl_path = get_crl_path()
-        crl_path.write_bytes(pem)
-        os.chmod(crl_path, 0o644)
+        write_file_atomic(get_crl_path(), pem, 0o644)
         return True
     except Exception as exc:
         import logging as _logging

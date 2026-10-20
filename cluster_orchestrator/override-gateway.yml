@@ -28,18 +28,25 @@ services:
       - CLUSTER_ADDRESS=${CLUSTER_ADDRESS}
       - CLUSTER_REGISTRATION_TOKEN=${CLUSTER_REGISTRATION_TOKEN:-}
       - ROOT_GATEWAY_TRUST=${ROOT_GATEWAY_TRUST-system}
-      - MQTT_CONTAINER_NAME=${MQTT_CONTAINER_NAME:-mqtt}
     volumes:
       - ${CLUSTER_CERT_PATH:-./config/certs}:/certs
       - ./config/docker-update-ca-trust.sh:/docker-update-ca-trust.sh:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: "no"
 
   mqtt:
     user: root
+    # Sends mosquitto SIGHUP when its CA, server cert or CRL change on disk: it re-reads
+    # them without dropping connections. The command is the image's own entrypoint and command.
+    entrypoint: ["/bin/sh", "/cert-watch.sh"]
+    command: ["/docker-entrypoint.sh", "/usr/sbin/mosquitto", "-c", "/mosquitto/config/mosquitto.conf"]
+    environment:
+      - CERT_WATCH_FILES=/certs/ca.crt /certs/mqtt_server.crt /certs/mqtt_server.key /certs/cluster_revoked.crl
+      - CERT_WATCH_ACTION=signal
+      - CERT_WATCH_SIGNAL=HUP
     volumes:
       - ${CLUSTER_CERT_PATH:-./config/certs}:/certs:ro
       - ./mosquitto/mosquitto-tls.conf:/mosquitto/config/mosquitto.conf
+      - ./config/cert-watch.sh:/cert-watch.sh:ro
     ports: !override
       - "8883:8883"
     expose:
@@ -65,10 +72,8 @@ services:
     volumes:
       - ${CLUSTER_CERT_PATH:-./config/certs}:/certs
       - ./config/docker-update-ca-trust.sh:/docker-update-ca-trust.sh:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - SYSTEM_MANAGER_PORT=${SYSTEM_MANAGER_GATEWAY_HTTPS_PORT:-443}
-      - MQTT_CONTAINER_NAME=${MQTT_CONTAINER_NAME:-mqtt}
       - SYSTEM_MANAGER_GRPC_PORT=${SYSTEM_MANAGER_GATEWAY_HTTPS_PORT:-443}
       - SYSTEM_MANAGER_USE_TLS=true
       - GATEWAY_ENABLED=true
@@ -94,12 +99,18 @@ services:
     ports: !reset []
 
   cluster_service_manager:
-    entrypoint: ["/bin/sh", "/docker-update-ca-trust.sh"]
-    command: ["python", "service_manager.py"]
+    # paho loads the MQTT client cert only once, so the service restarts inside this
+    # container whenever cluster_manager touches mqtt_clients.restart (after it re-issues
+    # cluster_mqtt.crt or a worker migration ends).
+    entrypoint: ["/bin/sh", "/cert-watch.sh"]
+    command: ["/bin/sh", "/docker-update-ca-trust.sh", "python", "service_manager.py"]
     volumes:
       - ${CLUSTER_CERT_PATH:-./config/certs}:/certs:ro
       - ./config/docker-update-ca-trust.sh:/docker-update-ca-trust.sh:ro
+      - ./config/cert-watch.sh:/cert-watch.sh:ro
     environment:
+      - CERT_WATCH_FILES=/certs/mqtt_clients.restart
+      - CERT_WATCH_ACTION=restart
       - ROOT_SERVICE_MANAGER_PORT=${SYSTEM_MANAGER_GATEWAY_HTTPS_PORT:-443}
       - ROOT_SERVICE_MANAGER_USE_TLS=true
       - MQTT_CERT_FILE=/certs/cluster_mqtt.crt
@@ -222,7 +233,14 @@ services:
     image: kong:3.6
     container_name: cluster_kong_external
     hostname: cluster_kong_external
+    # Reloads Kong when ca.crt or the public cert change on disk, so cluster_manager only
+    # writes the files. The command is the image's own entrypoint and command.
+    entrypoint: ["/bin/sh", "/cert-watch.sh"]
+    command: ["/docker-entrypoint.sh", "kong", "docker-start"]
     environment:
+      - CERT_WATCH_FILES=/certs/ca.crt /certs/public/fullchain.pem /certs/public/privkey.pem
+      - CERT_WATCH_ACTION=command
+      - CERT_WATCH_COMMAND=kong reload
       - KONG_DATABASE=postgres
       - KONG_PG_HOST=cluster_kong_db_external
       - KONG_PG_USER=kong
@@ -240,6 +258,7 @@ services:
       - KONG_LOG_LEVEL=info
     volumes:
       - ${CLUSTER_CERT_PATH:-./config/certs}:/certs:ro
+      - ./config/cert-watch.sh:/cert-watch.sh:ro
     ports:
       - "8080:8000"
       - "8443:8443"

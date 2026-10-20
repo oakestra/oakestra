@@ -12,6 +12,8 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
+from utils.files import write_file_atomic
+
 DEFAULT_KEY_SIZE = 3072
 
 
@@ -323,9 +325,7 @@ def regenerate_cluster_crl(revoked_serials: list) -> bool:
         old = load_old_cluster_ca()
         if old is not None:
             pem += generate_cluster_crl(revoked_serials, old)
-        crl_path = get_cluster_crl_path()
-        crl_path.write_bytes(pem)
-        os.chmod(crl_path, 0o644)
+        write_file_atomic(get_cluster_crl_path(), pem, 0o644)
         return True
     except Exception:
         return False
@@ -436,10 +436,8 @@ def write_mqtt_server_identity(cluster_address: str) -> Path:
 
 def _write_identity(paths: tuple[Path, Path], private_pem: str, fullchain_pem: str) -> Path:
     cert_path, key_path = paths
-    key_path.write_text(private_pem)
-    os.chmod(key_path, 0o600)
-    cert_path.write_text(fullchain_pem)
-    os.chmod(cert_path, 0o644)
+    write_file_atomic(key_path, private_pem, 0o600)
+    write_file_atomic(cert_path, fullchain_pem, 0o644)
     return cert_path
 
 
