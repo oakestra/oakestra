@@ -44,6 +44,12 @@ Flags:
 Use "NodeEngine [command] --help" for more information about a command.
 ```
 
+## Requirements
+
+NodeEngine uses the containerd 2.x Go client, so the containerd daemon on the worker should be 2.x as well. CI tests against 2.3. containerd 1.7 still works on a best effort basis, but it went EOL on 2026-09-30. 1.6 and older are not supported.
+
+If no containerd is running yet, `build/install.sh` installs containerd 2.x and runc for you.
+
 ## How to configure additional OCI runtimes
 
 Containerd (the default NodeEngine container runtime) allows any OCI-compliant runtime to be used as a plugin. This means that you can use any OCI-compliant runtime with Oakestra, including:
@@ -62,6 +68,17 @@ To configure a new OCI runtime, you need to edit the containerd configuration fi
 [plugins.cri.containerd.runtimes.runsc]
   runtime_type = "io.containerd.runsc.v1"
 [plugins.cri.containerd.runtimes.runsc.options]
+  TypeUrl = "io.containerd.runsc.v1.options"
+  ConfigPath = "/etc/containerd/runsc.toml"
+```
+
+That is the containerd 1.x syntax. containerd 2.x renamed the CRI plugin, so with a `version = 3` config it looks like this:
+```toml
+version = 3
+
+[plugins."io.containerd.cri.v1.runtime".containerd.runtimes.runsc]
+  runtime_type = "io.containerd.runsc.v1"
+[plugins."io.containerd.cri.v1.runtime".containerd.runtimes.runsc.options]
   TypeUrl = "io.containerd.runsc.v1.options"
   ConfigPath = "/etc/containerd/runsc.toml"
 ```
