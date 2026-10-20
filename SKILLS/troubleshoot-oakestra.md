@@ -534,6 +534,20 @@ containerd --version 2>/dev/null || echo "containerd not found"
 ls /dev/kvm 2>/dev/null && echo "KVM available (unikernel support)" || echo "KVM not available"
 ```
 
+Check the containerd version:
+- 2.x is supported, CI tests against 2.3.
+- 1.7 works on a best effort basis only, it went EOL on 2026-09-30.
+- Anything older is not supported.
+
+If containerd is older than 1.7, or NodeEngine can't connect, pull or start containers through it, upgrade to 2.x. `go_node_engine/build/install.sh` installs 2.x when no containerd is running.
+
+Where custom runtimes like runsc go in the config depends on the config `version`:
+- `version = 2` (usual for 1.x): `[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.<name>]`
+- no version (old 1.x configs): `[plugins.cri.containerd.runtimes.<name>]`
+- `version = 3` (2.x): `[plugins."io.containerd.cri.v1.runtime".containerd.runtimes.<name>]`
+
+containerd 2.x migrates the first two on load, so old configs keep working after an upgrade.
+
 ### 9.7 GPU Support
 
 ```bash
