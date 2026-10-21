@@ -4,8 +4,6 @@ cluster status report and application deletion. It catches breakage between the 
 that the per-endpoint tests can't see.
 """
 
-import re
-
 import pytest
 
 from tests.component.conftest import cs2_message
@@ -208,19 +206,13 @@ def test_full_deployment_lifecycle(
         "cluster manager was never asked to undeploy the running instance"
     )
 
-    # The instance number sent on instance undeploy is wrong today (strict xfail in
-    # test_instances.py), so this test only checks that the call happens.
-    instance_undeploy = re.compile(rf"^/api/net/{frontend_id}/-?\d+$")
-    net_plugin_call_signatures = [
-        (c.method, instance_undeploy.sub(f"/api/net/{frontend_id}/<n>", c.path))
-        for c in outbound.net_plugin()
-    ]
+    net_plugin_call_signatures = [(c.method, c.path) for c in outbound.net_plugin()]
     assert net_plugin_call_signatures == [
         ("POST", "/api/net/cluster"),
         ("POST", "/api/net/service/deploy"),
         ("POST", "/api/net/service/deploy"),
         ("POST", "/api/net/instance/deploy"),
-        ("DELETE", f"/api/net/{frontend_id}/<n>"),
+        ("DELETE", f"/api/net/{frontend_id}/{instance_number}"),
         ("DELETE", f"/api/net/service/{frontend_id}"),
         ("DELETE", f"/api/net/service/{backend_id}"),
     ]

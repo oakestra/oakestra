@@ -119,11 +119,6 @@ def _seed_three_instances(resource_abstractor, cluster):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="bug: services/instance_management.py:106 mutates instances while iterating over "
-    "it, so 'delete all' (which_one=-1) skips the middle instance instead of removing all 3",
-)
 def test_scale_down_all_removes_every_instance(
     client, admin_headers, resource_abstractor, make_cluster
 ):
@@ -137,16 +132,11 @@ def test_scale_down_all_removes_every_instance(
     assert remaining == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="bug: services/instance_management.py:104 passes which_one (always -1 for 'delete "
-    "all') to net_inform_instance_undeploy instead of the instance's own instance_number",
-)
 def test_scale_down_all_informs_net_plugin_of_the_instance_number(
     client, admin_headers, resource_abstractor, outbound, make_cluster
 ):
-    # One instance only, so the mutate-while-iterating bug above can't skip anything
-    # and the which_one mixup is the only thing that can fail this.
+    # One instance only, so the net plugin call can't be lost to a skipped instance and
+    # only a wrong instance number can fail this.
     cluster = make_cluster()
     instances = [{"instance_number": 0, "cluster_id": cluster.id, "status": "CLUSTER_SCHEDULED"}]
     job = resource_abstractor.add_service(

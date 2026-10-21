@@ -176,16 +176,6 @@ def test_refresh_non_json_body_returns_400(client):
     assert response.get_json() == {"msg": "Missing JSON in request"}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "bug: jwt_generator.py create_refresh_token_route re-wraps an already-parsed "
-        "timedelta in timedelta(minutes=expires_delta), which raises TypeError and "
-        "surfaces as a 500 instead of honouring the requested expiry (see "
-        "system-manager-python/ext_requests/jwt_generator_requests.py "
-        "create_refresh_token, which sends expires_delta as {days,seconds,microseconds})"
-    ),
-)
 def test_refresh_token_expires_delta_honoured(client):
     response = client.post(
         "/refresh",

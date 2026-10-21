@@ -3,8 +3,6 @@ blueprints/users_blueprints.py, blueprints/organization_blueprints.py, the passw
 flows in users/auth.py, and ext_requests/user_db.py.
 """
 
-import hashlib
-
 import pytest
 from bson import ObjectId
 
@@ -13,9 +11,9 @@ pytestmark = pytest.mark.component
 
 @pytest.fixture
 def fixed_reset_token(monkeypatch):
-    """The raw reset token comes from secrets.token_urlsafe() and never leaves the server:
-    the mail carries its hash, and sending is broken anyway (see the xfails below). Fixing
-    its value lets a test drive the reset flow with the token a working mail would carry."""
+    """The raw reset token comes from secrets.token_urlsafe() and only leaves the server in
+    the reset mail, which is never sent (see the xfail below). Fixing its value lets a test
+    drive the reset flow with the token a working mail would carry."""
     import secrets as secrets_module
 
     token = "fixed-reset-token-for-tests"
@@ -172,59 +170,43 @@ def test_password_reset_request_sends_email(client, create_user, smtp):
     assert smtp.return_value.send_message.called
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "bug: blueprints/users_blueprints.py UserResetPasswordController wraps the "
-        "(body, status) tuple returned by users/auth.py in jsonify() instead of "
-        "returning (jsonify(body), status), so the real status code (404 for an "
-        "unknown user here) never reaches the HTTP response - the endpoint answers "
-        "200 no matter what users/auth.py decided"
-    ),
-)
 def test_password_reset_request_for_unknown_user_returns_404(client):
     response = client.post("/api/user/", json={"username": "no-such-user", "domain": "example.com"})
 
     assert response.status_code == 404
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "bug: users/auth.py user_create_password_reset_request() builds the mailed "
-        "reset link from reset_token_hash (the value already hashed for storage) "
-        "instead of the raw reset_token, so the value actually printed in the email a "
-        "user receives can never satisfy user_change_password_with_reset_request()'s "
-        "hash-and-compare check"
-    ),
-)
-def test_password_reset_mailed_link_value_can_be_used_to_reset(
-    client, create_user, fixed_reset_token
+def test_password_reset_mailed_link_carries_the_raw_token(
+    client, create_user, fixed_reset_token, monkeypatch
 ):
-    create_user("alice", password="oldpw")
+    import users.auth
+
+    # Sending fails before anything reaches SMTP (expiry_delta xfail above), so capture
+    # the payload where it is handed to the mail factory.
+    mailed = []
+    real_factory = users.auth.ResetPasswordMailFactory
+
+    def recording_factory(user, email):
+        mailed.append(email)
+        return real_factory(user, email)
+
+    monkeypatch.setattr(users.auth, "ResetPasswordMailFactory", recording_factory)
+    create_user("alice")
+
     client.post("/api/user/", json={"username": "alice", "domain": "example.com"})
-    # Same hashing users/auth.py applies before putting the token into the mail.
-    mailed_value = hashlib.pbkdf2_hmac(
-        "sha256", fixed_reset_token.encode("ascii"), b"", 100000
-    ).hex()
 
-    client.put("/api/user/", json={"token": mailed_value, "password": "newpw"})
-
-    # The PUT always answers 200 (jsonify(tuple) bug above), so check whether the
-    # password actually changed.
-    login_with_new_password = client.post(
-        "/api/auth/login", json={"username": "alice", "password": "newpw"}
-    )
-    assert login_with_new_password.status_code == 200
+    assert [m["link"] for m in mailed] == [f"http://example.com/resetPassword/{fixed_reset_token}"]
 
 
 def test_password_reset_apply_rejects_wrong_token(client, create_user, fixed_reset_token):
     create_user("alice", password="oldpw")
     client.post("/api/user/", json={"username": "alice", "domain": "example.com"})
 
-    # Always 200, see above.
-    client.put("/api/user/", json={"token": "not-the-real-token", "password": "whatever"})
+    response = client.put(
+        "/api/user/", json={"token": "not-the-real-token", "password": "whatever"}
+    )
 
+    assert response.status_code == 400
     still_old = client.post("/api/auth/login", json={"username": "alice", "password": "oldpw"})
     rejected_new = client.post(
         "/api/auth/login", json={"username": "alice", "password": "whatever"}
@@ -233,6 +215,15 @@ def test_password_reset_apply_rejects_wrong_token(client, create_user, fixed_res
     assert rejected_new.status_code == 401
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "bug: users/auth.py user_change_password_with_reset_request() compares "
+        "datetime.now(timezone.utc) with the stored expiry_date, but PyMongo (like "
+        "mongomock) returns naive datetimes unless the client is created with "
+        "tz_aware=True, so applying a valid reset token raises TypeError and answers 500"
+    ),
+)
 def test_password_reset_apply_with_raw_token_works_and_cannot_be_reused(
     client, create_user, fixed_reset_token
 ):
@@ -247,9 +238,9 @@ def test_password_reset_apply_with_raw_token_works_and_cannot_be_reused(
     assert old_login.status_code == 401
     assert new_login.status_code == 200
 
-    # Always 200 as well, so a rejected reuse only shows in the login below.
-    client.put("/api/user/", json={"token": fixed_reset_token, "password": "yet-another"})
+    reuse = client.put("/api/user/", json={"token": fixed_reset_token, "password": "yet-another"})
 
+    assert reuse.status_code == 400
     unaffected_login = client.post(
         "/api/auth/login", json={"username": "alice", "password": "newpw"}
     )

@@ -192,14 +192,6 @@ def test_update_application_changes_name_and_namespace(client, admin_headers, re
     assert resource_abstractor.apps[app_id]["application_name"] == "AppOneRenamed"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "bug: services/application_management.py:70-78 update_app() always writes "
-        "fields.get('microservices') into the PATCH payload, so a PUT that only renames "
-        "an app sets its microservices list to None"
-    ),
-)
 def test_update_application_without_microservices_field_keeps_existing_services(
     client, admin_headers, resource_abstractor
 ):
@@ -218,15 +210,6 @@ def test_update_application_without_microservices_field_keeps_existing_services(
     assert resource_abstractor.apps[app_id]["microservices"] == original_services
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "bug: blueprints/applications_blueprints.py ApplicationController.put() never "
-        "checks that the caller owns appid before calling update_app(), so any "
-        "authenticated user can overwrite another user's application and, because the "
-        "client sets userId to the caller, take ownership of it"
-    ),
-)
 def test_update_application_of_another_user_forbidden(client, create_user, resource_abstractor):
     alice = create_user("alice")
     bob = create_user("bob")
