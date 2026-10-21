@@ -27,6 +27,28 @@ A virtualenv will be started and the component will start up.
 
 For how to use the endpoints, look in `gitlab.lrz.de/cm/2020-mehdi-masters-thesis/src/README.md`. 
 
+## Testing
+
+The suite needs no running containers. Run it from this directory:
+
+```bash
+pip install -r requirements.txt -r requirements-test.txt
+pip install ../../libraries/resource_abstractor_client ../../libraries/oakestra_utils_library
+python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/clusterRegistration.proto
+pytest
+```
+
+- `tests/unit/` tests single modules in isolation.
+- `tests/component/` boots the real system manager (Flask app plus the gRPC registration server) and drives it only through its REST and gRPC interfaces. All external dependencies are replaced at the network boundary (see `tests/component/conftest.py`):
+  - MongoDB is `mongomock`.
+  - The resource-abstractor is a stateful in-memory fake (`tests/component/fakes/resource_abstractor.py`) that mirrors the real API. If you change the resource-abstractor contract, update the fake in the same PR.
+  - The root scheduler, network plugin and cluster managers are recording stubs. Tests assert on the requests they received through the `outbound` fixture.
+  - Tokens come from the real `jwt-generator` app, loaded in-process.
+
+  Any HTTP request to an address no fake answers fails the test, so the suite never touches the network.
+- Known production bugs are pinned as `xfail(strict=True)` tests. When you fix one, its test starts passing and fails the run until you remove the marker.
+- `tests/component/test_api_surface.py` compares the public routes, and whether they require a token, against `tests/component/snapshots/api_surface.json`. After an intentional API change, regenerate it with `UPDATE_SNAPSHOTS=1 pytest tests/component/test_api_surface.py` and commit the diff.
+
 ## Built With
 
 Python3.10
