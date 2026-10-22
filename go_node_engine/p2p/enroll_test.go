@@ -68,7 +68,7 @@ func TestTokenSingleUseAndExpiry(t *testing.T) {
 	if err := consumeToken(token); err != nil {
 		t.Fatalf("valid token rejected: %v", err)
 	}
-	// single use (plan §9.6)
+	// single use
 	if err := consumeToken(token); err == nil {
 		t.Fatal("token accepted twice — must be single-use")
 	}

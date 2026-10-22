@@ -99,14 +99,14 @@ func (c *NMClient) Members() ([]MemberInfo, error) {
 	return members, err
 }
 
-// Services returns the full gossiped registry (network-wide view, plan §8).
+// Services returns the full gossiped registry (network-wide view).
 func (c *NMClient) Services() ([]RegistryEntry, error) {
 	var entries []RegistryEntry
 	err := c.get("/p2p/services", &entries)
 	return entries, err
 }
 
-// Advertise publishes a locally-hosted service into the gossip registry (plan §2.4).
+// Advertise publishes a locally-hosted service into the gossip registry.
 func (c *NMClient) Advertise(entry RegistryEntry) error {
 	body, err := json.Marshal(entry)
 	if err != nil {
@@ -123,7 +123,7 @@ func (c *NMClient) Advertise(entry RegistryEntry) error {
 	return nil
 }
 
-// Rotate tells the local NetManager to swap the gossip PSK + data key (plan §9.6).
+// Rotate tells the local NetManager to swap the gossip PSK + data key.
 func (c *NMClient) Rotate(gossipKey string) error {
 	body, _ := json.Marshal(map[string]string{"gossip_key": gossipKey})
 	resp, err := c.http.Post(c.base+"/p2p/rotate", "application/json", bytes.NewBuffer(body))

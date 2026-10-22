@@ -2,12 +2,13 @@ package bestrandomfit
 
 import (
 	"errors"
+	"scheduler/calculate/schedulers/cpumemfit"
 	"scheduler/calculate/schedulers/placement"
 	"testing"
 )
 
-func res(id string, mem, cpu, cpuPct float64) Resources {
-	return Resources{BaseResources: placement.BaseResources{
+func res(id string, mem, cpu, cpuPct float64) cpumemfit.Resources {
+	return cpumemfit.Resources{BaseResources: placement.BaseResources{
 		ID:             id,
 		Virtualization: []string{"docker"},
 		AvailableMem:   mem,
@@ -30,7 +31,7 @@ func TestSchedulerFiltersUnqualified(t *testing.T) {
 	// Only c2 has enough cpu+mem.
 	c1 := res("c1", 500, 1, 0)
 	c2 := res("c2", 2000, 8, 0)
-	got, err := a.Calculate(job, []Resources{c1, c2})
+	got, err := a.Calculate(job, []cpumemfit.Resources{c1, c2})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -47,7 +48,7 @@ func TestSchedulerPicksAmongBestBand(t *testing.T) {
 	top1 := res("top1", 4000, 8, 5)   // score = 95 + 4000 = 4095
 	top2 := res("top2", 4000, 8, 5)   // score = 4095
 	worse := res("worse", 500, 2, 90) // score = 10 + 500 = 510
-	cands := []Resources{worse, top1, top2}
+	cands := []cpumemfit.Resources{worse, top1, top2}
 
 	seen := map[string]int{}
 	for i := 0; i < 200; i++ {
@@ -77,11 +78,34 @@ func TestSchedulerBandRespectsTolerance(t *testing.T) {
 	// rng returns the last index, so we can see how big the band is.
 	var bandSize int
 	a := Scheduler{Tolerance: 2.0, rng: func(n int) int { bandSize = n; return n - 1 }}
-	_, err := a.Calculate(job, []Resources{far, near, best})
+	_, err := a.Calculate(job, []cpumemfit.Resources{far, near, best})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if bandSize != 2 {
 		t.Errorf("band size = %d; want 2 (best + near, far excluded)", bandSize)
+	}
+}
+
+// A job requesting a CSI-backed volume must only land on candidates advertising
+// that driver, even when a better-scoring candidate lacks it.
+func TestSchedulerFiltersByCSIDriver(t *testing.T) {
+	job := res("j", 100, 1, 0)
+	job.Volumes = []cpumemfit.VolumeSpec{{VolumeID: "v", CSIDriver: "nfs.csi.k8s.io"}}
+	noDriver := res("noDriver", 8000, 8, 0)
+	withDriver := res("withDriver", 1000, 2, 0)
+	withDriver.CSIDrivers = []string{"nfs.csi.k8s.io"}
+
+	got, err := Scheduler{Tolerance: DefaultTolerance}.Calculate(job, []cpumemfit.Resources{noDriver, withDriver})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.ID() != "withDriver" {
+		t.Errorf("got %s; want withDriver", got.ID())
+	}
+
+	_, err = Scheduler{}.Calculate(job, []cpumemfit.Resources{noDriver})
+	if !errors.As(err, &placement.SchedulingError{}) {
+		t.Fatalf("expected scheduling error when no candidate has the driver, got %v", err)
 	}
 }

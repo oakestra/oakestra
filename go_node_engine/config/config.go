@@ -76,18 +76,18 @@ func ParseNodeMode(mode string) NodeMode {
 // The gossip PSK keyring and the data-plane AEAD key are obtained at enrollment
 // and stored under /etc/oakestra/p2p/ — they are NOT kept in this JSON.
 type P2PConfig struct {
-	BootstrapPeers   []string      `json:"bootstrap_peers"`          // optional static seeds "ip:port"
-	Discovery        string        `json:"discovery"`                // "mdns" (default) | "static" | "both"
-	NodeCert         string        `json:"node_cert"`                // this node's self-signed cert
-	NodeKey          string        `json:"node_key"`                 // this node's private key (never leaves node)
-	GossipPort       int           `json:"gossip_port"`              // default 50104
-	EnrollPort       int           `json:"enroll_port"`              // TLS enrollment endpoint, default 50106
-	ServiceIPBlock   string        `json:"service_ip_block"`         // claimed /24 in 10.30.0.0/16
-	SchedSigma       int           `json:"sched_sigma"`              // quorum divisor, default 4
-	SchedTimeoutSec  int           `json:"sched_timeout_sec"`        // bid-round timeout, default 30
-	SchedRetryMaxSec int           `json:"sched_retry_max_sec"`      // PENDING retry backoff cap, default 300
-	ReplicaFactor    int           `json:"replica_factor"`           // SLA custodians per job, default 3
-	Pending          PendingEnroll `json:"pending_enroll,omitempty"` // one-shot join params (cleared after enrollment)
+	BootstrapPeers       []string      `json:"bootstrap_peers"`          // optional static seeds "ip:port"
+	Discovery            string        `json:"discovery"`                // "mdns" (default) | "static" | "both"
+	NodeCert             string        `json:"node_cert"`                // this node's self-signed cert
+	NodeKey              string        `json:"node_key"`                 // this node's private key (never leaves node)
+	GossipPort           int           `json:"gossip_port"`              // default 50104
+	EnrollPort           int           `json:"enroll_port"`              // TLS enrollment endpoint, default 50106
+	ServiceIPBlock       string        `json:"service_ip_block"`         // claimed /24 in 10.30.0.0/16
+	SchedSample          int           `json:"sched_sample"`             // members asked per placement probe, default 3
+	SchedProbeTimeoutSec int           `json:"sched_probe_timeout_sec"`  // wait for a probe's answers, default 5
+	SchedRetryMaxSec     int           `json:"sched_retry_max_sec"`      // PENDING retry backoff cap, default 300
+	ReplicaFactor        int           `json:"replica_factor"`           // SLA custodians per job, default 3
+	Pending              PendingEnroll `json:"pending_enroll,omitempty"` // one-shot join params (cleared after enrollment)
 }
 
 // PendingEnroll carries one-shot enrollment parameters from the boot/config command
@@ -107,14 +107,14 @@ func (p P2PConfig) HasPendingEnroll() bool {
 // GenDefaultP2PConfig returns the P2P defaults. These are inert while Mode=cluster.
 func GenDefaultP2PConfig() P2PConfig {
 	return P2PConfig{
-		BootstrapPeers:   []string{},
-		Discovery:        "mdns",
-		GossipPort:       50104,
-		EnrollPort:       50106,
-		SchedSigma:       4,
-		SchedTimeoutSec:  30,
-		SchedRetryMaxSec: 300,
-		ReplicaFactor:    3,
+		BootstrapPeers:       []string{},
+		Discovery:            "mdns",
+		GossipPort:           50104,
+		EnrollPort:           50106,
+		SchedSample:          3,
+		SchedProbeTimeoutSec: 5,
+		SchedRetryMaxSec:     300,
+		ReplicaFactor:        3,
 	}
 }
 
@@ -194,6 +194,64 @@ type Virtualization struct {
 	Config  []string `json:"virtualization_config"`
 }
 
+// UnmarshalJSON also accepts the misspelled "virutalizaiton_*" keys written by
+// NodeEngine versions before the JSON tags were fixed, so existing config files
+// keep their virtualization entries.
+func (v *Virtualization) UnmarshalJSON(data []byte) error {
+	type current Virtualization
+	var legacy struct {
+		current
+		LegacyName    string   `json:"virutalizaiton_name"`
+		LegacyRuntime string   `json:"virutalizaiton_runtime"`
+		LegacyActive  bool     `json:"virutalizaiton_active"`
+		LegacyConfig  []string `json:"virutalizaiton_config"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+	*v = Virtualization(legacy.current)
+	if v.Runtime == "" && legacy.LegacyRuntime != "" {
+		*v = Virtualization{
+			Name:    legacy.LegacyName,
+			Runtime: legacy.LegacyRuntime,
+			Active:  legacy.LegacyActive,
+			Config:  legacy.LegacyConfig,
+		}
+	}
+	return nil
+}
+
+// repairVirtualizations drops entries without a runtime, which an older NodeEngine
+// leaves behind when it rewrites a config whose keys it cannot read. If that removed
+// the container runtime, the default containerd entry is restored: without it the
+// node advertises no container support and every container workload is refused.
+// It reports whether conf changed.
+func repairVirtualizations(conf *ConfFile) bool {
+	kept := make([]Virtualization, 0, len(conf.Virtualizations))
+	for _, v := range conf.Virtualizations {
+		if v.Runtime != "" {
+			kept = append(kept, v)
+		}
+	}
+	dropped := len(conf.Virtualizations) - len(kept)
+	if dropped == 0 {
+		return false
+	}
+	logger.WarnLogger().Printf("Config: dropped %d virtualization entr(ies) without a runtime (written by an incompatible NodeEngine version)", dropped)
+	hasContainer := false
+	for _, v := range kept {
+		if v.Runtime == string(CONTAINER_RUNTIME) {
+			hasContainer = true
+		}
+	}
+	if !hasContainer {
+		logger.WarnLogger().Printf("Config: restoring the default containerd virtualization")
+		kept = append(kept, Default().Virtualizations...)
+	}
+	conf.Virtualizations = kept
+	return true
+}
+
 // CSIDriverType describes a locally available CSI plugin endpoint.
 // The Endpoint must point to the plugin's UNIX domain socket, typically
 // provided via the CSI_ENDPOINT environment variable or a per-plugin config.
@@ -230,6 +288,11 @@ func Read() (ConfFile, error) {
 			return ConfFile{}, resetErr
 		}
 		return ConfFile{}, err
+	}
+	if repairVirtualizations(&clusterConf) {
+		if err := writeLocked(clusterConf); err != nil {
+			logger.ErrorLogger().Printf("Unable to persist the repaired configuration: %v", err)
+		}
 	}
 	return clusterConf, nil
 }

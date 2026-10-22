@@ -1,7 +1,7 @@
 // Package p2p implements the NodeEngine side of peer-to-peer mode: SLA expansion,
-// the distributed bid scheduler (plan §1.5), IP allocation from the node's claimed
-// block (plan §3.3), SLA custodianship + failover (plan §7), and the node control
-// API (plan §8).
+// the distributed bid scheduler, IP allocation from the node's claimed
+// block, SLA custodianship + failover, and the node control
+// API.
 package p2p
 
 import (
@@ -13,7 +13,7 @@ import (
 
 // SLA mirrors the deployment descriptor accepted by the root system manager, so the
 // exact same file works with `oak app create` against a root orchestrator or a p2p
-// worker (plan §1.2).
+// worker.
 type SLA struct {
 	SlaVersion   string           `json:"sla_version"`
 	Applications []SLAApplication `json:"applications"`
@@ -42,13 +42,15 @@ type SLAMicroservice struct {
 	Privileged     bool         `json:"privileged"`
 	Addresses      SLAAddresses `json:"addresses"`
 	Constraints    []any        `json:"constraints"`
-	// RestartPolicy controls failover behaviour (plan §7.3): "reschedule" (default) moves
+	// Volumes are CSI-backed volumes; hosts must advertise each volume's csi_driver.
+	Volumes []model.VolumeRequest `json:"volumes"`
+	// RestartPolicy controls failover behaviour: "reschedule" (default) moves
 	// the service to another node when its host dies; "none" opts out (one-shot jobs
 	// default to none — they should not re-run on failover).
 	RestartPolicy string `json:"p2p_restart_policy"`
 }
 
-// Restart policies (plan §7.3).
+// Restart policies.
 const (
 	RestartReschedule = "reschedule"
 	RestartNone       = "none"
@@ -62,11 +64,11 @@ type SLAAddresses struct {
 type DeployableService struct {
 	JobName       string        `json:"job_name"`       // app.appns.svc.svcns
 	RRIP          string        `json:"rr_ip"`          // stable ServiceIP; from SLA or allocated
-	RestartPolicy string        `json:"restart_policy"` // "reschedule" | "none" (plan §7.3)
+	RestartPolicy string        `json:"restart_policy"` // "reschedule" | "none"
 	Service       model.Service `json:"service"`
 }
 
-// ShouldReschedule reports whether the job may be moved on host death (plan §7.3).
+// ShouldReschedule reports whether the job may be moved on host death.
 func (d DeployableService) ShouldReschedule() bool {
 	if d.RestartPolicy == RestartNone {
 		return false
@@ -89,7 +91,7 @@ func runtimeFor(virt string) string {
 }
 
 // ExpandSLA parses a deployment descriptor and expands every microservice into a
-// DeployableService (plan §1.4: job naming + per-service scheduling unit).
+// DeployableService (job naming + per-service scheduling unit).
 func ExpandSLA(data []byte) ([]DeployableService, error) {
 	var sla SLA
 	if err := json.Unmarshal(data, &sla); err != nil {
@@ -127,6 +129,7 @@ func ExpandSLA(data []byte) ([]DeployableService, error) {
 					Storage:    ms.Storage,
 					OneShot:    ms.OneShot,
 					Privileged: ms.Privileged,
+					Volumes:    ms.Volumes,
 				},
 			})
 		}

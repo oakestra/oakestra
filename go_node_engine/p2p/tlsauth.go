@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Roster-pinned mutual TLS for the connections plane (plan §9.1, §9.4 — trust model D):
+// Roster-pinned mutual TLS for the connections plane (gossip-anchored roster, no CA):
 // every node serves and dials with its SELF-SIGNED cert; a peer is accepted iff its cert
 // fingerprint is in the trusted roster. No CA, no chains — set membership.
 //
@@ -61,7 +61,7 @@ func (rv *rosterVerifier) trusted() map[string]bool {
 	return fps
 }
 
-// verifyPeer is the custom TLS callback (plan §9.4): accept iff the presented cert's
+// verifyPeer is the custom TLS callback: accept iff the presented cert's
 // fingerprint is in the roster. Used symmetrically for client and server certs.
 func (rv *rosterVerifier) verifyPeer(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 	if len(rawCerts) == 0 {

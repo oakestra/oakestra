@@ -171,7 +171,7 @@ func main() {
 		// starting container resources background monitor.
 		jobs.StartServicesMonitoring(runtimeManager, MONITORING_CYCLE, mqtt.ReportServiceResources)
 	} else {
-		// P2P mode: start the controller — coordinator (bid rounds), host (assigns),
+		// P2P mode: start the controller — coordinator (placement), host (assigns),
 		// custodian (failover + PENDING retry) and observability endpoint.
 		var ctrl *p2pnode.Controller
 		statusFn := func(svc model.Service) {
@@ -210,6 +210,8 @@ func main() {
 
 		// Gossip our cert fingerprint so peers can verify our mTLS identity.
 		go ctrl.AnnounceRoster()
+		// Gossip our static capabilities so coordinators can shortlist us without asking.
+		go ctrl.AnnounceCapabilities()
 
 		// Reboot recovery with the generation rule: reconcile BEFORE reclaiming.
 		go ctrl.ReconcileP2P()

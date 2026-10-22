@@ -17,6 +17,7 @@ import (
 	"go_node_engine/config"
 	"go_node_engine/logger"
 	"io"
+	"io/fs"
 	"math/big"
 	"net/http"
 	"os"
@@ -25,21 +26,21 @@ import (
 	"time"
 )
 
-// Security & onboarding (plan §9, trust model D — no CA):
-//   - every node has a locally-generated keypair + SELF-SIGNED cert (§9.4)
+// Security & onboarding (gossip-anchored roster — no CA):
+//   - every node has a locally-generated keypair + SELF-SIGNED cert
 //   - trust = a roster of member cert fingerprints, handed over at enrollment
-//   - admission = single-use short-TTL join tokens minted by any member (§9.2, §9.6)
+//   - admission = single-use short-TTL join tokens minted by any member
 //   - the enrollment endpoint (:50106, TLS) is run by EVERY member, so any member
-//     can onboard and only members can (they alone hold the PSK + token mint) (§9.3)
+//     can onboard and only members can (they alone hold the PSK + token mint)
 
 // credsDirPath is a var (not const) so tests can point it at a temp dir.
 var credsDirPath = "/etc/oakestra/p2p"
 
-// Creds is the persisted p2p identity + trust state (plan §9; /etc/oakestra/p2p/).
+// Creds is the persisted p2p identity + trust state (/etc/oakestra/p2p/).
 type Creds struct {
-	GossipKey string            `json:"gossip_key"`        // PSK passphrase (keyed via DeriveGossipKey)
-	Roster    map[string]string `json:"roster"`            // node UUID -> cert fingerprint (sha256:...)
-	Seeds     []string          `json:"seeds,omitempty"`   // known gossip endpoints
+	GossipKey string            `json:"gossip_key"`      // PSK passphrase (keyed via DeriveGossipKey)
+	Roster    map[string]string `json:"roster"`          // node UUID -> cert fingerprint (sha256:...)
+	Seeds     []string          `json:"seeds,omitempty"` // known gossip endpoints
 }
 
 type issuedToken struct {
@@ -66,6 +67,17 @@ func LoadCreds() (Creds, bool) {
 	return c, true
 }
 
+// CredsAccessError returns why this process cannot read the persisted credentials,
+// typically a permission error for a non-root user. It returns nil when they are
+// readable or do not exist yet (pre-genesis).
+func CredsAccessError() error {
+	_, err := os.ReadFile(filepath.Join(credsDirPath, "creds.json"))
+	if err == nil || errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
 func SaveCreds(c Creds) error {
 	dir, err := credsDir()
 	if err != nil {
@@ -78,8 +90,8 @@ func SaveCreds(c Creds) error {
 	return os.WriteFile(filepath.Join(dir, "creds.json"), data, 0o600)
 }
 
-// EnsureIdentity loads or creates the node's keypair + self-signed cert (plan §9.4:
-// the private key never leaves the node). Returns the TLS certificate and the
+// EnsureIdentity loads or creates the node's keypair + self-signed cert (the private key
+// never leaves the node). Returns the TLS certificate and the
 // cert fingerprint ("sha256:<hex>").
 func EnsureIdentity(nodeUUID string) (tls.Certificate, string, error) {
 	dir, err := credsDir()
@@ -130,13 +142,13 @@ func EnsureIdentity(nodeUUID string) (tls.Certificate, string, error) {
 	return cert, Fingerprint(der), nil
 }
 
-// Fingerprint returns "sha256:<hex>" of a DER certificate — the roster identity (§9.4).
+// Fingerprint returns "sha256:<hex>" of a DER certificate — the roster identity.
 func Fingerprint(der []byte) string {
 	sum := sha256.Sum256(der)
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
-// Genesis creates a brand-new p2p network on this node (plan §1.2 `--init`, §9.4):
+// Genesis creates a brand-new p2p network on this node (`--init`):
 // mints the gossip PSK, generates the self-signed identity, rosters self.
 func Genesis(nodeUUID string) (Creds, error) {
 	if creds, ok := LoadCreds(); ok {
@@ -161,7 +173,7 @@ func Genesis(nodeUUID string) (Creds, error) {
 	return creds, nil
 }
 
-// ---------- join tokens (plan §9.2, §9.6) ----------
+// ---------- join tokens ----------
 
 func tokensPath() string { return filepath.Join(credsDirPath, "tokens.json") }
 
@@ -183,7 +195,7 @@ func saveTokens(list []issuedToken) error {
 }
 
 // MintToken creates a single-use join token "<id>.<secret>" valid for ttl. Only the
-// token's hash is stored (plan §9.6).
+// token's hash is stored.
 func MintToken(ttl time.Duration) (string, error) {
 	idB := make([]byte, 3)
 	secretB := make([]byte, 12)
@@ -204,7 +216,7 @@ func MintToken(ttl time.Duration) (string, error) {
 	return token, saveTokens(list)
 }
 
-// consumeToken validates a presented token and marks it used (single-use, plan §9.6).
+// consumeToken validates a presented token and marks it used (single-use).
 func consumeToken(token string) error {
 	sum := sha256.Sum256([]byte(token))
 	hash := hex.EncodeToString(sum[:])
@@ -225,7 +237,7 @@ func consumeToken(token string) error {
 	return errors.New("unknown token")
 }
 
-// ---------- enrollment endpoint + join flow (plan §9.3) ----------
+// ---------- enrollment endpoint + join flow ----------
 
 type enrollRequest struct {
 	Token       string `json:"token"`
@@ -241,7 +253,7 @@ type enrollResponse struct {
 }
 
 // ServeEnrollment runs the members-only onboarding endpoint on :<enrollPort> over TLS
-// with the node's self-signed cert. Every member runs it — "any node can onboard" (§9.3).
+// with the node's self-signed cert. Every member runs it — "any node can onboard".
 func ServeEnrollment(nodeUUID string, enrollPort, gossipPort int) error {
 	cert, _, err := EnsureIdentity(nodeUUID)
 	if err != nil {
@@ -269,7 +281,7 @@ func ServeEnrollment(nodeUUID string, enrollPort, gossipPort int) error {
 			http.Error(w, "this node is not an enrolled member", http.StatusServiceUnavailable)
 			return
 		}
-		// Admit: roster the new node's fingerprint (plan §9.4 — a PSK-authenticated
+		// Admit: roster the new node's fingerprint (a PSK-authenticated
 		// roster update; gossiped to the mesh via the registry on next advertisement).
 		creds.Roster[req.NodeUUID] = req.Fingerprint
 		_ = SaveCreds(creds)
@@ -297,7 +309,7 @@ func requestHostIP(r *http.Request) string {
 	return host
 }
 
-// Join performs the enrollment handshake against a bootstrap member (plan §9.3):
+// Join performs the enrollment handshake against a bootstrap member:
 // verify the trust-anchor pin, present token + our fingerprint, receive PSK + roster.
 func Join(nodeUUID string, pending config.PendingEnroll) (Creds, error) {
 	_, fp, err := EnsureIdentity(nodeUUID)
@@ -311,7 +323,7 @@ func Join(nodeUUID string, pending config.PendingEnroll) (Creds, error) {
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				// Self-signed certs: authenticity comes from the out-of-band pin
-				// (--ca-hash) carried in the addp2p command (plan §9.2) — defeats MITM.
+				// (--ca-hash) carried in the addp2p command — defeats MITM.
 				InsecureSkipVerify: true, //nolint:gosec // pin-verified below
 				VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 					if len(rawCerts) == 0 {
@@ -353,7 +365,7 @@ func Join(nodeUUID string, pending config.PendingEnroll) (Creds, error) {
 	return creds, nil
 }
 
-// Revoke drops a node from the local roster (plan §9.6). NOTE: full lock-out also
+// Revoke drops a node from the local roster. NOTE: full lock-out also
 // requires gossip-PSK + data-key rotation across the mesh, which is not yet automated —
 // documented limitation; rotate by re-running genesis + re-enrolling members.
 func Revoke(nodeUUID string) error {

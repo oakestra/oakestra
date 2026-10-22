@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -176,5 +177,67 @@ func TestConcurrentReadWrite(t *testing.T) {
 	var persisted ConfFile
 	if err := json.Unmarshal(data, &persisted); err != nil {
 		t.Fatalf("final config is invalid JSON: %v", err)
+	}
+}
+
+func TestVirtualizationReadsLegacyKeys(t *testing.T) {
+	var v Virtualization
+	legacy := `{"virutalizaiton_name":"containerd","virutalizaiton_runtime":"docker","virutalizaiton_active":true,"virutalizaiton_config":[]}`
+	if err := json.Unmarshal([]byte(legacy), &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.Name != "containerd" || v.Runtime != "docker" || !v.Active {
+		t.Fatalf("legacy keys not read: %+v", v)
+	}
+
+	// Current keys win when both are present.
+	both := `{"virtualization_runtime":"crosvm","virtualization_active":true,"virutalizaiton_runtime":"docker"}`
+	if err := json.Unmarshal([]byte(both), &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.Runtime != "crosvm" {
+		t.Fatalf("current keys must take precedence: %+v", v)
+	}
+}
+
+// A config emptied by an incompatible NodeEngine (entries whose keys it could not
+// read) gets its container runtime back, and the repair is persisted.
+func TestReadRepairsEmptiedVirtualizations(t *testing.T) {
+	useTempConfig(t)
+	emptied := `{"conf_version":"1.0","virtualizations":[
+		{"virutalizaiton_name":"","virutalizaiton_runtime":"","virutalizaiton_active":false,"virutalizaiton_config":null},
+		{"virutalizaiton_name":"","virutalizaiton_runtime":"","virutalizaiton_active":false,"virutalizaiton_config":null}]}`
+	if err := os.WriteFile(confPath, []byte(emptied), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Virtualizations, Default().Virtualizations) {
+		t.Fatalf("virtualizations = %+v; want the default containerd entry", got.Virtualizations)
+	}
+	data, _ := os.ReadFile(confPath)
+	if !strings.Contains(string(data), `"virtualization_runtime":"docker"`) {
+		t.Fatalf("repair not persisted:\n%s", data)
+	}
+}
+
+// Valid entries are left alone, including a deliberately disabled containerd.
+func TestReadKeepsValidVirtualizations(t *testing.T) {
+	useTempConfig(t)
+	conf := Default()
+	conf.Virtualizations[0].Active = false
+	conf.Virtualizations = append(conf.Virtualizations, Virtualization{Name: "crosvm", Runtime: string(CROSVM_RUNTIME), Active: true, Config: []string{}})
+	if err := Write(conf); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Virtualizations, conf.Virtualizations) {
+		t.Fatalf("got %+v; want %+v", got.Virtualizations, conf.Virtualizations)
 	}
 }

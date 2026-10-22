@@ -13,11 +13,11 @@ import (
 )
 
 // CustodyRecord is the SLA copy held by a job's custodians so the job survives its host
-// dying (plan §7.1). Pending=true parks an unschedulable job for retry (plan §7.6).
+// dying. Pending=true parks an unschedulable job for retry.
 type CustodyRecord struct {
 	Job        DeployableService `json:"job"`
 	HostUUID   string            `json:"host_uuid"`  // "" while pending (no host yet)
-	Generation int               `json:"generation"` // bumped on every (re)schedule (plan §7.4)
+	Generation int               `json:"generation"` // bumped on every (re)schedule
 	Pending    bool              `json:"pending"`
 }
 
@@ -95,7 +95,7 @@ func LoadCustody() []CustodyRecord {
 }
 
 // hrwScore is the Highest-Random-Weight hash of (job, node) — deterministic on every
-// node, so all members agree on a job's custodian order with zero coordination (plan §7.1).
+// node, so all members agree on a job's custodian order with zero coordination.
 func hrwScore(jobName, nodeUUID string) uint64 {
 	sum := sha256.Sum256([]byte(jobName + "|" + nodeUUID))
 	return binary.BigEndian.Uint64(sum[:8])
@@ -115,7 +115,7 @@ func HRWOrder(jobName string, nodeUUIDs []string) []string {
 }
 
 // Custodians returns the job's custodian set: the host itself plus the top k−1 live
-// nodes by HRW (host included by decision — it already stores what it runs, plan §7.1).
+// nodes by HRW (host included by decision — it already stores what it runs).
 func Custodians(jobName string, memberUUIDs []string, k int, hostUUID string) []string {
 	if k < 1 {
 		k = 1
@@ -137,7 +137,7 @@ func Custodians(jobName string, memberUUIDs []string, k int, hostUUID string) []
 }
 
 // PrimaryLiveCustodian returns the node that owns rescheduling a job after its host died:
-// the first node in HRW order that is alive and not the dead host (plan §7.2). Because
+// the first node in HRW order that is alive and not the dead host. Because
 // HRW is deterministic, every node computes the same answer — exactly one rescheduler.
 func PrimaryLiveCustodian(jobName string, liveUUIDs []string, deadUUID string) string {
 	for _, uuid := range HRWOrder(jobName, liveUUIDs) {

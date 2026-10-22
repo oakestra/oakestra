@@ -12,7 +12,7 @@ import (
 )
 
 // IPAM allocates instance and RR ServiceIPs from this node's exclusively-owned /24
-// block inside 10.30.0.0/16 (plan §3.3). Because every node draws only from a block it
+// block inside 10.30.0.0/16. Because every node draws only from a block it
 // owns, two nodes can never mint the same IP — uniqueness by construction.
 type IPAM struct {
 	mu        sync.Mutex
@@ -21,7 +21,7 @@ type IPAM struct {
 	allocated map[string]bool
 }
 
-// BlockFor derives the default /24 block octet from the node UUID (plan §3.3).
+// BlockFor derives the default /24 block octet from the node UUID.
 // Collisions between two nodes' derived blocks are resolved at claim time via gossip
 // (the block is embedded in every advertised instance IP, so a claimer can detect and
 // move to the next free block).
@@ -64,7 +64,7 @@ func NewIPAM(nodeUUID string, configuredBlock string) (*IPAM, error) {
 	return ip, nil
 }
 
-// Block returns this node's claimed block in CIDR form, gossiped as the claim (plan §3.3).
+// Block returns this node's claimed block in CIDR form, gossiped as the claim.
 func (i *IPAM) Block() string { return fmt.Sprintf("10.30.%d.0/24", i.block) }
 
 // Alloc returns the next free IP in the node's block and persists the allocation.
@@ -78,7 +78,7 @@ func (i *IPAM) Alloc() (string, error) {
 			return candidate, i.saveLocked()
 		}
 	}
-	return "", errors.New("instance IP block exhausted (widen to /23, plan §3.3)")
+	return "", errors.New("instance IP block exhausted (widen to /23)")
 }
 
 // Free releases an IP back to the block.

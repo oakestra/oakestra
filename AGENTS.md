@@ -105,23 +105,25 @@ Root Orchestrator  (1 per deployment)
 ### P2P Mode (clusterless workers)
 
 Workers can alternatively run **standalone in a peer-to-peer mesh** — no root or cluster
-orchestrator. Full design: `P2P_MODE_IMPLEMENTATION_PLAN.md` (repo parent directory).
+orchestrator. How it works, end to end: [`P2P_MODE.md`](P2P_MODE.md).
 
 - **Start**: `NodeEngine -d --p2p --init` (genesis) or `NodeEngine -d --p2p --join <ip:50106>
   --token <tok> --ca-hash sha256:<pin>` (join; the command is printed by `NodeEngine addp2p`
   on any member). Bare `--p2p` re-joins with stored creds. Switch modes with
   `NodeEngine config mode p2p|cluster <ip>` (drains workloads first).
-- **Deploy**: `NodeEngine deploy <sla.json>` (same SLA format as the root API) runs a
-  **bid round** across the mesh (quorum `ceil(N/SIGMA)`, SIGMA=4 default, 30s timeout;
-  tune via `NodeEngine config sched`) and places each service via `bestrandomfit`.
-  `--local` skips bidding. Lifecycle: `services ls|logs|inspect`, `members`, `undeploy`, `drain`.
+- **Deploy**: `NodeEngine deploy <sla.json>` (same SLA format as the root API) shortlists
+  the members whose gossiped capabilities match, asks 3 random ones how much room they have
+  (escalating to the rest of the shortlist only if none has room), and places each service
+  via `bestrandomfit`. Tune with `NodeEngine config sched --sample N --probe-timeout S`.
+  `--local` skips placement. Lifecycle: `services ls|logs|inspect`, `members`, `undeploy`, `drain`.
 - **Networking**: every node uses the same fixed local subnet (10.18.0.0/26) — the per-node
   subnet request to root/cluster is **deprecated** (endpoints now return the fixed subnet).
   Instance IPs come from a per-node /24 block in 10.30.0.0/16. Membership + service registry
   ride SWIM gossip (`hashicorp/memberlist`), PSK-encrypted (AES-GCM).
 - **Resilience**: SLAs replicate to k=3 HRW custodians (host + 2 backups); on host death the
   primary live custodian reschedules (a generation counter resolves reboot-vs-failover
-  races); unschedulable jobs park as PENDING and retry on node-join / interval.
+  races, and duplicate placements are stopped deterministically: higher generation wins,
+  then lower node UUID); unschedulable jobs park as PENDING and retry on node-join / interval.
 - **Security**: no CA — self-signed node certs + a roster of member fingerprints; single-use
   join tokens (default 1h TTL); `NodeEngine revoke <uuid>` drops a member from the roster.
 - **Ports**: 50103 overlay tunnel (unchanged) · 50104 gossip · 50105 node control API ·

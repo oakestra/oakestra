@@ -32,35 +32,35 @@ func init() {
 
 	modeClusterCmd.Flags().IntVarP(&clusterPort, "port", "p", 10100, "Cluster orchestrator port")
 
-	schedCmd.Flags().IntVar(&schedSigma, "sigma", 0, "Bid quorum divisor SIGMA (default 4)")
-	schedCmd.Flags().IntVar(&schedTimeout, "timeout", 0, "Bid-round timeout in seconds (default 30)")
+	schedCmd.Flags().IntVar(&schedSample, "sample", 0, "Random matching members asked per placement (default 3)")
+	schedCmd.Flags().IntVar(&schedProbeTimeout, "probe-timeout", 0, "Seconds to wait for a probe's answers (default 5)")
 }
 
-// `config sched` — tune the bid-round quorum/timeout.
+// `config sched` — tune placement sampling.
 var (
-	schedSigma   int
-	schedTimeout int
-	schedCmd     = &cobra.Command{
+	schedSample       int
+	schedProbeTimeout int
+	schedCmd          = &cobra.Command{
 		Use:   "sched",
-		Short: "Show or tune the p2p bid-round parameters (SIGMA, timeout)",
+		Short: "Show or tune the p2p placement parameters (sample size, probe timeout)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := config.Read()
 			if err != nil {
 				return err
 			}
-			if schedSigma > 0 {
-				conf.P2P.SchedSigma = schedSigma
+			if schedSample > 0 {
+				conf.P2P.SchedSample = schedSample
 			}
-			if schedTimeout > 0 {
-				conf.P2P.SchedTimeoutSec = schedTimeout
+			if schedProbeTimeout > 0 {
+				conf.P2P.SchedProbeTimeoutSec = schedProbeTimeout
 			}
-			if schedSigma > 0 || schedTimeout > 0 {
+			if schedSample > 0 || schedProbeTimeout > 0 {
 				if err := config.Write(conf); err != nil {
 					return err
 				}
 			}
-			fmt.Printf("Scheduler: SIGMA=%d timeout=%ds retry-cap=%ds replica-factor=%d\n",
-				conf.P2P.SchedSigma, conf.P2P.SchedTimeoutSec, conf.P2P.SchedRetryMaxSec, conf.P2P.ReplicaFactor)
+			fmt.Printf("Scheduler: sample=%d probe-timeout=%ds retry-cap=%ds replica-factor=%d\n",
+				conf.P2P.SchedSample, conf.P2P.SchedProbeTimeoutSec, conf.P2P.SchedRetryMaxSec, conf.P2P.ReplicaFactor)
 			return nil
 		},
 	}

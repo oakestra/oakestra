@@ -43,7 +43,7 @@ func TestExpandSLA(t *testing.T) {
 	}
 	web := services[0]
 	if web.JobName != "myapp.prod.web.prod" {
-		t.Errorf("job name = %s; want myapp.prod.web.prod (4-part, plan §1.4)", web.JobName)
+		t.Errorf("job name = %s; want myapp.prod.web.prod (4-part)", web.JobName)
 	}
 	if web.RRIP != "10.30.30.30" {
 		t.Errorf("rr_ip from SLA not honoured: %s", web.RRIP)
@@ -74,7 +74,7 @@ func TestHRWDeterministicAndConsistent(t *testing.T) {
 	order2 := HRWOrder("myapp.prod.web.prod", []string{"node-e", "node-c", "node-a", "node-d", "node-b"})
 	for i := range order1 {
 		if order1[i] != order2[i] {
-			t.Fatalf("HRW order depends on input order: %v vs %v — must be deterministic (plan §7.1)", order1, order2)
+			t.Fatalf("HRW order depends on input order: %v vs %v — must be deterministic", order1, order2)
 		}
 	}
 	// Different jobs should (generally) get different custodian orders.
@@ -98,7 +98,7 @@ func TestCustodiansIncludeHost(t *testing.T) {
 		t.Fatalf("got %d custodians; want 3", len(got))
 	}
 	if got[0] != "node-c" {
-		t.Errorf("host must be first custodian (plan §7.1): %v", got)
+		t.Errorf("host must be first custodian: %v", got)
 	}
 	seen := map[string]bool{}
 	for _, u := range got {

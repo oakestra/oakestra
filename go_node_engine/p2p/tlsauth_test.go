@@ -34,7 +34,7 @@ func newForeignIdentity(t *testing.T) tls.Certificate {
 	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
 }
 
-// TestControlAPIMutualTLSRosterPinned verifies the connections plane (plan §9.1, §9.4):
+// TestControlAPIMutualTLSRosterPinned verifies the connections plane:
 // a rostered member completes the mTLS handshake; an un-rostered cert is rejected.
 func TestControlAPIMutualTLSRosterPinned(t *testing.T) {
 	useTempCreds(t)

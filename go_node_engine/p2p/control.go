@@ -3,6 +3,7 @@ package p2p
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go_node_engine/config"
 	"go_node_engine/internal/store"
@@ -21,11 +22,11 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// DefaultControlPort is the node control API port (plan §8): deploy/bid/assign between
+// DefaultControlPort is the node control API port: deploy/bid/assign between
 // members, plus status/logs observability. Identical on every node.
 const DefaultControlPort = 50105
 
-// Controller is the p2p brain of the NodeEngine: coordinator (bid rounds), host
+// Controller is the p2p brain of the NodeEngine: coordinator (placement), host
 // (assign handling), custodian (failover + pending retry), and observability endpoint.
 type Controller struct {
 	NodeUUID    string
@@ -38,10 +39,10 @@ type Controller struct {
 	nm     *NMClient
 	ipam   *IPAM
 	peers  *http.Client
-	scheme string // "https" (roster-pinned mTLS, plan §9.1) or "http" (pre-genesis fallback)
+	scheme string // "https" (roster-pinned mTLS) or "http" (pre-genesis fallback)
 	roster *rosterVerifier
 
-	// maintenance suppression (plan §7.4): nodeUUID -> unix deadline. While a node is in
+	// maintenance suppression: nodeUUID -> unix deadline. While a node is in
 	// its maintenance window, its death does NOT trigger failover — it reclaims on return.
 	maintMu     sync.Mutex
 	maintenance map[string]int64
@@ -71,7 +72,7 @@ func NewController(conf config.ConfFile, deploy func(model.Service) error, undep
 }
 
 // AnnounceRoster gossips this node's cert fingerprint as a __roster__ registry entry so
-// every member can verify our mTLS identity (plan §9.4). Retries until the NetManager's
+// every member can verify our mTLS identity. Retries until the NetManager's
 // p2p layer is up.
 func (c *Controller) AnnounceRoster() {
 	_, fp, err := EnsureIdentity(c.NodeUUID)
@@ -107,8 +108,9 @@ func (c *Controller) Serve() error {
 	router.HandleFunc("/ctrl/services", c.servicesHandler).Methods("GET")
 	router.HandleFunc("/ctrl/services/{job}/{instance}", c.undeployHandler).Methods("DELETE")
 	router.HandleFunc("/ctrl/logs", c.logsHandler).Methods("GET")
-	// Root-API-compatible subset so `oak app`/`oak service` work against a p2p worker
-	// (plan §1.7). Shapes match the root system_manager; see the compat section below.
+	router.HandleFunc("/ctrl/capacity", c.capacityHandler).Methods("GET")
+	// Root-API-compatible subset so `oak app`/`oak service` work against a p2p worker.
+	// Shapes match the root system_manager; see the compat section below.
 	router.HandleFunc("/api/application", c.apiDeployHandler).Methods("POST", "PUT")
 	router.HandleFunc("/api/applications", c.apiListApplicationsHandler).Methods("GET")
 	router.HandleFunc("/api/services", c.apiListServicesHandler).Methods("GET")
@@ -121,8 +123,9 @@ func (c *Controller) Serve() error {
 	router.HandleFunc("/api/service/{id}/instance/{n}", c.apiInstanceUndeployHandler).Methods("DELETE")
 
 	go c.pendingRetryLoop()
+	go c.duplicateLoop()
 
-	// Roster-pinned mutual TLS (plan §9.1 connections plane): serve with our self-signed
+	// Roster-pinned mutual TLS: serve with our self-signed
 	// cert and require every client to present a rostered cert. Plain HTTP only as a
 	// pre-genesis fallback (creds always exist after daemon startup in p2p mode).
 	if _, ok := LoadCreds(); ok {
@@ -142,7 +145,7 @@ func (c *Controller) Serve() error {
 	return http.ListenAndServe(fmt.Sprintf(":%d", c.ControlPort), router)
 }
 
-// ---------- deploy (coordinator role, plan §1.4/§1.5) ----------
+// ---------- deploy (coordinator role) ----------
 
 type DeployRequest struct {
 	SLA   json.RawMessage `json:"sla"`
@@ -168,7 +171,7 @@ func (c *Controller) deployHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, results)
 }
 
-// DeploySLA expands the SLA and schedules every service (plan §1.4 coordinator role).
+// DeploySLA expands the SLA and schedules every service.
 func (c *Controller) DeploySLA(sla []byte, localOnly bool) []DeployResult {
 	services, err := ExpandSLA(sla)
 	if err != nil {
@@ -176,7 +179,7 @@ func (c *Controller) DeploySLA(sla []byte, localOnly bool) []DeployResult {
 	}
 	results := make([]DeployResult, 0, len(services))
 	for _, job := range services {
-		// RR ServiceIP: honour the SLA's rr_ip, else allocate from our block (plan §1.4).
+		// RR ServiceIP: honour the SLA's rr_ip, else allocate from our block.
 		if job.RRIP == "" {
 			if ip, err := c.ipam.Alloc(); err == nil {
 				job.RRIP = ip
@@ -187,11 +190,11 @@ func (c *Controller) DeploySLA(sla []byte, localOnly bool) []DeployResult {
 		case err == nil:
 			c.replicateCustody(CustodyRecord{Job: job, HostUUID: host, Generation: 0})
 			results = append(results, DeployResult{JobName: job.JobName, Host: host, RRIP: job.RRIP, Status: "SCHEDULED"})
-		case err == ErrUnschedulable:
-			// Park as PENDING on the HRW custodians instead of dropping (plan §7.6).
+		case errors.Is(err, ErrUnschedulable):
+			// Park as PENDING on the HRW custodians instead of dropping.
 			c.parkPending(job, 0)
 			results = append(results, DeployResult{JobName: job.JobName, RRIP: job.RRIP, Status: "PENDING",
-				Detail: "unschedulable: parked, retried when capacity appears"})
+				Detail: err.Error() + " — parked, retried when capacity appears"})
 		default:
 			results = append(results, DeployResult{JobName: job.JobName, Status: "ERROR", Detail: err.Error()})
 		}
@@ -199,7 +202,7 @@ func (c *Controller) DeploySLA(sla []byte, localOnly bool) []DeployResult {
 	return results
 }
 
-// ---------- bid + assign (host role, plan §1.5) ----------
+// ---------- bid + assign (host role) ----------
 
 func (c *Controller) bidHandler(w http.ResponseWriter, r *http.Request) {
 	var req BidRequest
@@ -220,13 +223,12 @@ func (c *Controller) assignHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAssign runs on the winning host: TOCTOU re-check, instance-IP allocation from
-// OUR block (plan §1.4 host role), deploy, persist, advertise, self-custody.
+// OUR block, deploy, persist, advertise, self-custody.
 func (c *Controller) handleAssign(req AssignRequest) AssignResponse {
 	job := req.Job
 
-	// TOCTOU re-check: capacity may be gone since we bid (plan §1.5).
-	check := c.evaluateBid(BidRequest{JobName: job.JobName, Runtime: job.Service.Runtime,
-		Memory: job.Service.Memory, Vcpus: job.Service.Vcpus})
+	// TOCTOU re-check: capacity may be gone since we bid.
+	check := c.evaluateBid(newBidRequest(job))
 	if !check.Ok {
 		return AssignResponse{Ok: false, Reason: "resources no longer available"}
 	}
@@ -241,7 +243,7 @@ func (c *Controller) handleAssign(req AssignRequest) AssignResponse {
 		return AssignResponse{Ok: false, Reason: err.Error()}
 	}
 
-	// Persist for reboot recovery (plan §6) with the scheduling generation (plan §7.4).
+	// Persist for reboot recovery with the scheduling generation.
 	_ = store.Upsert(store.Record{
 		JobName:      job.JobName,
 		Service:      job.Service,
@@ -251,10 +253,10 @@ func (c *Controller) handleAssign(req AssignRequest) AssignResponse {
 		DesiredState: store.DesiredRunning,
 	})
 
-	// Advertise into the gossip registry; the NetManager fills the namespace IP (plan §2.4).
+	// Advertise into the gossip registry; the NetManager fills the namespace IP.
 	c.advertise(job, instanceIP, req.Generation, "RUNNING")
 
-	// The host is always one of its own custodians (plan §7.1).
+	// The host is always one of its own custodians.
 	_ = SaveCustody(CustodyRecord{Job: job, HostUUID: c.NodeUUID, Generation: req.Generation})
 
 	logger.InfoLogger().Printf("p2p: deployed %s (gen %d, instance IP %s)", job.JobName, req.Generation, instanceIP)
@@ -282,7 +284,7 @@ func (c *Controller) advertise(job DeployableService, instanceIP string, generat
 	}
 }
 
-// ReportStatus propagates coarse app-status transitions into the registry (plan §7.5).
+// ReportStatus propagates coarse app-status transitions into the registry.
 // Wired as the runtime status callback in p2p mode.
 func (c *Controller) ReportStatus(svc model.Service) {
 	status := map[string]string{
@@ -304,7 +306,7 @@ func (c *Controller) ReportStatus(svc model.Service) {
 	}
 }
 
-// ---------- custody + failover + pending (plan §7) ----------
+// ---------- custody + failover + pending ----------
 
 func (c *Controller) custodyHandler(w http.ResponseWriter, r *http.Request) {
 	var rec CustodyRecord
@@ -321,8 +323,8 @@ func (c *Controller) custodyDeleteHandler(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 }
 
-// replicateCustody copies the SLA to the job's custodian set: host + k−1 HRW backups
-// (plan §7.1). Directed unicast — never a broadcast.
+// replicateCustody copies the SLA to the job's custodian set: host + k−1 HRW backups.
+// Directed unicast — never a broadcast.
 func (c *Controller) replicateCustody(rec CustodyRecord) {
 	members, err := c.nm.Members()
 	if err != nil {
@@ -351,7 +353,7 @@ func (c *Controller) replicateCustody(rec CustodyRecord) {
 	}
 }
 
-// parkPending stores an unschedulable job on its custodians for automatic retry (plan §7.6).
+// parkPending stores an unschedulable job on its custodians for automatic retry.
 func (c *Controller) parkPending(job DeployableService, generation int) {
 	rec := CustodyRecord{Job: job, Generation: generation, Pending: true}
 	_ = SaveCustody(rec)
@@ -364,7 +366,7 @@ type nodeEventPayload struct {
 	Lost     []RegistryEntry `json:"lost"`
 }
 
-// nodeLeaveHandler is the failover trigger (plan §7.2): the NetManager forwards the SWIM
+// nodeLeaveHandler is the failover trigger: the NetManager forwards the SWIM
 // NodeLeave event; if this node is the primary live custodian for an affected job, it
 // reschedules it with a bumped generation.
 func (c *Controller) nodeLeaveHandler(w http.ResponseWriter, r *http.Request) {
@@ -379,7 +381,7 @@ func (c *Controller) nodeLeaveHandler(w http.ResponseWriter, r *http.Request) {
 
 func (c *Controller) handleNodeLeave(deadUUID string) {
 	// A node in its maintenance window is rebooting on purpose — do not fail over its
-	// jobs; it reclaims them from its own store on return (plan §7.4).
+	// jobs; it reclaims them from its own store on return.
 	if c.inMaintenance(deadUUID) {
 		logger.InfoLogger().Printf("p2p: %s left during its maintenance window — reschedule suppressed", deadUUID)
 		return
@@ -392,17 +394,27 @@ func (c *Controller) handleNodeLeave(deadUUID string) {
 	for _, m := range members {
 		live = append(live, m.UUID)
 	}
+	entries, _ := c.nm.Services()
 	for _, rec := range LoadCustody() {
 		if rec.HostUUID != deadUUID {
 			continue
 		}
-		// Per-SLA opt-out (plan §7.3): one-shot / pinned jobs are reported, not moved.
+		// Per-SLA opt-out: one-shot / pinned jobs are reported, not moved.
 		if !rec.Job.ShouldReschedule() {
 			logger.InfoLogger().Printf("p2p failover: host %s died but %s has restart policy 'none' — not rescheduling", deadUUID, rec.Job.JobName)
 			continue
 		}
-		// Exactly one node reschedules: the primary live custodian by HRW (plan §7.2).
+		// Exactly one node reschedules: the primary live custodian by HRW.
 		if PrimaryLiveCustodian(rec.Job.JobName, live, deadUUID) != c.NodeUUID {
+			continue
+		}
+		// The record may be stale: the job can already run elsewhere (a duplicate that
+		// was resolved, or a placement this custodian never heard of). Follow it instead
+		// of creating another copy.
+		if host, gen, ok := livePlacement(entries, rec.Job.JobName, deadUUID); ok {
+			logger.InfoLogger().Printf("p2p failover: %s already runs on %s (gen %d) — not rescheduling", rec.Job.JobName, host, gen)
+			rec.HostUUID, rec.Generation = host, gen
+			_ = SaveCustody(rec)
 			continue
 		}
 		gen := rec.Generation + 1
@@ -414,13 +426,13 @@ func (c *Controller) handleNodeLeave(deadUUID string) {
 			c.parkPending(rec.Job, gen)
 		}
 	}
-	// Membership changed: custodian sets shift — restore k live copies (plan §7.2 step 5).
+	// Membership changed: custodian sets shift — restore k live copies.
 	c.reReplicateCustody()
 }
 
 // reReplicateCustody re-copies each custody record this node holds for jobs it HOSTS to
-// the current custodian set, restoring k live copies after membership churn (plan §7.2
-// step 5). Only the host re-replicates, so exactly one node does it per job.
+// the current custodian set, restoring k live copies after membership churn.
+// Only the host re-replicates, so exactly one node does it per job.
 func (c *Controller) reReplicateCustody() {
 	for _, rec := range LoadCustody() {
 		if rec.HostUUID == c.NodeUUID && !rec.Pending {
@@ -429,7 +441,7 @@ func (c *Controller) reReplicateCustody() {
 	}
 }
 
-// ---------- maintenance suppression (plan §7.4, `drain --maintenance`) ----------
+// ---------- maintenance suppression (`drain --maintenance`) ----------
 
 type maintenanceRequest struct {
 	NodeUUID string `json:"node_uuid"`
@@ -444,7 +456,7 @@ func (c *Controller) inMaintenance(nodeUUID string) bool {
 }
 
 // maintenanceHandler (local CLI entry): broadcast "I am going down on purpose for <dur>,
-// do not reschedule my jobs" to every member (plan §7.4).
+// do not reschedule my jobs" to every member.
 func (c *Controller) maintenanceHandler(w http.ResponseWriter, r *http.Request) {
 	var req maintenanceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -474,7 +486,7 @@ func (c *Controller) maintenanceHandler(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusOK)
 }
 
-// ---------- revocation + key rotation (plan §9.6) ----------
+// ---------- revocation + key rotation ----------
 
 type rotateRequest struct {
 	GossipKey string            `json:"gossip_key"`
@@ -482,7 +494,7 @@ type rotateRequest struct {
 }
 
 // revokeHandler (local CLI entry): evict a member and rotate the network keys so it can
-// no longer decrypt gossip or the data plane (plan §9.6). Fan-out rides the roster-pinned
+// no longer decrypt gossip or the data plane. Fan-out rides the roster-pinned
 // mTLS control plane, which the PSK rotation does not disturb.
 func (c *Controller) revokeHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -504,7 +516,7 @@ func (c *Controller) revokeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // RevokeAndRotate drops a node from the roster and rotates the gossip PSK + data key
-// across all remaining members (plan §9.6): a compromised node knew the shared symmetric
+// across all remaining members: a compromised node knew the shared symmetric
 // keys — rotating them is what actually locks it out.
 func (c *Controller) RevokeAndRotate(revokedUUID string) error {
 	if err := Revoke(revokedUUID); err != nil {
@@ -591,7 +603,7 @@ func (c *Controller) maintenanceMarkHandler(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusOK)
 }
 
-// nodeJoinHandler retries PENDING jobs when capacity appears (plan §7.6 retry trigger)
+// nodeJoinHandler retries PENDING jobs when capacity appears (retry trigger)
 // and re-replicates custody — the joiner may now be in some jobs' HRW custodian sets.
 func (c *Controller) nodeJoinHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
@@ -601,7 +613,7 @@ func (c *Controller) nodeJoinHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-// pendingRetryLoop is the backstop timer for PENDING retries (plan §7.6).
+// pendingRetryLoop is the backstop timer for PENDING retries.
 func (c *Controller) pendingRetryLoop() {
 	interval := time.Duration(c.Conf.P2P.SchedRetryMaxSec) * time.Second
 	if interval <= 0 {
@@ -627,20 +639,23 @@ func (c *Controller) retryPending() {
 		if !rec.Pending {
 			continue
 		}
-		// One deterministic owner per pending job (plan §7.6).
+		// One deterministic owner per pending job.
 		if PrimaryLiveCustodian(rec.Job.JobName, live, "") != c.NodeUUID {
 			continue
 		}
 		gen := rec.Generation + 1
-		if host, err := c.ScheduleJob(rec.Job, false, gen); err == nil {
-			logger.InfoLogger().Printf("p2p: PENDING %s placed on %s (gen %d)", rec.Job.JobName, host, gen)
-			c.replicateCustody(CustodyRecord{Job: rec.Job, HostUUID: host, Generation: gen})
+		host, err := c.ScheduleJob(rec.Job, false, gen)
+		if err != nil {
+			logger.InfoLogger().Printf("p2p: PENDING %s still not placed: %v", rec.Job.JobName, err)
+			continue
 		}
+		logger.InfoLogger().Printf("p2p: PENDING %s placed on %s (gen %d)", rec.Job.JobName, host, gen)
+		c.replicateCustody(CustodyRecord{Job: rec.Job, HostUUID: host, Generation: gen})
 	}
 }
 
 // ReconcileP2P restores persisted deployments after a reboot, but yields to any newer
-// placement made while this node was down (generation rule, plan §7.4): reconcile
+// placement made while this node was down (generation rule): reconcile
 // BEFORE reclaiming.
 func (c *Controller) ReconcileP2P() {
 	// Let gossip anti-entropy converge after the re-join before consulting the registry.
@@ -658,14 +673,14 @@ func (c *Controller) ReconcileP2P() {
 		for _, e := range entries {
 			// A live instance on another host with >= generation means the job was failed
 			// over (or re-placed) while we were down — the newer decision wins and the
-			// returning host yields (plan §7.4).
+			// returning host yields.
 			if e.JobName == rec.JobName && e.NodeUUID != c.NodeUUID && e.Generation >= rec.Generation {
 				yield = true
 				break
 			}
 		}
 		if yield {
-			logger.InfoLogger().Printf("p2p reconcile: %s was re-placed while we were down — yielding (plan §7.4)", rec.JobName)
+			logger.InfoLogger().Printf("p2p reconcile: %s was re-placed while we were down — yielding", rec.JobName)
 			_ = store.Remove(rec.Service.Sname, rec.Service.Instance)
 			c.ipam.Free(rec.InstanceIP)
 			continue
@@ -681,7 +696,7 @@ func (c *Controller) ReconcileP2P() {
 	}
 }
 
-// ---------- observability + undeploy (plan §8) ----------
+// ---------- observability + undeploy ----------
 
 type ServiceView struct {
 	JobName    string `json:"job_name"`
@@ -695,7 +710,7 @@ type ServiceView struct {
 	Pending    bool   `json:"pending,omitempty"`
 }
 
-// servicesHandler renders the network-wide view from the gossiped registry (plan §8) —
+// servicesHandler renders the network-wide view from the gossiped registry —
 // no per-node query needed — plus any PENDING jobs this node holds custody for.
 func (c *Controller) servicesHandler(w http.ResponseWriter, r *http.Request) {
 	views := make([]ServiceView, 0)
@@ -739,13 +754,10 @@ func (c *Controller) undeployHandler(w http.ResponseWriter, r *http.Request) {
 	for _, rec := range records {
 		if rec.JobName == job && rec.Service.Instance == instance {
 			// hosted here: stop, deregister everywhere
-			if err := c.UndeployFn(rec.Service.Sname, instance); err != nil {
+			if err := c.stopLocal(rec); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			_ = store.Remove(rec.Service.Sname, instance)
-			_ = c.nm.Withdraw(job, instance)
-			c.ipam.Free(rec.InstanceIP)
 			DeleteCustody(job)
 			c.dropCustodyEverywhere(job)
 			w.WriteHeader(http.StatusOK)
@@ -780,6 +792,18 @@ func (c *Controller) undeployHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// stopLocal stops a locally hosted instance and releases everything it held here: the
+// runtime instance, the persisted record, its registry advertisement and its instance IP.
+func (c *Controller) stopLocal(rec store.Record) error {
+	if err := c.UndeployFn(rec.Service.Sname, rec.Service.Instance); err != nil {
+		return err
+	}
+	_ = store.Remove(rec.Service.Sname, rec.Service.Instance)
+	_ = c.nm.Withdraw(rec.JobName, rec.Service.Instance)
+	c.ipam.Free(rec.InstanceIP)
+	return nil
+}
+
 func (c *Controller) dropCustodyEverywhere(job string) {
 	members, err := c.nm.Members()
 	if err != nil {
@@ -798,8 +822,8 @@ func (c *Controller) dropCustodyEverywhere(job string) {
 }
 
 // logsHandler streams the tail of an app's log. If the service is hosted elsewhere, the
-// request is proxied to the hosting node — the kubectl-logs→kubelet pattern (plan §8:
-// logs never gossip; they are fetched from the host on demand).
+// request is proxied to the hosting node — the kubectl-logs→kubelet pattern
+// (logs never gossip; they are fetched from the host on demand).
 func (c *Controller) logsHandler(w http.ResponseWriter, r *http.Request) {
 	job := r.URL.Query().Get("job")
 	instance, _ := strconv.Atoi(r.URL.Query().Get("instance"))
@@ -850,7 +874,7 @@ func (c *Controller) logsHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, fmt.Sprintf("no logs found for %s.%d anywhere in the network", job, instance), http.StatusNotFound)
 }
 
-// ---------- root-API compatibility for the oak CLI (plan §1.7) ----------
+// ---------- root-API compatibility for the oak CLI ----------
 //
 // These endpoints return the SAME JSON shapes as the root system_manager so the oak CLI
 // (Python and Go) works unmodified against a p2p worker. The p2p network is flat, so we
@@ -870,15 +894,15 @@ type apiApplication struct {
 
 // apiService mirrors the root's Service JSON shape (subset consumed by the CLI).
 type apiService struct {
-	MicroserviceID        string           `json:"microserviceID"`
-	MicroserviceName      string           `json:"microservice_name"`
-	MicroserviceNamespace string           `json:"microservice_namespace"`
-	ApplicationID         string           `json:"applicationID"`
-	ApplicationName       string           `json:"application_name"`
-	ApplicationNamespace  string           `json:"application_namespace"`
-	Status                string           `json:"status"`
-	RRip                  string           `json:"RR_ip"`
-	InstanceList          []apiInstance    `json:"instance_list"`
+	MicroserviceID        string        `json:"microserviceID"`
+	MicroserviceName      string        `json:"microservice_name"`
+	MicroserviceNamespace string        `json:"microservice_namespace"`
+	ApplicationID         string        `json:"applicationID"`
+	ApplicationName       string        `json:"application_name"`
+	ApplicationNamespace  string        `json:"application_namespace"`
+	Status                string        `json:"status"`
+	RRip                  string        `json:"RR_ip"`
+	InstanceList          []apiInstance `json:"instance_list"`
 }
 
 type apiInstance struct {

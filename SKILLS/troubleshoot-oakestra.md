@@ -539,6 +539,22 @@ Common p2p failures: wrong/expired join token (enrollment log line "rejected joi
 gossip PSK mismatch ("no installed keys could decrypt the message" in netmanager.log),
 control API not up (daemon not started with `--p2p`).
 
+**Scheduling fails (UNSCHEDULABLE / PENDING):** ask every member whether it would bid
+for the service's requirements, and why not:
+
+```bash
+# Capacity of all members + each one's verdict on a hypothetical job
+# (p2p CLI commands need root: they authenticate with the node's mTLS identity)
+sudo NodeEngine members capacity --runtime container --memory 512 --vcpus 1 [--vgpus 1] [--csi nfs.csi.k8s.io]
+# One member only (UUID prefix), raw JSON
+sudo NodeEngine members capacity <node-uuid-prefix> --json
+# Declined bids of past deploys are logged by the coordinating node
+grep "declined" /var/log/oakestra/nodeengine.log 2>/dev/null | tail
+```
+
+An "unreachable" row means the member is in the gossip view but its control API
+(50105/tcp, mTLS) cannot be reached — it cannot answer placement probes either.
+
 ### 9.5 Worker → Cluster Connectivity (cluster mode only)
 
 ```bash

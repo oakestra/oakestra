@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -133,11 +134,9 @@ var (
 			}
 			// Always ask the local controller: it serves local logs directly and proxies
 			// to the hosting node otherwise — the kubectl-logs pattern.
-			url := ctrlURL(fmt.Sprintf("/ctrl/logs?job=%s&instance=%d&tail=%d", args[0], instance, logsTail))
-			client, _ := ctrlClientAndScheme()
-			resp, err := client.Get(url)
+			resp, err := ctrlDo(http.MethodGet, fmt.Sprintf("/ctrl/logs?job=%s&instance=%d&tail=%d", args[0], instance, logsTail), nil)
 			if err != nil {
-				return daemonHint(err)
+				return err
 			}
 			defer func() { _ = resp.Body.Close() }()
 			body, _ := io.ReadAll(resp.Body)
@@ -189,6 +188,62 @@ var (
 			for _, m := range members {
 				fmt.Printf("%-40v %v\n", m["uuid"], m["addr"])
 			}
+			return nil
+		},
+	}
+
+	capRuntime string
+	capMemory  int
+	capVcpus   int
+	capVgpus   int
+	capCSI     []string
+	capJSON    bool
+
+	membersCapacityCmd = &cobra.Command{
+		Use:   "capacity [node-uuid]",
+		Short: "Show every member's schedulable capacity, and whether it would bid for a job",
+		Long: "Queries each member's control API for the resources its bid evaluation uses.\n" +
+			"With --runtime/--memory/--vcpus/--vgpus/--csi, every member also evaluates that job with\n" +
+			"its real bid logic and reports why it would decline.",
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true // flags parsed; errors from here on are not usage errors
+			if err := requireP2PMode(); err != nil {
+				return err
+			}
+			query := url.Values{"network": {"1"}}
+			flags := cmd.Flags()
+			if flags.Changed("runtime") || flags.Changed("memory") || flags.Changed("vcpus") || flags.Changed("vgpus") || flags.Changed("csi") {
+				query.Set("runtime", capRuntime)
+				query.Set("memory", strconv.Itoa(capMemory))
+				query.Set("vcpus", strconv.Itoa(capVcpus))
+				query.Set("vgpus", strconv.Itoa(capVgpus))
+				for _, driver := range capCSI {
+					query.Add("csi", driver)
+				}
+			}
+			var network p2pnode.NetworkCapacity
+			if err := ctrlGet("/ctrl/capacity?"+query.Encode(), &network); err != nil {
+				return err
+			}
+			if len(args) == 1 {
+				kept := network.Members[:0]
+				for _, m := range network.Members {
+					if strings.HasPrefix(m.NodeUUID, args[0]) {
+						kept = append(kept, m)
+					}
+				}
+				if len(kept) == 0 {
+					return fmt.Errorf("no member matches %q", args[0])
+				}
+				network.Members = kept
+			}
+			if capJSON {
+				data, _ := json.MarshalIndent(network, "", "  ")
+				fmt.Println(string(data))
+				return nil
+			}
+			printCapacity(network, query.Has("runtime"))
 			return nil
 		},
 	}
@@ -308,7 +363,7 @@ var (
 )
 
 func init() {
-	deployCmd.Flags().BoolVar(&deployLocal, "local", false, "Force placement on THIS node (skip the bid round)")
+	deployCmd.Flags().BoolVar(&deployLocal, "local", false, "Force placement on THIS node (skip sampling)")
 	servicesLogsCmd.Flags().IntVar(&logsTail, "tail", 100, "Number of log lines to fetch")
 	addp2pCmd.Flags().DurationVar(&tokenTTL, "ttl", time.Hour, "Join-token validity (e.g. 30m, 2h)")
 	drainCmd.Flags().DurationVar(&maintenanceDur, "maintenance", 0,
@@ -324,6 +379,55 @@ func init() {
 	servicesCmd.AddCommand(servicesLsCmd)
 	servicesCmd.AddCommand(servicesLogsCmd)
 	servicesCmd.AddCommand(servicesInspectCmd)
+	membersCmd.AddCommand(membersCapacityCmd)
+	membersCapacityCmd.Flags().StringVar(&capRuntime, "runtime", "container", "SLA virtualization of the job to evaluate: container (alias docker), unikernel, crosvm, ...")
+	membersCapacityCmd.Flags().IntVar(&capMemory, "memory", 0, "memory in MB of the job to evaluate")
+	membersCapacityCmd.Flags().IntVar(&capVcpus, "vcpus", 0, "vcpus of the job to evaluate")
+	membersCapacityCmd.Flags().IntVar(&capVgpus, "vgpus", 0, "vgpus of the job to evaluate")
+	membersCapacityCmd.Flags().StringSliceVar(&capCSI, "csi", nil, "CSI driver(s) the job's volumes need")
+	membersCapacityCmd.Flags().BoolVar(&capJSON, "json", false, "print the raw JSON response")
+}
+
+// printCapacity renders a network capacity sweep as a table. withBid adds the
+// per-member verdict on the evaluated job.
+func printCapacity(network p2pnode.NetworkCapacity, withBid bool) {
+	header := fmt.Sprintf("%-36s %-18s %5s %6s %15s %4s %4s  %s", "NODE-UUID", "RUNTIMES", "VCPUS", "CPU%", "MEM-FREE/TOTAL", "GPUS", "SVCS", "CSI")
+	if withBid {
+		header += "  BID"
+	}
+	fmt.Println(header)
+	bidders := 0
+	for _, m := range network.Members {
+		c := m.Capacity
+		if c == nil {
+			fmt.Printf("%-36s unreachable: %s\n", m.NodeUUID, m.Error)
+			continue
+		}
+		csi := strings.Join(c.CSIDrivers, ",")
+		if csi == "" {
+			csi = "-"
+		}
+		line := fmt.Sprintf("%-36s %-18s %5d %6.1f %15s %4d %4d  %s",
+			m.NodeUUID, strings.Join(c.Runtimes, ","), c.Vcpus, c.CpuPct,
+			fmt.Sprintf("%.0f/%d MB", c.FreeMemMB, c.MemoryMB), c.Vgpus, c.Services, csi)
+		if withBid && c.Bid != nil {
+			if c.Bid.Ok {
+				bidders++
+				line += "  yes"
+			} else {
+				line += "  no: " + c.Bid.Reason
+			}
+		}
+		fmt.Println(line)
+	}
+	fmt.Printf("\nA deploy asks %d random matching member(s) for room (probe timeout %ds), and the\n"+
+		"other matching members only if none of them has room.\n", network.Sample, network.ProbeTimeoutSec)
+	if withBid {
+		fmt.Printf("%d of %d member(s) would bid for this job.\n", bidders, len(network.Members))
+		if bidders == 0 {
+			fmt.Println("No member would bid: a deploy would end UNSCHEDULABLE and be parked as PENDING.")
+		}
+	}
 }
 
 func requireP2PMode() error {
@@ -345,53 +449,68 @@ var (
 	ctrlOnce   sync.Once
 	ctrlHTTP   *http.Client
 	ctrlScheme = "http"
+	ctrlErr    error
 )
 
-func ctrlClientAndScheme() (*http.Client, string) {
+func ctrlClientAndScheme() (*http.Client, string, error) {
 	ctrlOnce.Do(func() {
+		// The identity is root-only; without it the daemon rejects us, and plain HTTP
+		// would only fail with a confusing "HTTP request to an HTTPS server".
+		if err := p2pnode.CredsAccessError(); err != nil {
+			ctrlErr = fmt.Errorf("cannot read the node's p2p identity (%v)\nThe p2p commands need root: run them with sudo", err)
+			return
+		}
 		if conf, err := config.Read(); err == nil && conf.NodeUUID != "" {
 			ctrlHTTP, ctrlScheme = p2pnode.NewMemberHTTPClient(conf.NodeUUID, nil, 90*time.Second)
 			return
 		}
 		ctrlHTTP = &http.Client{Timeout: 90 * time.Second}
 	})
-	return ctrlHTTP, ctrlScheme
+	return ctrlHTTP, ctrlScheme, ctrlErr
 }
 
-func ctrlURL(path string) string {
-	_, scheme := ctrlClientAndScheme()
-	return fmt.Sprintf("%s://localhost:%d%s", scheme, controlPort, path)
+// ctrlDo sends a request for path to the local control API.
+func ctrlDo(method, path string, body io.Reader) (*http.Response, error) {
+	client, scheme, err := ctrlClientAndScheme()
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(method, fmt.Sprintf("%s://localhost:%d%s", scheme, controlPort, path), body)
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, daemonHint(err)
+	}
+	return resp, nil
 }
 
 func ctrlPost(path string, body []byte, out interface{}) error {
-	client, _ := ctrlClientAndScheme()
-	resp, err := client.Post(ctrlURL(path), "application/json", bytes.NewBuffer(body))
+	resp, err := ctrlDo(http.MethodPost, path, bytes.NewBuffer(body))
 	if err != nil {
-		return daemonHint(err)
+		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return decodeCtrl(resp, out)
 }
 
 func ctrlGet(path string, out interface{}) error {
-	client, _ := ctrlClientAndScheme()
-	resp, err := client.Get(ctrlURL(path))
+	resp, err := ctrlDo(http.MethodGet, path, nil)
 	if err != nil {
-		return daemonHint(err)
+		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return decodeCtrl(resp, out)
 }
 
 func ctrlDelete(path string) error {
-	req, err := http.NewRequest(http.MethodDelete, ctrlURL(path), nil)
+	resp, err := ctrlDo(http.MethodDelete, path, nil)
 	if err != nil {
 		return err
-	}
-	client, _ := ctrlClientAndScheme()
-	resp, err := client.Do(req)
-	if err != nil {
-		return daemonHint(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return decodeCtrl(resp, nil)
