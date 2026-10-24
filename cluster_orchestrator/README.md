@@ -77,9 +77,9 @@ N.b. if you're using docker compose with **sudo** don't forget to use the -E fla
 
 ## Shared Library Dependency
 
-The shared python libraries (`resource_abstractor_client` and `oakestra_utils_library`) are **always built from this repo's local `libraries/` folder** — nothing is fetched from a remote git repo. The Docker build wires them in via a named build context declared in `docker-compose.yml` (`additional_contexts: libraries=../libraries`), so `docker compose up --build` just works.
+The shared python libraries (`resource-abstractor-client` and `oakestra-utils`) are part of the root `uv` workspace and are **always built from this repo's local `libraries/` folder** — nothing is fetched from a remote git repo. The Docker build wires them in via the workspace root build context declared in `docker-compose.yml` (`context: ../`), so `docker compose up --build` just works.
 
-To test local changes to a library, edit the code under `libraries/` and rebuild the image (`docker compose up --build`) — no branch pushing required. This requires Docker BuildKit/Buildx (the default on modern Docker).
+To test local changes to a library, edit the code under `libraries/` and rebuild the image (`docker compose up --build`) — no branch pushing required. Multi-stage UV builds require Docker BuildKit/Buildx (the default on modern Docker).
 
 
 ## Customize deployment

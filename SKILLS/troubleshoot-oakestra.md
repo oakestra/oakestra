@@ -634,11 +634,11 @@ docker compose build --no-cache system_manager
 docker compose pull
 ```
 
-The shared `libraries/` packages (`oakestra_utils_library`, `resource_abstractor_client`) are built from the repo-local `libraries/` folder via a Buildx named build context — not from a remote git repo, and there is no `LIB_BRANCH` env var. If a build fails on these libraries, check that:
+The shared `libraries/` packages (`oakestra-utils`, `resource-abstractor-client`) are part of the root `uv` workspace and are built from the repo-local `libraries/` folder — not from a remote git repo, and there is no `LIB_BRANCH` env var. If a build fails on these libraries, check that:
 ```bash
-# The libraries build context resolves (declared in docker-compose.yml as additional_contexts):
-ls libraries/oakestra_utils_library libraries/resource_abstractor_client
-# BuildKit/Buildx is enabled (named build contexts require it — default on modern Docker):
+# The shared libraries exist locally:
+ls libraries/oakestra-utils libraries/resource-abstractor-client
+# BuildKit/Buildx is enabled (multi-stage UV builds require Buildx — default on modern Docker):
 docker buildx version
 ```
 

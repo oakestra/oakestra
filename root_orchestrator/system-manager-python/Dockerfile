@@ -1,43 +1,56 @@
-FROM python:3.10-slim-bookworm
-LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
+ARG BASE_DIR=/oakestra
+ARG APP_DIR=$BASE_DIR/root_orchestrator/system-manager-python
+ARG LIB_DIR=$BASE_DIR/libraries
 
-# The greenlet pip package requires gcc & g++ to work properly. Cryptography requires libffi.
-RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ git libffi-dev
+FROM ghcr.io/astral-sh/uv:python3.10-trixie-slim AS builder
 
-COPY requirements.txt /
+ARG BASE_DIR
+ARG APP_DIR
+ARG LIB_DIR
 
-# Oakestra shared libraries are pulled from the repo-local libraries/ folder via the
-# "libraries" named build context (see docker-compose.yml / CI), not from a remote git repo.
-# DL3022 is ignored below: "libraries" is a BuildKit named build context, not a FROM stage.
-# hadolint ignore=DL3022
-COPY --from=libraries . /libraries
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_DEV=1
 
-# Install appropriate requirements
-RUN pip install -r requirements.txt --no-cache-dir \
-    && pip install --no-cache-dir /libraries/resource_abstractor_client /libraries/oakestra_utils_library \
-    && rm /requirements.txt
+COPY pyproject.toml uv.lock $BASE_DIR/
 
-COPY . /
+WORKDIR $BASE_DIR
+RUN uv sync --frozen --no-install-workspace --package system-manager
 
-RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/clusterRegistration.proto
+COPY libraries/ $LIB_DIR/
+COPY root_orchestrator/system-manager-python/ $APP_DIR/
 
-# TRUE for verbose logging
-ENV FLASK_DEBUG=FALSE
+WORKDIR $APP_DIR
+RUN uv run --no-sync -m grpc_tools.protoc \
+        -Isrc \
+        --python_out=src \
+        --grpc_python_out=src \
+        --pyi_out=src \
+        src/system_manager/proto/cluster_registration.proto \
+    && uv sync --frozen --no-editable
 
-ENV ROOT_MONGO_URL=localhost
-ENV ROOT_MONGO_PORT=10007
+FROM python:3.10-slim-trixie
 
-ENV ROOT_SCHEDULER_URL=localhost
-ENV ROOT_SCHEDULER_PORT=7777
+ARG BASE_DIR
 
-ENV NET_PLUGIN_URL=localhost
-ENV NET_PLUGIN_PORT=10100
+COPY --from=builder $BASE_DIR/.venv $BASE_DIR/.venv
 
-ENV LOG_LEVEL=INFO
+RUN apt-get update \
+    && apt-get --yes install --no-install-recommends \
+      libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-ENV MY_PORT=10000
+ENV PATH="$BASE_DIR/.venv/bin:$PATH" \
+    FLASK_DEBUG=0 \
+    ROOT_MONGO_URL=localhost \
+    ROOT_MONGO_PORT=10007 \
+    ROOT_SCHEDULER_URL=localhost \
+    ROOT_SCHEDULER_PORT=7777 \
+    NET_PLUGIN_URL=localhost \
+    NET_PLUGIN_PORT=10100 \
+    MY_PORT=10000 \
+    LOG_LEVEL=INFO
 
-EXPOSE 10000
-EXPOSE 50052
+LABEL org.opencontainers.image.source="https://github.com/oakestra/oakestra"
 
-CMD gunicorn --bind [::]:${MY_PORT} system_manager:app
+CMD gunicorn --bind [::]:${MY_PORT} system_manager.main:app
