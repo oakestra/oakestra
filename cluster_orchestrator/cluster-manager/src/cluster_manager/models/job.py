@@ -50,7 +50,7 @@ class JobInstance(BaseModel):
         if other.status is not None:
             self.status = other.status
         if other.status_detail is not None:
-            self.status = other.status_detail
+            self.status_detail = other.status_detail
         if other.last_modified_timestamp is not None:
             self.last_modified_timestamp = other.last_modified_timestamp
         if other.public_ip is not None:
