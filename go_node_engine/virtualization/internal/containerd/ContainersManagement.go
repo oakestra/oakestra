@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base32"
+	"errors"
 	"fmt"
 	"go_node_engine/csi"
 	"go_node_engine/logger"
@@ -11,7 +12,6 @@ import (
 	"go_node_engine/model/gpu"
 	"go_node_engine/requests"
 	"go_node_engine/util/taskid"
-	"go_node_engine/virtualization/internal/containerd/nvidia"
 	"go_node_engine/virtualization/internal/logutils"
 	virtrt "go_node_engine/virtualization/internal/runtime"
 	"iter"
@@ -29,6 +29,7 @@ import (
 	ctd "github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/core/containers"
 	docker_remote "github.com/containerd/containerd/v2/core/remotes/docker"
+	"github.com/containerd/containerd/v2/pkg/cdi"
 	"github.com/containerd/containerd/v2/pkg/cio"
 	"github.com/containerd/containerd/v2/pkg/namespaces"
 	"github.com/containerd/containerd/v2/pkg/oci"
@@ -342,15 +343,26 @@ func (r *ContainerRuntime) containerCreationRoutine(
 	}
 	// ---- add GPU if needed
 	if service.Vgpus > 0 {
+		// Devices are injected via CDI, so the worker needs a spec from
+		// `nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml`.
 		gpuDevices, err := selectBestGPUs(service.Vgpus)
 		if err != nil {
 			logger.ErrorLogger().Printf("Failed to select GPUs: %v", err)
-			// Fallback to GPU 0 if selection fails
-			specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(0), nvidia.WithAllCapabilities))
-			logger.InfoLogger().Printf("NVIDIA - Adding GPU 0 (fallback)")
+			// Jetson has no nvidia-smi and its CDI spec only knows "all". Everywhere else stick
+			// to GPU 0, a flaky nvidia-smi shouldn't give a 1-GPU service the whole host.
+			fallback := "0"
+			if errors.Is(err, exec.ErrNotFound) {
+				fallback = "all"
+			}
+			specOpts = append(specOpts, cdi.WithCDIDevices(cdiGPUDevice(fallback)))
+			logger.InfoLogger().Printf("NVIDIA - Adding GPU %s (fallback)", fallback)
 		} else {
-			specOpts = append(specOpts, nvidia.WithGPUs(nvidia.WithDevices(gpuDevices...), nvidia.WithAllCapabilities))
-			logger.InfoLogger().Printf("NVIDIA - Adding GPU(s): %v", gpuDevices)
+			cdiDevices := make([]string, 0, len(gpuDevices))
+			for _, idx := range gpuDevices {
+				cdiDevices = append(cdiDevices, cdiGPUDevice(strconv.Itoa(idx)))
+			}
+			specOpts = append(specOpts, cdi.WithCDIDevices(cdiDevices...))
+			logger.InfoLogger().Printf("NVIDIA - Adding GPU(s): %v", cdiDevices)
 		}
 	}
 	// ---- mount CSI volumes (stage + publish) and add bind mounts to OCI spec
@@ -844,6 +856,12 @@ func convertTaskIdToContainerId(taskId string) string {
 	}
 
 	return safeTaskId + "." + hashString
+}
+
+// cdiGPUDevice builds the CDI name nvidia-ctk generates for a GPU. By default it
+// names them after the nvidia-smi index, plus "all".
+func cdiGPUDevice(name string) string {
+	return "nvidia.com/gpu=" + name
 }
 
 // gpuInfo holds GPU device information for sorting

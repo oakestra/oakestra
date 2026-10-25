@@ -550,16 +550,21 @@ containerd 2.x migrates the first two on load, so old configs keep working after
 
 ### 9.7 GPU Support
 
-```bash
-# NVIDIA GPU check
-nvidia-smi 2>/dev/null || echo "nvidia-smi not found (no NVIDIA GPU or driver issue)"
-docker run --rm --gpus all nvidia/cuda:11.0-base nvidia-smi 2>/dev/null || echo "Docker GPU passthrough not working"
+NodeEngine passes NVIDIA GPUs into containers via CDI, so the worker needs the NVIDIA Container Toolkit and a CDI spec. `oak install worker` sets up both.
 
-# Check GPU configuration script
-ls /usr/local/bin/configure_gpu.sh 2>/dev/null || \
-ls /opt/oakestra/configure_gpu.sh 2>/dev/null || \
-echo "GPU configure script not found (run go_node_engine/build/configure_gpu.sh if GPU is needed)"
+```bash
+# NVIDIA GPU check (Jetson boards have tegrastats instead of nvidia-smi)
+nvidia-smi 2>/dev/null || which tegrastats 2>/dev/null || echo "No NVIDIA GPU or driver found"
+
+# NVIDIA Container Toolkit and CDI spec
+nvidia-ctk --version 2>/dev/null || echo "nvidia-ctk not found (install the NVIDIA Container Toolkit)"
+ls /etc/cdi/nvidia*.yaml /var/run/cdi/nvidia*.yaml 2>/dev/null | grep . || echo "No NVIDIA CDI spec found"
+nvidia-ctk cdi list 2>/dev/null
 ```
+
+- No CDI spec, or GPU deployments fail with `CDI device injection failed: unresolvable CDI devices nvidia.com/gpu=...` → generate it: `sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml`.
+- Containers start but CUDA reports a driver/library mismatch → the spec is stale after a driver upgrade, regenerate it the same way.
+- NodeEngine asks for `nvidia.com/gpu=<nvidia-smi index>`. Without `nvidia-smi` (e.g. Jetson) it asks for `nvidia.com/gpu=all`, and if `nvidia-smi` fails it falls back to `nvidia.com/gpu=0`. Those names have to show up in `nvidia-ctk cdi list`.
 
 ---
 
