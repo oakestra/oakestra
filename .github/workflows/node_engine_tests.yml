@@ -1,0 +1,105 @@
+name: Golang node engine tests
+
+# node_engine_artifacts.yml only runs on release tags, so this is what
+# actually checks node engine changes before they are merged.
+on:
+  pull_request:
+    paths:
+      - 'go_node_engine/**'
+      - '!go_node_engine/**/*.md'
+      - '.github/workflows/node_engine_tests.yml'
+  push:
+    branches:
+      - develop
+    paths:
+      - 'go_node_engine/**'
+      - '!go_node_engine/**/*.md'
+      - '.github/workflows/node_engine_tests.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go_node_engine/go.mod
+          cache-dependency-path: go_node_engine/go.sum
+
+      - name: Vet
+        working-directory: go_node_engine
+        run: go vet ./...
+
+      - name: Test
+        working-directory: go_node_engine
+        run: go test ./...
+
+  # The unit tests never talk to a real containerd, so this catches client/daemon
+  # incompatibilities. 1.7 is EOL but still common on existing workers (best effort),
+  # 2.3 is the LTS line the client library is built against.
+  containerd-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        containerd: ["1.7.36", "2.3.7"]
+    env:
+      RUNC_VERSION: "1.5.2"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go_node_engine/go.mod
+          cache-dependency-path: go_node_engine/go.sum
+
+      # Compiled as the runner user so Go and its caches are available, then run
+      # as root because the test needs access to the containerd socket.
+      - name: Build integration test
+        working-directory: go_node_engine
+        run: go test -c -tags integration -o containerd.test ./virtualization/internal/containerd/
+
+      # The runner image ships its own containerd (via docker) which would
+      # clash with the one under test on the same socket.
+      - name: Stop preinstalled docker and containerd
+        run: sudo systemctl stop docker docker.socket containerd || true
+
+      - name: Install containerd ${{ matrix.containerd }} and runc ${{ env.RUNC_VERSION }}
+        run: |
+          curl -fsSL -o containerd.tar.gz \
+            "https://github.com/containerd/containerd/releases/download/v${{ matrix.containerd }}/containerd-${{ matrix.containerd }}-linux-amd64.tar.gz"
+          sudo tar -xzf containerd.tar.gz -C /usr/local
+          curl -fsSL -o runc.amd64 \
+            "https://github.com/opencontainers/runc/releases/download/v${RUNC_VERSION}/runc.amd64"
+          sudo install -m 755 runc.amd64 /usr/local/sbin/runc
+
+      - name: Start containerd
+        run: |
+          sudo sh -c 'nohup /usr/local/bin/containerd > /tmp/containerd.log 2>&1 &'
+          for _ in $(seq 1 30); do
+            if sudo /usr/local/bin/ctr version; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "containerd did not become ready"
+          exit 1
+
+      # Opt-in is required because the runtime wipes every container in the
+      # oakestra namespace on startup. Disposable runner, so that is fine here.
+      - name: Run integration test
+        working-directory: go_node_engine
+        run: sudo OAKESTRA_CONTAINERD_INTEGRATION=1 ./containerd.test -test.v -test.count=1 -test.timeout=10m
+
+      - name: Dump containerd log
+        if: failure()
+        run: sudo cat /tmp/containerd.log

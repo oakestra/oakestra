@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	containerdidentifiers "github.com/containerd/containerd/identifiers"
+	containerdidentifiers "github.com/containerd/containerd/v2/pkg/identifiers"
 	"gotest.tools/v3/assert"
 )
 
@@ -62,6 +62,22 @@ runtime_type = "io.containerd.kata.v2"
 	}
 	assert.Assert(t, got["runc"], "expected runc, got %v", got)
 	assert.Assert(t, got["kata"], "expected kata, got %v", got)
+}
+
+func TestFindAdditionalRuntimePluginsHandlesConfigVersion3(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	contents := `version = 3
+[plugins."io.containerd.cri.v1.runtime".containerd.runtimes.runsc]
+  runtime_type = "io.containerd.runsc.v1"
+`
+	assert.NilError(t, os.WriteFile(path, []byte(contents), 0o644))
+
+	got := map[string]bool{}
+	for name := range findAdditionalRuntimePluginsAt(path) {
+		got[name] = true
+	}
+	assert.Assert(t, got["runsc"], "expected runsc, got %v", got)
 }
 
 func expectedContainerIdHash(taskId string) string {
