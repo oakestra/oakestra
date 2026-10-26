@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
@@ -23,34 +23,57 @@ class Job:
 
         Attributes:
             field_id (str | Unset):  Example: 65f1c0d2a1b2c3d4e5f60718.
-            job_name (str | Unset): Unique per deployment; the key `PUT /api/v1/jobs` upserts on.
-            application_id (str | Unset):
-            candidate (str | Unset): Id of the candidate resource this job is placed on.
-            instance_list (list[JobInstance] | Unset):
+            job_name (None | str | Unset): Unique per deployment; the key `PUT /api/v1/jobs` upserts on.
+                Nullable because a `PATCH` sending an explicit `null` here $sets
+                the stored value to null rather than leaving it untouched (only
+                an absent key does that) - see `candidate`.
+            application_id (None | str | Unset):
+            candidate (None | str | Unset): Id of the candidate resource this job is placed on. Nullable: a
+                `PATCH` body's `null` is written and read back as `null`,
+                distinct from omitting the field entirely, which leaves the
+                stored value alone.
+            instance_list (list[JobInstance] | None | Unset):
     """
 
     field_id: str | Unset = UNSET
-    job_name: str | Unset = UNSET
-    application_id: str | Unset = UNSET
-    candidate: str | Unset = UNSET
-    instance_list: list[JobInstance] | Unset = UNSET
+    job_name: None | str | Unset = UNSET
+    application_id: None | str | Unset = UNSET
+    candidate: None | str | Unset = UNSET
+    instance_list: list[JobInstance] | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         field_id = self.field_id
 
-        job_name = self.job_name
+        job_name: None | str | Unset
+        if isinstance(self.job_name, Unset):
+            job_name = UNSET
+        else:
+            job_name = self.job_name
 
-        application_id = self.application_id
+        application_id: None | str | Unset
+        if isinstance(self.application_id, Unset):
+            application_id = UNSET
+        else:
+            application_id = self.application_id
 
-        candidate = self.candidate
+        candidate: None | str | Unset
+        if isinstance(self.candidate, Unset):
+            candidate = UNSET
+        else:
+            candidate = self.candidate
 
-        instance_list: list[dict[str, Any]] | Unset = UNSET
-        if not isinstance(self.instance_list, Unset):
+        instance_list: list[dict[str, Any]] | None | Unset
+        if isinstance(self.instance_list, Unset):
+            instance_list = UNSET
+        elif isinstance(self.instance_list, list):
             instance_list = []
-            for instance_list_item_data in self.instance_list:
-                instance_list_item = instance_list_item_data.to_dict()
-                instance_list.append(instance_list_item)
+            for instance_list_type_0_item_data in self.instance_list:
+                instance_list_type_0_item = instance_list_type_0_item_data.to_dict()
+                instance_list.append(instance_list_type_0_item)
+
+        else:
+            instance_list = self.instance_list
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -75,20 +98,56 @@ class Job:
         d = dict(src_dict)
         field_id = d.pop("_id", UNSET)
 
-        job_name = d.pop("job_name", UNSET)
+        def _parse_job_name(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
 
-        application_id = d.pop("applicationID", UNSET)
+        job_name = _parse_job_name(d.pop("job_name", UNSET))
 
-        candidate = d.pop("candidate", UNSET)
+        def _parse_application_id(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
 
-        _instance_list = d.pop("instance_list", UNSET)
-        instance_list: list[JobInstance] | Unset = UNSET
-        if _instance_list is not UNSET:
-            instance_list = []
-            for instance_list_item_data in _instance_list:
-                instance_list_item = JobInstance.from_dict(instance_list_item_data)
+        application_id = _parse_application_id(d.pop("applicationID", UNSET))
 
-                instance_list.append(instance_list_item)
+        def _parse_candidate(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        candidate = _parse_candidate(d.pop("candidate", UNSET))
+
+        def _parse_instance_list(data: object) -> list[JobInstance] | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, list):
+                    raise TypeError()
+                instance_list_type_0 = []
+                _instance_list_type_0 = data
+                for instance_list_type_0_item_data in _instance_list_type_0:
+                    instance_list_type_0_item = JobInstance.from_dict(
+                        instance_list_type_0_item_data
+                    )
+
+                    instance_list_type_0.append(instance_list_type_0_item)
+
+                return instance_list_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(list[JobInstance] | None | Unset, data)
+
+        instance_list = _parse_instance_list(d.pop("instance_list", UNSET))
 
         job = cls(
             field_id=field_id,

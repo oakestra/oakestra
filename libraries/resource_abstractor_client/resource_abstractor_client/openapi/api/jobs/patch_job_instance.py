@@ -89,6 +89,11 @@ def sync_detailed(
         instance_id (int):
         body (JobInstance): One running copy of a job on one worker.
 
+            cpu_percent, memory_percent, disk and host_port also accept a numeric
+            string on write, for compatibility with NodeEngine/cluster_manager
+            (which send them that way) and documents written by the older Python
+            service. The service always responds with a number.
+
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
@@ -128,6 +133,11 @@ def sync(
         instance_id (int):
         body (JobInstance): One running copy of a job on one worker.
 
+            cpu_percent, memory_percent, disk and host_port also accept a numeric
+            string on write, for compatibility with NodeEngine/cluster_manager
+            (which send them that way) and documents written by the older Python
+            service. The service always responds with a number.
+
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
@@ -161,6 +171,11 @@ async def asyncio_detailed(
         job_id (str):  Example: 65f1c0d2a1b2c3d4e5f60718.
         instance_id (int):
         body (JobInstance): One running copy of a job on one worker.
+
+            cpu_percent, memory_percent, disk and host_port also accept a numeric
+            string on write, for compatibility with NodeEngine/cluster_manager
+            (which send them that way) and documents written by the older Python
+            service. The service always responds with a number.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -198,6 +213,11 @@ async def asyncio(
         job_id (str):  Example: 65f1c0d2a1b2c3d4e5f60718.
         instance_id (int):
         body (JobInstance): One running copy of a job on one worker.
+
+            cpu_percent, memory_percent, disk and host_port also accept a numeric
+            string on write, for compatibility with NodeEngine/cluster_manager
+            (which send them that way) and documents written by the older Python
+            service. The service always responds with a number.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

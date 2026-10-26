@@ -18,20 +18,22 @@ class Application:
     Attributes:
         field_id (str | Unset):  Example: 65f1c0d2a1b2c3d4e5f60718.
         application_id (str | Unset): Set server-side on creation to the document's own `_id`.
-        application_name (str | Unset):
-        application_namespace (str | Unset):
-        application_desc (str | Unset):
-        user_id (str | Unset):
-        microservices (list[str] | Unset):
+        application_name (None | str | Unset): Nullable because a `PATCH` sending an explicit `null` here $sets
+            the stored value to null rather than leaving it untouched (only
+            an absent key does that).
+        application_namespace (None | str | Unset):
+        application_desc (None | str | Unset):
+        user_id (None | str | Unset):
+        microservices (list[str] | None | Unset):
     """
 
     field_id: str | Unset = UNSET
     application_id: str | Unset = UNSET
-    application_name: str | Unset = UNSET
-    application_namespace: str | Unset = UNSET
-    application_desc: str | Unset = UNSET
-    user_id: str | Unset = UNSET
-    microservices: list[str] | Unset = UNSET
+    application_name: None | str | Unset = UNSET
+    application_namespace: None | str | Unset = UNSET
+    application_desc: None | str | Unset = UNSET
+    user_id: None | str | Unset = UNSET
+    microservices: list[str] | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -39,16 +41,37 @@ class Application:
 
         application_id = self.application_id
 
-        application_name = self.application_name
+        application_name: None | str | Unset
+        if isinstance(self.application_name, Unset):
+            application_name = UNSET
+        else:
+            application_name = self.application_name
 
-        application_namespace = self.application_namespace
+        application_namespace: None | str | Unset
+        if isinstance(self.application_namespace, Unset):
+            application_namespace = UNSET
+        else:
+            application_namespace = self.application_namespace
 
-        application_desc = self.application_desc
+        application_desc: None | str | Unset
+        if isinstance(self.application_desc, Unset):
+            application_desc = UNSET
+        else:
+            application_desc = self.application_desc
 
-        user_id = self.user_id
+        user_id: None | str | Unset
+        if isinstance(self.user_id, Unset):
+            user_id = UNSET
+        else:
+            user_id = self.user_id
 
-        microservices: list[str] | Unset = UNSET
-        if not isinstance(self.microservices, Unset):
+        microservices: list[str] | None | Unset
+        if isinstance(self.microservices, Unset):
+            microservices = UNSET
+        elif isinstance(self.microservices, list):
+            microservices = self.microservices
+
+        else:
             microservices = self.microservices
 
         field_dict: dict[str, Any] = {}
@@ -78,15 +101,58 @@ class Application:
 
         application_id = d.pop("applicationID", UNSET)
 
-        application_name = d.pop("application_name", UNSET)
+        def _parse_application_name(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
 
-        application_namespace = d.pop("application_namespace", UNSET)
+        application_name = _parse_application_name(d.pop("application_name", UNSET))
 
-        application_desc = d.pop("application_desc", UNSET)
+        def _parse_application_namespace(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
 
-        user_id = d.pop("userId", UNSET)
+        application_namespace = _parse_application_namespace(d.pop("application_namespace", UNSET))
 
-        microservices = cast(list[str], d.pop("microservices", UNSET))
+        def _parse_application_desc(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        application_desc = _parse_application_desc(d.pop("application_desc", UNSET))
+
+        def _parse_user_id(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        user_id = _parse_user_id(d.pop("userId", UNSET))
+
+        def _parse_microservices(data: object) -> list[str] | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, list):
+                    raise TypeError()
+                microservices_type_0 = cast(list[str], data)
+
+                return microservices_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(list[str] | None | Unset, data)
+
+        microservices = _parse_microservices(d.pop("microservices", UNSET))
 
         application = cls(
             field_id=field_id,

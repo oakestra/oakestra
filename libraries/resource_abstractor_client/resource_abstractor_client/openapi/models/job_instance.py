@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
@@ -19,66 +19,123 @@ T = TypeVar("T", bound="JobInstance")
 class JobInstance:
     """One running copy of a job on one worker.
 
-    Attributes:
-        instance_number (int | Unset):
-        worker_id (str | Unset):
-        status (str | Unset):
-        status_detail (str | Unset):
-        host_ip (str | Unset):
-        host_port (int | Unset):
-        publicip (str | Unset):
-        cpu_percent (float | Unset):
-        memory_percent (float | Unset):
-        disk (float | Unset):
-        logs (str | Unset):
-        last_modified_timestamp (float | Unset): Unix seconds. Unlike cpu_history/memory_history's timestamp
-            (server-generated on every PATCH), this one is taken from the
-            request body verbatim - the caller (cluster_manager) sets it
-            before sending.
-        cpu_history (list[JobHistorySample] | Unset):
-        memory_history (list[JobHistorySample] | Unset):
+    cpu_percent, memory_percent, disk and host_port also accept a numeric
+    string on write, for compatibility with NodeEngine/cluster_manager
+    (which send them that way) and documents written by the older Python
+    service. The service always responds with a number.
+
+        Attributes:
+            instance_number (int | None | Unset):
+            worker_id (None | str | Unset):
+            status (None | str | Unset):
+            status_detail (None | str | Unset):
+            host_ip (None | str | Unset):
+            host_port (int | None | Unset):
+            publicip (None | str | Unset):
+            cpu_percent (float | None | Unset):
+            memory_percent (float | None | Unset):
+            disk (float | None | Unset):
+            logs (None | str | Unset):
+            last_modified_timestamp (float | None | Unset): Unix seconds. Unlike cpu_history/memory_history's timestamp
+                (server-generated on every PATCH), this one is taken from the
+                request body verbatim - the caller (cluster_manager) sets it
+                before sending. `PATCH /jobs/{id}/{instance_id}` writes a
+                literal null for any of these fields the request body omits
+                (see internal/store/jobs.go's UpdateJobInstance), so every field
+                above is nullable in a response even though none of them are
+                required on write.
+            cpu_history (list[JobHistorySample] | Unset):
+            memory_history (list[JobHistorySample] | Unset):
     """
 
-    instance_number: int | Unset = UNSET
-    worker_id: str | Unset = UNSET
-    status: str | Unset = UNSET
-    status_detail: str | Unset = UNSET
-    host_ip: str | Unset = UNSET
-    host_port: int | Unset = UNSET
-    publicip: str | Unset = UNSET
-    cpu_percent: float | Unset = UNSET
-    memory_percent: float | Unset = UNSET
-    disk: float | Unset = UNSET
-    logs: str | Unset = UNSET
-    last_modified_timestamp: float | Unset = UNSET
+    instance_number: int | None | Unset = UNSET
+    worker_id: None | str | Unset = UNSET
+    status: None | str | Unset = UNSET
+    status_detail: None | str | Unset = UNSET
+    host_ip: None | str | Unset = UNSET
+    host_port: int | None | Unset = UNSET
+    publicip: None | str | Unset = UNSET
+    cpu_percent: float | None | Unset = UNSET
+    memory_percent: float | None | Unset = UNSET
+    disk: float | None | Unset = UNSET
+    logs: None | str | Unset = UNSET
+    last_modified_timestamp: float | None | Unset = UNSET
     cpu_history: list[JobHistorySample] | Unset = UNSET
     memory_history: list[JobHistorySample] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        instance_number = self.instance_number
+        instance_number: int | None | Unset
+        if isinstance(self.instance_number, Unset):
+            instance_number = UNSET
+        else:
+            instance_number = self.instance_number
 
-        worker_id = self.worker_id
+        worker_id: None | str | Unset
+        if isinstance(self.worker_id, Unset):
+            worker_id = UNSET
+        else:
+            worker_id = self.worker_id
 
-        status = self.status
+        status: None | str | Unset
+        if isinstance(self.status, Unset):
+            status = UNSET
+        else:
+            status = self.status
 
-        status_detail = self.status_detail
+        status_detail: None | str | Unset
+        if isinstance(self.status_detail, Unset):
+            status_detail = UNSET
+        else:
+            status_detail = self.status_detail
 
-        host_ip = self.host_ip
+        host_ip: None | str | Unset
+        if isinstance(self.host_ip, Unset):
+            host_ip = UNSET
+        else:
+            host_ip = self.host_ip
 
-        host_port = self.host_port
+        host_port: int | None | Unset
+        if isinstance(self.host_port, Unset):
+            host_port = UNSET
+        else:
+            host_port = self.host_port
 
-        publicip = self.publicip
+        publicip: None | str | Unset
+        if isinstance(self.publicip, Unset):
+            publicip = UNSET
+        else:
+            publicip = self.publicip
 
-        cpu_percent = self.cpu_percent
+        cpu_percent: float | None | Unset
+        if isinstance(self.cpu_percent, Unset):
+            cpu_percent = UNSET
+        else:
+            cpu_percent = self.cpu_percent
 
-        memory_percent = self.memory_percent
+        memory_percent: float | None | Unset
+        if isinstance(self.memory_percent, Unset):
+            memory_percent = UNSET
+        else:
+            memory_percent = self.memory_percent
 
-        disk = self.disk
+        disk: float | None | Unset
+        if isinstance(self.disk, Unset):
+            disk = UNSET
+        else:
+            disk = self.disk
 
-        logs = self.logs
+        logs: None | str | Unset
+        if isinstance(self.logs, Unset):
+            logs = UNSET
+        else:
+            logs = self.logs
 
-        last_modified_timestamp = self.last_modified_timestamp
+        last_modified_timestamp: float | None | Unset
+        if isinstance(self.last_modified_timestamp, Unset):
+            last_modified_timestamp = UNSET
+        else:
+            last_modified_timestamp = self.last_modified_timestamp
 
         cpu_history: list[dict[str, Any]] | Unset = UNSET
         if not isinstance(self.cpu_history, Unset):
@@ -133,29 +190,116 @@ class JobInstance:
         from ..models.job_history_sample import JobHistorySample
 
         d = dict(src_dict)
-        instance_number = d.pop("instance_number", UNSET)
 
-        worker_id = d.pop("worker_id", UNSET)
+        def _parse_instance_number(data: object) -> int | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(int | None | Unset, data)
 
-        status = d.pop("status", UNSET)
+        instance_number = _parse_instance_number(d.pop("instance_number", UNSET))
 
-        status_detail = d.pop("status_detail", UNSET)
+        def _parse_worker_id(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
 
-        host_ip = d.pop("host_ip", UNSET)
+        worker_id = _parse_worker_id(d.pop("worker_id", UNSET))
 
-        host_port = d.pop("host_port", UNSET)
+        def _parse_status(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
 
-        publicip = d.pop("publicip", UNSET)
+        status = _parse_status(d.pop("status", UNSET))
 
-        cpu_percent = d.pop("cpu_percent", UNSET)
+        def _parse_status_detail(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
 
-        memory_percent = d.pop("memory_percent", UNSET)
+        status_detail = _parse_status_detail(d.pop("status_detail", UNSET))
 
-        disk = d.pop("disk", UNSET)
+        def _parse_host_ip(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
 
-        logs = d.pop("logs", UNSET)
+        host_ip = _parse_host_ip(d.pop("host_ip", UNSET))
 
-        last_modified_timestamp = d.pop("last_modified_timestamp", UNSET)
+        def _parse_host_port(data: object) -> int | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(int | None | Unset, data)
+
+        host_port = _parse_host_port(d.pop("host_port", UNSET))
+
+        def _parse_publicip(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        publicip = _parse_publicip(d.pop("publicip", UNSET))
+
+        def _parse_cpu_percent(data: object) -> float | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(float | None | Unset, data)
+
+        cpu_percent = _parse_cpu_percent(d.pop("cpu_percent", UNSET))
+
+        def _parse_memory_percent(data: object) -> float | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(float | None | Unset, data)
+
+        memory_percent = _parse_memory_percent(d.pop("memory_percent", UNSET))
+
+        def _parse_disk(data: object) -> float | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(float | None | Unset, data)
+
+        disk = _parse_disk(d.pop("disk", UNSET))
+
+        def _parse_logs(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        logs = _parse_logs(d.pop("logs", UNSET))
+
+        def _parse_last_modified_timestamp(data: object) -> float | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(float | None | Unset, data)
+
+        last_modified_timestamp = _parse_last_modified_timestamp(
+            d.pop("last_modified_timestamp", UNSET)
+        )
 
         _cpu_history = d.pop("cpu_history", UNSET)
         cpu_history: list[JobHistorySample] | Unset = UNSET
