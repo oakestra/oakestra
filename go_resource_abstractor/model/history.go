@@ -17,8 +17,8 @@ type HistorySample struct {
 	// means absent. It's safe here because Value is only ever written
 	// server-side, never decoded from a request, so there's no PATCH
 	// semantics to preserve.
-	Value     *float64 `json:"value" bson:"value"`
-	Timestamp float64  `json:"timestamp" bson:"timestamp"`
+	Value     *float64 `bson:"value"     json:"value"`
+	Timestamp float64  `bson:"timestamp" json:"timestamp"`
 }
 
 // JobHistorySample is one entry of a JobInstance's cpu_history/memory_history.
@@ -28,6 +28,6 @@ type HistorySample struct {
 // MemoryPercent (see internal/store/jobs.go's UpdateJobInstance), which are
 // Float themselves, and old documents may hold it as a string too.
 type JobHistorySample struct {
-	Value     *Float `json:"value" bson:"value"`
-	Timestamp string `json:"timestamp" bson:"timestamp"`
+	Value     *Float `bson:"value"     json:"value"`
+	Timestamp string `bson:"timestamp" json:"timestamp"`
 }

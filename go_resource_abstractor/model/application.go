@@ -12,18 +12,18 @@ package model
 // out as a literal null, so a PATCH sending one $sets the stored field to
 // null rather than leaving it alone.
 type Application struct {
-	ID *string `json:"_id,omitempty" bson:"_id,omitempty"`
+	ID *string `bson:"_id,omitempty" json:"_id,omitempty"`
 
 	// ApplicationID is set server-side on creation to the document's own
 	// _id, so a caller-supplied value here is always ignored on create.
-	ApplicationID        *string   `json:"applicationID,omitempty" bson:"applicationID,omitempty"`
-	ApplicationName      *string   `json:"application_name,omitempty" bson:"application_name,omitempty"`
-	ApplicationNamespace *string   `json:"application_namespace,omitempty" bson:"application_namespace,omitempty"`
-	ApplicationDesc      *string   `json:"application_desc,omitempty" bson:"application_desc,omitempty"`
-	UserID               *string   `json:"userId,omitempty" bson:"userId,omitempty"`
-	Microservices        *[]string `json:"microservices,omitempty" bson:"microservices,omitempty"`
+	ApplicationID        *string   `bson:"applicationID,omitempty"         json:"applicationID,omitempty"`
+	ApplicationName      *string   `bson:"application_name,omitempty"      json:"application_name,omitempty"`
+	ApplicationNamespace *string   `bson:"application_namespace,omitempty" json:"application_namespace,omitempty"`
+	ApplicationDesc      *string   `bson:"application_desc,omitempty"      json:"application_desc,omitempty"`
+	UserID               *string   `bson:"userId,omitempty"                json:"userId,omitempty"`
+	Microservices        *[]string `bson:"microservices,omitempty"         json:"microservices,omitempty"`
 
-	Extra Extra `json:"-" bson:",inline"`
+	Extra Extra `bson:",inline" json:"-"`
 }
 
 // MarshalJSON merges Application's typed fields with Extra so unknown

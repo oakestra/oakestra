@@ -5,17 +5,17 @@ package model
 // (/api/v1/custom-resources/{resource_type}) and the Mongo collection its
 // instances live in.
 type CustomResourceDefinition struct {
-	ID *string `json:"_id,omitempty" bson:"_id,omitempty"`
+	ID *string `bson:"_id,omitempty" json:"_id,omitempty"`
 
 	// ResourceType is required.
-	ResourceType string `json:"resource_type" bson:"resource_type"`
+	ResourceType string `bson:"resource_type" json:"resource_type"`
 
 	// Schema is the JSON Schema every instance of this type is validated
 	// against. An absent or empty schema imposes no constraint, so a nil or
 	// empty map is treated the same way and omitted on write.
-	Schema map[string]any `json:"schema,omitempty" bson:"schema,omitempty"`
+	Schema map[string]any `bson:"schema,omitempty" json:"schema,omitempty"`
 
-	Extra Extra `json:"-" bson:",inline"`
+	Extra Extra `bson:",inline" json:"-"`
 }
 
 // MarshalJSON merges CustomResourceDefinition's typed fields with Extra so
@@ -77,9 +77,9 @@ func (d *CustomResourceDefinition) UnmarshalBSON(data []byte) error {
 // type. Its fields are whatever the type's own JSON Schema allows, so
 // nothing beyond _id is fixed here. Everything else lands in Extra.
 type CustomResourceInstance struct {
-	ID *string `json:"_id,omitempty" bson:"_id,omitempty"`
+	ID *string `bson:"_id,omitempty" json:"_id,omitempty"`
 
-	Extra Extra `json:"-" bson:",inline"`
+	Extra Extra `bson:",inline" json:"-"`
 }
 
 // MarshalJSON merges CustomResourceInstance's _id with Extra so unknown

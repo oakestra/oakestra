@@ -40,13 +40,13 @@ func (e HookEvent) Valid() bool {
 // out as a literal null, so a PATCH sending one $sets the stored field to
 // null rather than leaving it alone.
 type Hook struct {
-	ID         *string      `json:"_id,omitempty" bson:"_id,omitempty"`
-	HookName   *string      `json:"hook_name,omitempty" bson:"hook_name,omitempty"`
-	WebhookURL *string      `json:"webhook_url,omitempty" bson:"webhook_url,omitempty"`
-	Entity     *string      `json:"entity,omitempty" bson:"entity,omitempty"`
-	Events     *[]HookEvent `json:"events,omitempty" bson:"events,omitempty"`
+	ID         *string      `bson:"_id,omitempty"         json:"_id,omitempty"`
+	HookName   *string      `bson:"hook_name,omitempty"   json:"hook_name,omitempty"`
+	WebhookURL *string      `bson:"webhook_url,omitempty" json:"webhook_url,omitempty"`
+	Entity     *string      `bson:"entity,omitempty"      json:"entity,omitempty"`
+	Events     *[]HookEvent `bson:"events,omitempty"      json:"events,omitempty"`
 
-	Extra Extra `json:"-" bson:",inline"`
+	Extra Extra `bson:",inline" json:"-"`
 }
 
 // MarshalJSON merges Hook's typed fields with Extra so unknown fields

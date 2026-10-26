@@ -15,48 +15,48 @@ package model
 // out as a literal null, so a PATCH sending one $sets the stored field to
 // null rather than leaving it alone.
 type Resource struct {
-	ID                *string `json:"_id,omitempty" bson:"_id,omitempty"`
-	CandidateName     *string `json:"candidate_name,omitempty" bson:"candidate_name,omitempty"`
-	CandidateLocation *string `json:"candidate_location,omitempty" bson:"candidate_location,omitempty"`
-	IP                *string `json:"ip,omitempty" bson:"ip,omitempty"`
-	Port              *string `json:"port,omitempty" bson:"port,omitempty"`
-	Architecture      *string `json:"architecture,omitempty" bson:"architecture,omitempty"`
+	ID                *string `bson:"_id,omitempty"                json:"_id,omitempty"`
+	CandidateName     *string `bson:"candidate_name,omitempty"     json:"candidate_name,omitempty"`
+	CandidateLocation *string `bson:"candidate_location,omitempty" json:"candidate_location,omitempty"`
+	IP                *string `bson:"ip,omitempty"                 json:"ip,omitempty"`
+	Port              *string `bson:"port,omitempty"               json:"port,omitempty"`
+	Architecture      *string `bson:"architecture,omitempty"       json:"architecture,omitempty"`
 
 	// Active is true when LastModifiedTimestamp falls within the last 30
 	// seconds. It's computed per request, not persisted: store.FindCandidates
 	// sets it via an aggregation stage, so a Resource read from a plain
 	// single-document lookup won't have it set.
-	Active                     *bool          `json:"active,omitempty" bson:"active,omitempty"`
-	ActiveNodes                *int64         `json:"active_nodes,omitempty" bson:"active_nodes,omitempty"`
-	Memory                     *int64         `json:"memory,omitempty" bson:"memory,omitempty"`
-	VCPUs                      *int64         `json:"vcpus,omitempty" bson:"vcpus,omitempty"`
-	VGPUs                      *int64         `json:"vgpus,omitempty" bson:"vgpus,omitempty"`
-	CPUPercent                 *float64       `json:"cpu_percent,omitempty" bson:"cpu_percent,omitempty"`
-	MemoryPercent              *float64       `json:"memory_percent,omitempty" bson:"memory_percent,omitempty"`
-	GPUPercent                 *int64         `json:"gpu_percent,omitempty" bson:"gpu_percent,omitempty"`
-	AggregationPerArchitecture map[string]any `json:"aggregation_per_architecture,omitempty" bson:"aggregation_per_architecture,omitempty"`
+	Active                     *bool          `bson:"active,omitempty"                       json:"active,omitempty"`
+	ActiveNodes                *int64         `bson:"active_nodes,omitempty"                 json:"active_nodes,omitempty"`
+	Memory                     *int64         `bson:"memory,omitempty"                       json:"memory,omitempty"`
+	VCPUs                      *int64         `bson:"vcpus,omitempty"                        json:"vcpus,omitempty"`
+	VGPUs                      *int64         `bson:"vgpus,omitempty"                        json:"vgpus,omitempty"`
+	CPUPercent                 *float64       `bson:"cpu_percent,omitempty"                  json:"cpu_percent,omitempty"`
+	MemoryPercent              *float64       `bson:"memory_percent,omitempty"               json:"memory_percent,omitempty"`
+	GPUPercent                 *int64         `bson:"gpu_percent,omitempty"                  json:"gpu_percent,omitempty"`
+	AggregationPerArchitecture map[string]any `bson:"aggregation_per_architecture,omitempty" json:"aggregation_per_architecture,omitempty"`
 
 	// Virtualization, SupportedAddons and CSIDrivers are three of many
 	// optional Resource fields. rest's field-shape validation still treats
 	// them as nullable to match the Python service's 422 messages, even
 	// though every optional field here already treats null the same as
 	// omitted.
-	Virtualization  *[]string `json:"virtualization,omitempty" bson:"virtualization,omitempty"`
-	SupportedAddons *[]string `json:"supported_addons,omitempty" bson:"supported_addons,omitempty"`
-	CSIDrivers      *[]any    `json:"csi_drivers,omitempty" bson:"csi_drivers,omitempty"`
+	Virtualization  *[]string `bson:"virtualization,omitempty"   json:"virtualization,omitempty"`
+	SupportedAddons *[]string `bson:"supported_addons,omitempty" json:"supported_addons,omitempty"`
+	CSIDrivers      *[]any    `bson:"csi_drivers,omitempty"      json:"csi_drivers,omitempty"`
 
 	// CPUHistory and MemoryHistory are appended server-side on every PATCH
 	// and capped at the most recent 100 entries. They're never set directly
 	// from a request; the store strips them from the $set doc before
 	// applying it.
-	CPUHistory    *[]HistorySample `json:"cpu_history,omitempty" bson:"cpu_history,omitempty"`
-	MemoryHistory *[]HistorySample `json:"memory_history,omitempty" bson:"memory_history,omitempty"`
+	CPUHistory    *[]HistorySample `bson:"cpu_history,omitempty"    json:"cpu_history,omitempty"`
+	MemoryHistory *[]HistorySample `bson:"memory_history,omitempty" json:"memory_history,omitempty"`
 
 	// LastModifiedTimestamp is Unix seconds, refreshed server-side on every
 	// usage report.
-	LastModifiedTimestamp *float64 `json:"last_modified_timestamp,omitempty" bson:"last_modified_timestamp,omitempty"`
+	LastModifiedTimestamp *float64 `bson:"last_modified_timestamp,omitempty" json:"last_modified_timestamp,omitempty"`
 
-	Extra Extra `json:"-" bson:",inline"`
+	Extra Extra `bson:",inline" json:"-"`
 }
 
 // MarshalJSON merges Resource's typed fields with Extra so unknown fields

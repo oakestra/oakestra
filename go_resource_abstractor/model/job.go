@@ -13,14 +13,14 @@ package model
 // out as a literal null, so a PATCH sending one $sets the stored field to
 // null rather than leaving it alone.
 type Job struct {
-	ID            *string `json:"_id,omitempty" bson:"_id,omitempty"`
-	JobName       *string `json:"job_name,omitempty" bson:"job_name,omitempty"`
-	ApplicationID *string `json:"applicationID,omitempty" bson:"applicationID,omitempty"`
+	ID            *string `bson:"_id,omitempty"           json:"_id,omitempty"`
+	JobName       *string `bson:"job_name,omitempty"      json:"job_name,omitempty"`
+	ApplicationID *string `bson:"applicationID,omitempty" json:"applicationID,omitempty"`
 	// Candidate is the id of the candidate resource this job is placed on.
-	Candidate    *string        `json:"candidate,omitempty" bson:"candidate,omitempty"`
-	InstanceList *[]JobInstance `json:"instance_list,omitempty" bson:"instance_list,omitempty"`
+	Candidate    *string        `bson:"candidate,omitempty"     json:"candidate,omitempty"`
+	InstanceList *[]JobInstance `bson:"instance_list,omitempty" json:"instance_list,omitempty"`
 
-	Extra Extra `json:"-" bson:",inline"`
+	Extra Extra `bson:",inline" json:"-"`
 }
 
 // MarshalJSON merges Job's typed fields with Extra so unknown fields (the
@@ -88,30 +88,30 @@ func (j *Job) UnmarshalBSON(data []byte) error {
 
 // JobInstance is one running copy of a job on one worker.
 type JobInstance struct {
-	InstanceNumber *int64  `json:"instance_number,omitempty" bson:"instance_number,omitempty"`
-	WorkerID       *string `json:"worker_id,omitempty" bson:"worker_id,omitempty"`
-	Status         *string `json:"status,omitempty" bson:"status,omitempty"`
-	StatusDetail   *string `json:"status_detail,omitempty" bson:"status_detail,omitempty"`
-	HostIP         *string `json:"host_ip,omitempty" bson:"host_ip,omitempty"`
+	InstanceNumber *int64  `bson:"instance_number,omitempty" json:"instance_number,omitempty"`
+	WorkerID       *string `bson:"worker_id,omitempty"       json:"worker_id,omitempty"`
+	Status         *string `bson:"status,omitempty"          json:"status,omitempty"`
+	StatusDetail   *string `bson:"status_detail,omitempty"   json:"status_detail,omitempty"`
+	HostIP         *string `bson:"host_ip,omitempty"         json:"host_ip,omitempty"`
 	// HostPort, CPUPercent, MemoryPercent and Disk are Float/Int, not
 	// float64/int64: NodeEngine and cluster_manager send them as strings, and
 	// existing documents written by the Python service have them stored that
 	// way too. See model.Float/model.Int.
-	HostPort      *Int    `json:"host_port,omitempty" bson:"host_port,omitempty"`
-	PublicIP      *string `json:"publicip,omitempty" bson:"publicip,omitempty"`
-	CPUPercent    *Float  `json:"cpu_percent,omitempty" bson:"cpu_percent,omitempty"`
-	MemoryPercent *Float  `json:"memory_percent,omitempty" bson:"memory_percent,omitempty"`
-	Disk          *Float  `json:"disk,omitempty" bson:"disk,omitempty"`
-	Logs          *string `json:"logs,omitempty" bson:"logs,omitempty"`
+	HostPort      *Int    `bson:"host_port,omitempty"      json:"host_port,omitempty"`
+	PublicIP      *string `bson:"publicip,omitempty"       json:"publicip,omitempty"`
+	CPUPercent    *Float  `bson:"cpu_percent,omitempty"    json:"cpu_percent,omitempty"`
+	MemoryPercent *Float  `bson:"memory_percent,omitempty" json:"memory_percent,omitempty"`
+	Disk          *Float  `bson:"disk,omitempty"           json:"disk,omitempty"`
+	Logs          *string `bson:"logs,omitempty"           json:"logs,omitempty"`
 	// LastModifiedTimestamp is Unix seconds. Unlike CPUHistory/MemoryHistory's
 	// timestamp, which the server generates on every PATCH, this one comes
 	// from the request body verbatim: the caller (cluster_manager) sets it
 	// before sending.
-	LastModifiedTimestamp *float64            `json:"last_modified_timestamp,omitempty" bson:"last_modified_timestamp,omitempty"`
-	CPUHistory            *[]JobHistorySample `json:"cpu_history,omitempty" bson:"cpu_history,omitempty"`
-	MemoryHistory         *[]JobHistorySample `json:"memory_history,omitempty" bson:"memory_history,omitempty"`
+	LastModifiedTimestamp *float64            `bson:"last_modified_timestamp,omitempty" json:"last_modified_timestamp,omitempty"`
+	CPUHistory            *[]JobHistorySample `bson:"cpu_history,omitempty"             json:"cpu_history,omitempty"`
+	MemoryHistory         *[]JobHistorySample `bson:"memory_history,omitempty"          json:"memory_history,omitempty"`
 
-	Extra Extra `json:"-" bson:",inline"`
+	Extra Extra `bson:",inline" json:"-"`
 }
 
 // MarshalJSON merges JobInstance's typed fields with Extra so unknown
