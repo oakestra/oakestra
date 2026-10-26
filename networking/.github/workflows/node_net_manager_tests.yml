@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         working-directory: node-net-manager
         run: |
-          go get -u
+          go mod download
 
       - name: Run test suite
         working-directory: node-net-manager
