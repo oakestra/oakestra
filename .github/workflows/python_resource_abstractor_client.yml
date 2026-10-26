@@ -1,0 +1,82 @@
+name: Python Resource Abstractor Client
+
+on:
+  push:
+    paths:
+      - 'go_resource_abstractor/openapi/**'
+      - 'libraries/resource_abstractor_client/**'
+      - 'scripts/generate_python_client.py'
+      - '.pre-commit-config.yaml'
+      - '.github/workflows/python_resource_abstractor_client.yml'
+  pull_request:
+    paths:
+      - 'go_resource_abstractor/openapi/**'
+      - 'libraries/resource_abstractor_client/**'
+      - 'scripts/generate_python_client.py'
+      - '.pre-commit-config.yaml'
+      - '.github/workflows/python_resource_abstractor_client.yml'
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install the generator
+        run: pip install openapi-python-client==0.29.0 ruff==0.15.22
+
+      # resource_abstractor_client/openapi/ is generated from
+      # go_resource_abstractor/openapi/openapi.yaml and committed, so building a
+      # consumer never has to run a code generator. This catches the spec and the
+      # generated code drifting apart - the same check
+      # go_resource_abstractor_tests.yml runs for the Go server and its own client.
+      - name: Check generated Python client code is up to date
+        run: |
+          python scripts/generate_python_client.py
+          rm -rf libraries/resource_abstractor_client/resource_abstractor_client/openapi/.ruff_cache
+          if ! git diff --exit-code -- libraries/resource_abstractor_client/resource_abstractor_client/openapi; then
+            echo "libraries/resource_abstractor_client/resource_abstractor_client/openapi is out of date."
+            echo "Run 'python scripts/generate_python_client.py' and commit the result."
+            exit 1
+          fi
+          untracked=$(git ls-files --others --exclude-standard -- libraries/resource_abstractor_client/resource_abstractor_client/openapi)
+          if [ -n "$untracked" ]; then
+            echo "Generated files are missing from the commit:"
+            echo "$untracked"
+            echo "Run 'python scripts/generate_python_client.py' and commit the result."
+            exit 1
+          fi
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Install the library and its test dependencies
+        run: |
+          pip install ./libraries/resource_abstractor_client ./libraries/oakestra_utils_library
+          pip install pytest ruff==0.15.22
+
+      - name: Lint
+        run: |
+          ruff check libraries/resource_abstractor_client
+          ruff format --check libraries/resource_abstractor_client
+
+      - name: Run test suite
+        run: pytest libraries/resource_abstractor_client/tests
