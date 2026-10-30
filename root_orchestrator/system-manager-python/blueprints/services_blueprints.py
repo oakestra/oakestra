@@ -7,6 +7,7 @@ from flask_restful import Resource
 from flask_smorest import Blueprint, abort
 from roles.securityUtils import Role, get_jwt_auth_identity, jwt_auth_required, require_role
 from services import service_management
+from services.ownership import app_owner, service_owner
 
 from blueprints.schema_wrapper import SchemaWrapper
 
@@ -42,7 +43,7 @@ class ServiceController(MethodView):
         Requires user to own the service
         ---
         """
-        username = get_jwt_auth_identity()
+        username = service_owner(serviceid, get_jwt_auth_identity())
         job = service_management.get_service(serviceid, username)
 
         if job is not None:
@@ -59,7 +60,7 @@ class ServiceController(MethodView):
         ---
         """
         try:
-            username = get_jwt_auth_identity()
+            username = service_owner(serviceid, get_jwt_auth_identity())
             if service_management.delete_service(username, serviceid):
                 return jsonify({"message": "Job deleted"})
             else:
@@ -79,7 +80,7 @@ class ServiceController(MethodView):
         ---
         """
         try:
-            username = get_jwt_auth_identity()
+            username = service_owner(serviceid, get_jwt_auth_identity())
             job = (request.get_json()["applications"][0])["microservices"][0]
             if "_id" in job:
                 del job["_id"]
@@ -107,7 +108,8 @@ class ServiceControllerPost(MethodView):
         data = request.get_json()
         if data:
             try:
-                username = get_jwt_auth_identity()
+                applications = data.get("applications") or [{}]
+                username = app_owner(applications[0].get("applicationID"), get_jwt_auth_identity())
                 result, status = service_management.create_services_of_app(username, data)
                 if status != 200:
                     abort(status, result)
@@ -128,7 +130,7 @@ class MultipleServicesControllerUser(Resource):
     )
     @jwt_auth_required()
     def get(self, appid):
-        username = get_jwt_auth_identity()
+        username = app_owner(appid, get_jwt_auth_identity())
         result, status = service_management.user_services(appid, username)
         if status != 200:
             abort(status, result)

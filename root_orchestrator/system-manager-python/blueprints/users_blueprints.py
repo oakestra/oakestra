@@ -19,6 +19,7 @@ from users.auth import (
     user_change_password_with_reset_request,
     user_create_password_reset_request,
 )
+from users.federated import internal_login_only
 from users.user_management import (
     user_add,
     user_delete,
@@ -90,6 +91,7 @@ class AllOrganizationUserController(MethodView):
 
 @userbp.route("/<username>")
 class UserChangePasswordController(MethodView):
+    @internal_login_only
     @jwt_auth_required()
     @identity_is_username()
     def post(self, username, *args, **kwargs):
@@ -99,6 +101,7 @@ class UserChangePasswordController(MethodView):
 
 @userbp.route("/")
 class UserResetPasswordController(MethodView):
+    @internal_login_only
     def post(self, *args, **kwargs):
         content = request.get_json()
         if content is None:
@@ -113,6 +116,7 @@ class UserResetPasswordController(MethodView):
         )
         return jsonify(body), status
 
+    @internal_login_only
     def put(self, *args, **kwargs):
         content = request.get_json()
         if content is None:
