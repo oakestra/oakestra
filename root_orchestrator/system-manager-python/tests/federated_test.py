@@ -117,9 +117,12 @@ def test_roles_are_synced_on_every_login(enabled, tokens):
 @mongomock.patch(servers=(("localhost", 10007),))
 def test_cannot_take_over_local_user(enabled, tokens):
     mockdb()
-    with patch(
-        PROVIDER, return_value=provider_answer(body={"username": "Admin", "roles": ["Admin"]})
-    ), pytest.raises(FederatedLoginError) as e:
+    with (
+        patch(
+            PROVIDER, return_value=provider_answer(body={"username": "Admin", "roles": ["Admin"]})
+        ),
+        pytest.raises(FederatedLoginError) as e,
+    ):
         federated_login("t")
     assert e.value.status == 409
     tokens.create_jwt_auth_access_token.assert_not_called()
