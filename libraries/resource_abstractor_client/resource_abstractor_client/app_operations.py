@@ -31,6 +31,11 @@ def get_app_by_id(app_id, user_id, filter={}):
     return make_request(get, request_address, params=filter)
 
 
+def get_app(app_id):
+    """Application by id regardless of its owner (callers must check permissions)."""
+    return make_request(get, f"{APPS_API}/{app_id}")
+
+
 def create_app(user_id, data):
     data["userId"] = user_id
     return make_request(post, APPS_API, json=data)

@@ -96,5 +96,7 @@ def create_jwt_auth_access_token(identity, additional_claims):
     return create_access_token(identity=identity, additional_claims=additional_claims)
 
 
-def create_jwt_auth_refresh_token(identity, additional_claims):
-    return create_refresh_token(identity=identity, additional_claims=additional_claims)
+def create_jwt_auth_refresh_token(identity, additional_claims, expires_delta=None):
+    return create_refresh_token(
+        identity=identity, additional_claims=additional_claims, expires_delta=expires_delta
+    )
