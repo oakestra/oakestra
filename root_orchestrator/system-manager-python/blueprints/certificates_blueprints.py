@@ -2,6 +2,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
+from cryptography import x509
 from ext_requests.certificates_db import (
     TOKEN_TYPE_CLUSTER,
     add_revoked_cert,
@@ -24,7 +25,7 @@ from utils.certificates import (
     client_spiffe_id,
     cluster_spiffe_id,
     current_ca_cert_pem,
-    ensure_ca_files,
+    generate_ca_material,
     generate_intermediate_ca,
     generate_key_and_signed_cert,
     get_ca_cert_path,
@@ -35,7 +36,6 @@ from utils.certificates import (
     get_server_key_path,
     is_ca_cert,
     issued_by_root_ca,
-    regenerate_ca_files,
     regenerate_root_crl,
     regenerate_server_files,
     reissue_server_files,
@@ -86,12 +86,20 @@ SERVER_CERT_RENEW_DAYS = 30
 def renew_server_cert_if_expiring() -> None:
     """Re-issue server.crt, the root's client certificate towards clusters, near expiry.
 
+    Also re-issued when the current CA did not sign it, which happens when a CA rotation
+    is interrupted before complete_ca_rotation() re-issued it.
+
     Skipped during a rotation grace period: clusters that have not renewed yet only
     trust the old CA, and complete_ca_rotation() re-issues it when the period ends.
     """
     if get_old_ca_cert_path().is_file():
         return
-    days = cert_expires_in(get_server_cert_path().read_text()).days
+    server_cert_pem = get_server_cert_path().read_text()
+    if not issued_by_root_ca(x509.load_pem_x509_certificate(server_cert_pem.encode("utf-8"))):
+        logger.warning("Root server certificate is not signed by the root CA; re-issuing it.")
+        reissue_server_files()
+        return
+    days = cert_expires_in(server_cert_pem).days
     if days > SERVER_CERT_RENEW_DAYS:
         return
     logger.warning("Root server certificate expires in %d day(s); re-issuing it.", days)
@@ -181,7 +189,6 @@ class CertificateServerRenewController(Resource):
 @certbp.route("/ca.crt")
 class CertificateAuthorityFileController(Resource):
     def get(self):
-        ensure_ca_files()
         if not get_ca_cert_path().exists():
             abort(404, message="CA certificate not found")
         return send_file(
@@ -440,6 +447,8 @@ class CertificateAuthorityRotateController(Resource):
 
         grace_period_hours=0 rotates immediately (e.g. after a CA key compromise): the old
         CA is never trusted again and every cluster must be re-registered with a new token.
+
+        Returns 409 if a grace period is already active, unless grace_period_hours=0.
         """
         content = request.get_json(silent=True) or {}
         try:
@@ -448,6 +457,17 @@ class CertificateAuthorityRotateController(Resource):
             abort(400, message="grace_period_hours must be a number")
         if grace_hours < 0:
             abort(400, message="grace_period_hours must not be negative")
+        roll_back_interrupted_ca_rotation()
+        # ca.crt holds both CAs during a grace period, and only one of them can be kept
+        # as ca.old.*: the other would lose its CRL and with it its grace period.
+        if grace_hours > 0 and get_old_ca_cert_path().is_file():
+            abort(
+                409,
+                message=(
+                    "A CA rotation grace period is already active. End it first "
+                    "(POST /api/certs/rotate-complete) or rotate with grace_period_hours=0."
+                ),
+            )
         rotated_at = datetime.now(timezone.utc)
 
         ca_path = get_ca_cert_path()
@@ -469,54 +489,82 @@ class CertificateAuthorityRotateController(Resource):
             if old_names and old_names[0].value == common_name:
                 abort(400, message="ca_common_name must differ from the current CA's name")
 
-        regenerate_ca_files(
+        new_ca_key, new_ca_cert = generate_ca_material(
             valid_days=int(content.get("ca_valid_days") or 3650),
             common_name=common_name,
         )
-        new_ca_pem = ca_path.read_text()
+        new_ca_pem = new_ca_cert.decode("utf-8")
+
+        if get_old_ca_cert_path().is_file():
+            # Only reachable with grace_hours=0, which ends the running grace period anyway.
+            # Ending it first leaves only the current CA in ca.crt to back up below.
+            drop_old_ca()
+            old_ca_pem = ca_path.read_text()
+
+        grace_period = bool(old_ca_pem and old_ca_key) and grace_hours > 0
+        grace_ends = rotated_at + timedelta(hours=grace_hours) if grace_period else None
+        if old_ca_pem and old_ca_key:
+            # Back up the old CA before replacing it, so a failure part-way never loses it.
+            # ca.old.crt goes last: its presence is what marks a grace period as active.
+            # Until ca.crt is rewritten, ca.old.crt equals it and a rollback restores the old CA.
+            try:
+                expiry = (grace_ends or rotated_at).isoformat()
+                write_file_atomic(_grace_expiry_path(), expiry, 0o644)
+                write_file_atomic(get_old_ca_key_path(), old_ca_key, 0o600)
+                write_file_atomic(get_old_ca_cert_path(), old_ca_pem, 0o644)
+                write_file_atomic(get_ca_key_path(), new_ca_key, 0o600)
+                # Dual-CA bundle: Kong verifies client certs against either CA.
+                bundle = new_ca_pem + "\n" + old_ca_pem if grace_period else new_ca_pem
+                write_file_atomic(ca_path, bundle, 0o644)
+            except Exception:
+                roll_back_interrupted_ca_rotation()
+                raise
+        else:
+            write_file_atomic(get_ca_key_path(), new_ca_key, 0o600)
+            write_file_atomic(ca_path, new_ca_pem, 0o644)
 
         if grace_hours == 0:
             # No grace period: complete the rotation straight away, which also ends one
             # still in progress, clears revocations and re-issues server.crt.
-            return {
-                **complete_ca_rotation(),
-                "grace_period_active": False,
-                "grace_period_ends": None,
-                "message": (
+            result = complete_ca_rotation()
+            if result["crl_regenerated"]:
+                result["message"] = (
                     "CA rotated without a grace period — only the new CA is trusted. "
                     "Every cluster must be re-registered with a new token."
-                ),
-            }
-
-        # Write dual-CA bundle: nginx's ssl_client_certificate accepts a
-        # concatenated PEM file and will verify client certs against either CA.
-        if old_ca_pem and old_ca_key and old_ca_pem.strip() != new_ca_pem.strip():
-            write_file_atomic(get_old_ca_cert_path(), old_ca_pem, 0o644)
-            write_file_atomic(get_old_ca_key_path(), old_ca_key, 0o600)
-            write_file_atomic(ca_path, new_ca_pem + "\n" + old_ca_pem, 0o644)
-            grace_ends = rotated_at + timedelta(hours=grace_hours)
-            _grace_expiry_path().write_text(grace_ends.isoformat())
-            grace_period = True
-        else:
-            grace_ends = None
-            grace_period = False
+                )
+            return {**result, "grace_period_active": False, "grace_period_ends": None}
 
         # Re-sign the CRL with the new CA key, plus one signed by the old CA key while
         # the grace period lasts, so certs from both CAs pass Kong's CRL check. Old-CA
         # revocations stay in effect until rotate-complete clears them.
         crl_ok = write_root_crl_from_db()
+        if not crl_ok:
+            message = crl_failed_after_rotation()
+        elif grace_period:
+            message = (
+                "CA rotated. Grace period active — old CA still accepted until "
+                f"{grace_ends.isoformat()}. Clusters renew on their next information update."
+            )
+        else:
+            message = "CA rotated (no prior CA to carry forward)."
 
         return {
             "grace_period_active": grace_period,
             "grace_period_ends": grace_ends.isoformat() if grace_ends else None,
             "crl_regenerated": crl_ok,
-            "message": (
-                "CA rotated. Grace period active — old CA still accepted until "
-                f"{grace_ends.isoformat()}. Clusters renew on their next information update."
-                if grace_period
-                else "CA rotated (no prior CA to carry forward)."
-            ),
+            "message": message,
         }
+
+
+def crl_failed_after_rotation() -> str:
+    """Log and return the message for a CA rotation whose CRL could not be re-signed."""
+    message = (
+        "The CA was rotated, but the CRL could not be written, so the gateway rejects every "
+        "certificate the new CA signed. Fix the cause logged above, then restart "
+        "system_manager to rewrite the CRL."
+    )
+    logger.error(message)
+    return message
 
 
 @certbp.route("/cluster-renew")
@@ -600,8 +648,11 @@ def _grace_expiry_path():
     return get_ca_cert_path().parent / "ca.old.expiry"
 
 
-def complete_ca_rotation() -> dict:
-    """Drop the old CA from the trust bundle, ending the rotation grace period."""
+def drop_old_ca() -> None:
+    """Remove the old CA from the trust bundle, then delete its files.
+
+    ca.old.crt is deleted before the other ca.old.* files: without it nothing reads them.
+    """
     ca_path = get_ca_cert_path()
 
     # Strip the old CA from the bundle: keep only the first cert in the file.
@@ -620,6 +671,11 @@ def complete_ca_rotation() -> dict:
     get_old_ca_key_path().unlink(missing_ok=True)
     _grace_expiry_path().unlink(missing_ok=True)
 
+
+def complete_ca_rotation() -> dict:
+    """Drop the old CA from the trust bundle, ending the rotation grace period."""
+    drop_old_ca()
+
     # All old-CA CRL
     clear_revoked_certs()
     crl_ok = regenerate_root_crl([])
@@ -631,8 +687,30 @@ def complete_ca_rotation() -> dict:
         "old_ca_removed": True,
         "revoked_certs_cleared": True,
         "crl_regenerated": crl_ok,
-        "message": "Grace period ended — only new CA is now trusted.",
+        "message": (
+            "Grace period ended — only new CA is now trusted."
+            if crl_ok
+            else crl_failed_after_rotation()
+        ),
     }
+
+
+def roll_back_interrupted_ca_rotation() -> bool:
+    """Restore the old CA if a rotation stopped before rewriting ca.crt. Returns True if it did.
+
+    A rotation backs up the old CA as ca.old.* and writes ca.crt last, so until then
+    ca.old.crt equals ca.crt while ca.key may already hold the new key.
+    """
+    old_cert_path = get_old_ca_cert_path()
+    if not old_cert_path.is_file() or old_cert_path.read_bytes() != get_ca_cert_path().read_bytes():
+        return False
+
+    write_file_atomic(get_ca_key_path(), get_old_ca_key_path().read_bytes(), 0o600)
+    old_cert_path.unlink()
+    get_old_ca_key_path().unlink(missing_ok=True)
+    _grace_expiry_path().unlink(missing_ok=True)
+    logger.warning("A CA rotation was interrupted; the previous CA was restored. Rotate again.")
+    return True
 
 
 def complete_expired_ca_rotation() -> bool:

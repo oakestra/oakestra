@@ -110,11 +110,11 @@ def ca_files_exist() -> bool:
     return get_ca_key_path().is_file() and get_ca_cert_path().is_file()
 
 
-def regenerate_ca_files(
+def generate_ca_material(
     valid_days: int,
     common_name: str = DEFAULT_CA_COMMON_NAME,
-) -> bool:
-    """Force-generate a new CA key+cert, overwriting any existing material."""
+) -> tuple[bytes, bytes]:
+    """A new self-signed root CA as (key PEM, cert PEM), without writing anything."""
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=DEFAULT_KEY_SIZE)
     now = datetime.now(timezone.utc)
     subject = x509.Name(
@@ -144,30 +144,28 @@ def regenerate_ca_files(
         .sign(private_key, hashes.SHA256())
     )
 
-    get_cert_path()
-    write_file_atomic(
-        get_ca_key_path(),
-        private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=serialization.NoEncryption(),
-        ),
-        0o600,
+    key_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
     )
-    write_file_atomic(
-        get_ca_cert_path(), certificate.public_bytes(serialization.Encoding.PEM), 0o644
-    )
-    return True
+    return key_pem, certificate.public_bytes(serialization.Encoding.PEM)
 
 
-def ensure_ca_files(
+def regenerate_ca_files(
+    valid_days: int,
     common_name: str = DEFAULT_CA_COMMON_NAME,
-    valid_days: int = DEFAULT_CA_VALID_DAYS,
-) -> bool:
-    """Generate CA key+cert only if they are missing. Returns True if generated, False if already present."""
-    if ca_files_exist():
-        return False
-    return regenerate_ca_files(common_name=common_name, valid_days=valid_days)
+) -> None:
+    """Force-generate a new CA key+cert, overwriting any existing material."""
+    key_pem, cert_pem = generate_ca_material(valid_days=valid_days, common_name=common_name)
+    write_file_atomic(get_ca_key_path(), key_pem, 0o600)
+    write_file_atomic(get_ca_cert_path(), cert_pem, 0o644)
+
+
+def ensure_ca_files() -> None:
+    """Generate CA key+cert only if they are missing."""
+    if not ca_files_exist():
+        regenerate_ca_files(valid_days=DEFAULT_CA_VALID_DAYS)
 
 
 def current_ca_cert_pem() -> str:
@@ -440,13 +438,10 @@ def ensure_server_files(
     common_name: str,
     alt_names: list[str],
     valid_days: int,
-) -> bool:
-    """Generate server key+cert only if either is missing. Returns True if generated, False if already present."""
-    if get_server_key_path().is_file() and get_server_cert_path().is_file():
-        return False
-    return regenerate_server_files(
-        common_name=common_name, alt_names=alt_names, valid_days=valid_days
-    )
+) -> None:
+    """Generate server key+cert only if either is missing."""
+    if not (get_server_key_path().is_file() and get_server_cert_path().is_file()):
+        regenerate_server_files(common_name=common_name, alt_names=alt_names, valid_days=valid_days)
 
 
 def cert_expires_in(cert_pem: str) -> "timedelta":
@@ -588,5 +583,7 @@ def regenerate_root_crl(revoked_serials: list) -> bool:
     except Exception as exc:
         import logging as _logging
 
-        _logging.getLogger(__name__).error("Failed to write CRL to %s: %s", get_crl_path(), exc)
+        _logging.getLogger("system_manager").error(
+            "Failed to write CRL to %s: %s", get_crl_path(), exc
+        )
         return False

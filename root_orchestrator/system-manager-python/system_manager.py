@@ -85,6 +85,7 @@ if GATEWAY_ENABLED:
         complete_expired_ca_rotation,
         refresh_root_crl,
         renew_server_cert_if_expiring,
+        roll_back_interrupted_ca_rotation,
         warn_if_root_ca_expiring,
         write_root_crl_from_db,
     )
@@ -94,6 +95,7 @@ if GATEWAY_ENABLED:
     _server_common_name = ROOT_PUBLIC_ADDRESS or "localhost"
     _server_alt_names = [_server_common_name, "localhost", "system_manager"]
     ensure_ca_files()
+    roll_back_interrupted_ca_rotation()
     ensure_server_files(
         common_name=_server_common_name,
         alt_names=list(dict.fromkeys(_server_alt_names)),

@@ -445,5 +445,122 @@ class RevocationTest(RootCaTestCase):
         self.assertEqual(certificates.get_crl_path().read_bytes(), previous)
 
 
+# ---------------------------------------------------------------------------
+# CA rotation
+# ---------------------------------------------------------------------------
+
+
+def without_auth(handler):
+    """handler without its @jwt_required and @require_role decorators."""
+    while hasattr(handler, "__wrapped__"):
+        handler = handler.__wrapped__
+    # require_role's wrapper does not set __wrapped__.
+    return next(c.cell_contents for c in handler.__closure__ if callable(c.cell_contents))
+
+
+class CaRotationTest(RootCaTestCase):
+    def setUp(self):
+        super().setUp()
+        for name, value in (
+            ("prune_expired_revoked_certs", None),
+            ("get_revoked_serials", []),
+            ("clear_revoked_certs", 0),
+        ):
+            patcher = mock.patch.object(certificates_blueprints, name, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.rotations = 0
+
+    def rotate(self, grace_period_hours):
+        # Distinct names: the default one only changes once a second.
+        self.rotations += 1
+        body = {
+            "grace_period_hours": grace_period_hours,
+            "ca_common_name": f"Oakestra Root CA {self.rotations + 1}",
+        }
+        post = without_auth(certificates_blueprints.CertificateAuthorityRotateController.post)
+        with Flask(__name__).test_request_context("/api/certs/rotate", method="POST", json=body):
+            return post(certificates_blueprints.CertificateAuthorityRotateController())
+
+    def failing_write_to(self, path):
+        write = certificates_blueprints.write_file_atomic
+
+        def fail_on_path(target, data, mode):
+            if target == path:
+                raise OSError("disk full")
+            write(target, data, mode)
+
+        return mock.patch.object(certificates_blueprints, "write_file_atomic", fail_on_path)
+
+    def ca_files(self):
+        return (
+            certificates.get_ca_cert_path().read_bytes(),
+            certificates.get_ca_key_path().read_bytes(),
+        )
+
+    def trusted_cas(self):
+        return x509.load_pem_x509_certificates(certificates.get_ca_cert_path().read_bytes())
+
+    def test_failed_write_restores_the_previous_ca(self):
+        before = self.ca_files()
+
+        # ca.crt is written last, after ca.key already holds the new key.
+        with self.failing_write_to(certificates.get_ca_cert_path()), self.assertRaises(OSError):
+            self.rotate(24)
+
+        self.assertEqual(self.ca_files(), before)
+        self.assertFalse(certificates.get_old_ca_cert_path().exists())
+
+    def test_rejects_a_second_rotation_during_the_grace_period(self):
+        # Only one previous CA can be kept as ca.old.*: the other would lose its CRL.
+        self.rotate(24)
+        before = self.ca_files()
+
+        with self.assertRaises(HTTPException) as raised:
+            self.rotate(24)
+
+        self.assertEqual(raised.exception.code, 409)
+        self.assertEqual(self.ca_files(), before)
+
+    def test_failed_immediate_rotation_during_grace_period_keeps_key_and_cert_matching(self):
+        self.rotate(24)
+        self.assertEqual(len(self.trusted_cas()), 2)
+        # A grace period is not mistaken for an interrupted rotation.
+        self.assertFalse(certificates_blueprints.roll_back_interrupted_ca_rotation())
+
+        with self.failing_write_to(certificates.get_old_ca_cert_path()):
+            with self.assertRaises(OSError):
+                self.rotate(0)
+
+        self.assertEqual(len(self.trusted_cas()), 1)
+        ca_cert, ca_key = certificates.load_ca_material()
+        self.assertEqual(ca_cert.public_key(), ca_key.public_key())
+        # Startup refuses to run when the CRL cannot be signed.
+        self.assertTrue(certificates.regenerate_root_crl([]))
+
+    def test_reissues_a_server_cert_from_a_previous_ca(self):
+        # As left by a rotation interrupted before complete_ca_rotation() re-issued it.
+        certificates.regenerate_server_files("root", ["root"], 30)
+        certificates.regenerate_ca_files(valid_days=30, common_name="Oakestra Root CA 2")
+
+        certificates_blueprints.renew_server_cert_if_expiring()
+
+        server_cert = x509.load_pem_x509_certificate(
+            certificates.get_server_cert_path().read_bytes()
+        )
+        self.assertTrue(certificates.issued_by_root_ca(server_cert))
+
+    def test_reports_and_logs_a_crl_that_could_not_be_written(self):
+        with (
+            mock.patch.object(certificates, "generate_root_crl", side_effect=ValueError("bad key")),
+            self.assertLogs("system_manager", "ERROR") as logs,
+        ):
+            response = self.rotate(24)
+
+        self.assertFalse(response["crl_regenerated"])
+        self.assertIn("CRL could not be written", response["message"])
+        self.assertTrue(any("bad key" in line for line in logs.output))
+
+
 if __name__ == "__main__":
     unittest.main()

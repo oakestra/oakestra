@@ -12,6 +12,7 @@ from blueprints import blueprints
 from clients.mqtt_client import mqtt_init
 from clients.my_prometheus_client import prometheus_init_gauge_metrics
 from cm_logging import configure_logging
+from ext_requests.network_manager_requests import network_notify_cluster_id
 from ext_requests.system_manager_requests import (
     re_deploy_dead_jobs_routine,
     send_aggregated_info_to_sm,
@@ -172,6 +173,8 @@ def _try_register() -> bool:
                 )
                 return False
         config.MY_ASSIGNED_CLUSTER_ID = response.id
+        # The service manager names the cluster by this id when calling the root.
+        network_notify_cluster_id(response.id)
         logger.info("Received ID. Go ahead with Background Jobs")
         prometheus_init_gauge_metrics(config.MY_ASSIGNED_CLUSTER_ID, app.logger)
         background_job_send_aggregated_information_to_sm()
