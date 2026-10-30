@@ -265,11 +265,12 @@ services:
         methods: [POST, OPTIONS]
         strip_path: false
 
-      # CA lifecycle administration (JWT + Admin role in the application):
-      # /rotate, /rotate-complete, /renew, /sign, /generate-client, /revoke.
-      - name: sm-certs-admin-public
+      # Certificate revocation (JWT + Admin role in the application), kept external
+      # for incident response. The other CA administration endpoints (/rotate,
+      # /rotate-complete, /renew, /sign, /generate-client) are internal only.
+      - name: sm-certs-revoke-public
         paths:
-          - /api/certs
+          - /api/certs/revoke
         methods: [GET, POST, DELETE, OPTIONS]
         strip_path: false
 
