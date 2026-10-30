@@ -24,6 +24,16 @@ def network_notify_deployment(job_id, job):
         logger.error("Calling Service Manager /api/net/deployment not successful.")
 
 
+def network_notify_cluster_id(cluster_id):
+    try:
+        requests.post(
+            SERVICE_MANAGER_ADDR + "/api/net/cluster/id",
+            json={"cluster_id": cluster_id},
+        )
+    except requests.exceptions.RequestException:
+        logger.error("Calling Service Manager /api/net/cluster/id not successful.")
+
+
 def network_notify_migration(job_id, job):
     pass
 

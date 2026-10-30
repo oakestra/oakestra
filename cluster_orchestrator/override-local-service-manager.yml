@@ -1,5 +1,3 @@
-version: "3.3"
-
 services:
   cluster_service_manager:
     pull_policy: never

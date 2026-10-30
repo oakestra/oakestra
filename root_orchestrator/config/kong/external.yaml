@@ -1,0 +1,353 @@
+_format_version: "3.0"
+
+# The external gateway terminates TLS with a *publicly trusted* server cert
+# (/certs/public/, BYO) and verifies client certificates against the internal
+# root CA only *optionally* (KONG_NGINX_PROXY_SSL_VERIFY_CLIENT=optional).
+#
+# Routes are grouped into two sections:
+#   * mTLS Routes  — machine-to-machine; clusters are the only callers. Each
+#                    carries the &cluster_guard pre-function (defined on the
+#                    first route), which identifies the caller by its verified
+#                    client certificate and admits only clusters (see below).
+#                    It passes the certificate on in X-Client-Cert; backends
+#                    then check the caller acts for itself, e.g. that it posts
+#                    /api/information only for its own cluster id.
+#   * Public Routes — user-facing (no client cert; app-level JWT auth),
+#                     token-gated bootstrap, and explicitly blocked endpoints.
+#
+# Caller identity. Client certs are verified against the root CA, which also signs
+# every cluster's intermediate CA, so a cert's chain alone says nothing about who
+# the caller is. Every cert carries exactly one SPIFFE ID in a URI SAN, set by its
+# issuer, and every CA subject carries an OU marker the root chose:
+#   spiffe://oakestra/root                          issued by the root CA
+#   spiffe://oakestra/cluster/<id>                  issued by the root CA
+#   spiffe://oakestra/cluster/<id>/worker/<id>      issued by a cluster CA
+# A cluster holds its intermediate's key and can put any SPIFFE ID in certs it
+# signs, so an ID only counts when the issuer marker matches it. The &identify
+# chunk extracts both into kong.ctx.shared.caller; &cluster_only then checks them.
+# Lua modules a pre-function may load are listed in
+# KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES (override-gateway.yml).
+#
+# Clusters call (cluster_manager and cluster_service_manager, with cluster.crt):
+#   gRPC register_cluster, POST /api/information/<id>, POST /api/certs/cluster-renew,
+#   GET /api/net/subnet, POST /api/net/service/net_deploy_status,
+#   GET /api/net/service/<name>/instances, GET /api/net/service/ip/<ip>/instances,
+#   DELETE /api/net/interest/<name>.
+# Every other root_service_manager endpoint is called from inside the root only.
+
+services:
+  # ======================================================================
+  # mTLS Routes (cluster client certificate required)
+  # ======================================================================
+
+  # External gRPC entrypoint for cluster registration.
+  - name: system_manager_grpc_external
+    url: grpc://system_manager:50052
+    routes:
+      - name: cluster-registration-external
+        protocols:
+          - grpc
+          - grpcs
+        paths:
+          - /clusterRegistration.register_cluster
+        plugins:
+          - &cluster_guard
+            name: pre-function
+            config:
+              access:
+                - &identify |
+                  if ngx.var.ssl_client_verify ~= "SUCCESS" then
+                    return kong.response.exit(401, { message = "mTLS client certificate required" })
+                  end
+                  local crt = require("resty.openssl.x509").new(ngx.var.ssl_client_raw_cert)
+                  local uris = {}
+                  local san = crt:get_subject_alt_name()
+                  if san then
+                    for kind, value in san:each() do
+                      if kind == "URI" then uris[#uris + 1] = value end
+                    end
+                  end
+                  local issuer
+                  for kind, attribute in crt:get_issuer_name():each() do
+                    if kind == "OU" and attribute.blob == "oakestra-root-ca" then issuer = "root" end
+                    if kind == "OU" and attribute.blob == "oakestra-cluster-ca" then issuer = "cluster" end
+                  end
+                  kong.ctx.shared.caller = { id = #uris == 1 and uris[1] or "", issuer = issuer }
+                  kong.service.request.set_header("X-Client-Cert", ngx.var.ssl_client_escaped_cert)
+                - |
+                  local caller = kong.ctx.shared.caller
+                  if caller.issuer ~= "root"
+                    or not caller.id:match("^spiffe://oakestra/cluster/[0-9a-f]+$") then
+                    return kong.response.exit(403, { message = "caller not permitted on this route" })
+                  end
+
+  # Machine-to-machine REST surface (cluster_manager -> system_manager).
+  - name: system_manager_m2m
+    url: http://system_manager:10000
+    routes:
+      # Aggregated resource/job updates pushed by cluster managers.
+      - name: sm-information-m2m
+        protocols: [https]
+        paths:
+          - /api/information/
+        methods: [POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - *cluster_guard
+
+      # In-band cluster cert renewal: cluster sends a CSR while its old cert is
+      # still trusted (during the dual-CA grace period after POST /api/certs/rotate).
+      - name: cluster-renew-external
+        protocols: [https]
+        paths:
+          - /api/certs/cluster-renew
+        methods: [POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - *cluster_guard
+
+  # Machine-to-machine surface for the root networking plugin
+  # (cluster_service_manager -> root_service_manager).
+  - name: root_service_manager_m2m
+    url: http://root_service_manager:10099
+    routes:
+      - name: rsm-subnet-m2m
+        protocols: [https]
+        paths:
+          - /api/net/subnet
+        methods: [GET, OPTIONS]
+        strip_path: false
+        plugins:
+          - *cluster_guard
+      - name: rsm-service-deploy-status-m2m
+        protocols: [https]
+        paths:
+          - /api/net/service/net_deploy_status
+        methods: [POST, OPTIONS]
+        strip_path: false
+        plugins:
+          - *cluster_guard
+      - name: rsm-service-instances-m2m
+        protocols: [https]
+        paths:
+          - ~/api/net/service/(ip/)?[^/]+/instances$
+        methods: [GET, OPTIONS]
+        strip_path: false
+        plugins:
+          - *cluster_guard
+      - name: rsm-interest-m2m
+        protocols: [https]
+        paths:
+          - /api/net/interest/
+        methods: [DELETE, OPTIONS]
+        strip_path: false
+        plugins:
+          - *cluster_guard
+
+  # ======================================================================
+  # Public Routes (no client certificate)
+  # ======================================================================
+
+  # Public API surface for end users (JWT-protected in the application).
+  # X-Client-Cert is only ever set by the gateway after verifying a client cert,
+  # so a client-supplied one is dropped.
+  - name: system_manager_public
+    url: http://system_manager:10000
+    plugins:
+      - name: pre-function
+        config:
+          access:
+            - |
+              kong.service.request.clear_header("X-Client-Cert")
+    routes:
+      - name: sm-auth-login
+        paths:
+          - /api/auth/login
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+      - name: sm-auth-refresh
+        paths:
+          - /api/auth/refresh
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+      # JWT + Admin role enforced in the application.
+      - name: sm-auth-register
+        paths:
+          - /api/auth/register
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+      - name: sm-applications-public
+        paths:
+          - /api/application
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        strip_path: false
+
+      - name: sm-applications-by-user
+        paths:
+          - /api/applications/
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      - name: sm-permission-public
+        paths:
+          - /api/permission
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      - name: sm-clusters-public
+        paths:
+          - /api/clusters
+          - /api/clusters/
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      - name: sm-service-public
+        paths:
+          - /api/service
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        strip_path: false
+
+      - name: sm-services-by-app
+        paths:
+          - /api/services/
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      - name: sm-user-public
+        paths:
+          - /api/user
+        methods: [GET, POST, PUT, OPTIONS]
+        strip_path: false
+
+      # JWT + Admin role enforced in the application.
+      - name: sm-users-public
+        paths:
+          - /api/users
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+        strip_path: false
+
+      # JWT + Admin role enforced in the application.
+      - name: sm-organization-public
+        paths:
+          - /api/organization
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+        strip_path: false
+
+      # One-time registration token minting (JWT + role in the application).
+      - name: sm-tokens-public
+        paths:
+          - /api/tokens
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+      - name: sm-docs-public
+        paths:
+          - /api/docs
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      # CA download — workers/clusters bootstrap trust from here.
+      - name: sm-ca-cert-public
+        paths:
+          - /api/certs/ca.crt
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+      # Token-gated cluster certificate bootstrap (no JWT, no client cert —
+      # the one-time token is the credential).
+      - name: sm-cluster-bootstrap-public
+        protocols: [https]
+        paths:
+          - /api/certs/cluster-bootstrap
+        methods: [POST, OPTIONS]
+        strip_path: false
+
+      # Certificate revocation (JWT + Admin role in the application), kept external
+      # for incident response. The other CA administration endpoints (/rotate,
+      # /rotate-complete, /renew, /sign, /generate-client) are internal only.
+      - name: sm-certs-revoke-public
+        paths:
+          - /api/certs/revoke
+        methods: [GET, POST, DELETE, OPTIONS]
+        strip_path: false
+
+  # Root service manager: user-facing read endpoint.
+  - name: root_service_manager_public
+    url: http://root_service_manager:10099
+    routes:
+      - name: rsm-netinfo-public
+        paths:
+          - /api/pubnet/service/netinfo
+          - /api/pubnet/service/netinfo/
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+  # Public addons marketplace endpoint (catalogue browsing stays exposed).
+  - name: marketplace_manager_public
+    url: http://marketplace_manager:11102
+    routes:
+      - name: marketplace-addons-public
+        paths:
+          - /api/v1/marketplace/addons
+          - /api/v1/marketplace/addons/
+        methods: [GET, OPTIONS]
+        strip_path: false
+
+  # Dashboard SPA.
+  - name: dashboard_public
+    url: http://dashboard_external:80
+    routes:
+      - name: dashboard-public-routes
+        paths:
+          - "~/^$"
+          - /
+        methods: [GET, HEAD, OPTIONS]
+        strip_path: false
+
+  # Explicitly block endpoints that must not be reachable externally:
+  # the scheduler callback (/api/result, no app-level auth), grafana,
+  # and a fallback deny for any unlisted API path.
+  - name: system_manager_admin_block
+    url: http://system_manager:10000
+    routes:
+      # Fallback deny: any API path not matched by the explicit prefix allowlist above stays blocked.
+      - name: sm-block-api-fallback
+        paths:
+          - /api
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        strip_path: false
+      - name: sm-block-grafana
+        paths:
+          - /grafana
+          - /grafana/
+        methods: [GET, HEAD, OPTIONS]
+        strip_path: false
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 403
+          message: "This endpoint is not exposed on the external gateway"
+
+plugins:
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      headers:
+        - Authorization
+        - Content-Type
+        - Accept
+      exposed_headers:
+        - Authorization
+      credentials: false
+      max_age: 3600
