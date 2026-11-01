@@ -9,7 +9,10 @@ from ext_requests.user_db import (
 
 
 def user_get_by_name(username, oragnization_id):
-    return mongo_get_user_by_name(username, oragnization_id)
+    user = mongo_get_user_by_name(username, oragnization_id)
+    if user is not None:
+        user.pop("password", None)
+    return user
 
 
 def user_delete(username):
