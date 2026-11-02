@@ -1,4 +1,9 @@
-from marshmallow import Schema, fields
+import re
+
+from marshmallow import Schema, ValidationError, fields, validate, validates_schema
+
+# The dashboard proxies /addon-assets/<name>/ and resolves the container addonui-<name>.
+UI_ADDON_NAME_REGEX = re.compile(r"^[a-z0-9-]+$")
 
 
 class VolumeSchema(Schema):
@@ -29,6 +34,11 @@ class ServiceSchema(Schema):
     labels = fields.Dict(keys=fields.String(), values=fields.String(), default={})
 
 
+class UiSchema(Schema):
+    service = fields.String(required=True)
+    sdk = fields.String(required=True, validate=validate.Length(min=1))
+
+
 class MarketplaceAddonSchema(Schema):
     _id = fields.String()
     name = fields.String(required=True)
@@ -37,6 +47,21 @@ class MarketplaceAddonSchema(Schema):
     status = fields.String(dump_only=True)
     volumes = fields.Nested(VolumeSchema, many=True, default=[])
     networks = fields.Nested(NetworkSchema, many=True, default=[])
+    ui = fields.Nested(UiSchema)
+
+    @validates_schema
+    def validate_ui(self, data, **kwargs):
+        ui = data.get("ui")
+        if ui is None:
+            return
+        service_names = [service["service_name"] for service in data.get("services", [])]
+        if ui["service"] not in service_names:
+            raise ValidationError("ui.service must match one of the addon's services", "ui")
+        if not UI_ADDON_NAME_REGEX.match(data.get("name", "")):
+            raise ValidationError(
+                "name must only contain lowercase letters, digits and hyphens for addons with a ui",
+                "name",
+            )
 
 
 class MarketplaceFilterSchema(Schema):

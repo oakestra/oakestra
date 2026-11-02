@@ -169,6 +169,7 @@ docker logs <exited_container_name> 2>&1 | tail -50
 | `CLUSTER_ADDRESS env var is not set` (cluster_manager log) | Missing env var — cluster cannot advertise its address to root |
 | `cluster_address is required` (system_manager log) | Cluster connected via gRPC but sent empty `cluster_address` |
 | `Cluster reachability probe failed` / `cluster not reachable at` (system_manager log) | Root cannot reach `http://CLUSTER_ADDRESS:10100/api/cluster/status` — wrong IP, firewall, or cluster_manager not up |
+| HTTP 502 on `/addon-assets/<name>/...` (dashboard) | The addon UI container is not running, or is not on the `oakestra` network with the alias `addonui-<name>` - see STEP 12 |
 
 ---
 
@@ -611,7 +612,25 @@ curl -s --connect-timeout 5 "http://localhost:11102/status" 2>/dev/null || echo 
 
 # Check addons_monitor docker socket access
 docker exec addons_monitor ls /var/run/docker.sock 2>/dev/null || echo "WARN: addons_monitor cannot access docker socket"
+
+echo "=== UI addons ==="
+# Active addons with a dashboard UI. An empty list means none are installed or active yet.
+curl -s --connect-timeout 5 "http://localhost:11101/api/v1/ui-addons" 2>/dev/null || echo "addons_manager not responding"
 ```
+
+The dashboard's nginx fetches each addon UI from `http://addonui-<name>:80/`. The addons monitor sets that alias on the UI container in the `oakestra` network. If an addon UI doesn't load, or `/addon-assets/<name>/mf-manifest.json` returns 502, check the aliases and try the request from the dashboard container (`oakestra-frontend-container` on root, `oaekstra-frontend-container` in 1-DOC):
+
+```bash
+NAME=<addon-name>
+# Aliases of every container on the oakestra network. addonui-$NAME should be among them.
+docker network inspect oakestra --format '{{range .Containers}}{{.Name}} {{end}}' | tr ' ' '\n' | grep . \
+  | xargs -I{} docker inspect {} --format '{{.Name}}: {{json .NetworkSettings.Networks.oakestra.Aliases}}'
+docker exec oakestra-frontend-container wget -qO /dev/null "http://addonui-$NAME/mf-manifest.json" \
+  && echo "OK: addonui-$NAME serves mf-manifest.json" \
+  || echo "FAIL: addonui-$NAME not reachable from the dashboard"
+```
+
+Addon UIs don't work with `override-network-host.yml`, since the dashboard has no Docker DNS there.
 
 ---
 
