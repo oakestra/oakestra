@@ -21,6 +21,10 @@ class MarketplaceUnavailableError(Exception):
     pass
 
 
+class UiAddonNameTakenError(Exception):
+    pass
+
+
 def get_addon_in_marketplace(marketplace_id, check_is_verified=True):
     try:
         response = requests.get(
@@ -54,9 +58,19 @@ def install_addon(addon):
         logging.error(f"Addon-{marketplace_id} has no services")
         return None
 
+    name = marketplace_addon.get("name")
+    # The dashboard reaches a UI as addonui-<name>, so two installed UIs with the same name would
+    # share one DNS alias. Disabled addons have no containers left and don't count.
+    if marketplace_addon.get("ui") and list(
+        addons_db.find_addons(
+            {"name": name, "ui": {"$ne": None}, "status": {"$ne": str(AddonStatusEnum.DISABLED)}}
+        )
+    ):
+        raise UiAddonNameTakenError(name)
+
     now = datetime.now(timezone.utc)
 
-    addon["name"] = marketplace_addon.get("name")
+    addon["name"] = name
     addon["description"] = marketplace_addon.get("description", "")
     addon["services"] = services
     addon["volumes"] = marketplace_addon.get("volumes", [])

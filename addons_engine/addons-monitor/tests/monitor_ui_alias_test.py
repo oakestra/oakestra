@@ -84,6 +84,25 @@ def test_addon_without_ui_has_no_alias():
         assert DEFAULT_NETWORK not in service["networks"]
 
 
+def test_cluster_monitor_adds_no_alias(monkeypatch):
+    monkeypatch.setattr("services.monitor_service.ORCHESTRATION_PLANE", "cluster")
+
+    service, aliases = run(make_addon(ui_networks=["private"]))["example-ui"]
+
+    assert aliases is None
+    assert service["networks"] == ["private"]
+
+
+def test_invalid_name_skips_alias_but_still_runs_service():
+    addon = make_addon()
+    addon["name"] = "My Addon"
+
+    calls = run(addon)
+
+    assert set(calls) == {"example-ui", "example-api"}
+    assert all(aliases is None for _, aliases in calls.values())
+
+
 def make_runner():
     with mock.patch("docker.from_env") as from_env:
         return DockerRunner(), from_env.return_value

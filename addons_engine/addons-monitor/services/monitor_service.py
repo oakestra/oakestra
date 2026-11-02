@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import time
 from collections import defaultdict
 from enum import Enum
@@ -15,6 +16,7 @@ CONTAINER_POLL_INTERVAL = int(os.environ.get("CONTAINER_POLL_INTERVAL", 30))
 
 DEFAULT_NETWORK = "oakestra"
 UI_ALIAS_PREFIX = "addonui-"
+UI_ADDON_NAME_PATTERN = re.compile(r"^[a-z0-9-]+$")
 
 ADDONS_ID_LABEL = os.environ.get("ADDONS_ID_LABEL") or "oak.addon.id"
 ADDONS_SERVICE_NAME_LABEL = os.environ.get("ADDONS_SERVICE_NAME_LABEL") or "oak.service.name"
@@ -136,10 +138,21 @@ class AddonsMonitor:
     def _get_ui_service(self, addon):
         """Return (service_name, alias) for the addon's UI service, or None if it has no UI."""
         ui = addon.get("ui")
-        if not ui or not ui.get("service") or not addon.get("name"):
+        if not ui or not ui.get("service"):
             return None
 
-        return ui["service"], f"{UI_ALIAS_PREFIX}{addon['name']}"
+        # Only the root dashboard loads addon UIs. A cluster monitor on the same host shares the
+        # oakestra network, and adding the alias there too would make it ambiguous.
+        if ORCHESTRATION_PLANE != "root":
+            return None
+
+        name = addon.get("name") or ""
+        if not UI_ADDON_NAME_PATTERN.match(name):
+            # Still start the container, it just won't be reachable from the dashboard.
+            logging.warning(f"Addon-{addon.get('_id')}: name {name!r} can't be used as a UI alias")
+            return None
+
+        return ui["service"], f"{UI_ALIAS_PREFIX}{name}"
 
     def run_addon_services(self, addon_id, services, runner_engine, ui_service=None):
         """Runs the services of an addon.

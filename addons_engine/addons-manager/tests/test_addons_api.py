@@ -151,3 +151,45 @@ def test_post_with_marketplace_unavailable_is_502(
 
     assert response.status_code == 502
     assert addons_collection.docs == []
+
+
+@pytest.mark.parametrize(
+    "existing_status, expected_code",
+    [("active", 409), ("installing", 409), ("disabled", 201)],
+)
+def test_post_ui_addon_with_taken_name(
+    client, addons_collection, monkeypatch, existing_status, expected_code
+):
+    addons_collection.docs.append(
+        {"name": "metrics", "status": existing_status, "ui": {"service": "ui", "sdk": "^1.0.0"}}
+    )
+    marketplace_addon = {
+        "name": "metrics",
+        "services": [{"service_name": "ui", "image": "ui:2.0"}],
+        "ui": {"service": "ui", "sdk": "^1.0.0"},
+    }
+    monkeypatch.setattr(
+        addons_service.requests,
+        "get",
+        lambda *a, **kw: _marketplace_response(200, marketplace_addon),
+    )
+
+    response = client.post("/api/v1/addons/", json={"marketplace_id": "mp-2"})
+
+    assert response.status_code == expected_code
+
+
+def test_post_addon_without_ui_ignores_name_clash(client, addons_collection, monkeypatch):
+    addons_collection.docs.append(
+        {"name": "metrics", "status": "active", "ui": {"service": "ui", "sdk": "^1.0.0"}}
+    )
+    marketplace_addon = {"name": "metrics", "services": [{"service_name": "x", "image": "x"}]}
+    monkeypatch.setattr(
+        addons_service.requests,
+        "get",
+        lambda *a, **kw: _marketplace_response(200, marketplace_addon),
+    )
+
+    response = client.post("/api/v1/addons/", json={"marketplace_id": "mp-3"})
+
+    assert response.status_code == 201

@@ -77,3 +77,12 @@ def test_empty_list_when_nothing_qualifies(client, addons_collection):
 
     assert response.status_code == 200
     assert response.get_json() == []
+
+
+@pytest.mark.parametrize("sdk", [None, ""])
+def test_skips_addon_without_sdk(client, addons_collection, sdk):
+    addons_collection.docs.extend([_addon("no-sdk", sdk=sdk), _addon("fine")])
+
+    response = client.get("/api/v1/ui-addons")
+
+    assert [entry["name"] for entry in response.get_json()] == ["fine"]

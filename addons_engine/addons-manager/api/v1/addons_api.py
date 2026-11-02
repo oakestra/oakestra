@@ -48,6 +48,8 @@ class AllAddonsController(MethodView):
         except addons_service.MarketplaceUnavailableError as e:
             logging.warning(f"Marketplace lookup for {marketplace_id} failed: {e}")
             abort(502, message="Marketplace is unavailable")
+        except addons_service.UiAddonNameTakenError as e:
+            abort(409, message=f"An addon with a UI named {e} is already installed.")
 
         if result is None:
             abort(400, message="Failed to install addon")

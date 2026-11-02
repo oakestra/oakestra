@@ -33,6 +33,9 @@ The UI container has to serve `mf-manifest.json`, `remoteEntry.js` and `assets/`
 on port 80. The monitor attaches it to the `oakestra` network with the alias `addonui-<name>`,
 in addition to any networks the service declares. The container name itself doesn't change. The
 dashboard's nginx then proxies `/addon-assets/<name>/...` to `http://addonui-<name>:80/...`.
+Only the root monitor sets the alias, since the dashboard only talks to the root addons manager.
+Two UI addons with the same name would share the alias, so the addons manager answers 409 when
+you install one whose name is taken. Disable the old one first.
 
 To find out which UIs to load, the dashboard calls `GET /api/v1/ui-addons` on the addons manager
 (without a token). It returns every `active` addon that has a `ui` block:
