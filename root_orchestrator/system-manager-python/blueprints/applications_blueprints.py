@@ -76,6 +76,9 @@ class ApplicationController(MethodView):
     def put(self, appid, *args, **kwargs):
         try:
             current_user = get_jwt_identity()
+            result, code = get_user_app(current_user, appid)
+            if code != 200:
+                abort(code, **result)
             update_app(appid, current_user, request.get_json())
             return jsonify({"message": "Application is updated"})
         except ConnectionError as e:
