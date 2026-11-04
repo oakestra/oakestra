@@ -18,3 +18,30 @@ services:
     deploy:
       mode: replicated
       replicas: 0
+
+  # No addons manager here, so the dashboard shouldn't poll /ui-addons or show the addon pages.
+  # New dashboard modules stay off until they're added to the list below. The preset is inline
+  # since the start scripts only download this file (configs.content needs Compose 2.23.1+).
+  dashboard:
+    environment:
+      - PRESET_URL=/preset.json
+    configs:
+      - source: dashboard_preset
+        target: /usr/share/nginx/html/preset.json
+
+configs:
+  dashboard_preset:
+    content: |
+      {
+        "modules": [
+          "overview",
+          "applications",
+          "infrastructure",
+          "users",
+          "organizations",
+          "profile",
+          "settings",
+          "help"
+        ],
+        "addonDiscovery": false
+      }

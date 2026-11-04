@@ -186,6 +186,9 @@ docker exec root_scheduler env 2>/dev/null | grep -E "MANAGER_URL|RESOURCE_ABSTR
 docker exec root_resource_abstractor env 2>/dev/null | grep -E "MONGO_URL|MONGO_PORT" || echo "root_resource_abstractor not running"
 
 docker exec root_service_manager env 2>/dev/null | grep -E "SYSTEM_MANAGER|ROOT_MONGO|JWT" || echo "root_service_manager not running"
+
+# oaekstra-frontend-container in 1-DOC
+docker exec oakestra-frontend-container env 2>/dev/null | grep -E "API_ADDRESS|ADDONS_MANAGER_ADDRESS|MARKETPLACE_ADDRESS|PRESET_URL" || echo "dashboard not running"
 ```
 
 ```bash
@@ -203,6 +206,7 @@ docker exec cluster_service_manager env 2>/dev/null | grep -E "ROOT_SERVICE_MANA
 - `CLUSTER_ADDRESS` must be non-empty in cluster_manager and must be the **IP/hostname at which the ROOT can reach this cluster manager** (typically the cluster host's default-route IP). It must NOT be `localhost`, `127.0.0.1`, `0.0.0.0`, or a Docker-internal address like `172.17.x.x` / `172.19.x.x` (those are the docker bridge gateway and not routable from the root). In 1-DOC deployments, `CLUSTER_ADDRESS` should equal `SYSTEM_MANAGER_URL`.
 - `REDIS_ADDR` must match `redis://:rootRedis@root_redis:6379` (root) or `redis://:clusterRedis@cluster_redis:6479` (cluster)
 - `CLUSTER_LOCATION` format: `latitude,longitude,radius` (e.g., `48.1,11.6,1000`)
+- `PRESET_URL` on the dashboard is optional. If it's set, the file must exist and be a valid preset, otherwise the dashboard shows a configuration error instead of the login page (see STEP 12)
 
 ---
 
@@ -631,6 +635,18 @@ docker exec oakestra-frontend-container wget -qO /dev/null "http://addonui-$NAME
 ```
 
 Addon UIs don't work with `override-network-host.yml`, since the dashboard has no Docker DNS there.
+
+An addon that is `active` and listed in `/api/v1/ui-addons` but never appears in the dashboard may be named like a built-in module (`applications`, `infrastructure`, `users`, `organizations`, `help`). The dashboard ignores those and only logs a warning in the browser console.
+
+`override-no-addons.yml` turns off the addon pages through a dashboard preset, so it's normal that they're missing there. If the dashboard shows a configuration error instead of the login page, or the addon pages are gone without that override, check the preset:
+
+```bash
+# Use oaekstra-frontend-container in 1-DOC. An empty presetUrl means no preset.
+docker exec oakestra-frontend-container cat /usr/share/nginx/html/config.json
+docker exec oakestra-frontend-container cat /usr/share/nginx/html/preset.json
+```
+
+The error page lists what is wrong with the preset. A 404 for `preset.json` means `PRESET_URL=/preset.json` is set but no file is mounted. If `docker compose` rejects `configs.content` in `override-no-addons.yml`, Docker Compose is older than 2.23.1.
 
 ---
 

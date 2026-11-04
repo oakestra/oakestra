@@ -27,7 +27,9 @@ Module Federation remote. To ship a UI, add a `ui` block to the marketplace defi
 `ui.service` is the `service_name` of the service that serves the UI and has to be one of the
 addon's services. `ui.sdk` is the semver range of the dashboard SDK the UI was built against.
 Addons with a `ui` block also need a name matching `^[a-z0-9-]+$`, since the dashboard uses it in
-URLs and host names.
+URLs and host names. Don't use the name of a built-in dashboard module (`applications`,
+`infrastructure`, `users`, `organizations`, `help`): the dashboard ignores such an addon and only
+logs a warning in the browser console, even though the addon is `active`.
 
 The UI container has to serve `mf-manifest.json`, `remoteEntry.js` and `assets/` over plain HTTP
 on port 80. The monitor attaches it to the `oakestra` network with the alias `addonui-<name>`,
@@ -49,3 +51,7 @@ To find out which UIs to load, the dashboard calls `GET /api/v1/ui-addons` on th
 The dashboard container finds both managers through `ADDONS_MANAGER_ADDRESS` and
 `MARKETPLACE_ADDRESS`. Addon UIs don't work with `override-network-host.yml`, because there is
 no Docker DNS to resolve `addonui-<name>`.
+
+`override-no-addons.yml` removes the addons engine and sets a dashboard preset (`PRESET_URL`) that
+turns off addon discovery and the addon pages. For your own presets, see `docs/addons/presets.md`
+in the dashboard repo.

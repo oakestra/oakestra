@@ -138,7 +138,7 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | `override-network-host.yml` | All containers use host network. Container DNS names no longer work — env vars must use IPs, not container names. |
 | `override-ipv6-enabled.yml` | Enables IPv6 on the oakestra Docker network. |
 | `override-no-network.yml` | Disables the network plugin (root/cluster service managers). |
-| `override-no-addons.yml` | Removes addons subsystem from root. |
+| `override-no-addons.yml` | Removes addons subsystem from root and turns off addon discovery and the addon pages in the dashboard. Needs Docker Compose 2.23.1+. |
 | `override-no-dashboard.yml` | Removes frontend dashboard from root. |
 | `override-no-observe.yml` | Removes Grafana/Loki/Promtail/Prometheus. |
 | `override-mosquitto-auth.yml` | Enables MQTT authentication (workers need credentials). |
