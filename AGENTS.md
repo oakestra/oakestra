@@ -69,7 +69,7 @@ Root Orchestrator  (1 per deployment)
 | `grafana` | Grafana | 3000 | Dashboards. |
 | `loki` | Loki | 3100 | Log aggregation. |
 | `promtail` | Promtail | — | Ships Docker container logs to Loki via docker socket. |
-| `oakestra-frontend-container` | nginx | 80 | Dashboard SPA. Connects to system_manager via `API_ADDRESS` env var. |
+| `oakestra-frontend-container` | nginx | 80 | Dashboard SPA. Connects to system_manager via `API_ADDRESS` env var, and to the addons and marketplace managers via `ADDONS_MANAGER_ADDRESS` / `MARKETPLACE_ADDRESS`. Proxies addon UIs from `addonui-<name>` containers. |
 | `root_addons_manager` | Python | 11101 | Manages installed addons (optional, disable with override-no-addons.yml). |
 | `root_addons_monitor` | Python | — | Monitors running addon containers via docker socket. |
 | `root_addons_dashboard` | Python | 11103 | Addons UI. |

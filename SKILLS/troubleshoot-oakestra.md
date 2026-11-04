@@ -634,6 +634,8 @@ docker exec oakestra-frontend-container wget -qO /dev/null "http://addonui-$NAME
   || echo "FAIL: addonui-$NAME not reachable from the dashboard"
 ```
 
+Installing an addon (`POST /api/v1/addons`) can fail with 404 (marketplace doesn't know the addon), 502 (marketplace unreachable, check `marketplace_manager`) or 409 (another non-disabled addon with a UI already uses that name; disable it first).
+
 Addon UIs don't work with `override-network-host.yml`, since the dashboard has no Docker DNS there.
 
 An addon that is `active` and listed in `/api/v1/ui-addons` but never appears in the dashboard may be named like a built-in module (`applications`, `infrastructure`, `users`, `organizations`, `help`). The dashboard ignores those and only logs a warning in the browser console.

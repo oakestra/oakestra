@@ -37,7 +37,11 @@ in addition to any networks the service declares. The container name itself does
 dashboard's nginx then proxies `/addon-assets/<name>/...` to `http://addonui-<name>:80/...`.
 Only the root monitor sets the alias, since the dashboard only talks to the root addons manager.
 Two UI addons with the same name would share the alias, so the addons manager answers 409 when
-you install one whose name is taken. Disable the old one first.
+you install one whose name is taken. Disable the old one first. Installing also answers 404 if the
+marketplace doesn't know the addon and 502 if the marketplace can't be reached.
+
+The marketplace rejects a `ui` block when `ui.service` isn't one of the addon's services, when
+`ui.sdk` is missing, or when the name doesn't match the pattern above.
 
 To find out which UIs to load, the dashboard calls `GET /api/v1/ui-addons` on the addons manager
 (without a token). It returns every `active` addon that has a `ui` block:
