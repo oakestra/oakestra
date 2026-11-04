@@ -28,6 +28,7 @@ from proto.clusterRegistration_pb2_grpc import (
 )
 from resource_abstractor_client import candidate_operations
 from sm_logging import configure_logging
+from users.federated import log_auth_configuration
 from utils.json_encoder import MongoJSONEncoder
 from utils.network import add_brackets_if_ipv6
 from werkzeug.utils import redirect, secure_filename
@@ -66,6 +67,7 @@ socketio = SocketIO(
 )
 mongo_init(app)
 create_admin()
+log_auth_configuration()
 
 MY_PORT = os.environ.get("MY_PORT") or 10000
 MY_PORT_GRPC = os.environ.get("MY_PORT_GRPC") or 50052

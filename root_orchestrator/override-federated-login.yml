@@ -1,0 +1,25 @@
+# Federated login only: users sign in through an external identity provider, password login is off.
+#
+# Required environment variables (exported before `docker compose up`):
+#   FEDERATED_LOGIN_AUTHORIZE_URL   identity provider endpoint that authorizes a user for this cluster
+#   FEDERATED_LOGIN_CLUSTER_ID      id of this cluster at the identity provider
+#   FEDERATED_LOGIN_CLUSTER_SECRET  secret proving the request comes from this cluster
+# Optional:
+#   FEDERATED_LOGIN_REFRESH_MINUTES lifetime of refresh tokens issued by federated login (default 60)
+#
+# The JWT generator signs any token it is asked for, so this override also stops publishing its port
+# on the host: only containers on the Oakestra network can reach it. Requires Docker Compose >= 2.24.4.
+#
+# Usage: export OVERRIDE_FILES=override-federated-login.yml
+
+services:
+  system_manager:
+    environment:
+      - INTERNAL_LOGIN=false
+      - FEDERATED_LOGIN_AUTHORIZE_URL=${FEDERATED_LOGIN_AUTHORIZE_URL:-}
+      - FEDERATED_LOGIN_CLUSTER_ID=${FEDERATED_LOGIN_CLUSTER_ID:-}
+      - FEDERATED_LOGIN_CLUSTER_SECRET=${FEDERATED_LOGIN_CLUSTER_SECRET:-}
+      - FEDERATED_LOGIN_REFRESH_MINUTES=${FEDERATED_LOGIN_REFRESH_MINUTES:-60}
+
+  jwt_generator:
+    ports: !reset []
