@@ -69,7 +69,7 @@ Root Orchestrator  (1 per deployment)
 | `grafana` | Grafana | 3000 | Dashboards. |
 | `loki` | Loki | 3100 | Log aggregation. |
 | `promtail` | Promtail | — | Ships Docker container logs to Loki via docker socket. |
-| `oakestra-frontend-container` | nginx | 80 | Dashboard SPA. Connects to system_manager via `API_ADDRESS` env var. |
+| `oakestra-frontend-container` | nginx | 80 | Dashboard SPA. Connects to system_manager via `API_ADDRESS` env var, and to the addons and marketplace managers via `ADDONS_MANAGER_ADDRESS` / `MARKETPLACE_ADDRESS`. Proxies addon UIs from `addonui-<name>` containers. |
 | `root_addons_manager` | Python | 11101 | Manages installed addons (optional, disable with override-no-addons.yml). |
 | `root_addons_monitor` | Python | — | Monitors running addon containers via docker socket. |
 | `root_addons_dashboard` | Python | 11103 | Addons UI. |
@@ -138,7 +138,7 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | `override-network-host.yml` | All containers use host network. Container DNS names no longer work — env vars must use IPs, not container names. |
 | `override-ipv6-enabled.yml` | Enables IPv6 on the oakestra Docker network. |
 | `override-no-network.yml` | Disables the network plugin (root/cluster service managers). |
-| `override-no-addons.yml` | Removes addons subsystem from root. |
+| `override-no-addons.yml` | Removes addons subsystem from root and turns off addon discovery and the addon pages in the dashboard. Needs Docker Compose 2.23.1+. |
 | `override-no-dashboard.yml` | Removes frontend dashboard from root. |
 | `override-no-observe.yml` | Removes Grafana/Loki/Promtail/Prometheus. |
 | `override-mosquitto-auth.yml` | Enables MQTT authentication (workers need credentials). |
