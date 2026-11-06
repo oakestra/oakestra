@@ -6,7 +6,10 @@ import traceback
 
 import paho.mqtt.client as paho_mqtt
 from interfaces.mongodb_requests import mongo_find_node_by_id_and_update_subnetwork
-from interfaces.root_service_manager_requests import root_service_manager_get_subnet
+from interfaces.root_service_manager_requests import (
+    GATEWAY_ENABLED,
+    root_service_manager_get_subnet,
+)
 from network.deployment import deployment_address_update, deployment_status_report
 from network.tablequery import interests, resolution
 
@@ -84,6 +87,11 @@ def mqtt_init(flask_app):
         except FileNotFoundError as e:
             logger.error("MQTT - Unable to load certificate files")
             logger.error(e)
+            # The gateway's broker only accepts TLS.
+            if GATEWAY_ENABLED:
+                raise
+    elif GATEWAY_ENABLED:
+        raise RuntimeError("GATEWAY_ENABLED is set but MQTT_CERT is not")
 
     mqtt.connect(
         os.environ.get("MQTT_BROKER_URL").strip("[]"),

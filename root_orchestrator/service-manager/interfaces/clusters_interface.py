@@ -16,6 +16,12 @@ ROOT_CERT_FILE = os.environ.get("ROOT_CERT_FILE")
 ROOT_KEY_FILE = os.environ.get("ROOT_KEY_FILE")
 ROOT_CA_FILE = os.environ.get("ROOT_CA_FILE")
 
+# Fail at start-up if files are not present
+if client_identity.GATEWAY_ENABLED:
+    for name in ("ROOT_CERT_FILE", "ROOT_KEY_FILE", "ROOT_CA_FILE"):
+        if not os.path.isfile(os.environ.get(name) or ""):
+            raise RuntimeError(f"GATEWAY_ENABLED is set but {name} is not a file")
+
 # Manual port override in case cluster is behind gateway
 CLUSTER_GATEWAY_PORT = os.environ.get("CLUSTER_GATEWAY_PORT")
 
@@ -24,14 +30,6 @@ CLUSTER_GATEWAY_PORT = os.environ.get("CLUSTER_GATEWAY_PORT")
 #   "system" -> the system trust store (cluster uses a BYO public cert)
 #   <path>   -> a custom CA bundle
 CLUSTER_GATEWAY_TRUST = os.environ.get("CLUSTER_GATEWAY_TRUST", "")
-
-
-def _mtls_enabled() -> bool:
-    if not client_identity.GATEWAY_ENABLED:
-        return False
-    return all(
-        path and os.path.isfile(path) for path in (ROOT_CERT_FILE, ROOT_KEY_FILE, ROOT_CA_FILE)
-    )
 
 
 def _gateway_verify():
@@ -52,7 +50,7 @@ def notify_deployment(cluster_addr, cluster_port, job_name, instancenum):
 
 
 def _notify_interest_update(cluster_addr, cluster_port, job_name, instancenum, type):
-    mtls = _mtls_enabled()
+    mtls = client_identity.GATEWAY_ENABLED
     scheme = "https" if mtls else "http"
     port = CLUSTER_GATEWAY_PORT if (mtls and CLUSTER_GATEWAY_PORT) else cluster_port
     return request_with_retry(
@@ -72,7 +70,7 @@ def request_with_retry(url, json):
     s.mount("http://", HTTPAdapter(max_retries=retries))
     s.mount("https://", HTTPAdapter(max_retries=retries))
 
-    if _mtls_enabled():
+    if client_identity.GATEWAY_ENABLED:
         s.cert = (ROOT_CERT_FILE, ROOT_KEY_FILE)
         s.verify = _gateway_verify()
 

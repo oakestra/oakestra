@@ -7,14 +7,18 @@ from interfaces import mongodb_requests
 logger = logging.getLogger("cluster_service_manager")
 
 
+# Set by gateway override file
+GATEWAY_ENABLED = os.environ.get("GATEWAY_ENABLED", "").lower() in ("true", "1", "yes")
+
 CLUSTER_CERT_FILE = os.environ.get("CLUSTER_CERT_FILE")
 CLUSTER_KEY_FILE = os.environ.get("CLUSTER_KEY_FILE")
 ROOT_CA_FILE = os.environ.get("ROOT_CA_FILE")
-ROOT_SERVICE_MANAGER_USE_TLS = os.environ.get("ROOT_SERVICE_MANAGER_USE_TLS", "").lower() in (
-    "true",
-    "1",
-    "yes",
-)
+
+# Fail at start-up if files are not present
+if GATEWAY_ENABLED:
+    for name in ("CLUSTER_CERT_FILE", "CLUSTER_KEY_FILE", "ROOT_CA_FILE"):
+        if not os.path.isfile(os.environ.get(name) or ""):
+            raise RuntimeError(f"GATEWAY_ENABLED is set but {name} is not a file")
 
 # What to verify the root gateway's *server* cert against (same values as cluster_manager):
 #   ""         -> the internal root CA
@@ -22,15 +26,6 @@ ROOT_SERVICE_MANAGER_USE_TLS = os.environ.get("ROOT_SERVICE_MANAGER_USE_TLS", ""
 #   <path>     -> a custom CA bundle, as a path inside the container
 #   "insecure" -> no verification
 ROOT_GATEWAY_TRUST = os.environ.get("ROOT_GATEWAY_TRUST", "")
-
-
-def _mtls_enabled() -> bool:
-    if not ROOT_SERVICE_MANAGER_USE_TLS:
-        return False
-    return all(
-        path and os.path.isfile(path)
-        for path in (CLUSTER_CERT_FILE, CLUSTER_KEY_FILE, ROOT_CA_FILE)
-    )
 
 
 def _gateway_verify():
@@ -41,7 +36,7 @@ def _gateway_verify():
     return ROOT_GATEWAY_TRUST or ROOT_CA_FILE
 
 
-_scheme = "https" if _mtls_enabled() else "http"
+_scheme = "https" if GATEWAY_ENABLED else "http"
 ROOT_SERVICE_MANAGER_ADDR = (
     _scheme
     + "://"
@@ -53,7 +48,7 @@ ROOT_SERVICE_MANAGER_ADDR = (
 
 def _build_session() -> requests.Session:
     session = requests.Session()
-    if _mtls_enabled():
+    if GATEWAY_ENABLED:
         session.cert = (CLUSTER_CERT_FILE, CLUSTER_KEY_FILE)
         session.verify = _gateway_verify()
     return session

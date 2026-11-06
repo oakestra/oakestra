@@ -232,6 +232,7 @@ Set `"Debug": true` to enable verbose logging to `/var/log/oakestra/netmanager.l
 | `ROOT_SERVICE_MANAGER_PORT` | `5000` | root service manager port |
 | `MQTT_CERT` | — | Path to TLS certs dir (only when using MQTT auth override) |
 | `MY_PORT` | `10200` | Port this service listens on |
+| `GATEWAY_ENABLED` | unset | Set by `override-gateway.yml`. Calls to the root then use mTLS (`CLUSTER_CERT_FILE`, `CLUSTER_KEY_FILE`, `ROOT_CA_FILE`) and MQTT uses TLS (`MQTT_CERT`). The service won't start if any of these is missing |
 
 ---
 
