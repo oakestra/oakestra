@@ -1,4 +1,7 @@
-"""Identify the cluster calling through the Oakestra gateway.
+"""Identify the cluster calling the root.
+
+Without the gateway, a cluster names itself in the cluster_id query parameter and is
+trusted.
 
 Behind the gateway (GATEWAY_ENABLED), the root's external gateway verifies each
 cluster's mTLS client certificate and forwards it in the X-Client-Cert header,
@@ -31,6 +34,13 @@ class ClientCertError(Exception):
     def __init__(self, status: int, message: str):
         super().__init__(message)
         self.status = status
+
+
+def request_cluster_id(request):
+    """The id of the cluster making the request, or None if it does not say."""
+    if GATEWAY_ENABLED:
+        return caller_cluster_id(request.headers.get("X-Client-Cert"))
+    return request.args.get("cluster_id")
 
 
 def caller_cluster_id(client_cert_header) -> str:

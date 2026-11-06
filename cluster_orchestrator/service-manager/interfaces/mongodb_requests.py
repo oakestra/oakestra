@@ -48,6 +48,24 @@ def mongo_find_node_by_id_and_update_subnetwork(node_id, addr, addr_v6):
     return 1
 
 
+# ........... Cluster Operations ............#
+#############################################
+
+
+def mongo_set_cluster_id(cluster_id):
+    global mongo_jobs
+    logger.info("MONGODB - set cluster id {0}".format(cluster_id))
+    mongo_jobs.db.cluster.find_one_and_update({}, {"$set": {"cluster_id": cluster_id}}, upsert=True)
+
+
+def mongo_get_cluster_id():
+    global mongo_jobs
+    cluster = mongo_jobs.db.cluster.find_one()
+    if cluster is None:
+        return None
+    return cluster.get("cluster_id")
+
+
 # ........... Job Operations ............#
 #########################################
 

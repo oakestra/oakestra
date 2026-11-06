@@ -633,14 +633,22 @@ def mongo_set_cluster_status(cluster_id, cluster_status):
     )
 
 
+def mongo_set_cluster_address(cluster_id, cluster_address):
+    global mongo_clusters
+
+    mongo_clusters.db.cluster.find_one_and_update(
+        {"cluster_id": cluster_id}, {"$set": {"cluster_address": cluster_address}}
+    )
+
+
 def mongo_cluster_remove(cluster_id):
     global mongo_clusters
     mongo_clusters.db.cluster.delete_one({"cluster_id": cluster_id})
 
 
-def mongo_get_cluster_by_ip(cluster_ip):
+def mongo_get_cluster_by_id(cluster_id):
     global mongo_clusters
-    return mongo_clusters.db.cluster.find_one({"cluster_address": cluster_ip})
+    return mongo_clusters.db.cluster.find_one({"cluster_id": cluster_id})
 
 
 # .......... INTERESTS OPERATIONS .........#
