@@ -35,6 +35,7 @@ configs:
       {
         "modules": [
           "overview",
+          "fleet",
           "applications",
           "infrastructure",
           "users",
