@@ -87,7 +87,7 @@ func (r *Resources) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	r.BaseResources.Virtualization = virt
+	r.Virtualization = virt
 
 	// Normalise to a deduplicated flat list of driver-name strings regardless
 	// of whether we received pre-aggregated strings (root level) or raw

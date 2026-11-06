@@ -18,7 +18,7 @@ var interestedResourcesCache sync.Map
 // cached by type so reflection runs only once per concrete candidate type.
 func getInterestedResources[C placement.Candidate](candidate C) []string {
 	t := reflect.TypeOf(candidate)
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {
@@ -47,7 +47,7 @@ func collectJSONFields(t reflect.Type) []string {
 		// tag of their own — their promoted fields need to be inspected directly.
 		if f.Anonymous && f.Tag.Get("json") == "" {
 			ft := f.Type
-			if ft.Kind() == reflect.Ptr {
+			if ft.Kind() == reflect.Pointer {
 				ft = ft.Elem()
 			}
 			if ft.Kind() == reflect.Struct {
