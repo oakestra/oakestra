@@ -3,11 +3,13 @@ import logging
 import os
 import re
 
+import config
 import paho.mqtt.client as paho_mqtt
 from oakestra_utils.types.statuses import convert_to_status
 from resource_abstractor_client import candidate_operations
 
 from clients.job_management import update_deployed_instance_job, update_deployed_instance_worker
+from clients.worker_cert_renewal import check_worker_cert
 
 logger = logging.getLogger("cluster_manager")
 
@@ -43,6 +45,12 @@ def handle_mqtt_message(client, userdata, message):
 
     # if topic starts with nodes and ends with information
     if re_nodes_information_topic is not None:
+        worker_cert = payload.pop("worker_cert", None)
+        if worker_cert and config.GATEWAY_ENABLED:
+            try:
+                check_worker_cert(client_id, worker_cert, mqtt.publish)
+            except Exception as e:
+                logger.error("MQTT - worker certificate check for %s failed: %s", client_id, e)
         payload = {k: v for k, v in payload.items() if v is not None}
         updated = candidate_operations.update_candidate_information(client_id, payload)
         if updated is None:
@@ -89,10 +97,13 @@ def mqtt_init(flask_app):
     mqtt.max_queued_messages_set(1000)
     if "MQTT_CERT" in os.environ:
         try:
+            # MQTT certs set by gateway override
             mqtt.tls_set(
                 ca_certs=os.environ.get("MQTT_CERT") + "/ca.crt",
-                certfile=os.environ.get("MQTT_CERT") + "/cluster.crt",
-                keyfile=os.environ.get("MQTT_CERT") + "/cluster.key",
+                certfile=os.environ.get("MQTT_CERT_FILE")
+                or os.environ.get("MQTT_CERT") + "/cluster.crt",
+                keyfile=os.environ.get("MQTT_KEY_FILE")
+                or os.environ.get("MQTT_CERT") + "/cluster.key",
                 keyfile_password=os.environ.get("CLUSTER_KEYFILE_PASSWORD"),
             )
             logger.info("MQTT - TLS configured")
