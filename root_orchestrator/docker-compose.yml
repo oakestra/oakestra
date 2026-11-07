@@ -30,7 +30,6 @@ services:
       - mongo_root
       - root_scheduler
       - root_resource_abstractor
-      - root_service_manager
       - jwt_generator
     environment:
       - ROOT_MONGO_URL=mongo

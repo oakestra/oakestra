@@ -21,6 +21,11 @@ services:
       - CERT_PATH=/certs
       - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - REGISTRATION_TOKEN_TTL_MINUTES=${REGISTRATION_TOKEN_TTL_MINUTES:-10}
+    # The certs are written at start-up, the CRL last
+    healthcheck:
+      test: ["CMD", "test", "-f", "/certs/server.crt", "-a", "-f", "/certs/revoked.crl"]
+      interval: 2s
+      retries: 30
     ports: !reset []
 
   mongo_root:
@@ -32,6 +37,10 @@ services:
   root_service_manager:
     entrypoint: ["/bin/sh", "/docker-update-ca-trust.sh"]
     command: ["python", "service_manager.py"]
+    # Waits for the certs system_manager writes at start-up
+    depends_on:
+      system_manager:
+        condition: service_healthy
     volumes:
       - ${ROOT_CERT_PATH:-./config/certs}:/certs:ro
       - ./config/docker-update-ca-trust.sh:/docker-update-ca-trust.sh:ro

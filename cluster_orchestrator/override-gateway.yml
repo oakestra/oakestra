@@ -112,7 +112,7 @@ services:
       - CERT_WATCH_FILES=/certs/mqtt_clients.restart
       - CERT_WATCH_ACTION=restart
       - ROOT_SERVICE_MANAGER_PORT=${SYSTEM_MANAGER_GATEWAY_HTTPS_PORT:-443}
-      - ROOT_SERVICE_MANAGER_USE_TLS=true
+      - GATEWAY_ENABLED=true
       - MQTT_CERT_FILE=/certs/cluster_mqtt.crt
       - MQTT_KEY_FILE=/certs/cluster_mqtt.key
       - CLUSTER_ADDRESS=${CLUSTER_ADDRESS}
