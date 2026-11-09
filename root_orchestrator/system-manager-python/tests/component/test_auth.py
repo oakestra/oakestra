@@ -102,10 +102,11 @@ def test_login_unknown_user_rejected(client):
 
 
 def test_login_missing_body_rejected(client):
-    # No json= at all, so request.get_json() sees a non-JSON content type and returns None.
+    # No json= at all. Since Werkzeug 3, request.get_json() raises 415 for a non-JSON content
+    # type instead of returning None, so the handler's own 403 branch is no longer reached.
     response = client.post("/api/auth/login")
 
-    assert response.status_code == 403
+    assert response.status_code == 415
 
 
 def test_login_unknown_organization_name_not_found(client):

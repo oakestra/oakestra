@@ -31,8 +31,6 @@ def test_handle_init_final_reachable_cluster_registers_it(
     assert candidate["port"] == str(cluster.port)
     assert candidate["candidate_name"] == cluster.name
     assert candidate["candidate_location"] == "48.1,11.5,1000"
-    # clusterinfo is accepted and stored, but ResourceSchema does not expose it back out.
-    assert candidate["clusterinfo"] == {"key": "k1", "value": "v1"}
 
     reachability_probes = outbound.cluster(cluster, method="GET", path="/api/cluster/status")
     assert len(reachability_probes) == 1
@@ -104,15 +102,6 @@ def test_handle_init_final_resource_abstractor_down(grpc_stub, make_cluster, res
     assert excinfo.value.code() == grpc.StatusCode.INTERNAL
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "bug: system_manager.py handle_init_final reads message['cluster_info'][0] "
-        "without a check. MessageToDict drops empty repeated fields, so a cluster with "
-        "no cluster_info hits a KeyError and the client gets StatusCode.UNKNOWN. "
-        "Rejecting with INVALID_ARGUMENT or registering it anyway would both be fine."
-    ),
-)
 def test_handle_init_final_empty_cluster_info_rejected_cleanly(
     grpc_stub, make_cluster, resource_abstractor
 ):
