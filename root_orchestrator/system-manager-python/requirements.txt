@@ -13,7 +13,6 @@ pymongo~=4.18.2
 werkzeug~=3.1.9
 MarkupSafe~=3.0.3
 flask_swagger_ui~=5.33.0
-mongomock==4.3.0
 grpcio~=1.75.1
 grpcio-tools~=1.75.1
 protobuf>=4.25.2,<7.0.0

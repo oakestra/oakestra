@@ -172,8 +172,12 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 # Install deps for a service (example: system_manager)
 pip install -r root_orchestrator/system-manager-python/requirements.txt
 
-# Run tests
-pytest root_orchestrator/system-manager-python/tests/
+# Run tests (no containers needed: external deps are faked, see the service README).
+# system_manager also needs the shared libraries (see Shared Libraries) and generated protos.
+(cd root_orchestrator/system-manager-python && pip install -r requirements-test.txt \
+  && python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/clusterRegistration.proto \
+  && pytest)
+(cd root_orchestrator/jwt-generator && pip install -r requirements.txt -r requirements-test.txt && pytest)
 pytest resource-abstractor/tests/
 # Note: cluster_manager has no unit tests currently
 
