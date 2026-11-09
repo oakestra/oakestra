@@ -72,16 +72,28 @@ Port `50103` is reserved and cannot be used by deployed services.
 
 ### node-net-manager internals
 
-- **`env/`** — EnvironmentManager: creates/destroys network namespaces, maintains the translation table, dispatches between container (`env/ContainerNetDeployment.go`) and unikernel (`env/UnikernelNetDeployment.go`) deployments
-- **`proxy/`** — ProxyTunnel: intercepts traffic destined for Service VIPs, resolves them via the translation table, and forwards via TUN; uses `github.com/google/gopacket` and `github.com/songgao/water`
+- **`env/`** — EnvironmentManager: owns host/namespace management only, creating/destroying network namespaces and dispatching between container (`env/ContainerNetDeployment.go`) and unikernel (`env/UnikernelNetDeployment.go`) deployments; Service IP resolution is delegated to `resolver`
+- **`resolver/`** — ServiceResolver: resolves Service IPs, Namespace IPs and Instance IPs against the translation table and kicks off background MQTT table queries on a miss. Netlink-free, which is what lets `proxy` build and test without it
+- **`proxy/`** — the datapath, split in two: `Datapath` (`proxy/Datapath.go`) decides what happens to a packet and does no I/O, `Tunnel` (`proxy/ProxyTunnel.go`) owns the TUN device, the listen socket, the per-peer connection pool and the read loops that act on `Datapath`'s verdict. See "Packet path" below
 - **`mqtt/`** — subscribes to cluster MQTT topics for route/table-query updates; implements interest registration with a self-destruct timeout when a service is no longer needed
 - **`network/`** — iptables rule management (`network/iptables.go`) and NAT utilities
 - **`handlers/`** — dispatches deployment/removal requests to the correct manager (container vs unikernel)
 - **`server/`** — HTTP REST API accepting requests from NodeEngine (Unix socket at `/etc/netmanager/netmanager.sock`)
-- **`TableEntryCache/`** — in-memory cache for the service translation table
-- **`events/`** — internal pub/sub for table-query events (used to reset MQTT interest timeouts)
+- **`TableEntryCache/`** — in-memory cache for the service translation table; `TableManager` keeps three address indexes, rebuilt wholesale on every mutation, and bumps an atomic generation counter each time
+- **`events/`** — one atomic "last used" timestamp per job, touched on the packet path and polled by the MQTT interest timeout
+- **`clock/`** — a 1Hz coarse Unix-seconds clock. Anything on the packet path that needs a "last used" timestamp reads this instead of `time.Now()`, which costs ~29ns and swamps the lookup it is timing
 - **`cmd/`** — Cobra CLI (`root.go` startup, `logs.go`, `status.go`, `version.go`); version injected at build time via `-ldflags`
 - **`model/`** — `NetConfiguration` struct mirrors `/etc/netmanager/netcfg.json`
+
+#### Packet path
+
+The outgoing path is split by how warm the flow is. `ProxyCache.Lookup` answers from the flow cache alone whenever the route's `routeGen` still matches `TableManager`'s current generation, so a steady-state packet touches no index at all: one atomic load, one shard mutex, one short bucket scan. Everything that consults the table lives in `Datapath.resolveRoute`, off that path.
+
+A generation bump sends the flow through `ProxyCache.Revalidate`, which *refreshes* the flow (its instance IPs and the destination job's activity stamp) rather than rerouting it - an established connection has to keep the replica it was pinned to. `FlowKey` therefore deliberately excludes the source instance IP: it is a function of the source namespace IP under a given generation, and including it would force a table lookup before the cache could even be asked. For the same reason `Resolver.GetInstanceIP` hands back a single `netip.Addr` rather than a whole `TableEntry` - copying one per packet to read one address out of it used to dominate the outgoing path.
+
+I/O goes through two seams, `TunDevice` (`proxy/TunDevice.go`) and `TunnelSocket` (`proxy/TunnelSocket.go`), each with a `ReadBatch`/`WriteBatch` pair so a batch of packets costs one syscall instead of one per packet. Both directions are batched: ingoing writes a whole batch to the TUN device in one call, outgoing groups one read's packets by destination (`outgoingBatch`) and issues one write per distinct peer. Each peer has its own dialled `tunnelConn` - deliberately not unified with the listen socket, which would swap tunnel traffic's source port from ephemeral to the fixed listen port - carrying an `*ipv4.PacketConn` or `*ipv6.PacketConn` chosen from the peer's address family, since a node can have both v4 and v6 peers at once.
+
+`TunDevice` is backed by `golang.zx2c4.com/wireguard/tun`; `github.com/google/gopacket` is used for test fixtures only.
 
 ### root-service-manager internals (Python/Flask)
 

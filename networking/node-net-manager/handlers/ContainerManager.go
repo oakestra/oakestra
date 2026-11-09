@@ -28,15 +28,19 @@ func GetContainerManager() ManagerInterface {
 	return containerManager
 }
 
-func (m *ContainerManager) Register(Env *env.Environment, WorkerID *string, NodePublicAddress string, NodePublicPort string, Router *mux.Router) {
-	m.Env = Env
+func (m *ContainerManager) Register(WorkerID *string, NodePublicAddress string, NodePublicPort string, Router *mux.Router) {
 	m.WorkerID = WorkerID
 	m.Configuration = netConfiguration{NodePublicAddress: NodePublicAddress, NodePublicPort: NodePublicPort}
 
-	env.InitContainerDeployment(Env)
 	Router.HandleFunc("/container/deploy", m.containerDeploy).Methods("POST")
 	Router.HandleFunc("/container/undeploy", m.containerUndeploy).Methods("POST")
 	Router.HandleFunc("/docker/undeploy", m.containerUndeploy).Methods("POST")
+}
+
+// SetEnvironment binds the Environment once it exists, after /register runs.
+func (m *ContainerManager) SetEnvironment(Env *env.Environment) {
+	m.Env = Env
+	env.InitContainerDeployment(Env)
 }
 
 /*
@@ -62,7 +66,7 @@ Response Json:
 func (m *ContainerManager) containerDeploy(writer http.ResponseWriter, request *http.Request) {
 	log.Println("Received HTTP request - /container/deploy ")
 
-	if *m.WorkerID == "" {
+	if *m.WorkerID == "" || m.Env == nil {
 		log.Printf("[ERROR] Node not initialized")
 		writer.WriteHeader(http.StatusBadRequest)
 		return
@@ -124,7 +128,7 @@ Response: 200 OK or Failure code
 func (m *ContainerManager) containerUndeploy(writer http.ResponseWriter, request *http.Request) {
 	log.Println("Received HTTP request - /container/undeploy ")
 
-	if *m.WorkerID == "" {
+	if *m.WorkerID == "" || m.Env == nil {
 		log.Printf("[ERROR] Node not initialized")
 		writer.WriteHeader(http.StatusBadRequest)
 		return

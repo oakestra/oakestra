@@ -124,6 +124,13 @@ func (cache *TableQueryRequestCache) tableQueryRequestBlocking(sip string, sname
 		return result, nil
 	case <-time.After(5 * time.Second):
 		logger.ErrorLogger().Printf("TIMEOUT - Table query without response, quitting goroutine")
+		// Without this, siprequests[reqname] stays set forever: every future
+		// query for the same address/job would see it as "already happening"
+		// (the check above) and fail immediately, permanently, even though
+		// nothing is actually in flight anymore.
+		cache.requestadd.Lock()
+		delete(cache.siprequests, reqname)
+		cache.requestadd.Unlock()
 	}
 
 	return TableQueryResponse{}, net.UnknownNetworkError("Mqtt Timeout")
@@ -181,7 +188,7 @@ func (cache *TableQueryRequestCache) TablequeryResultMqttHandler(client mqtt.Cli
 				logger.DebugLogger().Printf("TableQuery response - channel notified")
 			}
 		}
-		cache.siprequests[key] = nil
+		delete(cache.siprequests, key)
 		cache.requestadd.Unlock()
 	}
 }

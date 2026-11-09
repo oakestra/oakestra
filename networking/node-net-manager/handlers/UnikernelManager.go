@@ -28,15 +28,18 @@ func GetUnikernelManager() ManagerInterface {
 	return unikernelManager
 }
 
-func (m *UnikernelManager) Register(Env *env.Environment, WorkerID *string, NodePublicAddress string, NodePublicPort string, Router *mux.Router) {
-	m.Env = Env
+func (m *UnikernelManager) Register(WorkerID *string, NodePublicAddress string, NodePublicPort string, Router *mux.Router) {
 	m.WorkerID = WorkerID
 	m.Configuration = netConfiguration{NodePublicAddress: NodePublicAddress, NodePublicPort: NodePublicPort}
 
-	env.InitUnikernelDeployment(Env)
-
 	Router.HandleFunc("/unikernel/deploy", m.CreateUnikernelNamesapce).Methods("POST")
 	Router.HandleFunc("/unikernel/undeploy", m.DeleteUnikernelNamespace).Methods("POST")
+}
+
+// SetEnvironment binds the Environment once it exists, after /register runs.
+func (m *UnikernelManager) SetEnvironment(Env *env.Environment) {
+	m.Env = Env
+	env.InitUnikernelDeployment(Env)
 }
 
 /*
@@ -55,7 +58,7 @@ Response: 200 or Failure code
 func (m *UnikernelManager) CreateUnikernelNamesapce(writer http.ResponseWriter, request *http.Request) {
 	log.Println("Received HTTP request - /unikernel/deploy")
 
-	if *m.WorkerID == "" {
+	if *m.WorkerID == "" || m.Env == nil {
 		log.Printf("[ERROR] Node not initialized")
 		writer.WriteHeader(http.StatusBadRequest)
 		return
@@ -112,7 +115,7 @@ Response: 200 or Failure code
 func (m *UnikernelManager) DeleteUnikernelNamespace(writer http.ResponseWriter, request *http.Request) {
 	log.Println("Received HTTP request - /unikernel/undeploy")
 
-	if *m.WorkerID == "" {
+	if *m.WorkerID == "" || m.Env == nil {
 		log.Printf("[ERROR] Node not initialized")
 		writer.WriteHeader(http.StatusBadRequest)
 		return

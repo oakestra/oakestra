@@ -16,6 +16,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"time"
 
@@ -48,10 +49,13 @@ func update() {
 			logger.InfoLogger().Printf("Updating NodePublicAddress from %s to %s", model.NetConfig.NodePublicAddress, defaultLink.String())
 			// update service in the cluster
 			//for each service instance in the worker, update the public address
-			for _, si := range Env.GetTableEntriesOnNode() {
-				err := mqtt.NotifyAddressChange(si.Appname, si.Instancenumber, defaultLink.String(), model.NetConfig.NodePublicPort)
-				if err != nil {
-					logger.ErrorLogger().Println("[ERROR]:", err)
+			// this timer can fire before /register has created Env
+			if Env != nil {
+				for _, si := range Env.GetTableEntriesOnNode() {
+					err := mqtt.NotifyAddressChange(si.Appname, si.Instancenumber, defaultLink.String(), model.NetConfig.NodePublicPort)
+					if err != nil {
+						logger.ErrorLogger().Println("[ERROR]:", err)
+					}
 				}
 			}
 			model.NetConfig.NodePublicAddress = defaultLink.String()
@@ -91,15 +95,15 @@ func HandleRequests(port int) {
 	// main server with all registered routes
 	mainRouter := mux.NewRouter().StrictSlash(true)
 	mainRouter.HandleFunc("/register", register).Methods("POST")
-	handlers.RegisterAllManagers(&Env, &model.WorkerID, model.NetConfig.NodePublicAddress, model.NetConfig.NodePublicPort, mainRouter)
+	handlers.RegisterAllManagers(&model.WorkerID, model.NetConfig.NodePublicAddress, model.NetConfig.NodePublicPort, mainRouter)
 
 	mainListener := createListener(port)
 	log.Fatal(http.Serve(mainListener, mainRouter))
 }
 
 var (
-	Env        env.Environment
-	Proxy      *proxy.GoProxyTunnel
+	Env        *env.Environment
+	Proxy      *proxy.Tunnel
 	initServer *http.Server
 )
 
@@ -172,13 +176,21 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	mqtt.InitNetMqttClient(requestStruct.ClientID, model.NetConfig.ClusterUrl, model.NetConfig.ClusterMqttPort, model.NetConfig.MqttCert, model.NetConfig.MqttKey)
 
 	// initialize the proxy tunnel
-	Proxy = proxy.New()
-	Proxy.Listen()
+	ipstring, _ := network.GetLocalIPandIface()
+	localIP, err := netip.ParseAddr(ipstring)
+	if err != nil {
+		log.Fatalf("Unable to parse the local IP %q: %s", ipstring, err)
+	}
+	Proxy = proxy.New(localIP)
 
 	// initialize the Env Manager
-	Env = *env.NewEnvironmentClusterConfigured(Proxy.HostTUNDeviceName)
+	Env = env.NewEnvironmentClusterConfigured(Proxy.HostTUNDeviceName)
 
-	Proxy.SetEnvironment(&Env)
+	// must be set before Listen starts the read loops, or Datapath sees a nil resolver
+	Proxy.SetResolver(Env.Resolver())
+	Proxy.Listen()
+
+	handlers.SetEnvironmentForAllManagers(Env)
 
 	logger.InfoLogger().Printf("NetManager is now running 🟢")
 	writer.WriteHeader(http.StatusOK)

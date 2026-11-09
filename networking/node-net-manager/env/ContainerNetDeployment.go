@@ -164,7 +164,7 @@ func (env *Environment) DetachContainer(sname string, instance int) {
 	s, ok := env.deployedServices[snameAndInstance]
 	env.deployedServicesLock.RUnlock()
 	if ok {
-		_ = env.translationTable.RemoveByNsip(s.ip)
+		_ = env.RemoveNsIPEntry(s.ip)
 		env.deployedServicesLock.Lock()
 		delete(env.deployedServices, snameAndInstance)
 		env.deployedServicesLock.Unlock()

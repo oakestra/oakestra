@@ -25,7 +25,8 @@ type DeployResponse struct {
 var AvailableRuntimes = make(map[string]func() ManagerInterface)
 
 type ManagerInterface interface {
-	Register(Env *env.Environment, WorkerID *string, NodePublicAddress string, NodePublicPort string, Router *mux.Router)
+	Register(WorkerID *string, NodePublicAddress string, NodePublicPort string, Router *mux.Router)
+	SetEnvironment(Env *env.Environment)
 }
 
 func GetNetManager(handler string) ManagerInterface {
@@ -35,8 +36,16 @@ func GetNetManager(handler string) ManagerInterface {
 	return nil
 }
 
-func RegisterAllManagers(Env *env.Environment, WorkerID *string, NodePublicAddress string, NodePublicPort string, Router *mux.Router) {
+// RegisterAllManagers wires up routes at startup, before the Environment exists.
+func RegisterAllManagers(WorkerID *string, NodePublicAddress string, NodePublicPort string, Router *mux.Router) {
 	for _, getfunc := range AvailableRuntimes {
-		getfunc().Register(Env, WorkerID, NodePublicAddress, NodePublicPort, Router)
+		getfunc().Register(WorkerID, NodePublicAddress, NodePublicPort, Router)
+	}
+}
+
+// SetEnvironmentForAllManagers binds the Environment once /register has created it.
+func SetEnvironmentForAllManagers(Env *env.Environment) {
+	for _, getfunc := range AvailableRuntimes {
+		getfunc().SetEnvironment(Env)
 	}
 }

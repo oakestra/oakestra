@@ -209,7 +209,7 @@ func (env *Environment) DeleteUnikernelNamespace(sname string, instance int) {
 	name := fmt.Sprintf("%s.instance.%d", sname, instance)
 	s, ok := env.deployedServices[name]
 	if ok {
-		_ = env.translationTable.RemoveByNsip(s.ip)
+		_ = env.RemoveNsIPEntry(s.ip)
 		env.deployedServicesLock.Lock()
 		delete(env.deployedServices, name)
 		env.deployedServicesLock.Unlock()

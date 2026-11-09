@@ -1,90 +1,69 @@
+// Package events tracks per-target "last used" activity via a single atomic
+// timestamp, cheap enough to touch on every packet. mqtt's interest
+// self-destruct timer polls it to decide when a subscription has gone idle.
 package events
 
 import (
-	"errors"
+	"NetManager/clock"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
-type EventManager interface {
-	Emit(event Event)
-	Register(eventType EventType, eventTarget string) (chan Event, error)
-	DeRegister(eventType EventType, eventTarget string)
+// Activity is a per-target last-used timestamp. The zero value is "never touched".
+type Activity struct {
+	stamp atomic.Int64 // Unix seconds, 0 = never touched
 }
 
-type Events struct {
-	//map of event target to event kind
-	eventTableQueryChannelQueue map[string]chan Event
+// Touch records that target was just used. It runs on the packet path, so it
+// reads the shared coarse clock instead of calling time.Now() itself.
+//
+// The store is skipped once the stamp already matches the current second.
+// Activity is shared across every flow of a job, so an unconditional store
+// would bounce its cache line between cores on every packet.
+func (a *Activity) Touch() {
+	now := clock.Unix()
+	if a.stamp.Load() != now {
+		a.stamp.Store(now)
+	}
 }
 
-type Event struct {
-	EventType    EventType
-	EventTarget  string
-	EventMessage string
+// IdleFor reports how long since the last Touch, or forever if never touched.
+func (a *Activity) IdleFor() time.Duration {
+	last := a.stamp.Load()
+	if last == 0 {
+		return time.Duration(1<<63 - 1)
+	}
+	return time.Since(time.Unix(last, 0))
 }
 
-type EventType int
-
-const (
-	TableQuery EventType = iota
-)
-
-/* ------------- singleton instance ------- */
-var once sync.Once
-var rwlock sync.RWMutex
 var (
-	eventInstance EventManager
+	registryMu sync.RWMutex
+	registry   = make(map[string]*Activity)
 )
 
-/* ------------------------------------------*/
+// GetOrCreate returns the shared Activity for target, creating it on first use.
+func GetOrCreate(target string) *Activity {
+	registryMu.RLock()
+	a, ok := registry[target]
+	registryMu.RUnlock()
+	if ok {
+		return a
+	}
 
-func GetInstance() EventManager {
-	once.Do(func() {
-		eventInstance = &Events{
-			eventTableQueryChannelQueue: make(map[string]chan Event, 0),
-		}
-	})
-	return eventInstance
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	if a, ok = registry[target]; ok {
+		return a
+	}
+	a = &Activity{}
+	registry[target] = a
+	return a
 }
 
-func (e *Events) Emit(event Event) {
-	rwlock.RLock()
-	defer rwlock.RUnlock()
-	switch event.EventType {
-	case TableQuery:
-		channel := e.eventTableQueryChannelQueue[event.EventTarget]
-		if channel != nil {
-			//check channel buffer capacity to prevent blocking. If this is false, probably no receiver is active.
-			if len(channel) < cap(channel) {
-				channel <- event
-			}
-		}
-	}
-}
-
-func (e *Events) Register(eventType EventType, eventTarget string) (chan Event, error) {
-	rwlock.Lock()
-	defer rwlock.Unlock()
-	switch eventType {
-	case TableQuery:
-		channel := e.eventTableQueryChannelQueue[eventTarget]
-		if channel == nil {
-			channel = make(chan Event, 10)
-		}
-		e.eventTableQueryChannelQueue[eventTarget] = channel
-		return channel, nil
-	}
-	return nil, errors.New("Invalid EventType")
-}
-
-func (e *Events) DeRegister(eventType EventType, eventTarget string) {
-	rwlock.Lock()
-	defer rwlock.Unlock()
-	switch eventType {
-	case TableQuery:
-		channel := e.eventTableQueryChannelQueue[eventTarget]
-		if channel != nil {
-			e.eventTableQueryChannelQueue[eventTarget] = nil
-			close(channel)
-		}
-	}
+// Delete removes the Activity for target, so the registry doesn't grow with every job ever seen.
+func Delete(target string) {
+	registryMu.Lock()
+	delete(registry, target)
+	registryMu.Unlock()
 }

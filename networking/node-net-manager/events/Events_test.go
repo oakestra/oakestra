@@ -5,104 +5,68 @@ import (
 	"time"
 )
 
-func handlers(done chan bool, job string) {
-	eventManager := GetInstance()
-	eventchannel, _ := eventManager.Register(TableQuery, job)
-	done <- true
-	select {
-	case _ = <-eventchannel:
-		done <- true
-	case <-time.After(1 * time.Second):
-		done <- false
+func TestActivityNeverTouchedIsIdleForever(t *testing.T) {
+	a := &Activity{}
+	if a.IdleFor() < 24*time.Hour {
+		t.Error("an Activity that was never touched should report as idle for a very long time")
 	}
 }
 
-func TestSimpleEventEmit(t *testing.T) {
-	eventManager := GetInstance()
-	eventManager.Emit(Event{
-		EventType:    TableQuery,
-		EventMessage: "test",
-		EventTarget:  "regtest",
-	})
-}
-
-func TestSimpleEventRegistration(t *testing.T) {
-	eventManager := GetInstance()
-	_, err := eventManager.Register(TableQuery, "regtest")
-	if err != nil {
-		t.Error("Invalid registration result")
+func TestActivityTouchResetsIdle(t *testing.T) {
+	a := &Activity{}
+	a.Touch()
+	if a.IdleFor() > time.Second {
+		t.Error("Activity should be freshly idle right after Touch")
 	}
 }
 
-func TestRegisterAndEmit(t *testing.T) {
-	eventManager := GetInstance()
-	done := make(chan bool, 1)
+func TestGetOrCreateReturnsSameInstance(t *testing.T) {
+	a1 := GetOrCreate("job0")
+	a2 := GetOrCreate("job0")
+	if a1 != a2 {
+		t.Error("GetOrCreate should return the same *Activity for the same target")
+	}
 
-	go handlers(done, "job0")
-
-	<-done
-
-	eventManager.Emit(Event{
-		EventType:    TableQuery,
-		EventMessage: "test",
-		EventTarget:  "job0",
-	})
-
-	res := <-done
-	if !res {
-		t.Error("Event not received")
+	a1.Touch()
+	if a2.IdleFor() > time.Second {
+		t.Error("touching the target via one handle should be visible via any other handle to the same target")
 	}
 }
 
-func TestRegisterAndEmitWrongEvent(t *testing.T) {
-	eventManager := GetInstance()
-	done := make(chan bool, 1)
-
-	go handlers(done, "job1")
-
-	<-done
-
-	eventManager.Emit(Event{
-		EventType:    TableQuery,
-		EventMessage: "test",
-		EventTarget:  "job2",
-	})
-
-	res := <-done
-	if res {
-		t.Error("Received wrong event")
+func TestGetOrCreateIsolatesTargets(t *testing.T) {
+	a1 := GetOrCreate("job1")
+	a2 := GetOrCreate("job2")
+	if a1 == a2 {
+		t.Error("different targets should get different Activity instances")
 	}
 }
 
-func TestRegisterMultipleAndEmit(t *testing.T) {
-	eventManager := GetInstance()
-	done1 := make(chan bool, 1)
-	done2 := make(chan bool, 1)
+func TestDeleteThenGetOrCreateReturnsFreshInstance(t *testing.T) {
+	a1 := GetOrCreate("job3")
+	a1.Touch()
+	Delete("job3")
 
-	go handlers(done1, "job2")
-	go handlers(done2, "job3")
-
-	<-done1
-	<-done2
-
-	eventManager.Emit(Event{
-		EventType:    TableQuery,
-		EventMessage: "test",
-		EventTarget:  "job2",
-	})
-	eventManager.Emit(Event{
-		EventType:    TableQuery,
-		EventMessage: "test",
-		EventTarget:  "job3",
-	})
-
-	res1 := <-done1
-	res2 := <-done2
-	if !res1 {
-		t.Error("Event not received")
+	a2 := GetOrCreate("job3")
+	if a1 == a2 {
+		t.Error("GetOrCreate after Delete should hand out a fresh Activity")
 	}
-	if !res2 {
-		t.Error("Event not received")
+	if a2.IdleFor() < 24*time.Hour {
+		t.Error("the fresh Activity should not carry over the deleted one's timestamp")
 	}
+}
 
+func TestActivityConcurrentTouch(t *testing.T) {
+	a := &Activity{}
+	done := make(chan struct{})
+	for range 8 {
+		go func() {
+			for range 1000 {
+				a.Touch()
+			}
+			done <- struct{}{}
+		}()
+	}
+	for range 8 {
+		<-done
+	}
 }
