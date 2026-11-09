@@ -99,9 +99,10 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
         instances = service.get("instance_list")
 
         if len(instances) > 0:
-            for instance in instances:
+            # iterate over a temporary copy of 'instances' (via [:]), since we remove elements while iterating
+            for instance in instances[:]:
                 if which_one == instance["instance_number"] or which_one == -1:
-                    net_inform_instance_undeploy(microserviceid, which_one)
+                    net_inform_instance_undeploy(microserviceid, instance["instance_number"])
                     cluster_request_to_delete_job(microserviceid, instance["instance_number"])
                     instances.remove(instance)
 
