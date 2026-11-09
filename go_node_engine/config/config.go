@@ -146,7 +146,7 @@ func Read() (ConfFile, error) {
 
 	data, err := os.ReadFile(confPath)
 	if errors.Is(err, os.ErrNotExist) || (err == nil && len(data) == 0) {
-		logger.InfoLogger().Printf("Config file missing or empty, using default configuration")
+		logger.InfoLogger("Config file missing or empty, using default configuration")
 		def := Default()
 		return def, writeLocked(def)
 	}
@@ -156,7 +156,7 @@ func Read() (ConfFile, error) {
 
 	var clusterConf ConfFile
 	if err := json.Unmarshal(data, &clusterConf); err != nil {
-		logger.ErrorLogger().Printf("Error reading configuration: %v, resetting the file\n", err)
+		logger.ErrorLogger("Error reading configuration: %v, resetting the file\n", err)
 		if resetErr := writeLocked(Default()); resetErr != nil {
 			return ConfFile{}, resetErr
 		}
@@ -180,7 +180,7 @@ func writeLocked(conf ConfFile) error {
 		return err
 	}
 	if err := os.MkdirAll(confDir, 0755); err != nil {
-		logger.ErrorLogger().Printf("Failed to create config directory %s: %v\n", confDir, err)
+		logger.ErrorLogger("Failed to create config directory %s: %v\n", confDir, err)
 		return err
 	}
 	return os.WriteFile(confPath, data, 0644)

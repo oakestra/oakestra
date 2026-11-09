@@ -33,7 +33,7 @@ func stopNodeEngine() {
 
 	err := cmd.Run()
 	if err != nil {
-		logger.ErrorLogger().Printf("%v", err)
+		logger.ErrorLogger("%v", err)
 	}
 
 	if stderr.Len() > 0 {
@@ -45,6 +45,6 @@ func stopNodeEngine() {
 	cmd = exec.Command("systemctl", "stop", "netmanager", "--no-pager")
 	err = cmd.Run()
 	if err != nil {
-		logger.ErrorLogger().Printf("%v", err)
+		logger.ErrorLogger("%v", err)
 	}
 }
