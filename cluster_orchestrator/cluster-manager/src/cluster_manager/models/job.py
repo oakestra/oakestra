@@ -63,6 +63,12 @@ class JobInstance(BaseModel):
             self.disk = other.disk
         if other.logs is not None:
             self.logs = other.logs
+        if other.host_ip is not None:
+            self.host_ip = other.host_ip
+        if other.host_port is not None:
+            self.host_port = other.host_port
+        if other.worker_id is not None:
+            self.worker_id = other.worker_id
 
 
 class Job(BaseModel):
