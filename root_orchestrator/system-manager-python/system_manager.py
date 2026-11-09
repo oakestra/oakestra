@@ -171,7 +171,6 @@ class ClusterRegistrationServicer(register_clusterServicer):
 
         cluster_data = {
             "ip": cluster_address,
-            "clusterinfo": message["cluster_info"][0],
             "port": cluster_port,
             "candidate_location": message["cluster_location"],
             "candidate_name": message["cluster_name"],
