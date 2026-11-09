@@ -1,4 +1,4 @@
-from ext_requests.user_db import mongo_get_user_by_name
+from ext_requests.user_db import mongo_get_user_by_id, mongo_get_user_by_name
 from flask import jsonify, request
 from flask.views import MethodView
 from flask_jwt_extended import get_jwt_identity, jwt_required
@@ -16,6 +16,7 @@ from services.application_management import (
     register_app,
     update_app,
 )
+from services.ownership import app_owner, caller_is_admin
 from sla.schema import sla_schema
 
 from blueprints.schema_wrapper import SchemaWrapper
@@ -52,8 +53,8 @@ class ApplicationController(MethodView):
     @jwt_required()
     def get(self, appid, *args, **kwargs):
         try:
-            current_user = get_jwt_identity()
-            result, code = get_user_app(current_user, appid)
+            owner = app_owner(appid, get_jwt_identity())
+            result, code = get_user_app(owner, appid)
             if code != 200:
                 abort(code, result)
             return result
@@ -63,8 +64,8 @@ class ApplicationController(MethodView):
     @jwt_required()
     def delete(self, appid, *args, **kwargs):
         try:
-            current_user = get_jwt_identity()
-            res = delete_app(appid, current_user)
+            owner = app_owner(appid, get_jwt_identity())
+            res = delete_app(appid, owner)
             if res:
                 return jsonify({"message": "Application Deleted"})
             else:
@@ -75,11 +76,11 @@ class ApplicationController(MethodView):
     @jwt_required()
     def put(self, appid, *args, **kwargs):
         try:
-            current_user = get_jwt_identity()
-            result, code = get_user_app(current_user, appid)
+            owner = app_owner(appid, get_jwt_identity())
+            result, code = get_user_app(owner, appid)
             if code != 200:
                 abort(code, **result)
-            update_app(appid, current_user, request.get_json())
+            update_app(appid, owner, request.get_json())
             return jsonify({"message": "Application is updated"})
         except ConnectionError as e:
             abort(404, {"message": str(e)})
@@ -112,9 +113,14 @@ class MultipleApplicationControllerUser(Resource):
         current_user = get_jwt_identity()
         organization_id = get_jwt_organization()
         user = mongo_get_user_by_name(current_user, organization_id)
+        owner = current_user
         if userid != str(user["_id"]):
-            abort(401, {"message": "Unauthorized"})
-        result, code = get_user_apps(current_user)
+            # Admins may list the applications of any user
+            other = mongo_get_user_by_id(userid) if caller_is_admin() else None
+            if other is None:
+                abort(401, {"message": "Unauthorized"})
+            owner = other["name"]
+        result, code = get_user_apps(owner)
         if code != 200:
             abort(code, result)
 

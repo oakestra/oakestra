@@ -142,6 +142,7 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | `override-no-dashboard.yml` | Removes frontend dashboard from root. |
 | `override-no-observe.yml` | Removes Grafana/Loki/Promtail/Prometheus. |
 | `override-mosquitto-auth.yml` | Enables MQTT authentication (workers need credentials). |
+| `override-federated-login.yml` | Federated login only: users sign in through an external identity provider (`POST /api/auth/federated`), password login/registration/reset are disabled, and the JWT generator port 10011 is no longer published on the host. Needs `FEDERATED_LOGIN_AUTHORIZE_URL`, `FEDERATED_LOGIN_CLUSTER_ID`, `FEDERATED_LOGIN_CLUSTER_SECRET` exported and Docker Compose >= 2.24.4. |
 | `override-images-only.yml` | Forces pre-built images, skips local builds. |
 | `override-local-service-manager.yml` | Builds service manager from local source. |
 | `override-custom-service-manager-version.yml` | Pins `oakestra-net` service manager images to a specific version (e.g. `alpha-v0.4.403`). Useful for testing against a particular `oakestra-net` release. |

@@ -319,6 +319,21 @@ If MQTT is not healthy, `cluster_manager` and `cluster_service_manager` cannot c
 
 Check if `override-mosquitto-auth.yml` is being used — if so, authentication credentials must be provided; without them, workers cannot connect.
 
+### Login fails with 403 "Password login is disabled on this cluster"
+
+The root runs with `override-federated-login.yml`: only federated login works. Check the configuration:
+
+```bash
+curl -s http://localhost:10000/api/auth/methods   # {"internal": false, "federated": true} expected
+docker exec system_manager env | grep -E 'INTERNAL_LOGIN|FEDERATED_LOGIN_(AUTHORIZE_URL|CLUSTER_ID)'
+docker logs system_manager 2>&1 | grep -iE "login methods|federated login"
+```
+
+- `federated: false` while `internal: false` → `FEDERATED_LOGIN_AUTHORIZE_URL` was not exported when the stack started; nobody can log in. Export it and re-run `docker compose up -d`.
+- `Identity provider unreachable` / 502 → the root cannot reach the identity provider URL (DNS, egress firewall).
+- 403 `You do not have access to this cluster` → the identity provider refused the user for this cluster id.
+- Emergency access: restart the root without the override to re-enable password login.
+
 ---
 
 ## STEP 7 — Inter-Service Connectivity

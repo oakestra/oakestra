@@ -61,3 +61,19 @@ Example: IPv6 server receiving IPv4 request -> source address is in 4-to-6 mappe
 E.g.: Disable [observability stack](../root_orchestrator/config/README.md)
 
 Usage: `docker-compose -f docker-compose.yml -f override-no-observe.yml`
+
+E.g.: Federated login only
+
+Users sign in through an external identity provider instead of an Oakestra password. Off by default; without this override nothing changes.
+
+```
+export FEDERATED_LOGIN_AUTHORIZE_URL=<identity provider endpoint>
+export FEDERATED_LOGIN_CLUSTER_ID=<id of this cluster at the provider>
+export FEDERATED_LOGIN_CLUSTER_SECRET=<secret of this cluster at the provider>
+docker compose -f docker-compose.yml -f override-federated-login.yml up -d
+```
+
+- Clients exchange a provider token for Oakestra tokens with `POST /api/auth/federated {"token": "..."}`. `GET /api/auth/methods` tells clients which login methods are on.
+- The system manager calls `POST $FEDERATED_LOGIN_AUTHORIZE_URL` with `Authorization: Bearer <provider token>` and `{"cluster_id", "cluster_secret"}`, and expects `200 {"username", "email", "roles": [Oakestra roles]}`. Users are created on first login (without password) and their roles are synced on every login. A federated identity can never take over an existing local user.
+- Password login, registration and password reset return 403. Refresh tokens from federated login last `FEDERATED_LOGIN_REFRESH_MINUTES` (default 60).
+- The JWT generator port (10011) is no longer published on the host (requires Docker Compose >= 2.24.4). It does not apply with `override-network-host.yml`, where every container listens on the host directly.

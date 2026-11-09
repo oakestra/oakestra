@@ -7,12 +7,14 @@ from flask_restful import Resource
 from flask_smorest import abort
 from roles.securityUtils import (
     Role,
+    get_jwt_auth_claims,
     get_jwt_auth_identity,
     get_jwt_organization,
     refresh_token_required,
     require_role,
 )
 from users.auth import user_login, user_register, user_token_refresh
+from users.federated import internal_login_enabled, internal_login_only
 
 from blueprints.jwt_wrapper import BlueprintExt
 
@@ -46,6 +48,7 @@ register_schema = {
 @loginbp.route("/login")
 class UserLoginController(MethodView):
     @loginbp.arguments(schema=login_schema, location="json", validate=False, unknown=True)
+    @internal_login_only
     def post(self, *args, **kwargs):
         content = request.get_json()
         logger.debug(content)
@@ -60,6 +63,7 @@ class UserLoginController(MethodView):
 @loginbp.route("/register")
 class UserRegisterController(Resource):
     @loginbp.arguments(schema=register_schema, location="json", validate=False, unknown=True)
+    @internal_login_only
     @jwt_required()
     @require_role(Role.ADMIN)
     def post(self, *args, **kwargs):
@@ -73,6 +77,8 @@ class UserRegisterController(Resource):
 class TokenRefreshController(Resource):
     @refresh_token_required()
     def post(self):
+        if not internal_login_enabled() and not get_jwt_auth_claims().get("federated"):
+            abort(403, {"message": "Password login is disabled on this cluster"})
         identity = get_jwt_auth_identity()
         token = user_token_refresh(identity)
         if token == {}:
