@@ -25,6 +25,9 @@ def user_add(username, data, organization_id):
         mongo_add_user_role_to_organization(user_id, organization_id, data["roles"])
         del data["roles"]
 
+    # Passwords only change through the change/reset endpoints, which hash them. The dashboard
+    # sends the whole user object back on edit, so whatever is in here must not be stored.
+    data.pop("password", None)
     return mongo_update_user(user_id, data)
 
 
