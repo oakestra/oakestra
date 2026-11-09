@@ -21,8 +21,9 @@ message SC1Message {
 message CS2Message {
   int32 manager_port = 1;
   int32 network_component_port = 2;
-  string cluster_name = 3;
-  repeated KeyValue cluster_info = 4;
+  string cluster_name = 3 ;
+  // this field is currently ignored by the system_manager
+  repeated KeyValue cluster_info = 4 [deprecated = true];
   string cluster_location = 5;
   string cluster_address = 6;
 }
@@ -36,9 +37,3 @@ message KeyValue {
 message SC2Message {
   string id = 1;
 }
-
-
-
-
-
-
