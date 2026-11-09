@@ -2,7 +2,9 @@
 ---
     name: Super-Linter Codestyles Checks
     
-    on: pull_request
+    on:
+      pull_request:
+      merge_group:
     
     permissions: { }
     
