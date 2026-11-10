@@ -3,6 +3,7 @@
 package placement
 
 import (
+	"cmp"
 	"errors"
 	"slices"
 )
@@ -17,6 +18,9 @@ const (
 	NoWorkerCapacity
 	NoQualifiedWorkerFound
 	NoNodeFound
+	// NoGpuCapacity is appended rather than inserted so the numeric values of
+	// the statuses above stay stable.
+	NoGpuCapacity
 )
 
 // NegativeSchedulingStatusName maps each status to the string sent on the wire
@@ -29,6 +33,7 @@ var NegativeSchedulingStatusName = map[NegativeSchedulingStatus]string{
 	NoWorkerCapacity:            "NO_WORKER_CAPACITY",
 	NoQualifiedWorkerFound:      "NO_QUALIFIED_WORKER_FOUND",
 	NoNodeFound:                 "NO_NODE_FOUND",
+	NoGpuCapacity:               "NoGpuCapacity",
 }
 
 // SchedulingError is returned by Algorithm.Calculate when no suitable placement
@@ -61,6 +66,16 @@ type BaseResources struct {
 	AvailableMem   float64  `json:"memory"`
 	AvailableCPU   float64  `json:"vcpus"`
 	CPUPercent     float64  `json:"cpu_percent"`
+	// On a job, Vgpus is the number of GPUs requested and Vram the total VRAM
+	// in MiB needed across them. On a candidate, they are the installed GPU
+	// count and total installed VRAM, which only matter for the legacy
+	// fallback when GpuVramFree is missing.
+	Vgpus int     `json:"vgpus"`
+	Vram  float64 `json:"vram"`
+	// GpuVramFree is the free VRAM per GPU in MiB, only set on candidates.
+	// Clusters report the per-slot max over their workers, so a cluster that
+	// passes the GPU check only means some worker might fit.
+	GpuVramFree []float64 `json:"gpu_vram_free"`
 }
 
 // Candidate is a resource (cluster or worker node) that can be selected for a job.
@@ -97,16 +112,88 @@ type Algorithm[J Job, C Candidate] interface {
 }
 
 // MeetsBasicRequirements reports whether candidate satisfies the job's
-// virtualization type, CPU, and memory requirements.
+// virtualization type, CPU, memory, and GPU requirements.
 // It returns false when the job carries no virtualization entry, which is
 // treated as a malformed request.
 func MeetsBasicRequirements(job, candidate BaseResources) bool {
+	return MeetsNonGPURequirements(job, candidate) && MeetsGPURequirements(job, candidate)
+}
+
+// MeetsNonGPURequirements is MeetsBasicRequirements without the GPU check.
+// Schedulers use it to tell "no GPU capacity" apart from a generic capacity
+// shortage when nothing fits.
+func MeetsNonGPURequirements(job, candidate BaseResources) bool {
 	if len(job.Virtualization) == 0 {
 		return false
 	}
 	return slices.Contains(candidate.Virtualization, job.Virtualization[0]) &&
 		candidate.AvailableCPU >= job.AvailableCPU &&
 		candidate.AvailableMem >= job.AvailableMem
+}
+
+// RequiredGPUs returns how many GPUs the job needs. A VRAM request without a
+// GPU count still needs somewhere to put that VRAM, so it implies one GPU.
+func RequiredGPUs(job BaseResources) int {
+	if job.Vgpus <= 0 && job.Vram > 0 {
+		return 1
+	}
+	return max(job.Vgpus, 0)
+}
+
+// MeetsGPURequirements reports whether candidate has at least as many GPUs as
+// the job requests and whether its GPUs with the most free VRAM together cover
+// the job's total VRAM request.
+func MeetsGPURequirements(job, candidate BaseResources) bool {
+	n := RequiredGPUs(job)
+	if n == 0 {
+		return true
+	}
+	free := freeVramPerGPU(candidate)
+	if len(free) < n {
+		return false
+	}
+	var sum float64
+	for _, v := range free[:n] {
+		sum += v
+	}
+	return sum >= job.Vram
+}
+
+// freeVramPerGPU returns the candidate's free VRAM per GPU, largest first.
+func freeVramPerGPU(candidate BaseResources) []float64 {
+	if len(candidate.GpuVramFree) == 0 {
+		// Older node engines and cluster managers do not report per-GPU free
+		// VRAM. Assume the installed VRAM is spread evenly and entirely free,
+		// which is optimistic but matches what they were scheduled on before.
+		if candidate.Vgpus <= 0 {
+			return nil
+		}
+		perGPU := candidate.Vram / float64(candidate.Vgpus)
+		free := make([]float64, candidate.Vgpus)
+		for i := range free {
+			free[i] = perGPU
+		}
+		return free
+	}
+	// Workers don't guarantee an order. Sort a copy so the top-n sum works
+	// without mutating the candidate.
+	free := slices.Clone(candidate.GpuVramFree)
+	slices.SortFunc(free, func(a, b float64) int { return cmp.Compare(b, a) })
+	return free
+}
+
+// NoCapacityStatus picks the status to report when no candidate passed the
+// full filter. meetsAllButGPU must apply every check of the scheduler's filter
+// except MeetsGPURequirements. If the job needs a GPU and some candidate fails
+// only on GPUs, the more specific NoGpuCapacity is returned so the user knows
+// what to change.
+func NoCapacityStatus[C any](
+	job BaseResources, candidates []C, meetsAllButGPU func(C) bool,
+) NegativeSchedulingStatus {
+	if RequiredGPUs(job) > 0 && slices.ContainsFunc(candidates, meetsAllButGPU) {
+		return NoGpuCapacity
+	}
+	return NoActiveClusterWithCapacity
 }
 
 // Filter returns the elements of candidates for which keep returns true.

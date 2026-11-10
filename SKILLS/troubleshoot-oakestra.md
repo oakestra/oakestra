@@ -174,6 +174,7 @@ docker logs <exited_container_name> 2>&1 | tail -50
 | `Cluster reachability probe failed` / `cluster not reachable at` (system_manager log) | Root cannot reach `http://CLUSTER_ADDRESS:10100/api/cluster/status` — wrong IP, firewall, or cluster_manager not up |
 | `permission denied` opening `/var/run/docker.sock` (Alloy log) | Alloy cannot discover/read container logs; inspect the socket mount and host permissions |
 | `loki.write` connection refused | The local Loki is not ready, or `LOKI_URL` is wrong for the selected network mode |
+| Service status `NoGpuCapacity` | The SLA asks for `vgpus`/`vram` (setting `vram` alone implies 1 GPU) and no candidate has that many GPUs whose free VRAM adds up to `vram` (MiB). Check the worker's `gpu_vram_free` (free MiB per GPU) and `vgpus` in `cluster_mongo` (`docker exec cluster_mongo mongosh --port 10107 candidates --quiet --eval "db.candidates.find({}, {candidate_name:1, vgpus:1, gpu_vram_free:1}).forEach(printjson)"`); both empty/0 means `nvidia-smi` is missing or failing on the worker (STEP 9.7) |
 
 ---
 

@@ -1,4 +1,5 @@
 import logging
+from itertools import zip_longest
 
 from resource_abstractor_client import candidate_operations
 
@@ -83,6 +84,40 @@ def csi_drivers_aggregator(w, acc=None):
     return acc
 
 
+def gpu_drivers_aggregator(w, acc=None):
+    """Collect the worker's gpu_driver string into a deduplicated list.
+
+    Workers send the singular key "gpu_driver" while the cluster reports "gpu_drivers".
+    """
+    if acc is None:
+        acc = []
+    driver = w.get("gpu_driver")
+    if isinstance(driver, str) and driver not in ("", "-") and driver not in acc:
+        acc.append(driver)
+    return acc
+
+
+def _worker_gpu_vram_free(w):
+    free = w.get("gpu_vram_free")
+    if isinstance(free, list):
+        return sorted((float(v) for v in free), reverse=True)
+    # Legacy workers do not report per-GPU free VRAM, assume an even split of total VRAM.
+    vgpus = w.get("vgpus") or 0
+    if vgpus > 0:
+        return [float(w.get("vram") or 0) / vgpus] * int(vgpus)
+    return []
+
+
+def gpu_vram_free_aggregator(w, acc=None):
+    """Element-wise max over the workers' descending free-VRAM lists.
+
+    The root scheduler accepts a cluster if the top-N entries sum to >= vram and there are
+    >= vgpus entries. This envelope never rejects a cluster that has a fitting worker, unlike
+    summed vgpus/vram, which would accept a 2-GPU job in a cluster of 1-GPU nodes.
+    """
+    return [max(a, b) for a, b in zip_longest(acc or [], _worker_gpu_vram_free(w), fillvalue=0.0)]
+
+
 # canonical resources are resources that are required by the system manager
 # this dict contains {resource_name: aggregation_scheme}
 # where aggregation scheme outlines how this resource should be aggregated.
@@ -95,8 +130,9 @@ canonical_resources = {
     "vram": lambda w, acc=0: default_aggregator(w, acc, "vram"),
     "vram_percent": lambda w, acc=0.0: average_aggregator(w, acc, "vram_percent"),
     "gpu_temp": lambda w, acc=0.0: average_aggregator(w, acc, "gpu_temp"),
-    "gpu_drivers": lambda w, acc=None: default_aggregator(w, acc, "gpu_drivers"),
+    "gpu_drivers": gpu_drivers_aggregator,
     "gpu_percent": lambda w, acc=0.0: average_aggregator(w, acc, "gpu_percent"),
+    "gpu_vram_free": gpu_vram_free_aggregator,
     "vgpus": lambda w, acc=0: default_aggregator(w, acc, "vgpus"),
     "memory": lambda w, acc=0: default_aggregator(w, acc, "memory"),
     "virtualization": lambda w, acc=None: default_aggregator(w, acc, "virtualization"),
@@ -141,7 +177,9 @@ def aggregate_workers(workers):
 
 
 def aggregate_info():
-    workers = candidate_operations.get_candidates(active=True)
+    # The resource abstractor only projects its canonical fields unless asked for more,
+    # and the per-worker "gpu_driver" is not one of them.
+    workers = candidate_operations.get_candidates(active=True, resources="gpu_driver")
 
     if workers is None:
         return {}

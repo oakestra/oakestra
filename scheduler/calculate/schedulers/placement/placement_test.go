@@ -103,6 +103,111 @@ func TestMeetsBasicRequirements(t *testing.T) {
 	}
 }
 
+func TestMeetsGPURequirements(t *testing.T) {
+	docker := []string{"docker"}
+	job := func(vgpus int, vram float64) BaseResources {
+		return BaseResources{Virtualization: docker, AvailableMem: 100, AvailableCPU: 1, Vgpus: vgpus, Vram: vram}
+	}
+	node := func(free ...float64) BaseResources {
+		return BaseResources{Virtualization: docker, AvailableMem: 1000, AvailableCPU: 4, GpuVramFree: free}
+	}
+
+	tests := []struct {
+		name      string
+		job       BaseResources
+		candidate BaseResources
+		want      bool
+	}{
+		{"no GPU needed on GPU-less node", job(0, 0), node(), true},
+		{"one GPU on GPU-less node", job(1, 0), node(), false},
+		{"two GPUs on single-GPU node", job(2, 0), node(8000), false},
+		{"GPU count only, no VRAM request", job(1, 0), node(10), true},
+		{"VRAM fits across top two GPUs", job(2, 12000), node(8000, 6000), true},
+		{"VRAM does not fit on one GPU", job(1, 12000), node(8000, 6000), false},
+		{"VRAM exactly fits", job(1, 8000), node(8000, 6000), true},
+		{"VRAM without vgpus implies one GPU, fits", job(0, 7000), node(8000), true},
+		{"VRAM without vgpus implies one GPU, GPU-less node", job(0, 7000), node(), false},
+		{"VRAM without vgpus implies one GPU, too little", job(0, 9000), node(8000, 6000), false},
+		{"unsorted list uses largest GPUs", job(2, 13000), node(1000, 6000, 8000), true},
+		{
+			"legacy fallback splits installed VRAM evenly",
+			job(2, 16000),
+			BaseResources{Virtualization: docker, AvailableMem: 1000, AvailableCPU: 4, Vgpus: 2, Vram: 16000},
+			true,
+		},
+		{
+			"legacy fallback rejects VRAM above installed total",
+			job(2, 16001),
+			BaseResources{Virtualization: docker, AvailableMem: 1000, AvailableCPU: 4, Vgpus: 2, Vram: 16000},
+			false,
+		},
+		{
+			"legacy fallback rejects more GPUs than installed",
+			job(3, 0),
+			BaseResources{Virtualization: docker, AvailableMem: 1000, AvailableCPU: 4, Vgpus: 2, Vram: 16000},
+			false,
+		},
+		{
+			"reported free VRAM wins over installed total",
+			job(1, 8000),
+			BaseResources{
+				Virtualization: docker, AvailableMem: 1000, AvailableCPU: 4,
+				Vgpus: 1, Vram: 16000, GpuVramFree: []float64{4000},
+			},
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MeetsGPURequirements(tt.job, tt.candidate); got != tt.want {
+				t.Errorf("MeetsGPURequirements() = %v, want %v", got, tt.want)
+			}
+			// CPU, memory and virtualization always fit here, so the combined
+			// check must agree with the GPU check alone.
+			if got := MeetsBasicRequirements(tt.job, tt.candidate); got != tt.want {
+				t.Errorf("MeetsBasicRequirements() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMeetsGPURequirements_DoesNotMutateCandidate(t *testing.T) {
+	candidate := BaseResources{GpuVramFree: []float64{1000, 6000, 8000}}
+	MeetsGPURequirements(BaseResources{Vgpus: 2, Vram: 1}, candidate)
+	want := []float64{1000, 6000, 8000}
+	for i := range want {
+		if candidate.GpuVramFree[i] != want[i] {
+			t.Fatalf("GpuVramFree mutated: got %v, want %v", candidate.GpuVramFree, want)
+		}
+	}
+}
+
+func TestNoCapacityStatus(t *testing.T) {
+	always := func(bool) bool { return true }
+	never := func(bool) bool { return false }
+	gpuJob := BaseResources{Vgpus: 1}
+
+	tests := []struct {
+		name string
+		job  BaseResources
+		keep func(bool) bool
+		want NegativeSchedulingStatus
+	}{
+		{"GPU job, near miss exists", gpuJob, always, NoGpuCapacity},
+		{"GPU job, nothing passes other checks", gpuJob, never, NoActiveClusterWithCapacity},
+		{"VRAM-only job counts as GPU job", BaseResources{Vram: 100}, always, NoGpuCapacity},
+		{"non-GPU job", BaseResources{}, always, NoActiveClusterWithCapacity},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NoCapacityStatus(tt.job, []bool{true}, tt.keep); got != tt.want {
+				t.Errorf("NoCapacityStatus() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSchedulingErrorString(t *testing.T) {
 	tests := []struct {
 		status NegativeSchedulingStatus
@@ -114,6 +219,7 @@ func TestSchedulingErrorString(t *testing.T) {
 		{NoWorkerCapacity, "NO_WORKER_CAPACITY"},
 		{NoQualifiedWorkerFound, "NO_QUALIFIED_WORKER_FOUND"},
 		{NoNodeFound, "NO_NODE_FOUND"},
+		{NoGpuCapacity, "NoGpuCapacity"},
 	}
 
 	for _, tt := range tests {

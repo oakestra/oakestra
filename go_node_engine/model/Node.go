@@ -56,11 +56,12 @@ type Node struct {
 	DiskInfo        map[string]string    `json:"disk_info"`
 	NetworkInfo     map[string]string    `json:"network_info"`
 	GpuDriver       string               `json:"gpu_driver"`
-	GpuUsage        float64              `json:"gpu_usage"`
+	GpuUsage        float64              `json:"gpu_percent"`
 	GpuCores        int                  `json:"vgpus"`
 	GpuTemp         float64              `json:"gpu_temp"`
 	GpuMemUsage     float64              `json:"vram_percent"`
 	GpuTotMem       float64              `json:"vram"`
+	GpuVramFree     []float64            `json:"gpu_vram_free"` // free MiB per GPU; [] without GPUs
 	Technology      []config.RuntimeType `json:"virtualization"`
 	SupportedAddons []AddonType          `json:"supported_addons"`
 	// CSIDrivers lists the CSI plugins that have been successfully probed on this node.
@@ -123,6 +124,7 @@ func GetDynamicInfo() Node {
 		GpuTotMem:   node.GpuTotMem,
 		GpuMemUsage: node.GpuMemUsage,
 		GpuCores:    node.GpuCores,
+		GpuVramFree: node.GpuVramFree,
 	}
 }
 
@@ -141,13 +143,7 @@ func (n *Node) updateDynamicInfo() {
 	n.NetworkInfo = getNetworkInfo()
 
 	// GPU Info
-	n.GpuDriver = getGpuDriver()
-	n.GpuTotMem = getTotGpuMem()
-	n.GpuMemUsage = getGpuMemUsage()
-	n.GpuUsage = getGpuUsage()
-	n.GpuCores = getGpuCores()
-	n.GpuTemp = getGpuTemp()
-
+	n.updateGpuInfo()
 }
 
 // SetNodeId sets the node id
@@ -360,141 +356,46 @@ func (n *Node) HasCSIDriver(driverName string) bool {
 	return false
 }
 
-func getGpuDriver() string {
-	n, err := gpu.NvsmiDeviceCount()
+// updateGpuInfo refreshes every GPU field from one nvidia-smi call. A missing nvidia-smi or
+// a failing query is the normal case on GPU-less nodes, so it resets to zero values silently.
+func (n *Node) updateGpuInfo() {
+	// GetNodeInfo is called from many goroutines, each refreshing the shared node.
+	// Everything is computed into locals and assigned at the end so a concurrent
+	// reader never copies a half-reset node that looks like it has no GPUs.
+	driver := "-"
+	var totMem, memPercentSum, usageSum, tempSum float64
+	vramFree := make([]float64, 0)
+
+	gpus, err := gpu.QueryAll()
 	if err != nil {
-		return "-"
+		gpus = nil
 	}
-
-	var queryResult string
-	for i := 0; i < n; i++ {
-		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "driver_version")
-		if err != nil {
-			continue
+	for _, g := range gpus {
+		totMem += g.MemTotal
+		if g.MemTotal > 0 {
+			memPercentSum += g.MemUsed * 100 / g.MemTotal
 		}
-		queryResult = res
-	}
-
-	if queryResult != "" {
-		return "-"
-	}
-	return queryResult
-}
-
-func getGpuMemUsage() float64 {
-	n, err := gpu.NvsmiDeviceCount()
-	if err != nil || n == 0 {
-		return 0
-	}
-
-	totMem := 0.0
-	for i := 0; i < n; i++ {
-		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.used")
-		if err != nil {
-			return 0
-		}
-		totm := getTotGpuMem()
-		if totm >= 0 {
-			currmem, err := strconv.Atoi(res)
-			if err != nil {
-				return 0
-			}
-			totMem += float64(currmem) * 100 / getTotGpuMem()
+		usageSum += g.Utilization
+		tempSum += g.Temperature
+		vramFree = append(vramFree, g.MemFree)
+		if g.DriverVersion != "" {
+			driver = g.DriverVersion
 		}
 	}
-	return totMem / float64(n)
-}
 
-func getGpuCores() int {
-	n, err := gpu.NvsmiDeviceCount()
-	if err != nil || n == 0 {
-		return 0
-	}
-	return n
-}
-
-func getGpuUsage() float64 {
-	n, err := gpu.NvsmiDeviceCount()
-	if err != nil || n == 0 {
-		return 0
+	var memUsage, usage, temp float64
+	if count := float64(len(gpus)); count > 0 {
+		// Averaged per GPU so a small card is not diluted by a big one.
+		memUsage = memPercentSum / count
+		usage = usageSum / count
+		temp = tempSum / count
 	}
 
-	totUage := 0.0
-	for i := 0; i < n; i++ {
-		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "utilization.gpu")
-		if err != nil {
-			return 0
-		}
-		gpuusage, err := strconv.Atoi(res)
-		if err != nil {
-			return 0
-		}
-		totUage += float64(gpuusage)
-	}
-	return totUage / float64(n)
-}
-
-func getTotGpuMem() float64 {
-	n, err := gpu.NvsmiDeviceCount()
-	if err != nil || n == 0 {
-		return 0
-	}
-
-	totMem := 0.0
-	for i := 0; i < n; i++ {
-		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.total")
-		if err != nil {
-			return 0
-		}
-		gpuMem, err := strconv.Atoi(res)
-		if err != nil {
-			return 0
-		}
-		totMem += float64(gpuMem)
-	}
-	return totMem
-}
-
-/*
-func getTotGpuMemFreeMB() float64 {
-	n, err := gpu.NvsmiDeviceCount()
-	if err != nil || n == 0 {
-		return 0
-	}
-
-	totMem := 0.0
-	for i := 0; i < n; i++ {
-		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.free")
-		if err != nil {
-			return 0
-		}
-		gpuMem, err := strconv.Atoi(res)
-		if err != nil {
-			return 0
-		}
-		totMem += float64(gpuMem)
-	}
-	return totMem
-}
-*/
-
-func getGpuTemp() float64 {
-	n, err := gpu.NvsmiDeviceCount()
-	if err != nil || n == 0 {
-		return 0
-	}
-
-	totTemp := 0.0
-	for i := 0; i < n; i++ {
-		res, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "temperature.gpu")
-		if err != nil {
-			return 0
-		}
-		currTemp, err := strconv.Atoi(res)
-		if err != nil {
-			return 0
-		}
-		totTemp += float64(currTemp)
-	}
-	return totTemp / float64(n)
+	n.GpuDriver = driver
+	n.GpuTotMem = totMem
+	n.GpuMemUsage = memUsage
+	n.GpuUsage = usage
+	n.GpuCores = len(gpus)
+	n.GpuTemp = temp
+	n.GpuVramFree = vramFree
 }

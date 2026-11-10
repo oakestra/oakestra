@@ -20,6 +20,9 @@ func TestGetInterestedResources_EmbeddedFields(t *testing.T) {
 		"memory":         true,
 		"vcpus":          true,
 		"cpu_percent":    true,
+		"vgpus":          true,
+		"vram":           true,
+		"gpu_vram_free":  true,
 		// From cpumemfit.Resources directly:
 		"constraints": true,
 		"csi_drivers": true,

@@ -169,3 +169,84 @@ func TestFilterWithObjectFormatCSIDrivers(t *testing.T) {
 	}
 	assert.Equal(t, res.ID(), "w1")
 }
+
+func withGPU(b placement.BaseResources, vgpus int, vram float64, free ...float64) placement.BaseResources {
+	b.Vgpus = vgpus
+	b.Vram = vram
+	b.GpuVramFree = free
+	return b
+}
+
+func TestCalculateGPU(t *testing.T) {
+	var algorithm Scheduler
+
+	gpuJob := Resources{BaseResources: withGPU(base("gpu-job", []string{"docker"}, 500, 1, 0), 1, 4000)}
+	bigGpuJob := Resources{BaseResources: withGPU(base("big-gpu-job", []string{"docker"}, 5000, 1, 0), 1, 4000)}
+	csiGpuJob := Resources{
+		BaseResources: withGPU(base("csi-gpu-job", []string{"docker"}, 500, 1, 0), 1, 4000),
+		Volumes:       []VolumeSpec{{VolumeID: "v1", CSIDriver: "nfs.csi.k8s.io"}},
+	}
+
+	// cpuOnly outranks gpuNode on cmpMemCPU, so picking gpuNode means the
+	// GPU filter ran and it wasn't just the ranking.
+	cpuOnly := Resources{BaseResources: base("cpu-only", []string{"docker"}, 4000, 8, 0)}
+	gpuNode := Resources{BaseResources: withGPU(base("gpu", []string{"docker"}, 2000, 4, 50), 1, 8000, 8000)}
+	smallGpuNode := Resources{BaseResources: withGPU(base("small-gpu", []string{"docker"}, 2000, 4, 10), 1, 2000, 2000)}
+
+	tests := []struct {
+		name       string
+		job        Resources
+		candidates []Resources
+		want       Resources
+		wantErr    error
+	}{
+		{"GPU job picks the GPU candidate", gpuJob, []Resources{cpuOnly, gpuNode, smallGpuNode}, gpuNode, nil},
+		{
+			"GPU job on CPU-sufficient GPU-less candidates",
+			gpuJob,
+			[]Resources{cpuOnly, smallGpuNode},
+			Resources{},
+			placement.SchedulingError{NegativeSchedulingStatus: placement.NoGpuCapacity},
+		},
+		{
+			"GPU job where nothing has enough memory",
+			bigGpuJob,
+			[]Resources{cpuOnly, smallGpuNode},
+			Resources{},
+			placement.SchedulingError{NegativeSchedulingStatus: placement.NoActiveClusterWithCapacity},
+		},
+		{
+			// The GPU candidate lacks the CSI driver, so GPUs aren't the only
+			// thing missing and we expect the generic status.
+			"GPU job where the CSI check also fails",
+			csiGpuJob,
+			[]Resources{gpuNode},
+			Resources{},
+			placement.SchedulingError{NegativeSchedulingStatus: placement.NoActiveClusterWithCapacity},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := algorithm.Calculate(tt.job, tt.candidates)
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("expected error %v, got %v", tt.wantErr, err)
+			}
+			if err == nil {
+				assert.DeepEqual(t, tt.want, got)
+			}
+		})
+	}
+}
+
+func TestGPUFieldsUnmarshal(t *testing.T) {
+	raw := `{"_id":"w1","virtualization":["docker"],"memory":2000,"vcpus":4,
+		"vgpus":2,"vram":16000,"gpu_vram_free":[8000.5,6000]}`
+	var r Resources
+	if err := json.Unmarshal([]byte(raw), &r); err != nil {
+		t.Fatalf("UnmarshalJSON error: %v", err)
+	}
+	assert.Equal(t, r.Vgpus, 2)
+	assert.Equal(t, r.Vram, 16000.0)
+	assert.DeepEqual(t, r.GpuVramFree, []float64{8000.5, 6000})
+}

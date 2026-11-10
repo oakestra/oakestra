@@ -62,7 +62,71 @@ func TestCalculate_SingleCandidate_IsDeterministic(t *testing.T) {
 	}
 }
 
+func gpuBase(id string, mem float64, vgpus int, vram float64, free ...float64) placement.BaseResources {
+	b := base(id, []string{"docker"}, mem, 4)
+	b.Vgpus = vgpus
+	b.Vram = vram
+	b.GpuVramFree = free
+	return b
+}
+
+func TestCalculate_GPUJobPicksGPUCandidate(t *testing.T) {
+	job := Resources{BaseResources: gpuBase("j1", 100, 1, 4000)}
+	cpuOnly := Resources{BaseResources: base("cpu-only", []string{"docker"}, 4000, 8)}
+	gpu := Resources{BaseResources: gpuBase("gpu", 1000, 1, 8000, 8000)}
+
+	for range 10 {
+		chosen, err := Scheduler{}.Calculate(job, []Resources{cpuOnly, gpu})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if chosen.ID() != "gpu" {
+			t.Errorf("expected gpu, got %q", chosen.ID())
+		}
+	}
+}
+
+func TestCalculate_NoGpuCapacity(t *testing.T) {
+	job := Resources{BaseResources: gpuBase("j1", 100, 1, 4000)}
+	candidates := []Resources{
+		{BaseResources: base("cpu-only", []string{"docker"}, 4000, 8)},
+		{BaseResources: gpuBase("small-gpu", 1000, 1, 2000, 2000)},
+	}
+	_, err := Scheduler{}.Calculate(job, candidates)
+	var se placement.SchedulingError
+	if !errors.As(err, &se) || se.NegativeSchedulingStatus != placement.NoGpuCapacity {
+		t.Errorf("expected NoGpuCapacity, got %v", err)
+	}
+}
+
+func TestCalculate_GPUJobWithoutMemoryAnywhere(t *testing.T) {
+	job := Resources{BaseResources: gpuBase("j1", 5000, 1, 4000)}
+	candidates := []Resources{
+		{BaseResources: base("cpu-only", []string{"docker"}, 4000, 8)},
+		{BaseResources: gpuBase("gpu", 1000, 1, 8000, 8000)},
+	}
+	_, err := Scheduler{}.Calculate(job, candidates)
+	var se placement.SchedulingError
+	if !errors.As(err, &se) || se.NegativeSchedulingStatus != placement.NoActiveClusterWithCapacity {
+		t.Errorf("expected NoActiveClusterWithCapacity, got %v", err)
+	}
+}
+
 // --- UnmarshalJSON ---
+
+func TestUnmarshalJSON_GPUFields(t *testing.T) {
+	var r Resources
+	raw := `{"_id":"r5","virtualization":"docker","vgpus":2,"vram":16000,"gpu_vram_free":[8000,6000.5]}`
+	if err := json.Unmarshal([]byte(raw), &r); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if r.Vgpus != 2 || r.Vram != 16000 {
+		t.Errorf("Vgpus, Vram = %d, %v, want 2, 16000", r.Vgpus, r.Vram)
+	}
+	if len(r.GpuVramFree) != 2 || r.GpuVramFree[0] != 8000 || r.GpuVramFree[1] != 6000.5 {
+		t.Errorf("GpuVramFree = %v, want [8000 6000.5]", r.GpuVramFree)
+	}
+}
 
 func TestUnmarshalJSON_StringVirtualization(t *testing.T) {
 	var r Resources
