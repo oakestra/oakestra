@@ -170,8 +170,8 @@ func TestFilterWithObjectFormatCSIDrivers(t *testing.T) {
 	assert.Equal(t, res.ID(), "w1")
 }
 
-func withGPU(b placement.BaseResources, vgpus int, vram float64, free ...float64) placement.BaseResources {
-	b.Vgpus = vgpus
+func withGPU(b placement.BaseResources, vram float64, free ...float64) placement.BaseResources {
+	b.Vgpus = 1
 	b.Vram = vram
 	b.GpuVramFree = free
 	return b
@@ -180,18 +180,18 @@ func withGPU(b placement.BaseResources, vgpus int, vram float64, free ...float64
 func TestCalculateGPU(t *testing.T) {
 	var algorithm Scheduler
 
-	gpuJob := Resources{BaseResources: withGPU(base("gpu-job", []string{"docker"}, 500, 1, 0), 1, 4000)}
-	bigGpuJob := Resources{BaseResources: withGPU(base("big-gpu-job", []string{"docker"}, 5000, 1, 0), 1, 4000)}
+	gpuJob := Resources{BaseResources: withGPU(base("gpu-job", []string{"docker"}, 500, 1, 0), 4000)}
+	bigGpuJob := Resources{BaseResources: withGPU(base("big-gpu-job", []string{"docker"}, 5000, 1, 0), 4000)}
 	csiGpuJob := Resources{
-		BaseResources: withGPU(base("csi-gpu-job", []string{"docker"}, 500, 1, 0), 1, 4000),
+		BaseResources: withGPU(base("csi-gpu-job", []string{"docker"}, 500, 1, 0), 4000),
 		Volumes:       []VolumeSpec{{VolumeID: "v1", CSIDriver: "nfs.csi.k8s.io"}},
 	}
 
 	// cpuOnly outranks gpuNode on cmpMemCPU, so picking gpuNode means the
 	// GPU filter ran and it wasn't just the ranking.
 	cpuOnly := Resources{BaseResources: base("cpu-only", []string{"docker"}, 4000, 8, 0)}
-	gpuNode := Resources{BaseResources: withGPU(base("gpu", []string{"docker"}, 2000, 4, 50), 1, 8000, 8000)}
-	smallGpuNode := Resources{BaseResources: withGPU(base("small-gpu", []string{"docker"}, 2000, 4, 10), 1, 2000, 2000)}
+	gpuNode := Resources{BaseResources: withGPU(base("gpu", []string{"docker"}, 2000, 4, 50), 8000, 8000)}
+	smallGpuNode := Resources{BaseResources: withGPU(base("small-gpu", []string{"docker"}, 2000, 4, 10), 2000, 2000)}
 
 	tests := []struct {
 		name       string

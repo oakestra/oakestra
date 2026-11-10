@@ -62,18 +62,18 @@ func TestCalculate_SingleCandidate_IsDeterministic(t *testing.T) {
 	}
 }
 
-func gpuBase(id string, mem float64, vgpus int, vram float64, free ...float64) placement.BaseResources {
+func gpuBase(id string, mem float64, vram float64, free ...float64) placement.BaseResources {
 	b := base(id, []string{"docker"}, mem, 4)
-	b.Vgpus = vgpus
+	b.Vgpus = 1
 	b.Vram = vram
 	b.GpuVramFree = free
 	return b
 }
 
 func TestCalculate_GPUJobPicksGPUCandidate(t *testing.T) {
-	job := Resources{BaseResources: gpuBase("j1", 100, 1, 4000)}
+	job := Resources{BaseResources: gpuBase("j1", 100, 4000)}
 	cpuOnly := Resources{BaseResources: base("cpu-only", []string{"docker"}, 4000, 8)}
-	gpu := Resources{BaseResources: gpuBase("gpu", 1000, 1, 8000, 8000)}
+	gpu := Resources{BaseResources: gpuBase("gpu", 1000, 8000, 8000)}
 
 	for range 10 {
 		chosen, err := Scheduler{}.Calculate(job, []Resources{cpuOnly, gpu})
@@ -87,10 +87,10 @@ func TestCalculate_GPUJobPicksGPUCandidate(t *testing.T) {
 }
 
 func TestCalculate_NoGpuCapacity(t *testing.T) {
-	job := Resources{BaseResources: gpuBase("j1", 100, 1, 4000)}
+	job := Resources{BaseResources: gpuBase("j1", 100, 4000)}
 	candidates := []Resources{
 		{BaseResources: base("cpu-only", []string{"docker"}, 4000, 8)},
-		{BaseResources: gpuBase("small-gpu", 1000, 1, 2000, 2000)},
+		{BaseResources: gpuBase("small-gpu", 1000, 2000, 2000)},
 	}
 	_, err := Scheduler{}.Calculate(job, candidates)
 	var se placement.SchedulingError
@@ -100,10 +100,10 @@ func TestCalculate_NoGpuCapacity(t *testing.T) {
 }
 
 func TestCalculate_GPUJobWithoutMemoryAnywhere(t *testing.T) {
-	job := Resources{BaseResources: gpuBase("j1", 5000, 1, 4000)}
+	job := Resources{BaseResources: gpuBase("j1", 5000, 4000)}
 	candidates := []Resources{
 		{BaseResources: base("cpu-only", []string{"docker"}, 4000, 8)},
-		{BaseResources: gpuBase("gpu", 1000, 1, 8000, 8000)},
+		{BaseResources: gpuBase("gpu", 1000, 8000, 8000)},
 	}
 	_, err := Scheduler{}.Calculate(job, candidates)
 	var se placement.SchedulingError
