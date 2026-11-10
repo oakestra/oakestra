@@ -20,7 +20,7 @@ def register_app(applications, userid):
     try:
         parse_sla_json(applications)
     except SLAFormatError as e:
-        return {"message": e}, 422
+        return {"message": str(e)}, 422
 
     for application in applications["applications"]:
         if app_operations.get_app_by_name_and_namespace(

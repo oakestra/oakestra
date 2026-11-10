@@ -68,7 +68,7 @@ Root Orchestrator  (1 per deployment)
 | `root_redis` | Redis | 6379 (pw: `rootRedis`) | Job queue (asynq) for root_scheduler. |
 | `grafana` | Grafana | 3000 | Dashboards. |
 | `loki` | Loki | 3100 | Log aggregation. |
-| `promtail` | Promtail | — | Ships Docker container logs to Loki via docker socket. |
+| `alloy` | Grafana Alloy 1.17.0 | 12345 (loopback) | Discovers Root containers, ships opted-in stdout/stderr to the Root-local Loki, and exposes its diagnostic UI locally. |
 | `oakestra-frontend-container` | nginx | 80 | Dashboard SPA. v1 by default, v2 with `override-dashboard-v2.yml`. Connects to system_manager via `API_ADDRESS` env var, and to the addons and marketplace managers via `ADDONS_MANAGER_ADDRESS` / `MARKETPLACE_ADDRESS`. Proxies addon UIs from `addonui-<name>` containers. |
 | `root_addons_manager` | Python | 11101 | Manages installed addons (optional, disable with override-no-addons.yml). |
 | `root_addons_monitor` | Python | — | Monitors running addon containers via docker socket. |
@@ -93,7 +93,7 @@ Root Orchestrator  (1 per deployment)
 | `prometheus` | Prometheus | 10009 (→9090) | Scrapes cluster_manager metrics. |
 | `cluster_grafana` | Grafana | 3001 | Cluster dashboards. |
 | `cluster_loki` | Loki | 3101 | Cluster log aggregation. |
-| `cluster_promtail` | Promtail | — | Ships Docker logs to cluster_loki. |
+| `cluster_alloy` | Grafana Alloy 1.17.0 | 12346 (loopback) | Discovers Cluster containers, ships opted-in stdout/stderr to that Cluster's local Loki, and exposes its diagnostic UI locally. |
 
 ### Worker Node — binaries
 
@@ -141,7 +141,7 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | `override-no-addons.yml` | Removes addons subsystem from root and turns off addon discovery and the addon pages in the dashboard. Needs Docker Compose 2.23.1+. |
 | `override-no-dashboard.yml` | Removes frontend dashboard from root. |
 | `override-dashboard-v2.yml` | Uses `ghcr.io/oakestra/dashboard-v2:latest` instead of the v1 dashboard. Needed for addon UIs and presets. Stays on `latest` with `OAKESTRA_VERSION`. 1-DOC: `override-dashboard-v2.yaml`. |
-| `override-no-observe.yml` | Removes Grafana/Loki/Promtail/Prometheus. |
+| `override-no-observe.yml` | Removes Grafana/Loki/Alloy/Prometheus. |
 | `override-mosquitto-auth.yml` | Enables MQTT authentication (workers need credentials). |
 | `override-images-only.yml` | Forces pre-built images, skips local builds. |
 | `override-local-service-manager.yml` | Builds service manager from local source. |
@@ -161,7 +161,7 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | Databases | MongoDB 8.0, Redis | — |
 | Messaging | Eclipse Mosquitto 2.0 (MQTT) | — |
 | Networking | oakestra-net (external Go repo) | — |
-| Observability | Grafana, Loki 2.9.2, Promtail 2.9.2, Prometheus | — |
+| Observability | Grafana, Loki 2.9.2, Alloy 1.17.0, Prometheus | — |
 
 ---
 

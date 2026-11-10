@@ -17,6 +17,10 @@ from ext_requests.organization_db import (
 
 logger = logging.getLogger("system_manager")
 
+# Projection for user documents that end up in API responses. Login and password changes
+# read the hash through mongo_get_user_by_name / mongo_get_user_by_id, which keep it.
+WITHOUT_PASSWORD = {"password": 0}
+
 
 def create_admin():
     user_id = None
@@ -64,7 +68,7 @@ def mongo_save_user(data, organization_id):
 
 
 def mongo_get_single_user_of_organization(user_id, organization_id):
-    user = mongo_get_user_by_id(user_id)
+    user = db.mongo_users.find_one(ObjectId(user_id), WITHOUT_PASSWORD)
     user["roles"] = mongo_get_roles_of_user_in_organization(user_id, organization_id)
     return user
 
@@ -75,7 +79,8 @@ def mongo_save_user_without_roles(data):
 
 
 def mongo_get_user():
-    return list(db.mongo_users.find())
+    # Password reset tokens are stored in the users collection as well, skip them here.
+    return list(db.mongo_users.find({"token_hash": {"$exists": False}}, WITHOUT_PASSWORD))
 
 
 def mongo_get_user_by_name(username, organization_id=None):
@@ -95,7 +100,7 @@ def mongo_get_user_by_organization_id(organization_id):
 
     user = []
     for m in organization["member"]:
-        u = db.mongo_users.find_one({"_id": ObjectId(m.get("user_id"))})
+        u = db.mongo_users.find_one({"_id": ObjectId(m.get("user_id"))}, WITHOUT_PASSWORD)
         if u is not None:
             u["roles"] = m.get("roles")
             user.append(u)
@@ -106,7 +111,7 @@ def mongo_delete_user(username):
     user = db.mongo_users.find_one_and_delete({"name": username})
     if user is not None:
         mongo_delete_all_role_entrys_of_user(str(user["_id"]))
-    return list(db.mongo_users.find())
+    return mongo_get_user()
 
 
 def mongo_update_user(user_id, user):
