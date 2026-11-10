@@ -58,7 +58,7 @@ func (r *Resources) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	r.BaseResources.Virtualization = virt
+	r.Virtualization = virt
 
 	return nil
 }
