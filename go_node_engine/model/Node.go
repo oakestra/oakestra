@@ -359,9 +359,9 @@ func (n *Node) HasCSIDriver(driverName string) bool {
 // updateGpuInfo refreshes every GPU field from one nvidia-smi call. A missing nvidia-smi or
 // a failing query is the normal case on GPU-less nodes, so it resets to zero values silently.
 func (n *Node) updateGpuInfo() {
-	// GetNodeInfo is called from many goroutines, each refreshing the shared node.
-	// Everything is computed into locals and assigned at the end so a concurrent
-	// reader never copies a half-reset node that looks like it has no GPUs.
+	// node is a singleton and GetNodeInfo/GetDynamicInfo refresh it from several goroutines
+	// without a lock. Fill locals first and assign at the end, otherwise a concurrent read
+	// can see the GPU fields zeroed mid-refresh and report vgpus=0.
 	driver := "-"
 	var totMem, memPercentSum, usageSum, tempSum float64
 	vramFree := make([]float64, 0)
