@@ -91,12 +91,12 @@ type Algorithm[J Job, C Candidate] interface {
 ## GPU requirements
 
 `vgpus` and `vram` mean different things depending on the side. On a job they are what the
-SLA asks for: a number of GPUs and the total free VRAM in MiB across them. On a candidate
-they are what is installed. Candidates also carry `gpu_vram_free`, the free VRAM per GPU as
-reported by `nvidia-smi`.
+SLA asks for: a number of GPUs and the free VRAM in MiB that each of them needs. On a
+candidate they are what is installed. Candidates also carry `gpu_vram_free`, the free VRAM
+per GPU as reported by `nvidia-smi`.
 
-`MeetsGPURequirements` takes the candidate's `vgpus` GPUs with the most free VRAM and checks
-that they add up to the job's `vram`. Some details:
+`MeetsGPURequirements` sorts the candidate's `gpu_vram_free` and checks that its `vgpus`-th
+best GPU still has at least `vram` free. Some details:
 
 - Only `docker` jobs are checked. For `crosvm`, `vgpus` is the number of virtio-gpu devices,
   which don't need a dedicated GPU, and unikernels don't use it at all.
@@ -106,9 +106,11 @@ that they add up to the job's `vram`. Some details:
   before.
 
 At the root, a cluster's `gpu_vram_free` is the element-wise max of its workers' sorted lists
-(`aggregate_workers` in the cluster manager). With one worker at `[8000]` and another at
-`[4000, 4000]`, the cluster reports `[8000, 4000]` and passes a job asking for 2 GPUs and
-12000 MiB, even though neither worker can run it. The cluster scheduler catches that.
+(`aggregate_workers` in the cluster manager). Because `vram` is per GPU, the check above is
+exact on that summary: the n-th entry is big enough only if some single worker has n GPUs that
+fit. With a total instead, the root would add up GPUs from different workers. One worker at
+`[8000]` and another at `[4000, 4000]` give `[8000, 4000]`, which would pass 2 GPUs with
+12000 MiB in total although neither worker can run it.
 
 When nothing fits, use `placement.NoCapacityStatus` to pick the error. It returns
 `NoGpuCapacity` if the GPUs were the only problem and `NoActiveClusterWithCapacity` otherwise.

@@ -145,22 +145,20 @@ func RequiredGPUs(job BaseResources) int {
 }
 
 // MeetsGPURequirements reports whether candidate has at least as many GPUs as
-// the job requests and whether its GPUs with the most free VRAM together cover
-// the job's total VRAM request.
+// the job requests, each with at least the job's vram free.
+//
+// vram is per GPU rather than a total on purpose. Clusters report the
+// element-wise max of their workers' sorted free-VRAM lists, and checking the
+// n-th largest entry against that is exact: it passes only if a single worker
+// has n GPUs that fit. A sum over that list would mix GPUs from different
+// workers.
 func MeetsGPURequirements(job, candidate BaseResources) bool {
 	n := RequiredGPUs(job)
 	if n == 0 {
 		return true
 	}
 	free := freeVramPerGPU(candidate)
-	if len(free) < n {
-		return false
-	}
-	var sum float64
-	for _, v := range free[:n] {
-		sum += v
-	}
-	return sum >= job.Vram
+	return len(free) >= n && free[n-1] >= job.Vram
 }
 
 // freeVramPerGPU returns the candidate's free VRAM per GPU, largest first.
@@ -179,8 +177,8 @@ func freeVramPerGPU(candidate BaseResources) []float64 {
 		}
 		return free
 	}
-	// Workers don't guarantee an order. Sort a copy so the top-n sum works
-	// without mutating the candidate.
+	// Workers don't guarantee an order. Sort a copy so free[n-1] is the n-th
+	// best GPU without mutating the candidate.
 	free := slices.Clone(candidate.GpuVramFree)
 	slices.SortFunc(free, func(a, b float64) int { return cmp.Compare(b, a) })
 	return free

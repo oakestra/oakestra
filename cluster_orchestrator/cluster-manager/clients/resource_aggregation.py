@@ -111,9 +111,9 @@ def _worker_gpu_vram_free(w):
 def gpu_vram_free_aggregator(w, acc=None):
     """Element-wise max over the workers' descending free-VRAM lists.
 
-    The root scheduler accepts a cluster if the top-N entries sum to >= vram and there are
-    >= vgpus entries. This envelope never rejects a cluster that has a fitting worker, unlike
-    summed vgpus/vram, which would accept a 2-GPU job in a cluster of 1-GPU nodes.
+    The root scheduler accepts a cluster if entry N-1 is >= vram, with N = vgpus. With vram
+    being per GPU, that is true exactly when one worker has N GPUs that fit. Summing vgpus and
+    vram across workers instead would accept a 2-GPU job in a cluster of 1-GPU nodes.
     """
     return [max(a, b) for a, b in zip_longest(acc or [], _worker_gpu_vram_free(w), fillvalue=0.0)]
 
