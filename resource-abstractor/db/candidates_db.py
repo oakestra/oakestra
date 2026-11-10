@@ -15,6 +15,7 @@ CANONICAL_RESOURCES = [
     "vram_percent",
     "gpu_temp",
     "gpu_drivers",
+    "gpu_vram_free",
     "gpu_percent",
     "vgpus",
     "memory",

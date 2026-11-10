@@ -2,46 +2,88 @@ package gpu
 
 import (
 	"bytes"
-	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
 const (
 	bin       = "nvidia-smi"
-	gpuArg    = "--id="
 	queryArg  = "--query-gpu="
 	formatArg = "--format=csv,noheader,nounits"
 )
 
-// NvsmiQuery Query to nvidia-smi. Refer to https://nvidia.custhelp.com/app/answers/detail/a_id/3751/~/useful-nvidia-smi-queries
-// For the available query
-func NvsmiQuery(id string, query string) (string, error) {
-	var out bytes.Buffer
+const allGpusQuery = "index,memory.total,memory.used,memory.free,utilization.gpu,temperature.gpu,driver_version"
 
-	cmd := exec.Command(bin, fmt.Sprintf("%s%s", gpuArg, id), fmt.Sprintf("%s%s", queryArg, query), formatArg)
-	cmd.Stdout = &out
+// ParseQueryAll indexes rows positionally, so its row width must follow the query.
+var allGpusFields = strings.Count(allGpusQuery, ",") + 1
 
-	err := cmd.Run()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(out.String()), nil
+// Info is a single GPU's snapshot. Memory values are MiB, as reported by nvidia-smi.
+type Info struct {
+	Index         int
+	MemTotal      float64
+	MemUsed       float64
+	MemFree       float64
+	Utilization   float64
+	Temperature   float64
+	DriverVersion string
 }
 
-// NvsmiDeviceCount Counts the available nvidia-smi compatible GPUs in the machine
-func NvsmiDeviceCount() (int, error) {
+// QueryAll snapshots every GPU with a single nvidia-smi invocation, so one update
+// cycle does not spawn a process per GPU per metric.
+func QueryAll() ([]Info, error) {
 	var out bytes.Buffer
 
-	query := "gpu_name"
-	cmd := exec.Command(bin, fmt.Sprintf("%s%s", queryArg, query), formatArg)
+	cmd := exec.Command(bin, queryArg+allGpusQuery, formatArg)
 	cmd.Stdout = &out
-
-	err := cmd.Run()
-	if err != nil {
-		return 0, err
+	if err := cmd.Run(); err != nil {
+		return nil, err
 	}
+	return ParseQueryAll(out.String()), nil
+}
 
-	nvSmi := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
-	return len(nvSmi), nil
+// ParseQueryAll parses the csv output of QueryAll. Malformed lines are skipped so a
+// single bad row cannot hide the remaining GPUs. Fields nvidia-smi cannot report
+// ("[N/A]", "[Not Supported]") become 0 or an empty driver version.
+func ParseQueryAll(output string) []Info {
+	infos := make([]Info, 0)
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Split(line, ",")
+		if len(fields) != allGpusFields {
+			continue
+		}
+		for i := range fields {
+			fields[i] = strings.TrimSpace(fields[i])
+		}
+		index, err := strconv.Atoi(fields[0])
+		if err != nil {
+			continue
+		}
+		driver := fields[6]
+		if strings.HasPrefix(driver, "[") {
+			driver = ""
+		}
+		infos = append(infos, Info{
+			Index:         index,
+			MemTotal:      parseNumber(fields[1]),
+			MemUsed:       parseNumber(fields[2]),
+			MemFree:       parseNumber(fields[3]),
+			Utilization:   parseNumber(fields[4]),
+			Temperature:   parseNumber(fields[5]),
+			DriverVersion: driver,
+		})
+	}
+	return infos
+}
+
+func parseNumber(s string) float64 {
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil || v < 0 {
+		return 0
+	}
+	return v
 }
