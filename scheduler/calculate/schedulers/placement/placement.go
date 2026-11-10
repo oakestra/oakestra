@@ -66,15 +66,11 @@ type BaseResources struct {
 	AvailableMem   float64  `json:"memory"`
 	AvailableCPU   float64  `json:"vcpus"`
 	CPUPercent     float64  `json:"cpu_percent"`
-	// On a job, Vgpus is the number of GPUs requested and Vram the total VRAM
-	// in MiB needed across them. On a candidate, they are the installed GPU
-	// count and total installed VRAM, which only matter for the legacy
-	// fallback when GpuVramFree is missing.
-	Vgpus int     `json:"vgpus"`
-	Vram  float64 `json:"vram"`
-	// GpuVramFree is the free VRAM per GPU in MiB, only set on candidates.
-	// Clusters report the per-slot max over their workers, so a cluster that
-	// passes the GPU check only means some worker might fit.
+	// On a job, Vgpus and Vram are what the SLA asks for. On a candidate
+	// they are the installed totals. GpuVramFree is candidate-only. The
+	// matching rules are in the scheduler README.
+	Vgpus       int       `json:"vgpus"`
+	Vram        float64   `json:"vram"`
 	GpuVramFree []float64 `json:"gpu_vram_free"`
 }
 

@@ -13,7 +13,7 @@ The scheduler is agnostic to the underlying resource types and scheduling algori
 
 - **Job**: Describes the resource requirements of a workload. Decoded from the incoming SLA payload.
 - **Candidate**: Represents a cluster or worker node with available resources. Fetched from the ResourceAbstractor.
-- **BaseResources**: A shared struct embedded by concrete `Job`/`Candidate` types that carries the common fields (`_id`, `virtualization`, `memory`, `vcpus`, `cpu_percent`).
+- **BaseResources**: A shared struct embedded by concrete `Job`/`Candidate` types that carries the common fields (`_id`, `virtualization`, `memory`, `vcpus`, `cpu_percent`, `vgpus`, `vram`, `gpu_vram_free`).
 - **Algorithm**: A generic interface parameterised on `Job` and `Candidate` types that runs the placement logic.
 
 ## Architecture
@@ -87,3 +87,28 @@ type Algorithm[J Job, C Candidate] interface {
 |---|---|---|
 | `calculate/schedulers/cpumemfit` | `Scheduler` | Picks the candidate with the most available CPU headroom and memory. Also checks virtualization type and CSI driver availability. |
 | `calculate/schedulers/random` | `Scheduler` | Picks a qualifying candidate at random. |
+
+## GPU requirements
+
+`vgpus` and `vram` mean different things depending on the side. On a job they are what the
+SLA asks for: a number of GPUs and the total free VRAM in MiB across them. On a candidate
+they are what is installed. Candidates also carry `gpu_vram_free`, the free VRAM per GPU as
+reported by `nvidia-smi`.
+
+`MeetsGPURequirements` takes the candidate's `vgpus` GPUs with the most free VRAM and checks
+that they add up to the job's `vram`. Some details:
+
+- Only `docker` jobs are checked. For `crosvm`, `vgpus` is the number of virtio-gpu devices,
+  which don't need a dedicated GPU, and unikernels don't use it at all.
+- A job that sets `vram` but not `vgpus` asks for one GPU.
+- Older NodeEngines and cluster managers don't send `gpu_vram_free`. For those we fall back
+  to `vram / vgpus` per GPU and assume all of it is free, which is how they were scheduled
+  before.
+
+At the root, a cluster's `gpu_vram_free` is the element-wise max of its workers' sorted lists
+(`aggregate_workers` in the cluster manager). With one worker at `[8000]` and another at
+`[4000, 4000]`, the cluster reports `[8000, 4000]` and passes a job asking for 2 GPUs and
+12000 MiB, even though neither worker can run it. The cluster scheduler catches that.
+
+When nothing fits, use `placement.NoCapacityStatus` to pick the error. It returns
+`NoGpuCapacity` if the GPUs were the only problem and `NoActiveClusterWithCapacity` otherwise.
