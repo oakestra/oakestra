@@ -52,10 +52,13 @@ To find out which UIs to load, the dashboard calls `GET /api/v1/ui-addons` on th
 
 `version` is the tag of the `ui.service` image, or `latest` if the image has no tag.
 
+Addon UIs need the new dashboard from `github.com/oakestra/dashboard-v2`. The default is still v1,
+so start with `override-dashboard-v2.yml` (`override-dashboard-v2.yaml` for 1-DOC).
+
 The dashboard container finds both managers through `ADDONS_MANAGER_ADDRESS` and
 `MARKETPLACE_ADDRESS`. Addon UIs don't work with `override-network-host.yml`, because there is
 no Docker DNS to resolve `addonui-<name>`.
 
 `override-no-addons.yml` removes the addons engine and sets a dashboard preset (`PRESET_URL`) that
-turns off addon discovery and the addon pages. For your own presets, see `docs/addons/presets.md`
-in the dashboard repo.
+turns off addon discovery and the addon pages. The v1 dashboard ignores it. For your own presets,
+see `docs/addons/presets.md` in the dashboard-v2 repo.

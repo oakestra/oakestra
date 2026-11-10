@@ -622,6 +622,13 @@ echo "=== UI addons ==="
 curl -s --connect-timeout 5 "http://localhost:11101/api/v1/ui-addons" 2>/dev/null || echo "addons_manager not responding"
 ```
 
+Addon UIs and presets need the v2 dashboard (`ghcr.io/oakestra/dashboard-v2`), which only runs with `override-dashboard-v2.yml` (`.yaml` in 1-DOC). The default is v1 (`ghcr.io/oakestra/dashboard`). To see which one is running:
+
+```bash
+# Use oaekstra-frontend-container in 1-DOC.
+docker inspect oakestra-frontend-container --format '{{.Config.Image}}'
+```
+
 The dashboard's nginx fetches each addon UI from `http://addonui-<name>:80/`. The addons monitor sets that alias on the UI container in the `oakestra` network. If an addon UI doesn't load, or `/addon-assets/<name>/mf-manifest.json` returns 502, check the aliases and try the request from the dashboard container (`oakestra-frontend-container` on root, `oaekstra-frontend-container` in 1-DOC):
 
 ```bash
