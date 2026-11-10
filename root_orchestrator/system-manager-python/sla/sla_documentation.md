@@ -16,8 +16,8 @@ Example under *sla.json*
     - **virtualization** : type of virtualization chosen for the application, may be one of ["container", "unikernel", "vm"]
     - **memory** : Needed memory in MB,
     - **vcpus** : Needed vCPUs, default 1
-    - **vgpus** : Needed vGPUs, default 0. The service is only placed on nodes that have at least this many GPUs
-    - **vram** : Needed free VRAM in MiB (as reported by `nvidia-smi`), default 0. Total across the requested GPUs, compared against the free VRAM of the node's GPUs (like **memory** against free RAM). If set without **vgpus**, 1 GPU is requested
+    - **vgpus** : Needed vGPUs, default 0. For containers, the number of NVIDIA GPUs; the service is only placed on nodes that have at least this many. For `crosvm` VMs, the number of virtio-gpu devices, which is not checked during scheduling
+    - **vram** : Containers only. Needed free VRAM in MiB (as reported by `nvidia-smi`), default 0. Total across the requested GPUs, compared against the free VRAM of the node's GPUs (like **memory** against free RAM). If set without **vgpus**, 1 GPU is requested. Ignored for other virtualization types
     - **vtpus** : Needed vTPUs, default 0
     - **bandwidth_in** : Minimum bandwidth-ingress needed for application in kbit/s, default 0
     - **bandwith_out** : Minimum bandwidth-egress needed for application in kbit/s, default 0

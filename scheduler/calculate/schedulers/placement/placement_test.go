@@ -172,9 +172,21 @@ func TestMeetsGPURequirements(t *testing.T) {
 	}
 }
 
+func TestMeetsGPURequirements_NonContainerRuntimes(t *testing.T) {
+	gpuLess := BaseResources{AvailableMem: 1000, AvailableCPU: 4}
+	for _, virt := range []string{"crosvm", "unikernel"} {
+		t.Run(virt, func(t *testing.T) {
+			job := BaseResources{Virtualization: []string{virt}, Vgpus: 2, Vram: 8000}
+			if !MeetsGPURequirements(job, gpuLess) {
+				t.Errorf("%s job must not be filtered on NVIDIA GPU capacity", virt)
+			}
+		})
+	}
+}
+
 func TestMeetsGPURequirements_DoesNotMutateCandidate(t *testing.T) {
 	candidate := BaseResources{GpuVramFree: []float64{1000, 6000, 8000}}
-	MeetsGPURequirements(BaseResources{Vgpus: 2, Vram: 1}, candidate)
+	MeetsGPURequirements(BaseResources{Virtualization: []string{"docker"}, Vgpus: 2, Vram: 1}, candidate)
 	want := []float64{1000, 6000, 8000}
 	for i := range want {
 		if candidate.GpuVramFree[i] != want[i] {
@@ -186,7 +198,8 @@ func TestMeetsGPURequirements_DoesNotMutateCandidate(t *testing.T) {
 func TestNoCapacityStatus(t *testing.T) {
 	always := func(bool) bool { return true }
 	never := func(bool) bool { return false }
-	gpuJob := BaseResources{Vgpus: 1}
+	docker := []string{"docker"}
+	gpuJob := BaseResources{Virtualization: docker, Vgpus: 1}
 
 	tests := []struct {
 		name string
@@ -196,8 +209,9 @@ func TestNoCapacityStatus(t *testing.T) {
 	}{
 		{"GPU job, near miss exists", gpuJob, always, NoGpuCapacity},
 		{"GPU job, nothing passes other checks", gpuJob, never, NoActiveClusterWithCapacity},
-		{"VRAM-only job counts as GPU job", BaseResources{Vram: 100}, always, NoGpuCapacity},
-		{"non-GPU job", BaseResources{}, always, NoActiveClusterWithCapacity},
+		{"VRAM-only job counts as GPU job", BaseResources{Virtualization: docker, Vram: 100}, always, NoGpuCapacity},
+		{"non-GPU job", BaseResources{Virtualization: docker}, always, NoActiveClusterWithCapacity},
+		{"crosvm job with vgpus", BaseResources{Virtualization: []string{"crosvm"}, Vgpus: 1}, always, NoActiveClusterWithCapacity},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

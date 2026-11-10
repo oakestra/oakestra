@@ -170,12 +170,16 @@ def generate_db_structure(application, microservice):
     microservice["image"] = microservice["code"]
     microservice["next_instance_progressive_number"] = 0
     microservice["instance_list"] = []
-    # The worker only attaches GPUs when vgpus > 0, so a VRAM requirement alone
-    # must still reserve one GPU.
-    if (microservice.get("vram") or 0) > 0 and not microservice.get("vgpus"):
-        microservice["vgpus"] = 1
     if microservice["virtualization"] == "container":
         microservice["virtualization"] = "docker"
+    # The worker only attaches GPUs when vgpus > 0, so vram alone has to ask for
+    # one. Not for crosvm, where vgpus means virtio-gpu devices.
+    if (
+        microservice["virtualization"] == "docker"
+        and (microservice.get("vram") or 0) > 0
+        and not microservice.get("vgpus")
+    ):
+        microservice["vgpus"] = 1
     addresses = microservice.get("addresses")
     if addresses is not None:
         microservice["RR_ip"] = addresses.get(

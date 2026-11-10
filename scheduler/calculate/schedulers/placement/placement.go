@@ -131,9 +131,17 @@ func MeetsNonGPURequirements(job, candidate BaseResources) bool {
 		candidate.AvailableMem >= job.AvailableMem
 }
 
-// RequiredGPUs returns how many GPUs the job needs. A VRAM request without a
-// GPU count still needs somewhere to put that VRAM, so it implies one GPU.
+// Only containers get physical NVIDIA GPUs, which is what a candidate's vgpus
+// and gpu_vram_free count. crosvm uses vgpus for virtio-gpu devices that run
+// on any host GPU, and unikernels ignore it.
+const gpuRuntime = "docker"
+
+// RequiredGPUs returns how many NVIDIA GPUs the job needs. vram without vgpus
+// implies one GPU. Non-container jobs need none.
 func RequiredGPUs(job BaseResources) int {
+	if len(job.Virtualization) == 0 || job.Virtualization[0] != gpuRuntime {
+		return 0
+	}
 	if job.Vgpus <= 0 && job.Vram > 0 {
 		return 1
 	}

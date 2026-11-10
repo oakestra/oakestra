@@ -31,8 +31,8 @@ def test_schema_rejects_negative_vgpus():
     assert validate_json_v2(_sla_with(vgpus=-1)) is not None
 
 
-def _structure(**resources):
-    service = get_fake_sla_service("s", addresses={})
+def _structure(virt="container", **resources):
+    service = get_fake_sla_service("s", virt=virt, addresses={})
     service.pop("vgpus")
     service.update(resources)
     application = {**get_first_app(get_fake_sla_app("n")), "applicationID": "a"}
@@ -46,6 +46,11 @@ def test_vram_without_vgpus_requests_one_gpu(extra):
 
 def test_explicit_vgpus_kept_with_vram():
     assert _structure(vram=8000, vgpus=3)["vgpus"] == 3
+
+
+@pytest.mark.parametrize("virt, extra", [("crosvm", {}), ("unikernel", {"arch": ["amd64"]})])
+def test_vram_does_not_add_gpu_for_non_containers(virt, extra):
+    assert "vgpus" not in _structure(virt=virt, vram=8000, **extra)
 
 
 def test_no_vram_leaves_vgpus_untouched():
