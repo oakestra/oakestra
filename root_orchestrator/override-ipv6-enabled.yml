@@ -1,5 +1,3 @@
-version: "3.3"
-
 services:
   system_manager:
     networks:
@@ -27,7 +25,7 @@ services:
         ipv4_address: 192.168.128.3
         ipv6_address: 2001:db8:a::3
 
-  redis:
+  root_redis:
     networks:
       root_net:
         ipv4_address: 192.168.128.8
@@ -38,6 +36,30 @@ services:
       root_net:
         ipv4_address: 192.168.128.9
         ipv6_address: 2001:db8:a::9
+
+  prometheus:
+    networks:
+      root_net:
+        ipv4_address: 192.168.128.11
+        ipv6_address: 2001:db8:a::11
+
+  cadvisor:
+    networks:
+      root_net:
+        ipv4_address: 192.168.128.12
+        ipv6_address: 2001:db8:a::12
+
+  loki:
+    networks:
+      root_net:
+        ipv4_address: 192.168.128.13
+        ipv6_address: 2001:db8:a::13
+
+  alloy:
+    networks:
+      root_net:
+        ipv4_address: 192.168.128.14
+        ipv6_address: 2001:db8:a::14
 
   dashboard:
     networks:
@@ -51,7 +73,7 @@ services:
         ipv4_address: 192.168.128.7
         ipv6_address: 2001:db8:a::7
 
-  resource_abstractor:
+  root_resource_abstractor:
     networks:
       root_net:
         ipv4_address: 192.168.128.10
