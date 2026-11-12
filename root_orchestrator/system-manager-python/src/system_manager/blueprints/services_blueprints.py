@@ -116,6 +116,7 @@ class ServiceControllerPost(MethodView):
                     event_name="service.create.request_failed",
                 )
                 abort(400, message="The given SLA was not formatted correctly")
+
             if status != 200:
                 abort(status, message=result["message"])
             return jsonify(result)

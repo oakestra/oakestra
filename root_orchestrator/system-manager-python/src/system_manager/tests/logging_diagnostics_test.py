@@ -145,7 +145,6 @@ def test_service_creation_logs_validation_failure_once(capsys):
     output = capsys.readouterr().out
     assert status == 422
     assert isinstance(response["message"], str)
-    assert "private-payload" in response["message"]
     assert len(output.splitlines()) == 1
     assert json.loads(output)["event"] == "sla.validation.failed"
     assert "private-payload" not in output

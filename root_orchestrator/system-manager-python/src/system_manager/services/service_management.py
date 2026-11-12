@@ -48,8 +48,9 @@ def create_services_of_app(username, data, force=False):
     )
     try:
         parse_sla_json(data)
-    except SLAFormatError as e:
-        return {"message": str(e)}, 422
+    except SLAFormatError as exc:
+        # The validator already emitted the structured validation event.
+        return {"message": str(exc)}, 422
 
     app_id = data.get("applications")[0]["applicationID"]
     last_service_id = ""
