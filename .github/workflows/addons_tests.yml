@@ -1,0 +1,51 @@
+name: Addons Tests
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'addons/**'
+      - '.github/workflows/addons_tests.yml'
+  pull_request:
+    paths:
+      - 'addons/**'
+      - '.github/workflows/addons_tests.yml'
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: addons
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: addons/go.mod
+          cache-dependency-path: addons/go.sum
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...

@@ -26,6 +26,11 @@ services:
   dashboard:
     image: ghcr.io/oakestra/dashboard:latest
     pull_policy: always
+    # Also on the addon UI network, where the addons engine attaches addon UI containers as
+    # addonui-<id>.
+    networks:
+      - default
+      - addon_ui
     ports:
       - '80:80'
     restart: unless-stopped
@@ -458,44 +463,47 @@ services:
     logging: *default-logging
 
 
-  # Addons 
+  # Addons engine: install/update API plus the reconcile loop that runs addon containers.
   addons_manager:
     image: ghcr.io/oakestra/oakestra/addons_manager:latest
     container_name: addons_manager
+    build:
+      context: ../addons/
+      dockerfile: Dockerfile.addons
     labels: *root-log-labels
+    volumes:
+      # The only component that starts addon containers, so the only one with the socket.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Grant signing key and instance id. Losing it means re-approving every addon.
+      - addons_state:/var/lib/oakestra-addons
     environment:
       - ADDONS_MANAGER_PORT=11101
       - ADDONS_ENGINE_MONGO_URL=mongo
       - ADDONS_ENGINE_MONGO_PORT=10007
       - MARKETPLACE_ADDR=http://marketplace_manager:11102
+      - ORCHESTRATION_PLANE=root
+      - JWT_GENERATOR_URL=jwt_generator
+      - JWT_GENERATOR_PORT=10011
+      - ADDONS_STATE_DIR=/var/lib/oakestra-addons
+      # Resource limits for every addon container the engine starts.
+      - ADDON_MEMORY_LIMIT=512m
+      - ADDON_CPU_LIMIT=1
+      - ADDON_PIDS_LIMIT=1024
     ports:
       - 11101:11101
     depends_on:
       - mongo_root
       - marketplace_manager
-    logging: *default-logging
-
-  addons_monitor:
-    image: ghcr.io/oakestra/oakestra/addons_monitor:latest
-    container_name: addons_monitor
-    build: ../addons_engine/addons-monitor/
-    labels: *root-log-labels
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: bash -c 'sleep 10; python addons_monitor.py'
-    environment:
-      - ADDONS_MANAGER_ADDR=http://addons_manager:11101
-      - CONTAINER_POLL_INTERVAL=5
-    depends_on:
-      - addons_manager
+      - jwt_generator
     logging: *default-logging
 
   marketplace_manager:
     image: ghcr.io/oakestra/oakestra/marketplace_manager:latest
     container_name: marketplace_manager
+    build:
+      context: ../addons/
+      dockerfile: Dockerfile.marketplace
     labels: *root-log-labels
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     expose:
       - "11102"
     ports:
@@ -504,33 +512,28 @@ services:
       - ADDON_MARKETPLACE_PORT=11102
       - ADDON_MARKETPLACE_MONGO_URL=mongo
       - ADDON_MARKETPLACE_MONGO_PORT=10007
+      - JWT_GENERATOR_URL=jwt_generator
+      - JWT_GENERATOR_PORT=10011
+      # Empty means the default official index. Set "off" for air-gapped setups.
+      - MARKETPLACE_OFFICIAL_INDEX=${MARKETPLACE_OFFICIAL_INDEX:-}
+      - MARKETPLACE_OFFICIAL_TOKEN=${MARKETPLACE_OFFICIAL_TOKEN:-}
+      - MARKETPLACE_SYNC_INTERVAL=${MARKETPLACE_SYNC_INTERVAL:-}
+      - MARKETPLACE_REGISTRY_ALLOW_PRIVATE=${MARKETPLACE_REGISTRY_ALLOW_PRIVATE:-false}
+    healthcheck:
+      test: ["CMD", "/marketplace", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     depends_on:
       - mongo_root
-    logging: *default-logging
-
-  addons_dashboard:
-    image: ghcr.io/oakestra/oakestra/addons_dashboard:latest
-    container_name: addons_dashboard
-    labels: *root-log-labels
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - DASHBOARD_PORT=11103
-      - MARKETPLACE_URL=${SYSTEM_MANAGER_URL}
-      - RESOURCE_ABSTRACTOR_URL=${SYSTEM_MANAGER_URL}
-      - ADDONS_ENGINE_URL=${SYSTEM_MANAGER_URL}
-    depends_on:
-      - marketplace_manager
-      - addons_monitor
-      - addons_manager
-    ports:
-      - 11103:11103
-    expose:
-      - "11103"
+      - jwt_generator
     logging: *default-logging
 
 volumes:
   mongodb_data:
+    driver: local
+  addons_state:
     driver: local
   mongodb_net_data:
     driver: local
@@ -547,5 +550,9 @@ volumes:
 networks:
   default:
     name: oakestra
+  # The addons engine attaches addon UI containers here. It only creates the network itself
+  # if compose hasn't.
+  addon_ui:
+    name: oakestra_addon_ui
   ip6net:
     enable_ipv6: true
