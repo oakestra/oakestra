@@ -2,7 +2,8 @@
 // community-marketplace CI runs it on every pull request and on every publish.
 //
 //	addonctl validate [--source official|<tap>] <file>...
-//	addonctl build-index --source official --serial N --out index.json [--generated-at RFC3339] <dir>
+//	addonctl build-index --source official --serial N --out index.json [--generated-at RFC3339] [--allow-empty] <dir>
+//	addonctl diff [--source official|<tap>] <base-dir> <head-dir>
 //
 // Catalog files hold one definition each, in YAML (.yaml, .yml) or JSON (.json), without a
 // source field. They are checked as index entries: images must be digest pinned and every
@@ -32,7 +33,8 @@ func main() {
 
 const usage = `usage:
   addonctl validate [--source official|<tap>] <file>...
-  addonctl build-index --source official|<tap> --serial N --out index.json [--generated-at RFC3339] <dir>
+  addonctl build-index --source official|<tap> --serial N --out index.json [--generated-at RFC3339] [--allow-empty] <dir>
+  addonctl diff [--source official|<tap>] <base-dir> <head-dir>
 `
 
 func run(args []string, stdout, stderr io.Writer) int {
@@ -45,6 +47,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runValidate(args[1:], stdout, stderr)
 	case "build-index":
 		return runBuildIndex(args[1:], stdout, stderr)
+	case "diff":
+		return runDiff(args[1:], stdout, stderr)
 	case "-h", "--help", "help":
 		fmt.Fprint(stdout, usage)
 		return 0
@@ -92,6 +96,7 @@ func runBuildIndex(args []string, stdout, stderr io.Writer) int {
 	serialFlag := fs.String("serial", "", "index serial, must grow with every publication (required)")
 	out := fs.String("out", "", "output file (required)")
 	generatedAt := fs.String("generated-at", "", "timestamp to embed (RFC 3339); defaults to SOURCE_DATE_EPOCH, then now")
+	allowEmpty := fs.Bool("allow-empty", false, "publish an index without addons instead of failing")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -120,28 +125,15 @@ func runBuildIndex(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "%v\n", err)
 		return 1
 	}
-	if len(files) == 0 {
-		fmt.Fprintf(stderr, "no definitions found in %s\n", fs.Arg(0))
+	// An empty index replaces the whole catalog on every marketplace, so it has to be asked for
+	// explicitly rather than happen because the wrong directory was passed.
+	if len(files) == 0 && !*allowEmpty {
+		fmt.Fprintf(stderr, "no definitions found in %s (pass --allow-empty to publish an empty index)\n", fs.Arg(0))
 		return 1
 	}
 
-	var addons []definition.Addon
-	failed := false
-	for _, file := range files {
-		a, ok := loadChecked(file, src, stderr)
-		if !ok {
-			failed = true
-			continue
-		}
-		// One file per addon, named after it, keeps reviews and git history per addon.
-		if base := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)); base != a.Name {
-			fmt.Fprintf(stderr, "%s: file name must be %s%s to match the addon name\n", file, a.Name, filepath.Ext(file))
-			failed = true
-			continue
-		}
-		addons = append(addons, *a)
-	}
-	if failed {
+	addons, ok := loadCatalog(files, src, stderr)
+	if !ok {
 		return 1
 	}
 
@@ -173,6 +165,28 @@ func runBuildIndex(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stdout, "wrote %s: %d addons, serial %d\n", *out, len(addons), serial)
 	return 0
+}
+
+// loadCatalog checks every file of a catalog and returns the definitions, or false after
+// printing every problem.
+func loadCatalog(files []string, src definition.Source, stderr io.Writer) ([]definition.Addon, bool) {
+	addons := []definition.Addon{}
+	failed := false
+	for _, file := range files {
+		a, ok := loadChecked(file, src, stderr)
+		if !ok {
+			failed = true
+			continue
+		}
+		// One file per addon, named after it, keeps reviews and git history per addon.
+		if base := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)); base != a.Name {
+			fmt.Fprintf(stderr, "%s: file name must be %s%s to match the addon name\n", file, a.Name, filepath.Ext(file))
+			failed = true
+			continue
+		}
+		addons = append(addons, *a)
+	}
+	return addons, !failed
 }
 
 // loadChecked reads, decodes and checks one catalog file, printing every problem.

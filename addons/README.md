@@ -214,8 +214,10 @@ container. Images whose own labels use one of the reserved prefixes are refused.
 
 The official catalog is built from the `oakestra/community-marketplace` repository. Every addon is
 one file named after it (`node-metrics.yaml`), changes go through pull requests, and CI runs
-`addonctl validate` on them. After a merge, CI builds `index.json` with `addonctl build-index` and
-publishes it to GitHub Pages, where every Oakestra marketplace picks it up on its next sync.
+`addonctl validate` and `addonctl diff` on them. `diff` fails if a definition changed but its
+version didn't go up, or if installed copies couldn't update to it. After a merge, CI builds
+`index.json` with `addonctl build-index` and publishes it to GitHub Pages, where every Oakestra
+marketplace picks it up on its next sync. See the repository's `CONTRIBUTING.md` to add an addon.
 
 ### Your own catalog (tap)
 

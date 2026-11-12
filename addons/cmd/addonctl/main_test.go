@@ -187,7 +187,7 @@ func TestBuildIndexRejects(t *testing.T) {
 			},
 			code: 1,
 		},
-		{name: "empty catalog", files: map[string]string{"addons/.keep": ""}, code: 1},
+		{name: "empty catalog without --allow-empty", files: map[string]string{"addons/.keep": ""}, code: 1},
 		{name: "zero serial", files: map[string]string{"addons/monitoring.yaml": monitoringYAML}, args: []string{"--serial", "0"}, code: 2},
 		{name: "negative serial", files: map[string]string{"addons/monitoring.yaml": monitoringYAML}, args: []string{"--serial", "-1"}, code: 2},
 		{name: "reserved source", files: map[string]string{"addons/monitoring.yaml": monitoringYAML}, args: []string{"--source", "local"}, code: 2},
@@ -205,6 +205,101 @@ func TestBuildIndexRejects(t *testing.T) {
 			}
 			if _, err := os.Stat(out); err == nil {
 				t.Error("index written despite errors")
+			}
+		})
+	}
+}
+
+func TestBuildIndexAllowEmpty(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"addons/.gitkeep": ""})
+	out := filepath.Join(dir, "index.json")
+	code, _, stderr := runCmd("build-index", "--source", "official", "--serial", "1", "--allow-empty", "--out", out, dir)
+	if code != 0 {
+		t.Fatalf("code %d\n%s", code, stderr)
+	}
+	b, _ := os.ReadFile(out)
+	if !bytes.Contains(b, []byte(`"addons": []`)) {
+		t.Errorf("empty catalog not emitted as an empty list:\n%s", b)
+	}
+	if _, err := definition.DecodeIndex(bytes.NewReader(b)); err != nil {
+		t.Errorf("decoding output: %v", err)
+	}
+}
+
+func TestDiff(t *testing.T) {
+	bumped := strings.Replace(monitoringYAML, "version: 1.3.0", "version: 1.4.0", 1)
+	tests := []struct {
+		name       string
+		base, head map[string]string
+		code       int
+		want       []string
+	}{
+		{
+			name: "first catalog",
+			head: map[string]string{"addons/monitoring.yaml": monitoringYAML},
+			want: []string{"| monitoring | added | 1.3.0 | **host_root**; host_paths: `/proc:ro`; host_ports: 9100 |"},
+		},
+		{
+			name: "unchanged",
+			base: map[string]string{"addons/monitoring.yaml": monitoringYAML},
+			head: map[string]string{"addons/monitoring.yaml": monitoringYAML},
+			want: []string{"No addon definitions changed."},
+		},
+		{
+			name: "changed without bump",
+			base: map[string]string{"addons/monitoring.yaml": monitoringYAML},
+			head: map[string]string{"addons/monitoring.yaml": strings.Replace(monitoringYAML, "Node metrics", "Host metrics", 1)},
+			code: 1,
+			want: []string{"version must be higher than 1.3.0"},
+		},
+		{
+			name: "version goes backwards",
+			base: map[string]string{"addons/monitoring.yaml": bumped},
+			head: map[string]string{"addons/monitoring.yaml": monitoringYAML},
+			code: 1,
+			want: []string{"version must be higher than 1.4.0"},
+		},
+		{
+			name: "bumped, permissions grow",
+			base: map[string]string{"addons/monitoring.yaml": monitoringYAML},
+			head: map[string]string{"addons/monitoring.yaml": strings.Replace(bumped, "host_ports: [9100]", "host_ports: [9100, 9200]", 1)},
+			want: []string{"| monitoring | changed, **permissions grow** | 1.3.0 → 1.4.0 |"},
+		},
+		{
+			name: "update mounts below a read-write path",
+			base: map[string]string{"addons/logging.yaml": "name: logging\nversion: 1.0.0\npermissions: {host_paths: [/srv/logs]}\nservices:\n  - service_name: agent\n    image: x/agent@" + digest + "\n    volumes: [/srv/logs:/logs]\n"},
+			head: map[string]string{"addons/logging.yaml": "name: logging\nversion: 1.1.0\npermissions: {host_paths: [/srv/logs/app]}\nservices:\n  - service_name: agent\n    image: x/agent@" + digest + "\n    volumes: [/srv/logs/app:/logs]\n"},
+			code: 1,
+			want: []string{"would refuse this update"},
+		},
+		{
+			name: "removed",
+			base: map[string]string{"addons/monitoring.yaml": monitoringYAML, "addons/logging.json": loggingJSON},
+			head: map[string]string{"addons/logging.json": loggingJSON},
+			want: []string{"| monitoring | removed | 1.3.0 |  |"},
+		},
+		{
+			name: "invalid head",
+			head: map[string]string{"addons/monitoring.yaml": strings.Replace(monitoringYAML, "@"+digest, "", 1)},
+			code: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			base, head := filepath.Join(t.TempDir(), "base"), t.TempDir()
+			if tt.base != nil {
+				writeFiles(t, base, tt.base)
+			}
+			writeFiles(t, head, tt.head)
+			code, stdout, stderr := runCmd("diff", filepath.Join(base, "addons"), filepath.Join(head, "addons"))
+			if code != tt.code {
+				t.Fatalf("code %d, want %d\n%s\n%s", code, tt.code, stdout, stderr)
+			}
+			for _, w := range tt.want {
+				if !strings.Contains(stdout+stderr, w) {
+					t.Errorf("output lacks %q:\n%s\n%s", w, stdout, stderr)
+				}
 			}
 		})
 	}
