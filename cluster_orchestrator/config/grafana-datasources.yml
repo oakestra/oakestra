@@ -6,6 +6,28 @@ datasources:
     access: proxy
     uid: Loki
     url: http://cluster_loki:3101
-    version: 1
+    version: 2
     editable: true
     isDefault: true
+    jsonData:
+      derivedFields:
+        - name: "Search this ID across Cluster logs"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-source_scope=.%2B&var-compose_service=All&var-level_filter=.%2A&var-search=$${__value.raw}&var-logql_pipeline='
+          urlDisplayLabel: "Search this ID across Cluster logs"
+        - name: "Search this ID in Cluster Manager"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-source_scope=.%2B&var-compose_service=cluster_manager&var-level_filter=.%2A&var-search=$${__value.raw}&var-logql_pipeline='
+          urlDisplayLabel: "Search this ID in Cluster Manager"
+        - name: "Search this ID in Cluster Scheduler"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-source_scope=.%2B&var-compose_service=cluster_scheduler&var-level_filter=.%2A&var-search=$${__value.raw}&var-logql_pipeline='
+          urlDisplayLabel: "Search this ID in Cluster Scheduler"
+        - name: "Search this ID in Cluster Resource Abstractor"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-source_scope=.%2B&var-compose_service=cluster_resource_abstractor&var-level_filter=.%2A&var-search=$${__value.raw}&var-logql_pipeline='
+          urlDisplayLabel: "Search this ID in Cluster Resource Abstractor"
+        - name: "Search this ID in Cluster Service Manager"
+          matcherRegex: '\b([a-fA-F0-9]{24})\b'
+          url: '/d/oakestra-logs/oakestra-orchestrator-logs?orgId=1&$${__url_time_range}&var-cluster_id=All&var-source_scope=.%2B&var-compose_service=cluster_service_manager&var-level_filter=.%2A&var-search=$${__value.raw}&var-logql_pipeline='
+          urlDisplayLabel: "Search this ID in Cluster Service Manager"
