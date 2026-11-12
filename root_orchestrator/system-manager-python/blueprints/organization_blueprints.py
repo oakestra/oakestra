@@ -1,11 +1,10 @@
 # ........ Functions for organization management ...............#
 # ......................................................#
-import logging
-
 from flask import request
 from flask.views import MethodView
 from flask_jwt_extended import jwt_required
 from flask_smorest import Blueprint, abort
+from oakestra_logging import get_logger
 from organizations.organization_management import (
     add_organization,
     delete_organization,
@@ -16,7 +15,7 @@ from roles.securityUtils import Role, require_role
 
 from blueprints.schema_wrapper import SchemaWrapper
 
-logger = logging.getLogger("system_manager")
+logger = get_logger(__name__)
 
 
 organizationblp = Blueprint(
@@ -74,9 +73,12 @@ class OrganizationController(MethodView):
     def get(self, *args, **kwargs):
         try:
             return get_all_organizations()
-        except Exception as e:
-            logger.error(e)
-            return abort(404, {"message": e})
+        except Exception as exc:
+            logger.exception(
+                "Failed to retrieve organizations",
+                event_name="organizations.retrieve_failed",
+            )
+            return abort(404, {"message": exc})
 
     @organizationblp.response(
         200, SchemaWrapper(organization_schema), content_type="application/json"
@@ -94,7 +96,11 @@ class OrganizationController(MethodView):
                 "name": new_org.get("name"),
                 "member": new_org.get("member", []),
             }
-            logger.info(f"Organization created with ID: {new_id}")
+            logger.info(
+                "Organization created",
+                event_name="organization.created",
+                organization_id=new_id,
+            )
             return response_org
         except ConnectionError as e:
             abort(404, {"message": e})

@@ -1,10 +1,16 @@
-import logging
-
+from oakestra_logging import get_logger
 from resource_abstractor_client import candidate_operations, job_operations
+
+logger = get_logger(__name__)
 
 
 def find_cluster_of_job(job_id, instance_num=-1):
-    logging.log(logging.INFO, "Find job by Id and return cluster...")
+    logger.debug(
+        "Finding cluster assigned to job",
+        event_name="job.cluster.lookup",
+        job_id=job_id,
+        instance_number=instance_num,
+    )
 
     job_obj = job_operations.get_job_by_id(job_id)
     if not job_obj:
