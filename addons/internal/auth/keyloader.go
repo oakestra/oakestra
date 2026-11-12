@@ -97,6 +97,43 @@ func (l *KeyLoader) RefreshAllowed() bool {
 	return l.Source == KeySourceGenerator
 }
 
+// NewGate returns a gate that re-fetches the key through l only when RefreshAllowed. A key from
+// JWT_PUBLIC_KEY_URL usually crosses hosts over plain HTTP, where a refetch that anyone can
+// trigger with a bad token would let an on-path attacker swap in their own key; it is loaded
+// once and kept until the service restarts.
+func (l *KeyLoader) NewGate(log *slog.Logger) *Gate {
+	if log == nil {
+		log = slog.Default()
+	}
+	if l.Logger == nil {
+		l.Logger = log
+	}
+	if l.Source == KeySourceURL {
+		log.Warn("the JWT public key is fetched from JWT_PUBLIC_KEY_URL without pinning; set JWT_PUBLIC_KEY to the root's public key instead, the URL is only trusted on first fetch and key rotation needs a restart",
+			"url", l.URL)
+	}
+	if !l.RefreshAllowed() {
+		return NewGate(nil, log)
+	}
+	return NewGate(l.Fetch, log)
+}
+
+// StartGate is NewGate plus a background Load. The key may arrive after the service is up
+// (jwt_generator can start later), and until it does the gated endpoints answer 503.
+func (l *KeyLoader) StartGate(ctx context.Context, log *slog.Logger) *Gate {
+	gate := l.NewGate(log)
+	go func() {
+		key, err := l.Load(ctx)
+		if err != nil {
+			// Shutdown, or an invalid JWT_PUBLIC_KEY, which Load already logged.
+			return
+		}
+		gate.SetKey(key)
+		gate.log.Info("JWT public key loaded")
+	}()
+	return gate
+}
+
 // Load fetches the key, retrying until it succeeds or ctx is done. Services call it at startup;
 // jwt_generator may still be starting, which is why failures are retried rather than fatal.
 func (l *KeyLoader) Load(ctx context.Context) (*rsa.PublicKey, error) {

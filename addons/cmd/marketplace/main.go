@@ -102,19 +102,8 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
-	keys := auth.KeyLoaderFromEnv()
-	keys.Logger = log
-	gate := api.NewAdminGate(keys.Fetch, log)
-	go func() {
-		key, err := keys.Load(ctx)
-		if err != nil {
-			// Shutdown, or an invalid JWT_PUBLIC_KEY, which Load already logged. Admin
-			// endpoints keep answering 503.
-			return
-		}
-		gate.SetKey(key)
-		log.Info("loaded the JWT public key, admin endpoints are available")
-	}()
+	// Until the key is loaded, admin endpoints answer 503.
+	gate := auth.KeyLoaderFromEnv().StartGate(ctx, log)
 
 	srv := &http.Server{
 		Addr:    net.JoinHostPort("", strconv.Itoa(cfg.Port)),

@@ -7,6 +7,8 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -72,6 +75,14 @@ func newTestVerifier() *Verifier {
 	v := NewVerifier(&testKey.PublicKey)
 	v.now = func() time.Time { return testNow }
 	return v
+}
+
+// newTestGate returns a loaded gate whose verifier runs at testNow.
+func newTestGate() *Gate {
+	g := NewGate(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	g.verifier.now = func() time.Time { return testNow }
+	g.SetKey(&testKey.PublicKey)
+	return g
 }
 
 func TestMiddleware(t *testing.T) {
@@ -138,36 +149,26 @@ func TestMiddleware(t *testing.T) {
 		{"signed by another key", "Bearer " + otherSigner, 401, 401},
 	}
 
-	v := newTestVerifier()
-	var seen atomic.Pointer[Claims]
-	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, found := ClaimsFromContext(r.Context())
-		if !found {
-			t.Error("claims missing from context")
-		}
-		seen.Store(c)
-		w.WriteHeader(http.StatusOK)
-	})
+	gate := newTestGate()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, mw := range []struct {
 				name string
-				h    http.Handler
+				h    gin.HandlerFunc
 				want int
 			}{
-				{"RequireAdmin", v.RequireAdmin(ok), tt.adminCode},
-				{"RequireUser", v.RequireUser(ok), tt.userCode},
+				{"RequireAdmin", gate.RequireAdmin(), tt.adminCode},
+				{"RequireUser", gate.RequireUser(), tt.userCode},
 			} {
-				req := httptest.NewRequest(http.MethodPost, "/api/v1/addons", nil)
-				if tt.header != "" {
-					req.Header.Set("Authorization", tt.header)
+				rec := doGet(ginEngine(mw.h, nil), tt.header)
+				want := mw.want
+				if want == http.StatusOK {
+					want = http.StatusNoContent
 				}
-				rec := httptest.NewRecorder()
-				mw.h.ServeHTTP(rec, req)
-				if rec.Code != mw.want {
-					t.Errorf("%s: status %d, want %d (%s)", mw.name, rec.Code, mw.want, rec.Body)
+				if rec.Code != want {
+					t.Errorf("%s: status %d, want %d (%s)", mw.name, rec.Code, want, rec.Body)
 				}
-				if rec.Code != http.StatusOK {
+				if rec.Code != http.StatusNoContent {
 					var body map[string]string
 					if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body["message"] == "" {
 						t.Errorf("%s: error body %q is not {\"message\": ...}", mw.name, rec.Body)
@@ -180,10 +181,8 @@ func TestMiddleware(t *testing.T) {
 		})
 	}
 
-	seen.Store(nil)
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Authorization", "Bearer "+admin)
-	v.RequireAdmin(ok).ServeHTTP(httptest.NewRecorder(), req)
+	var seen atomic.Pointer[Claims]
+	doGet(ginEngine(gate.RequireAdmin(), &seen), "Bearer "+admin)
 	c := seen.Load()
 	if c == nil || c.Subject != "alice" || c.User != "alice" || c.Organization != "64f0c0ffee" || !c.IsAdmin() {
 		t.Errorf("claims not passed through: %+v", c)

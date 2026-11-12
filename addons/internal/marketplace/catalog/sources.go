@@ -70,7 +70,7 @@ func (s *Service) view(src store.Source, snap *store.Snapshot) SourceView {
 		v.Serial = snap.Serial
 		v.ETag = snap.ETag
 		v.GeneratedAt = optTime(snap.GeneratedAt)
-		v.AddonCount = len(snap.Addons)
+		v.AddonCount = snap.AddonCount
 	}
 	return v
 }
@@ -81,7 +81,7 @@ func (s *Service) Sources(ctx context.Context) ([]SourceView, error) {
 	if err != nil {
 		return nil, err
 	}
-	snaps, err := s.cfg.Store.ListSnapshots(ctx)
+	snaps, err := s.cfg.Store.ListSnapshotHeaders(ctx)
 	if err != nil {
 		return nil, err
 	}

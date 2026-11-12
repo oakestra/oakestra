@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"path"
 	"slices"
 	"strings"
@@ -207,7 +208,7 @@ func analyze(a *Addon) analysis {
 			}
 			needPath(idx(sp+".volumes", j), m.HostPath, m.ReadOnly)
 		}
-		for _, cp := range sortedKeys(s.Ports) {
+		for _, cp := range slices.Sorted(maps.Keys(s.Ports)) {
 			b, err := ParsePort(cp, s.Ports[cp])
 			if err != nil {
 				continue
@@ -225,7 +226,7 @@ func analyze(a *Addon) analysis {
 				forbid(np, "joining another container's network namespace is not allowed")
 			}
 		}
-		for _, k := range sortedKeys(s.Labels) {
+		for _, k := range slices.Sorted(maps.Keys(s.Labels)) {
 			if IsReservedLabel(k) {
 				forbid(key(sp+".labels", k), "label %q is in a namespace reserved for the runtime (%s)", k, strings.Join(reservedLabelPrefixes, ", "))
 			}
@@ -270,7 +271,7 @@ func analyzeVolume(vp string, v Volume, forbid func(string, string, ...any), nee
 		return
 	}
 	op := vp + ".driver_opts"
-	for _, k := range sortedKeys(v.DriverOpts) {
+	for _, k := range slices.Sorted(maps.Keys(v.DriverOpts)) {
 		if k != "type" && k != "o" && k != "device" {
 			forbid(key(op, k), "driver option %q is not allowed", k)
 			return
@@ -386,7 +387,7 @@ func CheckPolicy(a *Addon) []Violation {
 			undeclared(f, "the %q network gives access to the core services and needs permissions.core_network", CoreNetwork)
 		}
 	}
-	ports := sortedKeys(an.hostPorts)
+	ports := slices.Sorted(maps.Keys(an.hostPorts))
 	for _, port := range ports {
 		if !slices.Contains(a.Permissions.HostPorts, port) {
 			for _, f := range an.hostPorts[port] {
@@ -425,7 +426,7 @@ func (p Permissions) Canonical() Permissions {
 		rw[g.Path] = rw[g.Path] || !g.ReadOnly
 	}
 	out.HostPaths = make([]string, 0, len(rw)+len(bad))
-	for _, hp := range sortedKeys(rw) {
+	for _, hp := range slices.Sorted(maps.Keys(rw)) {
 		out.HostPaths = append(out.HostPaths, HostPathGrant{Path: hp, ReadOnly: !rw[hp]}.String())
 	}
 	out.HostPaths = append(out.HostPaths, bad...)
@@ -484,15 +485,6 @@ func (p Permissions) Grows(old Permissions) bool {
 	return false
 }
 
-func sortedKeys[K ~string | ~int, V any](m map[K]V) []K {
-	keys := make([]K, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	return keys
-}
-
 // HostBind is one host path an addon bind mounts, either from a service volume or from a
 // volume's bind driver_opts. ReadOnly is false if any mount of the path is read-write.
 type HostBind struct {
@@ -511,7 +503,7 @@ func HostBindSources(a *Addon) []HostBind {
 		rw[n.path] = rw[n.path] || !n.readOnly
 	}
 	out := make([]HostBind, 0, len(rw))
-	for _, p := range sortedKeys(rw) {
+	for _, p := range slices.Sorted(maps.Keys(rw)) {
 		out = append(out, HostBind{Path: p, ReadOnly: !rw[p]})
 	}
 	return out

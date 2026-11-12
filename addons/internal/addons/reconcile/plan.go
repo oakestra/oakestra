@@ -10,7 +10,6 @@ import (
 	"github.com/oakestra/oakestra/addons/internal/addons"
 	"github.com/oakestra/oakestra/addons/internal/addons/grant"
 	"github.com/oakestra/oakestra/addons/internal/addons/runtime"
-	"github.com/oakestra/oakestra/addons/internal/addons/store"
 	"github.com/oakestra/oakestra/addons/internal/definition"
 )
 
@@ -51,7 +50,7 @@ func (r *Reconciler) volumeName(id, volume string) string {
 // against the stored snapshot. The record lives in a database anyone with Mongo access can
 // edit, so nothing about it is trusted until it passes here.
 func (r *Reconciler) verify(a addons.Installed) (definition.Addon, error) {
-	def := store.CloneDefinition(a.Definition)
+	def := a.Definition.Clone()
 	// First, so a forged record can't even make the loop pull an image or create a network.
 	// Re-running the policy below isn't enough on its own: whoever rewrites the snapshot can
 	// rewrite the grant to match.

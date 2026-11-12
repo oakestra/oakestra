@@ -194,8 +194,11 @@ func (m *Mongo) GetSnapshot(ctx context.Context, source string) (*Snapshot, erro
 	return d.toSnapshot()
 }
 
-func (m *Mongo) ListSnapshots(ctx context.Context) ([]Snapshot, error) {
-	cur, err := m.catalog.Find(ctx, bson.D{}, options.Find().SetSort(bson.D{{Key: "_id", Value: 1}}))
+func (m *Mongo) ListSnapshotHeaders(ctx context.Context) ([]Snapshot, error) {
+	opts := options.Find().
+		SetSort(bson.D{{Key: "_id", Value: 1}}).
+		SetProjection(bson.D{{Key: "addons_json", Value: 0}})
+	cur, err := m.catalog.Find(ctx, bson.D{}, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -203,13 +206,9 @@ func (m *Mongo) ListSnapshots(ctx context.Context) ([]Snapshot, error) {
 	if err := cur.All(ctx, &docs); err != nil {
 		return nil, err
 	}
-	out := make([]Snapshot, 0, len(docs))
-	for i := range docs {
-		s, err := docs[i].toSnapshot()
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, *s)
+	out := make([]Snapshot, len(docs))
+	for i, d := range docs {
+		out[i] = d.header()
 	}
 	return out, nil
 }
@@ -252,13 +251,19 @@ func (d *snapshotDoc) toSnapshot() (*Snapshot, error) {
 	if addons == nil {
 		addons = []definition.Addon{}
 	}
-	return &Snapshot{
+	s := d.header()
+	s.AddonCount, s.Addons = len(addons), addons
+	return &s, nil
+}
+
+func (d *snapshotDoc) header() Snapshot {
+	return Snapshot{
 		Source:      d.ID,
 		Serial:      uint64(d.Serial),
 		ContentHash: d.ContentHash,
 		ETag:        d.ETag,
 		GeneratedAt: d.GeneratedAt,
 		UpdatedAt:   d.UpdatedAt,
-		Addons:      addons,
-	}, nil
+		AddonCount:  d.AddonCount,
+	}
 }

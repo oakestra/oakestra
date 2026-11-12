@@ -191,7 +191,8 @@ func (s *Service) officialURLChanged(ctx context.Context, oldURL string) error {
 	return s.cfg.Store.PutSnapshot(ctx, snap)
 }
 
-// target is what a sync needs to know about a source.
+// target is what a sync needs to know about a source. Init keeps the official source's URL in
+// line with the environment, so src.URL is current for every kind.
 type target struct {
 	src   *store.Source
 	url   string
@@ -213,7 +214,7 @@ func (s *Service) target(ctx context.Context, name string) (*target, error) {
 	switch src.Kind {
 	case definition.SourceOfficial:
 		return &target{
-			src: src, url: s.cfg.OfficialURL, token: s.cfg.OfficialToken,
+			src: src, url: src.URL, token: s.cfg.OfficialToken,
 			allowInsecure: true, allowPrivate: true, allowFile: true,
 		}, nil
 	case definition.SourceTap:
@@ -352,9 +353,6 @@ func (s *Service) fail(ctx context.Context, src *store.Source, cause error) erro
 // list is public and a future error path that does must not leak a query-string secret.
 func (s *Service) scrubURL(src *store.Source, msg string) string {
 	raw := src.URL
-	if src.Kind == definition.SourceOfficial {
-		raw = s.cfg.OfficialURL
-	}
 	u, err := url.Parse(raw)
 	if raw == "" || err != nil || u.RawQuery == "" {
 		return msg
@@ -388,7 +386,8 @@ func (s *Service) SyncAll(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		if src.Kind == definition.SourceLocal || (src.Kind == definition.SourceOfficial && s.cfg.OfficialURL == "") {
+		// The local source has no URL, and neither has the official one when it is turned off.
+		if src.URL == "" {
 			continue
 		}
 		// Errors are already recorded and logged by Sync.

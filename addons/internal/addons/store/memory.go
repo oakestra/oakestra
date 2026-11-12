@@ -101,7 +101,7 @@ func (m *Memory) Delete(_ context.Context, id string) error {
 // clone deep copies the parts of a record that hold slices and maps, so callers and the store
 // can't mutate each other's data.
 func clone(a addons.Installed) addons.Installed {
-	a.Definition = CloneDefinition(a.Definition)
+	a.Definition = a.Definition.Clone()
 	a.Granted.HostPaths = slices.Clone(a.Granted.HostPaths)
 	a.Granted.HostPorts = slices.Clone(a.Granted.HostPorts)
 	a.StatusDetails.FailedServices = slices.Clone(a.StatusDetails.FailedServices)

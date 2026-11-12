@@ -2,7 +2,9 @@ package definition
 
 import (
 	"fmt"
+	"maps"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -257,7 +259,7 @@ func validateService(s *Service, mode Mode, volumes, networks map[string]bool, h
 		targets[m.Target] = true
 	}
 
-	for _, cp := range sortedKeys(s.Ports) {
+	for _, cp := range slices.Sorted(maps.Keys(s.Ports)) {
 		pp := key(sp+".ports", cp)
 		b, err := ParsePort(cp, s.Ports[cp])
 		if err != nil {
@@ -272,12 +274,12 @@ func validateService(s *Service, mode Mode, volumes, networks map[string]bool, h
 		}
 	}
 
-	for _, k := range sortedKeys(s.Environment) {
+	for _, k := range slices.Sorted(maps.Keys(s.Environment)) {
 		if k == "" || strings.ContainsAny(k, "=\x00") {
 			errs = errs.add(key(sp+".environment", k), "is not a valid environment variable name")
 		}
 	}
-	for _, k := range sortedKeys(s.Labels) {
+	for _, k := range slices.Sorted(maps.Keys(s.Labels)) {
 		if k == "" {
 			errs = errs.add(sp+".labels", "label keys must not be empty")
 		}

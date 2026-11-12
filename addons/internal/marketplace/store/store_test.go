@@ -100,9 +100,9 @@ func testStore(t *testing.T, s store.Store) {
 		gotSnap.Addons[0].Services[0].Labels["com.example.team"] != "x" || gotSnap.Addons[0].Source != a.Source {
 		t.Errorf("snapshot round trip: %+v", gotSnap)
 	}
-	snaps, err := s.ListSnapshots(ctx)
-	if err != nil || len(snaps) != 1 {
-		t.Errorf("list snapshots: %d %v", len(snaps), err)
+	snaps, err := s.ListSnapshotHeaders(ctx)
+	if err != nil || len(snaps) != 1 || snaps[0].AddonCount != 1 || snaps[0].Addons != nil || snaps[0].Serial != 7 {
+		t.Errorf("list snapshot headers: %+v %v", snaps, err)
 	}
 
 	if err := s.DeleteSource(ctx, "mytap"); err != nil {

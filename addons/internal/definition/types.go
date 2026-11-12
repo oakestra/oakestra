@@ -1,5 +1,7 @@
 package definition
 
+import "encoding/json"
+
 // SourceKind says where a definition comes from.
 type SourceKind string
 
@@ -152,6 +154,22 @@ func (a *Addon) Normalize() {
 			s.Labels = map[string]string{}
 		}
 	}
+}
+
+// Clone returns a normalized deep copy. Definitions hold maps and slices, and a shallow copy
+// would let a caller mutate what a store holds.
+func (a *Addon) Clone() Addon {
+	b, err := json.Marshal(a)
+	if err != nil {
+		// Definitions only hold strings, numbers, bools, slices and maps of those.
+		panic(err)
+	}
+	var out Addon
+	if err := json.Unmarshal(b, &out); err != nil {
+		panic(err)
+	}
+	out.Normalize()
+	return out
 }
 
 // QualifiedName returns the user-facing name, see QualifiedName.

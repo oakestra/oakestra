@@ -94,15 +94,17 @@ func (m *Memory) GetSnapshot(_ context.Context, source string) (*Snapshot, error
 		return nil, ErrNotFound
 	}
 	s.Addons = cloneAddons(s.Addons)
+	s.AddonCount = len(s.Addons)
 	return &s, nil
 }
 
-func (m *Memory) ListSnapshots(_ context.Context) ([]Snapshot, error) {
+func (m *Memory) ListSnapshotHeaders(_ context.Context) ([]Snapshot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make([]Snapshot, 0, len(m.snapshots))
 	for _, s := range m.snapshots {
-		s.Addons = cloneAddons(s.Addons)
+		s.AddonCount = len(s.Addons)
+		s.Addons = nil
 		out = append(out, s)
 	}
 	slices.SortFunc(out, func(a, b Snapshot) int { return strings.Compare(a.Source, b.Source) })

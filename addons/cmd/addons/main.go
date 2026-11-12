@@ -70,18 +70,8 @@ func run() error {
 	defer docker.Close()
 	docker.Limits = cfg.Limits
 
-	// The key loads in the background: jwt_generator may start after us, and the reconcile
-	// loop doesn't need it. Until it arrives, authenticated endpoints answer 503.
-	loader := auth.KeyLoaderFromEnv()
-	gate := newGate(loader, logger)
-	go func() {
-		key, err := loader.Load(ctx)
-		if err != nil {
-			return
-		}
-		gate.SetKey(key)
-		logger.Info("JWT public key loaded")
-	}()
+	// The reconcile loop doesn't need the key, so it loads in the background.
+	gate := auth.KeyLoaderFromEnv().StartGate(ctx, logger)
 
 	market := marketplaceclient.New(cfg.MarketplaceAddr)
 	go (&reconcile.Reconciler{
@@ -122,21 +112,6 @@ func run() error {
 		return err
 	}
 	return nil
-}
-
-// newGate builds the auth gate. Only a key from jwt_generator is re-fetched when a token fails
-// to verify. A key from JWT_PUBLIC_KEY_URL usually crosses hosts over plain HTTP, where a
-// refetch that anyone can trigger with a bad token would let an on-path attacker swap in their
-// own key; it is loaded once and kept until the engine restarts.
-func newGate(loader *auth.KeyLoader, logger *slog.Logger) *auth.Gate {
-	if loader.Source == auth.KeySourceURL {
-		logger.Warn("the JWT public key is fetched from JWT_PUBLIC_KEY_URL without pinning; set JWT_PUBLIC_KEY to the root's public key instead, the URL is only trusted on first fetch and key rotation needs a restart",
-			"url", loader.URL)
-	}
-	if !loader.RefreshAllowed() {
-		return auth.NewGate(nil, logger)
-	}
-	return auth.NewGate(loader.Fetch, logger)
 }
 
 func retryUntil(ctx context.Context, logger *slog.Logger, what string, fn func(context.Context) error) {

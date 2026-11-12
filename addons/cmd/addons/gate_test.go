@@ -78,7 +78,7 @@ func signed(t *testing.T, k *rsa.PrivateKey) string {
 func setup(t *testing.T, logger *slog.Logger) (*auth.Gate, http.Handler) {
 	t.Helper()
 	loader := auth.KeyLoaderFromEnv()
-	gate := newGate(loader, logger)
+	gate := loader.NewGate(logger)
 	key, err := loader.Load(context.Background())
 	if err != nil {
 		t.Fatal(err)

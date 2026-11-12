@@ -128,16 +128,7 @@ func Encode(a addons.Installed, plane string) []byte {
 // keys sorted, so equal definitions give equal bytes whether they came from the marketplace,
 // the memory store or a BSON round trip through Mongo.
 func CanonicalDefinition(d definition.Addon) []byte {
-	raw, err := json.Marshal(d)
-	if err != nil {
-		// Definitions only hold strings, numbers, bools, slices and maps of those.
-		panic(err)
-	}
-	var c definition.Addon
-	if err := json.Unmarshal(raw, &c); err != nil {
-		panic(err)
-	}
-	c.Normalize()
+	c := d.Clone()
 	c.Permissions = c.Permissions.Canonical()
 	out, err := json.Marshal(c)
 	if err != nil {

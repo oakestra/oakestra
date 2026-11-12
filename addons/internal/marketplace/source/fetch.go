@@ -198,9 +198,9 @@ func (f *Fetcher) Fetch(ctx context.Context, req Request) (*Result, error) {
 	if resp.ContentLength > definition.MaxIndexSize {
 		return nil, fmt.Errorf("index is %d bytes, the limit is %d", resp.ContentLength, definition.MaxIndexSize)
 	}
-	idx, err := definition.DecodeIndex(io.LimitReader(resp.Body, definition.MaxIndexSize+1))
+	idx, err := Decode(resp.Body)
 	if err != nil {
-		return nil, describeDecodeError(err)
+		return nil, err
 	}
 	return &Result{Index: idx, ETag: resp.Header.Get("ETag")}, nil
 }
@@ -211,9 +211,9 @@ func fetchFile(path string) (*Result, error) {
 		return nil, fmt.Errorf("opening index file: %w", err)
 	}
 	defer f.Close()
-	idx, err := definition.DecodeIndex(io.LimitReader(f, definition.MaxIndexSize+1))
+	idx, err := Decode(f)
 	if err != nil {
-		return nil, describeDecodeError(err)
+		return nil, err
 	}
 	return &Result{Index: idx}, nil
 }

@@ -28,7 +28,7 @@ func TestKeyRefreshAfterRotation(t *testing.T) {
 		t.Fatal(err)
 	}
 	var fetches atomic.Int32
-	gate := NewAdminGate(func(context.Context) (*rsa.PublicKey, error) {
+	gate := auth.NewGate(func(context.Context) (*rsa.PublicKey, error) {
 		fetches.Add(1)
 		return &newKey.PublicKey, nil
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -62,7 +62,7 @@ func TestKeyRefreshAfterRotation(t *testing.T) {
 	if code := call(tok); code != http.StatusUnauthorized || fetches.Load() != 0 {
 		t.Fatalf("right after SetKey: code %d, fetches %d", code, fetches.Load())
 	}
-	clock = clock.Add(DefaultKeyRefreshInterval)
+	clock = clock.Add(auth.DefaultKeyRefreshInterval)
 	if code := call(tok); code != http.StatusOK || fetches.Load() != 1 {
 		t.Fatalf("after rotation: code %d, fetches %d", code, fetches.Load())
 	}
@@ -73,7 +73,7 @@ func TestKeyRefreshAfterRotation(t *testing.T) {
 	if fetches.Load() != 1 {
 		t.Errorf("refetched %d times within the interval", fetches.Load())
 	}
-	clock = clock.Add(DefaultKeyRefreshInterval)
+	clock = clock.Add(auth.DefaultKeyRefreshInterval)
 	call("garbage")
 	if fetches.Load() != 2 {
 		t.Errorf("no refetch after the interval: %d", fetches.Load())
@@ -83,7 +83,7 @@ func TestKeyRefreshAfterRotation(t *testing.T) {
 func TestPublicKeyEndpoint(t *testing.T) {
 	first, _ := rsa.GenerateKey(rand.Reader, 2048)
 	second, _ := rsa.GenerateKey(rand.Reader, 2048)
-	gate := NewAdminGate(func(context.Context) (*rsa.PublicKey, error) { return &second.PublicKey, nil },
+	gate := auth.NewGate(func(context.Context) (*rsa.PublicKey, error) { return &second.PublicKey, nil },
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 	clock := time.Now()
 	gate.Now = func() time.Time { return clock }
@@ -115,7 +115,7 @@ func TestPublicKeyEndpoint(t *testing.T) {
 	}
 
 	// A failed verification after the interval re-fetches; the endpoint follows.
-	clock = clock.Add(DefaultKeyRefreshInterval)
+	clock = clock.Add(auth.DefaultKeyRefreshInterval)
 	req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/marketplace/sources/x", nil)
 	req.Header.Set("Authorization", "Bearer garbage")
 	if resp, err := http.DefaultClient.Do(req); err == nil {

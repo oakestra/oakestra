@@ -7,18 +7,20 @@ import (
 	"encoding/pem"
 	"errors"
 	"log/slog"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/oakestra/oakestra/addons/internal/httpx"
 )
 
 // ginClaimsKey is the gin context key the Gin middleware stores the claims under.
 const ginClaimsKey = "oakestra.auth.claims"
 
-// GinClaims returns the claims the Gin middleware stored. ClaimsFromContext(c.Request.Context())
-// works as well, which is what code that only sees a context.Context should use.
+// GinClaims returns the claims the gate's middleware stored.
 func GinClaims(c *gin.Context) (*Claims, bool) {
 	v, ok := c.Get(ginClaimsKey)
 	if !ok {
@@ -26,50 +28,6 @@ func GinClaims(c *gin.Context) (*Claims, bool) {
 	}
 	claims, ok := v.(*Claims)
 	return claims, ok
-}
-
-// GinRequireUser is RequireUser as Gin middleware: same statuses, JSON bodies and
-// WWW-Authenticate header.
-func (v *Verifier) GinRequireUser() gin.HandlerFunc {
-	return v.ginRequire(nil)
-}
-
-// GinRequireAdmin is RequireAdmin as Gin middleware.
-func (v *Verifier) GinRequireAdmin() gin.HandlerFunc {
-	return v.ginRequire(func(c *Claims) bool { return c.IsAdmin() })
-}
-
-func (v *Verifier) ginRequire(allowed func(*Claims) bool) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		raw, ok := bearerToken(c.Request)
-		if !ok {
-			unauthorized(c.Writer, "Missing authentication token")
-			c.Abort()
-			return
-		}
-		claims, err := v.Verify(raw)
-		switch {
-		case errors.Is(err, ErrNotAccess):
-			unauthorized(c.Writer, "Only access token allowed")
-			c.Abort()
-			return
-		case err != nil:
-			// The parser's error text can echo token details, so keep the response generic.
-			unauthorized(c.Writer, "Invalid authentication token")
-			c.Abort()
-			return
-		}
-		if allowed != nil && !allowed(claims) {
-			writeError(c.Writer, 403, "You have not enough permissions!")
-			c.Abort()
-			return
-		}
-		c.Set(ginClaimsKey, claims)
-		// Handlers and shared code read the claims from the request context, so both
-		// access paths stay valid.
-		c.Request = c.Request.WithContext(WithClaims(c.Request.Context(), claims))
-		c.Next()
-	}
 }
 
 // DefaultKeyRefreshInterval limits how often a failed verification may re-fetch the key.
@@ -146,42 +104,68 @@ func (g *Gate) PublicKeyPEM() (string, bool) {
 // Ready reports whether a key has been loaded.
 func (g *Gate) Ready() bool { return g.loaded.Load() }
 
-// RequireUser is Verifier.GinRequireUser behind the readiness check and key refresh.
+// RequireUser rejects requests without a valid access token with 401 and stores the claims
+// for GinClaims.
 func (g *Gate) RequireUser() gin.HandlerFunc {
-	return g.gated(g.verifier.GinRequireUser())
+	return g.require(nil)
 }
 
-// RequireAdmin is Verifier.GinRequireAdmin behind the readiness check and key refresh.
+// RequireAdmin is RequireUser plus a 403 for tokens without AdminRole.
 func (g *Gate) RequireAdmin() gin.HandlerFunc {
-	return g.gated(g.verifier.GinRequireAdmin())
+	return g.require(func(c *Claims) bool { return c.IsAdmin() })
 }
 
-func (g *Gate) gated(inner gin.HandlerFunc) gin.HandlerFunc {
+func (g *Gate) require(allowed func(*Claims) bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !g.loaded.Load() {
 			c.Header("Retry-After", "5")
-			writeError(c.Writer, 503, "authentication is not ready yet, the JWT public key hasn't been loaded")
+			httpx.WriteError(c.Writer, http.StatusServiceUnavailable, "authentication is not ready yet, the JWT public key hasn't been loaded")
 			c.Abort()
 			return
 		}
-		if raw, ok := bearerToken(c.Request); ok {
-			if _, err := g.verifier.Verify(raw); errors.Is(err, ErrInvalidToken) {
-				g.maybeRefresh(c.Request.Context())
-			}
+		raw, ok := bearerToken(c.Request)
+		if !ok {
+			unauthorized(c.Writer, "Missing authentication token")
+			c.Abort()
+			return
 		}
-		inner(c)
+		claims, err := g.verifier.Verify(raw)
+		if errors.Is(err, ErrInvalidToken) && g.maybeRefresh(c.Request.Context()) {
+			claims, err = g.verifier.Verify(raw)
+		}
+		switch {
+		case errors.Is(err, ErrNotAccess):
+			unauthorized(c.Writer, "Only access token allowed")
+			c.Abort()
+			return
+		case err != nil:
+			// The parser's error text can echo token details, so keep the response generic.
+			unauthorized(c.Writer, "Invalid authentication token")
+			c.Abort()
+			return
+		}
+		if allowed != nil && !allowed(claims) {
+			// Same message as system_manager's not_authorized.
+			httpx.WriteError(c.Writer, http.StatusForbidden, "You have not enough permissions!")
+			c.Abort()
+			return
+		}
+		c.Set(ginClaimsKey, claims)
+		c.Next()
 	}
 }
 
-func (g *Gate) maybeRefresh(ctx context.Context) {
+// maybeRefresh re-fetches the key unless that happened within the interval, and reports
+// whether a new key was installed.
+func (g *Gate) maybeRefresh(ctx context.Context) bool {
 	if g.fetch == nil {
-		return
+		return false
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	now := g.Now()
 	if now.Sub(g.lastRefresh) < g.Interval {
-		return
+		return false
 	}
 	g.lastRefresh = now
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -189,9 +173,10 @@ func (g *Gate) maybeRefresh(ctx context.Context) {
 	key, err := g.fetch(ctx)
 	if err != nil {
 		g.log.Warn("re-fetching the JWT public key failed", "error", err)
-		return
+		return false
 	}
 	g.verifier.SetKey(key)
 	g.key.Store(key)
 	g.log.Info("re-fetched the JWT public key after a failed verification")
+	return true
 }

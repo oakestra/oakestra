@@ -10,7 +10,6 @@
 package auth
 
 import (
-	"context"
 	"crypto/rsa"
 	"errors"
 	"fmt"
@@ -128,18 +127,4 @@ func truthy(v any) bool {
 	default:
 		return true
 	}
-}
-
-type claimsKey struct{}
-
-// WithClaims returns a context carrying the claims. The middleware does this; it is exported
-// so handlers can be tested without minting tokens.
-func WithClaims(ctx context.Context, c *Claims) context.Context {
-	return context.WithValue(ctx, claimsKey{}, c)
-}
-
-// ClaimsFromContext returns the claims the middleware stored, if any.
-func ClaimsFromContext(ctx context.Context) (*Claims, bool) {
-	c, ok := ctx.Value(claimsKey{}).(*Claims)
-	return c, ok
 }

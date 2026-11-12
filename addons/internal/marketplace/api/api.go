@@ -22,14 +22,12 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
-	"os"
-	"slices"
-	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/oakestra/oakestra/addons/internal/auth"
 	"github.com/oakestra/oakestra/addons/internal/definition"
+	"github.com/oakestra/oakestra/addons/internal/httpx"
 	"github.com/oakestra/oakestra/addons/internal/marketplace/catalog"
 )
 
@@ -43,7 +41,7 @@ const (
 // Config wires the handler.
 type Config struct {
 	Catalog *catalog.Service
-	Gate    *AdminGate
+	Gate    *auth.Gate
 	// CORSOrigin enables CORS for exactly this origin. Empty sends no CORS headers; the
 	// dashboard reaches the marketplace through its own nginx proxy, which needs none.
 	CORSOrigin string
@@ -67,69 +65,33 @@ func New(cfg Config) http.Handler {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
-	if os.Getenv(gin.EnvGinMode) == "" {
-		gin.SetMode(gin.ReleaseMode)
-	}
 	h := &handler{cat: cfg.Catalog, log: cfg.Logger, listSem: make(chan struct{}, maxConcurrentLists)}
 	admin := cfg.Gate.RequireAdmin()
 
-	r := gin.New()
-	// Redirects turn a POST into a GET on most clients and drop the body, so a missing or
-	// extra slash must be a plain 404 (or an explicit route below) rather than a 301/307.
-	r.RedirectTrailingSlash = false
-	r.RedirectFixedPath = false
-	// Without this, wrong methods would get the 404 handler instead of 405.
-	r.HandleMethodNotAllowed = true
-	// Match on the escaped path, so an encoded slash stays inside its segment instead of
-	// splitting it in two.
-	r.UseRawPath = true
-	r.UnescapePathValues = true
-
-	routes := &routeTable{}
-	r.Use(recoverPanics(cfg.Logger), logRequests(cfg.Logger))
+	var mw []gin.HandlerFunc
 	if cfg.CORSOrigin != "" {
-		r.Use(cors(cfg.CORSOrigin))
+		mw = append(mw, cors(cfg.CORSOrigin))
 	}
-	// JSON like every other error response, so clients can rely on a {"message"} body.
-	r.NoRoute(func(c *gin.Context) { writeError(c.Writer, http.StatusNotFound, "not found") })
-	r.NoMethod(routes.methodNotAllowed)
-
-	handle := func(method, path string, handlers ...gin.HandlerFunc) {
-		routes.add(method, path)
-		r.Handle(method, path, handlers...)
-		if method == http.MethodGet {
-			// Answer HEAD on every GET route, as net/http does.
-			routes.add(http.MethodHead, path)
-			r.Handle(http.MethodHead, path, handlers...)
-		}
-	}
-
-	handle(http.MethodGet, "/", health)
-	handle(http.MethodGet, "/api/v1/marketplace/auth/public-key", publicKey(cfg.Gate))
+	r := httpx.NewRouter(cfg.Logger, mw...)
+	r.Handle(http.MethodGet, "/api/v1/marketplace/auth/public-key", publicKey(cfg.Gate))
 
 	// The dashboard may send either form.
 	for _, p := range []string{"/api/v1/marketplace/addons", "/api/v1/marketplace/addons/"} {
-		handle(http.MethodGet, p, h.listAddons)
-		handle(http.MethodPost, p, admin, limitBody(MaxBodySize), h.registerLocal)
+		r.Handle(http.MethodGet, p, h.listAddons)
+		r.Handle(http.MethodPost, p, admin, httpx.LimitBody(MaxBodySize), h.registerLocal)
 	}
-	handle(http.MethodGet, "/api/v1/marketplace/addons/:source/:name", h.getAddon)
-	handle(http.MethodDelete, "/api/v1/marketplace/addons/local/:name", admin, h.deleteLocal)
+	r.Handle(http.MethodGet, "/api/v1/marketplace/addons/:source/:name", h.getAddon)
+	r.Handle(http.MethodDelete, "/api/v1/marketplace/addons/local/:name", admin, h.deleteLocal)
 
 	for _, p := range []string{"/api/v1/marketplace/sources", "/api/v1/marketplace/sources/"} {
-		handle(http.MethodGet, p, h.listSources)
-		handle(http.MethodPost, p, admin, limitBody(MaxBodySize), h.addTap)
+		r.Handle(http.MethodGet, p, h.listSources)
+		r.Handle(http.MethodPost, p, admin, httpx.LimitBody(MaxBodySize), h.addTap)
 	}
-	handle(http.MethodDelete, "/api/v1/marketplace/sources/:name", admin, h.deleteSource)
-	handle(http.MethodPost, "/api/v1/marketplace/sources/:name/sync", admin, h.syncSource)
-	handle(http.MethodPost, "/api/v1/marketplace/sources/:name/import", admin, limitBody(MaxImportSize), h.importIndex)
+	r.Handle(http.MethodDelete, "/api/v1/marketplace/sources/:name", admin, h.deleteSource)
+	r.Handle(http.MethodPost, "/api/v1/marketplace/sources/:name/sync", admin, h.syncSource)
+	r.Handle(http.MethodPost, "/api/v1/marketplace/sources/:name/import", admin, httpx.LimitBody(MaxImportSize), h.importIndex)
 
 	return r
-}
-
-func health(c *gin.Context) {
-	w := c.Writer
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = io.WriteString(w, "ok")
 }
 
 // publicKey republishes the JWT verification key in jwt_generator's GET /key format. Its port
@@ -137,16 +99,16 @@ func health(c *gin.Context) {
 // without authentication, yet the cluster addons managers on other hosts need the key to verify
 // admin tokens. They point JWT_PUBLIC_KEY_URL here instead. A public key is not secret, so the
 // endpoint needs no auth. It serves whatever key is current, including after a re-fetch.
-func publicKey(g *AdminGate) gin.HandlerFunc {
+func publicKey(g *auth.Gate) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		w := c.Writer
 		key, ok := g.PublicKeyPEM()
 		if !ok {
 			w.Header().Set("Retry-After", "5")
-			writeError(w, http.StatusServiceUnavailable, "the JWT public key hasn't been loaded yet")
+			httpx.WriteError(w, http.StatusServiceUnavailable, "the JWT public key hasn't been loaded yet")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"public_key": key})
+		httpx.WriteJSON(w, http.StatusOK, map[string]string{"public_key": key})
 	}
 }
 
@@ -164,7 +126,7 @@ func (h *handler) listAddons(c *gin.Context) {
 		h.fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	httpx.WriteJSON(w, http.StatusOK, items)
 }
 
 func (h *handler) getAddon(c *gin.Context) {
@@ -174,7 +136,7 @@ func (h *handler) getAddon(c *gin.Context) {
 		h.fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, item)
+	httpx.WriteJSON(w, http.StatusOK, item)
 }
 
 func (h *handler) registerLocal(c *gin.Context) {
@@ -189,7 +151,7 @@ func (h *handler) registerLocal(c *gin.Context) {
 		h.fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, item)
+	httpx.WriteJSON(w, http.StatusCreated, item)
 }
 
 func (h *handler) deleteLocal(c *gin.Context) {
@@ -208,7 +170,7 @@ func (h *handler) listSources(c *gin.Context) {
 		h.fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, sources)
+	httpx.WriteJSON(w, http.StatusOK, sources)
 }
 
 func (h *handler) addTap(c *gin.Context) {
@@ -225,7 +187,7 @@ func (h *handler) addTap(c *gin.Context) {
 		h.fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, src)
+	httpx.WriteJSON(w, http.StatusCreated, src)
 }
 
 func (h *handler) deleteSource(c *gin.Context) {
@@ -249,7 +211,7 @@ func (h *handler) syncSource(c *gin.Context) {
 		case errors.As(err, &rejected), errors.As(err, &fetch):
 			// The fetch or the index is at fault, not the request. The error is also on
 			// the source's last_error.
-			writeError(w, http.StatusBadGateway, err.Error())
+			httpx.WriteError(w, http.StatusBadGateway, err.Error())
 		default:
 			h.fail(w, err)
 		}
@@ -270,7 +232,7 @@ func (h *handler) importIndex(c *gin.Context) {
 	if err := h.cat.Import(r.Context(), name, body); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeError(w, http.StatusRequestEntityTooLarge, "request body is too large")
+			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "request body is too large")
 			return
 		}
 		h.fail(w, err)
@@ -285,7 +247,7 @@ func (h *handler) respondSource(w http.ResponseWriter, r *http.Request, name str
 		h.fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, src)
+	httpx.WriteJSON(w, http.StatusOK, src)
 }
 
 // importBody accepts either a raw JSON index or a multipart form with the index in a file
@@ -337,33 +299,26 @@ func (h *handler) fail(w http.ResponseWriter, err error) {
 	)
 	switch {
 	case errors.Is(err, errTooLarge):
-		writeError(w, http.StatusRequestEntityTooLarge, err.Error())
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, err.Error())
 	case errors.Is(err, catalog.ErrNotFound):
-		writeError(w, http.StatusNotFound, "not found")
+		httpx.WriteError(w, http.StatusNotFound, "not found")
 	case errors.Is(err, catalog.ErrSyncDisabled):
-		writeError(w, http.StatusConflict, err.Error())
+		httpx.WriteError(w, http.StatusConflict, err.Error())
 	case errors.As(err, &validation):
-		body := errorBody{Message: validation.Msg}
+		body := httpx.ErrorBody{Message: validation.Msg}
 		if len(validation.Fields) > 0 {
 			body.Errors = validation.Fields
 		}
-		writeJSON(w, http.StatusUnprocessableEntity, body)
+		httpx.WriteJSON(w, http.StatusUnprocessableEntity, body)
 	case errors.As(err, &conflict):
-		writeError(w, http.StatusConflict, conflict.Msg)
+		httpx.WriteError(w, http.StatusConflict, conflict.Msg)
 	case errors.As(err, &rejected):
-		writeError(w, http.StatusUnprocessableEntity, rejected.Msg)
+		httpx.WriteError(w, http.StatusUnprocessableEntity, rejected.Msg)
 	case errors.As(err, &resolve):
-		writeError(w, http.StatusUnprocessableEntity, "resolving image digest: "+resolve.Error())
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "resolving image digest: "+resolve.Error())
 	default:
 		h.log.Error("request failed", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
-	}
-}
-
-func limitBody(n int64) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, n)
-		c.Next()
+		httpx.WriteError(w, http.StatusInternalServerError, "internal error")
 	}
 }
 
@@ -383,71 +338,4 @@ func cors(origin string) gin.HandlerFunc {
 		}
 		c.Next()
 	}
-}
-
-// logRequests logs method, path and status only. Headers and bodies are left out because
-// they carry tokens, and the query string because tap URLs can carry credentials.
-func logRequests(log *slog.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-		c.Next()
-		status := c.Writer.Status()
-		if c.Request.URL.Path == "/" && status == http.StatusOK {
-			// Health checks would drown everything else.
-			return
-		}
-		log.Info("request", "method", c.Request.Method, "path", c.Request.URL.Path, "status", status, "duration_ms", time.Since(start).Milliseconds())
-	}
-}
-
-// recoverPanics replaces gin.Recovery's default output, which dumps request headers, with a
-// log line through the service logger. The response matches fail's internal error.
-func recoverPanics(log *slog.Logger) gin.HandlerFunc {
-	return gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, err any) {
-		log.Error("request panicked", "method", c.Request.Method, "path", c.Request.URL.Path, "panic", err)
-		writeError(c.Writer, http.StatusInternalServerError, "internal error")
-		c.Abort()
-	})
-}
-
-// routeTable lets the 405 handler report an Allow header like net/http's mux does, which Gin
-// doesn't provide.
-type routeTable struct {
-	routes []route
-}
-
-type route struct {
-	method   string
-	segments []string
-}
-
-func (t *routeTable) add(method, path string) {
-	t.routes = append(t.routes, route{method: method, segments: strings.Split(path, "/")})
-}
-
-func (t *routeTable) methodNotAllowed(c *gin.Context) {
-	segs := strings.Split(c.Request.URL.Path, "/")
-	var allowed []string
-	for _, rt := range t.routes {
-		if len(rt.segments) != len(segs) {
-			continue
-		}
-		match := true
-		for i, s := range rt.segments {
-			if strings.HasPrefix(s, ":") {
-				match = segs[i] != ""
-			} else {
-				match = s == segs[i]
-			}
-			if !match {
-				break
-			}
-		}
-		if match && !slices.Contains(allowed, rt.method) {
-			allowed = append(allowed, rt.method)
-		}
-	}
-	slices.Sort(allowed)
-	c.Header("Allow", strings.Join(allowed, ", "))
-	writeError(c.Writer, http.StatusMethodNotAllowed, "method not allowed")
 }

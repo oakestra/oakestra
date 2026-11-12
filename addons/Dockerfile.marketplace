@@ -6,6 +6,7 @@ RUN go mod download
 # Only what the marketplace needs, so changes elsewhere in the module don't bust the cache.
 COPY internal/definition ./internal/definition
 COPY internal/auth ./internal/auth
+COPY internal/httpx ./internal/httpx
 COPY internal/marketplace ./internal/marketplace
 COPY cmd/marketplace ./cmd/marketplace
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/marketplace ./cmd/marketplace

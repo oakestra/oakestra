@@ -37,6 +37,12 @@ func (s Status) Running() bool {
 	return s == Active || s == PartiallyActive
 }
 
+// Settled reports whether no install, update or removal is in flight, which is when an admin
+// may update or re-approve the addon.
+func (s Status) Settled() bool {
+	return s.Running() || s == Failed
+}
+
 // StatusDetails explains a status. It serializes to {} when empty, which is what the dashboard
 // expects rather than null.
 type StatusDetails struct {

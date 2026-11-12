@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/oakestra/oakestra/addons/internal/auth"
 	"github.com/oakestra/oakestra/addons/internal/marketplace/api"
 	"github.com/oakestra/oakestra/addons/internal/marketplace/catalog"
 	"github.com/oakestra/oakestra/addons/internal/marketplace/mptest"
@@ -90,7 +91,7 @@ func TestRequestLogOmitsQueryString(t *testing.T) {
 	var buf lockedBuffer
 	log := slog.New(slog.NewTextHandler(&buf, nil))
 	cat := catalog.New(catalog.Config{Store: store.NewMemory(), Fetcher: mptest.Fetcher(httptest.NewServer(http.NotFoundHandler()), mptest.Resolver{}), Resolver: nopResolver{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	gate := api.NewAdminGate(nil, log)
+	gate := auth.NewGate(nil, log)
 	h := api.New(api.Config{Catalog: cat, Gate: gate, Logger: log})
 
 	req := httptest.NewRequest("GET", "/api/v1/marketplace/sources?token=hunter2&url=https://x.test/?k=secret", nil)

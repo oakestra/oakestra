@@ -146,7 +146,7 @@ func TestPanicsAndRequestLog(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusInternalServerError || strings.TrimSpace(rec.Body.String()) != `{"message":"Internal server error"}` {
+	if rec.Code != http.StatusInternalServerError || strings.TrimSpace(rec.Body.String()) != `{"message":"internal error"}` {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
 	out := buf.String()

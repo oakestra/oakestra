@@ -59,17 +59,23 @@ type derivedEntry struct {
 	items []Item
 }
 
-// derivedItems returns the sorted items of a snapshot, computing them only when the snapshot
-// changed. The list endpoint is unauthenticated, so recomputing every definition per request
-// would be a cheap way to burn CPU. Callers must treat the result as read-only.
-func (s *Service) derivedItems(snap *store.Snapshot) []Item {
-	key := derivedKey{snap.Serial, snap.ContentHash}
+// derivedItems returns the sorted items of the snapshot that head describes, reading and
+// decoding the snapshot only when the cache doesn't hold that serial and content hash. The read
+// endpoints are unauthenticated, so decoding up to MaxIndexSize of JSON per request would be a
+// cheap way to burn CPU and memory. Callers must treat the result as read-only.
+func (s *Service) derivedItems(ctx context.Context, head *store.Snapshot) ([]Item, error) {
 	s.cacheMu.Lock()
-	e, ok := s.derived[snap.Source]
+	e, ok := s.derived[head.Source]
 	s.cacheMu.Unlock()
-	if ok && e.key == key {
-		return e.items
+	if ok && e.key == (derivedKey{head.Serial, head.ContentHash}) {
+		return e.items, nil
 	}
+	snap, err := s.snapshot(ctx, head.Source)
+	if err != nil || snap == nil {
+		return nil, err
+	}
+	// The snapshot may be newer than head; cache it under its own key.
+	key := derivedKey{snap.Serial, snap.ContentHash}
 	addons := slices.Clone(snap.Addons)
 	slices.SortFunc(addons, func(a, b definition.Addon) int { return strings.Compare(a.Name, b.Name) })
 	items := make([]Item, 0, len(addons))
@@ -80,7 +86,7 @@ func (s *Service) derivedItems(snap *store.Snapshot) []Item {
 	// A concurrent request may have stored the same key already; the result is identical.
 	s.derived[snap.Source] = derivedEntry{key: key, items: items}
 	s.cacheMu.Unlock()
-	return items
+	return items, nil
 }
 
 // Addons returns the merged catalog: official, taps by name, local; addons by name within a
@@ -90,7 +96,7 @@ func (s *Service) Addons(ctx context.Context, f Filter) ([]Item, error) {
 	if err != nil {
 		return nil, err
 	}
-	snaps, err := s.cfg.Store.ListSnapshots(ctx)
+	snaps, err := s.cfg.Store.ListSnapshotHeaders(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +115,11 @@ func (s *Service) Addons(ctx context.Context, f Filter) ([]Item, error) {
 		if snap == nil {
 			continue
 		}
-		for _, item := range s.derivedItems(snap) {
+		items, err := s.derivedItems(ctx, snap)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range items {
 			if f.Name != "" && item.Name != f.Name && item.QualifiedName != f.Name {
 				continue
 			}
@@ -127,16 +137,13 @@ func (s *Service) Addon(ctx context.Context, sourceName, name string) (*Item, er
 		}
 		return nil, err
 	}
-	snap, err := s.snapshot(ctx, sourceName)
+	items, err := s.Addons(ctx, Filter{Source: sourceName, Name: name})
 	if err != nil {
 		return nil, err
 	}
-	if snap == nil {
-		return nil, ErrNotFound
-	}
-	for _, a := range snap.Addons {
-		if a.Name == name {
-			item := newItem(a)
+	for _, item := range items {
+		// Filter.Name also matches qualified names, which a bare name lookup must not.
+		if item.Name == name {
 			return &item, nil
 		}
 	}

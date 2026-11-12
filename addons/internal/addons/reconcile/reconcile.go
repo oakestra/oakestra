@@ -104,6 +104,19 @@ func (r *Reconciler) ReconcileOnce(ctx context.Context) {
 		r.log().Error("listing addons failed", "error", err)
 		return
 	}
+	// One list for the whole pass. Deploys and teardowns list again, since they act on what
+	// exists at that moment; watching and the orphan cleanup can work from this snapshot.
+	cs, listErr := r.Runtime.ListContainers(ctx, r.scope())
+	if listErr != nil {
+		// Deploys and teardowns don't need the snapshot, so only watching and the orphan
+		// cleanup are skipped.
+		r.log().Error("listing containers failed", "error", listErr)
+	}
+	byRecord := map[string][]runtime.Container{}
+	for _, c := range cs {
+		id := c.Labels[runtime.LabelAddonID]
+		byRecord[id] = append(byRecord[id], c)
+	}
 	for _, a := range list {
 		if ctx.Err() != nil {
 			return
@@ -114,10 +127,14 @@ func (r *Reconciler) ReconcileOnce(ctx context.Context) {
 		case addons.Disabling:
 			r.teardown(ctx, a)
 		case addons.Active, addons.PartiallyActive:
-			r.watch(ctx, a)
+			if listErr == nil {
+				r.watch(ctx, a, byRecord[a.ID])
+			}
 		}
 	}
-	r.removeOrphans(ctx, list)
+	if listErr == nil {
+		r.removeOrphans(ctx, list, byRecord)
+	}
 }
 
 // scope are the labels that mark an object as this engine's.
@@ -132,9 +149,32 @@ func (r *Reconciler) recordLabels(id string) map[string]string {
 	return l
 }
 
-// owned lists this engine's containers that carry the addon's record id.
-func (r *Reconciler) owned(ctx context.Context, id string) ([]runtime.Container, error) {
-	return r.Runtime.ListContainers(ctx, r.recordLabels(id))
+// removeContainers removes this engine's containers that carry the addon's record id, and
+// reports whether all of them are gone.
+func (r *Reconciler) removeContainers(ctx context.Context, a addons.Installed) bool {
+	cs, err := r.Runtime.ListContainers(ctx, r.recordLabels(a.ID))
+	if err != nil {
+		r.log().Error("listing containers failed, will retry", "addon", a.AddonID, "error", err)
+		return false
+	}
+	for _, c := range cs {
+		if err := r.Runtime.RemoveContainer(ctx, c.ID); err != nil {
+			r.log().Error("removing container failed, will retry", "container", c.Name, "error", err)
+			return false
+		}
+	}
+	return true
+}
+
+// statusFor is the status of an addon with failed out of total services not running.
+func statusFor(failed, total int) addons.Status {
+	switch {
+	case failed > 0 && failed == total:
+		return addons.Failed
+	case failed > 0:
+		return addons.PartiallyActive
+	}
+	return addons.Active
 }
 
 func (r *Reconciler) isOwned(c *runtime.Container, id string) bool {
@@ -231,16 +271,8 @@ func (r *Reconciler) deploy(ctx context.Context, a addons.Installed, all []addon
 
 	// Replace rather than reuse: after an update the old containers run the old snapshot, and
 	// after a crashed install they are in an unknown state.
-	old, err := r.owned(ctx, a.ID)
-	if err != nil {
-		r.log().Error("listing containers failed, will retry", "addon", a.AddonID, "error", err)
+	if !r.removeContainers(ctx, a) {
 		return
-	}
-	for _, c := range old {
-		if err := r.Runtime.RemoveContainer(ctx, c.ID); err != nil {
-			r.log().Error("removing old container failed, will retry", "container", c.Name, "error", err)
-			return
-		}
 	}
 
 	for _, n := range p.networks {
@@ -270,13 +302,7 @@ func (r *Reconciler) deploy(ctx context.Context, a addons.Installed, all []addon
 		}
 	}
 
-	status := addons.Active
-	switch {
-	case len(failed) == len(p.services):
-		status = addons.Failed
-	case len(failed) > 0:
-		status = addons.PartiallyActive
-	}
+	status := statusFor(len(failed), len(p.services))
 	r.settle(ctx, a.ID, []addons.Status{a.Status}, func(x *addons.Installed) {
 		x.Status = status
 		x.StatusDetails = addons.StatusDetails{FailedServices: failed, Message: strings.Join(problems, "; ")}
@@ -298,16 +324,8 @@ func (r *Reconciler) pull(ctx context.Context, ref string) error {
 // on this engine adopts them and finds its data again. Deleting them is a deliberate manual
 // step.
 func (r *Reconciler) teardown(ctx context.Context, a addons.Installed) {
-	cs, err := r.owned(ctx, a.ID)
-	if err != nil {
-		r.log().Error("listing containers failed, will retry", "addon", a.AddonID, "error", err)
+	if !r.removeContainers(ctx, a) {
 		return
-	}
-	for _, c := range cs {
-		if err := r.Runtime.RemoveContainer(ctx, c.ID); err != nil {
-			r.log().Error("removing container failed, will retry", "container", c.Name, "error", err)
-			return
-		}
 	}
 	nets, err := r.Runtime.ListNetworks(ctx, r.recordLabels(a.ID))
 	if err != nil {
@@ -327,14 +345,9 @@ func (r *Reconciler) teardown(ctx context.Context, a addons.Installed) {
 	})
 }
 
-// watch compares the containers with the snapshot and reports services that are gone or not
-// running.
-func (r *Reconciler) watch(ctx context.Context, a addons.Installed) {
-	cs, err := r.owned(ctx, a.ID)
-	if err != nil {
-		r.log().Error("listing containers failed", "addon", a.AddonID, "error", err)
-		return
-	}
+// watch compares the addon's containers with the snapshot and reports services that are gone
+// or not running.
+func (r *Reconciler) watch(ctx context.Context, a addons.Installed, cs []runtime.Container) {
 	byName := map[string]runtime.Container{}
 	for _, c := range cs {
 		byName[c.Name] = c
@@ -345,7 +358,11 @@ func (r *Reconciler) watch(ctx context.Context, a addons.Installed) {
 	}
 
 	var failed []string
-	var logs []string
+	type stoppedService struct {
+		name string
+		c    runtime.Container
+	}
+	var stopped []stoppedService
 	for _, s := range a.Definition.Services {
 		c, ok := byName[r.containerName(a.AddonID, s.ServiceName)]
 		switch {
@@ -355,22 +372,21 @@ func (r *Reconciler) watch(ctx context.Context, a addons.Installed) {
 		case c.State == "restarting" && c.RestartCount < maxRestarts:
 		default:
 			failed = append(failed, s.ServiceName)
-			if out, err := r.Runtime.ContainerLogs(ctx, c.ID, logTail); err == nil {
-				logs = append(logs, fmt.Sprintf("Logs for service '%s' (%s, exit code %d):\n%s", s.ServiceName, c.State, c.ExitCode, out))
-			}
+			stopped = append(stopped, stoppedService{s.ServiceName, c})
 		}
 	}
 
-	want := addons.Active
-	switch {
-	case len(failed) > 0 && len(failed) == len(a.Definition.Services):
-		want = addons.Failed
-	case len(failed) > 0:
-		want = addons.PartiallyActive
-	}
-	// Logs change on every pass, so only a change in status or in the failing set is written.
+	want := statusFor(len(failed), len(a.Definition.Services))
+	// Logs change on every pass, so only a change in status or in the failing set is written,
+	// and the logs are only read then.
 	if want == a.Status && slices.Equal(failed, a.StatusDetails.FailedServices) {
 		return
+	}
+	var logs []string
+	for _, st := range stopped {
+		if out, err := r.Runtime.ContainerLogs(ctx, st.c.ID, logTail); err == nil {
+			logs = append(logs, fmt.Sprintf("Logs for service '%s' (%s, exit code %d):\n%s", st.name, st.c.State, st.c.ExitCode, out))
+		}
 	}
 	r.log().Warn("addon state changed", "addon", a.AddonID, "from", a.Status, "to", want, "failed_services", failed)
 	r.settle(ctx, a.ID, []addons.Status{addons.Active, addons.PartiallyActive}, func(x *addons.Installed) {
@@ -383,26 +399,22 @@ func (r *Reconciler) watch(ctx context.Context, a addons.Installed) {
 // removeOrphans removes this engine's containers that carry an addon id no live record claims,
 // e.g. after a record was deleted by hand. Containers without our plane and instance labels are
 // never considered.
-func (r *Reconciler) removeOrphans(ctx context.Context, list []addons.Installed) {
+func (r *Reconciler) removeOrphans(ctx context.Context, list []addons.Installed, byRecord map[string][]runtime.Container) {
 	live := map[string]bool{}
 	for _, a := range list {
 		if a.Status != addons.Disabled {
 			live[a.ID] = true
 		}
 	}
-	cs, err := r.Runtime.ListContainers(ctx, r.scope())
-	if err != nil {
-		r.log().Warn("listing containers for orphan cleanup failed", "error", err)
-		return
-	}
-	for _, c := range cs {
-		id, ok := c.Labels[runtime.LabelAddonID]
-		if !ok || live[id] {
+	for id, cs := range byRecord {
+		if id == "" || live[id] {
 			continue
 		}
-		r.log().Info("removing orphaned addon container", "container", c.Name)
-		if err := r.Runtime.RemoveContainer(ctx, c.ID); err != nil {
-			r.log().Warn("removing orphaned container failed", "container", c.Name, "error", err)
+		for _, c := range cs {
+			r.log().Info("removing orphaned addon container", "container", c.Name)
+			if err := r.Runtime.RemoveContainer(ctx, c.ID); err != nil {
+				r.log().Warn("removing orphaned container failed", "container", c.Name, "error", err)
+			}
 		}
 	}
 }

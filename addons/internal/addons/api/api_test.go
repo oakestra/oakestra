@@ -68,7 +68,7 @@ func (f *fakeMarket) Get(_ context.Context, src definition.Source, name string) 
 	if !ok {
 		return nil, marketplaceclient.ErrNotFound
 	}
-	out := store.CloneDefinition(a)
+	out := a.Clone()
 	return &out, nil
 }
 
@@ -588,7 +588,7 @@ func TestUIAddonsEmptyAndCluster(t *testing.T) {
 }
 
 func TestImageVersion(t *testing.T) {
-	d := "sha256:0123456789abcdef0123"
+	d := "sha256:0123456789abcdef" + strings.Repeat("0", 48)
 	for in, want := range map[string]string{
 		"ghcr.io/x/ui:1.2.0":      "1.2.0",
 		"ghcr.io/x/ui:1.2.0@" + d: "1.2.0",

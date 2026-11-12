@@ -8,7 +8,6 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -59,7 +58,10 @@ type Snapshot struct {
 	ETag        string
 	GeneratedAt time.Time
 	UpdatedAt   time.Time
-	Addons      []definition.Addon
+	// AddonCount is len(Addons). It is also set by ListSnapshotHeaders, which leaves Addons
+	// out.
+	AddonCount int
+	Addons     []definition.Addon
 }
 
 // Store is the persistence the marketplace needs. Implementations must be safe for concurrent
@@ -77,26 +79,18 @@ type Store interface {
 	DeleteSource(ctx context.Context, name string) error
 
 	GetSnapshot(ctx context.Context, source string) (*Snapshot, error)
-	ListSnapshots(ctx context.Context) ([]Snapshot, error)
+	// ListSnapshotHeaders returns every snapshot sorted by source, without Addons. Decoding
+	// the addons is the expensive part, and callers that cache derived data only need it when
+	// serial or content hash changed.
+	ListSnapshotHeaders(ctx context.Context) ([]Snapshot, error)
 	PutSnapshot(ctx context.Context, s *Snapshot) error
 }
 
-// cloneAddons deep-copies addons. Definitions hold maps and slices, and a shallow copy would
-// let a caller mutate what the store holds.
+// cloneAddons deep-copies addons, see definition.Addon.Clone.
 func cloneAddons(in []definition.Addon) []definition.Addon {
-	if in == nil {
-		return []definition.Addon{}
-	}
-	b, err := json.Marshal(in)
-	if err != nil {
-		panic(err)
-	}
-	var out []definition.Addon
-	if err := json.Unmarshal(b, &out); err != nil {
-		panic(err)
-	}
-	for i := range out {
-		out[i].Normalize()
+	out := make([]definition.Addon, len(in))
+	for i := range in {
+		out[i] = in[i].Clone()
 	}
 	return out
 }

@@ -19,6 +19,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
+	"github.com/oakestra/oakestra/addons/internal/auth"
 	"github.com/oakestra/oakestra/addons/internal/marketplace/api"
 	"github.com/oakestra/oakestra/addons/internal/marketplace/catalog"
 	"github.com/oakestra/oakestra/addons/internal/marketplace/mptest"
@@ -54,7 +55,7 @@ func token(t *testing.T, key *rsa.PrivateKey, roles ...string) string {
 
 type fixture struct {
 	h     http.Handler
-	gate  *api.AdminGate
+	gate  *auth.Gate
 	admin string
 	user  string
 }
@@ -89,7 +90,7 @@ func newFixture(t *testing.T, cors string) *fixture {
 	if err := cat.Import(context.Background(), "official", bytes.NewReader(mptest.IndexJSON("official", 1, mptest.Addon("monitoring", "1.0.0")))); err != nil {
 		t.Fatal(err)
 	}
-	gate := api.NewAdminGate(nil, log)
+	gate := auth.NewGate(nil, log)
 	gate.SetKey(&signingKey.PublicKey)
 	return &fixture{
 		h:     api.New(api.Config{Catalog: cat, Gate: gate, CORSOrigin: cors, Logger: log}),
@@ -158,7 +159,7 @@ func TestAdminEndpointsNeedAdmin(t *testing.T) {
 
 func TestAdminEndpointsUnavailableWithoutKey(t *testing.T) {
 	f := newFixture(t, "")
-	gate := api.NewAdminGate(nil, nil)
+	gate := auth.NewGate(nil, nil)
 	f.h = api.New(api.Config{Catalog: nil, Gate: gate})
 	for _, ep := range adminEndpoints {
 		rec := f.do(t, ep.method, ep.path, f.admin, nil, "")
@@ -361,7 +362,7 @@ func TestHealthAndCORS(t *testing.T) {
 	}
 }
 
-// gatedStore counts how many list calls are inside ListSnapshots at once and holds them until
+// gatedStore counts how many list calls are inside ListSnapshotHeaders at once and holds them until
 // released.
 type gatedStore struct {
 	store.Store
@@ -369,7 +370,7 @@ type gatedStore struct {
 	release   chan struct{}
 }
 
-func (g *gatedStore) ListSnapshots(ctx context.Context) ([]store.Snapshot, error) {
+func (g *gatedStore) ListSnapshotHeaders(ctx context.Context) ([]store.Snapshot, error) {
 	n := g.cur.Add(1)
 	defer g.cur.Add(-1)
 	for {
@@ -379,7 +380,7 @@ func (g *gatedStore) ListSnapshots(ctx context.Context) ([]store.Snapshot, error
 		}
 	}
 	<-g.release
-	return g.Store.ListSnapshots(ctx)
+	return g.Store.ListSnapshotHeaders(ctx)
 }
 
 func TestListAddonsConcurrencyIsBounded(t *testing.T) {
@@ -389,7 +390,7 @@ func TestListAddonsConcurrencyIsBounded(t *testing.T) {
 	if err := cat.Init(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	gate := api.NewAdminGate(nil, log)
+	gate := auth.NewGate(nil, log)
 	h := api.New(api.Config{Catalog: cat, Gate: gate, Logger: log})
 
 	const requests = 40

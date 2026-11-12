@@ -19,10 +19,8 @@ func ginEngine(mw gin.HandlerFunc, seen *atomic.Pointer[Claims]) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	e := gin.New()
 	e.GET("/", mw, func(c *gin.Context) {
-		if cl, ok := GinClaims(c); ok {
-			if cc, ok := ClaimsFromContext(c.Request.Context()); ok && cc == cl && seen != nil {
-				seen.Store(cl)
-			}
+		if cl, ok := GinClaims(c); ok && seen != nil {
+			seen.Store(cl)
 		}
 		c.Status(http.StatusNoContent)
 	})
@@ -39,41 +37,14 @@ func doGet(h http.Handler, authz string) *httptest.ResponseRecorder {
 	return rec
 }
 
-// The Gin middleware must answer exactly like the net/http one, since the addons API and the
-// marketplace are documented to behave the same.
-func TestGinMiddlewareMatchesNetHTTP(t *testing.T) {
-	v := newTestVerifier()
-	admin := sign(t, tokenClaims("Admin"), nil)
-	user := sign(t, tokenClaims("Application_Provider"), nil)
-	refresh := sign(t, tokenClaims("Admin"), func(c jwt.MapClaims) { c["type"] = "refresh" })
-	expired := sign(t, tokenClaims("Admin"), func(c jwt.MapClaims) { c["exp"] = testNow.Add(-time.Hour).Unix() })
-	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-
-	for _, authz := range []string{"", "Basic abc", "Bearer ", "Bearer garbage", "Bearer " + expired, "Bearer " + refresh, "Bearer " + user, "Bearer " + admin} {
-		for name, pair := range map[string][2]any{
-			"user":  {v.RequireUser(ok), v.GinRequireUser()},
-			"admin": {v.RequireAdmin(ok), v.GinRequireAdmin()},
-		} {
-			want := doGet(pair[0].(http.Handler), authz)
-			got := doGet(ginEngine(pair[1].(gin.HandlerFunc), nil), authz)
-			if got.Code != want.Code || got.Body.String() != want.Body.String() ||
-				got.Header().Get("WWW-Authenticate") != want.Header().Get("WWW-Authenticate") ||
-				got.Header().Get("Content-Type") != want.Header().Get("Content-Type") {
-				t.Errorf("%s with %q: gin %d %q %v, net/http %d %q %v", name, authz,
-					got.Code, got.Body, got.Header(), want.Code, want.Body, want.Header())
-			}
-		}
-	}
-}
-
 func TestGinClaimsReachHandler(t *testing.T) {
 	var seen atomic.Pointer[Claims]
-	rec := doGet(ginEngine(newTestVerifier().GinRequireAdmin(), &seen), "Bearer "+sign(t, tokenClaims("Admin"), nil))
+	rec := doGet(ginEngine(newTestGate().RequireAdmin(), &seen), "Bearer "+sign(t, tokenClaims("Admin"), nil))
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status %d", rec.Code)
 	}
 	if c := seen.Load(); c == nil || c.Subject != "alice" {
-		t.Errorf("claims not visible through both gin context and request context: %+v", c)
+		t.Errorf("claims not passed to the handler: %+v", c)
 	}
 }
 

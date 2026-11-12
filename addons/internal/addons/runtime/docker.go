@@ -45,6 +45,13 @@ func NewDocker() (*Docker, error) {
 func (d *Docker) Close() error { return d.cli.Close() }
 
 func (d *Docker) PullImage(ctx context.Context, ref string) error {
+	// A digest names exactly one image, so a local copy can't be stale. Skipping the pull also
+	// lets a redeploy work on a node that has lost its registry access.
+	if strings.Contains(ref, "@sha256:") {
+		if _, err := d.cli.ImageInspect(ctx, ref); err == nil {
+			return nil
+		}
+	}
 	rc, err := d.cli.ImagePull(ctx, ref, image.PullOptions{})
 	if err != nil {
 		return err
@@ -117,8 +124,12 @@ func (d *Docker) ListContainers(ctx context.Context, labels map[string]string) (
 		if len(c.Names) > 0 {
 			name = strings.TrimPrefix(c.Names[0], "/")
 		}
-		// The list call doesn't report exit codes or restart counts, so fetch them. Containers
-		// per addon are few.
+		if c.State == "running" || c.State == "paused" {
+			// Exit codes and restart counts only matter for containers that aren't running.
+			out = append(out, Container{ID: c.ID, Name: name, Labels: c.Labels, State: c.State})
+			continue
+		}
+		// The list call doesn't report exit codes or restart counts, so fetch them.
 		full, err := d.InspectContainer(ctx, c.ID)
 		if err != nil || full == nil {
 			out = append(out, Container{ID: c.ID, Name: name, Labels: c.Labels, State: c.State})
