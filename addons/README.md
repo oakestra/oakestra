@@ -1,248 +1,386 @@
-# Addons Engine
+# Addons
 
-The addons engine installs optional extensions ("addons") next to the Oakestra control plane and
-keeps their containers running. It is one Go module with two services and a CLI for people who
-publish addons:
+Addons are optional extensions that run as containers next to the Oakestra control plane, for
+example a monitoring stack or an extra dashboard page. This Go module has the services that
+install and run them and a CLI for publishing them:
 
-| Binary | Image | Role |
+| Binary | Image | What it does |
 |---|---|---|
-| `cmd/marketplace` | `marketplace_manager` | The catalog: addon sources, sync, local registrations, merged listing. Root only. |
-| `cmd/addons` | `addons_manager` | Install, update and uninstall API, plus the reconcile loop that runs the addon containers. One per plane (root and cluster). |
-| `cmd/addonctl` | - | `validate` and `build-index`, used by the community marketplace CI and by anyone writing an addon. |
+| `cmd/marketplace` | `marketplace_manager` | The catalog. Keeps track of where addons come from (sources), syncs them and serves one merged list. Runs on root only, port `11102`. |
+| `cmd/addons` | `addons_manager` | Installs, updates and removes addons and keeps their containers running. Runs on root (`11101`) and on every cluster (`11201`). |
+| `cmd/addonctl` | - | CLI for addon authors and catalog maintainers: `validate` and `build-index`. |
 
-The Oakestra dashboard (separate repo) talks to both services directly.
+The dashboard (separate repo) talks to both services. The examples below use `curl` instead.
 
-## Start
+## Quick start
 
-The services are part of the root and cluster compose files, so they come up with the stack:
+Register a small addon on your root orchestrator, install it and remove it again. You need a
+running stack (`./scripts/StartOakestraFull.sh`) and a shell on the root machine.
+
+Log in to get a token. The system manager creates the user `Admin` with password `Admin` on first
+start. Change it on anything that isn't a dev setup.
 
 ```bash
-./scripts/StartOakestraFull.sh
+TOKEN=$(curl -s -X POST http://localhost:10000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username": "Admin", "password": "Admin"}' | jq -r .token)
 ```
 
-To work on them only, from `root_orchestrator/`:
+Register an addon on the marketplace. A local registration may use an image tag; the marketplace
+resolves it to a digest and stores the pinned reference.
 
 ```bash
-docker compose -f docker-compose.yml up --build marketplace_manager root_addons_manager
+curl -s -X POST http://localhost:11102/api/v1/marketplace/addons \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{
+    "name": "hello",
+    "version": "0.1.0",
+    "description": "Serves the nginx welcome page on port 8080.",
+    "permissions": { "host_ports": [8080] },
+    "services": [
+      { "service_name": "web", "image": "nginx:1.27", "ports": { "80": "8080" } }
+    ]
+  }'
 ```
 
-Run the tests with `go test -race ./...` inside `addons/`. The images are built with
-`addons/` as the build context (`Dockerfile.marketplace`, `Dockerfile.addons`).
+The addon now shows up in the catalog as `local/hello`. Ask the root addons manager to install it.
+The first call is expected to fail with `409`: the response contains the full definition and its
+hash, and the install only goes through once you send that hash back.
 
-## Concepts
+```bash
+curl -s -X POST http://localhost:11101/api/v1/addons \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name": "local/hello"}' | tee consent.json
 
-### Sources
+HASH=$(jq -r .definition_hash consent.json)
 
-Every addon comes from a source:
+curl -s -X POST http://localhost:11101/api/v1/addons \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"name\": \"local/hello\", \"accept_definition\": \"$HASH\"}"
+```
 
-| Source | Name in the catalog | What it is |
+The answer is `201` with the installed record. Its `_id` is what the other addon endpoints take.
+Within a few seconds the reconcile loop starts the container `root_addon-local--hello--web`, and
+the status goes from `installing` to `active`:
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:11101/api/v1/addons | jq '.[] | {_id, name, status}'
+curl -s http://localhost:8080
+```
+
+To remove it, call `DELETE` twice. The first call stops the addon (status `disabling`, then
+`disabled`), the second deletes the record.
+
+```bash
+ID=<the _id from above>
+curl -s -X DELETE -H "Authorization: Bearer $TOKEN" http://localhost:11101/api/v1/addons/$ID
+curl -s -X DELETE -H "Authorization: Bearer $TOKEN" http://localhost:11101/api/v1/addons/$ID
+```
+
+## Writing an addon
+
+An addon is described by a definition: a name, a version, the containers to run and the
+permissions they need. The marketplace accepts JSON. Catalog repositories keep one YAML or JSON
+file per addon. A YAML example with host mounts and a volume:
+
+```yaml
+name: node-metrics
+version: 1.2.0
+description: Exports host metrics for Prometheus.
+homepage: https://github.com/your-org/node-metrics
+maintainers:
+  - Jane Doe <jane@example.org>
+
+permissions:
+  host_paths: ["/proc:ro"]
+  host_root: true            # /proc gives root on the host, so it needs this too
+  host_ports: [9100]
+
+services:
+  - service_name: exporter
+    image: quay.io/prometheus/node-exporter@sha256:<digest>
+    command: --path.procfs=/host/proc --collector.disable-defaults --collector.cpu
+    volumes:
+      - /proc:/host/proc:ro
+      - data:/var/lib/exporter
+    ports:
+      "9100": "9100"
+    environment:
+      LOG_LEVEL: info
+
+volumes:
+  - name: data
+```
+
+### Fields
+
+| Field | Required | |
 |---|---|---|
-| `official` | `<name>` (bare) | The curated index published by `oakestra/community-marketplace`. Fetched from `MARKETPLACE_OFFICIAL_INDEX`. |
-| `tap` | `<tap>/<name>` | A third-party index that an admin added. Credentials are optional and never returned by the API. |
-| `local` | `local/<name>` | A definition registered directly on this marketplace with `POST`. |
+| `name` | yes | Lowercase letters, digits and `-`, 1 to 32 characters, starting and ending with a letter or digit. |
+| `version` | yes | Semantic version (`1.2.0`). Updates are offered when the catalog has a higher one. |
+| `description` | no | Up to 4096 characters. |
+| `homepage` | no | http(s) URL. |
+| `maintainers` | no | Up to 32 strings. |
+| `permissions` | no | What the addon may do on the host. Anything the services need has to be declared here, see [Permissions](#permissions). |
+| `services` | yes | The containers, see below. |
+| `volumes` | no | Named volumes the addon creates: `name`, optional `driver`, `driver_opts`, `labels`. |
+| `networks` | no | Networks the addon creates: `name`, optional `driver`, `enable_ipv6`. |
+| `ui` | no | A page for the dashboard, see [Addons with a dashboard UI](#addons-with-a-dashboard-ui). |
+| `source` | no | Set by the marketplace. Leave it out. |
 
-Addon, tap and service names match `^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`. The catalog name above
-is the qualified name. Docker and DNS use the addon id instead, because `/` isn't valid there:
-`<name>` for official addons and `<source>--<name>` for the rest. Containers are named
-`<plane>_addon-<id>--<service>` and UI addons get the alias `addonui-<id>`. Container, volume and
-network names always come from the id, never from the definition, so an addon can't take over
-the name of a core service.
+Each service has:
 
-### Versions and updates
+| Field | |
+|---|---|
+| `service_name` | Same rules as the addon name. Unique within the addon. |
+| `image` | `registry/repo@sha256:<digest>`. Catalogs (official and taps) must pin by digest. Local registrations may use a tag. |
+| `command` | One string, split like a shell would (spaces separate, quotes group, `\` escapes). No shell runs it, so no pipes or variables. |
+| `volumes` | Docker short syntax: `/host/path:/container[:ro]` for a bind mount, `<volume>:/container[:ro]` for one of the addon's volumes, or `/container` for an anonymous volume. |
+| `ports` | Container port (`"80"`, `"80/tcp"`, `"53/udp"`) to host port (`"8080"` or `"127.0.0.1:8080"`). |
+| `networks` | Names from the addon's `networks`, `host`, `none`, or `oakestra`. Without any, the service joins a network private to the addon. |
+| `environment` | String to string map. |
+| `labels` | String to string map. Labels starting with `oak.`, `oakestra.`, `org.oakestra.` or `com.docker.compose.` are reserved. |
 
-An index lists the latest version of each addon. An installed addon remembers its exact version
-and image digests. The addons engine compares them with the catalog every
-`UPDATE_CHECK_INTERVAL`, and every addon in `GET /api/v1/addons` carries `update_available` and
-`latest_version`.
+Field names are matched exactly. Unknown fields (`privileged`, `cap_add`, a misspelled `Image`)
+and duplicate keys are rejected instead of being ignored. In YAML, quote numbers that are used as
+strings, such as ports and environment values.
 
-Images in official and tap indexes have to be pinned by digest (`image@sha256:...`). Local
-registrations may use tags, which are resolved to a digest when registered.
+Check a definition before publishing it:
 
-### Index format and sync
+```bash
+cd addons
+go run ./cmd/addonctl validate path/to/node-metrics.yaml
+```
 
-An index is a JSON document: `schema` (1), `source`, `serial`, `generated_at`, `addons[]` and a
-reserved `signatures[]`. There is no signing in v1. Instead:
+`validate` applies the catalog rules, so tags fail there even though a local registration would
+accept them.
 
-- The `serial` must not go down. A lower serial than the last good one is rejected, which is weak
-  rollback protection.
-- A failed or rejected fetch keeps the last good snapshot. The source shows `last_error`,
-  `last_attempt_at` and `last_synced_at`, so a broken tap is visible instead of silently empty.
-- Fetches use https only (unless the source sets `allow_insecure`), a 5 MiB cap, a 10 s timeout,
-  same-host redirects, and block loopback, link-local, private and similar address ranges (unless
-  the source sets `allow_private`). This guards the server-side fetch against SSRF.
-- Sync runs every `MARKETPLACE_SYNC_INTERVAL` (default 6h), on demand with
-  `POST /api/v1/marketplace/sources/<name>/sync`, and uses ETags.
+### Names in Docker
 
-Digest resolution goes through the registry HTTP API, so the marketplace needs no Docker socket.
+The catalog shows an addon under its qualified name: `<name>` for the official catalog,
+`<tap>/<name>` for a tap and `local/<name>` for local registrations. Docker and DNS can't use `/`,
+so containers, volumes and networks are named after the addon id instead: `<name>` for official
+addons and `<source>--<name>` for the rest. A container is called
+`<plane>_addon-<id>--<service>`, for example `root_addon-local--hello--web`. These names are
+always derived from the id, never taken from the definition, so an addon can't claim the name of a
+core container or of another addon's volume.
 
-### Air-gapped setups
+### Permissions
 
-Set `MARKETPLACE_OFFICIAL_INDEX=off` and import an index file instead:
+The engine derives what a definition needs and refuses it unless `permissions` covers all of
+it. Declaring more than needed is allowed, but the admin sees the whole list when installing.
+
+| Permission | Needed for |
+|---|---|
+| `host_paths` | Bind mounts from the host, as `/path` or `/path:ro`. Each entry covers exactly that path: `/data` does not cover `/data/sub`. A read-write entry also covers a read-only mount of the same path, not the other way round. |
+| `host_ports` | Publishing ports on the host. List every host port. |
+| `host_root` | Mounting a path that gives root on the host, even read-only. See below. |
+| `docker_socket` | Mounting a container runtime socket (Docker, containerd, CRI-O, Podman) or a directory that contains one, such as `/run` or `/run/docker`. This is root on the host. |
+| `host_network` | `networks: [host]`. |
+| `core_network` | `networks: [oakestra]`. Mongo, Redis and the internal APIs on that network have no authentication, so this is close to root on the control plane. |
+
+`host_root` is needed for `/`, `/etc`, `/root`, `/boot`, `/proc`, `/sys`, `/dev`, `/usr`, `/bin`,
+`/sbin`, `/lib`, `/lib64`, `/home`, the runtime state directories (`/var/lib/docker`,
+`/var/lib/containerd`, `/var/lib/kubelet`, `/run/containerd`), any directory above one of those,
+and anything below `/etc`, `/root`, `/boot`, `/proc`, `/sys`, `/dev` and the runtime state
+directories. Read-only paths like `/usr/share/zoneinfo` or `/lib/modules` only need a
+`host_paths` entry.
+
+Docker follows symlinks in a bind source when the container starts. A container that can write to
+a host directory could leave a symlink there that redirects a later mount, so there are a few
+rules on top of the permissions:
+
+- An addon can't mount a path below one of its own read-write bind mounts. Mount the parent
+  instead. Mounting a parent of a read-write path is fine.
+- Two addons can't share host paths (same path, or one inside the other) if either of them
+  mounts it read-write. The error reads `... conflicts with host path of addon X`. Two read-only
+  mounts of the same path are fine. Disabled addons don't count.
+- An update can't mount a path below one the previous version had read-write. Mounting the same
+  path again is fine.
+
+Some things can't be granted at all: `privileged`, extra capabilities, devices, host PID or IPC
+namespaces, reserved labels, and volume `driver_opts` other than plain local or bind options.
+
+### What the engine does to every container
+
+Addon containers run unprivileged, with no added capabilities, `NET_RAW` dropped,
+`no-new-privileges`, and capped json-file logs. The addons manager also sets resource limits (see
+[Configuration](#configuration)), by default 1 CPU, 512 MB of memory and 1024 processes per
+container. Images whose own labels use one of the reserved prefixes are refused.
+
+## Publishing an addon
+
+### Official catalog
+
+The official catalog is built from the `oakestra/community-marketplace` repository. Every addon is
+one file named after it (`node-metrics.yaml`), changes go through pull requests, and CI runs
+`addonctl validate` on them. After a merge, CI builds `index.json` with `addonctl build-index` and
+publishes it to GitHub Pages, where every Oakestra marketplace picks it up on its next sync.
+
+### Your own catalog (tap)
+
+A tap is an index that you host yourself, for example for addons that are internal to your
+organisation. Build the index from a directory of definition files:
+
+```bash
+go run ./cmd/addonctl build-index --source myorg --serial 7 --out index.json ./catalog
+```
+
+`--source` is the tap name the index is meant for. `--serial` must grow with every publication:
+the marketplace refuses an index whose serial is lower than the last one it accepted. Host
+`index.json` on any https server and add it on the root marketplace:
+
+```bash
+curl -s -X POST http://localhost:11102/api/v1/marketplace/sources \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name": "myorg", "url": "https://example.org/oakestra/index.json"}'
+```
+
+Its addons then show up as `myorg/<name>`. Optional fields: `token` (sent as a bearer token,
+never returned by the API), `allow_insecure` (allow plain http), `allow_private` (allow private and
+loopback addresses).
+
+### Index format
+
+An index is a JSON file with `schema` (always `1`), `source`, `serial`, `generated_at`, `addons`
+(the definitions) and `signatures` (reserved, empty for now). Indexes are not signed yet. What
+protects them today is digest pinning, the serial check and review of the catalog repository.
+
+The marketplace syncs every source every `MARKETPLACE_SYNC_INTERVAL` (6 hours by default) using
+ETags, or right away with `POST /api/v1/marketplace/sources/<name>/sync`. If a fetch fails or the
+index is rejected, the marketplace keeps serving the last good copy and shows the problem in the
+source's `last_error`, next to `last_attempt_at` and `last_synced_at`.
+
+Fetches are https only (unless `allow_insecure`), limited to 5 MiB and 10 seconds, follow
+redirects only on the same host, and refuse private, loopback and link-local addresses (unless
+`allow_private`), so a tap URL can't point the marketplace at your internal network.
+
+### Without internet access
+
+Set `MARKETPLACE_OFFICIAL_INDEX=off` and upload an index file instead:
 
 ```bash
 curl -X POST -H "Authorization: Bearer $TOKEN" -F file=@index.json \
   http://<root>:11102/api/v1/marketplace/sources/official/import
 ```
 
-An import is only as trustworthy as the channel that carried the file. The same serial rules apply.
-Images have to be available to the host's Docker daemon (pre-loaded or from a local registry).
+The serial check still applies. An imported file is only as trustworthy as the way it reached you.
+The images have to be available to the Docker daemon on each machine, preloaded or from a local
+registry.
 
-### Permissions model
+## Installing and running addons
 
-A definition has to declare every risky capability in `permissions`:
+### Install, update and approve
 
-| Permission | Needed for |
+Install, update and approve all ask the admin to confirm the exact definition that will run. The
+flow is the same for all three:
+
+1. Call the endpoint without `accept_definition`.
+2. The addons manager fetches the definition from the marketplace and answers `409` with
+   `definition` (the exact JSON that will be stored), `definition_hash` and `permissions`. Show
+   these to the admin.
+3. Call again with `accept_definition` set to the hash.
+
+The marketplace doesn't publish hashes. Only the hash from the `409` counts, so the
+admin always confirms what the addons manager actually fetched. If the catalog changes between the
+two calls, the hash no longer matches and you get a new `409`.
+
+Updates always ask, even when the permissions stay the same, because a new version can run
+different images. The `409` of an update also has `previous_version`, `previous_permissions` and
+`permissions_grow`, so a UI can highlight new permissions. A host path only counts as already
+granted when the old version had that exact path with at least the same access.
+
+`approve` is for an addon that is `failed`, for example after an image couldn't be pulled or with
+`grant signature invalid; re-approve the addon` (see [Grant signing](#grant-signing-and-the-state-volume)).
+It only succeeds if the marketplace still serves the installed version with the same definition.
+A failed addon is deployed again, a running one keeps running. If the marketplace has a newer
+version, update instead. If the definition changed under the same version, remove and reinstall.
+
+Clusters work the same way: send the requests to the cluster addons manager on port `11201`. It
+reads definitions from the root marketplace.
+
+### Statuses
+
+| Status | |
 |---|---|
-| `host_paths` | Host bind mounts (`/path` or `/path:ro`). A grant covers exactly that mount source: `/data` does not cover `/data/sub`. A read-write grant also covers a read-only mount of the same path, not the other way round. |
-| `host_root` | Mounting a root-equivalent host path, even read-only. See below. |
-| `host_ports` | Publishing ports on the host. |
-| `docker_socket` | Mounting a container runtime socket (Docker, containerd, CRI-O, Podman), or any directory above one, such as `/run`, `/run/docker` or `/run/user`. This is root on the host. |
-| `host_network` | `network: host`. |
-| `core_network` | Joining the `oakestra` network, where Mongo, Redis and the core APIs are reachable without authentication. This is close to root on the control plane. |
+| `installing`, `updating` | Accepted, the reconcile loop is creating containers. |
+| `active` | All containers are running. |
+| `partially_active` | Some containers are running. `status_details.failed_services` lists the others. |
+| `failed` | `status_details.message` says why: a permission or policy violation, a host path conflict, a bad grant signature, an image that can't be pulled. |
+| `disabling`, `disabled` | Being stopped, or stopped. A disabled addon can be deleted. |
 
-`host_root` is needed for `/`, `/etc`, `/root`, `/boot`, `/proc`, `/sys`, `/dev`, `/usr`, `/bin`,
-`/sbin`, `/lib`, `/lib64`, `/home`, the container runtime state (`/var/lib/docker`,
-`/var/lib/containerd`, `/var/lib/kubelet`, `/run/containerd`), every directory above one of
-those, and everything below the trees `/etc`, `/root`, `/boot`, `/proc`, `/sys`, `/dev` and the
-runtime state directories. Harmless read-only paths such as `/usr/share/zoneinfo` or
-`/lib/modules` only need a `host_paths` entry.
+The reconcile loop runs every `RECONCILE_INTERVAL` (15 seconds). It also checks the stored
+definition against the permission rules again before it creates containers, so an addon whose
+record no longer passes fails with `the installed definition does not pass the current permission
+policy`. Approving it again doesn't help; update to a version that declares what it needs, or
+remove it.
 
-Docker follows symlinks in a bind source when the container starts, so a writable bind source
-can be used to redirect later mounts. Hence:
+Every `UPDATE_CHECK_INTERVAL` (10 minutes) the addons manager compares installed versions with the
+catalog and sets `update_available` and `latest_version`.
 
-- Inside one addon, a path below one of its own read-write bind sources is rejected. Mount the
-  parent instead. Mounting an ancestor of a read-write path is fine.
-- Across addons, the engine refuses to install, update, approve or start an addon whose bind
-  sources equal, contain or lie below those of another addon that isn't disabled, when at least
-  one side is read-write (the message reads `... conflicts with host path of addon X`).
-  Two read-only mounts never conflict.
-- On an update, the new version can't mount a path strictly below a path the previous version
-  had read-write (`UpgradeConflict`), because the old version may have left a symlink behind.
-  The same path again is fine.
+### Uninstall
 
-Things that no permission can grant are rejected outright (for example reserved label prefixes
-such as `oak.`, `oakestra.`, `org.oakestra.` or `com.docker.compose.`, and volume `driver_opts`
-other than plain bind/local ones). Decoding is strict: unknown fields (`privileged`, `cap_add`),
-duplicate keys and keys that differ from the documented spelling in case (`Image` instead of
-`image`) are rejected, so a reviewer can't be shown one value while another is decoded.
+`DELETE /api/v1/addons/<_id>` on an addon that isn't disabled sets it to `disabling`; the reconcile
+loop removes its containers and networks. A second `DELETE` on the disabled addon removes the
+record. Named volumes are left in place, so data survives a reinstall. Remove them with
+`docker volume rm` if you don't need them.
 
-A service that lists no networks gets an addon-private network, not `oakestra`. Only services that
-list `oakestra` (with `core_network` declared) join the core network.
+## API reference
 
-The service named in `ui.service` is also attached to the Docker network `oakestra_addon_ui` with
-the alias `addonui-<id>`. The root dashboard container is on that network too, so it can proxy the
-UI without any addon sitting on the core network. Definitions can't list `oakestra_addon_ui`
-themselves. Compose declares the network; the `addons` binary only creates it if it is missing.
+### Authentication and errors
 
-The policy runs when a definition enters the catalog (sync, import, local registration), at
-install and update, and again right before the reconcile loop creates containers. A stored
-definition that no longer passes the policy fails with `the installed definition does not pass
-the current permission policy`. Re-approving doesn't help there: update to a version that
-declares what it needs, or remove the addon.
+The services accept the JWT that system manager hands out at `POST :10000/api/auth/login`, sent as
+`Authorization: Bearer <token>`. Endpoints marked "admin" need the `Admin` role, "user" means any
+valid token. Until a service has loaded the public key to check tokens, protected endpoints answer
+`503`.
 
-### Container hardening and limits
+Errors are JSON: `{"message": "..."}`. Validation errors from the marketplace (`422`) add an
+`errors` array of `{"path", "message"}`, for example `{"path": "services[0].image", ...}`. Request
+bodies are decoded strictly, an unknown field is a `400` on the addons manager and a `422` on the
+marketplace.
 
-Every addon container runs unprivileged, without added capabilities, with `NET_RAW` dropped and
-`no-new-privileges`, with no devices and no host PID/IPC/user/UTS namespace, and with capped
-json-file logs. Images are inspected before the container is created: an image whose own labels
-use a reserved prefix is refused (`image ... carries the reserved label ...`), since image labels
-would otherwise end up on the container without passing the definition check. An existing volume
-or network is only reused when it carries this addon's owner labels (and, for volumes, the same
-driver options); otherwise the addon fails with a `volume ...` error such as `exists but is not
-owned by this addon` or `exists with a different driver or driver options`.
-
-Limits apply to each addon container and are set on the addons manager:
-
-| Variable | Default | |
-|---|---|---|
-| `ADDON_PIDS_LIMIT` | `1024` | Max processes. `0` disables. |
-| `ADDON_MEMORY_LIMIT` | `512m` | Bytes with optional `k`/`m`/`g`, minimum `6m`. `0` or `unlimited` disables. |
-| `ADDON_CPU_LIMIT` | `1` | Number of CPUs, fractions allowed. `0` disables. |
-
-### Install and update API
-
-On the addons manager (root `:11101`, cluster `:11201`):
+### Addons manager (root `11101`, cluster `11201`)
 
 | Method | Path | Auth | |
 |---|---|---|---|
-| `GET` | `/api/v1/addons`, `/api/v1/addons/<id>` | user token | Installed addons with `status`, `update_available`. |
-| `POST` | `/api/v1/addons` | admin | Install `{"name": "...", "accept_definition": "<hash>"}`. |
-| `POST` | `/api/v1/addons/<id>/update` | admin | Update to the catalog version, `{"accept_definition": "<hash>"}`. |
-| `POST` | `/api/v1/addons/<id>/approve` | admin | Sign the grant of an installed addon again, `{"accept_definition": "<hash>"}`. |
-| `DELETE` | `/api/v1/addons/<id>` | admin | Uninstall. |
-| `GET` | `/api/v1/ui-addons` | none | Active addons with a UI (root only). |
+| `GET` | `/api/v1/addons[?status=<status>]` | user | Installed addons. When an addon fails, `logs` holds the output of its containers. Only admins get `logs`, since addons may print secrets. |
+| `GET` | `/api/v1/addons/<_id>` | user | One installed addon. |
+| `POST` | `/api/v1/addons` | admin | Install. Body `{"name": "<qualified name>", "accept_definition": "<hash>"}`. `201`, or `409` for the confirmation, if already installed or on a host path conflict. |
+| `POST` | `/api/v1/addons/<_id>/update` | admin | Update to the catalog version. Body `{"accept_definition": "<hash>"}`. `409` if there is no newer version or the addon is busy. |
+| `POST` | `/api/v1/addons/<_id>/approve` | admin | Confirm an installed addon again. Body `{"accept_definition": "<hash>"}`. |
+| `DELETE` | `/api/v1/addons/<_id>` | admin | Disable (`200`), or delete if already disabled (`204`). |
+| `GET` | `/api/v1/ui-addons` | none | Active addons that have a UI. Always empty on clusters. |
 
-Install, update and approve all need `accept_definition`, the hash of the whole definition as the
-addons manager would store it: images with their digests, commands, environment, volumes and the
-permissions. Without the right hash the call answers `409` with `definition` (the canonical
-definition the hash covers), `definition_hash` and `permissions` for the dialog. Show it to the
-admin, then repeat the call with the hash. The catalog serves no hash on purpose, only the one
-from the `409` counts. If the catalog changes in between, the old hash no longer matches and the
-call answers `409` again with the new one. Updates always ask, also when the permissions stay the
-same, because a new version can run other images under them. The update answer also contains
-`previous_version`, `previous_permissions` and `permissions_grow`, so a UI can point out new
-permissions. A path counts as covered only when the old grant names that exact path with at least
-the same access. A host path conflict with another addon or with the previous version answers
-`409`. There is no `PATCH`: state changes are internal to the reconcile loop. Request bodies with
-unknown fields, such as the old `accept_permissions`, answer `400`.
+`<_id>` is the `_id` of the installed record from the list, not the addon name. Besides the
+definition fields, a record has `qualified_name`, `addon_id`, `source`, `status`,
+`status_details`, `update_available`, `latest_version`, `created_at` and `updated_at`.
 
-Use `approve` when an addon is `failed` with `grant signature invalid; re-approve the addon` (or
-`missing`), and to retry a failed addon. It asks for the definition hash again and only goes through
-if the marketplace still serves the installed version with the same definition, so a record that
-was rewritten in the database can't be approved by accident. A failed addon is deployed again, a
-running one keeps running. If the marketplace lists a different version, update instead; if the
-definition differs, remove and reinstall.
+### Marketplace (root `11102`)
 
-Statuses: `installing`, `updating`, `disabling`, `disabled`, `failed`, `active`,
-`partially_active`. A `failed` addon carries the reason in `status_details`, for example a
-permission or policy violation, a bind conflict, a bad grant signature, or an image that can't be
-pulled.
+Reads need no token: the cluster addons managers read from here and have no user token. Writes
+need an admin token.
 
-Unknown paths and wrong methods answer JSON (`{"message": ...}`) with `404` and `405`, on both
-services.
+| Method | Path | Auth | |
+|---|---|---|---|
+| `GET` | `/api/v1/marketplace/addons[?source=&name=]` | none | All addons from all sources. |
+| `GET` | `/api/v1/marketplace/addons/<source>/<name>` | none | One addon. `<source>` is `official`, `local` or a tap name. |
+| `POST` | `/api/v1/marketplace/addons` | admin | Register a local addon. Body is the definition. `201`. |
+| `DELETE` | `/api/v1/marketplace/addons/local/<name>` | admin | Remove a local addon. `204`. |
+| `GET` | `/api/v1/marketplace/sources` | none | Sources with their sync state. |
+| `POST` | `/api/v1/marketplace/sources` | admin | Add a tap. Body `{"name", "url", "token"?, "allow_insecure"?, "allow_private"?}`. `201`. |
+| `DELETE` | `/api/v1/marketplace/sources/<name>` | admin | Remove a tap. `204`. `official` and `local` can't be removed (`409`). |
+| `POST` | `/api/v1/marketplace/sources/<name>/sync` | admin | Sync now. `502` if the fetch or the index fails. |
+| `POST` | `/api/v1/marketplace/sources/<name>/import` | admin | Upload an index, as the raw JSON body or as multipart field `file`. |
+| `GET` | `/api/v1/marketplace/auth/public-key` | none | The root's JWT public key, `{"public_key": "<PEM>"}`. |
 
-### Grant signing and the state volume
-
-The record of an installed addon lives in Mongo, and whoever can write there could rewrite the
-stored definition and the grant together (say, add the docker socket to both). So the engine signs
-each record with an HMAC-SHA256 key and only runs records it signed itself.
-
-The key (`grant.key`) and an engine `instance.id` live in `ADDONS_STATE_DIR` (default
-`/var/lib/oakestra-addons`), which is a named volume of its own: `addons_state` on root,
-`cluster_addons_state` on a cluster. It is created with mode 0700 and must not be shared with
-Mongo or an addon. The instance id labels the containers an engine created, so two engines on one
-Docker daemon don't touch each other's.
-
-Back this volume up together with the Mongo data. If it is lost or replaced, the engine makes a
-new key and every installed addon fails with `grant signature invalid` until you approve it again.
-A key file that exists but is unreadable or has the wrong length stops the engine from starting
-rather than silently making a new key. The signature does not stop someone from restoring an
-older signed state of the same record, but that stays within what an admin approved at some point.
-
-### Marketplace API
-
-On the marketplace (`:11102`). Reads are open, writes need an admin token.
-
-| Method | Path | Auth |
-|---|---|---|
-| `GET` | `/api/v1/marketplace/addons[?source=&name=]`, `/api/v1/marketplace/addons/<source>/<name>` | none |
-| `POST` | `/api/v1/marketplace/addons` (local registration) | admin |
-| `DELETE` | `/api/v1/marketplace/addons/local/<name>` | admin |
-| `GET` | `/api/v1/marketplace/sources` | none |
-| `POST` | `/api/v1/marketplace/sources` (add a tap) | admin |
-| `DELETE` | `/api/v1/marketplace/sources/<name>` | admin |
-| `POST` | `/api/v1/marketplace/sources/<name>/sync` | admin |
-| `POST` | `/api/v1/marketplace/sources/<name>/import` (raw JSON or multipart `file`) | admin |
-| `GET` | `/api/v1/marketplace/auth/public-key` | none |
-
-Source listings never contain credentials, and URLs are shown without their query string
-(`?<redacted>`), because presigned or `?token=` URLs carry secrets. Error messages are redacted the
-same way.
+Catalog entries add `qualified_name`, `id` and `required_permissions` (what the definition
+actually uses) to the definition. Sources never include their token, only `has_token`, and URLs
+are shown without the query string because presigned URLs keep secrets there.
 
 ## Addons with a dashboard UI
 
-An addon can add pages to the Oakestra dashboard. The dashboard loads them at runtime as a Module
-Federation remote. Add a `ui` block to the definition:
+An addon can add pages to the dashboard. The dashboard loads them at runtime as a Module
+Federation remote. Add a `ui` block that names the service serving the UI:
 
 ```json
 {
@@ -256,104 +394,138 @@ Federation remote. Add a `ui` block to the definition:
 }
 ```
 
-`ui.service` must be one of the addon's services and `ui.sdk` is the semver range of the dashboard
-SDK the UI was built against. The UI container serves `mf-manifest.json`, `remoteEntry.js` and
-`assets/` over plain HTTP on port 80. The dashboard's nginx proxies `/addon-assets/<id>/...` to
-`http://addonui-<id>:80/...` over the `oakestra_addon_ui` network. Don't use the name of a
-built-in dashboard module (`applications`, `infrastructure`, `users`, `organizations`, `help`): the
-dashboard ignores such an addon.
+`ui.sdk` is the semver range of `@oakestra/dashboard-sdk` the UI was built against. The UI
+container serves `mf-manifest.json`, `remoteEntry.js` and `assets/` over plain http on port 80.
+The addons manager attaches that service to the `oakestra_addon_ui` network with the alias
+`addonui-<id>`, and the dashboard's nginx proxies `/addon-assets/<id>/...` to it. The UI service
+doesn't need `core_network` for this. Don't name your addon after a built-in dashboard module
+(`applications`, `infrastructure`, `users`, `organizations`, `help`), the dashboard ignores those.
 
-The SDK range check is a usability feature, not a security boundary. The dashboard knows its own
-SDK version, computes compatibility and blocks the install. The backend only stores and serves the
-range.
-
-To find out which UIs to load, the dashboard calls `GET /api/v1/ui-addons` on the root addons
-manager (without a token). It returns every `active` addon with a `ui` block:
+The dashboard asks `GET /api/v1/ui-addons` on the root addons manager which UIs to load:
 
 ```json
 [{ "name": "insights", "version": "0.1.0", "sdk": "^0.1.0" }]
 ```
 
-Addon UIs need dashboard-v2 (`github.com/oakestra/dashboard-v2`). The stack starts v1 by default,
-so add `override-dashboard-v2.yml` (`override-dashboard-v2.yaml` for 1-DOC). They don't work with
-`override-network-host.yml`, because there is no Docker DNS to resolve `addonui-<id>`.
+`name` here is the addon id. The dashboard checks the SDK range against its own version and won't
+load an incompatible UI. That check is for compatibility, not security.
 
-`override-no-addons.yml` removes the addons engine and sets a dashboard preset (`PRESET_URL`) that
-turns off addon discovery and the addon pages. For your own presets, see `docs/addons/presets.md`
-in the dashboard-v2 repo.
+Addon UIs need dashboard-v2 (`github.com/oakestra/dashboard-v2`), which you get with
+`override-dashboard-v2.yml` (`override-dashboard-v2.yaml` for 1-DOC). They don't work with
+`override-network-host.yml`, because without Docker DNS the dashboard can't resolve
+`addonui-<id>`. `override-no-addons.yml` removes the addon services and sets a dashboard preset
+that hides the addon pages. For your own presets, see `docs/addons/presets.md` in the dashboard-v2
+repo.
 
 ## Configuration
+
+Both services read their configuration from environment variables. The compose files in
+`root_orchestrator/` and `cluster_orchestrator/` set the ones that differ from the defaults.
 
 ### marketplace
 
 | Variable | Default | |
 |---|---|---|
 | `ADDON_MARKETPLACE_PORT` | `11102` | Listen port. |
-| `ADDON_MARKETPLACE_MONGO_URL` / `_PORT` | `localhost` / `10007` | MongoDB. Database `marketplace`, collections `sources` and `catalog`. |
-| `JWT_GENERATOR_URL` / `JWT_GENERATOR_PORT` | `localhost` / `10011` | Where to fetch the RS256 public key (`GET /key`). |
-| `JWT_PUBLIC_KEY_URL`, `JWT_PUBLIC_KEY` | unset | Alternative key sources, see below. |
-| `MARKETPLACE_OFFICIAL_INDEX` | the community marketplace URL | Official index (URL or file). `off` disables it. Empty means the default. |
+| `ADDON_MARKETPLACE_MONGO_URL`, `ADDON_MARKETPLACE_MONGO_PORT` | `localhost`, `10007` | MongoDB. Database `marketplace`, collections `sources` and `catalog`. |
+| `MARKETPLACE_OFFICIAL_INDEX` | `https://oakestra.github.io/community-marketplace/index.json` | URL of the official index. `off` disables syncing it, so it can only be fed by import. |
 | `MARKETPLACE_OFFICIAL_TOKEN` | unset | Bearer token for the official index, for private development setups. |
-| `MARKETPLACE_SYNC_INTERVAL` | `6h` | Minimum `1m`. |
-| `MARKETPLACE_CORS_ORIGIN` | unset | Allowed CORS origin. Empty means none. |
-| `MARKETPLACE_REGISTRY_ALLOW_PRIVATE` | `false` | Let digest resolution talk to registries on private or loopback addresses, over plain http. Only for local registries in air-gapped or dev setups. |
+| `MARKETPLACE_SYNC_INTERVAL` | `6h` | At least `1m`. |
+| `MARKETPLACE_CORS_ORIGIN` | unset | Allowed CORS origin. Unset sends no CORS headers; the dashboard goes through its own nginx and doesn't need them. |
+| `MARKETPLACE_REGISTRY_ALLOW_PRIVATE` | `false` | Let digest resolution for local registrations reach registries on private or loopback addresses over plain http. Only for local registries. |
+| `JWT_*` | | See [Token verification](#token-verification). |
 
 ### addons
 
 | Variable | Default | |
 |---|---|---|
-| `ADDONS_MANAGER_PORT` | `11101` | Listen port (`11201` on the cluster plane in compose). |
-| `ADDONS_ENGINE_MONGO_URL` / `_PORT` | `localhost` / `10007` | MongoDB. Database `addons`, collection `installed`. |
-| `MARKETPLACE_ADDR` | `http://localhost:11102` | The root marketplace. The cluster plane points at root's. |
-| `ORCHESTRATION_PLANE` | `root` | `root` or `cluster`. Prefixes container names and decides who serves `/ui-addons`. |
-| `RECONCILE_INTERVAL` | `15s` | Go duration or plain seconds, at least 1s. |
-| `UPDATE_CHECK_INTERVAL` | `10m` | Go duration or plain seconds, at least 1s. |
+| `ADDONS_MANAGER_PORT` | `11101` | Listen port. Compose sets `11201` on clusters. |
+| `ADDONS_ENGINE_MONGO_URL`, `ADDONS_ENGINE_MONGO_PORT` | `localhost`, `10007` | MongoDB. Database `addons`, collection `installed`. |
+| `MARKETPLACE_ADDR` | `http://localhost:11102` | The root marketplace. On a cluster this points at the root. |
+| `ORCHESTRATION_PLANE` | `root` | `root` or `cluster`. Used in container names. Only root serves `/ui-addons`. |
+| `RECONCILE_INTERVAL` | `15s` | Go duration or seconds, at least 1s. |
+| `UPDATE_CHECK_INTERVAL` | `10m` | Go duration or seconds, at least 1s. |
 | `ADDONS_CORS_ORIGIN` | `*` | Allowed CORS origin. |
-| `ADDONS_STATE_DIR` | `/var/lib/oakestra-addons` | Grant key and instance id, see above. |
-| `ADDON_PIDS_LIMIT`, `ADDON_MEMORY_LIMIT`, `ADDON_CPU_LIMIT` | `1024`, `512m`, `1` | Per-container limits, see above. |
+| `ADDONS_STATE_DIR` | `/var/lib/oakestra-addons` | Where the grant key lives, see below. |
+| `ADDON_PIDS_LIMIT` | `1024` | Max processes per container. `0` turns the limit off. |
+| `ADDON_MEMORY_LIMIT` | `512m` | Memory per container, bytes with optional `k`, `m` or `g`, at least `6m`. `0` or `unlimited` turns it off. |
+| `ADDON_CPU_LIMIT` | `1` | CPUs per container, fractions allowed. `0` turns it off. |
 | `LOG_LEVEL` | `info` | |
-| `JWT_*` | | Same key loading as the marketplace. |
+| `JWT_*` | | See [Token verification](#token-verification). |
 
-Key loading order (both binaries): `JWT_PUBLIC_KEY` (static PEM, `\n` sequences accepted) wins,
-then `JWT_PUBLIC_KEY_URL`, then `JWT_GENERATOR_URL`/`JWT_GENERATOR_PORT`. The cluster plane has no
-jwt_generator, so compose sets
-`JWT_PUBLIC_KEY_URL=http://<root>:11102/api/v1/marketplace/auth/public-key`.
+### Token verification
 
-Only the jwt_generator source re-fetches the key after a token fails verification: it makes a new
-key pair on every restart, and the path is the local Docker network. A key from a URL or from
-`JWT_PUBLIC_KEY` is loaded once, because root to cluster is plain HTTP and refreshing would let
-anyone on the path trigger a refetch with a bad token and answer it with their own key. So on
-clusters, pin `JWT_PUBLIC_KEY` to the root's public key where you can, and restart the addons
-manager after a root key rotation. An unparsable `JWT_PUBLIC_KEY` stops loading with an error
-instead of retrying.
+Both services need the root's public key to check tokens. They look for it in this order:
 
-## Security model
+1. `JWT_PUBLIC_KEY`: the PEM itself. Literal `\n` sequences are accepted.
+2. `JWT_PUBLIC_KEY_URL`: a URL that returns `{"public_key": "<PEM>"}`.
+3. `JWT_GENERATOR_URL` and `JWT_GENERATOR_PORT` (default `localhost`, `10011`): the root
+   `jwt_generator`.
 
-- Authentication: every write, and every addons manager read except `/ui-addons`, needs an RS256
-  JWT signed by the key of the root `jwt_generator`. Writes also need the `Admin` role. Until the
-  key is loaded, protected endpoints answer `503` instead of letting requests through.
-- Policy and permissions: checked in the marketplace when a definition enters the catalog, in the
-  addons manager at install and update (with the admin accepting the definition hash), and again
-  right before containers are created.
-- Naming: containers, volumes and networks are named from the addon id, never from the definition.
-- Grants: signed with a key in the state volume, see "Grant signing and the state volume".
-- Containers: unprivileged, resource limited, reserved image labels refused, host path overlaps
-  between addons refused.
-- Docker socket: only the `addons` binary mounts it. The marketplace and the dashboard don't.
-- Source fetches: SSRF guards (scheme, size, timeout, redirects, address ranges), serial
-  monotonicity and last-good snapshots, see "Index format and sync".
-- Internal ports are not published on the host: Mongo (10007, 10008, 10107, 10108), Redis (6379,
-  6479), the resource abstractors (11011, 11012) and `jwt_generator` (10011). They have no
-  authentication, and `jwt_generator`'s `POST /create` mints tokens for anyone. Only containers on
-  the `oakestra` network reach them. `override-network-host.yml` puts them on the host.
+Root uses the jwt_generator. Clusters have none, so the cluster compose file sets
+`JWT_PUBLIC_KEY_URL` to the root marketplace's `/api/v1/marketplace/auth/public-key`.
 
-Known tradeoffs:
+The jwt_generator creates a new key pair on every restart, so a key loaded from it is fetched again
+when a token fails to verify. Keys from `JWT_PUBLIC_KEY_URL` or `JWT_PUBLIC_KEY` are loaded once
+and never refreshed. Root to cluster traffic is plain http, and a refresh on failure would let
+anyone on the path send a bad token and then answer the refetch with their own key. On clusters,
+set `JWT_PUBLIC_KEY` to the root's key where you can, and restart the cluster addons manager after
+the root key changes.
 
-- The marketplace `GET` endpoints are unauthenticated, because the cluster addons manager reads
-  root's marketplace across hosts and has no user token. Tap metadata (never credentials) is
-  therefore visible to anyone who can reach port 11102.
-- There is no signing. Digest pinning, serials and PR review in the community marketplace are the
-  trust steps. An offline import is as trustworthy as the way the file was delivered.
-- Even with declared permissions, an admin who accepts a broad permission set (`docker_socket`,
-  `core_network`) hands that power to the addon. The confirmation dialog is the only guard there.
-  It shows the whole definition, image digests included, not just the permission list.
+## Security notes
+
+### Grant signing and the state volume
+
+Installed addons are stored in Mongo. Someone who can write to Mongo could change a stored
+definition and its granted permissions together, for example to add the Docker socket to both. To
+catch that, the addons manager signs each record with an HMAC key and only runs records it signed.
+
+The key (`grant.key`) and an `instance.id` live in `ADDONS_STATE_DIR`, a named volume of its own:
+`addons_state` on root, `cluster_addons_state` on a cluster. Don't share it with Mongo or with an
+addon. The instance id is added to the labels of every container the manager creates, so two
+managers on one Docker daemon leave each other's containers alone.
+
+Back this volume up together with the Mongo data. If it is lost, the manager creates a new key and
+every installed addon fails with `grant signature invalid` until an admin approves it again. If the
+key file exists but can't be read or has the wrong size, the manager refuses to start instead of
+creating a new key. The signature doesn't stop someone from restoring an older signed copy of a
+record, but an admin approved that copy when it was current.
+
+### What is exposed
+
+- Only the addons manager mounts the Docker socket. The marketplace resolves digests through the
+  registry HTTP API and doesn't need it.
+- Mongo (10007, 10008, 10107, 10108), Redis (6379, 6479), the resource abstractors (11011, 11012)
+  and the jwt_generator (10011) are not published on the host. They have no authentication, and
+  the jwt_generator's `POST /create` hands out tokens to anyone. `override-network-host.yml` puts
+  them back on the host network, so avoid it where untrusted users or addons can reach the host.
+- The marketplace reads are open because clusters on other hosts read from it. Anyone who can
+  reach port `11102` can see the configured taps (never their tokens) and their addons. Firewall
+  the port if you don't run remote clusters or want the catalog closed.
+
+### Trust
+
+- Indexes aren't signed. Digest pinning, the serial check and review in the catalog repository are
+  what you rely on.
+- An addon granted `docker_socket`, `host_root` or `core_network` has root on the host
+  or the control plane. The confirmation step shows the full definition with image digests, not
+  just the permission list, but it is the only check.
+
+## Development
+
+The services are part of the root and cluster compose files and start with the stack. To rebuild
+only them, from `root_orchestrator/`:
+
+```bash
+docker compose -f docker-compose.yml up --build marketplace_manager root_addons_manager
+```
+
+Tests and vet, from `addons/`:
+
+```bash
+go vet ./... && go test -race ./...
+```
+
+The images are built with `addons/` as the context (`Dockerfile.marketplace`,
+`Dockerfile.addons`). The definition format, validation and permission rules live in
+`internal/definition`; its package doc lists what the runtime has to do for the rules to hold.
