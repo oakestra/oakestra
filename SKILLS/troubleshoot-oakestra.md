@@ -190,6 +190,8 @@ line. If Python application lines are plain text, verify the image version and t
 | `permission denied` opening `/var/run/docker.sock` (Alloy log) | Alloy cannot discover/read container logs; inspect the socket mount and host permissions |
 | `loki.write` connection refused | The local Loki is not ready, or `LOKI_URL` is wrong for the selected network mode |
 | Service status `NoGpuCapacity` | The SLA asks for `vgpus`/`vram` (setting `vram` alone implies 1 GPU) and no candidate has that many GPUs with at least `vram` MiB free on each. Check the worker's `gpu_vram_free` (free MiB per GPU) and `vgpus` in `cluster_mongo` (`docker exec cluster_mongo mongosh --port 10107 candidates --quiet --eval "db.candidates.find({}, {candidate_name:1, vgpus:1, gpu_vram_free:1}).forEach(printjson)"`); both empty/0 means `nvidia-smi` is missing or failing on the worker (STEP 9.7) |
+| `Oakestra Alert Webhook` with `127.0.0.1:65535: connect: connection refused` (Grafana log) | Alerting is evaluating, but the intentionally inactive webhook placeholder is still in use; set `OAKESTRA_ALERT_WEBHOOK_URL` and recreate Grafana |
+| `Oakestra Alert Email` with `SMTP not configured` or SMTP connection/authentication errors (Grafana log) | Email was selected without a working SMTP transport; set `OAKESTRA_ALERT_EMAIL_TO` and the `OAKESTRA_ALERT_SMTP_*` variables, then recreate Grafana |
 
 ---
 
