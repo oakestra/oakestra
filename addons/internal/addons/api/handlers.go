@@ -1,0 +1,440 @@
+package api
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"net/http"
+	"slices"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/oakestra/oakestra/addons/internal/addons"
+	"github.com/oakestra/oakestra/addons/internal/addons/grant"
+	"github.com/oakestra/oakestra/addons/internal/addons/marketplaceclient"
+	"github.com/oakestra/oakestra/addons/internal/addons/store"
+	"github.com/oakestra/oakestra/addons/internal/auth"
+	"github.com/oakestra/oakestra/addons/internal/definition"
+)
+
+func (s *server) list(c *gin.Context) {
+	w, r := c.Writer, c.Request
+	status := addons.Status(r.URL.Query().Get("status"))
+	if status != "" && !status.Valid() {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Unknown status %q", status))
+		return
+	}
+	items, err := s.Store.List(r.Context(), status)
+	if err != nil {
+		s.internal(w, "listing addons", err)
+		return
+	}
+	admin := isAdmin(c)
+	out := make([]addonResponse, len(items))
+	for i, a := range items {
+		out[i] = toResponse(a, admin)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// isAdmin reports whether the caller's token has the Admin role. Container logs are only shown
+// to admins: addons can print anything there, including secrets from their environment.
+func isAdmin(c *gin.Context) bool {
+	claims, ok := auth.GinClaims(c)
+	return ok && claims.IsAdmin()
+}
+
+func (s *server) get(c *gin.Context) {
+	w, r := c.Writer, c.Request
+	a, err := s.Store.Get(r.Context(), c.Param("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "Addon not found")
+		return
+	}
+	if err != nil {
+		s.internal(w, "reading addon", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toResponse(a, isAdmin(c)))
+}
+
+type installRequest struct {
+	Name              string `json:"name"`
+	AcceptPermissions string `json:"accept_permissions"`
+}
+
+func (s *server) install(c *gin.Context) {
+	w, r := c.Writer, c.Request
+	var req installRequest
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	src, name, err := definition.ParseQualified(req.Name)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	def, ok := s.fetch(w, r, src, name)
+	if !ok {
+		return
+	}
+
+	id := def.ID()
+	current, err := s.Store.List(r.Context(), "")
+	if err != nil {
+		s.internal(w, "listing addons", err)
+		return
+	}
+	for _, o := range current {
+		if o.Current && o.AddonID == id {
+			writeError(w, http.StatusConflict, fmt.Sprintf("Addon %q is already installed.", def.QualifiedName()))
+			return
+		}
+	}
+	if msg, conflict := addons.HostBindConflict(def, "", current); conflict {
+		writeError(w, http.StatusConflict, "The addon's host paths conflict with an installed addon: "+msg)
+		return
+	}
+
+	// The admin confirms the declared set. Check has made sure it covers what the services need,
+	// so confirming it confirms everything the addon can do.
+	perms := def.Permissions.Canonical()
+	hash := perms.Hash()
+	if req.AcceptPermissions != hash {
+		writePermissionsRequired(w, "The permissions of this addon have to be accepted before it is installed.", perms, hash, nil)
+		return
+	}
+
+	def.Permissions = perms
+	now := s.now()
+	rec := addons.Installed{
+		ID: store.NewID(), AddonID: id, QualifiedName: def.QualifiedName(), Source: def.Source, Version: def.Version,
+		Definition: *def, Granted: perms, Status: addons.Installing, CreatedAt: now, UpdatedAt: now,
+	}
+	rec.Signature = s.GrantKey.Sign(rec, s.Plane)
+	created, err := s.Store.Insert(r.Context(), rec)
+	switch {
+	case errors.Is(err, store.ErrDuplicate):
+		// Lost a race against a concurrent install of the same addon.
+		writeError(w, http.StatusConflict, fmt.Sprintf("Addon %q is already installed.", def.QualifiedName()))
+	case err != nil:
+		s.internal(w, "storing addon", err)
+	default:
+		writeJSON(w, http.StatusCreated, toResponse(created, true))
+	}
+}
+
+type updateRequest struct {
+	AcceptPermissions string `json:"accept_permissions"`
+}
+
+func (s *server) update(c *gin.Context) {
+	w, r := c.Writer, c.Request
+	var req updateRequest
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	cur, err := s.Store.Get(r.Context(), c.Param("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "Addon not found")
+		return
+	}
+	if err != nil {
+		s.internal(w, "reading addon", err)
+		return
+	}
+	if !cur.Current || !slices.Contains([]addons.Status{addons.Active, addons.PartiallyActive, addons.Failed}, cur.Status) {
+		writeError(w, http.StatusConflict, fmt.Sprintf("Addon is %s and can't be updated right now.", cur.Status))
+		return
+	}
+
+	latest, ok := s.fetch(w, r, cur.Source, cur.Definition.Name)
+	if !ok {
+		return
+	}
+	if latest.ID() != cur.AddonID {
+		s.internal(w, "update", fmt.Errorf("marketplace returned %q for %q", latest.ID(), cur.AddonID))
+		return
+	}
+	if !newer(latest.Version, cur.Version) {
+		writeError(w, http.StatusConflict, fmt.Sprintf("No newer version than %s is available.", cur.Version))
+		return
+	}
+
+	// Files the old version wrote stay on the host, so it may have planted a symlink below its
+	// own read-write paths. Accepting the permissions can't make that safe, the admin can't
+	// see it.
+	if msg, conflict := definition.UpgradeConflict(definition.HostBindSources(&cur.Definition), definition.HostBindSources(latest)); conflict {
+		writeError(w, http.StatusConflict, "This version can't be installed over the current one: "+msg)
+		return
+	}
+	others, err := s.Store.List(r.Context(), "")
+	if err != nil {
+		s.internal(w, "listing addons", err)
+		return
+	}
+	if msg, conflict := addons.HostBindConflict(latest, cur.ID, others); conflict {
+		writeError(w, http.StatusConflict, "This version's host paths conflict with an installed addon: "+msg)
+		return
+	}
+
+	perms := latest.Permissions.Canonical()
+	hash := perms.Hash()
+	if perms.Grows(cur.Granted) && req.AcceptPermissions != hash {
+		old := cur.Granted.Canonical()
+		writePermissionsRequired(w, "This version asks for more permissions than the installed one, they have to be accepted.", perms, hash, &old)
+		return
+	}
+	latest.Permissions = perms
+
+	applied := false
+	updated, err := s.Store.Update(r.Context(), cur.ID, func(a *addons.Installed) error {
+		// Someone else may have changed the addon since it was read.
+		if a.Version != cur.Version || a.Status != cur.Status {
+			return store.ErrAbort
+		}
+		applied = true
+		a.Version, a.Definition, a.Granted = latest.Version, *latest, perms
+		a.LatestVersion = latest.Version
+		a.Status, a.StatusDetails, a.Logs = addons.Updating, addons.StatusDetails{}, ""
+		a.UpdatedAt = s.now()
+		a.Signature = s.GrantKey.Sign(*a, s.Plane)
+		return nil
+	})
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "Addon not found")
+	case err != nil:
+		s.internal(w, "storing update", err)
+	case !applied:
+		writeError(w, http.StatusConflict, "The addon changed while the update was prepared, try again.")
+	default:
+		writeJSON(w, http.StatusOK, toResponse(updated, true))
+	}
+}
+
+type approveRequest struct {
+	AcceptPermissions string `json:"accept_permissions"`
+}
+
+// approve signs an installed addon's grant again. It is the way out of "grant signature
+// invalid" (the state directory was lost, or the record was edited in the database): the admin
+// confirms the permissions again, and the snapshot is only kept if the marketplace still
+// serves exactly that definition for the version, so a record rewritten in the database can't
+// get approved by accident.
+func (s *server) approve(c *gin.Context) {
+	w, r := c.Writer, c.Request
+	var req approveRequest
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	cur, err := s.Store.Get(r.Context(), c.Param("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "Addon not found")
+		return
+	}
+	if err != nil {
+		s.internal(w, "reading addon", err)
+		return
+	}
+	if !cur.Current || !slices.Contains([]addons.Status{addons.Active, addons.PartiallyActive, addons.Failed}, cur.Status) {
+		writeError(w, http.StatusConflict, fmt.Sprintf("Addon is %s and can't be approved right now.", cur.Status))
+		return
+	}
+
+	latest, ok := s.fetch(w, r, cur.Source, cur.Definition.Name)
+	if !ok {
+		return
+	}
+	latest.Permissions = latest.Permissions.Canonical()
+	if latest.ID() != cur.AddonID || latest.Version != cur.Version {
+		writeError(w, http.StatusConflict, fmt.Sprintf("The marketplace lists %s %s, not the installed %s; update the addon instead.", latest.QualifiedName(), latest.Version, cur.Version))
+		return
+	}
+	if !bytes.Equal(grant.CanonicalDefinition(*latest), grant.CanonicalDefinition(cur.Definition)) {
+		writeError(w, http.StatusConflict, "The installed definition differs from the marketplace's definition of the same version; remove and reinstall the addon.")
+		return
+	}
+	others, err := s.Store.List(r.Context(), "")
+	if err != nil {
+		s.internal(w, "listing addons", err)
+		return
+	}
+	if msg, conflict := addons.HostBindConflict(latest, cur.ID, others); conflict {
+		writeError(w, http.StatusConflict, "The addon's host paths conflict with an installed addon: "+msg)
+		return
+	}
+	perms := latest.Permissions
+	hash := perms.Hash()
+	if req.AcceptPermissions != hash {
+		writePermissionsRequired(w, "The permissions of this addon have to be accepted again.", perms, hash, nil)
+		return
+	}
+
+	applied := false
+	updated, err := s.Store.Update(r.Context(), cur.ID, func(a *addons.Installed) error {
+		if a.Version != cur.Version || a.Status != cur.Status || !a.Current {
+			return store.ErrAbort
+		}
+		applied = true
+		a.Definition, a.Granted = *latest, perms
+		a.QualifiedName, a.Source = latest.QualifiedName(), latest.Source
+		// A failed addon is deployed again; a running one keeps running and only gets the
+		// signature its next redeploy will need.
+		if a.Status == addons.Failed {
+			a.Status, a.StatusDetails, a.Logs = addons.Installing, addons.StatusDetails{}, ""
+		}
+		a.UpdatedAt = s.now()
+		a.Signature = s.GrantKey.Sign(*a, s.Plane)
+		return nil
+	})
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "Addon not found")
+	case err != nil:
+		s.internal(w, "storing approval", err)
+	case !applied:
+		writeError(w, http.StatusConflict, "The addon changed while the approval was prepared, try again.")
+	default:
+		writeJSON(w, http.StatusOK, toResponse(updated, true))
+	}
+}
+
+func (s *server) remove(c *gin.Context) {
+	w, r := c.Writer, c.Request
+	id := c.Param("id")
+	cur, err := s.Store.Get(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "Addon not found")
+		return
+	}
+	if err != nil {
+		s.internal(w, "reading addon", err)
+		return
+	}
+
+	if cur.Status == addons.Disabled {
+		if err := s.Store.Delete(r.Context(), id); err != nil && !errors.Is(err, store.ErrNotFound) {
+			s.internal(w, "deleting addon", err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// Disabling is picked up by the reconcile loop, which removes the containers.
+	updated, err := s.Store.Update(r.Context(), id, func(a *addons.Installed) error {
+		if a.Status == addons.Disabled || a.Status == addons.Disabling {
+			return store.ErrAbort
+		}
+		a.Status, a.UpdatedAt = addons.Disabling, s.now()
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Addon not found")
+			return
+		}
+		s.internal(w, "disabling addon", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toResponse(updated, true))
+}
+
+// fetch gets a definition from the marketplace and checks it with ModeInstall: any source,
+// local registrations included, but every image digest pinned. It writes the error response
+// itself. The client drops everything the marketplace precomputes, so the definition is
+// checked from scratch here.
+func (s *server) fetch(w http.ResponseWriter, r *http.Request, src definition.Source, name string) (*definition.Addon, bool) {
+	def, err := s.Marketplace.Get(r.Context(), src, name)
+	switch {
+	case errors.Is(err, marketplaceclient.ErrNotFound):
+		writeError(w, http.StatusNotFound, "Marketplace addon not found")
+		return nil, false
+	case err != nil:
+		s.log.Warn("marketplace lookup failed", "source", src.Name, "name", name, "error", err)
+		writeError(w, http.StatusBadGateway, "Marketplace is unavailable")
+		return nil, false
+	}
+	def.Normalize()
+	if err := definition.Check(def, definition.ModeInstall); err != nil {
+		resp := map[string]any{"message": "The addon definition is not valid: " + err.Error()}
+		var errs definition.Errors
+		if errors.As(err, &errs) {
+			resp["errors"] = errs
+		}
+		writeJSON(w, http.StatusUnprocessableEntity, resp)
+		return nil, false
+	}
+	return def, true
+}
+
+func writePermissionsRequired(w http.ResponseWriter, msg string, perms definition.Permissions, hash string, previous *definition.Permissions) {
+	body := map[string]any{"message": msg, "permissions": perms, "permissions_hash": hash}
+	if previous != nil {
+		body["previous_permissions"] = *previous
+	}
+	writeJSON(w, http.StatusConflict, body)
+}
+
+func (s *server) internal(w http.ResponseWriter, what string, err error) {
+	s.log.Error(what+" failed", "error", err)
+	writeError(w, http.StatusInternalServerError, "Internal server error")
+}
+
+// uiAddonEntry is one element of GET /ui-addons. Name is the addon id, which is also what the
+// dashboard turns into the addonui-<name> host.
+type uiAddonEntry struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	SDK     string `json:"sdk"`
+}
+
+func (s *server) uiAddons(c *gin.Context) {
+	w, r := c.Writer, c.Request
+	entries := []uiAddonEntry{}
+	// Only the root dashboard loads UIs, and only the root engine attaches the alias.
+	if s.Plane != "root" {
+		writeJSON(w, http.StatusOK, entries)
+		return
+	}
+	items, err := s.Store.List(r.Context(), addons.Active)
+	if err != nil {
+		s.internal(w, "listing addons", err)
+		return
+	}
+	seen := map[string]bool{}
+	for _, a := range items {
+		ui := a.Definition.UI
+		if ui == nil || ui.SDK == "" || seen[a.AddonID] {
+			continue
+		}
+		svc := a.Definition.Service(ui.Service)
+		if svc == nil || svc.Image == "" {
+			s.log.Warn("skipping UI addon whose ui.service is missing", "addon", a.AddonID)
+			continue
+		}
+		seen[a.AddonID] = true
+		entries = append(entries, uiAddonEntry{Name: a.AddonID, Version: imageVersion(svc.Image), SDK: ui.SDK})
+	}
+	writeJSON(w, http.StatusOK, entries)
+}
+
+const digestPrefixLength = 12
+
+// imageVersion is the tag of an image reference, or the shortened digest if it has none. The
+// dashboard shows it and uses it to bust caches.
+func imageVersion(ref string) string {
+	name, digest, _ := strings.Cut(ref, "@")
+	last := name[strings.LastIndex(name, "/")+1:]
+	// A colon before the last slash is a registry port, not a tag, which the slicing above
+	// has already cut off.
+	if i := strings.LastIndex(last, ":"); i >= 0 && i < len(last)-1 {
+		return last[i+1:]
+	}
+	if algo, hex, ok := strings.Cut(digest, ":"); ok {
+		return algo + ":" + hex[:min(digestPrefixLength, len(hex))]
+	}
+	return "latest"
+}
