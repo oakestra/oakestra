@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -416,28 +415,14 @@ func (s *server) uiAddons(c *gin.Context) {
 		if ui == nil || ui.SDK == "" || seen[a.AddonID] {
 			continue
 		}
-		svc := a.Definition.Service(ui.Service)
-		if svc == nil || svc.Image == "" {
+		if svc := a.Definition.Service(ui.Service); svc == nil || svc.Image == "" {
 			s.log.Warn("skipping UI addon whose ui.service is missing", "addon", a.AddonID)
 			continue
 		}
 		seen[a.AddonID] = true
-		entries = append(entries, uiAddonEntry{Name: a.AddonID, Version: imageVersion(svc.Image), SDK: ui.SDK})
+		// Use the addon version, not the image tag. Images are pinned by digest, and an update
+		// always raises the version, so the dashboard's cache busting still works.
+		entries = append(entries, uiAddonEntry{Name: a.AddonID, Version: a.Version, SDK: ui.SDK})
 	}
 	httpx.WriteJSON(w, http.StatusOK, entries)
-}
-
-const digestPrefixLength = 12
-
-// imageVersion is the tag of an image reference, or the shortened digest if it has none. The
-// dashboard shows it and uses it to bust caches.
-func imageVersion(image string) string {
-	ref, _ := definition.ParseImage(image)
-	if ref.Tag != "" {
-		return ref.Tag
-	}
-	if algo, hex, ok := strings.Cut(ref.Digest, ":"); ok {
-		return algo + ":" + hex[:min(digestPrefixLength, len(hex))]
-	}
-	return "latest"
 }

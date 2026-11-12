@@ -587,7 +587,7 @@ func TestUIAddons(t *testing.T) {
 	if code != 200 {
 		t.Fatal(code)
 	}
-	want := `[{"name":"insights","version":"1.4.2","sdk":"^1.0.0"},{"name":"acme--tool","version":"sha256:0123456789ab","sdk":"^1.0.0"}]`
+	want := `[{"name":"insights","version":"1.4.2","sdk":"^1.0.0"},{"name":"acme--tool","version":"2.0.0","sdk":"^1.0.0"}]`
 	if strings.TrimSpace(string(body)) != want {
 		t.Fatalf("ui-addons = %s\nwant %s", body, want)
 	}
@@ -604,23 +604,6 @@ func TestUIAddonsEmptyAndCluster(t *testing.T) {
 	c.setStatus(a.ID, addons.Active)
 	if _, body := c.do("GET", "/api/v1/ui-addons", "", nil); strings.TrimSpace(string(body)) != "[]" {
 		t.Fatalf("cluster plane served UI addons: %s", body)
-	}
-}
-
-func TestImageVersion(t *testing.T) {
-	d := "sha256:0123456789abcdef" + strings.Repeat("0", 48)
-	for in, want := range map[string]string{
-		"ghcr.io/x/ui:1.2.0":      "1.2.0",
-		"ghcr.io/x/ui:1.2.0@" + d: "1.2.0",
-		"ghcr.io/x/ui@" + d:       "sha256:0123456789ab",
-		"localhost:5000/ui@" + d:  "sha256:0123456789ab",
-		"localhost:5000/ui:v1":    "v1",
-		"localhost:5000/ui":       "latest",
-		"ui":                      "latest",
-	} {
-		if got := imageVersion(in); got != want {
-			t.Errorf("imageVersion(%q) = %q, want %q", in, got, want)
-		}
 	}
 }
 

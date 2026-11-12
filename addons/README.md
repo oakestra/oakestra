@@ -407,7 +407,8 @@ The dashboard asks `GET /api/v1/ui-addons` on the root addons manager which UIs 
 [{ "name": "insights", "version": "0.1.0", "sdk": "^0.1.0" }]
 ```
 
-`name` here is the addon id. The dashboard checks the SDK range against its own version and won't
+`name` here is the addon id and `version` the installed addon version, which the dashboard also
+uses to bust caches. The dashboard checks the SDK range against its own version and won't
 load an incompatible UI. That check is for compatibility, not security.
 
 Addon UIs need dashboard-v2 (`github.com/oakestra/dashboard-v2`), which you get with
