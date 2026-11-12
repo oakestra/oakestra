@@ -39,6 +39,10 @@ UPLOAD_FOLDER = "files"
 ALLOWED_EXTENSIONS = {"txt", "json", "yml"}
 
 app = Flask(__name__)
+# Answer "/x" and "/x/" the same instead of redirecting. Werkzeug builds the redirect from the
+# Host header and drops hosts that contain an underscore, so containers calling
+# system_manager:10000 got "Location: http:///...". Has to be set before routes are registered.
+app.url_map.strict_slashes = False
 
 app.config["OPENAPI_VERSION"] = "3.0.2"
 app.config["API_TITLE"] = "Oakestra root api"
