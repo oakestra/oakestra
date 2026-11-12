@@ -53,6 +53,10 @@ Because the stack runs with **host networking**, every host value in the launch 
 | **Debug Cluster Resource Abstractor** | Python | `resource-abstractor` | 11012 |
 | **Debug Cluster Addons Manager** | Go | `addons/cmd/addons` (`ORCHESTRATION_PLANE=cluster`) | 11201 |
 
+> The base compose files don't publish Mongo, Redis or the resource abstractors on the host. The
+> debug profiles can still reach them because the `prep-*` tasks start the stacks with
+> `override-network-host.yml`, which puts those services on the host network.
+
 > The Resource Abstractor and the Addons Manager are single components deployed
 > in **both** planes; the root/cluster profiles differ only by port and target MongoDB.
 

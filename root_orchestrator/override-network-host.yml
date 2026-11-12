@@ -1,3 +1,6 @@
+# With host networking, mongo, mongo_net, redis and the resource abstractor listen directly on the
+# host, where anything on the host network and addon containers (via the Docker gateway) can reach
+# them. The base file keeps them off the host; in host mode that protection is gone.
 x-logging: &default-logging
   driver: "json-file"
   options:

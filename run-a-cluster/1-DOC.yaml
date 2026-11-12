@@ -79,13 +79,12 @@ services:
 
   # MongoDB in Root Orchestrator
   mongo_root:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     pull_policy: always
     container_name: mongo
     hostname: mongo
     labels: *root-log-labels
-    ports:
-      - "10007:10007"
     expose:
       - "10007"
     volumes:
@@ -97,13 +96,12 @@ services:
 
   # cluster-level mongoDB
   mongo_rootnet:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     pull_policy: always
     container_name: mongo_net
     hostname: mongo_net
     labels: *root-log-labels
-    ports:
-      - "10008:10008"
     expose:
       - "10008"
     volumes:
@@ -142,6 +140,7 @@ services:
 
   # Redis for the Root Scheduler
   root_redis:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: redis
     pull_policy: always
     hostname: root_redis
@@ -152,6 +151,7 @@ services:
     command: redis-server --requirepass rootRedis
 
   root_resource_abstractor:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
     pull_policy: always
     container_name: root_resource_abstractor
@@ -159,8 +159,6 @@ services:
     labels: *root-log-labels
     expose:
       - "11011"
-    ports:
-      - "11011:11011"
     environment:
       - RESOURCE_ABSTRACTOR_PORT=11011
       - MONGO_URL=mongo
@@ -174,10 +172,9 @@ services:
     container_name: jwt_generator
     hostname: jwt_generator
     labels: *root-log-labels
+    # Not published on the host: POST /create mints tokens without authentication.
     expose:
       - "10011"
-    ports:
-      - "10011:10011"
     environment:
       - JWT_GENERATOR_PORT=10011
     logging: *default-logging
@@ -229,13 +226,12 @@ services:
 
   # cluster-level mongoDB
   mongo_cluster:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     pull_policy: always
     container_name: cluster_mongo
     hostname: cluster_mongo
     labels: *cluster-log-labels
-    ports:
-      - "10107:10107"
     expose:
       - "10107"
     volumes:
@@ -247,13 +243,12 @@ services:
 
   # cluster-level mongoDB
   mongo_clusternet:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     pull_policy: always
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
     labels: *cluster-log-labels
-    ports:
-      - "10108:10108"
     expose:
       - "10108"
     volumes:
@@ -358,6 +353,7 @@ services:
     logging: *default-logging
 
   cluster_resource_abstractor:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
     pull_policy: always
     container_name: cluster_resource_abstractor
@@ -365,8 +361,6 @@ services:
     hostname: cluster_resource_abstractor
     expose:
       - "11012"
-    ports:
-      - "11012:11012"
     environment:
       - RESOURCE_ABSTRACTOR_PORT=11012
       - MONGO_URL=cluster_mongo
@@ -378,6 +372,7 @@ services:
 
   # Redis for the Cluster Scheduler as Job Queue
   cluster_redis:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: redis
     pull_policy: always
     hostname: cluster_redis

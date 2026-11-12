@@ -51,12 +51,11 @@ services:
 
   # MongoDB in Root Orchestrator
   mongo_root:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     container_name: mongo
     hostname: mongo
     labels: *root-log-labels
-    ports:
-      - "10007:10007"
     expose:
       - "10007"
     volumes:
@@ -68,12 +67,11 @@ services:
 
   # root-level network mongoDB
   mongo_rootnet:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     container_name: mongo_net
     hostname: mongo_net
     labels: *root-log-labels
-    ports:
-      - "10008:10008"
     volumes:
       - 'mongodb_net_data:/data/db'
   # Check oakestra pr #586 for details on why this is needed.
@@ -105,12 +103,11 @@ services:
 
   # Redis for the Root Scheduler
   root_redis:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: redis
     hostname: root_redis
     container_name: root_redis
     labels: *root-log-labels
-    ports:
-      - "6379:6379"
     command: redis-server --requirepass rootRedis
 
   # Observability Stack
@@ -214,6 +211,7 @@ services:
     logging: *default-logging
 
   root_resource_abstractor:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: resource_abstractor
     build: ../resource-abstractor/
     container_name: root_resource_abstractor
@@ -221,8 +219,6 @@ services:
     hostname: root_resource_abstractor
     expose:
       - "11011"
-    ports:
-      - "11011:11011"
     environment:
       - RESOURCE_ABSTRACTOR_PORT=11011
       - MONGO_URL=mongo
@@ -237,10 +233,10 @@ services:
     container_name: jwt_generator
     hostname: jwt_generator
     labels: *root-log-labels
+    # Not published on the host: POST /create mints tokens without authentication, so only
+    # containers on the oakestra network may reach it.
     expose:
       - "10011"
-    ports:
-      - "10011:10011"
     environment:
       - JWT_GENERATOR_PORT=10011
     logging: *default-logging
