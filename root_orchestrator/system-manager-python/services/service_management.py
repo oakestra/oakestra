@@ -172,6 +172,14 @@ def generate_db_structure(application, microservice):
     microservice["instance_list"] = []
     if microservice["virtualization"] == "container":
         microservice["virtualization"] = "docker"
+    # The worker only attaches GPUs when vgpus > 0, so vram alone has to ask for
+    # one. Not for crosvm, where vgpus means virtio-gpu devices.
+    if (
+        microservice["virtualization"] == "docker"
+        and (microservice.get("vram") or 0) > 0
+        and not microservice.get("vgpus")
+    ):
+        microservice["vgpus"] = 1
     addresses = microservice.get("addresses")
     if addresses is not None:
         microservice["RR_ip"] = addresses.get(

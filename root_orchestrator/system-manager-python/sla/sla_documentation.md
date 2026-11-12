@@ -16,7 +16,8 @@ Example under *sla.json*
     - **virtualization** : type of virtualization chosen for the application, may be one of ["container", "unikernel", "vm"]
     - **memory** : Needed memory in MB,
     - **vcpus** : Needed vCPUs, default 1
-    - **vgpus** : Needed vGPUs, default 0
+    - **vgpus** : Needed vGPUs, default 0. For containers, the number of NVIDIA GPUs; the service is only placed on nodes that have at least this many. For `crosvm` VMs, the number of virtio-gpu devices, which is not checked during scheduling
+    - **vram** : Containers only. Free VRAM in MiB (as reported by `nvidia-smi`) that each requested GPU needs, default 0. A node fits if it has **vgpus** GPUs with at least this much free each. If set without **vgpus**, 1 GPU is requested. Ignored for other virtualization types
     - **vtpus** : Needed vTPUs, default 0
     - **bandwidth_in** : Minimum bandwidth-ingress needed for application in kbit/s, default 0
     - **bandwith_out** : Minimum bandwidth-egress needed for application in kbit/s, default 0
@@ -60,6 +61,22 @@ Example under *sla.json*
           - **rigidness** : Rigidness of constraint; see definition in constraint.
           - **convergence_time** : Time the orchestration framework has to find the optimal solution, before the [**rigidness**] of the constraint gets measured. In [s], default 300 (5 min)
           
+### Example: GPU model serving
+
+A microservice that needs 2 GPUs with 8000 MiB of free VRAM each:
+
+```json
+{
+  "microservice_name": "llm-server",
+  "virtualization": "container",
+  "code": "docker.io/example/llm-server:latest",
+  "memory": 4096,
+  "vcpus": 4,
+  "vgpus": 2,
+  "vram": 8000
+}
+```
+
 ## On expandability
 
 There are multiple points for this design to be expanded upon:

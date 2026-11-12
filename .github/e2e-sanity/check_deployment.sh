@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Deploys, scales and removes a busybox service through the root API, then
-# makes sure a service that fits no worker gets rejected.
+# makes sure services that fit no worker (too much memory, a GPU on the
+# GPU-less runner) get rejected.
 #
 # Instance state is compared at root and in containerd. Root only learns about
 # the worker through the cluster, so it can look fine while the worker is not.
@@ -128,12 +129,17 @@ instance_count_is() {
   [[ "$count" == "$expected" ]]
 }
 
+# With an expected status the rejection has to carry that exact reason, so a
+# GPU request can't pass because it was rejected for something else.
 rejected_by_scheduler() {
-  local service_id=$1
+  local service_id=$1 expected=${2:-}
   local status
   status=$(api GET "/api/service/${service_id}" 2>/dev/null | jq -r '.status // "-"') || return 1
   echo "[${SECONDS}s] job status '${status}'"
-  grep -Fxq -- "$status" <<<"$NEGATIVE_SCHEDULING_STATUSES"
+  grep -Fxq -- "$status" <<<"$NEGATIVE_SCHEDULING_STATUSES" || return 1
+  if [[ -n "$expected" && "$status" != "$expected" ]]; then
+    fail "rejected with '${status}' instead of '${expected}'"
+  fi
 }
 
 service_gone_at_root() {
@@ -143,10 +149,11 @@ service_gone_at_root() {
 
 # Prints "<app id> <service id>".
 register_app() {
-  local app=$1 memory_mb=$2
+  local app=$1 memory_mb=$2 vgpus=${3:-0} vram_mib=${4:-0}
   local sla apps
   sla=$(jq -n --arg app "$app" --arg app_ns "$APP_NS" --arg svc "$SERVICE_NAME" \
-    --arg svc_ns "$SERVICE_NS" --arg image "$IMAGE" --argjson memory "$memory_mb" '{
+    --arg svc_ns "$SERVICE_NS" --arg image "$IMAGE" --argjson memory "$memory_mb" \
+    --argjson vgpus "$vgpus" --argjson vram "$vram_mib" '{
     sla_version: "v2.0",
     customerID: "Admin",
     applications: [{
@@ -162,7 +169,8 @@ register_app() {
         cmd: ["sh", "-c", "tail -f /dev/null"],
         memory: $memory,
         vcpus: 1,
-        vgpus: 0,
+        vgpus: $vgpus,
+        vram: $vram,
         vtpus: 0,
         bandwidth_in: 0,
         bandwidth_out: 0,
@@ -214,19 +222,37 @@ echo "Deleting application ${app_id}"
 api DELETE "/api/application/${app_id}" >/dev/null
 wait_for "service removed at root" service_gone_at_root "$service_id"
 
+# Registers an app the scheduler must reject, checks it never reached the
+# worker, and removes it again.
+# Usage: check_unschedulable <app> <expected status or ""> <register_app args...>
+check_unschedulable() {
+  local app=$1 expected=$2
+  shift 2
+  local job ids app_id service_id
+  job=$(job_name "$app")
+  ids=$(register_app "$app" "$@")
+  read -r app_id service_id <<<"$ids"
+  echo "Application ${app_id}, service ${service_id}"
+  api POST "/api/service/${service_id}/instance" >/dev/null
+  wait_for "scheduler rejected the service" rejected_by_scheduler "$service_id" "$expected"
+  if [[ -n "$(worker_state "$job")$(worker_containers "$job")" ]]; then
+    fail "the rejected service still reached the worker"
+  fi
+  api DELETE "/api/application/${app_id}" >/dev/null
+  wait_for "rejected service removed at root" service_gone_at_root "$service_id"
+}
+
 echo "== Unschedulable service"
-app=cisanitybig
-job=$(job_name "$app")
 # 100 TB, nothing fits that.
-ids=$(register_app "$app" 100000000)
-read -r app_id service_id <<<"$ids"
-echo "Application ${app_id}, service ${service_id}"
-api POST "/api/service/${service_id}/instance" >/dev/null
-wait_for "scheduler rejected the service" rejected_by_scheduler "$service_id"
-if [[ -n "$(worker_state "$job")$(worker_containers "$job")" ]]; then
-  fail "the rejected service still reached the worker"
-fi
-api DELETE "/api/application/${app_id}" >/dev/null
-wait_for "rejected service removed at root" service_gone_at_root "$service_id"
+check_unschedulable cisanitybig "" 100000000
+
+# The runner has no GPU, so both of these have to be turned down by the
+# scheduler instead of failing at container creation on the worker.
+echo "== GPU service on a GPU-less worker"
+check_unschedulable cisanitygpu NoGpuCapacity 50 1 0
+
+# vram alone implies one GPU.
+echo "== VRAM service on a GPU-less worker"
+check_unschedulable cisanityvram NoGpuCapacity 50 0 1024
 
 echo "OK: deployment checks passed"
