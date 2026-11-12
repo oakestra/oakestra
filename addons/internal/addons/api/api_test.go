@@ -142,12 +142,17 @@ func decode[T any](t *testing.T, b []byte) T {
 func (f *fixture) install(name string) addonResponse {
 	f.t.Helper()
 	q := f.mkt.addons[name]
-	hash := q.Permissions.Canonical().Hash()
-	code, body := f.do("POST", "/api/v1/addons", f.admin, map[string]string{"name": name, "accept_permissions": hash})
+	code, body := f.do("POST", "/api/v1/addons", f.admin, map[string]string{"name": name, "accept_definition": q.Hash()})
 	if code != 201 {
 		f.t.Fatalf("install = %d %s", code, body)
 	}
 	return decode[addonResponse](f.t, body)
+}
+
+// accept is the body that confirms what the marketplace currently serves for name.
+func (f *fixture) accept(name string) map[string]string {
+	q := f.mkt.addons[name]
+	return map[string]string{"accept_definition": q.Hash()}
 }
 
 func (f *fixture) setStatus(id string, s addons.Status) {
@@ -280,32 +285,43 @@ func TestInstallFlow(t *testing.T) {
 	d.Permissions = definition.Permissions{HostPorts: []int{8080}}
 	d.Services[0].Ports = map[string]string{"80": "8080"}
 	f.mkt.set(d)
-	hash := d.Permissions.Canonical().Hash()
+	pHash := d.Permissions.Canonical().Hash()
+	hash := d.Hash()
 
-	// Without the hash, the admin gets the permissions to look at.
+	// Without the hash, the admin gets the definition and permissions to look at.
 	code, body := f.do("POST", "/api/v1/addons", f.admin, map[string]string{"name": "insights"})
 	if code != 409 {
 		t.Fatalf("no hash: %d %s", code, body)
 	}
 	resp := decode[struct {
 		Message     string                 `json:"message"`
+		Definition  definition.Addon       `json:"definition"`
+		Hash        string                 `json:"definition_hash"`
 		Permissions definition.Permissions `json:"permissions"`
-		Hash        string                 `json:"permissions_hash"`
 	}](t, body)
 	if resp.Hash != hash || len(resp.Permissions.HostPorts) != 1 || resp.Permissions.HostPorts[0] != 8080 || resp.Message == "" {
 		t.Fatalf("response = %+v", resp)
 	}
+	if resp.Definition.Hash() != resp.Hash || resp.Definition.Services[0].Image != d.Services[0].Image {
+		t.Fatalf("definition does not match its hash: %+v", resp.Definition)
+	}
+	if strings.Contains(string(body), "permissions_hash") {
+		t.Fatalf("body still has permissions_hash: %s", body)
+	}
 
-	// A hash of something else is refused the same way.
-	code, _ = f.do("POST", "/api/v1/addons", f.admin, map[string]string{"name": "insights", "accept_permissions": definition.Permissions{}.Hash()})
-	if code != 409 {
-		t.Fatalf("wrong hash: %d", code)
+	// A hash of something else is refused the same way, and so is the hash of only the
+	// permissions.
+	for _, wrong := range []string{definition.Permissions{}.Hash(), pHash} {
+		code, _ = f.do("POST", "/api/v1/addons", f.admin, map[string]string{"name": "insights", "accept_definition": wrong})
+		if code != 409 {
+			t.Fatalf("wrong hash: %d", code)
+		}
 	}
 	if items, _ := f.st.List(context.Background(), ""); len(items) != 0 {
 		t.Fatal("stored without confirmation")
 	}
 
-	code, body = f.do("POST", "/api/v1/addons/", f.admin, map[string]string{"name": "oakestra/insights", "accept_permissions": resp.Hash})
+	code, body = f.do("POST", "/api/v1/addons/", f.admin, map[string]string{"name": "oakestra/insights", "accept_definition": resp.Hash})
 	if code != 201 {
 		t.Fatalf("install: %d %s", code, body)
 	}
@@ -320,7 +336,7 @@ func TestInstallFlow(t *testing.T) {
 		t.Fatalf("duplicate: %d", code)
 	}
 	stored, _ := f.st.Get(context.Background(), a.ID)
-	if stored.Granted.Hash() != hash || stored.Definition.Services[0].Image != d.Services[0].Image {
+	if stored.Granted.Hash() != pHash || stored.Definition.Hash() != hash || stored.Definition.Services[0].Image != d.Services[0].Image {
 		t.Error("snapshot or grant differ from what was confirmed")
 	}
 }
@@ -345,7 +361,7 @@ func TestInstallErrors(t *testing.T) {
 		{"empty body", "", 400},
 		{"not an object", "[]", 400},
 		// The marketplace says nothing about permissions here, the engine works them out itself.
-		{"undeclared host mount", map[string]string{"name": "evil", "accept_permissions": def("x", "1.0.0").Permissions.Hash()}, 422},
+		{"undeclared host mount", map[string]string{"name": "evil", "accept_definition": def("x", "1.0.0").Permissions.Hash()}, 422},
 		{"unpinned image", map[string]string{"name": "loose"}, 422},
 		{"oversize body", `{"name":"` + strings.Repeat("a", MaxBodyBytes) + `"}`, 413},
 	} {
@@ -371,7 +387,7 @@ func TestInstallRechecksNotTheMarketplacesWord(t *testing.T) {
 	d := def("sneaky", "1.0.0")
 	d.Services[0].Ports = map[string]string{"80": "80"}
 	f.mkt.set(d)
-	code, body := f.do("POST", "/api/v1/addons", f.admin, map[string]string{"name": "sneaky", "accept_permissions": d.Permissions.Canonical().Hash()})
+	code, body := f.do("POST", "/api/v1/addons", f.admin, map[string]string{"name": "sneaky", "accept_definition": d.Hash()})
 	if code != 422 || !strings.Contains(string(body), "host_ports") {
 		t.Fatalf("%d %s", code, body)
 	}
@@ -384,19 +400,19 @@ func TestUpdateFlows(t *testing.T) {
 	path := "/api/v1/addons/" + a.ID + "/update"
 
 	// Not while installing.
-	if code, _ := f.do("POST", path, f.admin, "{}"); code != 409 {
+	if code, _ := f.do("POST", path, f.admin, f.accept("insights")); code != 409 {
 		t.Fatalf("while installing: %d", code)
 	}
 	f.setStatus(a.ID, addons.Active)
 
 	// Same version.
-	if code, body := f.do("POST", path, f.admin, "{}"); code != 409 || !strings.Contains(string(body), "newer") {
+	if code, body := f.do("POST", path, f.admin, f.accept("insights")); code != 409 || !strings.Contains(string(body), "newer") {
 		t.Fatalf("same version: %d %s", code, body)
 	}
 
-	// Newer version without extra permissions needs no hash.
+	// A newer version with the same permissions still needs the hash of its definition.
 	f.mkt.set(def("insights", "1.1.0"))
-	code, body := f.do("POST", path, f.admin, "{}")
+	code, body := f.do("POST", path, f.admin, f.accept("insights"))
 	if code != 200 {
 		t.Fatalf("update: %d %s", code, body)
 	}
@@ -405,12 +421,12 @@ func TestUpdateFlows(t *testing.T) {
 		t.Fatalf("after update: %+v", got)
 	}
 	// A second update while updating is refused.
-	if code, _ = f.do("POST", path, f.admin, "{}"); code != 409 {
+	if code, _ = f.do("POST", path, f.admin, f.accept("insights")); code != 409 {
 		t.Fatalf("while updating: %d", code)
 	}
 	f.setStatus(a.ID, addons.Active)
 
-	// Permission growth needs the hash of the new set.
+	// Permission growth is flagged in the consent response.
 	grown := def("insights", "1.2.0")
 	grown.Permissions = definition.Permissions{HostNetwork: true}
 	grown.Services[0].Networks = []string{"host"}
@@ -421,20 +437,24 @@ func TestUpdateFlows(t *testing.T) {
 		t.Fatalf("growth without hash: %d %s", code, body)
 	}
 	resp := decode[struct {
-		Permissions definition.Permissions `json:"permissions"`
-		Hash        string                 `json:"permissions_hash"`
-		Previous    definition.Permissions `json:"previous_permissions"`
+		Definition      definition.Addon       `json:"definition"`
+		Permissions     definition.Permissions `json:"permissions"`
+		Hash            string                 `json:"definition_hash"`
+		PreviousVersion string                 `json:"previous_version"`
+		Previous        definition.Permissions `json:"previous_permissions"`
+		Grow            bool                   `json:"permissions_grow"`
 	}](t, body)
-	if !resp.Permissions.HostNetwork || resp.Previous.HostNetwork || resp.Hash != grown.Permissions.Canonical().Hash() {
+	if !resp.Permissions.HostNetwork || resp.Previous.HostNetwork || !resp.Grow || resp.PreviousVersion != "1.1.0" ||
+		resp.Hash != f.accept("insights")["accept_definition"] || resp.Definition.Hash() != resp.Hash {
 		t.Fatalf("response = %+v", resp)
 	}
 	if cur, _ := f.st.Get(context.Background(), a.ID); cur.Version != "1.1.0" || cur.Status != addons.Active {
 		t.Fatal("refused update changed the record")
 	}
-	if code, _ = f.do("POST", path, f.admin, map[string]string{"accept_permissions": definition.Permissions{}.Hash()}); code != 409 {
+	if code, _ = f.do("POST", path, f.admin, map[string]string{"accept_definition": definition.Permissions{}.Hash()}); code != 409 {
 		t.Fatalf("growth with the old hash: %d", code)
 	}
-	if code, body = f.do("POST", path, f.admin, map[string]string{"accept_permissions": resp.Hash}); code != 200 {
+	if code, body = f.do("POST", path, f.admin, map[string]string{"accept_definition": resp.Hash}); code != 200 {
 		t.Fatalf("growth with hash: %d %s", code, body)
 	}
 	cur, _ := f.st.Get(context.Background(), a.ID)
@@ -443,7 +463,7 @@ func TestUpdateFlows(t *testing.T) {
 	}
 }
 
-func TestUpdateShrinkingPermissionsNeedsNoHash(t *testing.T) {
+func TestUpdateShrinkingPermissionsStillNeedsHash(t *testing.T) {
 	f := newFixture(t, "root")
 	d := def("insights", "1.0.0")
 	d.Permissions = definition.Permissions{HostPorts: []int{8080}}
@@ -452,7 +472,7 @@ func TestUpdateShrinkingPermissionsNeedsNoHash(t *testing.T) {
 	a := f.install("insights")
 	f.setStatus(a.ID, addons.Active)
 	f.mkt.set(def("insights", "1.0.1"))
-	if code, body := f.do("POST", "/api/v1/addons/"+a.ID+"/update", f.admin, "{}"); code != 200 {
+	if code, body := f.do("POST", "/api/v1/addons/"+a.ID+"/update", f.admin, f.accept("insights")); code != 200 {
 		t.Fatalf("%d %s", code, body)
 	}
 	if cur, _ := f.st.Get(context.Background(), a.ID); len(cur.Granted.HostPorts) != 0 {
@@ -469,7 +489,7 @@ func TestUpdateUnknownAndMarketplaceErrors(t *testing.T) {
 	a := f.install("insights")
 	f.setStatus(a.ID, addons.Active)
 	f.mkt.err = marketplaceclient.ErrUnavailable
-	if code, _ := f.do("POST", "/api/v1/addons/"+a.ID+"/update", f.admin, "{}"); code != 502 {
+	if code, _ := f.do("POST", "/api/v1/addons/"+a.ID+"/update", f.admin, f.accept("insights")); code != 502 {
 		t.Errorf("marketplace down: %d", code)
 	}
 	f.mkt.err = nil

@@ -118,23 +118,9 @@ func Encode(a addons.Installed, plane string) []byte {
 	field([]byte(a.AddonID))
 	field([]byte(plane))
 	field([]byte(a.Version))
-	field(CanonicalDefinition(a.Definition))
+	field(definition.CanonicalJSON(a.Definition))
 	field(canonicalPermissions(a.Granted))
 	return buf
-}
-
-// CanonicalDefinition is the JSON of a definition after a round trip and Normalize, with the
-// declared permissions in canonical form. Struct fields marshal in declaration order and map
-// keys sorted, so equal definitions give equal bytes whether they came from the marketplace,
-// the memory store or a BSON round trip through Mongo.
-func CanonicalDefinition(d definition.Addon) []byte {
-	c := d.Clone()
-	c.Permissions = c.Permissions.Canonical()
-	out, err := json.Marshal(c)
-	if err != nil {
-		panic(err)
-	}
-	return out
 }
 
 func canonicalPermissions(p definition.Permissions) []byte {

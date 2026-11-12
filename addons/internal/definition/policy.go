@@ -454,6 +454,28 @@ func (p Permissions) Hash() string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
+// CanonicalJSON is the JSON of a definition after a round trip and Normalize, with the
+// declared permissions in canonical form. Struct fields marshal in declaration order and map
+// keys sorted, so equal definitions give equal bytes whether they came from the marketplace,
+// the memory store or a BSON round trip through Mongo.
+func CanonicalJSON(d Addon) []byte {
+	c := d.Clone()
+	c.Permissions = c.Permissions.Canonical()
+	out, err := json.Marshal(c)
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
+// Hash is a stable digest of the canonical definition, "sha256:<hex>". It covers everything
+// that gets stored and run (images, commands, environment, mounts), not just the permissions,
+// so an admin who echoes it back has confirmed exactly this definition.
+func (a *Addon) Hash() string {
+	sum := sha256.Sum256(CanonicalJSON(*a))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
 // Grows reports whether p grants anything old doesn't, i.e. whether an update from old to p
 // needs the admin to confirm again. A path counts as covered only when old grants that exact
 // path with at least the same access; a new path below an old one is growth, because the old

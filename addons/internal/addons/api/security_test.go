@@ -25,7 +25,7 @@ func TestInstallAndUpdateAreSigned(t *testing.T) {
 
 	f.setStatus(a.ID, addons.Active)
 	f.mkt.set(def("insights", "1.1.0"))
-	if code, body := f.do("POST", "/api/v1/addons/"+a.ID+"/update", f.admin, "{}"); code != 200 {
+	if code, body := f.do("POST", "/api/v1/addons/"+a.ID+"/update", f.admin, f.accept("insights")); code != 200 {
 		t.Fatalf("update: %d %s", code, body)
 	}
 	rec, _ = f.st.Get(context.Background(), a.ID)
@@ -75,7 +75,7 @@ func TestInstallRefusesOverlappingHostPaths(t *testing.T) {
 	w := f.install("writer")
 
 	n := f.mkt.addons["nested"]
-	code, body := f.do("POST", "/api/v1/addons", f.admin, map[string]string{"name": "nested", "accept_permissions": n.Permissions.Canonical().Hash()})
+	code, body := f.do("POST", "/api/v1/addons", f.admin, map[string]string{"name": "nested", "accept_definition": n.Hash()})
 	if code != 409 || !strings.Contains(string(body), "overlaps") || !strings.Contains(string(body), "writer") {
 		t.Fatalf("overlap: %d %s", code, body)
 	}
@@ -94,8 +94,7 @@ func TestUpdateRefusesPathBelowOldReadWritePath(t *testing.T) {
 
 	next := withHostPath("tool", "1.1.0", "/srv/tool/conf")
 	f.mkt.set(next)
-	hash := next.Permissions.Canonical().Hash()
-	code, body := f.do("POST", "/api/v1/addons/"+a.ID+"/update", f.admin, map[string]string{"accept_permissions": hash})
+	code, body := f.do("POST", "/api/v1/addons/"+a.ID+"/update", f.admin, f.accept("tool"))
 	if code != 409 || !strings.Contains(string(body), "previous version") {
 		t.Fatalf("%d %s", code, body)
 	}
@@ -105,7 +104,7 @@ func TestUpdateRefusesPathBelowOldReadWritePath(t *testing.T) {
 
 	// The same path again is just the data directory carried over.
 	f.mkt.set(withHostPath("tool", "1.2.0", "/srv/tool"))
-	if code, body := f.do("POST", "/api/v1/addons/"+a.ID+"/update", f.admin, "{}"); code != 200 {
+	if code, body := f.do("POST", "/api/v1/addons/"+a.ID+"/update", f.admin, f.accept("tool")); code != 200 {
 		t.Fatalf("same path: %d %s", code, body)
 	}
 }
@@ -119,7 +118,7 @@ func TestUpdateRefusesOverlapWithOtherAddon(t *testing.T) {
 	f.setStatus(a.ID, addons.Active)
 	next := withHostPath("tool", "1.1.0", "/srv/shared/x")
 	f.mkt.set(next)
-	code, body := f.do("POST", "/api/v1/addons/"+a.ID+"/update", f.admin, map[string]string{"accept_permissions": next.Permissions.Canonical().Hash()})
+	code, body := f.do("POST", "/api/v1/addons/"+a.ID+"/update", f.admin, f.accept("tool"))
 	if code != 409 || !strings.Contains(string(body), "writer") {
 		t.Fatalf("%d %s", code, body)
 	}
@@ -140,8 +139,8 @@ func TestApproveResignsAfterTampering(t *testing.T) {
 		x.Status = addons.Failed
 		return nil
 	})
-	hash := d.Permissions.Canonical().Hash()
-	code, body := f.do("POST", path, f.admin, map[string]string{"accept_permissions": hash})
+	hash := d.Hash()
+	code, body := f.do("POST", path, f.admin, map[string]string{"accept_definition": hash})
 	if code != 409 || !strings.Contains(string(body), "differs") {
 		t.Fatalf("tampered snapshot approved: %d %s", code, body)
 	}
@@ -155,13 +154,13 @@ func TestApproveResignsAfterTampering(t *testing.T) {
 		return nil
 	})
 	code, body = f.do("POST", path, f.admin, "{}")
-	if code != 409 || !strings.Contains(string(body), "permissions_hash") {
+	if code != 409 || !strings.Contains(string(body), "definition_hash") {
 		t.Fatalf("no hash: %d %s", code, body)
 	}
-	if code, _ := f.do("POST", path, f.user, map[string]string{"accept_permissions": hash}); code != 403 {
+	if code, _ := f.do("POST", path, f.user, map[string]string{"accept_definition": hash}); code != 403 {
 		t.Fatalf("non-admin: %d", code)
 	}
-	code, body = f.do("POST", path, f.admin, map[string]string{"accept_permissions": hash})
+	code, body = f.do("POST", path, f.admin, map[string]string{"accept_definition": hash})
 	if code != 200 {
 		t.Fatalf("approve: %d %s", code, body)
 	}
@@ -175,12 +174,12 @@ func TestApproveResignsAfterTampering(t *testing.T) {
 	}
 
 	// Not while installing, and not for a version the marketplace no longer serves.
-	if code, _ := f.do("POST", path, f.admin, map[string]string{"accept_permissions": hash}); code != 409 {
+	if code, _ := f.do("POST", path, f.admin, map[string]string{"accept_definition": hash}); code != 409 {
 		t.Fatalf("while installing: %d", code)
 	}
 	f.setStatus(a.ID, addons.Active)
 	f.mkt.set(def("insights", "1.1.0"))
-	if code, body := f.do("POST", path, f.admin, map[string]string{"accept_permissions": hash}); code != 409 || !strings.Contains(string(body), "update") {
+	if code, body := f.do("POST", path, f.admin, map[string]string{"accept_definition": hash}); code != 409 || !strings.Contains(string(body), "update") {
 		t.Fatalf("other version: %d %s", code, body)
 	}
 	if code, _ := f.do("POST", "/api/v1/addons/000000000000000000000099/approve", f.admin, "{}"); code != 404 {

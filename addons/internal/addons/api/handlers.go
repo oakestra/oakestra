@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/oakestra/oakestra/addons/internal/addons"
-	"github.com/oakestra/oakestra/addons/internal/addons/grant"
 	"github.com/oakestra/oakestra/addons/internal/addons/marketplaceclient"
 	"github.com/oakestra/oakestra/addons/internal/addons/store"
 	"github.com/oakestra/oakestra/addons/internal/auth"
@@ -54,8 +54,8 @@ func (s *server) get(c *gin.Context) {
 }
 
 type installRequest struct {
-	Name              string `json:"name"`
-	AcceptPermissions string `json:"accept_permissions"`
+	Name             string `json:"name"`
+	AcceptDefinition string `json:"accept_definition"`
 }
 
 func (s *server) install(c *gin.Context) {
@@ -91,16 +91,18 @@ func (s *server) install(c *gin.Context) {
 		return
 	}
 
-	// The admin confirms the declared set. Check has made sure it covers what the services need,
-	// so confirming it confirms everything the addon can do.
+	// The admin confirms the whole definition, not just the permissions: the marketplace can
+	// serve something else between the dialog and this call, and images, commands and
+	// environment change what runs without touching the permissions. The hash is taken over
+	// exactly what gets stored.
 	perms := def.Permissions.Canonical()
-	hash := perms.Hash()
-	if req.AcceptPermissions != hash {
-		writePermissionsRequired(w, "The permissions of this addon have to be accepted before it is installed.", perms, hash, nil)
+	def.Permissions = perms
+	hash := def.Hash()
+	if req.AcceptDefinition != hash {
+		writeConsentRequired(w, "This addon has to be accepted before it is installed.", def, hash, nil)
 		return
 	}
 
-	def.Permissions = perms
 	now := s.now()
 	rec := addons.Installed{
 		ID: store.NewID(), AddonID: id, QualifiedName: def.QualifiedName(), Source: def.Source, Version: def.Version,
@@ -119,10 +121,10 @@ func (s *server) install(c *gin.Context) {
 	}
 }
 
-// acceptRequest is the body of update and approve: the hash of the permissions the admin
-// accepted, which may be empty if the update doesn't need new ones.
+// acceptRequest is the body of update and approve: the hash of the definition the admin
+// accepted.
 type acceptRequest struct {
-	AcceptPermissions string `json:"accept_permissions"`
+	AcceptDefinition string `json:"accept_definition"`
 }
 
 func (s *server) update(c *gin.Context) {
@@ -170,14 +172,15 @@ func (s *server) update(c *gin.Context) {
 		return
 	}
 
+	// Every update needs the admin's confirmation, also when the permissions don't grow: a new
+	// version can run different images and commands under the same permissions.
 	perms := latest.Permissions.Canonical()
-	hash := perms.Hash()
-	if perms.Grows(cur.Granted) && req.AcceptPermissions != hash {
-		old := cur.Granted.Canonical()
-		writePermissionsRequired(w, "This version asks for more permissions than the installed one, they have to be accepted.", perms, hash, &old)
+	latest.Permissions = perms
+	hash := latest.Hash()
+	if req.AcceptDefinition != hash {
+		writeConsentRequired(w, "This version has to be accepted before it is installed.", latest, hash, &cur)
 		return
 	}
-	latest.Permissions = perms
 
 	applied := false
 	updated, err := s.Store.Update(r.Context(), cur.ID, func(a *addons.Installed) error {
@@ -207,7 +210,7 @@ func (s *server) update(c *gin.Context) {
 
 // approve signs an installed addon's grant again. It is the way out of "grant signature
 // invalid" (the state directory was lost, or the record was edited in the database): the admin
-// confirms the permissions again, and the snapshot is only kept if the marketplace still
+// confirms the definition again, and the snapshot is only kept if the marketplace still
 // serves exactly that definition for the version, so a record rewritten in the database can't
 // get approved by accident.
 func (s *server) approve(c *gin.Context) {
@@ -234,7 +237,7 @@ func (s *server) approve(c *gin.Context) {
 		httpx.WriteError(w, http.StatusConflict, fmt.Sprintf("The marketplace lists %s %s, not the installed %s; update the addon instead.", latest.QualifiedName(), latest.Version, cur.Version))
 		return
 	}
-	if !bytes.Equal(grant.CanonicalDefinition(*latest), grant.CanonicalDefinition(cur.Definition)) {
+	if !bytes.Equal(definition.CanonicalJSON(*latest), definition.CanonicalJSON(cur.Definition)) {
 		httpx.WriteError(w, http.StatusConflict, "The installed definition differs from the marketplace's definition of the same version; remove and reinstall the addon.")
 		return
 	}
@@ -248,9 +251,9 @@ func (s *server) approve(c *gin.Context) {
 		return
 	}
 	perms := latest.Permissions
-	hash := perms.Hash()
-	if req.AcceptPermissions != hash {
-		writePermissionsRequired(w, "The permissions of this addon have to be accepted again.", perms, hash, nil)
+	hash := latest.Hash()
+	if req.AcceptDefinition != hash {
+		writeConsentRequired(w, "This addon has to be accepted again.", latest, hash, nil)
 		return
 	}
 
@@ -361,10 +364,22 @@ func (s *server) fetch(w http.ResponseWriter, r *http.Request, src definition.So
 	return def, true
 }
 
-func writePermissionsRequired(w http.ResponseWriter, msg string, perms definition.Permissions, hash string, previous *definition.Permissions) {
-	body := map[string]any{"message": msg, "permissions": perms, "permissions_hash": hash}
-	if previous != nil {
-		body["previous_permissions"] = *previous
+// writeConsentRequired answers 409 with everything the dialog needs: the canonical definition
+// the hash covers, and the permissions on their own for display. For an update, installed is
+// the record being replaced, so the dialog can show what changed and whether the permissions
+// grew.
+func writeConsentRequired(w http.ResponseWriter, msg string, def *definition.Addon, hash string, installed *addons.Installed) {
+	perms := def.Permissions.Canonical()
+	body := map[string]any{
+		"message":         msg,
+		"definition":      json.RawMessage(definition.CanonicalJSON(*def)),
+		"definition_hash": hash,
+		"permissions":     perms,
+	}
+	if installed != nil {
+		body["previous_version"] = installed.Version
+		body["previous_permissions"] = installed.Granted.Canonical()
+		body["permissions_grow"] = perms.Grows(installed.Granted)
 	}
 	httpx.WriteJSON(w, http.StatusConflict, body)
 }

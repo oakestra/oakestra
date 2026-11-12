@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -99,10 +100,18 @@ func (s *server) cors() gin.HandlerFunc {
 
 // decodeBody reads a JSON object into v and writes the error response itself on failure.
 func decodeBody(w http.ResponseWriter, r *http.Request, v any) bool {
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+	dec := json.NewDecoder(r.Body)
+	// An outdated or misspelled field would otherwise look like a body that confirmed nothing.
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
 			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "Request body is too large")
+			return false
+		}
+		// encoding/json has no typed error for this one.
+		if field, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
+			httpx.WriteError(w, http.StatusBadRequest, "Unknown field "+field+" in request body")
 			return false
 		}
 		httpx.WriteError(w, http.StatusBadRequest, "Request body must be a JSON object")

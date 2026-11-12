@@ -22,9 +22,6 @@ type Item struct {
 	ID string `json:"id"`
 	// RequiredPermissions is what the definition actually uses, derived from its services.
 	RequiredPermissions definition.Permissions `json:"required_permissions"`
-	// PermissionsHash is the hash of the declared permissions, which the install API makes
-	// the admin echo back.
-	PermissionsHash string `json:"permissions_hash"`
 }
 
 func newItem(a definition.Addon) Item {
@@ -34,7 +31,6 @@ func newItem(a definition.Addon) Item {
 		QualifiedName:       a.QualifiedName(),
 		ID:                  a.ID(),
 		RequiredPermissions: definition.RequiredPermissions(&a),
-		PermissionsHash:     a.Permissions.Hash(),
 	}
 }
 

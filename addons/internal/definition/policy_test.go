@@ -1,6 +1,7 @@
 package definition
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -720,6 +721,77 @@ func TestIsReservedLabel(t *testing.T) {
 	} {
 		if got := IsReservedLabel(k); got != want {
 			t.Errorf("IsReservedLabel(%q) = %v, want %v", k, got, want)
+		}
+	}
+}
+
+func TestAddonHashIsStableForEquivalentDefinitions(t *testing.T) {
+	base := func() *Addon {
+		a := baseAddon()
+		a.Permissions = Permissions{HostPaths: []string{"/b", "/a:ro", "/a"}, HostPorts: []int{443, 80}}
+		a.Services[0].Environment = map[string]string{"A": "1", "B": "2"}
+		return a
+	}
+	want := base().Hash()
+	if !strings.HasPrefix(want, "sha256:") || len(want) != len("sha256:")+64 {
+		t.Fatalf("unexpected hash format %q", want)
+	}
+
+	t.Run("nil and empty collections", func(t *testing.T) {
+		a := base()
+		a.Services[0].Networks, a.Services[0].Volumes, a.Services[0].Labels = nil, nil, nil
+		b := base()
+		b.Services[0].Networks, b.Services[0].Volumes, b.Services[0].Labels = []string{}, []string{}, map[string]string{}
+		b.Volumes, b.Networks = []Volume{}, []Network{}
+		a.Volumes, a.Networks = nil, nil
+		if a.Hash() != b.Hash() {
+			t.Error("nil and empty hash differently")
+		}
+	})
+	t.Run("map key order in the source JSON", func(t *testing.T) {
+		var a Addon
+		raw := `{"name":"monitoring","source":{"kind":"official","name":"official"},"version":"1.3.0",
+			"services":[{"service_name":"web","image":"` + base().Services[0].Image + `","environment":{"B":"2","A":"1"}}],
+			"permissions":{"host_paths":["/a","/b"],"host_ports":[80,443]}}`
+		if err := json.Unmarshal([]byte(raw), &a); err != nil {
+			t.Fatal(err)
+		}
+		if a.Hash() != want {
+			t.Error("reordered JSON keys change the hash")
+		}
+	})
+	t.Run("permission host paths in another order", func(t *testing.T) {
+		a := base()
+		a.Permissions.HostPaths = []string{"/a", "/b", "/b"}
+		if a.Hash() != want {
+			t.Error("host path order changes the hash")
+		}
+	})
+	t.Run("does not mutate", func(t *testing.T) {
+		a := base()
+		_ = a.Hash()
+		if a.Permissions.HostPaths[0] != "/b" {
+			t.Error("Hash canonicalized the receiver")
+		}
+	})
+}
+
+func TestAddonHashChangesWithTheDefinition(t *testing.T) {
+	base := baseAddon().Hash()
+	for name, mutate := range map[string]func(*Addon){
+		"image digest": func(a *Addon) {
+			a.Services[0].Image = "ghcr.io/oakestra/web:1.3.0@sha256:" + strings.Repeat("ab", 32)
+		},
+		"environment value": func(a *Addon) { a.Services[0].Environment = map[string]string{"TOKEN": "x"} },
+		"command":           func(a *Addon) { a.Services[0].Command = "--debug" },
+		"source":            func(a *Addon) { a.Source = TapSource("acme") },
+		"version":           func(a *Addon) { a.Version = "1.3.1" },
+		"permissions":       func(a *Addon) { a.Permissions.HostNetwork = true },
+	} {
+		a := baseAddon()
+		mutate(a)
+		if a.Hash() == base {
+			t.Errorf("changing the %s does not change the hash", name)
 		}
 	}
 }

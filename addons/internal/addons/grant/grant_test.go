@@ -2,6 +2,8 @@ package grant
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"testing"
@@ -101,5 +103,19 @@ func TestKeyIsRedacted(t *testing.T) {
 	}
 	if _, err := NewKey([]byte("short")); err == nil {
 		t.Error("short key accepted")
+	}
+}
+
+func TestEncodeEmbedsCanonicalDefinition(t *testing.T) {
+	a := record()
+	enc := Encode(a, "root")
+	if !bytes.Contains(enc, definition.CanonicalJSON(a.Definition)) {
+		t.Fatal("Encode does not carry the canonical definition")
+	}
+	// Records already in the database carry signatures over these bytes, so they are pinned.
+	sum := sha256.Sum256(enc)
+	const want = "320f949c6e83f504bab7275079206ddbb8f6439213ffd6bca0ba37fff99735bf"
+	if got := hex.EncodeToString(sum[:]); got != want {
+		t.Fatalf("Encode output changed: %s", got)
 	}
 }

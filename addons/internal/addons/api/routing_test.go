@@ -103,7 +103,7 @@ func TestBodyLimitAppliesToEveryEndpoint(t *testing.T) {
 	f.mkt.set(def("insights", "1.0.0"))
 	a := f.install("insights")
 	f.setStatus(a.ID, addons.Failed)
-	big := `{"accept_permissions":"` + strings.Repeat("a", MaxBodyBytes) + `"}`
+	big := `{"accept_definition":"` + strings.Repeat("a", MaxBodyBytes) + `"}`
 	for _, p := range []string{"/api/v1/addons/" + a.ID + "/update", "/api/v1/addons/" + a.ID + "/approve"} {
 		if code, body := f.do("POST", p, f.admin, big); code != 413 {
 			t.Errorf("POST %s: %d %s", p, code, body)

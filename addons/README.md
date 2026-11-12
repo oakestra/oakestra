@@ -166,22 +166,28 @@ On the addons manager (root `:11101`, cluster `:11201`):
 | Method | Path | Auth | |
 |---|---|---|---|
 | `GET` | `/api/v1/addons`, `/api/v1/addons/<id>` | user token | Installed addons with `status`, `update_available`. |
-| `POST` | `/api/v1/addons` | admin | Install `{"name": "...", "accept_permissions": "<hash>"}`. |
-| `POST` | `/api/v1/addons/<id>/update` | admin | Update to the catalog version. |
-| `POST` | `/api/v1/addons/<id>/approve` | admin | Sign the grant of an installed addon again, `{"accept_permissions": "<hash>"}`. |
+| `POST` | `/api/v1/addons` | admin | Install `{"name": "...", "accept_definition": "<hash>"}`. |
+| `POST` | `/api/v1/addons/<id>/update` | admin | Update to the catalog version, `{"accept_definition": "<hash>"}`. |
+| `POST` | `/api/v1/addons/<id>/approve` | admin | Sign the grant of an installed addon again, `{"accept_definition": "<hash>"}`. |
 | `DELETE` | `/api/v1/addons/<id>` | admin | Uninstall. |
 | `GET` | `/api/v1/ui-addons` | none | Active addons with a UI (root only). |
 
-Installing without the right `accept_permissions` answers `409` with the declared `permissions` and
-their `permissions_hash`. Show the permissions to the admin, then repeat the call with that hash.
-An update whose permissions grew compared to what was granted needs the new hash as well (the
-answer also contains `previous_permissions`). A path counts as covered only when the old grant
-names that exact path with at least the same access. A host path conflict with another addon or
-with the previous version answers `409`. There is no `PATCH`: state changes are internal to the
-reconcile loop.
+Install, update and approve all need `accept_definition`, the hash of the whole definition as the
+addons manager would store it: images with their digests, commands, environment, volumes and the
+permissions. Without the right hash the call answers `409` with `definition` (the canonical
+definition the hash covers), `definition_hash` and `permissions` for the dialog. Show it to the
+admin, then repeat the call with the hash. The catalog serves no hash on purpose, only the one
+from the `409` counts. If the catalog changes in between, the old hash no longer matches and the
+call answers `409` again with the new one. Updates always ask, also when the permissions stay the
+same, because a new version can run other images under them. The update answer also contains
+`previous_version`, `previous_permissions` and `permissions_grow`, so a UI can point out new
+permissions. A path counts as covered only when the old grant names that exact path with at least
+the same access. A host path conflict with another addon or with the previous version answers
+`409`. There is no `PATCH`: state changes are internal to the reconcile loop. Request bodies with
+unknown fields, such as the old `accept_permissions`, answer `400`.
 
 Use `approve` when an addon is `failed` with `grant signature invalid; re-approve the addon` (or
-`missing`), and to retry a failed addon. It asks for the permissions again and only goes through
+`missing`), and to retry a failed addon. It asks for the definition hash again and only goes through
 if the marketplace still serves the installed version with the same definition, so a record that
 was rewritten in the database can't be approved by accident. A failed addon is deployed again, a
 running one keeps running. If the marketplace lists a different version, update instead; if the
@@ -327,7 +333,7 @@ instead of retrying.
   JWT signed by the key of the root `jwt_generator`. Writes also need the `Admin` role. Until the
   key is loaded, protected endpoints answer `503` instead of letting requests through.
 - Policy and permissions: checked in the marketplace when a definition enters the catalog, in the
-  addons manager at install and update (with the admin accepting the permission hash), and again
+  addons manager at install and update (with the admin accepting the definition hash), and again
   right before containers are created.
 - Naming: containers, volumes and networks are named from the addon id, never from the definition.
 - Grants: signed with a key in the state volume, see "Grant signing and the state volume".
@@ -349,4 +355,5 @@ Known tradeoffs:
 - There is no signing. Digest pinning, serials and PR review in the community marketplace are the
   trust steps. An offline import is as trustworthy as the way the file was delivered.
 - Even with declared permissions, an admin who accepts a broad permission set (`docker_socket`,
-  `core_network`) hands that power to the addon. The permission dialog is the only guard there.
+  `core_network`) hands that power to the addon. The confirmation dialog is the only guard there.
+  It shows the whole definition, image digests included, not just the permission list.

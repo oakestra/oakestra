@@ -1,7 +1,7 @@
 // Package marketplaceclient fetches addon definitions from the marketplace service.
 //
-// The marketplace also returns precomputed fields (id, qualified_name, required_permissions,
-// permissions_hash). They are dropped on purpose: decoding goes into definition.Addon, which
+// The marketplace also returns precomputed fields (id, qualified_name, required_permissions).
+// They are dropped on purpose: decoding goes into definition.Addon, which
 // has no place for them, so every security decision has to be recomputed from the definition.
 package marketplaceclient
 

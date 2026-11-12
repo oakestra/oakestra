@@ -15,7 +15,7 @@ import (
 const goodBody = `{
   "name": "tool", "source": {"kind": "tap", "name": "acme"}, "version": "1.2.3",
   "id": "acme--tool", "qualified_name": "acme/tool",
-  "required_permissions": {"docker_socket": true}, "permissions_hash": "sha256:lies",
+  "required_permissions": {"docker_socket": true}, "definition_hash": "sha256:lies",
   "permissions": {"host_paths": [], "host_ports": [], "docker_socket": false, "host_network": false, "core_network": false},
   "services": [{"service_name": "web", "image": "x@sha256:aa"}]
 }`

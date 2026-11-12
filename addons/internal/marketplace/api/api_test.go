@@ -232,7 +232,7 @@ func TestMergedListAndAddonContract(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &item); err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{"name", "version", "source", "qualified_name", "id", "required_permissions", "permissions_hash", "permissions", "services", "volumes", "networks"} {
+	for _, k := range []string{"name", "version", "source", "qualified_name", "id", "required_permissions", "permissions", "services", "volumes", "networks"} {
 		if _, ok := item[k]; !ok {
 			t.Errorf("addon is missing %q: %s", k, rec.Body)
 		}
@@ -240,8 +240,13 @@ func TestMergedListAndAddonContract(t *testing.T) {
 	if src := item["source"].(map[string]any); src["kind"] != "local" || src["name"] != "local" {
 		t.Errorf("source: %v", src)
 	}
-	if item["id"] != "local--web" || !strings.HasPrefix(item["permissions_hash"].(string), "sha256:") {
-		t.Errorf("derived fields: %v %v", item["id"], item["permissions_hash"])
+	if _, ok := item["definition_hash"]; ok {
+		// The only hash an admin may confirm is the one the addons manager computed from what
+		// it will store, so the catalog doesn't offer one a UI could shortcut with.
+		t.Errorf("catalog item carries definition_hash")
+	}
+	if item["id"] != "local--web" {
+		t.Errorf("derived fields: %v", item["id"])
 	}
 	img := item["services"].([]any)[0].(map[string]any)["image"].(string)
 	if !strings.HasPrefix(img, "nginx:1.27@sha256:") {
