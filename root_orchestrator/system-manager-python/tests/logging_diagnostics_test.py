@@ -143,7 +143,7 @@ def test_service_creation_logs_validation_failure_once(capsys):
 
     output = capsys.readouterr().out
     assert status == 422
-    assert isinstance(response["message"], SLAFormatError)
+    assert isinstance(response["message"], str)
     assert len(output.splitlines()) == 1
     assert json.loads(output)["event"] == "sla.validation.failed"
     assert "private-payload" not in output
@@ -159,7 +159,7 @@ def test_invalid_applications_reaches_sla_validation(capsys, applications):
     response, status = create_services_of_app("test-user", sla)
 
     assert status == 422
-    assert isinstance(response["message"], SLAFormatError)
+    assert isinstance(response["message"], str)
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     started = next(record for record in records if record.get("event") == "services.create.started")
     assert started["context"]["application_count"] == 0

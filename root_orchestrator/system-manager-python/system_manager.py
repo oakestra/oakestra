@@ -28,7 +28,6 @@ from proto.clusterRegistration_pb2_grpc import (
     register_clusterServicer,
 )
 from resource_abstractor_client import candidate_operations
-from sm_logging import configure_logging
 from utils.json_encoder import MongoJSONProvider
 from utils.network import add_brackets_if_ipv6
 from werkzeug.utils import redirect, secure_filename

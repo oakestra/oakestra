@@ -110,20 +110,22 @@ class ServiceControllerPost(MethodView):
             try:
                 username = get_jwt_auth_identity()
                 result, status = service_management.create_services_of_app(username, data)
-                if status != 200:
-                    abort(status, result)
-                return jsonify(result)
             except Exception:
                 logger.exception(
                     "Service creation request failed",
                     event_name="service.create.request_failed",
                 )
-                abort(400, {"message": "The given SLA was not formatted correctly"})
+                abort(400, message="The given SLA was not formatted correctly")
+
+            if status != 200:
+                abort(status, message=result["message"])
+
+            return jsonify(result)
         logger.warning(
             "Service creation request has no data",
             event_name="service.create.request_missing_data",
         )
-        abort(404, {"message": "/api/deploy request without a yaml file\n"})
+        abort(404, message="/api/deploy request without a yaml file\n")
 
 
 @servicesblp.route("/<appid>")

@@ -1,3 +1,5 @@
+from itertools import zip_longest
+
 from oakestra_logging import get_logger
 from resource_abstractor_client import candidate_operations
 
