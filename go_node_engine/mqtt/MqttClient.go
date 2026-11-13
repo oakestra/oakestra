@@ -2,12 +2,16 @@ package mqtt
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"go_node_engine/logger"
 	"go_node_engine/model"
 	"go_node_engine/virtualization"
+	"go_node_engine/workercert"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -18,8 +22,12 @@ var TOPICS = make(map[string]mqtt.MessageHandler)
 
 var clientID = ""
 var mainMqttClient mqtt.Client
+var clientMu sync.RWMutex
 var brokerUrl = ""
 var brokerPort = ""
+var certFilePath = ""
+var keyFilePath = ""
+var caFilePath = ""
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	logger.InfoLogger().Printf("DEBUG - Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
@@ -59,6 +67,7 @@ func InitMqtt(
 	brokerport string,
 	certFile string,
 	keyFile string,
+	caFile string,
 	runtimeManager *virtualization.RuntimeManager,
 ) {
 
@@ -69,47 +78,94 @@ func InitMqtt(
 
 	brokerPort = brokerport
 	brokerUrl = brokerurl
+	certFilePath = certFile
+	keyFilePath = keyFile
+	caFilePath = caFile
 
 	//platform's assigned client ID
 	clientID = clientid
 
 	TOPICS[fmt.Sprintf("nodes/%s/control/deploy", clientID)] = withRuntimeManager(deployHandler, runtimeManager)
 	TOPICS[fmt.Sprintf("nodes/%s/control/delete", clientID)] = withRuntimeManager(deleteHandler, runtimeManager)
+	TOPICS[fmt.Sprintf("nodes/%s/control/renew-cert", clientID)] = renewCertHandler
 
+	go runMqttClient(newClientOptions())
+}
+
+// newClientOptions builds the client options, reading the certificate files, so a
+// reconnect after a certificate renewal uses the new files.
+func newClientOptions() *mqtt.ClientOptions {
 	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("tcp://%s:%s", brokerUrl, brokerPort))
-	opts.SetClientID(clientid + "-ne")
+	if caFilePath == "" {
+		// Without a cluster CA (non-gateway setups) keep the plain broker first, as before.
+		opts.AddBroker(fmt.Sprintf("tcp://%s:%s", brokerUrl, brokerPort))
+	}
+	opts.SetClientID(clientID + "-ne")
 	opts.SetUsername("")
 	opts.SetPassword("")
 	opts.SetDefaultPublishHandler(messagePubHandler)
 	opts.OnConnect = connectHandler
 	opts.OnConnectionLost = connectLostHandler
 
-	if certFile != "" {
+	if certFilePath != "" {
 		logger.InfoLogger().Printf("MQTT - Configuring TLS")
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		cert, err := tls.LoadX509KeyPair(certFilePath, keyFilePath)
 		if err != nil {
 			logger.ErrorLogger().Printf("Error loading certificate: %v", err)
 		}
-		opts.SetTLSConfig(&tls.Config{
+		tlsCfg := &tls.Config{
 			Certificates: []tls.Certificate{cert},
-		})
+			MinVersion:   tls.VersionTLS12,
+		}
+		if caFilePath != "" {
+			caPem, err := os.ReadFile(caFilePath)
+			if err != nil {
+				logger.ErrorLogger().Fatalf("Error reading cluster CA: %v", err)
+			}
+			pool := x509.NewCertPool()
+			if !pool.AppendCertsFromPEM(caPem) {
+				logger.ErrorLogger().Fatalf("Failed to parse cluster CA PEM")
+			}
+			tlsCfg.RootCAs = pool
+		}
+		opts.SetTLSConfig(tlsCfg)
 		opts.AddBroker(fmt.Sprintf("tls://%s:%s", brokerUrl, brokerPort))
 	}
-
-	go runMqttClient(opts)
+	return opts
 }
 
 func runMqttClient(opts *mqtt.ClientOptions) {
-	mainMqttClient = mqtt.NewClient(opts)
-	if token := mainMqttClient.Connect(); token.Wait() && token.Error() != nil {
+	client := mqtt.NewClient(opts)
+	clientMu.Lock()
+	mainMqttClient = client
+	clientMu.Unlock()
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
+	}
+}
+
+// reconnectMqtt replaces the client so the broker sees the renewed certificate.
+// The connect handler subscribes to all topics again.
+func reconnectMqtt() {
+	opts := newClientOptions()
+	opts.SetConnectRetry(true)
+	client := mqtt.NewClient(opts)
+	clientMu.Lock()
+	previous := mainMqttClient
+	mainMqttClient = client
+	clientMu.Unlock()
+	previous.Disconnect(250)
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
+		logger.ErrorLogger().Printf("MQTT - reconnect with the renewed certificate failed: %v", token.Error())
 	}
 }
 
 func publishToBroker(topic string, payload string) {
 	logger.InfoLogger().Printf("MQTT - publish to - %s - the payload - %s", topic, payload)
-	token := mainMqttClient.Publish(fmt.Sprintf("nodes/%s/%s", clientID, topic), 1, false, payload)
+	clientMu.RLock()
+	client := mainMqttClient
+	clientMu.RUnlock()
+	token := client.Publish(fmt.Sprintf("nodes/%s/%s", clientID, topic), 1, false, payload)
 	if token.WaitTimeout(time.Second*5) && token.Error() != nil {
 		logger.ErrorLogger().Printf("ERROR: MQTT PUBLISH: %s", token.Error())
 	}
@@ -208,9 +264,21 @@ func ReportServiceResources(services []model.Resources) {
 	publishToBroker("jobs/resources", string(jsonmsg))
 }
 
-// ReportNodeInformation reports the information of the node in the broker
+// ReportNodeInformation reports the information of the node in the broker. In gateway
+// setups it includes the worker certificate details the cluster uses to decide renewals.
 func ReportNodeInformation(node model.Node) {
-	data, err := json.Marshal(node)
+	report := struct {
+		model.Node
+		WorkerCert *workercert.Info `json:"worker_cert,omitempty"`
+	}{Node: node}
+	if certFilePath != "" {
+		info, err := workercert.GetInfo(certFilePath)
+		if err != nil {
+			logger.ErrorLogger().Printf("ERROR: reading the worker certificate: %v", err)
+		}
+		report.WorkerCert = info
+	}
+	data, err := json.Marshal(report)
 	if err != nil {
 		logger.ErrorLogger().Printf("ERROR: error gathering node info")
 	}

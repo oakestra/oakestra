@@ -1,6 +1,7 @@
 import logging
 import traceback
 
+import config
 from bson import json_util
 from clients import job_management
 from clients.job_management import deploy_job
@@ -35,6 +36,15 @@ schedulingblp = Blueprint(
 )
 
 
+def _require_root_caller():
+    """Behind the gateway, only the root may deploy and undeploy services."""
+    if config.GATEWAY_ENABLED:
+        # Certificate APIs only exist behind the gateway.
+        from blueprints.certificates_blueprints import require_root_caller
+
+        require_root_caller()
+
+
 @serviceblp.route("/<job_id>/<instance_number>")
 class ServiceController(MethodView):
     @serviceblp.response(
@@ -43,6 +53,7 @@ class ServiceController(MethodView):
         content_type="application/json",
     )
     def post(self, job_id, instance_number):
+        _require_root_caller()
         job = request.json  # contains job_id and job_description
 
         try:
@@ -65,6 +76,7 @@ class ServiceController(MethodView):
         find service in db and ask corresponding worker to delete task,
         instance_number -1 undeploy all known instances
         """
+        _require_root_caller()
         logger.info("Incoming Request /api/delete/ - to delete task...")
 
         try:
