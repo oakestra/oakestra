@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -40,6 +41,17 @@ type Filter struct {
 	Source string
 	// Name matches the bare name or the qualified name.
 	Name string
+	// Category matches after definition.NormalizeCategory, so "AI" finds "ai".
+	Category string
+	// Tag matches addons that carry this tag, after definition.NormalizeTag.
+	Tag string
+}
+
+// Category is one entry of the category list: a normalized category and how many addons
+// carry it.
+type Category struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
 }
 
 // derivedKey identifies the content a cached item list was computed from. A snapshot with the
@@ -88,13 +100,57 @@ func (s *Service) derivedItems(ctx context.Context, head *store.Snapshot) ([]Ite
 // Addons returns the merged catalog: official, taps by name, local; addons by name within a
 // source. Snapshots whose source no longer exists are skipped.
 func (s *Service) Addons(ctx context.Context, f Filter) ([]Item, error) {
-	sources, err := s.cfg.Store.ListSources(ctx)
+	category := definition.NormalizeCategory(f.Category)
+	tag := definition.NormalizeTag(f.Tag)
+	out := []Item{}
+	err := s.eachItem(ctx, f.Source, func(item Item) {
+		if f.Name != "" && item.Name != f.Name && item.QualifiedName != f.Name {
+			return
+		}
+		// newItem normalized the item, so only the query needs normalizing.
+		if category != "" && item.Category != category {
+			return
+		}
+		if tag != "" && !slices.Contains(item.Tags, tag) {
+			return
+		}
+		out = append(out, item)
+	})
 	if err != nil {
 		return nil, err
 	}
-	snaps, err := s.cfg.Store.ListSnapshotHeaders(ctx)
+	return out, nil
+}
+
+// Categories counts the addons per category across all sources, or only sourceName if set.
+// Addons without a category are left out. The result is sorted by name.
+func (s *Service) Categories(ctx context.Context, sourceName string) ([]Category, error) {
+	counts := map[string]int{}
+	err := s.eachItem(ctx, sourceName, func(item Item) {
+		if item.Category != "" {
+			counts[item.Category]++
+		}
+	})
 	if err != nil {
 		return nil, err
+	}
+	out := make([]Category, 0, len(counts))
+	for _, name := range slices.Sorted(maps.Keys(counts)) {
+		out = append(out, Category{Name: name, Count: counts[name]})
+	}
+	return out, nil
+}
+
+// eachItem calls fn for every item of every source in merged order, or only of sourceName if
+// it isn't empty.
+func (s *Service) eachItem(ctx context.Context, sourceName string, fn func(Item)) error {
+	sources, err := s.cfg.Store.ListSources(ctx)
+	if err != nil {
+		return err
+	}
+	snaps, err := s.cfg.Store.ListSnapshotHeaders(ctx)
+	if err != nil {
+		return err
 	}
 	bySource := map[string]*store.Snapshot{}
 	for i := range snaps {
@@ -102,9 +158,8 @@ func (s *Service) Addons(ctx context.Context, f Filter) ([]Item, error) {
 	}
 	sortSources(sources)
 
-	out := []Item{}
 	for _, src := range sources {
-		if f.Source != "" && src.Name != f.Source {
+		if sourceName != "" && src.Name != sourceName {
 			continue
 		}
 		snap := bySource[src.Name]
@@ -113,16 +168,13 @@ func (s *Service) Addons(ctx context.Context, f Filter) ([]Item, error) {
 		}
 		items, err := s.derivedItems(ctx, snap)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, item := range items {
-			if f.Name != "" && item.Name != f.Name && item.QualifiedName != f.Name {
-				continue
-			}
-			out = append(out, item)
+			fn(item)
 		}
 	}
-	return out, nil
+	return nil
 }
 
 // Addon returns one addon of a source.

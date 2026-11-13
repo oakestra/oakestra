@@ -119,7 +119,7 @@ func (g *Gate) require(allowed func(*Claims) bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !g.loaded.Load() {
 			c.Header("Retry-After", "5")
-			httpx.WriteError(c.Writer, http.StatusServiceUnavailable, "authentication is not ready yet, the JWT public key hasn't been loaded")
+			httpx.WriteError(c.Writer, http.StatusServiceUnavailable, httpx.CodeAuthUnavailable, "authentication is not ready yet, the JWT public key hasn't been loaded")
 			c.Abort()
 			return
 		}
@@ -146,7 +146,7 @@ func (g *Gate) require(allowed func(*Claims) bool) gin.HandlerFunc {
 		}
 		if allowed != nil && !allowed(claims) {
 			// Same message as system_manager's not_authorized.
-			httpx.WriteError(c.Writer, http.StatusForbidden, "You have not enough permissions!")
+			httpx.WriteError(c.Writer, http.StatusForbidden, httpx.CodeForbidden, "You have not enough permissions!")
 			c.Abort()
 			return
 		}

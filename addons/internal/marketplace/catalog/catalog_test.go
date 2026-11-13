@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -404,6 +405,84 @@ func TestMergedListOrderAndFilter(t *testing.T) {
 	items, _ = e.cat.Addons(ctx, catalog.Filter{Source: "local"})
 	if len(items) != 1 || items[0].ID != "local--alpha" {
 		t.Errorf("source filter: %+v", items)
+	}
+}
+
+func TestCategoryFilterAndCounts(t *testing.T) {
+	e := setup(t, "off")
+	ctx := context.Background()
+	withCategory := func(name, category string, tags ...string) definition.Addon {
+		a := mptest.Addon(name, "1.0.0")
+		a.Category = category
+		a.Tags = tags
+		return a
+	}
+	if err := e.cat.Import(ctx, "official", bytes.NewReader(mptest.IndexJSON("official", 1,
+		withCategory("grafana", "Monitoring", "Dashboards", "metrics"), withCategory("ollama", "ai", "llm", "gpu"),
+		mptest.Addon("plain", "1.0.0")))); err != nil {
+		t.Fatal(err)
+	}
+	e.srv.set(200, mptest.IndexJSON("mytap", 1, withCategory("prom", " monitoring ", "metrics")))
+	e.addTap(t)
+	local := withCategory("llm", "AI", "LLM")
+	if _, err := e.cat.RegisterLocal(ctx, &local); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		filter catalog.Filter
+		want   string
+	}{
+		{catalog.Filter{Category: "ai"}, "ollama,local/llm"},
+		{catalog.Filter{Category: "AI"}, "ollama,local/llm"},
+		{catalog.Filter{Category: "  Monitoring "}, "grafana,mytap/prom"},
+		{catalog.Filter{Category: "monitoring", Source: "mytap"}, "mytap/prom"},
+		{catalog.Filter{Category: "networking"}, ""},
+		{catalog.Filter{Tag: "metrics"}, "grafana,mytap/prom"},
+		{catalog.Filter{Tag: " LLM "}, "ollama,local/llm"},
+		{catalog.Filter{Tag: "dashboards"}, "grafana"},
+		{catalog.Filter{Tag: "metrics", Category: "monitoring", Source: "official"}, "grafana"},
+		{catalog.Filter{Tag: "gpu", Category: "monitoring"}, ""},
+		{catalog.Filter{Tag: "llm", Name: "llm"}, "local/llm"},
+		{catalog.Filter{}, "grafana,ollama,plain,mytap/prom,local/llm"},
+	}
+	for _, tt := range tests {
+		items, err := e.cat.Addons(ctx, tt.filter)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, it := range items {
+			got = append(got, it.QualifiedName)
+		}
+		if strings.Join(got, ",") != tt.want {
+			t.Errorf("Addons(%+v) = %v, want %s", tt.filter, got, tt.want)
+		}
+	}
+
+	render := func(cs []catalog.Category) string {
+		var out []string
+		for _, c := range cs {
+			out = append(out, c.Name+"="+strconv.Itoa(c.Count))
+		}
+		return strings.Join(out, ",")
+	}
+	for src, want := range map[string]string{
+		"":         "ai=2,monitoring=2",
+		"official": "ai=1,monitoring=1",
+		"mytap":    "monitoring=1",
+		"nope":     "",
+	} {
+		cs, err := e.cat.Categories(ctx, src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cs == nil {
+			t.Errorf("Categories(%q) = nil, want an empty list", src)
+		}
+		if got := render(cs); got != want {
+			t.Errorf("Categories(%q) = %s, want %s", src, got, want)
+		}
 	}
 }
 

@@ -18,5 +18,5 @@ func bearerToken(r *http.Request) (string, bool) {
 
 func unauthorized(w http.ResponseWriter, msg string) {
 	w.Header().Set("WWW-Authenticate", `Bearer`)
-	httpx.WriteError(w, http.StatusUnauthorized, msg)
+	httpx.WriteError(w, http.StatusUnauthorized, httpx.CodeUnauthorized, msg)
 }

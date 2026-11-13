@@ -55,14 +55,14 @@ func TestMethodNotAllowedAndNotFound(t *testing.T) {
 	if got := rec.Header().Get("Allow"); got != "GET, HEAD, POST" {
 		t.Errorf("Allow %q", got)
 	}
-	if rec.Header().Get("Content-Type") != "application/json" || strings.TrimSpace(rec.Body.String()) != `{"message":"method not allowed"}` {
+	if rec.Header().Get("Content-Type") != "application/json" || strings.TrimSpace(rec.Body.String()) != `{"code":"method_not_allowed","message":"method not allowed"}` {
 		t.Errorf("405 body: %q %s", rec.Header().Get("Content-Type"), rec.Body)
 	}
 	if rec := f.do(t, "DELETE", "/api/v1/marketplace/addons/local/web", "", nil, ""); rec.Code != http.StatusUnauthorized {
 		t.Errorf("registered DELETE without a token: %d", rec.Code)
 	}
 	if rec := f.do(t, "GET", "/nope", "", nil, ""); rec.Code != http.StatusNotFound ||
-		rec.Header().Get("Content-Type") != "application/json" || strings.TrimSpace(rec.Body.String()) != `{"message":"not found"}` {
+		rec.Header().Get("Content-Type") != "application/json" || strings.TrimSpace(rec.Body.String()) != `{"code":"not_found","message":"not found"}` {
 		t.Errorf("unknown route: %d %q %s", rec.Code, rec.Header().Get("Content-Type"), rec.Body)
 	}
 	if rec := f.do(t, "HEAD", "/", "", nil, ""); rec.Code != http.StatusOK {

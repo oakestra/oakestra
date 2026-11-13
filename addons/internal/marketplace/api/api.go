@@ -48,14 +48,14 @@ type Config struct {
 	Logger     *slog.Logger
 }
 
-// maxConcurrentLists bounds the unauthenticated list endpoint, which reads every snapshot
+// maxConcurrentLists bounds the unauthenticated list endpoints, which read every snapshot
 // from the database.
 const maxConcurrentLists = 8
 
 type handler struct {
 	cat *catalog.Service
 	log *slog.Logger
-	// listSem is a counting semaphore for listAddons.
+	// listSem is a counting semaphore for the endpoints that walk every snapshot.
 	listSem chan struct{}
 }
 
@@ -77,10 +77,13 @@ func New(cfg Config) http.Handler {
 
 	// The dashboard may send either form.
 	for _, p := range []string{"/api/v1/marketplace/addons", "/api/v1/marketplace/addons/"} {
-		r.Handle(http.MethodGet, p, h.listAddons)
+		r.Handle(http.MethodGet, p, h.limitLists, h.listAddons)
 		r.Handle(http.MethodPost, p, admin, httpx.LimitBody(MaxBodySize), h.registerLocal)
 	}
 	r.Handle(http.MethodGet, "/api/v1/marketplace/addons/:source/:name", h.getAddon)
+	for _, p := range []string{"/api/v1/marketplace/categories", "/api/v1/marketplace/categories/"} {
+		r.Handle(http.MethodGet, p, h.limitLists, h.listCategories)
+	}
 	r.Handle(http.MethodDelete, "/api/v1/marketplace/addons/local/:name", admin, h.deleteLocal)
 
 	for _, p := range []string{"/api/v1/marketplace/sources", "/api/v1/marketplace/sources/"} {
@@ -105,28 +108,43 @@ func publicKey(g *auth.Gate) gin.HandlerFunc {
 		key, ok := g.PublicKeyPEM()
 		if !ok {
 			w.Header().Set("Retry-After", "5")
-			httpx.WriteError(w, http.StatusServiceUnavailable, "the JWT public key hasn't been loaded yet")
+			httpx.WriteError(w, http.StatusServiceUnavailable, httpx.CodeAuthUnavailable, "the JWT public key hasn't been loaded yet")
 			return
 		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"public_key": key})
 	}
 }
 
-func (h *handler) listAddons(c *gin.Context) {
-	w, r := c.Writer, c.Request
+// limitLists holds a listSem slot for the rest of the request.
+func (h *handler) limitLists(c *gin.Context) {
 	select {
 	case h.listSem <- struct{}{}:
 		defer func() { <-h.listSem }()
-	case <-r.Context().Done():
-		return
+		c.Next()
+	case <-c.Request.Context().Done():
+		c.Abort()
 	}
+}
+
+func (h *handler) listAddons(c *gin.Context) {
+	w, r := c.Writer, c.Request
 	q := r.URL.Query()
-	items, err := h.cat.Addons(r.Context(), catalog.Filter{Source: q.Get("source"), Name: q.Get("name")})
+	items, err := h.cat.Addons(r.Context(), catalog.Filter{Source: q.Get("source"), Name: q.Get("name"), Category: q.Get("category"), Tag: q.Get("tag")})
 	if err != nil {
 		h.fail(w, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, items)
+}
+
+func (h *handler) listCategories(c *gin.Context) {
+	w, r := c.Writer, c.Request
+	cats, err := h.cat.Categories(r.Context(), r.URL.Query().Get("source"))
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string][]catalog.Category{"items": cats})
 }
 
 func (h *handler) getAddon(c *gin.Context) {
@@ -211,7 +229,7 @@ func (h *handler) syncSource(c *gin.Context) {
 		case errors.As(err, &rejected), errors.As(err, &fetch):
 			// The fetch or the index is at fault, not the request. The error is also on
 			// the source's last_error.
-			httpx.WriteError(w, http.StatusBadGateway, err.Error())
+			httpx.WriteError(w, http.StatusBadGateway, httpx.CodeSyncFailed, err.Error())
 		default:
 			h.fail(w, err)
 		}
@@ -232,7 +250,7 @@ func (h *handler) importIndex(c *gin.Context) {
 	if err := h.cat.Import(r.Context(), name, body); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "request body is too large")
+			httpx.WriteError(w, http.StatusRequestEntityTooLarge, httpx.CodePayloadTooLarge, "request body is too large")
 			return
 		}
 		h.fail(w, err)
@@ -299,26 +317,26 @@ func (h *handler) fail(w http.ResponseWriter, err error) {
 	)
 	switch {
 	case errors.Is(err, errTooLarge):
-		httpx.WriteError(w, http.StatusRequestEntityTooLarge, err.Error())
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, httpx.CodePayloadTooLarge, err.Error())
 	case errors.Is(err, catalog.ErrNotFound):
-		httpx.WriteError(w, http.StatusNotFound, "not found")
+		httpx.WriteError(w, http.StatusNotFound, httpx.CodeNotFound, "not found")
 	case errors.Is(err, catalog.ErrSyncDisabled):
-		httpx.WriteError(w, http.StatusConflict, err.Error())
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeConflict, err.Error())
 	case errors.As(err, &validation):
-		body := httpx.ErrorBody{Message: validation.Msg}
+		body := httpx.ErrorBody{Code: httpx.CodeValidationFailed, Message: validation.Msg}
 		if len(validation.Fields) > 0 {
 			body.Errors = validation.Fields
 		}
 		httpx.WriteJSON(w, http.StatusUnprocessableEntity, body)
 	case errors.As(err, &conflict):
-		httpx.WriteError(w, http.StatusConflict, conflict.Msg)
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeConflict, conflict.Msg)
 	case errors.As(err, &rejected):
-		httpx.WriteError(w, http.StatusUnprocessableEntity, rejected.Msg)
+		httpx.WriteError(w, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, rejected.Msg)
 	case errors.As(err, &resolve):
-		httpx.WriteError(w, http.StatusUnprocessableEntity, "resolving image digest: "+resolve.Error())
+		httpx.WriteError(w, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "resolving image digest: "+resolve.Error())
 	default:
 		h.log.Error("request failed", "error", err)
-		httpx.WriteError(w, http.StatusInternalServerError, "internal error")
+		httpx.WriteError(w, http.StatusInternalServerError, httpx.CodeInternalError, "internal error")
 	}
 }
 

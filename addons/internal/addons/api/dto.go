@@ -21,6 +21,11 @@ type addonResponse struct {
 	Description   string                 `json:"description"`
 	Homepage      string                 `json:"homepage,omitempty"`
 	Maintainers   []string               `json:"maintainers,omitempty"`
+	DisplayName   string                 `json:"display_name,omitempty"`
+	Category      string                 `json:"category,omitempty"`
+	Tags          []string               `json:"tags,omitempty"`
+	Icon          string                 `json:"icon,omitempty"`
+	Metadata      map[string]string      `json:"metadata,omitempty"`
 	UI            *definition.UI         `json:"ui"`
 	Services      []definition.Service   `json:"services"`
 	Volumes       []definition.Volume    `json:"volumes"`
@@ -49,7 +54,8 @@ func toResponse(a addons.Installed, withLogs bool) addonResponse {
 	return addonResponse{
 		ID: a.ID, Name: a.QualifiedName, QualifiedName: a.QualifiedName, AddonID: a.AddonID,
 		Source: a.Source, Version: a.Version, Description: d.Description, Homepage: d.Homepage,
-		Maintainers: d.Maintainers, UI: d.UI, Services: d.Services, Volumes: d.Volumes,
+		Maintainers: d.Maintainers, DisplayName: d.DisplayName, Category: d.Category, Tags: d.Tags, Icon: d.Icon,
+		Metadata: d.Metadata, UI: d.UI, Services: d.Services, Volumes: d.Volumes,
 		Networks: d.Networks, Permissions: a.Granted.Canonical(), Status: a.Status,
 		StatusDetails: a.StatusDetails, Logs: a.Logs, UpdateAvailable: newer(a.LatestVersion, a.Version),
 		LatestVersion: a.LatestVersion, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,

@@ -106,15 +106,15 @@ func decodeBody(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := dec.Decode(v); err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
-			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "Request body is too large")
+			httpx.WriteError(w, http.StatusRequestEntityTooLarge, httpx.CodePayloadTooLarge, "Request body is too large")
 			return false
 		}
 		// encoding/json has no typed error for this one.
 		if field, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
-			httpx.WriteError(w, http.StatusBadRequest, "Unknown field "+field+" in request body")
+			httpx.WriteError(w, http.StatusBadRequest, httpx.CodeValidationFailed, "Unknown field "+field+" in request body")
 			return false
 		}
-		httpx.WriteError(w, http.StatusBadRequest, "Request body must be a JSON object")
+		httpx.WriteError(w, http.StatusBadRequest, httpx.CodeValidationFailed, "Request body must be a JSON object")
 		return false
 	}
 	return true

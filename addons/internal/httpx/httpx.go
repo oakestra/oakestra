@@ -1,5 +1,5 @@
 // Package httpx is the Gin setup shared by the addons and marketplace APIs: routing flags,
-// request logging, panic recovery, 404/405 handling and the {"message"} error body.
+// request logging, panic recovery, 404/405 handling and the {"code", "message"} error body.
 package httpx
 
 import (
@@ -50,7 +50,7 @@ func NewRouter(log *slog.Logger, mw ...gin.HandlerFunc) *Router {
 
 	r.Use(recoverPanics(log), logRequests(log))
 	r.Use(mw...)
-	r.NoRoute(func(c *gin.Context) { WriteError(c.Writer, http.StatusNotFound, "not found") })
+	r.NoRoute(func(c *gin.Context) { WriteError(c.Writer, http.StatusNotFound, CodeNotFound, "not found") })
 	r.NoMethod(r.methodNotAllowed)
 	r.Handle(http.MethodGet, "/", health)
 	return r
@@ -93,7 +93,7 @@ func (r *Router) methodNotAllowed(c *gin.Context) {
 	}
 	slices.Sort(allowed)
 	c.Header("Allow", strings.Join(allowed, ", "))
-	WriteError(c.Writer, http.StatusMethodNotAllowed, "method not allowed")
+	WriteError(c.Writer, http.StatusMethodNotAllowed, CodeMethodNotAllowed, "method not allowed")
 }
 
 func health(c *gin.Context) {
@@ -129,13 +129,35 @@ func logRequests(log *slog.Logger) gin.HandlerFunc {
 func recoverPanics(log *slog.Logger) gin.HandlerFunc {
 	return gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, err any) {
 		log.Error("handler panicked", "method", c.Request.Method, "path", c.Request.URL.Path, "panic", err)
-		WriteError(c.Writer, http.StatusInternalServerError, "internal error")
+		WriteError(c.Writer, http.StatusInternalServerError, CodeInternalError, "internal error")
 		c.Abort()
 	})
 }
 
+// Error codes are part of the API: clients branch on them, because the HTTP status alone can't
+// tell the 409s apart. Add new ones instead of changing what an existing one means.
+const (
+	CodeUnauthorized         = "unauthorized"
+	CodeForbidden            = "forbidden"
+	CodeAuthUnavailable      = "auth_unavailable"
+	CodeNotFound             = "not_found"
+	CodeMethodNotAllowed     = "method_not_allowed"
+	CodeValidationFailed     = "validation_failed"
+	CodePayloadTooLarge      = "payload_too_large"
+	CodeConfirmationRequired = "confirmation_required"
+	CodeAlreadyInstalled     = "already_installed"
+	CodeHostPathConflict     = "host_path_conflict"
+	CodeNoUpdateAvailable    = "no_update_available"
+	CodeBusy                 = "busy"
+	CodeConflict             = "conflict"
+	CodeSyncFailed           = "sync_failed"
+	CodeMarketplaceDown      = "marketplace_unavailable"
+	CodeInternalError        = "internal_error"
+)
+
 // ErrorBody is every error response. Errors carries validation details.
 type ErrorBody struct {
+	Code    string `json:"code"`
 	Message string `json:"message"`
 	Errors  any    `json:"errors,omitempty"`
 }
@@ -147,7 +169,7 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// WriteError writes {"message": msg}.
-func WriteError(w http.ResponseWriter, status int, msg string) {
-	WriteJSON(w, status, ErrorBody{Message: msg})
+// WriteError writes {"code": code, "message": msg}.
+func WriteError(w http.ResponseWriter, status int, code, msg string) {
+	WriteJSON(w, status, ErrorBody{Code: code, Message: msg})
 }

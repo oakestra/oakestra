@@ -21,7 +21,7 @@ func (s *server) list(c *gin.Context) {
 	w, r := c.Writer, c.Request
 	status := addons.Status(r.URL.Query().Get("status"))
 	if status != "" && !status.Valid() {
-		httpx.WriteError(w, http.StatusBadRequest, fmt.Sprintf("Unknown status %q", status))
+		httpx.WriteError(w, http.StatusBadRequest, httpx.CodeValidationFailed, fmt.Sprintf("Unknown status %q", status))
 		return
 	}
 	items, err := s.Store.List(r.Context(), status)
@@ -65,7 +65,7 @@ func (s *server) install(c *gin.Context) {
 	}
 	src, name, err := definition.ParseQualified(req.Name)
 	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		httpx.WriteError(w, http.StatusBadRequest, httpx.CodeValidationFailed, err.Error())
 		return
 	}
 	def, ok := s.fetch(w, r, src, name)
@@ -81,12 +81,12 @@ func (s *server) install(c *gin.Context) {
 	}
 	for _, o := range current {
 		if o.Current && o.AddonID == id {
-			httpx.WriteError(w, http.StatusConflict, fmt.Sprintf("Addon %q is already installed.", def.QualifiedName()))
+			httpx.WriteError(w, http.StatusConflict, httpx.CodeAlreadyInstalled, fmt.Sprintf("Addon %q is already installed.", def.QualifiedName()))
 			return
 		}
 	}
 	if msg, conflict := addons.HostBindConflict(def, "", current); conflict {
-		httpx.WriteError(w, http.StatusConflict, "The addon's host paths conflict with an installed addon: "+msg)
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeHostPathConflict, "The addon's host paths conflict with an installed addon: "+msg)
 		return
 	}
 
@@ -112,7 +112,7 @@ func (s *server) install(c *gin.Context) {
 	switch {
 	case errors.Is(err, store.ErrDuplicate):
 		// Lost a race against a concurrent install of the same addon.
-		httpx.WriteError(w, http.StatusConflict, fmt.Sprintf("Addon %q is already installed.", def.QualifiedName()))
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeAlreadyInstalled, fmt.Sprintf("Addon %q is already installed.", def.QualifiedName()))
 	case err != nil:
 		s.internal(w, "storing addon", err)
 	default:
@@ -137,7 +137,7 @@ func (s *server) update(c *gin.Context) {
 		return
 	}
 	if !cur.Current || !cur.Status.Settled() {
-		httpx.WriteError(w, http.StatusConflict, fmt.Sprintf("Addon is %s and can't be updated right now.", cur.Status))
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeBusy, fmt.Sprintf("Addon is %s and can't be updated right now.", cur.Status))
 		return
 	}
 
@@ -150,7 +150,7 @@ func (s *server) update(c *gin.Context) {
 		return
 	}
 	if !newer(latest.Version, cur.Version) {
-		httpx.WriteError(w, http.StatusConflict, fmt.Sprintf("No newer version than %s is available.", cur.Version))
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeNoUpdateAvailable, fmt.Sprintf("No newer version than %s is available.", cur.Version))
 		return
 	}
 
@@ -158,7 +158,7 @@ func (s *server) update(c *gin.Context) {
 	// own read-write paths. Accepting the permissions can't make that safe, the admin can't
 	// see it.
 	if msg, conflict := definition.UpgradeConflict(definition.HostBindSources(&cur.Definition), definition.HostBindSources(latest)); conflict {
-		httpx.WriteError(w, http.StatusConflict, "This version can't be installed over the current one: "+msg)
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeConflict, "This version can't be installed over the current one: "+msg)
 		return
 	}
 	others, err := s.Store.List(r.Context(), "")
@@ -167,7 +167,7 @@ func (s *server) update(c *gin.Context) {
 		return
 	}
 	if msg, conflict := addons.HostBindConflict(latest, cur.ID, others); conflict {
-		httpx.WriteError(w, http.StatusConflict, "This version's host paths conflict with an installed addon: "+msg)
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeHostPathConflict, "This version's host paths conflict with an installed addon: "+msg)
 		return
 	}
 
@@ -197,11 +197,11 @@ func (s *server) update(c *gin.Context) {
 	})
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		httpx.WriteError(w, http.StatusNotFound, "Addon not found")
+		httpx.WriteError(w, http.StatusNotFound, httpx.CodeNotFound, "Addon not found")
 	case err != nil:
 		s.internal(w, "storing update", err)
 	case !applied:
-		httpx.WriteError(w, http.StatusConflict, "The addon changed while the update was prepared, try again.")
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeConflict, "The addon changed while the update was prepared, try again.")
 	default:
 		httpx.WriteJSON(w, http.StatusOK, toResponse(updated, true))
 	}
@@ -223,7 +223,7 @@ func (s *server) approve(c *gin.Context) {
 		return
 	}
 	if !cur.Current || !cur.Status.Settled() {
-		httpx.WriteError(w, http.StatusConflict, fmt.Sprintf("Addon is %s and can't be approved right now.", cur.Status))
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeBusy, fmt.Sprintf("Addon is %s and can't be approved right now.", cur.Status))
 		return
 	}
 
@@ -233,11 +233,11 @@ func (s *server) approve(c *gin.Context) {
 	}
 	latest.Permissions = latest.Permissions.Canonical()
 	if latest.ID() != cur.AddonID || latest.Version != cur.Version {
-		httpx.WriteError(w, http.StatusConflict, fmt.Sprintf("The marketplace lists %s %s, not the installed %s; update the addon instead.", latest.QualifiedName(), latest.Version, cur.Version))
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeConflict, fmt.Sprintf("The marketplace lists %s %s, not the installed %s; update the addon instead.", latest.QualifiedName(), latest.Version, cur.Version))
 		return
 	}
 	if !bytes.Equal(definition.CanonicalJSON(*latest), definition.CanonicalJSON(cur.Definition)) {
-		httpx.WriteError(w, http.StatusConflict, "The installed definition differs from the marketplace's definition of the same version; remove and reinstall the addon.")
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeConflict, "The installed definition differs from the marketplace's definition of the same version; remove and reinstall the addon.")
 		return
 	}
 	others, err := s.Store.List(r.Context(), "")
@@ -246,7 +246,7 @@ func (s *server) approve(c *gin.Context) {
 		return
 	}
 	if msg, conflict := addons.HostBindConflict(latest, cur.ID, others); conflict {
-		httpx.WriteError(w, http.StatusConflict, "The addon's host paths conflict with an installed addon: "+msg)
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeHostPathConflict, "The addon's host paths conflict with an installed addon: "+msg)
 		return
 	}
 	perms := latest.Permissions
@@ -275,11 +275,11 @@ func (s *server) approve(c *gin.Context) {
 	})
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		httpx.WriteError(w, http.StatusNotFound, "Addon not found")
+		httpx.WriteError(w, http.StatusNotFound, httpx.CodeNotFound, "Addon not found")
 	case err != nil:
 		s.internal(w, "storing approval", err)
 	case !applied:
-		httpx.WriteError(w, http.StatusConflict, "The addon changed while the approval was prepared, try again.")
+		httpx.WriteError(w, http.StatusConflict, httpx.CodeConflict, "The addon changed while the approval was prepared, try again.")
 	default:
 		httpx.WriteJSON(w, http.StatusOK, toResponse(updated, true))
 	}
@@ -312,7 +312,7 @@ func (s *server) remove(c *gin.Context) {
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			httpx.WriteError(w, http.StatusNotFound, "Addon not found")
+			httpx.WriteError(w, http.StatusNotFound, httpx.CodeNotFound, "Addon not found")
 			return
 		}
 		s.internal(w, "disabling addon", err)
@@ -325,7 +325,7 @@ func (s *server) remove(c *gin.Context) {
 func (s *server) load(c *gin.Context) (addons.Installed, bool) {
 	a, err := s.Store.Get(c.Request.Context(), c.Param("id"))
 	if errors.Is(err, store.ErrNotFound) {
-		httpx.WriteError(c.Writer, http.StatusNotFound, "Addon not found")
+		httpx.WriteError(c.Writer, http.StatusNotFound, httpx.CodeNotFound, "Addon not found")
 		return addons.Installed{}, false
 	}
 	if err != nil {
@@ -343,16 +343,16 @@ func (s *server) fetch(w http.ResponseWriter, r *http.Request, src definition.So
 	def, err := s.Marketplace.Get(r.Context(), src, name)
 	switch {
 	case errors.Is(err, marketplaceclient.ErrNotFound):
-		httpx.WriteError(w, http.StatusNotFound, "Marketplace addon not found")
+		httpx.WriteError(w, http.StatusNotFound, httpx.CodeNotFound, "Marketplace addon not found")
 		return nil, false
 	case err != nil:
 		s.log.Warn("marketplace lookup failed", "source", src.Name, "name", name, "error", err)
-		httpx.WriteError(w, http.StatusBadGateway, "Marketplace is unavailable")
+		httpx.WriteError(w, http.StatusBadGateway, httpx.CodeMarketplaceDown, "Marketplace is unavailable")
 		return nil, false
 	}
 	def.Normalize()
 	if err := definition.Check(def, definition.ModeInstall); err != nil {
-		resp := httpx.ErrorBody{Message: "The addon definition is not valid: " + err.Error()}
+		resp := httpx.ErrorBody{Code: httpx.CodeValidationFailed, Message: "The addon definition is not valid: " + err.Error()}
 		var errs definition.Errors
 		if errors.As(err, &errs) {
 			resp.Errors = errs
@@ -368,32 +368,48 @@ func (s *server) fetch(w http.ResponseWriter, r *http.Request, src definition.So
 // the record being replaced, so the dialog can show what changed and whether the permissions
 // grew.
 func writeConsentRequired(w http.ResponseWriter, msg string, def *definition.Addon, hash string, installed *addons.Installed) {
-	perms := def.Permissions.Canonical()
-	body := map[string]any{
-		"message":         msg,
-		"definition":      json.RawMessage(definition.CanonicalJSON(*def)),
-		"definition_hash": hash,
-		"permissions":     perms,
+	body := consentRequired{
+		ErrorBody:      httpx.ErrorBody{Code: httpx.CodeConfirmationRequired, Message: msg},
+		Definition:     json.RawMessage(definition.CanonicalJSON(*def)),
+		DefinitionHash: hash,
+		Permissions:    def.Permissions.Canonical(),
 	}
 	if installed != nil {
-		body["previous_version"] = installed.Version
-		body["previous_permissions"] = installed.Granted.Canonical()
-		body["permissions_grow"] = perms.Grows(installed.Granted)
+		prev := installed.Granted.Canonical()
+		grow := body.Permissions.Grows(installed.Granted)
+		body.PreviousVersion = installed.Version
+		body.PreviousPermissions = &prev
+		body.PermissionsGrow = &grow
 	}
 	httpx.WriteJSON(w, http.StatusConflict, body)
 }
 
+// consentRequired is the 409 that asks the admin to confirm a definition. The previous_* fields and
+// permissions_grow are only set on updates; they are pointers so a false permissions_grow is
+// still sent.
+type consentRequired struct {
+	httpx.ErrorBody
+	Definition          json.RawMessage         `json:"definition"`
+	DefinitionHash      string                  `json:"definition_hash"`
+	Permissions         definition.Permissions  `json:"permissions"`
+	PreviousVersion     string                  `json:"previous_version,omitempty"`
+	PreviousPermissions *definition.Permissions `json:"previous_permissions,omitempty"`
+	PermissionsGrow     *bool                   `json:"permissions_grow,omitempty"`
+}
+
 func (s *server) internal(w http.ResponseWriter, what string, err error) {
 	s.log.Error(what+" failed", "error", err)
-	httpx.WriteError(w, http.StatusInternalServerError, "Internal server error")
+	httpx.WriteError(w, http.StatusInternalServerError, httpx.CodeInternalError, "Internal server error")
 }
 
 // uiAddonEntry is one element of GET /ui-addons. Name is the addon id, which is also what the
 // dashboard turns into the addonui-<name> host.
 type uiAddonEntry struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
-	SDK     string `json:"sdk"`
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	SDK         string `json:"sdk"`
+	DisplayName string `json:"display_name,omitempty"`
+	Icon        string `json:"icon,omitempty"`
 }
 
 func (s *server) uiAddons(c *gin.Context) {
@@ -422,7 +438,10 @@ func (s *server) uiAddons(c *gin.Context) {
 		seen[a.AddonID] = true
 		// Use the addon version, not the image tag. Images are pinned by digest, and an update
 		// always raises the version, so the dashboard's cache busting still works.
-		entries = append(entries, uiAddonEntry{Name: a.AddonID, Version: a.Version, SDK: ui.SDK})
+		entries = append(entries, uiAddonEntry{
+			Name: a.AddonID, Version: a.Version, SDK: ui.SDK,
+			DisplayName: a.Definition.DisplayName, Icon: a.Definition.Icon,
+		})
 	}
 	httpx.WriteJSON(w, http.StatusOK, entries)
 }

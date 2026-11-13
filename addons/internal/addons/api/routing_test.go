@@ -33,7 +33,7 @@ func TestTrailingSlashVariants(t *testing.T) {
 	// A slash where no variant is registered is a 404, never a redirect.
 	for _, p := range []string{"/api/v1/addons/" + a.ID + "/", "/api/v1/addons/" + a.ID + "/update/"} {
 		code, body := f.do("POST", p, f.admin, "{}")
-		if code != 404 || strings.TrimSpace(string(body)) != `{"message":"not found"}` {
+		if code != 404 || strings.TrimSpace(string(body)) != `{"code":"not_found","message":"not found"}` {
 			t.Errorf("POST %s: %d %s", p, code, body)
 		}
 	}
@@ -44,7 +44,7 @@ func TestNotFoundAndMethodNotAllowedAreJSON(t *testing.T) {
 	req := httptest.NewRequest("GET", "/nope", nil)
 	rec := httptest.NewRecorder()
 	f.h.ServeHTTP(rec, req)
-	if rec.Code != 404 || rec.Header().Get("Content-Type") != "application/json" || strings.TrimSpace(rec.Body.String()) != `{"message":"not found"}` {
+	if rec.Code != 404 || rec.Header().Get("Content-Type") != "application/json" || strings.TrimSpace(rec.Body.String()) != `{"code":"not_found","message":"not found"}` {
 		t.Errorf("404: %d %q %s", rec.Code, rec.Header().Get("Content-Type"), rec.Body)
 	}
 	// CORS headers are on error responses as well.
@@ -59,7 +59,7 @@ func TestNotFoundAndMethodNotAllowedAreJSON(t *testing.T) {
 	} {
 		rec := httptest.NewRecorder()
 		f.h.ServeHTTP(rec, httptest.NewRequest("PATCH", path, strings.NewReader(`{"status":"installing"}`)))
-		if rec.Code != 405 || rec.Header().Get("Allow") != allow || strings.TrimSpace(rec.Body.String()) != `{"message":"method not allowed"}` {
+		if rec.Code != 405 || rec.Header().Get("Allow") != allow || strings.TrimSpace(rec.Body.String()) != `{"code":"method_not_allowed","message":"method not allowed"}` {
 			t.Errorf("PATCH %s: %d Allow %q %s", path, rec.Code, rec.Header().Get("Allow"), rec.Body)
 		}
 	}
@@ -146,7 +146,7 @@ func TestPanicsAndRequestLog(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusInternalServerError || strings.TrimSpace(rec.Body.String()) != `{"message":"internal error"}` {
+	if rec.Code != http.StatusInternalServerError || strings.TrimSpace(rec.Body.String()) != `{"code":"internal_error","message":"internal error"}` {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
 	out := buf.String()

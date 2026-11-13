@@ -149,8 +149,9 @@ func TestAdminEndpointsNeedAdmin(t *testing.T) {
 			if rec.Code != tc.want {
 				t.Errorf("%s %s (%s): %d, want %d", ep.method, ep.path, tc.name, rec.Code, tc.want)
 			}
+			wantCode := map[int]string{http.StatusUnauthorized: "unauthorized", http.StatusForbidden: "forbidden"}[tc.want]
 			var body map[string]any
-			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body["message"] == "" {
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body["message"] == "" || body["code"] != wantCode {
 				t.Errorf("%s %s (%s): error body %q", ep.method, ep.path, tc.name, rec.Body)
 			}
 		}
@@ -440,5 +441,90 @@ func TestSourcesListRedactsQuery(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "hunter2") || got != "https://tap.test/index.json?<redacted>" {
 		t.Errorf("sources: %s", rec.Body)
+	}
+}
+
+func TestCategoriesAndDisplayFields(t *testing.T) {
+	f := newFixture(t, "")
+	register := func(name, extra string) *httptest.ResponseRecorder {
+		t.Helper()
+		body := `{"name":"` + name + `","version":"0.1.0",` + extra + `"services":[{"service_name":"web","image":"nginx:1.27"}]}`
+		return f.do(t, "POST", "/api/v1/marketplace/addons", f.admin, strings.NewReader(body), "application/json")
+	}
+	meta := `"display_name":"Local LLM","category":"AI","icon":"https://cdn.example.com/llm.svg","metadata":{"example.com/id":"42"},`
+	if rec := register("llm", meta); rec.Code != http.StatusCreated {
+		t.Fatalf("register: %d %s", rec.Code, rec.Body)
+	}
+	if rec := register("chat", `"category":"ai","tags":["LLM","chat"],`); rec.Code != http.StatusCreated {
+		t.Fatalf("register: %d %s", rec.Code, rec.Body)
+	}
+	if rec := register("graphs", `"category":"Monitoring",`); rec.Code != http.StatusCreated {
+		t.Fatalf("register: %d %s", rec.Code, rec.Body)
+	}
+
+	rec := f.do(t, "GET", "/api/v1/marketplace/addons?category=AI", "", nil, "")
+	var list []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, it := range list {
+		names = append(names, it["qualified_name"].(string))
+	}
+	if strings.Join(names, ",") != "local/chat,local/llm" {
+		t.Errorf("category filter: %v", names)
+	}
+	llm := list[1]
+	if llm["display_name"] != "Local LLM" || llm["category"] != "ai" || llm["icon"] != "https://cdn.example.com/llm.svg" ||
+		llm["metadata"].(map[string]any)["example.com/id"] != "42" {
+		t.Errorf("metadata: %v", llm)
+	}
+	if _, ok := list[0]["metadata"]; ok {
+		t.Errorf("unset metadata is serialized: %v", list[0])
+	}
+
+	for path, want := range map[string]string{
+		"/api/v1/marketplace/categories":                  `{"items":[{"name":"ai","count":2},{"name":"monitoring","count":1}]}`,
+		"/api/v1/marketplace/categories/":                 `{"items":[{"name":"ai","count":2},{"name":"monitoring","count":1}]}`,
+		"/api/v1/marketplace/categories?source=official":  `{"items":[]}`,
+		"/api/v1/marketplace/categories?source=no-such":   `{"items":[]}`,
+		"/api/v1/marketplace/categories?source=local&x=1": `{"items":[{"name":"ai","count":2},{"name":"monitoring","count":1}]}`,
+	} {
+		rec := f.do(t, "GET", path, "", nil, "")
+		if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != want {
+			t.Errorf("GET %s = %d %s, want %s", path, rec.Code, rec.Body, want)
+		}
+	}
+
+	for path, want := range map[string]int{
+		"/api/v1/marketplace/addons?tag=llm":                1,
+		"/api/v1/marketplace/addons?tag=LLM&category=ai":    1,
+		"/api/v1/marketplace/addons?tag=llm&category=other": 0,
+		"/api/v1/marketplace/addons?tag=nope":               0,
+	} {
+		var got []map[string]any
+		rec := f.do(t, "GET", path, "", nil, "")
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || len(got) != want {
+			t.Errorf("GET %s = %s, want %d items", path, rec.Body, want)
+		}
+	}
+
+	rec = register("bad", `"icon":"http://cdn.example.com/x.png","category":"a/b","tags":["a b"],`)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid display fields: %d %s", rec.Code, rec.Body)
+	}
+	var body struct {
+		Code   string `json:"code"`
+		Errors []struct{ Path string }
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, e := range body.Errors {
+		paths = append(paths, e.Path)
+	}
+	if body.Code != "validation_failed" || strings.Join(paths, ",") != "category,tags[0],icon" {
+		t.Errorf("invalid display fields response: %s", rec.Body)
 	}
 }

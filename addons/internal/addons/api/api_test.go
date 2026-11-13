@@ -526,7 +526,13 @@ func TestDeleteSemantics(t *testing.T) {
 
 func TestListFilterAndUpdateAvailable(t *testing.T) {
 	f := newFixture(t, "root")
-	f.mkt.set(def("insights", "1.0.0"))
+	withMeta := def("insights", "1.0.0")
+	withMeta.DisplayName = "Insights"
+	withMeta.Category = "observability"
+	withMeta.Tags = []string{"metrics"}
+	withMeta.Icon = "https://cdn.example.com/insights.svg"
+	withMeta.Metadata = map[string]string{"example.com/id": "7"}
+	f.mkt.set(withMeta)
 	f.mkt.set(def("other", "1.0.0"))
 	a := f.install("insights")
 	b := f.install("other")
@@ -538,6 +544,9 @@ func TestListFilterAndUpdateAvailable(t *testing.T) {
 	list := decode[[]addonResponse](t, body)
 	if code != 200 || len(list) != 1 || list[0].ID != a.ID || !list[0].UpdateAvailable || list[0].LatestVersion != "1.0.1" {
 		t.Fatalf("%d %s", code, body)
+	}
+	if m := list[0]; m.DisplayName != "Insights" || m.Category != "observability" || len(m.Tags) != 1 || m.Icon == "" || m.Metadata["example.com/id"] != "7" {
+		t.Errorf("display fields missing: %s", body)
 	}
 	_, body = f.do("GET", "/api/v1/addons", f.user, nil)
 	all := decode[[]addonResponse](t, body)
@@ -565,6 +574,9 @@ func mustJSON(v any) []byte { b, _ := json.Marshal(v); return b }
 func TestUIAddons(t *testing.T) {
 	f := newFixture(t, "root")
 	tagged := def("insights", "1.4.2")
+	tagged.DisplayName = "Insights"
+	tagged.Icon = "https://cdn.example.com/insights.svg"
+	tagged.Category = "observability"
 	f.mkt.set(tagged)
 	f.mkt.set(def("inactive", "1.0.0"))
 	noUI := def("plain", "1.0.0")
@@ -587,7 +599,8 @@ func TestUIAddons(t *testing.T) {
 	if code != 200 {
 		t.Fatal(code)
 	}
-	want := `[{"name":"insights","version":"1.4.2","sdk":"^1.0.0"},{"name":"acme--tool","version":"2.0.0","sdk":"^1.0.0"}]`
+	want := `[{"name":"insights","version":"1.4.2","sdk":"^1.0.0","display_name":"Insights","icon":"https://cdn.example.com/insights.svg"},` +
+		`{"name":"acme--tool","version":"2.0.0","sdk":"^1.0.0"}]`
 	if strings.TrimSpace(string(body)) != want {
 		t.Fatalf("ui-addons = %s\nwant %s", body, want)
 	}

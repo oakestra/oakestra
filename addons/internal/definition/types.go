@@ -1,6 +1,9 @@
 package definition
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
 
 // SourceKind says where a definition comes from.
 type SourceKind string
@@ -42,7 +45,26 @@ type Addon struct {
 	Description string   `json:"description,omitempty"`
 	Homepage    string   `json:"homepage,omitempty"`
 	Maintainers []string `json:"maintainers,omitempty"`
-	UI          *UI      `json:"ui,omitempty"`
+
+	// DisplayName, Category and Icon are for catalog cards. The engine never acts on them.
+	// They are omitempty like Metadata, so definitions that don't set them keep the
+	// definition hash they had before these fields existed.
+	DisplayName string `json:"display_name,omitempty"`
+	// Category is free-form rather than a fixed list: with a list, an index using a category
+	// added later would fail validation on every older marketplace, which then rejects the whole
+	// index. Normalize lowercases it so filters match across sources.
+	Category string `json:"category,omitempty"`
+	// Tags are search keywords, Category is the main filter. Normalize lowercases, dedupes and
+	// sorts them, so their order in the source file doesn't change the definition hash.
+	Tags []string `json:"tags,omitempty"`
+	// Icon is an https URL. Browsers fetch it straight from the third party.
+	Icon string `json:"icon,omitempty"`
+	// Metadata is free key-value data for catalogs and clients (a catalog's own ids, extra
+	// display hints). The engine ignores it. New information goes here instead of into a new
+	// field, which older, strict decoders would reject.
+	Metadata map[string]string `json:"metadata,omitempty"`
+
+	UI *UI `json:"ui,omitempty"`
 
 	Permissions Permissions `json:"permissions"`
 	Services    []Service   `json:"services"`
@@ -119,8 +141,20 @@ type Permissions struct {
 }
 
 // Normalize replaces nil slices and maps with empty ones so the JSON output has [] and {}
-// instead of null, which is what the dashboard expects.
+// instead of null, which is what the dashboard expects. It also trims DisplayName and puts
+// Category and Tags into their canonical form (see NormalizeCategory and NormalizeTag).
+// Metadata goes the other way: an empty map becomes nil, because the field is omitted when
+// empty and the memory and Mongo stores should hold the same value either way.
+//
+// Normalize is idempotent, and CanonicalJSON relies on that: the definition hash is computed
+// after a Normalize, so "AI" and "ai" hash the same.
 func (a *Addon) Normalize() {
+	a.DisplayName = strings.TrimSpace(a.DisplayName)
+	a.Category = NormalizeCategory(a.Category)
+	a.Tags = normalizeTags(a.Tags)
+	if len(a.Metadata) == 0 {
+		a.Metadata = nil
+	}
 	if a.Permissions.HostPaths == nil {
 		a.Permissions.HostPaths = []string{}
 	}

@@ -86,7 +86,10 @@ file per addon. A YAML example with host mounts and a volume:
 ```yaml
 name: node-metrics
 version: 1.2.0
+display_name: Node Metrics
 description: Exports host metrics for Prometheus.
+category: monitoring
+tags: [prometheus, exporter]
 homepage: https://github.com/your-org/node-metrics
 maintainers:
   - Jane Doe <jane@example.org>
@@ -121,6 +124,11 @@ volumes:
 | `description` | no | Up to 4096 characters. |
 | `homepage` | no | http(s) URL. |
 | `maintainers` | no | Up to 32 strings. |
+| `display_name` | no | Name for catalog cards, up to 64 characters, no control or bidi formatting characters. Leading and trailing whitespace is trimmed. |
+| `category` | no | Main catalog filter (`?category=`). Free-form, stored trimmed and lowercased with inner whitespace collapsed (`AI Tools` becomes `ai tools`). Letters `a-z`, digits, spaces and `-`, up to 32 characters. |
+| `tags` | no | Search keywords (`?tag=`). Up to 8, each stored trimmed and lowercased, then deduplicated and sorted. Letters `a-z`, digits and `-`, up to 32 characters each. |
+| `icon` | no | `https` URL of an image, up to 2048 characters. No `http`, `data:` or userinfo. See below. |
+| `metadata` | no | Free key-value data (string to string) for catalogs and clients, such as a catalog's own ids. The engine ignores it. Up to 32 entries. Keys are lowercase letters, digits, `.`, `-` and `/`, start and end with a letter or digit, up to 63 characters (`example.com/catalog-id`). Values up to 1024 bytes. |
 | `permissions` | no | What the addon may do on the host. Anything the services need has to be declared here, see [Permissions](#permissions). |
 | `services` | yes | The containers, see below. |
 | `volumes` | no | Named volumes the addon creates: `name`, optional `driver`, `driver_opts`, `labels`. |
@@ -143,7 +151,15 @@ Each service has:
 
 Field names are matched exactly. Unknown fields (`privileged`, `cap_add`, a misspelled `Image`)
 and duplicate keys are rejected instead of being ignored. In YAML, quote numbers that are used as
-strings, such as ports and environment values.
+strings, such as ports, environment values and metadata values.
+
+The engine doesn't act on the display fields (`display_name`, `category`, `tags`, `icon`) or on
+`metadata`. They are still part of the definition, so they count for the definition hash an
+admin confirms, and `addonctl diff` wants a higher version when only they change.
+
+The dashboard loads `icon` straight from the third-party host, so it should render it with
+`<img referrerpolicy="no-referrer">` to keep the dashboard URL out of that host's logs. An icon
+host still learns the viewer's IP address and when the catalog was opened.
 
 Check a definition before publishing it:
 
@@ -248,6 +264,11 @@ An index is a JSON file with `schema` (always `1`), `source`, `serial`, `generat
 (the definitions) and `signatures` (reserved, empty for now). Indexes are not signed yet. What
 protects them today is digest pinning, the serial check and review of the catalog repository.
 
+Indexes are decoded as strictly as single definitions. A field that an older marketplace doesn't
+know makes it reject the whole index and keep serving its last good copy. Catalogs that want to
+carry extra information should put it in `metadata`, which every version accepts, rather than wait
+for a new field.
+
 The marketplace syncs every source every `MARKETPLACE_SYNC_INTERVAL` (6 hours by default) using
 ETags, or right away with `POST /api/v1/marketplace/sources/<name>/sync`. If a fetch fails or the
 index is rejected, the marketplace keeps serving the last good copy and shows the problem in the
@@ -279,8 +300,8 @@ flow is the same for all three:
 
 1. Call the endpoint without `accept_definition`.
 2. The addons manager fetches the definition from the marketplace and answers `409` with
-   `definition` (the exact JSON that will be stored), `definition_hash` and `permissions`. Show
-   these to the admin.
+   `code: "confirmation_required"`, `definition` (the exact JSON that will be stored),
+   `definition_hash` and `permissions`. Show these to the admin.
 3. Call again with `accept_definition` set to the hash.
 
 The marketplace doesn't publish hashes. Only the hash from the `409` counts, so the
@@ -336,10 +357,31 @@ The services accept the JWT that system manager hands out at `POST :10000/api/au
 valid token. Until a service has loaded the public key to check tokens, protected endpoints answer
 `503`.
 
-Errors are JSON: `{"message": "..."}`. Validation errors from the marketplace (`422`) add an
+Errors are JSON: `{"code": "...", "message": "...", "errors": [...]}`. Branch on `code`, which is
+stable, because a status like `409` has several meanings. `message` is for people and may change.
+Validation errors (`validation_failed`) from the marketplace and for invalid definitions add an
 `errors` array of `{"path", "message"}`, for example `{"path": "services[0].image", ...}`. Request
 bodies are decoded strictly, an unknown field is a `400` on the addons manager and a `422` on the
 marketplace.
+
+| `code` | Status | Meaning |
+|---|---|---|
+| `unauthorized` | 401 | Token missing, invalid or expired. |
+| `forbidden` | 403 | Valid token without the `Admin` role. |
+| `auth_unavailable` | 503 | The service hasn't loaded the JWT public key yet. Retry. |
+| `not_found` | 404 | No such route, addon, source or marketplace entry. |
+| `method_not_allowed` | 405 | The path exists, the method doesn't. `Allow` lists the right ones. |
+| `validation_failed` | 400, 422 | Bad body, parameter or definition. |
+| `payload_too_large` | 413 | The request body is over the limit. |
+| `confirmation_required` | 409 | The definition has to be accepted, or it changed since it was shown. The body carries `definition`, `definition_hash` and `permissions`. |
+| `already_installed` | 409 | The addon is installed already. |
+| `host_path_conflict` | 409 | The host paths overlap with an installed addon. |
+| `no_update_available` | 409 | The marketplace has nothing newer. |
+| `busy` | 409 | The addon is installing, updating or otherwise not settled. |
+| `conflict` | 409 | Any other conflict, for example removing the official or local source, or an addon that changed during the request. |
+| `sync_failed` | 502 | The marketplace couldn't fetch or accept a source's index. |
+| `marketplace_unavailable` | 502 | The addons manager can't reach the marketplace. |
+| `internal_error` | 500 | Unexpected failure, details are in the service log. |
 
 ### Addons manager (root `11101`, cluster `11201`)
 
@@ -351,7 +393,7 @@ marketplace.
 | `POST` | `/api/v1/addons/<_id>/update` | admin | Update to the catalog version. Body `{"accept_definition": "<hash>"}`. `409` if there is no newer version or the addon is busy. |
 | `POST` | `/api/v1/addons/<_id>/approve` | admin | Confirm an installed addon again. Body `{"accept_definition": "<hash>"}`. |
 | `DELETE` | `/api/v1/addons/<_id>` | admin | Disable (`200`), or delete if already disabled (`204`). |
-| `GET` | `/api/v1/ui-addons` | none | Active addons that have a UI. Always empty on clusters. |
+| `GET` | `/api/v1/ui-addons` | none | Active addons that have a UI: `name`, `version`, `sdk`, and `display_name` and `icon` when the definition sets them. Always empty on clusters. |
 
 `<_id>` is the `_id` of the installed record from the list, not the addon name. Besides the
 definition fields, a record has `qualified_name`, `addon_id`, `source`, `status`,
@@ -364,7 +406,8 @@ need an admin token.
 
 | Method | Path | Auth | |
 |---|---|---|---|
-| `GET` | `/api/v1/marketplace/addons[?source=&name=]` | none | All addons from all sources. |
+| `GET` | `/api/v1/marketplace/addons[?source=&name=&category=&tag=]` | none | All addons from all sources. Filters combine with AND. `category` and `tag` are normalized like the definition fields, so `?category=AI` finds `ai`. |
+| `GET` | `/api/v1/marketplace/categories[?source=]` | none | `{"items": [{"name": "ai", "count": 2}]}`, sorted by name. Addons without a category aren't counted. |
 | `GET` | `/api/v1/marketplace/addons/<source>/<name>` | none | One addon. `<source>` is `official`, `local` or a tap name. |
 | `POST` | `/api/v1/marketplace/addons` | admin | Register a local addon. Body is the definition. `201`. |
 | `DELETE` | `/api/v1/marketplace/addons/local/<name>` | admin | Remove a local addon. `204`. |
@@ -406,7 +449,7 @@ doesn't need `core_network` for this. Don't name your addon after a built-in das
 The dashboard asks `GET /api/v1/ui-addons` on the root addons manager which UIs to load:
 
 ```json
-[{ "name": "insights", "version": "0.1.0", "sdk": "^0.1.0" }]
+[{ "name": "insights", "version": "0.1.0", "sdk": "^0.1.0", "display_name": "Insights" }]
 ```
 
 `name` here is the addon id and `version` the installed addon version, which the dashboard also

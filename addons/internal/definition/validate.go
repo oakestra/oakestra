@@ -104,6 +104,7 @@ func Validate(a *Addon, mode Mode) Errors {
 		}
 	}
 
+	errs = append(errs, validateDisplayFields(a)...)
 	errs = append(errs, validatePermissions(a.Permissions)...)
 
 	volumes := map[string]bool{}
