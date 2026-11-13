@@ -86,19 +86,21 @@ Check that no foreign process is occupying Oakestra's ports before containers st
 
 **Root Orchestrator ports:**
 ```bash
-for port in 10000 50052 10007 10008 10099 6379 10004 11011 10011 80 3000 3100 12345 11101 11102 11103; do
+for port in 10000 50052 10099 10004 80 3000 3100 12345 11101 11102; do
   ss -tlnp "sport = :$port" 2>/dev/null | grep -v "State" | head -1 && echo "  ^ port $port" || true
 done
 ```
 
 **Cluster Orchestrator ports:**
 ```bash
-for port in 10003 10107 10108 10110 10100 10101 10105 11012 6479 10009 3001 3101 12346; do
+for port in 10003 10110 10100 10101 10105 10009 3001 3101 12346; do
   ss -tlnp "sport = :$port" 2>/dev/null | grep -v "State" | head -1 && echo "  ^ port $port" || true
 done
 ```
 
-Flag any port occupied by a non-Oakestra process. Common conflict: port 80 occupied by nginx/apache, port 3000 by another Grafana, port 6379 by a system Redis.
+Flag any port occupied by a non-Oakestra process. Common conflict: port 80 occupied by nginx/apache, port 3000 by another Grafana.
+
+Mongo (10007, 10008, 10107, 10108), Redis (6379, 6479) and the resource abstractors (11011, 11012) are internal only: they are not published on the host, so do not check them with `ss` or host-side clients. Use `docker exec` (STEP 4, STEP 5, STEP 11). Exception: with `override-network-host.yml` they listen on the host and the port check applies to them too.
 
 ---
 
@@ -120,13 +122,15 @@ For each container, check:
 `system_manager`, `mongo`, `mongo_net`, `root_service_manager`, `root_redis`, `root_scheduler`, `root_resource_abstractor`, `jwt_generator`, `grafana`, `loki`, `alloy`, `oakestra-frontend-container`
 
 Optional root containers (if addons enabled):
-`root_addons_manager`, `root_addons_monitor`, `root_addons_dashboard`, `marketplace_manager`
+`root_addons_manager` (Go, also starts and watches the addon containers), `marketplace_manager` (Go, healthcheck `/marketplace healthcheck`)
 
 **Expected containers for Cluster Orchestrator:**
 `mqtt`, `cluster_mongo`, `cluster_mongo_net`, `cluster_service_manager`, `cluster_manager`, `cluster_scheduler`, `cluster_resource_abstractor`, `cluster_redis`, `prometheus`, `cluster_grafana`, `cluster_loki`, `cluster_alloy`
 
 Optional cluster containers (if addons enabled):
-`cluster_addons_manager`, `cluster_addons_monitor`, `cluster_addons_dashboard`
+`cluster_addons_manager`
+
+The addons managers keep their grant signing key in a named volume of their own (`addons_state` on root, `cluster_addons_state` on the cluster). If that volume was removed or recreated, installed addons fail with `grant signature invalid` (see the error table and STEP 12).
 
 ### 2.2 Restart Loop Detection
 
@@ -167,11 +171,20 @@ docker logs <exited_container_name> 2>&1 | tail -50
 | `no such host` | Wrong container name in env var (DNS not resolving) |
 | `timeout` on root_scheduler/cluster_scheduler | Redis not accessible, check REDIS_ADDR env var |
 | `JWT` errors in system_manager | jwt_generator container not started |
+| Addons or marketplace admin endpoints answer 503 | The JWT public key is not loaded. Check `JWT_GENERATOR_URL`/`JWT_GENERATOR_PORT` (root), or `JWT_PUBLIC_KEY_URL` (cluster plane, must point at `http://<root>:11102/api/v1/marketplace/auth/public-key`), and that jwt_generator / marketplace_manager are up (STEP 12) |
+| Addon status `failed` with a permissions or policy message in `status_details` | The definition uses a capability it did not declare (host path, host port, docker socket, host/core network) or something that can never be granted. Fix the definition, not the Mongo record: the engine re-checks the policy before it starts any container |
+| Addon `failed` with `grant signature invalid; re-approve the addon` (or `missing`) | The record's signature doesn't match. Usual cause: the `addons_state` / `cluster_addons_state` volume was lost or replaced, so the key changed. Fix: `POST /api/v1/addons/<id>/approve` with the permissions hash (admin token), once per addon. If the volume was never touched, treat it as a tampered database record and a security incident: look at who can write to Mongo before approving anything |
+| Addon `failed` with `volume ...` (`exists but is not owned by this addon` / `exists with a different driver or driver options`) | A Docker volume with the addon's derived name already exists and wasn't created by this addon, or has other driver options. Inspect it with `docker volume inspect`; remove it if it is a leftover and holds nothing you need, then let the reconcile loop retry |
+| Addon `failed` with `image ... carries the reserved label` | The image itself sets an `oak.*`, `oakestra.*`, `org.oakestra.*` or `com.docker.compose.*` label. This can't be granted; the addon image has to be rebuilt without it |
+| Install/update/approve answers 409 with `conflicts with host path of addon X` (or the addon fails with it) | Its host bind sources equal, contain or lie below those of another non-disabled addon and one side is read-write, or an update mounts a path below one the previous version had read-write. Change the paths in the definition or remove the other addon |
+| Addon `failed` with `the installed definition does not pass the current permission policy` | The stored definition violates the policy that applies now (policy tightened, or the record was edited). Re-approving doesn't help: update to a version that declares what it needs (`host_root`, exact `host_paths`, ...) or remove the addon |
+| Tap source shows `last_error` | Sync failed (https only, blocked private address, body over 5 MiB, serial lower than the last good one, invalid index). The last good snapshot stays in use (STEP 12) |
 | `CLUSTER_NAME not set` | Missing env var in cluster startup |
 | `SYSTEM_MANAGER_URL not set` | Cluster started without root URL |
 | `CLUSTER_ADDRESS env var is not set` (cluster_manager log) | Missing env var — cluster cannot advertise its address to root |
 | `cluster_address is required` (system_manager log) | Cluster connected via gRPC but sent empty `cluster_address` |
 | `Cluster reachability probe failed` / `cluster not reachable at` (system_manager log) | Root cannot reach `http://CLUSTER_ADDRESS:10100/api/cluster/status` — wrong IP, firewall, or cluster_manager not up |
+| HTTP 502 on `/addon-assets/<name>/...` (dashboard) | The addon UI container is not running, or is not on the `oakestra` network with the alias `addonui-<name>` - see STEP 12 |
 | `permission denied` opening `/var/run/docker.sock` (Alloy log) | Alloy cannot discover/read container logs; inspect the socket mount and host permissions |
 | `loki.write` connection refused | The local Loki is not ready, or `LOKI_URL` is wrong for the selected network mode |
 | Service status `NoGpuCapacity` | The SLA asks for `vgpus`/`vram` (setting `vram` alone implies 1 GPU) and no candidate has that many GPUs with at least `vram` MiB free on each. Check the worker's `gpu_vram_free` (free MiB per GPU) and `vgpus` in `cluster_mongo` (`docker exec cluster_mongo mongosh --port 10107 candidates --quiet --eval "db.candidates.find({}, {candidate_name:1, vgpus:1, gpu_vram_free:1}).forEach(printjson)"`); both empty/0 means `nvidia-smi` is missing or failing on the worker (STEP 9.7) |
@@ -191,6 +204,13 @@ docker exec root_scheduler env 2>/dev/null | grep -E "MANAGER_URL|RESOURCE_ABSTR
 docker exec root_resource_abstractor env 2>/dev/null | grep -E "MONGO_URL|MONGO_PORT" || echo "root_resource_abstractor not running"
 
 docker exec root_service_manager env 2>/dev/null | grep -E "SYSTEM_MANAGER|ROOT_MONGO|JWT" || echo "root_service_manager not running"
+
+# oaekstra-frontend-container in 1-DOC
+docker exec oakestra-frontend-container env 2>/dev/null | grep -E "API_ADDRESS|ADDONS_MANAGER_ADDRESS|MARKETPLACE_ADDRESS|PRESET_URL" || echo "dashboard not running"
+
+# Addons engine (Go). Distroless images have no shell, so read the env from the container config.
+docker inspect root_addons_manager --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E "ADDONS_|ADDON_|MARKETPLACE_ADDR|ORCHESTRATION_PLANE|JWT_" || echo "root_addons_manager not running"
+docker inspect marketplace_manager --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E "ADDON_MARKETPLACE|MARKETPLACE_|JWT_" || echo "marketplace_manager not running"
 ```
 
 ```bash
@@ -200,6 +220,8 @@ docker exec cluster_manager env 2>/dev/null | grep -E "SYSTEM_MANAGER_URL|CLUSTE
 docker exec cluster_scheduler env 2>/dev/null | grep -E "MANAGER_URL|RESOURCE_ABSTRACTOR|REDIS_ADDR" || echo "cluster_scheduler not running"
 
 docker exec cluster_service_manager env 2>/dev/null | grep -E "ROOT_SERVICE_MANAGER_URL|MQTT|CLUSTER_MONGO|SYSTEM_MANAGER" || echo "cluster_service_manager not running"
+
+docker inspect cluster_addons_manager --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E "ADDONS_|ADDON_|MARKETPLACE_ADDR|ORCHESTRATION_PLANE|JWT_" || echo "cluster_addons_manager not running"
 ```
 
 **Key validations:**
@@ -208,6 +230,10 @@ docker exec cluster_service_manager env 2>/dev/null | grep -E "ROOT_SERVICE_MANA
 - `CLUSTER_ADDRESS` must be non-empty in cluster_manager and must be the **IP/hostname at which the ROOT can reach this cluster manager** (typically the cluster host's default-route IP). It must NOT be `localhost`, `127.0.0.1`, `0.0.0.0`, or a Docker-internal address like `172.17.x.x` / `172.19.x.x` (those are the docker bridge gateway and not routable from the root). In 1-DOC deployments, `CLUSTER_ADDRESS` should equal `SYSTEM_MANAGER_URL`.
 - `REDIS_ADDR` must match `redis://:rootRedis@root_redis:6379` (root) or `redis://:clusterRedis@cluster_redis:6479` (cluster)
 - `CLUSTER_LOCATION` format: `latitude,longitude,radius` (e.g., `48.1,11.6,1000`)
+- Addons engine, root: `ORCHESTRATION_PLANE=root`, `MARKETPLACE_ADDR=http://marketplace_manager:11102`, `JWT_GENERATOR_URL=jwt_generator`. Without a loadable JWT key every admin endpoint answers 503.
+- Addons engine, cluster: `ORCHESTRATION_PLANE=cluster`, `MARKETPLACE_ADDR=http://<root>:11102` and `JWT_PUBLIC_KEY_URL=http://<root>:11102/api/v1/marketplace/auth/public-key` (the cluster has no jwt_generator). `JWT_PUBLIC_KEY` (static PEM) overrides both. Precedence is `JWT_PUBLIC_KEY` > `JWT_PUBLIC_KEY_URL` > jwt_generator. Only the jwt_generator source refreshes its key: with the URL or static source, a root key rotation (jwt_generator restart) makes valid tokens fail with 401 until the cluster addons manager is restarted. Pin `JWT_PUBLIC_KEY` on clusters, since root to cluster is plain HTTP.
+- `MARKETPLACE_OFFICIAL_INDEX` on marketplace_manager: empty means the built-in default, `off` disables the official source (air-gapped, use the import endpoint), anything else must be a valid URL or the marketplace refuses to start. `MARKETPLACE_OFFICIAL_TOKEN` is only needed for a private index. `MARKETPLACE_REGISTRY_ALLOW_PRIVATE=true` is needed when image digests must be resolved against a registry on a private or loopback address (plain http); the default is false. Addon containers get `ADDON_PIDS_LIMIT` (1024), `ADDON_MEMORY_LIMIT` (512m) and `ADDON_CPU_LIMIT` (1); an addon that is OOM-killed or can't fork may just be hitting those.
+- `PRESET_URL` on the dashboard is optional. If it's set, the file must exist and be a valid preset, otherwise the dashboard shows a configuration error instead of the login page (see STEP 12)
 
 ---
 
@@ -251,6 +277,23 @@ docker exec mongo mongosh --port 10007 --eval "
 - Jobs stuck in `INSTANTIATION` indefinitely with fresh heartbeats → normal for large images; wait for the image pull to finish.
 - Jobs stuck in `CREATING` → NodeEngine issue on worker
 - No clusters registered despite cluster being started → cluster_manager cannot reach system_manager
+
+**Addons data (root Mongo, same instance, separate databases):**
+
+```bash
+docker exec mongo mongosh --port 10007 --quiet --eval "
+  print('=== addons.installed ===');
+  db.getSiblingDB('addons').installed.find({}, {qualified_name:1, version:1, status:1, status_details:1}).forEach(printjson);
+  print('=== marketplace.sources ===');
+  db.getSiblingDB('marketplace').sources.find({}, {name:1, kind:1, last_synced_at:1, last_error:1}).forEach(printjson);
+  print('=== marketplace.catalog (one snapshot per source) ===');
+  db.getSiblingDB('marketplace').catalog.find({}, {serial:1, addon_count:1, updated_at:1}).forEach(printjson);
+" 2>/dev/null || echo "Could not query addons data (the cluster plane uses cluster_mongo, port 10107)"
+```
+
+Look for `installed` documents stuck in `installing`/`updating` or `failed` (read `status_details`), and sources whose `last_error` is set.
+
+The grant key and instance id are not in Mongo. They live in the addons state volume, which must survive together with the Mongo data: `docker volume inspect addons_state` (root) or `cluster_addons_state` (cluster). If it is missing, expect `grant signature invalid` on every installed addon.
 
 ### 4.3 Cluster MongoDB — Data Consistency
 
@@ -355,7 +398,7 @@ docker exec system_manager curl -s --connect-timeout 3 "http://root_scheduler:10
 # From system_manager: can it reach resource_abstractor?
 docker exec system_manager curl -s --connect-timeout 3 "http://root_resource_abstractor:11011/status" 2>/dev/null || echo "WARN: system_manager cannot reach resource_abstractor"
 
-# From system_manager: can it reach jwt_generator?
+# From system_manager: can it reach jwt_generator? (not published on the host, only reachable inside the oakestra network)
 docker exec system_manager curl -s --connect-timeout 3 "http://jwt_generator:10011/status" 2>/dev/null || echo "WARN: system_manager cannot reach jwt_generator"
 
 # From cluster_manager: can it reach cluster_scheduler?
@@ -610,16 +653,20 @@ echo "=== Root Scheduler Status ==="
 curl -s --connect-timeout 5 "http://localhost:10004/status" 2>/dev/null || echo "FAIL: root_scheduler not responding"
 
 echo "=== Resource Abstractor (Root) ==="
-curl -s --connect-timeout 5 "http://localhost:11011/status" 2>/dev/null || echo "FAIL: root_resource_abstractor not responding"
+# Internal only (not published on the host), so check it from inside the network.
+docker exec system_manager curl -s --connect-timeout 5 "http://root_resource_abstractor:11011/status" 2>/dev/null || echo "FAIL: root_resource_abstractor not responding"
 
 echo "=== Cluster Scheduler Status ==="
 curl -s --connect-timeout 5 "http://localhost:10105/status" 2>/dev/null || echo "FAIL: cluster_scheduler not responding"
 
 echo "=== Resource Abstractor (Cluster) ==="
-curl -s --connect-timeout 5 "http://localhost:11012/status" 2>/dev/null || echo "FAIL: cluster_resource_abstractor not responding"
+# Internal only (not published on the host), so check it from inside the network.
+docker exec cluster_manager curl -s --connect-timeout 5 "http://cluster_resource_abstractor:11012/status" 2>/dev/null || echo "FAIL: cluster_resource_abstractor not responding"
 
 echo "=== JWT Generator ==="
-curl -s --connect-timeout 5 "http://localhost:10011/status" 2>/dev/null || echo "FAIL: jwt_generator not responding"
+# Port 10011 is deliberately not published on the host (POST /create mints tokens without
+# authentication), so check it from inside the network.
+docker exec system_manager curl -s --connect-timeout 5 "http://jwt_generator:10011/status" 2>/dev/null || echo "FAIL: jwt_generator not responding"
 ```
 
 ---
@@ -628,14 +675,70 @@ curl -s --connect-timeout 5 "http://localhost:10011/status" 2>/dev/null || echo 
 
 ```bash
 echo "=== Addons Manager ==="
-curl -s --connect-timeout 5 "http://localhost:11101/status" 2>/dev/null || echo "addons_manager not responding (may be disabled via override-no-addons.yml)"
+# Go service: GET / answers "ok". Use port 11201 for cluster_addons_manager.
+curl -s --connect-timeout 5 "http://localhost:11101/" 2>/dev/null || echo "addons_manager not responding (may be disabled via override-no-addons.yml)"
 
 echo "=== Marketplace Manager ==="
-curl -s --connect-timeout 5 "http://localhost:11102/status" 2>/dev/null || echo "marketplace_manager not responding"
+curl -s --connect-timeout 5 "http://localhost:11102/" 2>/dev/null || echo "marketplace_manager not responding"
+docker inspect marketplace_manager --format 'health: {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null
 
-# Check addons_monitor docker socket access
-docker exec addons_monitor ls /var/run/docker.sock 2>/dev/null || echo "WARN: addons_monitor cannot access docker socket"
+echo "=== Marketplace sources (sync state, last_error) ==="
+curl -s --connect-timeout 5 "http://localhost:11102/api/v1/marketplace/sources" 2>/dev/null | python3 -m json.tool 2>/dev/null | grep -E '"name"|last_error|last_synced_at|serial' || echo "could not read sources"
+
+echo "=== Public key served to the cluster plane (200 = key loaded) ==="
+curl -s -o /dev/null -w "%{http_code}\n" --connect-timeout 5 "http://localhost:11102/api/v1/marketplace/auth/public-key"
+
+# Only the addons manager mounts the docker socket. The image is distroless (no shell, no ls),
+# so look at the container's mounts instead of exec'ing into it.
+docker inspect root_addons_manager --format '{{range .Mounts}}{{println .Source}}{{end}}' 2>/dev/null | grep -q docker.sock \
+  || echo "WARN: root_addons_manager has no docker socket mounted"
+
+echo "=== UI addons ==="
+# Active addons with a dashboard UI. An empty list means none are installed or active yet.
+curl -s --connect-timeout 5 "http://localhost:11101/api/v1/ui-addons" 2>/dev/null || echo "addons_manager not responding"
 ```
+
+Addon UIs and presets need the v2 dashboard (`ghcr.io/oakestra/dashboard-v2`), which only runs with `override-dashboard-v2.yml` (`.yaml` in 1-DOC). The default is v1 (`ghcr.io/oakestra/dashboard`). To see which one is running:
+
+```bash
+# Use oaekstra-frontend-container in 1-DOC.
+docker inspect oakestra-frontend-container --format '{{.Config.Image}}'
+```
+
+The dashboard's nginx fetches each addon UI from `http://addonui-<id>:80/`. The addons manager (root plane) attaches the UI container to the dedicated `oakestra_addon_ui` network with that alias, and the dashboard container is on the same network. `<id>` is the bare name for official addons and `<source>--<name>` for tap and local ones; containers are named `root_addon-<id>--<service>`. If an addon UI doesn't load, or `/addon-assets/<id>/mf-manifest.json` returns 502, check that the network exists, that both the dashboard and the UI container are on it, and try the request from the dashboard container (`oakestra-frontend-container` on root, `oaekstra-frontend-container` in 1-DOC):
+
+```bash
+NAME=<addon-id>
+# Aliases of every container on the addon UI network. The dashboard and addonui-$NAME should
+# both be there.
+docker network inspect oakestra_addon_ui --format '{{range .Containers}}{{.Name}} {{end}}' | tr ' ' '\n' | grep . \
+  | xargs -I{} docker inspect {} --format '{{.Name}}: {{json .NetworkSettings.Networks.oakestra_addon_ui.Aliases}}'
+docker exec oakestra-frontend-container wget -qO /dev/null "http://addonui-$NAME/mf-manifest.json" \
+  && echo "OK: addonui-$NAME serves mf-manifest.json" \
+  || echo "FAIL: addonui-$NAME not reachable from the dashboard"
+```
+
+Installing an addon (`POST /api/v1/addons {name, accept_definition}`) can fail with 404 (marketplace doesn't know the addon), 502 (marketplace unreachable, check `marketplace_manager`) or 409. A 409 with `definition`, `definition_hash` and `permissions` in the body is the confirmation: repeat the call with `accept_definition` set to the hash. Any other 409 means the addon is already installed or conflicts with another one. Updates (`POST /api/v1/addons/<id>/update`) always ask again, and also set `permissions_grow` when the new version needs more permissions.
+
+**Admin endpoints answer 503:** the service has no JWT public key yet. On root check that `jwt_generator` is up and `JWT_GENERATOR_URL` is right; on the cluster plane check `JWT_PUBLIC_KEY_URL` and that `curl http://<root>:11102/api/v1/marketplace/auth/public-key` returns a key (port 11102 must be reachable from the cluster host). Look for key-load retries in `docker logs root_addons_manager` / `marketplace_manager`.
+
+**Addon status `failed`:** read `status_details` (`curl .../api/v1/addons/<id>` with an admin token, or the `addons.installed` collection). A permissions/policy message means the definition uses something it did not declare (host path grants are exact, root-equivalent paths need `host_root`, runtime sockets and `/run/docker` need `docker_socket`) or that can't be granted; the definition has to be fixed upstream. A `grant signature invalid` message is fixed with `POST /api/v1/addons/<id>/approve {"accept_definition": "<hash>"}` (also use it to retry after fixing the cause); see the error table for when that points to a security incident. Otherwise it is usually an image that can't be pulled (offline host, digest missing) or a Docker error from the addons manager log.
+
+**Tap source `last_error`:** `GET /api/v1/marketplace/sources` shows `last_error`, `last_attempt_at`, `last_synced_at` and `serial`. Typical causes: plain http without `allow_insecure`, a private or loopback address without `allow_private`, an index over 5 MiB or a timeout, a redirect to another host, a `serial` lower than the last good one, or an invalid definition. The last good snapshot stays in use until a sync succeeds. Retry with `POST /api/v1/marketplace/sources/<name>/sync`. For an air-gapped host use `MARKETPLACE_OFFICIAL_INDEX=off` and `POST .../sources/<name>/import`.
+
+Addon UIs don't work with `override-network-host.yml`, since the dashboard has no Docker DNS there (and the base file's `oakestra_addon_ui` attachment is dropped in host mode).
+
+An addon that is `active` and listed in `/api/v1/ui-addons` but never appears in the dashboard may be named like a built-in module (`applications`, `infrastructure`, `users`, `organizations`, `help`). The dashboard ignores those and only logs a warning in the browser console.
+
+`override-no-addons.yml` turns off the addon pages through a dashboard preset, so it's normal that they're missing there. If the dashboard shows a configuration error instead of the login page, or the addon pages are gone without that override, check the preset:
+
+```bash
+# Use oaekstra-frontend-container in 1-DOC. An empty presetUrl means no preset.
+docker exec oakestra-frontend-container cat /usr/share/nginx/html/config.json
+docker exec oakestra-frontend-container cat /usr/share/nginx/html/preset.json
+```
+
+The error page lists what is wrong with the preset. A 404 for `preset.json` means `PRESET_URL=/preset.json` is set but no file is mounted. If `docker compose` rejects `configs.content` in `override-no-addons.yml`, Docker Compose is older than 2.23.1.
 
 ---
 

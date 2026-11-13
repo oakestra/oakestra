@@ -1,0 +1,6 @@
+# Runs the new dashboard (github.com/oakestra/dashboard-v2) instead of v1. Its tags don't follow
+# Oakestra's versions, so this stays on latest even when OAKESTRA_VERSION pins a release.
+services:
+  dashboard:
+    image: ghcr.io/oakestra/dashboard-v2:latest
+    pull_policy: always

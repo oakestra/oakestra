@@ -1,3 +1,6 @@
+# With host networking, mongo, mongo_net, redis and the resource abstractor listen directly on the
+# host, where anything on the host network and addon containers (via the Docker gateway) can reach
+# them. The base file keeps them off the host; in host mode that protection is gone.
 x-logging: &default-logging
   driver: "json-file"
   options:
@@ -59,6 +62,14 @@ services:
 
   dashboard:
     network_mode: host
+    # network_mode and networks are mutually exclusive, so drop the addon UI network that the
+    # base file attaches.
+    networks: !reset null
+    environment:
+      - ADDONS_MANAGER_ADDRESS=127.0.0.1:11101
+      - MARKETPLACE_ADDRESS=127.0.0.1:11102
+      # No Docker DNS in host mode, so addonui-<name> can't be resolved and addon UIs won't
+      # load. The addon manager pages still work.
 
   # Root Scheduler
   root_scheduler:
@@ -81,39 +92,13 @@ services:
     environment:
       - ADDONS_ENGINE_MONGO_URL=0.0.0.0
       - MARKETPLACE_ADDR=http://0.0.0.0:11102
-  
-  root_addons_monitor:
-    network_mode: host
-    environment:
-      - ADDONS_MANAGER_ADDR=http://0.0.0.0:11101
-  
-  root_addons_dashboard:
-    network_mode: host
-    environment:
-      - MARKETPLACE_URL=0.0.0.0
-      - RESOURCE_ABSTRACTOR_URL=0.0.0.0
-      - ADDONS_ENGINE_URL=0.0.0.0
-  
-  marketplace_manager:
-    network_mode: host
-    environment:
-      - ADDON_MARKETPLACE_MONGO_URL=0.0.0.0
-
-  addons_manager:
-    network_mode: host
-    environment:
-      - ADDONS_ENGINE_MONGO_URL=0.0.0.0
-      - MARKETPLACE_ADDR=http://0.0.0.0:11102
+      - JWT_GENERATOR_URL=0.0.0.0
 
   marketplace_manager:
     network_mode: host
     environment:
       - ADDON_MARKETPLACE_MONGO_URL=0.0.0.0
-
-  addons_monitor:
-    network_mode: host
-    environment:
-      - ADDONS_MANAGER_ADDR=http://0.0.0.0:11101
+      - JWT_GENERATOR_URL=0.0.0.0
 
 volumes:
   mongodb_data:

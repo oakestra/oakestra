@@ -78,7 +78,8 @@ The following ports are exposed:
 - Port 10000/TCP - System Manager (Public port, but it also needs to be accessible from the Cluster Orchestrator)
 - Port 50052/TCP - System Manager (Needs to be exposed to the Clusters for cluster registration.)
 - Port 10099/TCP - Service Manager (This port should be exposed only to the Clusters)
-- Port 11103/TCP - Marketplace and addons manager (This port should be available only to the admin)
+- Port 11101/TCP - Addons manager (This port should be available only to the admin)
+- Port 11102/TCP - Marketplace manager (This port should be available to the admin and to the Clusters, whose addons managers fetch addon definitions and the JWT public key from it)
 
 #### ✅ Everything ok? 
 Check the oakestra components using: `docker ps`

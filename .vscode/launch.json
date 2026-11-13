@@ -100,45 +100,37 @@
         },
         {
             "name": "Debug Root Addons Manager",
-            "type": "debugpy",
+            "type": "go",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
-            "program": "${workspaceRoot}/addons_engine/addons-manager/addons_manager.py",
+            "mode": "auto",
+            "program": "${workspaceRoot}/addons/cmd/addons",
             "console": "integratedTerminal",
             "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin",
                 "ADDONS_MANAGER_PORT": "11101",
                 "ADDONS_ENGINE_MONGO_URL": "0.0.0.0",
                 "ADDONS_ENGINE_MONGO_PORT": "10007",
-                "MARKETPLACE_ADDR": "http://0.0.0.0:11102"
+                "MARKETPLACE_ADDR": "http://0.0.0.0:11102",
+                "ORCHESTRATION_PLANE": "root",
+                "JWT_GENERATOR_URL": "0.0.0.0",
+                "JWT_GENERATOR_PORT": "10011"
             },
             "preLaunchTask": "prep-debug-root-addons-manager-env"
         },
         {
-            "name": "Debug Root Addons Monitor",
-            "type": "debugpy",
-            "request": "launch",
-            "python": "${command:python.interpreterPath}",
-            "program": "${workspaceRoot}/addons_engine/addons-monitor/addons_monitor.py",
-            "console": "integratedTerminal",
-            "env": {
-                "ADDONS_MANAGER_ADDR": "http://0.0.0.0:11101",
-                "ORCHESTRATION_PLANE": "root",
-                "DEFAULT_PROJECT_NAME": "root_orchestrator",
-                "FLASK_DEBUG": "True"
-            },
-            "preLaunchTask": "prep-debug-root-addons-monitor-env"
-        },
-        {
             "name": "Debug Marketplace Manager",
-            "type": "debugpy",
+            "type": "go",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
-            "program": "${workspaceRoot}/addons_marketplace/marketplace-manager/marketplace_manager.py",
+            "mode": "auto",
+            "program": "${workspaceRoot}/addons/cmd/marketplace",
             "console": "integratedTerminal",
             "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin",
                 "ADDON_MARKETPLACE_PORT": "11102",
                 "ADDON_MARKETPLACE_MONGO_URL": "0.0.0.0",
-                "ADDON_MARKETPLACE_MONGO_PORT": "10007"
+                "ADDON_MARKETPLACE_MONGO_PORT": "10007",
+                "JWT_GENERATOR_URL": "0.0.0.0",
+                "JWT_GENERATOR_PORT": "10011"
             },
             "preLaunchTask": "prep-debug-marketplace-manager-env"
         },
@@ -212,41 +204,21 @@
         },
         {
             "name": "Debug Cluster Addons Manager",
-            "type": "debugpy",
+            "type": "go",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
-            "program": "${workspaceRoot}/addons_engine/addons-manager/addons_manager.py",
+            "mode": "auto",
+            "program": "${workspaceRoot}/addons/cmd/addons",
             "console": "integratedTerminal",
             "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin",
                 "ADDONS_MANAGER_PORT": "11201",
                 "ADDONS_ENGINE_MONGO_URL": "0.0.0.0",
                 "ADDONS_ENGINE_MONGO_PORT": "10107",
-                "MARKETPLACE_ADDR": "http://0.0.0.0:11102"
+                "MARKETPLACE_ADDR": "http://0.0.0.0:11102",
+                "ORCHESTRATION_PLANE": "cluster",
+                "JWT_PUBLIC_KEY_URL": "http://0.0.0.0:11102/api/v1/marketplace/auth/public-key"
             },
             "preLaunchTask": "prep-debug-cluster-addons-manager-env"
-        },
-        {
-            "name": "Debug Cluster Addons Monitor",
-            "type": "debugpy",
-            "request": "launch",
-            "python": "${command:python.interpreterPath}",
-            "program": "${workspaceRoot}/addons_engine/addons-monitor/addons_monitor.py",
-            "console": "integratedTerminal",
-            "env": {
-                "ADDONS_MANAGER_ADDR": "http://0.0.0.0:11201",
-                "ORCHESTRATION_PLANE": "cluster",
-                "DEFAULT_PROJECT_NAME": "cluster_orchestrator",
-                "FLASK_DEBUG": "True"
-            },
-            "preLaunchTask": "prep-debug-cluster-addons-monitor-env"
-        },
-        {
-            "name": "Debug Addons Dashboard",
-            "type": "chrome",
-            "request": "launch",
-            "url": "http://localhost:4200",
-            "webRoot": "${workspaceRoot}/addons_engine/addons-dashboard",
-            "preLaunchTask": "serve-addons-dashboard"
         },
         {
             "name": "Debug CSI HostPath Driver",
@@ -294,16 +266,14 @@
             "name": "Debug Root Addons Stack",
             "configurations": [
                 "Debug Marketplace Manager",
-                "Debug Root Addons Manager",
-                "Debug Root Addons Monitor"
+                "Debug Root Addons Manager"
             ],
             "stopAll": true
         },
         {
             "name": "Debug Cluster Addons Stack",
             "configurations": [
-                "Debug Cluster Addons Manager",
-                "Debug Cluster Addons Monitor"
+                "Debug Cluster Addons Manager"
             ],
             "stopAll": true
         },

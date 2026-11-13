@@ -28,8 +28,7 @@ oakestra/
 ├── libraries/                  # Shared Python packages
 │   ├── oakestra_utils_library/ # Enums: statuses, scheduling states
 │   └── resource_abstractor_client/ # HTTP client for resource-abstractor
-├── addons_engine/              # Optional addons subsystem (root only)
-├── addons_marketplace/         # Optional marketplace manager
+├── addons/                     # Go module (Gin): addons + marketplace services, addonctl; see addons/README.md
 ├── csi/                        # Container Storage Interface driver
 ├── scripts/                    # Startup and install scripts
 │   ├── StartOakestraFull.sh    # 1-DOC: root + cluster on one machine
@@ -59,37 +58,33 @@ Root Orchestrator  (1 per deployment)
 | Container | Language | Ports | Role |
 |---|---|---|---|
 | `system_manager` | Python/Flask + eventlet | 10000 (REST), 50052 (gRPC) | Central API. Receives deployments, manages clusters, dispatches to root_scheduler. Cluster registration happens via gRPC (port 50052). JWT auth (RS256). Swagger at `/api/docs`. |
-| `mongo` | MongoDB 8.0 | 10007 | Stores applications, services, clusters, workers, jobs. |
-| `mongo_net` | MongoDB 8.0 | 10008 | Stores network/IP state for the root service manager. |
+| `mongo` | MongoDB 8.0 | 10007 (internal only) | Stores applications, services, clusters, workers, jobs. |
+| `mongo_net` | MongoDB 8.0 | 10008 (internal only) | Stores network/IP state for the root service manager. |
 | `root_service_manager` | Go (oakestra-net repo) | 10099 | Network plugin — assigns service IPs, manages overlay. External repo: `github.com/oakestra/oakestra-net`. |
 | `root_scheduler` | Go | 10004 | Picks which cluster to place a job on. Reads from Redis queue (asynq). Calls resource-abstractor for available resources. |
-| `root_resource_abstractor` | Python/Flask | 11011 | DB abstraction layer over mongo (port 10007). Exposes REST for reading/writing cluster and job resource data. |
-| `jwt_generator` | Go | 10011 | Issues RS256 key pairs. system_manager fetches the public key on startup. |
-| `root_redis` | Redis | 6379 (pw: `rootRedis`) | Job queue (asynq) for root_scheduler. |
+| `root_resource_abstractor` | Python/Flask | 11011 (internal only) | DB abstraction layer over mongo (port 10007). Exposes REST for reading/writing cluster and job resource data. |
+| `jwt_generator` | Python | 10011 (internal only) | Issues RS256 key pairs. system_manager and the addons services fetch the public key. Not published on the host: `POST /create` mints tokens without authentication. |
+| `root_redis` | Redis | 6379 (internal only, pw: `rootRedis`) | Job queue (asynq) for root_scheduler. |
 | `grafana` | Grafana | 3000 | Dashboards. |
 | `loki` | Loki | 3100 | Log aggregation. |
 | `alloy` | Grafana Alloy 1.17.0 | 12345 (loopback) | Discovers Root containers, ships opted-in stdout/stderr to the Root-local Loki, and exposes its diagnostic UI locally. |
-| `oakestra-frontend-container` | nginx | 80 | Dashboard SPA. Connects to system_manager via `API_ADDRESS` env var. |
-| `root_addons_manager` | Python | 11101 | Manages installed addons (optional, disable with override-no-addons.yml). |
-| `root_addons_monitor` | Python | — | Monitors running addon containers via docker socket. |
-| `root_addons_dashboard` | Python | 11103 | Addons UI. |
-| `marketplace_manager` | Python | 11102 | Addon marketplace catalogue. |
+| `oakestra-frontend-container` | nginx | 80 | Dashboard SPA. v1 by default, v2 with `override-dashboard-v2.yml`. Connects to system_manager via `API_ADDRESS` env var, and to the addons and marketplace managers via `ADDONS_MANAGER_ADDRESS` / `MARKETPLACE_ADDRESS`. Proxies addon UIs from `addonui-<name>` containers. |
+| `root_addons_manager` | Go + Gin (`addons/cmd/addons`) | 11101 | Addon install/update/approve/uninstall API and the reconcile loop that runs addon containers. The only addons component with the docker socket. Signs grants with a key in the `addons_state` volume (`ADDONS_STATE_DIR`); losing the volume means re-approving every addon. Container limits via `ADDON_PIDS_LIMIT`, `ADDON_MEMORY_LIMIT`, `ADDON_CPU_LIMIT`. Optional, disable with override-no-addons.yml. |
+| `marketplace_manager` | Go + Gin (`addons/cmd/marketplace`) | 11102 | Addon catalogue: official/tap/local sources, sync, import. No docker socket. Serves root's JWT public key at `/api/v1/marketplace/auth/public-key` for the cluster plane. Env: `MARKETPLACE_OFFICIAL_INDEX`, `MARKETPLACE_SYNC_INTERVAL`, `MARKETPLACE_REGISTRY_ALLOW_PRIVATE` (default false). |
 
 ### Cluster Orchestrator — services
 
 | Container | Language | Ports | Role |
 |---|---|---|---|
 | `cluster_manager` | Python/Flask + eventlet | 10100 (REST), 10101 | Registers with root via gRPC. Receives jobs from root, dispatches via MQTT to workers. Runs background job every 15s to push aggregated resource info to system_manager. |
-| `cluster_mongo` | MongoDB 8.0 | 10107 | Cluster-level job and node state. |
-| `cluster_mongo_net` | MongoDB 8.0 | 10108 | Cluster-level network state. |
+| `cluster_mongo` | MongoDB 8.0 | 10107 (internal only) | Cluster-level job and node state. |
+| `cluster_mongo_net` | MongoDB 8.0 | 10108 (internal only) | Cluster-level network state. |
 | `cluster_service_manager` | Go (oakestra-net repo) | 10110 | Cluster-level network plugin. Talks to root_service_manager and workers via MQTT. |
 | `cluster_scheduler` | Go | 10105 | Picks which worker to place a job on. Same binary as root_scheduler; different env vars. |
-| `cluster_resource_abstractor` | Python/Flask | 11012 | Same binary as root; points at cluster_mongo. |
-| `cluster_redis` | Redis | 6479 (pw: `clusterRedis`) | Job queue for cluster_scheduler. |
+| `cluster_resource_abstractor` | Python/Flask | 11012 (internal only) | Same binary as root; points at cluster_mongo. |
+| `cluster_redis` | Redis | 6479 (internal only, pw: `clusterRedis`) | Job queue for cluster_scheduler. |
 | `mqtt` | Eclipse Mosquitto 2.0 | 10003 | Broker for cluster↔worker communication. Has a built-in healthcheck. |
-| `cluster_addons_manager` | Python | 11201 | Cluster-level addons manager (optional, disable with override-no-addons.yml). |
-| `cluster_addons_monitor` | Python | — | Monitors running addon containers via docker socket at cluster level. |
-| `cluster_addons_dashboard` | Python | 11203 | Cluster addons UI. |
+| `cluster_addons_manager` | Go + Gin (same binary, `ORCHESTRATION_PLANE=cluster`) | 11201 | Cluster-level addons manager and reconcile loop. Installs from root's marketplace, keeps its state in the `cluster_addons_state` volume. Pin `JWT_PUBLIC_KEY` here: a key from `JWT_PUBLIC_KEY_URL` is loaded once, and root to cluster is plain HTTP. Optional, disable with override-no-addons.yml. |
 | `prometheus` | Prometheus | 10009 (→9090) | Scrapes cluster_manager metrics. |
 | `cluster_grafana` | Grafana | 3001 | Cluster dashboards. |
 | `cluster_loki` | Loki | 3101 | Cluster log aggregation. |
@@ -135,11 +130,12 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 
 | Override | Effect |
 |---|---|
-| `override-network-host.yml` | All containers use host network. Container DNS names no longer work — env vars must use IPs, not container names. |
+| `override-network-host.yml` | All containers use host network. Container DNS names no longer work, so env vars must use IPs, not container names. It also puts the internal-only services (Mongo, Redis, resource abstractors) on the host network, where the host and any addon can reach them. |
 | `override-ipv6-enabled.yml` | Enables IPv6 on the oakestra Docker network. |
 | `override-no-network.yml` | Disables the network plugin (root/cluster service managers). |
-| `override-no-addons.yml` | Removes addons subsystem from root. |
+| `override-no-addons.yml` | Removes addons subsystem from root and turns off addon discovery and the addon pages in the dashboard. Needs Docker Compose 2.23.1+. |
 | `override-no-dashboard.yml` | Removes frontend dashboard from root. |
+| `override-dashboard-v2.yml` | Uses `ghcr.io/oakestra/dashboard-v2:latest` instead of the v1 dashboard. Needed for addon UIs and presets. Stays on `latest` with `OAKESTRA_VERSION`. 1-DOC: `override-dashboard-v2.yaml`. |
 | `override-no-observe.yml` | Removes Grafana/Loki/Alloy/Prometheus. |
 | `override-mosquitto-auth.yml` | Enables MQTT authentication (workers need credentials). |
 | `override-images-only.yml` | Forces pre-built images, skips local builds. |
@@ -192,6 +188,10 @@ cd go_node_engine && go build -o NodeEngine .
 
 # Run Go tests
 go test ./...
+
+# Addons engine (marketplace, addons, addonctl; own go.mod)
+cd addons
+go vet ./... && go test -race ./...
 ```
 
 ### Local stack (full root + cluster on one machine)

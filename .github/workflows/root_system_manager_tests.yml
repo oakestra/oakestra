@@ -49,8 +49,16 @@ jobs:
 
       - name: Run containers
         working-directory: root_orchestrator/
+        # The compose file keeps the abstractor off the host on purpose, but the tests run on
+        # the runner and call it at localhost:11011, so publish it on loopback for CI only.
         run: |
-          docker compose up root_resource_abstractor -d
+          cat > "$RUNNER_TEMP/ci-publish-abstractor.yml" <<'EOF'
+          services:
+            root_resource_abstractor:
+              ports:
+                - "127.0.0.1:11011:11011"
+          EOF
+          docker compose -f docker-compose.yml -f "$RUNNER_TEMP/ci-publish-abstractor.yml" up root_resource_abstractor -d
 
       - name: Run test suite
         working-directory: root_orchestrator/system-manager-python

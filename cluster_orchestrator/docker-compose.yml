@@ -37,12 +37,11 @@ services:
       
   # cluster-level mongoDB
   mongo_cluster:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     container_name: cluster_mongo
     hostname: cluster_mongo
     labels: *cluster-log-labels
-    ports:
-      - "10107:10107"
     volumes:
       - 'mongodb_cluster_data:/data/db'
     # Check oakestra pr #586 for details on why this is needed.
@@ -52,12 +51,11 @@ services:
 
   # cluster-level mongoDB
   mongo_clusternet:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
     labels: *cluster-log-labels
-    ports:
-      - "10108:10108"
     volumes:
       - 'mongodb_cluster_net_data:/data/db'
     # Check oakestra pr #586 for details on why this is needed. 
@@ -162,6 +160,7 @@ services:
     logging: *default-logging
 
   cluster_resource_abstractor:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: resource_abstractor
     build: ../resource-abstractor/
     container_name: cluster_resource_abstractor
@@ -169,8 +168,6 @@ services:
     hostname: cluster_resource_abstractor
     expose:
       - "11012"
-    ports:
-      - "11012:11012"
     environment:
       - RESOURCE_ABSTRACTOR_PORT=11012
       - MONGO_URL=cluster_mongo
@@ -182,12 +179,11 @@ services:
 
   # Redis for the Cluster Scheduler as Job Queue
   cluster_redis:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: redis
     hostname: cluster_redis
     container_name: cluster_redis
     labels: *cluster-log-labels
-    ports:
-      - "6479:6479"
     command: redis-server --requirepass clusterRedis --port 6479
 
 
@@ -261,62 +257,43 @@ services:
       - cluster_loki
     logging: *default-logging
 
-    # Addons
+  # Addons engine: install/update API plus the reconcile loop that runs addon containers.
   cluster_addons_manager:
     image: addons_manager
     container_name: cluster_addons_manager
-    build: ../addons_engine/addons-manager/
+    build:
+      context: ../addons/
+      dockerfile: Dockerfile.addons
     labels: *cluster-log-labels
+    volumes:
+      # The only component that starts addon containers, so the only one with the socket.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Grant signing key and instance id. Losing it means re-approving every addon.
+      - cluster_addons_state:/var/lib/oakestra-addons
     environment:
       - ADDONS_MANAGER_PORT=11201
       - ADDONS_ENGINE_MONGO_URL=cluster_mongo
       - ADDONS_ENGINE_MONGO_PORT=10107
       - MARKETPLACE_ADDR=http://${SYSTEM_MANAGER_URL}:11102
+      - ORCHESTRATION_PLANE=cluster
+      # The cluster has no jwt_generator of its own, so it fetches root's public key through
+      # the marketplace.
+      - JWT_PUBLIC_KEY_URL=http://${SYSTEM_MANAGER_URL}:11102/api/v1/marketplace/auth/public-key
+      - ADDONS_STATE_DIR=/var/lib/oakestra-addons
+      # Resource limits for every addon container the engine starts.
+      - ADDON_MEMORY_LIMIT=512m
+      - ADDON_CPU_LIMIT=1
+      - ADDON_PIDS_LIMIT=1024
     ports:
       - 11201:11201
     depends_on:
       - mongo_cluster
     logging: *default-logging
 
-  cluster_addons_monitor:
-    image: addons_monitor
-    container_name: cluster_addons_monitor
-    build: ../addons_engine/addons-monitor/
-    labels: *cluster-log-labels
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - ADDONS_MANAGER_ADDR=http://cluster_addons_manager:11201
-      - ORCHESTRATION_PLANE=cluster
-      - DEFAULT_PROJECT_NAME=cluster_orchestrator
-    depends_on:
-      - cluster_addons_manager
-    logging: *default-logging
-
-  
-  cluster_addons_dashboard:
-    image: addons_dashboard
-    container_name: cluster_addons_dashboard
-    build: ../addons_engine/addons-dashboard/
-    labels: *cluster-log-labels
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - DASHBOARD_PORT=11203
-      - MARKETPLACE_URL=${SYSTEM_MANAGER_URL}
-      - RESOURCE_ABSTRACTOR_URL=cluster_resource_abstractor
-      - ADDONS_ENGINE_URL=cluster_addons_manager
-    depends_on:
-      - cluster_addons_monitor
-      - cluster_addons_manager
-    ports:
-      - 11203:11203
-    expose:
-      - "11203"
-    logging: *default-logging
-
 volumes:
   mongodb_cluster_data:
+    driver: local
+  cluster_addons_state:
     driver: local
   mongodb_cluster_net_data:
     driver: local

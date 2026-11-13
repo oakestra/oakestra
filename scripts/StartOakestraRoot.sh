@@ -82,6 +82,7 @@ chmod +x downloadConfigFiles.sh
 
 #If additional override files provided, download them
 OAK_OVERRIDES=''
+OAK_INTERNAL_OVERRIDES=''
 
 if [ ! -z "$OVERRIDE_FILES" ]; then
     IFS=, 
@@ -109,7 +110,7 @@ if [ ! -z "$OAKESTRA_VERSION" ]; then
         cp override-root-images-only.yml override-root-images-only.yml.bak
         sed "s/:latest/:$OAKESTRA_VERSION/g" override-root-images-only.yml.bak > override-root-images-only.yml
         rm override-root-images-only.yml.bak
-        OAK_OVERRIDES="${OAK_OVERRIDES}-f override-root-images-only.yml "  
+        OAK_INTERNAL_OVERRIDES="${OAK_INTERNAL_OVERRIDES}-f override-root-images-only.yml "  
     else
         echo "🌿 Using branch: $OAKESTRA_VERSION"
         # if main branch, use latest images, if not main branch, build from source
@@ -127,7 +128,7 @@ if [ ! -z "$OAKESTRA_VERSION" ]; then
             BUILD_FLAG=' --build'
             COMPOSE_FILE='docker-compose.yml'
         else
-            OAK_OVERRIDES="${OAK_OVERRIDES}-f override-root-images-only.yml "
+            OAK_INTERNAL_OVERRIDES="${OAK_INTERNAL_OVERRIDES}-f override-root-images-only.yml "
             echo "🌿 Using main branch, pulling latest images from Docker Hub."
         fi
     fi
@@ -146,9 +147,9 @@ if [ "$OAKESTRA_VERSION" != "main" ]; then
         echo "services:
   root_service_manager:
     image: ghcr.io/oakestra/oakestra-net/root-service-manager:alpha-$ALPHA_TAG" > ~/.oakestra/root_orchestrator/override-custom-service-manager-version.yml
-        OAK_OVERRIDES="${OAK_OVERRIDES}-f override-custom-service-manager-version.yml " 
+        OAK_INTERNAL_OVERRIDES="${OAK_INTERNAL_OVERRIDES}-f override-custom-service-manager-version.yml " 
 
-        OAK_OVERRIDES="${OAK_OVERRIDES}-f ~/.oakestra/root_orchestrator/override-custom-service-manager-version.yml "
+        OAK_INTERNAL_OVERRIDES="${OAK_INTERNAL_OVERRIDES}-f ~/.oakestra/root_orchestrator/override-custom-service-manager-version.yml "
     fi
 fi
 
@@ -162,7 +163,9 @@ if sudo docker ps -a | grep oakestra/root >/dev/null 2>&1; then
     fi
 fi
 
-command_exec="sudo -E docker compose -f ${COMPOSE_FILE} ${OAK_OVERRIDES} up ${BUILD_FLAG} -d"
+# User overrides go last so they win over the generated ones above (e.g. override-dashboard-v2.yml
+# has to replace the dashboard image that override-root-images-only.yml sets).
+command_exec="sudo -E docker compose -f ${COMPOSE_FILE} ${OAK_INTERNAL_OVERRIDES}${OAK_OVERRIDES} up ${BUILD_FLAG} -d"
 echo executing "$command_exec"
 
 eval "$command_exec"

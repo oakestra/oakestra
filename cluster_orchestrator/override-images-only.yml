@@ -47,10 +47,4 @@ services:
     image: ghcr.io/oakestra/oakestra/addons_manager:latest
     pull_policy: always
 
-  cluster_addons_monitor:
-    image: ghcr.io/oakestra/oakestra/addons_monitor:latest
-    pull_policy: always
   
-  cluster_addons_dashboard:
-    image: ghcr.io/oakestra/oakestra/addons_dashboard:latest
-    pull_policy: always

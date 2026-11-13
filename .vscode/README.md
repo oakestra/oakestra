@@ -21,8 +21,8 @@ Because the stack runs with **host networking**, every host value in the launch 
 `0.0.0.0` (container DNS names don't resolve from the host).
 
 > **Requirements:** Docker + Buildx, a Python interpreter selected in VS Code (for
-> `debugpy` profiles), the Go extension (for `go` profiles), Node.js/npm (for the Angular
-> dashboard), and root/sudo for the Go worker/CSI profiles (`asRoot`).
+> `debugpy` profiles), the Go extension (for `go` profiles), and root/sudo for the Go
+> worker/CSI profiles (`asRoot`).
 
 ## Profiles
 
@@ -41,9 +41,8 @@ Because the stack runs with **host networking**, every host value in the launch 
 | **Debug Root Scheduler** | Go | `scheduler` (`ORCHESTRATION_PLANE=root`) | 10004 |
 | **Debug Root Resource Abstractor** | Python | `resource-abstractor` | 11011 |
 | **Debug JWT Generator** | Python | `root_orchestrator/jwt-generator` | 10011 |
-| **Debug Root Addons Manager** | Python | `addons_engine/addons-manager` | 11101 |
-| **Debug Root Addons Monitor** | Python | `addons_engine/addons-monitor` | — (docker.sock watcher) |
-| **Debug Marketplace Manager** | Python | `addons_marketplace/marketplace-manager` | 11102 |
+| **Debug Root Addons Manager** | Go | `addons/cmd/addons` (`ORCHESTRATION_PLANE=root`, includes the container reconcile loop) | 11101 |
+| **Debug Marketplace Manager** | Go | `addons/cmd/marketplace` | 11102 |
 
 ### Cluster Orchestrator
 
@@ -52,17 +51,19 @@ Because the stack runs with **host networking**, every host value in the launch 
 | **Debug Cluster Manager** | Python | `cluster_orchestrator/cluster-manager` | 10100 / 10101 |
 | **Debug Cluster Scheduler** | Go | `scheduler` (`ORCHESTRATION_PLANE=cluster`) | 10105 |
 | **Debug Cluster Resource Abstractor** | Python | `resource-abstractor` | 11012 |
-| **Debug Cluster Addons Manager** | Python | `addons_engine/addons-manager` | 11201 |
-| **Debug Cluster Addons Monitor** | Python | `addons_engine/addons-monitor` | — (docker.sock watcher) |
+| **Debug Cluster Addons Manager** | Go | `addons/cmd/addons` (`ORCHESTRATION_PLANE=cluster`) | 11201 |
 
-> The Resource Abstractor, Addons Manager, and Addons Monitor are single components deployed
+> The base compose files don't publish Mongo, Redis or the resource abstractors on the host. The
+> debug profiles can still reach them because the `prep-*` tasks start the stacks with
+> `override-network-host.yml`, which puts those services on the host network.
+
+> The Resource Abstractor and the Addons Manager are single components deployed
 > in **both** planes; the root/cluster profiles differ only by port and target MongoDB.
 
 ### Frontend / Storage
 
 | Profile | Type | Component | Notes |
 |---|---|---|---|
-| **Debug Addons Dashboard** | Chrome | `addons_engine/addons-dashboard` | Runs `ng serve` on :4200 (via the background `serve-addons-dashboard` task) and attaches the browser debugger with source maps. One shared build for both planes. |
 | **Debug CSI HostPath Driver** | Go | `csi/hostpath` | Standalone CSI driver (`--nodeid debug-node`); **not** part of the compose stack. Runs as root (creates `/var/lib/oakestra/csi` and binds its UNIX socket). No preLaunch. |
 
 ### Utility
@@ -79,8 +80,8 @@ Launch several components together (dependencies first; `stopAll` stops the whol
 |---|---|
 | **Debug Full Root Orchestrator** | JWT Generator → Root Resource Abstractor → Root Scheduler → Root Manager |
 | **Debug Full Cluster Orchestrator** | Cluster Resource Abstractor → Cluster Scheduler → Cluster Manager |
-| **Debug Root Addons Stack** | Marketplace Manager → Root Addons Manager → Root Addons Monitor |
-| **Debug Cluster Addons Stack** | Cluster Addons Manager → Cluster Addons Monitor |
+| **Debug Root Addons Stack** | Marketplace Manager → Root Addons Manager |
+| **Debug Cluster Addons Stack** | Cluster Addons Manager |
 | **Debug Full Stack (Root + Cluster)** | Root core + Cluster core (7 sessions) |
 
 ## Tasks reference
@@ -95,8 +96,6 @@ You normally don't run these directly — profiles invoke them — but they're a
 - **`install-<component>-dependencies`:** installs one component's Python deps. The
   cluster/root manager installers also `pip install` the local shared libraries from
   [../libraries/](../libraries/).
-- **`serve-addons-dashboard`** (+ `install-addons-dashboard-dependencies`): background
-  `ng serve` for the dashboard profile.
 
 ## Notes & gotchas
 
@@ -111,9 +110,6 @@ You normally don't run these directly — profiles invoke them — but they're a
   valid configuration names is populated asynchronously and is momentarily empty on load. The
   names are valid and the compounds run fine — the warning clears after any edit + save, or
   **Developer: Reload Window**.
-- **Angular readiness pattern:** `serve-addons-dashboard` waits for Angular's esbuild
-  "bundle generation complete" / "Local: http" line before attaching. If your Angular
-  version prints a different ready message, update the task's `endsPattern`.
 - **Shared libraries are local.** Python components that use them get
   [../libraries/](../libraries/) on `PYTHONPATH` (managers) or pip-installed (via the
   install tasks) — nothing is fetched from a remote git repo.

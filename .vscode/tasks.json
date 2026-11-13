@@ -101,18 +101,6 @@
             "problemMatcher": []
         },
         {
-            "label": "remove-root-addons-monitor",
-            "type": "shell",
-            "command": "docker container rm -f root_addons_monitor",
-            "problemMatcher": []
-        },
-        {
-            "label": "remove-cluster-addons-monitor",
-            "type": "shell",
-            "command": "docker container rm -f cluster_addons_monitor",
-            "problemMatcher": []
-        },
-        {
             "label": "remove-marketplace-manager",
             "type": "shell",
             "command": "docker container rm -f marketplace_manager",
@@ -149,57 +137,6 @@
             "type": "shell",
             "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/root_orchestrator/jwt-generator/requirements.txt",
             "problemMatcher": []
-        },
-        {
-            "label": "install-addons-manager-dependencies",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/addons_engine/addons-manager/requirements.txt",
-            "problemMatcher": []
-        },
-        {
-            "label": "install-addons-monitor-dependencies",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/addons_engine/addons-monitor/requirements.txt",
-            "problemMatcher": []
-        },
-        {
-            "label": "install-marketplace-manager-dependencies",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/addons_marketplace/marketplace-manager/requirements.txt",
-            "problemMatcher": []
-        },
-        {
-            "label": "install-addons-dashboard-dependencies",
-            "type": "shell",
-            "command": "npm install",
-            "options": {
-                "cwd": "${workspaceRoot}/addons_engine/addons-dashboard"
-            },
-            "problemMatcher": []
-        },
-        {
-            // Background Angular dev server used by the "Debug Addons Dashboard" launch.
-            // The problemMatcher tells VS Code when `ng serve` is ready so the browser
-            // debug session attaches at the right moment.
-            "label": "serve-addons-dashboard",
-            "type": "shell",
-            "command": "npm start",
-            "options": {
-                "cwd": "${workspaceRoot}/addons_engine/addons-dashboard"
-            },
-            "isBackground": true,
-            "dependsOn": ["install-addons-dashboard-dependencies"],
-            "problemMatcher": {
-                "owner": "typescript",
-                "pattern": {
-                    "regexp": "^$"
-                },
-                "background": {
-                    "activeOnStart": true,
-                    "beginsPattern": "(Building|Watch mode enabled|Application bundle generation)",
-                    "endsPattern": "(Application bundle generation complete|Compiled successfully|Local:\\s+http)"
-                }
-            }
         },
 
         // -------------------------------------------------------- prep-debug env tasks
@@ -282,8 +219,7 @@
             "label": "prep-debug-root-addons-manager-env",
             "dependsOn": [
                 "root-orchestrator-up",
-                "remove-root-addons-manager",
-                "install-addons-manager-dependencies"
+                "remove-root-addons-manager"
             ],
             "dependsOrder": "sequence",
         },
@@ -292,27 +228,7 @@
             "dependsOn": [
                 "root-orchestrator-up",
                 "cluster-orchestrator-up",
-                "remove-cluster-addons-manager",
-                "install-addons-manager-dependencies"
-            ],
-            "dependsOrder": "sequence",
-        },
-        {
-            "label": "prep-debug-root-addons-monitor-env",
-            "dependsOn": [
-                "root-orchestrator-up",
-                "remove-root-addons-monitor",
-                "install-addons-monitor-dependencies"
-            ],
-            "dependsOrder": "sequence",
-        },
-        {
-            "label": "prep-debug-cluster-addons-monitor-env",
-            "dependsOn": [
-                "root-orchestrator-up",
-                "cluster-orchestrator-up",
-                "remove-cluster-addons-monitor",
-                "install-addons-monitor-dependencies"
+                "remove-cluster-addons-manager"
             ],
             "dependsOrder": "sequence",
         },
@@ -320,8 +236,7 @@
             "label": "prep-debug-marketplace-manager-env",
             "dependsOn": [
                 "root-orchestrator-up",
-                "remove-marketplace-manager",
-                "install-marketplace-manager-dependencies"
+                "remove-marketplace-manager"
             ],
             "dependsOrder": "sequence",
         },

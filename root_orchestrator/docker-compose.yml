@@ -51,12 +51,11 @@ services:
 
   # MongoDB in Root Orchestrator
   mongo_root:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     container_name: mongo
     hostname: mongo
     labels: *root-log-labels
-    ports:
-      - "10007:10007"
     expose:
       - "10007"
     volumes:
@@ -68,12 +67,11 @@ services:
 
   # root-level network mongoDB
   mongo_rootnet:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     container_name: mongo_net
     hostname: mongo_net
     labels: *root-log-labels
-    ports:
-      - "10008:10008"
     volumes:
       - 'mongodb_net_data:/data/db'
   # Check oakestra pr #586 for details on why this is needed.
@@ -105,12 +103,11 @@ services:
 
   # Redis for the Root Scheduler
   root_redis:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: redis
     hostname: root_redis
     container_name: root_redis
     labels: *root-log-labels
-    ports:
-      - "6379:6379"
     command: redis-server --requirepass rootRedis
 
   # Observability Stack
@@ -172,6 +169,11 @@ services:
 
   dashboard:
     image: ghcr.io/oakestra/dashboard:latest
+    # Also on the addon UI network, where the addons engine attaches addon UI containers as
+    # addonui-<id>. The dashboard proxies to them.
+    networks:
+      - default
+      - addon_ui
     ports:
       - '80:80'
     restart: unless-stopped
@@ -179,6 +181,10 @@ services:
     labels: *root-log-labels
     environment:
       - API_ADDRESS=${SYSTEM_MANAGER_URL}:10000
+      # Proxied by the dashboard's nginx under /addons-api, /marketplace-api and /ui-addons.
+      # Addon UI containers are reached as addonui-<name> on this same network.
+      - ADDONS_MANAGER_ADDRESS=root_addons_manager:11101
+      - MARKETPLACE_ADDRESS=marketplace_manager:11102
 
   # Root Scheduler
   root_scheduler:
@@ -205,6 +211,7 @@ services:
     logging: *default-logging
 
   root_resource_abstractor:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: resource_abstractor
     build: ../resource-abstractor/
     container_name: root_resource_abstractor
@@ -212,8 +219,6 @@ services:
     hostname: root_resource_abstractor
     expose:
       - "11011"
-    ports:
-      - "11011:11011"
     environment:
       - RESOURCE_ABSTRACTOR_PORT=11011
       - MONGO_URL=mongo
@@ -228,77 +233,56 @@ services:
     container_name: jwt_generator
     hostname: jwt_generator
     labels: *root-log-labels
+    # Not published on the host: POST /create mints tokens without authentication, so only
+    # containers on the oakestra network may reach it.
     expose:
       - "10011"
-    ports:
-      - "10011:10011"
     environment:
       - JWT_GENERATOR_PORT=10011
     logging: *default-logging
 
-  # Addons 
+  # Addons engine: install/update API plus the reconcile loop that runs addon containers.
   root_addons_manager:
     image: addons_manager
     container_name: root_addons_manager
-    build: ../addons_engine/addons-manager/
+    build:
+      context: ../addons/
+      dockerfile: Dockerfile.addons
     labels: *root-log-labels
+    volumes:
+      # The only component that starts addon containers, so the only one with the socket.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Grant signing key and instance id. Losing it means re-approving every addon.
+      - addons_state:/var/lib/oakestra-addons
     environment:
       - ADDONS_MANAGER_PORT=11101
       - ADDONS_ENGINE_MONGO_URL=mongo
       - ADDONS_ENGINE_MONGO_PORT=10007
       - MARKETPLACE_ADDR=http://marketplace_manager:11102
+      - ORCHESTRATION_PLANE=root
+      - JWT_GENERATOR_URL=jwt_generator
+      - JWT_GENERATOR_PORT=10011
+      - ADDONS_STATE_DIR=/var/lib/oakestra-addons
+      # Resource limits for every addon container the engine starts.
+      - ADDON_MEMORY_LIMIT=512m
+      - ADDON_CPU_LIMIT=1
+      - ADDON_PIDS_LIMIT=1024
     ports:
       - 11101:11101
     depends_on:
       - mongo_root
       - marketplace_manager
-    logging: *default-logging
-
-  root_addons_monitor:
-    image: addons_monitor
-    container_name: root_addons_monitor
-    build: ../addons_engine/addons-monitor/
-    labels: *root-log-labels
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - ADDONS_MANAGER_ADDR=http://root_addons_manager:11101
-      - ORCHESTRATION_PLANE=root
-      - DEFAULT_PROJECT_NAME=root_orchestrator
-    depends_on:
-      - root_addons_manager
-    logging: *default-logging
-  
-  root_addons_dashboard:
-    image: addons_dashboard
-    container_name: root_addons_dashboard
-    build: ../addons_engine/addons-dashboard/
-    labels: *root-log-labels
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - DASHBOARD_PORT=11103
-      - MARKETPLACE_URL=marketplace_manager
-      - RESOURCE_ABSTRACTOR_URL=root_resource_abstractor
-      - ADDONS_ENGINE_URL=root_addons_manager
-    depends_on:
-      - marketplace_manager
-      - root_addons_monitor
-      - root_addons_manager
-    ports:
-      - 11103:11103
-    expose:
-      - "11103"
+      - jwt_generator
     logging: *default-logging
 
   # Marketplace
   marketplace_manager:
     image: marketplace_manager
-    build: ../addons_marketplace/marketplace-manager/
+    build:
+      context: ../addons/
+      dockerfile: Dockerfile.marketplace
     container_name: marketplace_manager
     labels: *root-log-labels
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     expose:
       - "11102"
     ports:
@@ -307,12 +291,29 @@ services:
       - ADDON_MARKETPLACE_PORT=11102
       - ADDON_MARKETPLACE_MONGO_URL=mongo
       - ADDON_MARKETPLACE_MONGO_PORT=10007
+      - JWT_GENERATOR_URL=jwt_generator
+      - JWT_GENERATOR_PORT=10011
+      # Empty means the default official index. Set "off" for air-gapped setups.
+      - MARKETPLACE_OFFICIAL_INDEX=${MARKETPLACE_OFFICIAL_INDEX:-}
+      - MARKETPLACE_OFFICIAL_TOKEN=${MARKETPLACE_OFFICIAL_TOKEN:-}
+      - MARKETPLACE_SYNC_INTERVAL=${MARKETPLACE_SYNC_INTERVAL:-}
+      - MARKETPLACE_REGISTRY_ALLOW_PRIVATE=${MARKETPLACE_REGISTRY_ALLOW_PRIVATE:-false}
+    healthcheck:
+      test: ["CMD", "/marketplace", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     depends_on:
       - mongo_root
+      - jwt_generator
     logging: *default-logging
+
 
 volumes:
   mongodb_data:
+    driver: local
+  addons_state:
     driver: local
   mongodb_net_data:
     driver: local
@@ -324,3 +325,7 @@ volumes:
 networks:
   default:
     name: oakestra
+  # The addons engine attaches addon UI containers here. It only creates the network itself
+  # if compose hasn't.
+  addon_ui:
+    name: oakestra_addon_ui

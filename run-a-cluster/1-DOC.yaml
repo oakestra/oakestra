@@ -26,6 +26,11 @@ services:
   dashboard:
     image: ghcr.io/oakestra/dashboard:latest
     pull_policy: always
+    # Also on the addon UI network, where the addons engine attaches addon UI containers as
+    # addonui-<id>.
+    networks:
+      - default
+      - addon_ui
     ports:
       - '80:80'
     restart: unless-stopped
@@ -33,6 +38,9 @@ services:
     labels: *root-log-labels
     environment:
       - API_ADDRESS=${SYSTEM_MANAGER_URL}:10000
+      # 1-DOC names the addons services without the root_ prefix.
+      - ADDONS_MANAGER_ADDRESS=addons_manager:11101
+      - MARKETPLACE_ADDRESS=marketplace_manager:11102
 
   # System Manager REST API of Root Orchestrator
   system_manager:
@@ -71,13 +79,12 @@ services:
 
   # MongoDB in Root Orchestrator
   mongo_root:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     pull_policy: always
     container_name: mongo
     hostname: mongo
     labels: *root-log-labels
-    ports:
-      - "10007:10007"
     expose:
       - "10007"
     volumes:
@@ -89,13 +96,12 @@ services:
 
   # cluster-level mongoDB
   mongo_rootnet:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     pull_policy: always
     container_name: mongo_net
     hostname: mongo_net
     labels: *root-log-labels
-    ports:
-      - "10008:10008"
     expose:
       - "10008"
     volumes:
@@ -134,6 +140,7 @@ services:
 
   # Redis for the Root Scheduler
   root_redis:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: redis
     pull_policy: always
     hostname: root_redis
@@ -144,6 +151,7 @@ services:
     command: redis-server --requirepass rootRedis
 
   root_resource_abstractor:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
     pull_policy: always
     container_name: root_resource_abstractor
@@ -151,8 +159,6 @@ services:
     labels: *root-log-labels
     expose:
       - "11011"
-    ports:
-      - "11011:11011"
     environment:
       - RESOURCE_ABSTRACTOR_PORT=11011
       - MONGO_URL=mongo
@@ -166,10 +172,9 @@ services:
     container_name: jwt_generator
     hostname: jwt_generator
     labels: *root-log-labels
+    # Not published on the host: POST /create mints tokens without authentication.
     expose:
       - "10011"
-    ports:
-      - "10011:10011"
     environment:
       - JWT_GENERATOR_PORT=10011
     logging: *default-logging
@@ -221,13 +226,12 @@ services:
 
   # cluster-level mongoDB
   mongo_cluster:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     pull_policy: always
     container_name: cluster_mongo
     hostname: cluster_mongo
     labels: *cluster-log-labels
-    ports:
-      - "10107:10107"
     expose:
       - "10107"
     volumes:
@@ -239,13 +243,12 @@ services:
 
   # cluster-level mongoDB
   mongo_clusternet:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: mongo:8.0.32
     pull_policy: always
     container_name: cluster_mongo_net
     hostname: cluster_mongo_net
     labels: *cluster-log-labels
-    ports:
-      - "10108:10108"
     expose:
       - "10108"
     volumes:
@@ -350,6 +353,7 @@ services:
     logging: *default-logging
 
   cluster_resource_abstractor:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: ghcr.io/oakestra/oakestra/resource-abstractor:latest
     pull_policy: always
     container_name: cluster_resource_abstractor
@@ -357,8 +361,6 @@ services:
     hostname: cluster_resource_abstractor
     expose:
       - "11012"
-    ports:
-      - "11012:11012"
     environment:
       - RESOURCE_ABSTRACTOR_PORT=11012
       - MONGO_URL=cluster_mongo
@@ -370,6 +372,7 @@ services:
 
   # Redis for the Cluster Scheduler as Job Queue
   cluster_redis:
+    # Not published on the host, so addon containers can't reach it via the Docker gateway.
     image: redis
     pull_policy: always
     hostname: cluster_redis
@@ -455,44 +458,47 @@ services:
     logging: *default-logging
 
 
-  # Addons 
+  # Addons engine: install/update API plus the reconcile loop that runs addon containers.
   addons_manager:
     image: ghcr.io/oakestra/oakestra/addons_manager:latest
     container_name: addons_manager
+    build:
+      context: ../addons/
+      dockerfile: Dockerfile.addons
     labels: *root-log-labels
+    volumes:
+      # The only component that starts addon containers, so the only one with the socket.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Grant signing key and instance id. Losing it means re-approving every addon.
+      - addons_state:/var/lib/oakestra-addons
     environment:
       - ADDONS_MANAGER_PORT=11101
       - ADDONS_ENGINE_MONGO_URL=mongo
       - ADDONS_ENGINE_MONGO_PORT=10007
       - MARKETPLACE_ADDR=http://marketplace_manager:11102
+      - ORCHESTRATION_PLANE=root
+      - JWT_GENERATOR_URL=jwt_generator
+      - JWT_GENERATOR_PORT=10011
+      - ADDONS_STATE_DIR=/var/lib/oakestra-addons
+      # Resource limits for every addon container the engine starts.
+      - ADDON_MEMORY_LIMIT=512m
+      - ADDON_CPU_LIMIT=1
+      - ADDON_PIDS_LIMIT=1024
     ports:
       - 11101:11101
     depends_on:
       - mongo_root
       - marketplace_manager
-    logging: *default-logging
-
-  addons_monitor:
-    image: ghcr.io/oakestra/oakestra/addons_monitor:latest
-    container_name: addons_monitor
-    build: ../addons_engine/addons-monitor/
-    labels: *root-log-labels
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: bash -c 'sleep 10; python addons_monitor.py'
-    environment:
-      - ADDONS_MANAGER_ADDR=http://addons_manager:11101
-      - CONTAINER_POLL_INTERVAL=5
-    depends_on:
-      - addons_manager
+      - jwt_generator
     logging: *default-logging
 
   marketplace_manager:
     image: ghcr.io/oakestra/oakestra/marketplace_manager:latest
     container_name: marketplace_manager
+    build:
+      context: ../addons/
+      dockerfile: Dockerfile.marketplace
     labels: *root-log-labels
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     expose:
       - "11102"
     ports:
@@ -501,33 +507,28 @@ services:
       - ADDON_MARKETPLACE_PORT=11102
       - ADDON_MARKETPLACE_MONGO_URL=mongo
       - ADDON_MARKETPLACE_MONGO_PORT=10007
+      - JWT_GENERATOR_URL=jwt_generator
+      - JWT_GENERATOR_PORT=10011
+      # Empty means the default official index. Set "off" for air-gapped setups.
+      - MARKETPLACE_OFFICIAL_INDEX=${MARKETPLACE_OFFICIAL_INDEX:-}
+      - MARKETPLACE_OFFICIAL_TOKEN=${MARKETPLACE_OFFICIAL_TOKEN:-}
+      - MARKETPLACE_SYNC_INTERVAL=${MARKETPLACE_SYNC_INTERVAL:-}
+      - MARKETPLACE_REGISTRY_ALLOW_PRIVATE=${MARKETPLACE_REGISTRY_ALLOW_PRIVATE:-false}
+    healthcheck:
+      test: ["CMD", "/marketplace", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     depends_on:
       - mongo_root
-    logging: *default-logging
-
-  addons_dashboard:
-    image: ghcr.io/oakestra/oakestra/addons_dashboard:latest
-    container_name: addons_dashboard
-    labels: *root-log-labels
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - DASHBOARD_PORT=11103
-      - MARKETPLACE_URL=${SYSTEM_MANAGER_URL}
-      - RESOURCE_ABSTRACTOR_URL=${SYSTEM_MANAGER_URL}
-      - ADDONS_ENGINE_URL=${SYSTEM_MANAGER_URL}
-    depends_on:
-      - marketplace_manager
-      - addons_monitor
-      - addons_manager
-    ports:
-      - 11103:11103
-    expose:
-      - "11103"
+      - jwt_generator
     logging: *default-logging
 
 volumes:
   mongodb_data:
+    driver: local
+  addons_state:
     driver: local
   mongodb_net_data:
     driver: local
@@ -544,5 +545,9 @@ volumes:
 networks:
   default:
     name: oakestra
+  # The addons engine attaches addon UI containers here. It only creates the network itself
+  # if compose hasn't.
+  addon_ui:
+    name: oakestra_addon_ui
   ip6net:
     enable_ipv6: true
