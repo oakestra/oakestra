@@ -104,12 +104,8 @@ class SchedulingController(MethodView):
         instance_number = id[1]
         node_id = data.get("candidate_id")
         logger.info(
-            "Received scheduling result for job "
-            + job_id
-            + " instance "
-            + instance_number
-            + ". Result: "
-            + node_id
+            f"Received scheduling result for job {job_id} instance {instance_number}. "
+            f"Result: {node_id if node_id is not None else data.get('status')}"
         )
         if node_id is None:
             # scheduling failed

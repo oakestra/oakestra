@@ -43,7 +43,7 @@ def create_services_of_app(username, data, force=False):
         parse_sla_json(data)
     except SLAFormatError as e:
         logging.log(logging.ERROR, e)
-        return {"message": e}, 422
+        return {"message": str(e)}, 422
 
     app_id = data.get("applications")[0]["applicationID"]
     last_service_id = ""
@@ -172,6 +172,14 @@ def generate_db_structure(application, microservice):
     microservice["instance_list"] = []
     if microservice["virtualization"] == "container":
         microservice["virtualization"] = "docker"
+    # The worker only attaches GPUs when vgpus > 0, so vram alone has to ask for
+    # one. Not for crosvm, where vgpus means virtio-gpu devices.
+    if (
+        microservice["virtualization"] == "docker"
+        and (microservice.get("vram") or 0) > 0
+        and not microservice.get("vgpus")
+    ):
+        microservice["vgpus"] = 1
     addresses = microservice.get("addresses")
     if addresses is not None:
         microservice["RR_ip"] = addresses.get(

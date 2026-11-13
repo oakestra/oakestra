@@ -36,7 +36,7 @@ from utils.certificates import (
     ensure_server_files,
 )
 from utils.gateway import GATEWAY_ENABLED
-from utils.json_encoder import MongoJSONEncoder
+from utils.json_encoder import MongoJSONProvider
 from utils.network import add_brackets_if_ipv6
 from werkzeug.utils import redirect, secure_filename
 
@@ -47,7 +47,6 @@ UPLOAD_FOLDER = "files"
 ALLOWED_EXTENSIONS = {"txt", "json", "yml"}
 
 app = Flask(__name__)
-app.json_encoder = MongoJSONEncoder
 
 app.config["OPENAPI_VERSION"] = "3.0.2"
 app.config["API_TITLE"] = "Oakestra root api"
@@ -75,6 +74,9 @@ socketio = SocketIO(
     cors_allowed_origins="*",
 )
 mongo_init(app)
+# Has to come after mongo_init: PyMongo(app) installs its own provider, which turns
+# ObjectIds into {"$oid": ...} and would break clients expecting plain strings.
+app.json = MongoJSONProvider(app)
 create_admin()
 
 
@@ -260,7 +262,6 @@ class ClusterRegistrationServicer(register_clusterServicer):
 
         cluster_data = {
             "ip": cluster_address,
-            "clusterinfo": message["cluster_info"][0],
             "port": cluster_port,
             "candidate_location": message["cluster_location"],
             "candidate_name": message["cluster_name"],

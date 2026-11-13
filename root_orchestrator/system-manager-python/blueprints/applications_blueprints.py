@@ -97,7 +97,7 @@ class CreateApplicationController(Resource):
         current_user = get_jwt_identity()
         result, code = register_app(data, current_user)
         if code != 200:
-            abort(code, description=result)
+            abort(code, message=result["message"])
 
         return jsonify(result)
 

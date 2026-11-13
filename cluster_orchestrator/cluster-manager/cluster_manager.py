@@ -23,7 +23,7 @@ from flask_smorest import Api
 from flask_socketio import SocketIO
 from flask_swagger_ui import get_swaggerui_blueprint
 from prometheus_client import start_http_server
-from proto.clusterRegistration_pb2 import CS1Message, CS2Message, KeyValue, SC1Message, SC2Message
+from proto.clusterRegistration_pb2 import CS1Message, CS2Message, SC1Message, SC2Message
 from proto.clusterRegistration_pb2_grpc import register_clusterStub
 
 my_logger = configure_logging()
@@ -148,9 +148,6 @@ def _try_register() -> bool:
             message.cluster_name = config.MY_CHOSEN_CLUSTER_NAME
             message.cluster_location = config.MY_CLUSTER_LOCATION
             message.cluster_address = config.MY_CLUSTER_ADDRESS
-
-            key_value_message = KeyValue()
-            message.cluster_info.append(key_value_message)
 
             response: SC2Message = stub.handle_init_final(
                 message, wait_for_ready=True, timeout=config.GRPC_REQUEST_TIMEOUT

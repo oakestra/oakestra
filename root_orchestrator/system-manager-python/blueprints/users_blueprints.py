@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import current_app, jsonify, request
 from flask.views import MethodView
@@ -106,17 +106,18 @@ class UserResetPasswordController(MethodView):
         username = content["username"]
         domain = content["domain"]
         expires = current_app.config["RESET_TOKEN_EXPIRES"]
-        expiry_date = datetime.now() + expires
+        expiry_date = datetime.now(timezone.utc) + expires
         reset_token = secrets.token_urlsafe()
-
-        return jsonify(
-            user_create_password_reset_request(username, domain, reset_token, expiry_date)
+        body, status = user_create_password_reset_request(
+            username, domain, reset_token, expiry_date
         )
+        return jsonify(body), status
 
     def put(self, *args, **kwargs):
         content = request.get_json()
         if content is None:
             return jsonify({"error": "Missing or invalid JSON body"}), 400
-        return jsonify(
-            user_change_password_with_reset_request(content["token"], content["password"])
+        body, status = user_change_password_with_reset_request(
+            content["token"], content["password"]
         )
+        return jsonify(body), status

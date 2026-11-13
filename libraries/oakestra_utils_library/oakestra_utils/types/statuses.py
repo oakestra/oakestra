@@ -35,6 +35,8 @@ class NegativeSchedulingStatus(SchedulingStatus):
 
     NO_ACTIVE_CLUSTER_WITH_CAPACITY = "NoActiveClusterWithCapacity"  # 🟨
 
+    # Some candidates have capacity, but none has enough GPUs or free VRAM.
+    NO_GPU_CAPACITY = "NoGpuCapacity"
     NO_WORKER_CAPACITY = "NO_WORKER_CAPACITY"
     NO_QUALIFIED_WORKER_FOUND = "NO_QUALIFIED_WORKER_FOUND"  # 🟨
     NO_NODE_FOUND = "NO_NODE_FOUND"  # 🟨

@@ -1,5 +1,5 @@
 FROM python:3.13-slim-bookworm
-LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
+LABEL org.opencontainers.image.source=https://github.com/oakestra/oakestra
 
 # Cryptography requires libffi
 RUN apt-get update && apt-get install -y curl libffi-dev
