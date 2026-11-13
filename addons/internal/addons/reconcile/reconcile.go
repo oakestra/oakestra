@@ -203,30 +203,30 @@ func (r *Reconciler) settle(ctx context.Context, id string, from []addons.Status
 	}
 }
 
-func (r *Reconciler) fail(ctx context.Context, a addons.Installed, msg string, failed []string, logs string) {
+func (r *Reconciler) fail(ctx context.Context, a addons.Installed, msg string, failed []string) {
 	r.log().Warn("addon failed", "addon", a.AddonID, "reason", msg)
 	r.settle(ctx, a.ID, []addons.Status{a.Status}, func(x *addons.Installed) {
 		x.Status = addons.Failed
 		x.StatusDetails = addons.StatusDetails{Message: msg, FailedServices: failed}
-		x.Logs = logs
+		x.Logs = ""
 	})
 }
 
 func (r *Reconciler) deploy(ctx context.Context, a addons.Installed, all []addons.Installed) {
 	def, err := r.verify(a)
 	if err != nil {
-		r.fail(ctx, a, err.Error(), nil, "")
+		r.fail(ctx, a, err.Error(), nil)
 		return
 	}
 	p, err := r.buildPlan(a, &def)
 	if err != nil {
-		r.fail(ctx, a, err.Error(), nil, "")
+		r.fail(ctx, a, err.Error(), nil)
 		return
 	}
 	// The API checked this at install time, but another addon may have been installed or
 	// updated since, and the records come from a database.
 	if msg, conflict := addons.HostBindConflict(&def, a.ID, all); conflict {
-		r.fail(ctx, a, msg, nil, "")
+		r.fail(ctx, a, msg, nil)
 		return
 	}
 
@@ -239,7 +239,7 @@ func (r *Reconciler) deploy(ctx context.Context, a addons.Installed, all []addon
 			return
 		}
 		if c != nil && !r.isOwned(c, a.ID) {
-			r.fail(ctx, a, fmt.Sprintf("container name %q is already used by a container that does not belong to this addon", sp.spec.Name), []string{sp.name}, "")
+			r.fail(ctx, a, fmt.Sprintf("container name %q is already used by a container that does not belong to this addon", sp.spec.Name), []string{sp.name})
 			return
 		}
 	}
@@ -263,7 +263,7 @@ func (r *Reconciler) deploy(ctx context.Context, a addons.Installed, all []addon
 		// project, and log shippers trust such labels too.
 		for _, k := range slices.Sorted(maps.Keys(labels)) {
 			if definition.IsReservedLabel(k) {
-				r.fail(ctx, a, fmt.Sprintf("service %s: image %s carries the reserved label %q; images may not set oak.*, oakestra.*, org.oakestra.* or com.docker.compose.* labels", sp.name, sp.spec.Image, k), []string{sp.name}, "")
+				r.fail(ctx, a, fmt.Sprintf("service %s: image %s carries the reserved label %q; images may not set oak.*, oakestra.*, org.oakestra.* or com.docker.compose.* labels", sp.name, sp.spec.Image, k), []string{sp.name})
 				return
 			}
 		}
@@ -277,13 +277,13 @@ func (r *Reconciler) deploy(ctx context.Context, a addons.Installed, all []addon
 
 	for _, n := range p.networks {
 		if err := r.Runtime.EnsureNetwork(ctx, n); err != nil {
-			r.fail(ctx, a, fmt.Sprintf("network %s: %v", n.Name, err), nil, "")
+			r.fail(ctx, a, fmt.Sprintf("network %s: %v", n.Name, err), nil)
 			return
 		}
 	}
 	for _, v := range p.volumes {
 		if err := r.Runtime.EnsureVolume(ctx, v); err != nil {
-			r.fail(ctx, a, fmt.Sprintf("volume %s: %v", v.Name, err), nil, "")
+			r.fail(ctx, a, fmt.Sprintf("volume %s: %v", v.Name, err), nil)
 			return
 		}
 	}

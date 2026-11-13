@@ -127,7 +127,7 @@ func readFile(path string) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("%s exists but can't be read: %w; refusing to start", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	// Both files are tiny; the limit only guards against pointing the dir at something odd.
 	b, err := io.ReadAll(io.LimitReader(f, 4096))
 	if err != nil {

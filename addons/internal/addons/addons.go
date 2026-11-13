@@ -46,8 +46,8 @@ func (s Status) Settled() bool {
 // StatusDetails explains a status. It serializes to {} when empty, which is what the dashboard
 // expects rather than null.
 type StatusDetails struct {
-	FailedServices []string `json:"failed_services,omitempty" bson:"failed_services,omitempty"`
-	Message        string   `json:"message,omitempty" bson:"message,omitempty"`
+	FailedServices []string `bson:"failed_services,omitempty" json:"failed_services,omitempty"`
+	Message        string   `bson:"message,omitempty"         json:"message,omitempty"`
 }
 
 // Installed is an addon installed on this orchestration plane.

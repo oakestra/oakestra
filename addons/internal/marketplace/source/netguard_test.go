@@ -54,7 +54,7 @@ func TestGuardedTransportRefusesLoopback(t *testing.T) {
 		client := &http.Client{Transport: NewGuardedTransport(allow)}
 		resp, err := client.Get(srv.URL)
 		if err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 		if wantErr && !errors.Is(err, ErrBlockedAddress) {
 			t.Errorf("allowPrivate=%v: expected ErrBlockedAddress, got %v", allow, err)

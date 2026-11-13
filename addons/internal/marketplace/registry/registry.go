@@ -54,7 +54,7 @@ func (r Remote) Resolve(ctx context.Context, image string) (string, error) {
 	}
 	// go-containerregistry picks http by itself for localhost, RFC 1918 and ".local" hosts.
 	// That is only acceptable when private registries are explicitly allowed.
-	if !r.AllowPrivate && ref.Context().Registry.Scheme() == "http" {
+	if !r.AllowPrivate && ref.Context().Scheme() == "http" {
 		return "", fmt.Errorf("resolving %q: registry %q would be reached over plain http, set MARKETPLACE_REGISTRY_ALLOW_PRIVATE to permit local registries", image, ref.Context().RegistryStr())
 	}
 	// The guarded transport replaces the default one, which honors proxy variables and would

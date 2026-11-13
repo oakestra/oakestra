@@ -186,7 +186,7 @@ func (f *Fetcher) Fetch(ctx context.Context, req Request) (*Result, error) {
 	if err != nil {
 		return nil, describeTransportError(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	switch resp.StatusCode {
 	case http.StatusOK:
@@ -210,7 +210,7 @@ func fetchFile(path string) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening index file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	idx, err := Decode(f)
 	if err != nil {
 		return nil, err

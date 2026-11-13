@@ -184,7 +184,7 @@ func (l *KeyLoader) Fetch(ctx context.Context) (*rsa.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %s", resp.Status)
 	}

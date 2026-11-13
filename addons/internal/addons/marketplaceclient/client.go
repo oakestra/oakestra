@@ -58,7 +58,7 @@ func (c *Client) Get(ctx context.Context, src definition.Source, name string) (*
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	switch {
 	case resp.StatusCode == http.StatusNotFound:

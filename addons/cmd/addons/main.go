@@ -67,7 +67,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer docker.Close()
+	defer func() { _ = docker.Close() }()
 	docker.Limits = cfg.Limits
 
 	// The reconcile loop doesn't need the key, so it loads in the background.

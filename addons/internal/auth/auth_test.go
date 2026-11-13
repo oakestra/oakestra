@@ -71,12 +71,6 @@ func sign(t *testing.T, claims jwt.MapClaims, mutate func(jwt.MapClaims)) string
 	return s
 }
 
-func newTestVerifier() *Verifier {
-	v := NewVerifier(&testKey.PublicKey)
-	v.now = func() time.Time { return testNow }
-	return v
-}
-
 // newTestGate returns a loaded gate whose verifier runs at testNow.
 func newTestGate() *Gate {
 	g := NewGate(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))

@@ -75,7 +75,7 @@ func signed(t *testing.T, k *rsa.PrivateKey) string {
 
 // setup loads the first key the way main does and moves the gate's clock past the refresh
 // interval, so any refresh the gate is allowed to do happens on the next failing token.
-func setup(t *testing.T, logger *slog.Logger) (*auth.Gate, http.Handler) {
+func setup(t *testing.T, logger *slog.Logger) http.Handler {
 	t.Helper()
 	loader := auth.KeyLoaderFromEnv()
 	gate := loader.NewGate(logger)
@@ -91,7 +91,7 @@ func setup(t *testing.T, logger *slog.Logger) (*auth.Gate, http.Handler) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/", gate.RequireUser(), func(c *gin.Context) { c.Status(http.StatusOK) })
-	return gate, r
+	return r
 }
 
 func call(h http.Handler, tok string) int {
@@ -117,7 +117,7 @@ func TestRemoteKeyURLIsNotReplacedOnFailure(t *testing.T) {
 	t.Setenv("JWT_PUBLIC_KEY_URL", ts.URL+"/api/v1/marketplace/auth/public-key")
 
 	var logs bytes.Buffer
-	_, h := setup(t, slog.New(slog.NewTextHandler(&logs, nil)))
+	h := setup(t, slog.New(slog.NewTextHandler(&logs, nil)))
 	if !strings.Contains(logs.String(), "JWT_PUBLIC_KEY") || !strings.Contains(logs.String(), "level=WARN") {
 		t.Errorf("no pinning recommendation logged: %s", logs.String())
 	}
@@ -145,7 +145,7 @@ func TestGeneratorKeyIsRefreshed(t *testing.T) {
 	t.Setenv("JWT_GENERATOR_URL", host)
 	t.Setenv("JWT_GENERATOR_PORT", port)
 
-	_, h := setup(t, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	h := setup(t, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
 	// jwt_generator restarted with a new key pair.
 	srv.set(&second.PublicKey)
 	if code := call(h, signed(t, second)); code != 200 || srv.count() != 2 {
@@ -161,7 +161,7 @@ func TestStaticKeyIsNeverFetched(t *testing.T) {
 	if loader.Source != auth.KeySourceStatic || loader.RefreshAllowed() {
 		t.Fatalf("loader = %+v", loader)
 	}
-	_, h := setup(t, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	h := setup(t, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
 	if code := call(h, signed(t, other)); code != 401 {
 		t.Fatalf("other key: %d", code)
 	}

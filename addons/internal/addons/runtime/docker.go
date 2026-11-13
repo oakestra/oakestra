@@ -10,13 +10,13 @@ import (
 	"strconv"
 	"strings"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 )
@@ -56,7 +56,7 @@ func (d *Docker) PullImage(ctx context.Context, ref string) error {
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	// The pull only finishes once the stream is drained, and failures that happen after the
 	// request was accepted show up as {"error": ...} messages in it.
 	dec := json.NewDecoder(rc)
@@ -90,7 +90,7 @@ func (d *Docker) ImageLabels(ctx context.Context, ref string) (map[string]string
 func (d *Docker) InspectContainer(ctx context.Context, name string) (*Container, error) {
 	j, err := d.cli.ContainerInspect(ctx, name)
 	if err != nil {
-		if errdefs.IsNotFound(err) {
+		if cerrdefs.IsNotFound(err) {
 			return nil, nil
 		}
 		return nil, err
@@ -158,7 +158,7 @@ func (d *Docker) CreateAndStart(ctx context.Context, spec ContainerSpec) error {
 
 	created, err := d.cli.ContainerCreate(ctx, cfg, host, netCfg, nil, spec.Name)
 	if err != nil {
-		if errdefs.IsNotFound(err) && netCfg != nil {
+		if cerrdefs.IsNotFound(err) && netCfg != nil {
 			return fmt.Errorf("%w: %v", ErrNetworkMissing, err)
 		}
 		return err
@@ -169,7 +169,7 @@ func (d *Docker) CreateAndStart(ctx context.Context, spec ContainerSpec) error {
 	}
 	for _, n := range rest {
 		if err := d.cli.NetworkConnect(ctx, n.Name, created.ID, &network.EndpointSettings{Aliases: n.Aliases}); err != nil {
-			if errdefs.IsNotFound(err) {
+			if cerrdefs.IsNotFound(err) {
 				err = fmt.Errorf("%w: %s", ErrNetworkMissing, n.Name)
 			}
 			return cleanup(err)
@@ -222,19 +222,19 @@ func buildCreateConfig(spec ContainerSpec, limits Limits) (*container.Config, *c
 		},
 	}
 
-	host.Resources.Devices = nil
+	host.Devices = nil
 	// Addons share the host with the control plane, which targets ~1 GB in total; a fork bomb
 	// or a leak in one addon must not take the orchestrator down with it.
 	if limits.PidsLimit > 0 {
 		pids := limits.PidsLimit
-		host.Resources.PidsLimit = &pids
+		host.PidsLimit = &pids
 	}
-	host.Resources.Memory = limits.MemoryBytes
-	host.Resources.NanoCPUs = limits.NanoCPUs
+	host.Memory = limits.MemoryBytes
+	host.NanoCPUs = limits.NanoCPUs
 
 	for _, m := range spec.Mounts {
-		switch {
-		case m.Source == "":
+		switch m.Source {
+		case "":
 			cfg.Volumes[m.Target] = struct{}{}
 		default:
 			bind := m.Source + ":" + m.Target
@@ -254,12 +254,12 @@ func buildCreateConfig(spec ContainerSpec, limits Limits) (*container.Config, *c
 
 func (d *Docker) RemoveContainer(ctx context.Context, id string) error {
 	timeout := stopTimeoutSeconds
-	if err := d.cli.ContainerStop(ctx, id, container.StopOptions{Timeout: &timeout}); err != nil && !errdefs.IsNotFound(err) {
+	if err := d.cli.ContainerStop(ctx, id, container.StopOptions{Timeout: &timeout}); err != nil && !cerrdefs.IsNotFound(err) {
 		// A failed stop shouldn't leave the container behind, Force kills it.
 		_ = err
 	}
 	err := d.cli.ContainerRemove(ctx, id, container.RemoveOptions{Force: true, RemoveVolumes: false})
-	if err != nil && !errdefs.IsNotFound(err) {
+	if err != nil && !cerrdefs.IsNotFound(err) {
 		return err
 	}
 	return nil
@@ -270,7 +270,7 @@ func (d *Docker) ContainerLogs(ctx context.Context, id string, tail int) (string
 	if err != nil {
 		return "", err
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(rc, 1<<20))
 	if err != nil {
 		return "", err
@@ -316,7 +316,7 @@ func (d *Docker) EnsureNetwork(ctx context.Context, spec NetworkSpec) error {
 	}
 	if _, err := d.cli.NetworkCreate(ctx, spec.Name, opts); err != nil {
 		// Two reconcilers (or a compose up) racing on a shared network is fine.
-		if spec.Shared && errdefs.IsConflict(err) {
+		if spec.Shared && cerrdefs.IsConflict(err) {
 			return nil
 		}
 		return err
@@ -338,7 +338,7 @@ func (d *Docker) ListNetworks(ctx context.Context, labels map[string]string) ([]
 
 func (d *Docker) RemoveNetwork(ctx context.Context, name string) error {
 	err := d.cli.NetworkRemove(ctx, name)
-	if err != nil && !errdefs.IsNotFound(err) {
+	if err != nil && !cerrdefs.IsNotFound(err) {
 		return err
 	}
 	return nil
@@ -355,7 +355,7 @@ func (d *Docker) EnsureVolume(ctx context.Context, spec VolumeSpec) error {
 		}
 		return nil
 	}
-	if !errdefs.IsNotFound(err) {
+	if !cerrdefs.IsNotFound(err) {
 		return err
 	}
 	_, err = d.cli.VolumeCreate(ctx, volume.CreateOptions{

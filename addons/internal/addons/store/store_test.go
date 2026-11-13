@@ -13,9 +13,9 @@ import (
 	"github.com/oakestra/oakestra/addons/internal/definition"
 )
 
-func sample(name string) addons.Installed {
+func sample() addons.Installed {
 	def := definition.Addon{
-		Name: name, Source: definition.TapSource("acme"), Version: "1.0.0",
+		Name: "tool", Source: definition.TapSource("acme"), Version: "1.0.0",
 		UI:          &definition.UI{Service: "web", SDK: "^1"},
 		Permissions: definition.Permissions{HostPaths: []string{"/var/log:ro"}, HostPorts: []int{8080}},
 		Services: []definition.Service{{
@@ -33,11 +33,11 @@ func sample(name string) addons.Installed {
 func TestMemoryRules(t *testing.T) {
 	ctx := context.Background()
 	m := NewMemory()
-	a, err := m.Insert(ctx, sample("tool"))
+	a, err := m.Insert(ctx, sample())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Insert(ctx, sample("tool")); !errors.Is(err, ErrDuplicate) {
+	if _, err := m.Insert(ctx, sample()); !errors.Is(err, ErrDuplicate) {
 		t.Fatalf("duplicate insert: %v", err)
 	}
 	if _, err := m.Get(ctx, "nope"); !errors.Is(err, ErrNotFound) {
@@ -48,7 +48,7 @@ func TestMemoryRules(t *testing.T) {
 	if _, err := m.Update(ctx, a.ID, func(x *addons.Installed) error { x.Current = false; return nil }); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Insert(ctx, sample("tool")); err != nil {
+	if _, err := m.Insert(ctx, sample()); err != nil {
 		t.Fatalf("reinstall: %v", err)
 	}
 
@@ -75,7 +75,7 @@ func TestMemoryRules(t *testing.T) {
 // The Mongo store relies on the client's UseJSONStructTags option to store definitions. This
 // checks that the stored shape survives a BSON round trip with that option, without a server.
 func TestMongoDocRoundTrip(t *testing.T) {
-	in := sample("tool")
+	in := sample()
 	in.ID = NewID()
 	key, _ := grant.NewKey(bytes.Repeat([]byte{1}, grant.KeySize))
 	in.Signature = key.Sign(in, "root")
