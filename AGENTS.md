@@ -69,7 +69,7 @@ Root Orchestrator  (1 per deployment)
 | `grafana` | Grafana | 3000 | Dashboards. |
 | `loki` | Loki | 3100 | Log aggregation. |
 | `alloy` | Grafana Alloy 1.17.0 | 12345 (loopback) | Discovers Root containers, ships opted-in stdout/stderr to the Root-local Loki, and exposes its diagnostic UI locally. |
-| `oakestra-frontend-container` | nginx | 80 | Dashboard SPA. Connects to system_manager via `API_ADDRESS` env var. |
+| `oakestra-frontend-container` | nginx | 80 | Dashboard SPA. v1 by default, v2 with `override-dashboard-v2.yml`. Connects to system_manager via `API_ADDRESS` env var, and to the addons and marketplace managers via `ADDONS_MANAGER_ADDRESS` / `MARKETPLACE_ADDRESS`. Proxies addon UIs from `addonui-<name>` containers. |
 | `root_addons_manager` | Python | 11101 | Manages installed addons (optional, disable with override-no-addons.yml). |
 | `root_addons_monitor` | Python | — | Monitors running addon containers via docker socket. |
 | `root_addons_dashboard` | Python | 11103 | Addons UI. |
@@ -138,8 +138,9 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | `override-network-host.yml` | All containers use host network. Container DNS names no longer work — env vars must use IPs, not container names. |
 | `override-ipv6-enabled.yml` | Enables IPv6 on the oakestra Docker network. |
 | `override-no-network.yml` | Disables the network plugin (root/cluster service managers). |
-| `override-no-addons.yml` | Removes addons subsystem from root. |
+| `override-no-addons.yml` | Removes addons subsystem from root and turns off addon discovery and the addon pages in the dashboard. Needs Docker Compose 2.23.1+. |
 | `override-no-dashboard.yml` | Removes frontend dashboard from root. |
+| `override-dashboard-v2.yml` | Uses `ghcr.io/oakestra/dashboard-v2:latest` instead of the v1 dashboard. Needed for addon UIs and presets. Stays on `latest` with `OAKESTRA_VERSION`. 1-DOC: `override-dashboard-v2.yaml`. |
 | `override-no-observe.yml` | Removes Grafana/Loki/Alloy/Prometheus. |
 | `override-mosquitto-auth.yml` | Enables MQTT authentication (workers need credentials). |
 | `override-images-only.yml` | Forces pre-built images, skips local builds. |

@@ -179,6 +179,10 @@ services:
     labels: *root-log-labels
     environment:
       - API_ADDRESS=${SYSTEM_MANAGER_URL}:10000
+      # Proxied by the dashboard's nginx under /addons-api, /marketplace-api and /ui-addons.
+      # Addon UI containers are reached as addonui-<name> on this same network.
+      - ADDONS_MANAGER_ADDRESS=root_addons_manager:11101
+      - MARKETPLACE_ADDRESS=marketplace_manager:11102
 
   # Root Scheduler
   root_scheduler:
