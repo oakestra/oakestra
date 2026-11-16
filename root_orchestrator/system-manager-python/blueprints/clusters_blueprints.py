@@ -113,7 +113,7 @@ class ClusterController(MethodView):
             logger.error("Could not update cluster")
             return abort(400, "Updating cluster failed")
 
-        # TODO(GB): fire an event to react to the cluster update
+        # TODO(MH): fire an event to react to the cluster update
         # and move this logic somewhere else.
         for j in jobs:
             result = update_job_status(
