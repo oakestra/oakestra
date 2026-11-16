@@ -1,8 +1,9 @@
-from unittest.mock import MagicMock
-import operations.instances_management
-import operations.cluster_management
-import interfaces.clusters_interface
 import sys
+from unittest.mock import MagicMock
+
+import interfaces.clusters_interface
+import operations.cluster_management
+import operations.instances_management
 
 mongodb_client = sys.modules["interfaces.mongodb_requests"]
 
@@ -29,9 +30,7 @@ def _get_fake_cluster():
 
 def test_deploy_request():
     mongodb_client.mongo_get_service_address_from_cache = MagicMock(return_value=None)
-    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(
-        return_value=None
-    )
+    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[10, 30, 0, 253])
     mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(
         return_value=[253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1]
@@ -57,9 +56,7 @@ def test_deploy_request():
 
 def test_deploy_request_2_instances():
     mongodb_client.mongo_get_service_address_from_cache = MagicMock(return_value=None)
-    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(
-        return_value=None
-    )
+    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_service_ip = MagicMock(return_value=[10, 30, 0, 253])
     mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(
         return_value=[
@@ -147,9 +144,7 @@ def test_deploy_request_2_instances():
 
 
 def test_deploy_completed_cluster_notification():
-    mongodb_client.mongo_update_job_net_status = MagicMock(
-        return_value=_get_fake_job("aaa")
-    )
+    mongodb_client.mongo_update_job_net_status = MagicMock(return_value=_get_fake_job("aaa"))
     mongodb_client.mongo_get_cluster_interested_to_job = MagicMock(
         return_value=[_get_fake_cluster()]
     )
@@ -173,24 +168,16 @@ def test_deploy_completed_cluster_notification():
         "192.168.1.1", "5555", "aaa", 0
     )
 
-    mongodb_client.mongo_update_job_net_status.assert_called_with(
-        job_id="123", instances=instances
-    )
+    mongodb_client.mongo_update_job_net_status.assert_called_with(job_id="123", instances=instances)
 
 
 def test_undeploy_completed_cluster_notification():
-    mongodb_client.mongo_find_job_by_systemid = MagicMock(
-        return_value=_get_fake_job("aaa")
-    )
+    mongodb_client.mongo_find_job_by_systemid = MagicMock(return_value=_get_fake_job("aaa"))
     cluster = _get_fake_cluster()
-    mongodb_client.mongo_get_cluster_interested_to_job = MagicMock(
-        return_value=[cluster]
-    )
+    mongodb_client.mongo_get_cluster_interested_to_job = MagicMock(return_value=[cluster])
     interfaces.clusters_interface.notify_undeployment = MagicMock(return_value=200)
 
-    operations.instances_management.undeploy_request(
-        sys_job_id="123", instance_number=1
-    )
+    operations.instances_management.undeploy_request(sys_job_id="123", instance_number=1)
 
     interfaces.clusters_interface.notify_undeployment.assert_called_with(
         "192.168.1.1", "5555", "aaa", 1

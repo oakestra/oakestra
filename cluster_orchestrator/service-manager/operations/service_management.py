@@ -1,10 +1,10 @@
-from interfaces import root_service_manager_requests, mongodb_requests
-from operations.instances_management import instance_updates
-import traceback
 import copy
 import logging
+import traceback
 
+from interfaces import mongodb_requests, root_service_manager_requests
 from interfaces.mongodb_requests import mongo_remove_job, mongo_update_job_instance
+from operations.instances_management import instance_updates
 
 logger = logging.getLogger("cluster_service_manager")
 

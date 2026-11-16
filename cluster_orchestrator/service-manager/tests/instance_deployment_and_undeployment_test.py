@@ -1,5 +1,6 @@
-from unittest.mock import MagicMock
 import sys
+from unittest.mock import MagicMock
+
 from interfaces import mqtt_client
 from operations.instances_management import _update_cache_and_workers
 
@@ -24,19 +25,14 @@ def test_instance_deployment_update(requests_mock):
     mongodb_client.mongo_insert_job = MagicMock()
     mqtt_client.mqtt_notify_service_change = MagicMock()
     req_addr = (
-        root_reqs.ROOT_SERVICE_MANAGER_ADDR
-        + "/api/net/service/"
-        + job["job_name"]
-        + "/instances"
+        root_reqs.ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/" + job["job_name"] + "/instances"
     )
     requests_mock.get(req_addr, json=job, status_code=200)
 
     _update_cache_and_workers("aaa", 0, "DEPLOYMENT")
 
     mongodb_client.mongo_update_job.assert_called_with(job)
-    mqtt_client.mqtt_notify_service_change.assert_called_with(
-        job_name="aaa", type="DEPLOYMENT"
-    )
+    mqtt_client.mqtt_notify_service_change.assert_called_with(job_name="aaa", type="DEPLOYMENT")
 
 
 def test_instance_undeployment_update():
@@ -46,9 +42,5 @@ def test_instance_undeployment_update():
 
     _update_cache_and_workers("aaa", 0, "UNDEPLOYMENT")
 
-    mongodb_client.mongo_remove_job_instance.assert_called_with(
-        job_name="aaa", instance_number=0
-    )
-    mqtt_client.mqtt_notify_service_change.assert_called_with(
-        job_name="aaa", type="UNDEPLOYMENT"
-    )
+    mongodb_client.mongo_remove_job_instance.assert_called_with(job_name="aaa", instance_number=0)
+    mqtt_client.mqtt_notify_service_change.assert_called_with(job_name="aaa", type="UNDEPLOYMENT")

@@ -4,10 +4,6 @@ target-version = "py310"
 exclude = [
     ".github/*",
     "**/proto",
-    # Imported from oakestra-net and not yet compliant with this config.
-    # TODO(giobart): clean up and remove these two entries.
-    "root_orchestrator/service-manager",
-    "cluster_orchestrator/service-manager",
 ]
 [tool.ruff.lint]
 extend-select = [

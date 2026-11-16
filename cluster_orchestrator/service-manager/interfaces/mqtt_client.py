@@ -1,10 +1,14 @@
+import json
+import logging
+import os
 import re
 import traceback
-from interfaces.mongodb_requests import mongo_find_node_by_id_and_update_subnetwork
-from network.deployment import *
-from network.tablequery import resolution, interests
+
 import paho.mqtt.client as paho_mqtt
-import logging
+from interfaces.mongodb_requests import mongo_find_node_by_id_and_update_subnetwork
+from interfaces.root_service_manager_requests import root_service_manager_get_subnet
+from network.deployment import deployment_address_update, deployment_status_report
+from network.tablequery import interests, resolution
 
 mqtt = None
 logger = logging.getLogger("cluster_service_manager")
@@ -111,7 +115,7 @@ def _deployment_handler(client_id, payload):
 
 
 def _undeployment_handler(client_id, payload):
-    # TODO
+    # TODO(GB): handle undeployment notifications
     pass
 
 
@@ -139,7 +143,6 @@ def _interest_remove_handler(client_id, payload):
 
 
 def _tablequery_handler(client_id, payload):
-    querySname = payload.get("sname")
     serviceName = payload.get("sname")
     sip = payload.get("sip")
 
@@ -178,14 +181,11 @@ def _subnet_handler(client_id, payload):
             addr = root_service_manager_get_subnet()
             if addr is None:
                 logger.error(
-                    "Root service manager responded with an invalid subnetwork: "
-                    + str(addr)
+                    "Root service manager responded with an invalid subnetwork: " + str(addr)
                 )
                 return
             mongo_find_node_by_id_and_update_subnetwork(client_id, addr[0], addr[1])
-            mqtt_publish_subnetwork_result(
-                client_id, {"address": addr[0], "addressv6": addr[1]}
-            )
+            mqtt_publish_subnetwork_result(client_id, {"address": addr[0], "addressv6": addr[1]})
         except Exception as e:
             logger.error(f"Error in _subnet_handler: {str(e)}")
             logger.debug(e, exc_info=True)

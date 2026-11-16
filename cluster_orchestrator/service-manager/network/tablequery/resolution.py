@@ -1,7 +1,6 @@
-from interfaces import mongodb_requests
-from interfaces import root_service_manager_requests
 import copy
 
+from interfaces import mongodb_requests, root_service_manager_requests
 from interfaces.mongodb_requests import mongo_update_job_instance
 
 

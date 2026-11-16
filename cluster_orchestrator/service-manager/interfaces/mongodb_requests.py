@@ -1,7 +1,8 @@
-import os
-from flask_pymongo import PyMongo
-from bson.objectid import ObjectId
 import logging
+import os
+
+from bson.objectid import ObjectId
+from flask_pymongo import PyMongo
 
 MONGO_URL = os.environ.get("CLUSTER_MONGO_URL")
 MONGO_PORT = os.environ.get("CLUSTER_MONGO_PORT")
@@ -69,9 +70,7 @@ def mongo_insert_job(job):
     )
     # if new job add empty instance list
     if new_job.get("instance_list") is None:
-        jobs.find_one_and_update(
-            {"job_name": job["job_name"]}, {"$set": {"instance_list": []}}
-        )
+        jobs.find_one_and_update({"job_name": job["job_name"]}, {"$set": {"instance_list": []}})
     logger.info("MONGODB - job {} inserted".format(str(new_job.get("_id"))))
     return str(new_job.get("_id"))
 
@@ -109,9 +108,7 @@ def mongo_update_job_instance(job_name, instance):
         mongo_jobs.db.jobs.update_one(
             {
                 "job_name": job_name,
-                "instance_list": {
-                    "$elemMatch": {"instance_number": instance["instance_number"]}
-                },
+                "instance_list": {"$elemMatch": {"instance_number": instance["instance_number"]}},
             },
             {
                 "$set": {

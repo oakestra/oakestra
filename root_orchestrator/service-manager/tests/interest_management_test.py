@@ -1,7 +1,8 @@
-from unittest.mock import MagicMock
-import operations.instances_management
-import operations.cluster_management
 import sys
+from unittest.mock import MagicMock
+
+import operations.cluster_management
+import operations.instances_management
 
 mongodb_client = sys.modules["interfaces.mongodb_requests"]
 

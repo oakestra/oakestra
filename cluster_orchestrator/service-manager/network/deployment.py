@@ -1,5 +1,5 @@
 from interfaces import mongodb_requests, mqtt_client
-from interfaces.root_service_manager_requests import *
+from interfaces.root_service_manager_requests import system_manager_notify_deployment_status
 
 
 def deployment_status_report(

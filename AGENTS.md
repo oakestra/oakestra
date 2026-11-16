@@ -290,7 +290,6 @@ pytest resource-abstractor/tests/
 # Note: cluster_manager has no unit tests currently
 
 # Lint (ruff is configured in pyproject.toml at repo root; line-length=100)
-# Note: both service-manager/ folders are excluded until they are cleaned up.
 ruff check .
 ```
 

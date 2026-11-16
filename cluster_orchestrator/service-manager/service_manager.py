@@ -1,12 +1,12 @@
+import logging
 import os
 import socket
-import logging
+
 from flask import Flask, request
 from flask_socketio import SocketIO
-
+from interfaces.mongodb_requests import mongo_init
 from interfaces.mqtt_client import mqtt_init
 from net_logging import configure_logging
-from interfaces.mongodb_requests import mongo_init
 from operations.instances_management import instance_updates
 from operations.service_management import create_service, remove_service
 
@@ -80,7 +80,7 @@ def task_update():
     )
 
 
-# TODO: job migration
+# TODO(GB): job migration
 
 if __name__ == "__main__":
     import eventlet

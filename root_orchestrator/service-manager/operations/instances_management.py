@@ -1,7 +1,7 @@
-from network.routes_interests import notify_job_instance_deployment
-from network.subnetwork_management import *
 from interfaces import mongodb_requests
-from network import tablequery, routes_interests
+from network import routes_interests, tablequery
+from network.routes_interests import notify_job_instance_deployment
+from network.subnetwork_management import new_instance_ip, new_instance_ip_v6
 from network.utils import sanitize
 
 
@@ -25,9 +25,7 @@ def update_instance_local_addresses(job_id=None, instances=None):
         assert instance.get("host_ip") is not None
         assert instance.get("host_port") is not None
 
-    job = mongodb_requests.mongo_update_job_net_status(
-        job_id=job_id, instances=instances
-    )
+    job = mongodb_requests.mongo_update_job_net_status(job_id=job_id, instances=instances)
 
     if job is None:
         return "Job not found", 404
@@ -45,9 +43,7 @@ def undeploy_request(sys_job_id=None, instance_number=None):
         _id=sys_job_id, instance_number=instance_number
     ):
         job = mongodb_requests.mongo_find_job_by_systemid(sys_job_id)
-        routes_interests.notify_job_instance_undeployment(
-            job.get("job_name"), instance_number
-        )
+        routes_interests.notify_job_instance_undeployment(job.get("job_name"), instance_number)
         return "Instance info cleared", 200
     return "Instance not found", 400
 

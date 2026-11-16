@@ -1,14 +1,19 @@
-from unittest.mock import MagicMock
 import sys
-from network.subnetwork_management import *
+from unittest.mock import MagicMock
+
+from network.subnetwork_management import (
+    clear_instance_ip_v6,
+    clear_subnetwork_ip_v6,
+    new_instance_ip_v6,
+    new_job_rr_address_v6,
+    new_subnetwork_addr_v6,
+)
 
 mongodb_client = sys.modules["interfaces.mongodb_requests"]
 
 
 def test_instance_address_base():
-    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(
-        return_value=None
-    )
+    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(
         return_value=[253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     )
@@ -24,9 +29,7 @@ def test_instance_address_base():
 
 
 def test_instance_address_complex():
-    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(
-        return_value=None
-    )
+    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(
         return_value=[253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 1, 1]
     )
@@ -43,9 +46,7 @@ def test_instance_address_complex():
 
 def test_instance_address_recycle():
     # mock mongo db
-    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(
-        return_value=None
-    )
+    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(
         return_value=[253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     )
@@ -72,9 +73,7 @@ def test_instance_address_recycle():
 
 def test_instance_address_recycle_failure_1():
     # mock mongo db
-    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(
-        return_value=None
-    )
+    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(
         return_value=[253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     )
@@ -96,16 +95,14 @@ def test_instance_address_recycle_failure_1():
     try:
         clear_instance_ip_v6("fdff::1")
         passed = True
-    except:
+    except Exception:
         pass
     assert passed is False
 
 
 def test_instance_address_recycle_failure_2():
     # mock mongo db
-    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(
-        return_value=None
-    )
+    mongodb_client.mongo_get_service_address_from_cache_v6 = MagicMock(return_value=None)
     mongodb_client.mongo_get_next_service_ip_v6 = MagicMock(
         return_value=[253, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     )
@@ -127,7 +124,7 @@ def test_instance_address_recycle_failure_2():
     try:
         clear_instance_ip_v6("fdfe::")
         passed = True
-    except:
+    except Exception:
         pass
     assert passed is False
 
@@ -206,9 +203,9 @@ def test_subnet_address_exhausted():
     mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     try:
-        ip1 = new_subnetwork_addr_v6()
+        new_subnetwork_addr_v6()
         assert False
-    except:
+    except Exception:
         assert True
 
 
@@ -262,7 +259,7 @@ def test_subnet_address_recycle_failure_1():
     try:
         clear_subnetwork_ip_v6("fc00::200")
         passed = True
-    except:
+    except Exception:
         pass
     assert passed is False
 
@@ -290,7 +287,7 @@ def test_subnet_address_recycle_failure_2():
     try:
         clear_subnetwork_ip_v6("fc00:0:dead:beef:c01d:c0ff:ee00:0")
         passed = True
-    except:
+    except Exception:
         pass
     assert passed is False
 
@@ -338,9 +335,9 @@ def test_new_job_rr_address_fail1():
 
     passed = False
     try:
-        addr = new_job_rr_address_v6(file)
+        new_job_rr_address_v6(file)
         passed = True
-    except:
+    except Exception:
         pass
 
     assert passed is False
@@ -366,9 +363,9 @@ def test_new_job_rr_address_fail2():
 
     passed = False
     try:
-        addr = new_job_rr_address_v6(file)
+        new_job_rr_address_v6(file)
         passed = True
-    except:
+    except Exception:
         pass
 
     assert passed is False

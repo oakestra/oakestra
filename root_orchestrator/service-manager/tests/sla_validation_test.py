@@ -9,36 +9,36 @@ def test_full_sla():
         "microservice_namespace": "service",
     }
 
-    assert sla_validation.valid_sla(sla) == True
+    assert sla_validation.valid_sla(sla)
 
     sla["app_name"] = "app-"
-    assert sla_validation.valid_sla(sla) == False
+    assert not sla_validation.valid_sla(sla)
 
     sla["app_name"] = "app"
     sla["app_ns"] = "app_"
-    assert sla_validation.valid_sla(sla) == False
+    assert not sla_validation.valid_sla(sla)
 
     sla["app_ns"] = "app"
     sla["microservice_name"] = "service!"
-    assert sla_validation.valid_sla(sla) == False
+    assert not sla_validation.valid_sla(sla)
 
     sla["microservice_name"] = "service"
     sla["microservice_namespace"] = "service."
-    assert sla_validation.valid_sla(sla) == False
+    assert not sla_validation.valid_sla(sla)
 
     sla["microservice_name"] = "service1234safasdf"
     sla["microservice_namespace"] = "servicfdfwefd"
-    assert sla_validation.valid_sla(sla) == True
+    assert sla_validation.valid_sla(sla)
 
 
 def test_sla_missing_field():
     sla = {"app_name": "app", "app_ns": "app", "microservice_name": "service"}
 
-    assert sla_validation.valid_sla(sla) == False
+    assert not sla_validation.valid_sla(sla)
 
     sla = {"app_name": "app", "app_ns": "app", "microservice_namespace": "service"}
 
-    assert sla_validation.valid_sla(sla) == False
+    assert not sla_validation.valid_sla(sla)
 
     sla = {
         "app_name": "app",
@@ -46,7 +46,7 @@ def test_sla_missing_field():
         "microservice_namespace": "service",
     }
 
-    assert sla_validation.valid_sla(sla) == False
+    assert not sla_validation.valid_sla(sla)
 
     sla = {
         "app_ns": "app",
@@ -54,4 +54,4 @@ def test_sla_missing_field():
         "microservice_namespace": "service",
     }
 
-    assert sla_validation.valid_sla(sla) == False
+    assert not sla_validation.valid_sla(sla)

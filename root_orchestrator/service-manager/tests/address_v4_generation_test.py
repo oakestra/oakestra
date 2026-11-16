@@ -1,6 +1,13 @@
-from unittest.mock import MagicMock
 import sys
-from network.subnetwork_management import *
+from unittest.mock import MagicMock
+
+from network.subnetwork_management import (
+    clear_instance_ip,
+    clear_subnetwork_ip,
+    new_instance_ip,
+    new_job_rr_address,
+    new_subnetwork_addr,
+)
 
 mongodb_client = sys.modules["interfaces.mongodb_requests"]
 
@@ -47,9 +54,7 @@ def test_instance_address_recycle():
     # test clearance condition
     clear_instance_ip(ip1)
 
-    mongodb_client.mongo_free_service_address_to_cache.assert_called_with(
-        [10, 30, 0, 0]
-    )
+    mongodb_client.mongo_free_service_address_to_cache.assert_called_with([10, 30, 0, 0])
 
 
 def test_instance_address_recycle_failure_1():
@@ -72,7 +77,7 @@ def test_instance_address_recycle_failure_1():
     try:
         clear_instance_ip("10.30.0.1")
         passed = True
-    except:
+    except Exception:
         pass
     assert passed is False
 
@@ -97,7 +102,7 @@ def test_instance_address_recycle_failure_2():
     try:
         clear_instance_ip("10.29.0.0")
         passed = True
-    except:
+    except Exception:
         pass
     assert passed is False
 
@@ -145,9 +150,9 @@ def test_subnet_address_exhausted():
     mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=None)
 
     try:
-        ip1 = new_subnetwork_addr()
+        new_subnetwork_addr()
         assert False
-    except:
+    except Exception:
         assert True
 
 
@@ -191,7 +196,7 @@ def test_subnet_address_recycle_failure_1():
     try:
         clear_subnetwork_ip("10.20.0.64")
         passed = True
-    except:
+    except Exception:
         pass
     assert passed is False
 
@@ -215,7 +220,7 @@ def test_subnet_address_recycle_failure_2():
     try:
         clear_subnetwork_ip("10.12.0.0")
         passed = True
-    except:
+    except Exception:
         pass
     assert passed is False
 
@@ -257,9 +262,9 @@ def test_new_job_rr_address_fail1():
 
     passed = False
     try:
-        addr = new_job_rr_address(file)
+        new_job_rr_address(file)
         passed = True
-    except:
+    except Exception:
         pass
 
     assert passed is False
@@ -282,9 +287,9 @@ def test_new_job_rr_address_fail2():
 
     passed = False
     try:
-        addr = new_job_rr_address(file)
+        new_job_rr_address(file)
         passed = True
-    except:
+    except Exception:
         pass
 
     assert passed is False

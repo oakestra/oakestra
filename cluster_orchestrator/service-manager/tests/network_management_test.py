@@ -1,9 +1,10 @@
-from unittest.mock import MagicMock, patch
 import sys
+from unittest.mock import MagicMock, patch
+
+from interfaces import mqtt_client
+from interfaces.mqtt_client import _tablequery_handler
 from network import deployment
 from network.tablequery import interests
-from interfaces.mqtt_client import _tablequery_handler
-from interfaces import mqtt_client
 
 mongodb_client = sys.modules["interfaces.mongodb_requests"]
 
@@ -145,7 +146,7 @@ def test_tablequery_service_ip_root(add_interest, requests_mock):
 
     job = _get_fake_job("aaa")
     job_instance = job["instance_list"][0]
-    adapter = requests_mock.get(
+    requests_mock.get(
         ROOT_SERVICE_MANAGER_ADDR
         + "/api/net/service/ip/"
         + job["service_ip_list"][0]["Address"].replace(".", "_")
@@ -189,7 +190,7 @@ def test_tablequery_service_name_root(add_interest, requests_mock):
 
     job = _get_fake_job("aaa")
     job_instance = job["instance_list"][0]
-    adapter = requests_mock.get(
+    requests_mock.get(
         ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/" + "aaa" + "/instances",
         status_code=200,
         json=dict(job),

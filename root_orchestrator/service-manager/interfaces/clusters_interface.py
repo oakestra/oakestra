@@ -1,6 +1,6 @@
 import logging
-import requests
 
+import requests
 from network.utils import sanitize
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
@@ -18,9 +18,7 @@ def notify_undeployment(cluster_addr, cluster_port, job_name, instancenum):
 
 
 def notify_deployment(cluster_addr, cluster_port, job_name, instancenum):
-    return _notify_interest_update(
-        cluster_addr, cluster_port, job_name, instancenum, "DEPLOYMENT"
-    )
+    return _notify_interest_update(cluster_addr, cluster_port, job_name, instancenum, "DEPLOYMENT")
 
 
 def _notify_interest_update(cluster_addr, cluster_port, job_name, instancenum, type):

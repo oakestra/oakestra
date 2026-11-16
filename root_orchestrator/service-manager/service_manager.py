@@ -1,22 +1,20 @@
+import logging
 import os
 import socket
 from datetime import timedelta
 
+from blueprints.netinfo_blueprints import netinfoblp
 from flask import Flask, request
 from flask_jwt_extended import JWTManager
 from flask_smorest import Api
 from flask_socketio import SocketIO
 from flask_swagger_ui import get_swaggerui_blueprint
-
-from blueprints.netinfo_blueprints import netinfoblp
 from interfaces.jwt_generator_requests import get_public_key
 from interfaces.mongodb_requests import mongo_init
-import logging
 from net_logging import configure_logging
-from network import subnetwork_management, routes_interests
+from network import routes_interests, subnetwork_management
 from network.utils import sanitize
-from operations import instances_management, cluster_management
-from operations import service_management
+from operations import cluster_management, instances_management, service_management
 
 my_logger = configure_logging()
 app = Flask(__name__)
@@ -198,9 +196,7 @@ def instance_undeployment(_id, instance_number):
     Undeployment request for the instance number "instance", if instance ==-1 remove the service all together
     """
 
-    logger.info(
-        "Incoming Request /api/net/undeploy/" + str(_id) + "/" + str(instance_number)
-    )
+    logger.info("Incoming Request /api/net/undeploy/" + str(_id) + "/" + str(instance_number))
 
     return instances_management.undeploy_request(str(_id), int(instance_number))
 
@@ -229,9 +225,7 @@ def table_query_resolution_by_ip(service_ip):
     Get all the instances of a job given a Service IP in 172_30_x_y notation
     """
     service_ip = service_ip.replace("_", ".")
-    logger.info(
-        "Incoming Request /api/net/service/ip/" + str(service_ip) + "/instances"
-    )
+    logger.info("Incoming Request /api/net/service/ip/" + str(service_ip) + "/instances")
     return instances_management.get_service_instances(
         ip=service_ip,
         cluster_ip=request.args.get("cluster_address"),

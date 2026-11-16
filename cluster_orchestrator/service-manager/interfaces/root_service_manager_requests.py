@@ -1,7 +1,7 @@
-import requests
-import os
-import json
 import logging
+import os
+
+import requests
 
 ROOT_SERVICE_MANAGER_ADDR = (
     "http://"
@@ -61,20 +61,14 @@ def system_manager_notify_deployment_status(job, worker_id):
             data["instances"].append(elem)
     try:
         logger.debug(job)
-        requests.post(
-            ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/net_deploy_status", json=data
-        )
+        requests.post(ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/net_deploy_status", json=data)
     except requests.exceptions.RequestException:
-        logger.error(
-            "Calling System Manager /api/result/cluster_deploy not successful."
-        )
+        logger.error("Calling System Manager /api/result/cluster_deploy not successful.")
 
 
 def root_table_query_ip(ip):
     job_ip = ip.replace(".", "_")
-    request_addr = (
-        ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/ip/" + str(job_ip) + "/instances"
-    )
+    request_addr = ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/ip/" + str(job_ip) + "/instances"
     try:
         return requests.get(request_addr, params=_cluster_identity_params()).json()
     except requests.exceptions.RequestException:
@@ -83,9 +77,7 @@ def root_table_query_ip(ip):
 
 def root_table_query_service_name(name):
     job_name = name.replace(".", "_")
-    request_addr = (
-        ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/" + str(job_name) + "/instances"
-    )
+    request_addr = ROOT_SERVICE_MANAGER_ADDR + "/api/net/service/" + str(job_name) + "/instances"
     try:
         resp = requests.get(request_addr, params=_cluster_identity_params())
         return resp.json()
@@ -99,11 +91,11 @@ def root_remove_interest(job_name):
     try:
         result = requests.delete(request_addr)
         if result.status_code == 404:
-            # TODO fallback cluster re-register and re-register the interests
+            # TODO(GB): fallback cluster re-register and re-register the interests
             logger.error(result)
             pass
         if result.status_code != 200:
-            # TODO try again later
+            # TODO(GB): try again later
             logger.error(result)
             pass
     except requests.exceptions.RequestException:

@@ -1,5 +1,5 @@
-import sys
 import logging
+import sys
 from logging.handlers import RotatingFileHandler
 
 
@@ -13,9 +13,7 @@ def configure_logging():
 
     stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     stdout_handler.setFormatter(formatter)
     my_logger.addHandler(stdout_handler)
     rotating_handler = RotatingFileHandler(my_filename, maxBytes=1500, backupCount=2)

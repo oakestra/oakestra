@@ -1,5 +1,5 @@
-import threading
 import ipaddress
+import threading
 
 from interfaces import mongodb_requests
 
@@ -41,7 +41,6 @@ def new_job_rr_address(job_data):
     return new_instance_ip()
 
 
-
 def get_next_available_ip(x=1):
     """
     Function used to get the next x available service IPv4 addresses without reserving them.
@@ -68,8 +67,6 @@ def get_next_available_ip(x=1):
                 break
 
     return ips
-
-
 
 
 def new_instance_ip():
@@ -110,9 +107,7 @@ def clear_instance_ip(addr):
         next_addr = mongodb_requests.mongo_get_next_service_ip()
 
         # Ensure that the give address is actually before the next address from the pool
-        assert int(str(addr[2]) + str(addr[3])) < int(
-            str(next_addr[2]) + str(next_addr[3])
-        )
+        assert int(str(addr[2]) + str(addr[3])) < int(str(next_addr[2]) + str(next_addr[3]))
 
         mongodb_requests.mongo_free_service_address_to_cache(addr)
 
@@ -213,9 +208,6 @@ def new_rr_ip_v6():
                 addr = None
 
         return _addr_stringify(addr)
-    
-
-
 
 
 def get_next_available_ip_v6(x=1):
@@ -246,8 +238,6 @@ def get_next_available_ip_v6(x=1):
                 break
 
     return ips
-
-
 
 
 def new_instance_ip_v6():
@@ -471,4 +461,3 @@ def _addr_destringify_v6(addrstr):
         addr.append(int(num[0:2], 16))
         addr.append(int(num[2:4], 16))
     return addr
-

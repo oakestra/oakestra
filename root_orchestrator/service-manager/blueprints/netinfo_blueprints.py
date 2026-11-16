@@ -1,6 +1,5 @@
 from flask_smorest import Blueprint
-from marshmallow import fields, Schema
-
+from marshmallow import Schema, fields
 from operations import netinfo_management
 from utils.security_utils import jwt_auth_required
 
@@ -38,13 +37,14 @@ class ServiceNetinfoSchema(Schema):
     service_ip_list = fields.Nested(ServiceIpSchema, many=True)
     instance_list = fields.Nested(InstanceSchema, many=True)
 
+
 class IPQueryArgsSchema(Schema):
-    v = fields.String(
-        required=False
-    )
+    v = fields.String(required=False)
+
 
 class AvailableServiceIPsSchema(Schema):
     available_service_ips = fields.Nested(ServiceIpSchema, many=True)
+
 
 @netinfoblp.route("/available-ip/<x>", methods=["GET"])
 @netinfoblp.route("/available-ip/", methods=["GET"])
@@ -53,7 +53,7 @@ class AvailableServiceIPsSchema(Schema):
 @jwt_auth_required()
 def get_available_service_ip(query_args, x=1):
     """
-    Get the next x available service IP addresses without reserving them. If x is not asigned, returns a single available IP. 
+    Get the next x available service IP addresses without reserving them. If x is not asigned, returns a single available IP.
     Its IP version can be specified via query parameter "v" -> "4" for IPv4, "6" for IPv6, or omit for both.
     """
     version_param = query_args.get("v")
@@ -64,7 +64,8 @@ def get_available_service_ip(query_args, x=1):
     else:
         version = None
 
-    return netinfo_management.get_next_x_available_service_ips(int(x),version=version)
+    return netinfo_management.get_next_x_available_service_ips(int(x), version=version)
+
 
 @netinfoblp.route("/<service_name>", methods=["GET"])
 @netinfoblp.response(200, ServiceNetinfoSchema, content_type="application/json")
