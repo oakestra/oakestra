@@ -80,8 +80,6 @@ def task_update():
     )
 
 
-# TODO(GB): job migration
-
 if __name__ == "__main__":
     import eventlet
 
