@@ -17,14 +17,17 @@ oakestra/
 ├── root_orchestrator/          # Root-level services (docker-compose)
 │   ├── docker-compose.yml
 │   ├── override-*.yml          # Composable overrides (network, addons, etc.)
-│   └── system-manager-python/ # Python/Flask – main root API
+│   ├── system-manager-python/ # Python/Flask – main root API
+│   └── service-manager/       # Python/Flask – root service manager (network plugin)
 ├── cluster_orchestrator/       # Cluster-level services (docker-compose)
 │   ├── docker-compose.yml
 │   ├── override-*.yml
-│   └── cluster-manager/       # Python/Flask – cluster API + MQTT client
+│   ├── cluster-manager/       # Python/Flask – cluster API + MQTT client
+│   └── service-manager/       # Python/Flask – cluster service manager (network plugin)
 ├── scheduler/                  # Go – shared scheduler (used by both root & cluster)
 ├── resource-abstractor/        # Python/Flask – resource DB layer (used by both levels)
-├── go_node_engine/             # Go – worker binary (NodeEngine)
+├── node_engine/                # Go – worker binary (NodeEngine)
+├── net_manager/                # Go – worker overlay network daemon (NetManager)
 ├── libraries/                  # Shared Python packages
 │   ├── oakestra_utils_library/ # Enums: statuses, scheduling states
 │   └── resource_abstractor_client/ # HTTP client for resource-abstractor
@@ -61,7 +64,7 @@ Root Orchestrator  (1 per deployment)
 | `system_manager` | Python/Flask + eventlet | 10000 (REST), 50052 (gRPC) | Central API. Receives deployments, manages clusters, dispatches to root_scheduler. Cluster registration happens via gRPC (port 50052). JWT auth (RS256). Swagger at `/api/docs`. |
 | `mongo` | MongoDB 8.0 | 10007 | Stores applications, services, clusters, workers, jobs. |
 | `mongo_net` | MongoDB 8.0 | 10008 | Stores network/IP state for the root service manager. |
-| `root_service_manager` | Go (oakestra-net repo) | 10099 | Network plugin — assigns service IPs, manages overlay. External repo: `github.com/oakestra/oakestra-net`. |
+| `root_service_manager` | Python/Flask | 10099 | Network plugin — assigns service IPs, manages overlay. Source: `root_orchestrator/service-manager/`. See [Networking](#networking). |
 | `root_scheduler` | Go | 10004 | Picks which cluster to place a job on. Reads from Redis queue (asynq). Calls resource-abstractor for available resources. |
 | `root_resource_abstractor` | Python/Flask | 11011 | DB abstraction layer over mongo (port 10007). Exposes REST for reading/writing cluster and job resource data. |
 | `jwt_generator` | Go | 10011 | Issues RS256 key pairs. system_manager fetches the public key on startup. |
@@ -82,7 +85,7 @@ Root Orchestrator  (1 per deployment)
 | `cluster_manager` | Python/Flask + eventlet | 10100 (REST), 10101 | Registers with root via gRPC. Receives jobs from root, dispatches via MQTT to workers. Runs background job every 15s to push aggregated resource info to system_manager. |
 | `cluster_mongo` | MongoDB 8.0 | 10107 | Cluster-level job and node state. |
 | `cluster_mongo_net` | MongoDB 8.0 | 10108 | Cluster-level network state. |
-| `cluster_service_manager` | Go (oakestra-net repo) | 10110 | Cluster-level network plugin. Talks to root_service_manager and workers via MQTT. |
+| `cluster_service_manager` | Python/Flask | 10110 | Cluster-level network plugin. Talks to root_service_manager and workers via MQTT. Source: `cluster_orchestrator/service-manager/`. |
 | `cluster_scheduler` | Go | 10105 | Picks which worker to place a job on. Same binary as root_scheduler; different env vars. |
 | `cluster_resource_abstractor` | Python/Flask | 11012 | Same binary as root; points at cluster_mongo. |
 | `cluster_redis` | Redis | 6479 (pw: `clusterRedis`) | Job queue for cluster_scheduler. |
@@ -99,8 +102,8 @@ Root Orchestrator  (1 per deployment)
 
 | Binary | Repo | Role |
 |---|---|---|
-| `NodeEngine` | This repo (`go_node_engine/`) | Runs on Linux workers. Connects to cluster via MQTT (10003). Receives deployment commands, manages containers/unikernels/VMs. Exposes CLI: `NodeEngine status`, `NodeEngine conf`, `NodeEngine logs`, `NodeEngine stop`. |
-| `NetManager` | `github.com/oakestra/oakestra-net` | Handles P2P overlay networking between workers (port 50103). Paired with NodeEngine. |
+| `NodeEngine` | This repo (`node_engine/`) | Runs on Linux workers. Connects to cluster via MQTT (10003). Receives deployment commands, manages containers/unikernels/VMs. Exposes CLI: `NodeEngine status`, `NodeEngine conf`, `NodeEngine logs`, `NodeEngine stop`. |
+| `NetManager` | This repo (`net_manager/`) | Handles P2P overlay networking between workers (port 50103). Paired with NodeEngine, which starts it as the `netmanager` systemd service. |
 
 ---
 
@@ -124,6 +127,112 @@ Two-step handshake (CS1/SC1, CS2/SC2). On success, cluster gets an ID and starts
 
 ---
 
+## Networking
+
+The overlay network has three parts: the **NetManager** daemon on every worker (`net_manager/`, Go), the **root service manager**
+(`root_orchestrator/service-manager/`, Python/Flask) and the **cluster service manager** (`cluster_orchestrator/service-manager/`, Python/Flask).
+It creates a semantic addressing space: an IP address not only names the destination but also encodes a balancing policy.
+
+### Address space
+
+| Range | Purpose |
+|---|---|
+| `10.16.0.0/12` | Container network (all instance IPs) |
+| `10.30.0.0/16` | Service Virtual IPs (require proxy translation) |
+| `10.19.1.0/24` | Default bridge subnetwork on each node |
+
+Port `50103` is reserved and cannot be used by deployed services.
+
+### NetManager internals (`net_manager/`)
+
+- **`env/`** — EnvironmentManager: owns host/namespace management only, creating/destroying network namespaces and dispatching between container (`env/ContainerNetDeployment.go`) and unikernel (`env/UnikernelNetDeployment.go`) deployments; Service IP resolution is delegated to `resolver`
+- **`resolver/`** — ServiceResolver: resolves Service IPs, Namespace IPs and Instance IPs against the translation table and kicks off background MQTT table queries on a miss. Netlink-free, which is what lets `proxy` build and test without it
+- **`proxy/`** — the datapath, split in two: `Datapath` (`proxy/Datapath.go`) decides what happens to a packet and does no I/O, `Tunnel` (`proxy/ProxyTunnel.go`) owns the TUN device, the listen socket, the per-peer connection pool and the read loops that act on `Datapath`'s verdict. See "Packet path" below
+- **`mqtt/`** — subscribes to cluster MQTT topics for route/table-query updates; implements interest registration with a self-destruct timeout when a service is no longer needed
+- **`network/`** — iptables rule management (`network/iptables.go`) and NAT utilities
+- **`handlers/`** — dispatches deployment/removal requests to the correct manager (container vs unikernel)
+- **`server/`** — HTTP REST API accepting requests from NodeEngine (Unix socket at `/etc/netmanager/netmanager.sock`)
+- **`TableEntryCache/`** — in-memory cache for the service translation table; `TableManager` keeps three address indexes, rebuilt wholesale on every mutation, and bumps an atomic generation counter each time
+- **`events/`** — one atomic "last used" timestamp per job, touched on the packet path and polled by the MQTT interest timeout
+- **`clock/`** — a 1Hz coarse Unix-seconds clock. Anything on the packet path that needs a "last used" timestamp reads this instead of `time.Now()`, which costs ~29ns and swamps the lookup it is timing
+- **`cmd/`** — Cobra CLI (`root.go` startup, `logs.go`, `status.go`, `version.go`); version injected at build time via `-ldflags`
+- **`model/`** — `NetConfiguration` struct mirrors `/etc/netmanager/netcfg.json`
+
+#### Packet path
+
+The outgoing path is split by how warm the flow is. `ProxyCache.Lookup` answers from the flow cache alone whenever the route's `routeGen` still matches `TableManager`'s current generation, so a steady-state packet touches no index at all: one atomic load, one shard mutex, one short bucket scan. Everything that consults the table lives in `Datapath.resolveRoute`, off that path.
+
+A generation bump sends the flow through `ProxyCache.Revalidate`, which *refreshes* the flow (its instance IPs and the destination job's activity stamp) rather than rerouting it - an established connection has to keep the replica it was pinned to. `FlowKey` therefore deliberately excludes the source instance IP: it is a function of the source namespace IP under a given generation, and including it would force a table lookup before the cache could even be asked. For the same reason `Resolver.GetInstanceIP` hands back a single `netip.Addr` rather than a whole `TableEntry` - copying one per packet to read one address out of it used to dominate the outgoing path.
+
+I/O goes through two seams, `TunDevice` (`proxy/TunDevice.go`) and `TunnelSocket` (`proxy/TunnelSocket.go`), each with a `ReadBatch`/`WriteBatch` pair so a batch of packets costs one syscall instead of one per packet. Both directions are batched: ingoing writes a whole batch to the TUN device in one call, outgoing groups one read's packets by destination (`outgoingBatch`) and issues one write per distinct peer. Each peer has its own dialled `tunnelConn` - deliberately not unified with the listen socket, which would swap tunnel traffic's source port from ephemeral to the fixed listen port - carrying an `*ipv4.PacketConn` or `*ipv6.PacketConn` chosen from the peer's address family, since a node can have both v4 and v6 peers at once.
+
+`TunDevice` is backed by `golang.zx2c4.com/wireguard/tun`; `github.com/google/gopacket` is used for test fixtures only.
+
+### Root service manager internals (`root_orchestrator/service-manager/`)
+
+- **`network/subnetwork_management.py`** — allocates Service VIPs from `10.30.0.0/16`; persists next-available IP in MongoDB
+- **`network/routes_interests.py`** — tracks which clusters have interest in which services
+- **`operations/`** — service, instance, and cluster lifecycle management
+- **`blueprints/`** — Flask-Smorest blueprints exposing OpenAPI endpoints; Swagger UI at `/api/docs`
+- Uses JWT (RS256) for auth; public key fetched from root orchestrator
+
+### Cluster service manager internals (`cluster_orchestrator/service-manager/`)
+
+- **`interfaces/mqtt_client.py`** — MQTT client (paho-mqtt) connecting to cluster broker
+- **`interfaces/root_service_manager_requests.py`** — HTTP calls to root service manager
+- **`operations/`** — handles instance deployment/undeployment, propagates routes down to nodes via MQTT
+
+### Communication flow
+
+```
+NodeEngine ──HTTP──> NetManager (server/)
+NetManager ──MQTT──> cluster_service_manager ──HTTP──> root_service_manager
+root_service_manager ──SocketIO──> cluster_service_manager (route push)
+cluster_service_manager ──MQTT──> NetManager (table updates)
+```
+
+### NetManager configuration
+
+NetManager config at `/etc/netmanager/netcfg.json`:
+```json
+{
+  "NodePublicAddress": "address",
+  "NodePublicPort": "port",
+  "ClusterUrl": "url",
+  "ClusterMqttPort": "port",
+  "Debug": false
+}
+```
+
+Set `"Debug": true` to enable verbose logging to `/var/log/oakestra/netmanager.log`.
+
+### Service manager environment variables
+
+#### Root service manager
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ROOT_MONGO_URL` | — | MongoDB host |
+| `ROOT_MONGO_PORT` | — | MongoDB port (typically `10008`) |
+| `JWT_GENERATOR_URL` | `localhost` | jwt_generator host (for RS256 public key) |
+| `JWT_GENERATOR_PORT` | `10011` | jwt_generator port |
+| `MY_PORT` | `10100` | Port this service listens on |
+
+#### Cluster service manager
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CLUSTER_MONGO_URL` | — | MongoDB host |
+| `CLUSTER_MONGO_PORT` | — | MongoDB port (typically `10108`) |
+| `MQTT_BROKER_URL` | — | MQTT broker host |
+| `MQTT_BROKER_PORT` | — | MQTT broker port (typically `10003`) |
+| `ROOT_SERVICE_MANAGER_URL` | `0.0.0.0` | root service manager host |
+| `ROOT_SERVICE_MANAGER_PORT` | `5000` | root service manager port |
+| `MQTT_CERT` | — | Path to TLS certs dir (only when using MQTT auth override) |
+| `MY_PORT` | `10200` | Port this service listens on |
+
+---
+
 ## Deployment Modes and Compose Overrides
 
 **Startup scripts** in `scripts/` auto-detect IPs, validate Docker versions, download config files from GitHub, and support version pinning via `OAKESTRA_VERSION` (branch triggers source build; tag like `v0.4.401` uses pre-built images).
@@ -143,8 +252,8 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | `override-no-observe.yml` | Removes Grafana/Loki/Alloy/Prometheus. |
 | `override-mosquitto-auth.yml` | Enables MQTT authentication (workers need credentials). |
 | `override-images-only.yml` | Forces pre-built images, skips local builds. |
-| `override-local-service-manager.yml` | Builds service manager from local source. |
-| `override-custom-service-manager-version.yml` | Pins `oakestra-net` service manager images to a specific version (e.g. `alpha-v0.4.403`). Useful for testing against a particular `oakestra-net` release. |
+
+The service managers are built from source like every other component (`docker compose up --build`), so there is no separate override to use a local or pinned network plugin.
 
 ---
 
@@ -157,9 +266,10 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | resource-abstractor | Python 3.10, Flask | pymongo, resource_abstractor_client (internal lib) |
 | root/cluster scheduler | Go 1.24 | gin, asynq (Redis-backed task queue) |
 | NodeEngine | Go | paho-mqtt, cobra CLI |
+| NetManager | Go | wireguard-go `tun`, paho-mqtt, cobra CLI |
+| root/cluster service manager | Python 3.10, Flask, flask-smorest | pymongo, paho-mqtt (cluster), flask-socketio |
 | Databases | MongoDB 8.0, Redis | — |
 | Messaging | Eclipse Mosquitto 2.0 (MQTT) | — |
-| Networking | oakestra-net (external Go repo) | — |
 | Observability | Grafana, Loki 2.9.2, Alloy 1.17.0, Prometheus | — |
 
 ---
@@ -175,24 +285,34 @@ pip install -r root_orchestrator/system-manager-python/requirements.txt
 # Run tests
 pytest root_orchestrator/system-manager-python/tests/
 pytest resource-abstractor/tests/
+(cd root_orchestrator/service-manager && pytest)
+(cd cluster_orchestrator/service-manager && pytest)
 # Note: cluster_manager has no unit tests currently
 
 # Lint (ruff is configured in pyproject.toml at repo root; line-length=100)
+# Note: both service-manager/ folders are excluded until they are cleaned up.
 ruff check .
 ```
 
-### Go services (scheduler, NodeEngine)
+### Go services (scheduler, NodeEngine, NetManager)
 
 ```bash
 # Build the scheduler
 cd scheduler && go build ./...
 
 # Build NodeEngine
-cd go_node_engine && go build -o NodeEngine .
+cd node_engine && go build -o NodeEngine .
 
-# Run Go tests
+# Build and install NetManager (bin/amd64-NetManager, bin/arm64-NetManager)
+cd net_manager/build && ./build.sh && ./install.sh amd64
+
+# Run Go tests (each Go module separately: scheduler/, node_engine/, net_manager/, csi/hostpath/)
 go test ./...
+cd net_manager && go test -race ./...
 ```
+
+Note: the Go module names were kept when the folders moved. `node_engine/` is still module `go_node_engine` and
+`net_manager/` is module `NetManager`, which is why `-ldflags` use `go_node_engine/cmd.Version` and `NetManager/cmd.Version`.
 
 ### Local stack (full root + cluster on one machine)
 
@@ -245,7 +365,7 @@ export OAKESTRA_VERSION=develop
 3. **Pluggable scheduling.** The scheduler binary is shared between root and cluster, differing only via env vars. New algorithms should implement the `placement.Algorithm` interface in `scheduler/calculate/schedulers/placement/`.
 4. **Stateless services, stateful DBs.** Services (schedulers, managers) are designed to restart cleanly. State lives in MongoDB and Redis. Don't add in-process state that survives restarts without an explicit persistence story.
 5. **Override-based configuration.** Don't bake deployment-specific config into docker-compose.yml. Add a new `override-*.yml` file instead.
-6. **The network plugin is external.** `oakestra-net` (`root_service_manager`, `cluster_service_manager`) is a separate repository. Changes to network behavior need PRs there, not here.
+6. **The network plugin lives here.** The former `oakestra-net` repo was merged into this one. Network changes go to `root_orchestrator/service-manager/`, `cluster_orchestrator/service-manager/` and `net_manager/`, and ship in the same release as the rest of the platform.
 
 ---
 

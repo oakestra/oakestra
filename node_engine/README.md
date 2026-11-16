@@ -10,7 +10,7 @@ Move to the build directory and run `./build.sh` and then `./install.sh $(dpkg -
 
 You can start the node engine using the `sudo NodeEngine` command.
 
-**N.B.** If you wish to start the NodeEngine standalone, without network component ([NetManager](https://github.com/oakestra/oakestra-net/tree/develop/node-net-manager)), first run `sudo NodeEngine config network off` to shut down overlay network mode.
+**N.B.** If you wish to start the NodeEngine standalone, without network component ([NetManager](../net_manager/README.md)), first run `sudo NodeEngine config network off` to shut down overlay network mode.
 
 `NodeEngine -h` gives you the list of available startup options.
 

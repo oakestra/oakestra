@@ -21,13 +21,22 @@ This component is the point of reference for all the cluster service managers.
   - `/api/net/subnet` request of a new node subnetwork address
   
 
-## Start the System Manager
+## Run it
 
-####TODO
+The Root Service Manager runs as the `root_service_manager` container of the root orchestrator and is built from this folder
+by `root_orchestrator/docker-compose.yml`. To run it on its own for development, use the
+**Debug Root Service Manager** profile in [`.vscode/launch.json`](../../.vscode/README.md).
+
+Run the tests with:
+
+```
+pip install -r requirements.txt pytest
+pytest
+```
 
 ## Built With
 
-Python3.8 
+Python 3.10
   - bson
   - Flask
   - Flask_PyMongo

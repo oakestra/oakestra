@@ -1,5 +1,16 @@
-# NetManager
-This component enables the communication between services distributed across multiple nodes.
+# NetManager 🕸️
+This component enables the communication between services distributed across multiple nodes and clusters.
+It is the worker side of the Oakestra network: the daemon installed next to the NodeEngine on every worker node.
+It captures the services traffic and creates the semantic overlay abstraction, where an IP address not only represents
+the final destination of a packet but also enforces a balancing policy. See
+[Semantic Addressing](https://www.oakestra.io/docs/networking/semantic-addressing) for details.
+
+The control plane counterparts live with the orchestrators:
+
+- [Root Service Manager](../root_orchestrator/service-manager/README.md) (`root_orchestrator/service-manager/`)
+- [Cluster Service Manager](../cluster_orchestrator/service-manager/README.md) (`cluster_orchestrator/service-manager/`)
+
+They propagate and install the routes to the NetManager components.
 
 The Network manager is divided in 4 main components: 
 
@@ -51,9 +62,21 @@ The Network manager is divided in 4 main components:
 
 # Installation
 
-- Navigate the `build` directory and use `./build.sh`
-- Move the binary to current folder based on required architecture. E.g., `mv bin/amd64-NetManager NetManager` for amd64
-- Then install it using `./install.sh` 
+## From the official release
+
+The [worker installation](../README.md) script (`scripts/InstallOakestraWorker.sh`) installs the NetManager release
+alongside the NodeEngine. Each release ships `NetManager_<arch>.tar.gz` next to `NodeEngine_<arch>.tar.gz`.
+
+## Build it on your own
+
+From the `net_manager/build` directory run:
+
+```
+./build.sh
+./install.sh $(dpkg --print-architecture)
+```
+
+`build.sh` builds `bin/amd64-NetManager` and `bin/arm64-NetManager`. Supported architectures are `amd64` and `arm64`.
 
 # Run NetManager
 
@@ -83,11 +106,11 @@ The net manager Daemon is automaitcally managed when starting up the NodeEngine.
 
 `sudo NetManager`
 
-> N.b. If you manually run the NetManager you need to start the Node Engine with a custom network configuration profile for your externally managed NetManager, E.g., `NodeEngine -o custom:/etc/netmanager/netmanager.sock`
+> N.b. If you manually run the NetManager you need to point the Node Engine at your externally managed NetManager first: `sudo NodeEngine config network manual` (default socket `/etc/netmanager/netmanager.sock`)
 
 ## Development setup
 The development setup can be used to test locally the tunneling mechanism without the use of the Cluster orchestrator. This setup requires 2 different machines namely Host1 and Host2.
-* go 1.12+ required 
+* the Go version in `go.mod` is required 
 * run the install.sh to install the dependencies on each machine 
 
 ### Start the netmanager in debug mode 
@@ -96,28 +119,17 @@ Simply set `"Debug": true` in `/etc/netmanager/netcfg.json`
 
 ### VSCode debug profile
 
-use the following `launch.json` profile  in VS Code to run the Netmanager in debug mode. 
+The repository's [`.vscode/launch.json`](../.vscode/README.md) has a **Debug Net Manager** profile. Its pre-launch task
+installs the default config into `/etc/netmanager/` (if missing) and switches the NodeEngine to the custom network mode
+(`sudo NodeEngine config network manual`), so the NodeEngine talks to your debugged NetManager over
+`/etc/netmanager/netmanager.sock` instead of starting the `netmanager` service. Use the **Debug Worker (Node Engine + Net Manager)**
+compound to debug both at once. Run `sudo NodeEngine config network auto` to go back to the installed service.
+
+### Run the tests
+
 ```
-{
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Debug Net Manager",
-            "type": "go",
-            "request": "launch",
-            "mode": "auto",
-            "program": "${workspaceRoot}/node-net-manager/NetManager.go",
-            "console": "integratedTerminal",
-            "asRoot": true,
-            "args": [],
-            "env": {
-                "PATH": "${env:PATH}:/usr/local/go/bin" 
-            }
-        }
-    ]
-}
+go test -race ./...
 ```
-> N.b. You then need to start the Node Engine with a custom network configuration profile for your externally managed NetManager, E.g., `NodeEngine -o custom:/etc/netmanager/netmanager.sock`
 
 
 ## Subnetworks

@@ -6,7 +6,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceRoot}/go_node_engine/internal/daemon/nodeengined.go",
+            "program": "${workspaceRoot}/node_engine/internal/daemon/nodeengined.go",
             "console": "integratedTerminal",
             "asRoot": true,
             "args": ["-a", "0.0.0.0"],
@@ -20,13 +20,41 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceRoot}/go_node_engine/internal/daemon/nodeengined.go",
+            "program": "${workspaceRoot}/node_engine/internal/daemon/nodeengined.go",
             "console": "integratedTerminal",
             "asRoot": true,
             "args": ["-a", "${input:enterClusterIp}"],
             "env": {
                 "PATH": "${env:PATH}:/usr/local/go/bin"
             }
+        },
+        {
+            "name": "Debug Node Engine With Net Manager",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/node_engine/internal/daemon/nodeengined.go",
+            "console": "integratedTerminal",
+            "asRoot": true,
+            "args": ["-a", "0.0.0.0"],
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin"
+            },
+            "preLaunchTask": "prep-debug-node-engine-manual-network-env"
+        },
+        {
+            "name": "Debug Net Manager",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/net_manager/NetManager.go",
+            "console": "integratedTerminal",
+            "asRoot": true,
+            "args": [],
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin"
+            },
+            "preLaunchTask": "prep-debug-net-manager-env"
         },
         {
             "name": "Debug Root Manager",
@@ -50,6 +78,25 @@
                 "JWT_GENERATOR_PORT": "10011"
             },
             "preLaunchTask": "prep-debug-root-manager-env"
+        },
+        {
+            "name": "Debug Root Service Manager",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${command:python.interpreterPath}",
+            "program": "${workspaceRoot}/root_orchestrator/service-manager/service_manager.py",
+            "cwd": "${workspaceRoot}/root_orchestrator/service-manager",
+            "console": "integratedTerminal",
+            "env": {
+                "MY_PORT": "10099",
+                "SYSTEM_MANAGER_URL": "0.0.0.0",
+                "SYSTEM_MANAGER_PORT": "10000",
+                "ROOT_MONGO_URL": "0.0.0.0",
+                "ROOT_MONGO_PORT": "10008",
+                "JWT_GENERATOR_URL": "0.0.0.0",
+                "JWT_GENERATOR_PORT": "10011"
+            },
+            "preLaunchTask": "prep-debug-root-service-manager-env"
         },
         {
             "name": "Debug Root Scheduler",
@@ -175,6 +222,29 @@
             "preLaunchTask": "prep-debug-cluster-manager-env"
         },
         {
+            "name": "Debug Cluster Service Manager",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${command:python.interpreterPath}",
+            "program": "${workspaceRoot}/cluster_orchestrator/service-manager/service_manager.py",
+            "cwd": "${workspaceRoot}/cluster_orchestrator/service-manager",
+            "console": "integratedTerminal",
+            "env": {
+                "MY_PORT": "10110",
+                "MQTT_BROKER_URL": "0.0.0.0",
+                "MQTT_BROKER_PORT": "10003",
+                "ROOT_SERVICE_MANAGER_URL": "0.0.0.0",
+                "ROOT_SERVICE_MANAGER_PORT": "10099",
+                "SYSTEM_MANAGER_URL": "0.0.0.0",
+                "SYSTEM_MANAGER_PORT": "10000",
+                "CLUSTER_MONGO_URL": "0.0.0.0",
+                "CLUSTER_MONGO_PORT": "10108",
+                "CLUSTER_NAME": "debug_cluster",
+                "CLUSTER_ADDRESS": "127.0.0.1"
+            },
+            "preLaunchTask": "prep-debug-cluster-service-manager-env"
+        },
+        {
             "name": "Debug Cluster Scheduler",
             "type": "go",
             "request": "launch",
@@ -277,6 +347,7 @@
                 "Debug JWT Generator",
                 "Debug Root Resource Abstractor",
                 "Debug Root Scheduler",
+                "Debug Root Service Manager",
                 "Debug Root Manager"
             ],
             "stopAll": true
@@ -286,6 +357,7 @@
             "configurations": [
                 "Debug Cluster Resource Abstractor",
                 "Debug Cluster Scheduler",
+                "Debug Cluster Service Manager",
                 "Debug Cluster Manager"
             ],
             "stopAll": true
@@ -313,10 +385,20 @@
                 "Debug JWT Generator",
                 "Debug Root Resource Abstractor",
                 "Debug Root Scheduler",
+                "Debug Root Service Manager",
                 "Debug Root Manager",
                 "Debug Cluster Resource Abstractor",
                 "Debug Cluster Scheduler",
+                "Debug Cluster Service Manager",
                 "Debug Cluster Manager"
+            ],
+            "stopAll": true
+        },
+        {
+            "name": "Debug Worker (Node Engine + Net Manager)",
+            "configurations": [
+                "Debug Net Manager",
+                "Debug Node Engine With Net Manager"
             ],
             "stopAll": true
         }

@@ -15,7 +15,7 @@ for GPU virtualization and [*EDK II*](https://github.com/tianocore/edk2) for UEF
 The built image contains only build artifacts of the mentioned projects and represents no runnable container.
 It is intended to be used with the `--output` argument of the `docker build` command to move the build artifacts
 to the `/opt/oakestra` directory of the host system:
-1) `$ cd <PROJECT_ROOT>/go_node_engine/third_party/crosvm`
+1) `$ cd <PROJECT_ROOT>/node_engine/third_party/crosvm`
 2) `$ mkdir out`
 3) `$ docker build --output out`
 4) `$ sudo mkdir --parents /opt/oakestra`

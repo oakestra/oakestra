@@ -9,8 +9,8 @@ component locally under the debugger while the rest of the stack runs in Docker.
 Each debug profile has a `preLaunchTask` that, before your breakpoints go live:
 
 1. **Brings up the required orchestrator stack** in Docker (`root-orchestrator-up`, and
-   `cluster-orchestrator-up` for cluster components). The stack is started with
-   `override-network-host.yml` + `override-custom-service-manager-version.yml`.
+   `cluster-orchestrator-up` for cluster components). The stack is built from source
+   (including the root and cluster service managers) and started with `override-network-host.yml`.
 2. **Removes the one container** you're about to replace (e.g. `remove-root-manager`), so
    the locally-debugged process can take over its port. Everything the component depends on
    keeps running from its Docker container.
@@ -30,14 +30,17 @@ Because the stack runs with **host networking**, every host value in the launch 
 
 | Profile | Type | Component | Notes |
 |---|---|---|---|
-| **Debug Node Engine** | Go | `go_node_engine` | Runs the node daemon (`-a 0.0.0.0`); brings up root + cluster and registers the local NodeEngine against the cluster. Runs as root. |
-| **Debug Node Engine With Custom Cluster** | Go | `go_node_engine` | Same, but prompts for the cluster IP (`enterClusterIp`). No preLaunch. |
+| **Debug Node Engine** | Go | `node_engine` | Runs the node daemon (`-a 0.0.0.0`); brings up root + cluster and registers the local NodeEngine against the cluster. Runs as root. |
+| **Debug Node Engine With Custom Cluster** | Go | `node_engine` | Same, but prompts for the cluster IP (`enterClusterIp`). No preLaunch. |
+| **Debug Node Engine With Net Manager** | Go | `node_engine` | Like **Debug Node Engine**, but also runs `sudo NodeEngine config network manual` so the NodeEngine uses the debugged NetManager's socket (`/etc/netmanager/netmanager.sock`) instead of the `netmanager` service. Undo with `sudo NodeEngine config network auto`. |
+| **Debug Net Manager** | Go | `net_manager` | Runs the NetManager daemon as root. The preLaunch installs the default config into `/etc/netmanager/` if missing and stops the `netmanager` service. Edit `/etc/netmanager/netcfg.json` to change it (e.g. `"Debug": true`). |
 
 ### Root Orchestrator
 
 | Profile | Type | Component | Port(s) |
 |---|---|---|---|
 | **Debug Root Manager** | Python | `root_orchestrator/system-manager-python` | 10000 / 50052 |
+| **Debug Root Service Manager** | Python | `root_orchestrator/service-manager` | 10099 (uses `mongo_net` on 10008) |
 | **Debug Root Scheduler** | Go | `scheduler` (`ORCHESTRATION_PLANE=root`) | 10004 |
 | **Debug Root Resource Abstractor** | Python | `resource-abstractor` | 11011 |
 | **Debug JWT Generator** | Python | `root_orchestrator/jwt-generator` | 10011 |
@@ -50,6 +53,7 @@ Because the stack runs with **host networking**, every host value in the launch 
 | Profile | Type | Component | Port(s) |
 |---|---|---|---|
 | **Debug Cluster Manager** | Python | `cluster_orchestrator/cluster-manager` | 10100 / 10101 |
+| **Debug Cluster Service Manager** | Python | `cluster_orchestrator/service-manager` | 10110 (uses `cluster_mongo_net` on 10108) |
 | **Debug Cluster Scheduler** | Go | `scheduler` (`ORCHESTRATION_PLANE=cluster`) | 10105 |
 | **Debug Cluster Resource Abstractor** | Python | `resource-abstractor` | 11012 |
 | **Debug Cluster Addons Manager** | Python | `addons_engine/addons-manager` | 11201 |
@@ -77,11 +81,12 @@ Launch several components together (dependencies first; `stopAll` stops the whol
 
 | Compound | Launches |
 |---|---|
-| **Debug Full Root Orchestrator** | JWT Generator → Root Resource Abstractor → Root Scheduler → Root Manager |
-| **Debug Full Cluster Orchestrator** | Cluster Resource Abstractor → Cluster Scheduler → Cluster Manager |
+| **Debug Full Root Orchestrator** | JWT Generator → Root Resource Abstractor → Root Scheduler → Root Service Manager → Root Manager |
+| **Debug Full Cluster Orchestrator** | Cluster Resource Abstractor → Cluster Scheduler → Cluster Service Manager → Cluster Manager |
 | **Debug Root Addons Stack** | Marketplace Manager → Root Addons Manager → Root Addons Monitor |
 | **Debug Cluster Addons Stack** | Cluster Addons Manager → Cluster Addons Monitor |
-| **Debug Full Stack (Root + Cluster)** | Root core + Cluster core (7 sessions) |
+| **Debug Full Stack (Root + Cluster)** | Root core + Cluster core, including both service managers (9 sessions) |
+| **Debug Worker (Node Engine + Net Manager)** | Net Manager → Node Engine With Net Manager |
 
 ## Tasks reference
 

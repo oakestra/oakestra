@@ -1,5 +1,6 @@
 ![workflow code style](https://github.com/oakestra/oakestra/actions/workflows/super-linter.yml/badge.svg)
-![node artifacts](https://github.com/oakestra/oakestra/actions/workflows/node_engine_artifacts.yml/badge.svg)
+![worker artifacts](https://github.com/oakestra/oakestra/actions/workflows/worker_artifacts.yml/badge.svg)
+![net manager tests](https://github.com/oakestra/oakestra/actions/workflows/net_manager_tests.yml/badge.svg)
 ![system artifacts](https://github.com/oakestra/oakestra/actions/workflows/root_system_manager_tests.yml/badge.svg)
 [![Stable](https://img.shields.io/badge/Latest%20Stable-🎸Bass%20v0.4.400-green.svg)](https://github.com/oakestra/oakestra/tree/v0.4.400)
 [![Github Downloads](https://img.shields.io/github/downloads/oakestra/oakestra/total.svg)]()
@@ -77,7 +78,7 @@ The following ports are exposed:
 - Port 80/TCP - Dashboard 
 - Port 10000/TCP - System Manager (Public port, but it also needs to be accessible from the Cluster Orchestrator)
 - Port 50052/TCP - System Manager (Needs to be exposed to the Clusters for cluster registration.)
-- Port 10099/TCP - Service Manager (This port should be exposed only to the Clusters)
+- Port 10099/TCP - Root Service Manager, the network plugin (This port should be exposed only to the Clusters)
 - Port 11103/TCP - Marketplace and addons manager (This port should be available only to the admin)
 
 #### ✅ Everything ok? 
@@ -138,12 +139,19 @@ The following ports must be exposed:
 
 Compile and install the binary with:
 ```
-cd go_node_engine/build
+cd node_engine/build
 ./build.sh
 ./install.sh $(dpkg --print-architecture)
 ```
 
-Configure and install the Node Network Manager, just follow the build guide in this [README](github.com/oakestra/oakestra-net) 
+Compile and install the Net Manager (the worker side of the overlay network) the same way:
+```
+cd net_manager/build
+./build.sh
+./install.sh $(dpkg --print-architecture)
+```
+
+See [net_manager/README.md](net_manager/README.md) for its configuration options.
 
 Finally, start the node engine with the following command:
 

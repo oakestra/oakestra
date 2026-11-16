@@ -16,7 +16,7 @@ COPY . .
 
 # --- Final Stage ---
 FROM python:3.10-slim-bookworm AS final
-LABEL org.opencontainers.image.source=https://github.com/oakestra/oakestra-net
+LABEL org.opencontainers.image.source=https://github.com/oakestra/oakestra
 
 WORKDIR /app
 

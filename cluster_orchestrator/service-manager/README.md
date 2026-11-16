@@ -1,4 +1,4 @@
-# Service Manager
+# Cluster Service Manager
 
 The service manager manages the networking aspects of each job and node. 
 
@@ -23,14 +23,22 @@ Each Node belongs to a subnetwork and upon deployment each job contains belongs 
 - Root service manager - root table query
 - Root service manager - update service status
 
-## Start the Cluster Manager
+## Run it
 
-Please start the Cluster Manager with `./start-up.sh`.
-A virtualenv will be started and cluster-service-manager will start up.
+The Cluster Service Manager runs as the `cluster_service_manager` container of the cluster orchestrator and is built from
+this folder by `cluster_orchestrator/docker-compose.yml`. To run it on its own for development, use the
+**Debug Cluster Service Manager** profile in [`.vscode/launch.json`](../../.vscode/README.md).
+
+Run the tests with:
+
+```
+pip install -r requirements.txt pytest
+pytest
+```
 
 ## Built With
 
-- Python3.8.5
+- Python 3.10
   - Flask
   - bson
   - Flask-PyMongo

@@ -4,7 +4,7 @@
         {
             "label": "root-orchestrator-up",
             "type": "shell",
-            "command": "SYSTEM_MANAGER_URL=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml -f ${workspaceRoot}/root_orchestrator/override-custom-service-manager-version.yml -f ${workspaceRoot}/root_orchestrator/override-network-host.yml up --build -d && sleep 1",
+            "command": "SYSTEM_MANAGER_URL=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml -f ${workspaceRoot}/root_orchestrator/override-network-host.yml up --build -d && sleep 1",
             "options": {
                 "env": {
                     "COMPOSE_BAKE":"true",
@@ -19,7 +19,7 @@
         {
             "label": "cluster-orchestrator-up",
             "type": "shell",
-            "command": "HOST_IP=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') && SYSTEM_MANAGER_URL=$HOST_IP CLUSTER_ADDRESS=$HOST_IP docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml -f ${workspaceRoot}/cluster_orchestrator/override-custom-service-manager-version.yml -f ${workspaceRoot}/cluster_orchestrator/override-network-host.yml up --build -d",
+            "command": "HOST_IP=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') && SYSTEM_MANAGER_URL=$HOST_IP CLUSTER_ADDRESS=$HOST_IP docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml -f ${workspaceRoot}/cluster_orchestrator/override-network-host.yml up --build -d",
             "options": {
                 "env": {
                     "CLUSTER_LOCATION": "48.13023160559729,11.583724427641824,100",
@@ -119,9 +119,38 @@
             "problemMatcher": []
         },
         {
+            "label": "remove-root-service-manager",
+            "type": "shell",
+            "command": "docker container rm -f root_service_manager",
+            "problemMatcher": []
+        },
+        {
+            "label": "remove-cluster-service-manager",
+            "type": "shell",
+            "command": "docker container rm -f cluster_service_manager",
+            "problemMatcher": []
+        },
+        {
             "label": "set-default-cluster-to-node-engine",
             "type": "shell",
-            "command": "cd ${workspaceRoot}/go_node_engine/build && ./build.sh && ./install.sh $(dpkg --print-architecture) && sudo NodeEngine config cluster 0.0.0.0",
+            "command": "cd ${workspaceRoot}/node_engine/build && ./build.sh && ./install.sh $(dpkg --print-architecture) && sudo NodeEngine config cluster 0.0.0.0",
+            "problemMatcher": []
+        },
+        {
+            // Points the NodeEngine at the NetManager socket instead of the netmanager service,
+            // so it talks to the NetManager started by "Debug Net Manager".
+            // Undo with: sudo NodeEngine config network auto
+            "label": "set-node-engine-network-manual",
+            "type": "shell",
+            "command": "sudo NodeEngine config network manual",
+            "problemMatcher": []
+        },
+        {
+            // Installs the default NetManager config (if missing) and stops the installed
+            // netmanager service, so the debugged NetManager owns the socket and port 50103.
+            "label": "install-net-manager-config",
+            "type": "shell",
+            "command": "sudo mkdir -p /etc/netmanager /var/log/oakestra && ( [ -e /etc/netmanager/netcfg.json ] || sudo cp ${workspaceRoot}/net_manager/config/netcfg.json ${workspaceRoot}/net_manager/config/tuncfg.json /etc/netmanager/ ) && ( sudo systemctl stop netmanager 2>/dev/null || true )",
             "problemMatcher": []
         },
 
@@ -142,6 +171,18 @@
             "label": "install-resource-abstractor-dependencies",
             "type": "shell",
             "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/resource-abstractor/requirements.txt",
+            "problemMatcher": []
+        },
+        {
+            "label": "install-root-service-manager-dependencies",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/root_orchestrator/service-manager/requirements.txt",
+            "problemMatcher": []
+        },
+        {
+            "label": "install-cluster-service-manager-dependencies",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m pip install -r ${workspaceRoot}/cluster_orchestrator/service-manager/requirements.txt",
             "problemMatcher": []
         },
         {
@@ -209,6 +250,42 @@
                 "root-orchestrator-up",
                 "cluster-orchestrator-up",
                 "set-default-cluster-to-node-engine",
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
+            "label": "prep-debug-node-engine-manual-network-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "cluster-orchestrator-up",
+                "set-default-cluster-to-node-engine",
+                "set-node-engine-network-manual",
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
+            "label": "prep-debug-net-manager-env",
+            "dependsOn": [
+                "install-net-manager-config",
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
+            "label": "prep-debug-root-service-manager-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "remove-root-service-manager",
+                "install-root-service-manager-dependencies"
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
+            "label": "prep-debug-cluster-service-manager-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "cluster-orchestrator-up",
+                "remove-cluster-service-manager",
+                "install-cluster-service-manager-dependencies"
             ],
             "dependsOrder": "sequence",
         },
