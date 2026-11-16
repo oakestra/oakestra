@@ -1,16 +1,11 @@
 import copy
 import os
-import sys
 from unittest.mock import ANY, patch
 
+import pytest
 from resource_abstractor_client import app_operations, job_operations
 
-from .utils import get_first_app, get_full_random_sla_app
-
-net_plugin = sys.modules["system_manager.ext_requests.net_plugin_requests"]
-
-# we ignore E402 because we need to import the service_management module after the mock
-from ..services.service_management import (  # noqa: E402
+from ..services.service_management import (
     create_services_of_app,
     delete_service,
     generate_db_structure,
@@ -19,13 +14,14 @@ from ..services.service_management import (  # noqa: E402
     update_service,
     user_services,
 )
+from .utils import get_first_app, get_full_random_sla_app
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 resource_abstractor = "http://localhost:11011"
 
 
-def test_create_service_with_app():
+def test_create_service_with_app(net_deploy_mock):
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
         new=str(resource_abstractor),
@@ -56,7 +52,7 @@ def test_create_service_with_app():
             sla_first_app["application_namespace"],
             "Admin",
         )
-        net_plugin.net_inform_service_deploy.assert_called_with(last_service, ANY)
+        net_deploy_mock.assert_called_with(last_service, ANY)
         assert len(result["microservices"]) == len(sla_first_app["microservices"])
 
 
@@ -134,6 +130,7 @@ def test_create_invalid_service_namespace():
     assert code == 422
 
 
+@pytest.mark.usefixtures("net_deploy_mock", "net_undeploy_mock")
 def test_delete_service():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
@@ -212,6 +209,7 @@ def test_delete_service():
 #         assert app_after_update["new_field"] == "new"
 
 
+@pytest.mark.usefixtures("net_deploy_mock", "net_undeploy_mock")
 def test_update_service_not_found():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
@@ -247,6 +245,7 @@ def test_update_service_not_found():
         assert code == 501
 
 
+@pytest.mark.usefixtures("net_deploy_mock")
 def test_get_user_services():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
@@ -282,6 +281,7 @@ def test_get_user_services():
         assert resultNone == {"message": "app not found"}
 
 
+@pytest.mark.usefixtures("net_deploy_mock")
 def test_get_services():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",

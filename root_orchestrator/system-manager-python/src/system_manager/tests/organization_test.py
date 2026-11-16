@@ -1,13 +1,10 @@
 import copy
-import sys
 from unittest.mock import MagicMock
 
 import mongomock
 import pymongo
 
 from ..ext_requests import mongodb_client, organization_db, user_db
-
-net_plugin = sys.modules["system_manager.ext_requests.net_plugin_requests"]
 
 
 @mongomock.patch(servers=(("localhost", 10007),))

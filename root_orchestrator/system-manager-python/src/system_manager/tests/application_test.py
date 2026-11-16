@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from services.application_management import update_app
+from ..services.application_management import update_app
 
 
 def test_update_application_without_microservices_field_keeps_existing_services():
