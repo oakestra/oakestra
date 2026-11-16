@@ -15,14 +15,46 @@ Each debug profile has a `preLaunchTask` that, before your breakpoints go live:
    the locally-debugged process can take over its port. Everything the component depends on
    keeps running from its Docker container.
 3. **Installs that component's dependencies** (Python profiles only), via
-   `install-*-dependencies`.
+   `install-*-dependencies`, into the component's own virtualenv at `.venv/<component>`
+   (see [Python environments](#python-environments)). The profile then runs with that
+   virtualenv's interpreter, so there's nothing to `pip install` by hand.
 
 Because the stack runs with **host networking**, every host value in the launch envs is
-`0.0.0.0` (container DNS names don't resolve from the host).
+`0.0.0.0` (container DNS names don't resolve from the host). After starting a stack, the task
+waits until it answers on `localhost` (`jwt_generator` on 10011 for root, `mqtt` on 10003 for
+cluster) and fails with an explanation if it never does.
 
-> **Requirements:** Docker + Buildx, a Python interpreter selected in VS Code (for
-> `debugpy` profiles), the Go extension (for `go` profiles), Node.js/npm (for the Angular
+> **macOS:** Docker runs containers in a VM there, so `network_mode: host` only reaches your
+> Mac's `localhost` if host networking is enabled. With **Docker Desktop 4.34+**, sign in and
+> turn on *Settings → Resources → Network → Enable host networking* (Apply and restart).
+> **OrbStack** supports it out of the box. Without it, the debugged component can't reach
+> the containers (e.g. endless `Calling JWT generator /key not successful ... Connection refused`).
+> The Node Engine and Net Manager profiles need a Linux host (they use iptables, network
+> namespaces and systemd), so run those in a Linux VM.
+
+> **Requirements:** Docker + Buildx, Python 3.10 (preferably; see below) for the
+> `debugpy` profiles, the Go extension (for `go` profiles), Node.js/npm (for the Angular
 > dashboard), and root/sudo for the Go worker/CSI profiles (`asRoot`).
+
+## Python environments
+
+Every Python component gets its **own virtualenv** under `.venv/` at the repo root
+(`.venv/root-manager`, `.venv/cluster-service-manager`, ...), created and kept up to date by
+[`scripts/ensure-venv.sh`](scripts/ensure-venv.sh). One shared interpreter does not work:
+the components pin incompatible versions (e.g. the Cluster Manager needs Flask 2.1 /
+Werkzeug 2.0, the Cluster Service Manager Flask 3.1 / Werkzeug 3.1), so installing one
+broke the other.
+
+- **First launch** of a profile creates its virtualenv and installs its requirements (plus the
+  local `libraries/` packages where needed). Later launches skip the install unless the
+  requirements file changed.
+- **Python version:** the virtualenv is created with, in order, `$OAK_DEBUG_PYTHON`,
+  `python3.10` if it is on your `PATH` (the version the Docker images use), or the interpreter
+  selected in VS Code. Some pins (e.g. `eventlet==0.33.3` in the Cluster Manager) don't work on
+  newer Pythons, so install 3.10 if you can (`brew install python@3.10`, `uv python install 3.10`, ...).
+- **Rebuild** a virtualenv by deleting its folder, e.g. `rm -rf .venv/cluster-manager`.
+  Do this after switching Python versions.
+- `.venv/` is git-ignored. Protobuf generation uses its own small `.venv/protos`.
 
 ## Profiles
 
@@ -97,9 +129,9 @@ You normally don't run these directly — profiles invoke them — but they're a
   `cleanup-debug-env`, `remove-containers`, `remove-volumes`.
 - **`prep-debug-<component>-env`:** the full pre-launch sequence for one profile.
 - **`remove-<container>`:** frees a single container's name/port.
-- **`install-<component>-dependencies`:** installs one component's Python deps. The
-  cluster/root manager installers also `pip install` the local shared libraries from
-  [../libraries/](../libraries/).
+- **`install-<component>-dependencies`:** creates/updates one component's virtualenv in
+  `.venv/<component>`. The cluster/root manager installers also `pip install` the local
+  shared libraries from [../libraries/](../libraries/).
 - **`serve-addons-dashboard`** (+ `install-addons-dashboard-dependencies`): background
   `ng serve` for the dashboard profile.
 
