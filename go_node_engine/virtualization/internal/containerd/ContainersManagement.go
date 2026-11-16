@@ -78,7 +78,7 @@ const CLEANUP_TIMEOUT = 5 * time.Second
 const TASK_ID_LABEL = "io.oakestra.taskid"
 
 // GetContainerdRuntime returns the container runtime client
-func newContainerdRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
+func newContainerdRuntime(_ virtrt.RuntimeInfo, _ []string) virtrt.Runtime {
 	client, err := ctd.New("/run/containerd/containerd.sock")
 	if err != nil {
 		logger.ErrorLogger().Printf("Unable to start the container engine: %v\n", err)

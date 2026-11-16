@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-type RuntimeInitializer func(info RuntimeInfo) Runtime
+type RuntimeInitializer func(info RuntimeInfo, config []string) Runtime
 
 var runtimeInitializers = make(map[string]RuntimeInitializer)
 var lock sync.RWMutex

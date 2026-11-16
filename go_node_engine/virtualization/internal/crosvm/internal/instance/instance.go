@@ -9,6 +9,7 @@ import (
 	"go_node_engine/util/ptr"
 	"go_node_engine/virtualization/internal/crosvm/internal/cgroup"
 	"go_node_engine/virtualization/internal/crosvm/internal/cloudinit"
+	gpuconfig "go_node_engine/virtualization/internal/crosvm/internal/gpu"
 	"go_node_engine/virtualization/internal/crosvm/internal/image"
 	"go_node_engine/virtualization/internal/crosvm/internal/stats"
 	"go_node_engine/virtualization/internal/crosvm/internal/tailbuf"
@@ -96,6 +97,7 @@ func NewInstance(
 	baseRuntimeDirPath string,
 	baseStateDirPath string,
 	imageStore *image.Store,
+	gpuConfig *gpuconfig.RuntimeGpuConfig,
 ) (*Instance, error) {
 	var restartMode instanceRestartMode
 	if service.OneShot {
@@ -136,7 +138,7 @@ func NewInstance(
 		return nil, err
 	}
 
-	configExt := NewInstanceConfigExt(&service)
+	configExt := NewInstanceConfigExt(&service, gpuConfig)
 
 	machineName := cgroup.ConvertTaskIdToMachineName(id)
 

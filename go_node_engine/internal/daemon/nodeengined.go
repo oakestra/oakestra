@@ -52,7 +52,7 @@ func main() {
 	}
 	for _, virt := range configs.Virtualizations {
 		if virt.Active {
-			rt := runtimeManager.GetRuntime(model.RuntimeType(virt.Runtime))
+			rt := runtimeManager.GetRuntime(model.RuntimeType(virt.Runtime), virt.Config)
 			defer rt.Stop()
 			model.GetNodeInfo().AddSupportedTechnology(model.RuntimeType(virt.Runtime))
 		}

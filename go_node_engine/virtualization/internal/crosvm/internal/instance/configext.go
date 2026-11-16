@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go_node_engine/model"
 	"go_node_engine/util/ptr"
+	gpuconfig "go_node_engine/virtualization/internal/crosvm/internal/gpu"
 	"strings"
 )
 
@@ -71,9 +72,22 @@ type InstanceConfigExtGpuRenderServer struct {
 	LdPreloadPath        *string
 }
 
-func NewInstanceConfigExt(service *model.Service) *InstanceConfigExt {
+func NewInstanceConfigExt(service *model.Service, gpuConfig *gpuconfig.RuntimeGpuConfig) *InstanceConfigExt {
+	if service.Vgpus <= 0 {
+		return &InstanceConfigExt{
+			Gpu:             []InstanceConfigExtGpu{},
+			GpuRenderServer: nil,
+		}
+	}
+
 	var gpus []InstanceConfigExtGpu
-	for range service.Vgpus {
+	if gpuConfig.DrmEnabled {
+		gpus = append(gpus, InstanceConfigExtGpu{
+			Backend:        ptr.Ptr("virglrenderer"),
+			ContextTypes:   []string{"drm"},
+			MaxNumDisplays: ptr.Ptr(uint32(0)),
+		})
+	} else {
 		gpus = append(gpus, InstanceConfigExtGpu{
 			Backend:     ptr.Ptr("virglrenderer"),
 			Egl:         ptr.Ptr(true),
@@ -86,15 +100,12 @@ func NewInstanceConfigExt(service *model.Service) *InstanceConfigExt {
 				"virgl",
 				"virgl2",
 				"venus",
-				//"drm",
 			},
 		})
 	}
-	var gpuRenderServer *InstanceConfigExtGpuRenderServer = nil
-	if len(gpus) > 0 {
-		gpuRenderServer = &InstanceConfigExtGpuRenderServer{
-			Path: "/opt/oakestra/libexec/virgl_render_server",
-		}
+
+	var gpuRenderServer *InstanceConfigExtGpuRenderServer = &InstanceConfigExtGpuRenderServer{
+		Path: "/opt/oakestra/libexec/virgl_render_server",
 	}
 
 	return &InstanceConfigExt{
