@@ -1,0 +1,28 @@
+name: Node Net Manager Test
+
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+
+      - name: Setup Golang
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: node-net-manager/go.mod
+          cache-dependency-path: node-net-manager/go.sum
+
+      - name: Install dependencies
+        working-directory: node-net-manager
+        run: |
+          go mod download
+
+      - name: Run test suite
+        working-directory: node-net-manager
+        run: |
+           go test -race ./...

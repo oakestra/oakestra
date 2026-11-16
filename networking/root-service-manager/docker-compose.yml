@@ -1,0 +1,42 @@
+version: "3.3"
+services:
+
+  # cluster-level mongoDB
+  mongo_rootnet:
+    image: mongo:8.0
+    container_name: mongo_net
+    hostname: mongo_net
+    ports:
+      - "10008:10008"
+    volumes:
+      - 'mongodb_data:/mongodb'
+    command: mongod --port 10008
+
+
+# Cluster Manager
+  root_service_manager:
+    image: root_service_manager
+    build: service-manager/
+    container_name: root_service_manager
+    hostname: root_service_manager
+    expose:
+      - "10099"
+    ports:
+      - "10099:10099"
+    environment:
+      - MY_PORT=10099
+      - SYSTEM_MANAGER_URL=system_manager
+      - SYSTEM_MANAGER_PORT=10000
+      - ROOT_MONGO_URL=mongo_net
+      - ROOT_MONGO_PORT=10008
+    depends_on:
+      - mongo_rootnet
+
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  default:
+    external:
+      name: oakestra
