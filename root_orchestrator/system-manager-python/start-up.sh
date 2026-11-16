@@ -11,4 +11,4 @@ export ROOT_SCHEDULER_PORT=7777
 
 export MY_PORT=10000
 
-uv run src/system_manager/main.py
+uv run -m system_manager.main

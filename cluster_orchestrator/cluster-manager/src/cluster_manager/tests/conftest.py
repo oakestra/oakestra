@@ -1,12 +1,12 @@
-"""Make the cluster-manager root importable and stub the resource abstractor client.
+from unittest.mock import patch
 
-resource_aggregation imports resource_abstractor_client at module level, which is not
-needed to test the pure aggregation functions.
-"""
+import pytest
 
-import os
-import sys
-from unittest.mock import MagicMock
+from ..clients import resource_aggregation
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.modules.setdefault("resource_abstractor_client", MagicMock())
+
+@pytest.fixture(autouse=True)
+def candidates_mock():
+    with patch.object(resource_aggregation, "candidate_operations") as mock:
+        mock.get_candidates.return_value = []
+        yield mock

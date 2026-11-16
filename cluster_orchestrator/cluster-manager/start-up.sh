@@ -42,4 +42,4 @@ export CLUSTER_NAME=cluster_local
 
 export MY_PORT=8000
 
-uv run src/cluster_manager/main.py
+uv run -m cluster_manager.main

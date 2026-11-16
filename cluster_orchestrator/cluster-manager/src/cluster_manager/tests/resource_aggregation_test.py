@@ -1,5 +1,5 @@
+import json
 from dataclasses import asdict
-from unittest.mock import patch
 
 import pytest
 
@@ -73,33 +73,69 @@ def test_gpu_vram_free_explicit_empty_list_does_not_use_legacy_fallback():
     assert aggregate_worker_metrics([worker]).gpu_vram_free == []
 
 
-def test_compute_aggregated_worker_metrics_serializes_gpu_fields_per_architecture():
+def test_compute_aggregated_worker_metrics_serializes_gpu_fields_per_architecture(candidates_mock):
     worker_msgs = [
-        {"architecture": "amd64", "gpu_driver": "550.1", "gpu_vram_free": [4000, 24000]},
-        {"architecture": "arm64", "gpu_driver": "535.2", "vgpus": 2, "vram": 16000},
+        {
+            "architecture": "amd64",
+            "gpu_driver": "550.1",
+            "gpu_percent": 20.0,
+            "gpu_vram_free": [4000, 24000],
+        },
+        {
+            "architecture": "arm64",
+            "gpu_driver": "535.2",
+            "gpu_percent": 60.0,
+            "vgpus": 2,
+            "vram": 16000,
+        },
     ]
-    with patch(
-        "cluster_manager.clients.resource_aggregation.candidate_operations.get_candidates",
-        return_value=worker_msgs,
-    ) as get_candidates:
-        metrics = compute_aggregated_worker_metrics()
+    candidates_mock.get_candidates.return_value = worker_msgs
+    metrics = compute_aggregated_worker_metrics()
 
-    get_candidates.assert_called_once_with(active=True, resources="gpu_driver")
+    candidates_mock.get_candidates.assert_called_once_with(active=True, resources="gpu_driver")
     assert metrics is not None
     data = asdict(metrics)
     assert data["gpu_vram_free"] == [24000.0, 8000.0]
     assert data["gpu_drivers"] == ["550.1", "535.2"]
+    assert data["gpu_percent"] == 40.0
     by_arch = data["aggregation_per_architecture"]
     assert by_arch["amd64"]["gpu_vram_free"] == [24000.0, 4000.0]
     assert by_arch["amd64"]["gpu_drivers"] == ["550.1"]
+    assert by_arch["amd64"]["gpu_percent"] == 20.0
     assert by_arch["arm64"]["gpu_vram_free"] == [8000.0, 8000.0]
     assert by_arch["arm64"]["gpu_drivers"] == ["535.2"]
+    assert by_arch["arm64"]["gpu_percent"] == 60.0
+
+
+def test_csi_drivers_are_unique_names_in_serializable_cluster_report(candidates_mock):
+    candidates_mock.get_candidates.return_value = [
+        {
+            "architecture": "amd64",
+            "csi_drivers": [
+                {"csi_driver_name": "hostpath", "csi_driver_endpoint": "/run/csi/hostpath.sock"},
+                {"csi_driver_name": "hostpath"},
+                {"csi_driver_name": ""},
+                {},
+            ],
+        },
+        {
+            "architecture": "arm64",
+            "csi_drivers": [
+                {"csi_driver_name": "hostpath", "csi_driver_endpoint": "/run/csi/hostpath.sock"},
+                {"csi_driver_name": "nfs", "csi_driver_endpoint": "/run/csi/nfs.sock"},
+            ],
+        },
+    ]
+    metrics = compute_aggregated_worker_metrics()
+
+    assert metrics is not None
+    data = json.loads(json.dumps(asdict(metrics)))
+    assert data["csi_drivers"] == ["hostpath", "nfs"]
+    assert data["aggregation_per_architecture"]["amd64"]["csi_drivers"] == ["hostpath"]
+    assert data["aggregation_per_architecture"]["arm64"]["csi_drivers"] == ["hostpath", "nfs"]
 
 
 @pytest.mark.parametrize("worker_msgs", [None, []])
-def test_compute_aggregated_worker_metrics_without_workers(worker_msgs):
-    with patch(
-        "cluster_manager.clients.resource_aggregation.candidate_operations.get_candidates",
-        return_value=worker_msgs,
-    ):
-        assert compute_aggregated_worker_metrics() is None
+def test_compute_aggregated_worker_metrics_without_workers(worker_msgs, candidates_mock):
+    candidates_mock.get_candidates.return_value = worker_msgs
+    assert compute_aggregated_worker_metrics() is None

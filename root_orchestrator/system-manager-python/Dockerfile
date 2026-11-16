@@ -35,6 +35,9 @@ ARG BASE_DIR
 
 COPY --from=builder $BASE_DIR/.venv $BASE_DIR/.venv
 
+# TODO: Let the service create its upload directory under XDG_DATA_HOME itself.
+RUN mkdir -p /files
+
 RUN apt-get update \
     && apt-get --yes install --no-install-recommends \
       libffi-dev \

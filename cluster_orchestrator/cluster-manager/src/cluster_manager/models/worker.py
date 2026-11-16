@@ -34,8 +34,7 @@ class WorkerMetrics(BaseModel):
     vram_percent: float | None = None
     gpu_temp: float | None = None
 
-    # TODO: I don't think resource-abstractor returns this (only 'gpu_percent')
-    gpu_usage: float | None = None
+    gpu_percent: float | None = None
 
     # TODO: resource-abstractor only returns this when explicitly requested
     gpu_driver: str | None = None
@@ -77,6 +76,6 @@ class AggregatedWorkerMetrics:
 
     virtualization: list[str]
     supported_addons: list[str]
-    csi_drivers: list[Any]
+    csi_drivers: list[str]
 
     aggregation_per_architecture: dict[str, "AggregatedWorkerMetrics"]

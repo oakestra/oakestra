@@ -85,16 +85,12 @@ def aggregate_csi_drivers(workers: list[WorkerMetrics]) -> list[str]:
     Node Engine advertises drivers as objects: {csi_driver_name, csi_driver_endpoint}.
     After aggregation, the cluster reports a flat list of name strings to the root.
     """
-    aggregated_drivers = []
-
-    for w in workers:
-        for driver in w.csi_drivers:
-            if driver.csi_driver_name is None:
-                continue
-
-            aggregated_drivers.append(driver)
-
-    return aggregated_drivers
+    return concatenate_multi_list_metric(
+        workers,
+        lambda w: [driver.csi_driver_name for driver in w.csi_drivers],
+        skip_values=(None, ""),
+        unique=True,
+    )
 
 
 def aggregate_worker_metrics(workers: list[WorkerMetrics]) -> AggregatedWorkerMetrics:
@@ -108,7 +104,7 @@ def aggregate_worker_metrics(workers: list[WorkerMetrics]) -> AggregatedWorkerMe
         cpu_percent=average_float_metric(workers, lambda w: w.cpu_percent),
         memory_percent=average_float_metric(workers, lambda w: w.memory_percent),
         vram_percent=average_float_metric(workers, lambda w: w.vram_percent),
-        gpu_percent=average_float_metric(workers, lambda w: w.gpu_usage),
+        gpu_percent=average_float_metric(workers, lambda w: w.gpu_percent),
         gpu_drivers=concatenate_single_list_metric(
             workers, lambda w: w.gpu_driver, skip_values=(None, "", "-"), unique=True
         ),
