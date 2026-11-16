@@ -27,6 +27,7 @@ class WorkerMetrics(BaseModel):
     memory: int | None = None
     vgpus: int | None = None
     vram: float | None = None
+    gpu_vram_free: list[float] | None = None
 
     cpu_percent: float | None = None
     memory_percent: float | None = None
@@ -36,7 +37,7 @@ class WorkerMetrics(BaseModel):
     # TODO: I don't think resource-abstractor returns this (only 'gpu_percent')
     gpu_usage: float | None = None
 
-    # TODO: I don't think resource-abstractor returns this (only 'gpu_drivers')
+    # TODO: resource-abstractor only returns this when explicitly requested
     gpu_driver: str | None = None
 
     virtualization: list[str] = []
@@ -72,6 +73,7 @@ class AggregatedWorkerMetrics:
     gpu_percent: float
 
     gpu_drivers: list[str]
+    gpu_vram_free: list[float]
 
     virtualization: list[str]
     supported_addons: list[str]

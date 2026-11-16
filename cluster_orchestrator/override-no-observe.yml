@@ -1,9 +1,7 @@
-version: "3.3"
-
 services:
 
   # Remove observability services for cluster components
-  cluster_promtail:
+  cluster_alloy:
     deploy:
       mode: replicated
       replicas: 0
@@ -15,4 +13,7 @@ services:
     deploy:
       mode: replicated
       replicas: 0
-
+  prometheus:
+    deploy:
+      mode: replicated
+      replicas: 0

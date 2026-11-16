@@ -39,6 +39,10 @@ services:
     image: grafana/loki:2.9.2
     pull_policy: always
 
+  cluster_alloy:
+    image: grafana/alloy:v1.17.0
+    pull_policy: always
+
   cluster_addons_manager:
     image: ghcr.io/oakestra/oakestra/addons_manager:latest
     pull_policy: always

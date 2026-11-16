@@ -27,8 +27,8 @@ services:
     image: grafana/loki:2.9.2
     pull_policy: always
 
-  promtail:
-    image: grafana/promtail:2.9.2
+  alloy:
+    image: grafana/alloy:v1.17.0
     pull_policy: always
     
   root_scheduler:

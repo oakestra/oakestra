@@ -23,7 +23,7 @@ from .ext_requests.system_manager_requests import (
     re_deploy_dead_jobs_routine,
     send_aggregated_info_to_sm,
 )
-from .proto.cluster_registration_pb2 import CS1Message, CS2Message, KeyValue, SC1Message, SC2Message
+from .proto.cluster_registration_pb2 import CS1Message, CS2Message, SC1Message, SC2Message
 from .proto.cluster_registration_pb2_grpc import register_clusterStub
 
 SWAGGER_URL = "/api/docs"
@@ -116,7 +116,6 @@ def register_with_system_manager():
         details.cluster_name = CONFIG.cluster_name
         details.cluster_location = CONFIG.cluster_location
         details.cluster_address = CONFIG.cluster_address
-        details.cluster_info.append(KeyValue())
 
         sc2: SC2Message = stub.handle_init_final(
             details, wait_for_ready=True, timeout=GRPC_REQUEST_TIMEOUT
