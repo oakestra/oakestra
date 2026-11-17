@@ -25,11 +25,6 @@ import (
 
 const IP_UPDATE_TIMER = 2 * time.Minute
 
-type undeployRequest struct {
-	Servicename    string `json:"serviceName"`
-	Instancenumber int    `json:"instanceNumber"`
-}
-
 type registerRequest struct {
 	ClientID          string `json:"client_id"`
 	ClusterAddress    string `json:"cluster_address"`

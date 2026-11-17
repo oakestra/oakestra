@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eclipse/paho.mqtt.golang"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 var initMqttClient sync.Once

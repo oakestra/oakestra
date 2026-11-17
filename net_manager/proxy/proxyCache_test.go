@@ -69,7 +69,7 @@ func reverse(t *testing.T, dp *Datapath, wire []byte) string {
 // on a cache hit: against the current table generation, so a hit always takes
 // the fast path regardless of what else has happened to the table in the
 // meantime.
-func cachedRoute(t *testing.T, dp *Datapath, protocol uint8, srcIP, dstServiceIP string, srcPort, dstPort int) (Route, bool) {
+func cachedRoute(t *testing.T, dp *Datapath, protocol uint8, srcIP, dstServiceIP string, srcPort, dstPort int) (Route, bool) { //nolint:unparam // spells out the full flow key
 	t.Helper()
 	key := FlowKey{
 		Protocol:     protocol,

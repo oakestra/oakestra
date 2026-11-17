@@ -13,7 +13,6 @@ var debuglogger *log.Logger
 var infoonce sync.Once
 var erroronce sync.Once
 var debugonce sync.Once
-var startuponce sync.Once
 var debugMode = false
 
 type EventType string

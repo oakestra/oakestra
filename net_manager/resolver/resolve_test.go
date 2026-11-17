@@ -47,12 +47,12 @@ func TestUnresolvedQueryIsAFailure(t *testing.T) {
 		"empty response": func(netip.Addr) ([]TableEntryCache.TableEntry, error) {
 			return nil, nil
 		},
-		"invalid entries": func(netip.Addr) ([]TableEntryCache.TableEntry, error) {
+		"invalid entries": func(netip.Addr) ([]TableEntryCache.TableEntry, error) { //nolint:unparam // must match the tableQuery signature
 			bad := resolvableEntry("job", vip)
 			bad.Nodeip = nil
 			return []TableEntryCache.TableEntry{bad}, nil
 		},
-		"response for a different address": func(netip.Addr) ([]TableEntryCache.TableEntry, error) {
+		"response for a different address": func(netip.Addr) ([]TableEntryCache.TableEntry, error) { //nolint:unparam // must match the tableQuery signature
 			return []TableEntryCache.TableEntry{resolvableEntry("job", "10.30.1.1")}, nil
 		},
 	} {

@@ -18,8 +18,8 @@ var (
 	logsCmd = &cobra.Command{
 		Use:   "logs",
 		Short: "tail net manager logs",
-		Run: func(cmd *cobra.Command, args []string) {
-			logsNetManager()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return logsNetManager()
 		},
 	}
 )
@@ -31,7 +31,11 @@ func logsNetManager() error {
 		fmt.Println("Error opening log file, is the NetManager running? Use 'NetManager status' to check.")
 		return err
 	}
-	defer logFile.Close()
+	defer func() {
+		if err := logFile.Close(); err != nil {
+			fmt.Println("Error closing log file:", err)
+		}
+	}()
 
 	// Get the file size to start reading from the end
 	fileInfo, err := logFile.Stat()

@@ -22,7 +22,11 @@ func New(localIP netip.Addr) *Tunnel {
 	if err != nil {
 		logger.ErrorLogger().Println(err)
 	} else {
-		defer cfg.Close()
+		defer func() {
+			if err := cfg.Close(); err != nil {
+				logger.ErrorLogger().Println(err)
+			}
+		}()
 	}
 
 	defaultconfig := Configuration{

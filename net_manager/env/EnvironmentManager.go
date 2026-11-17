@@ -35,14 +35,11 @@ type Configuration struct {
 
 type Environment struct {
 	//### Environment management variables
-	nodeNetwork       net.IPNet
-	nodeNetworkv6     net.IPNet
-	nameSpaces        []string
-	networkInterfaces []networkInterface
-	nextVethNumber    int
-	proxyName         string
-	config            Configuration
-	resolver          *resolver.ServiceResolver
+	nameSpaces     []string
+	nextVethNumber int
+	proxyName      string
+	config         Configuration
+	resolver       *resolver.ServiceResolver
 	//### Deployment management variables
 	deployedServices     map[string]service // all the deployed services with the ip and ports
 	deployedServicesLock sync.RWMutex
@@ -66,23 +63,10 @@ type service struct {
 	veth        *netlink.Veth
 }
 
-// current network interfaces in the system
-type networkInterface struct {
-	number                   int
-	veth0                    string
-	veth0ip                  net.IP
-	veth1                    string
-	veth1ip                  net.IP
-	isConnectedToAnInterface bool
-	interfaceNumber          int
-	namespace                string
-}
-
 // NewCustom environment constructor
 func NewCustom(proxyname string, customConfig Configuration) *Environment {
 	e := Environment{
 		nameSpaces:        make([]string, 0),
-		networkInterfaces: make([]networkInterface, 0),
 		nextVethNumber:    0,
 		proxyName:         proxyname,
 		config:            customConfig,
@@ -366,10 +350,18 @@ func (env *Environment) execInsideNs(pid int, function func() error) error {
 
 	stdNetns, err := netns.Get()
 	if err == nil {
-		defer stdNetns.Close()
+		defer func() {
+			if err := stdNetns.Close(); err != nil {
+				logger.ErrorLogger().Printf("Unable to close the host namespace handle: %v", err)
+			}
+		}()
 		containerNs, err = netns.GetFromPid(pid)
 		if err == nil {
-			defer netns.Set(stdNetns)
+			defer func() {
+				if err := netns.Set(stdNetns); err != nil {
+					logger.ErrorLogger().Printf("Unable to switch back to the host namespace: %v", err)
+				}
+			}()
 			err = netns.Set(containerNs)
 			if err == nil {
 				err = function()
@@ -388,10 +380,18 @@ func (env *Environment) execInsideNsByName(Nsname string, function func() error)
 
 	stdNetns, err := netns.Get()
 	if err == nil {
-		defer stdNetns.Close()
+		defer func() {
+			if err := stdNetns.Close(); err != nil {
+				logger.ErrorLogger().Printf("Unable to close the host namespace handle: %v", err)
+			}
+		}()
 		containerNs, err = netns.GetFromName(Nsname)
 		if err == nil {
-			defer netns.Set(stdNetns)
+			defer func() {
+				if err := netns.Set(stdNetns); err != nil {
+					logger.ErrorLogger().Printf("Unable to switch back to the host namespace: %v", err)
+				}
+			}()
 			err = netns.Set(containerNs)
 			if err == nil {
 				err = function()

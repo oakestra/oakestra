@@ -11,7 +11,7 @@ import (
 // fragmentIPv4 splits a datagram the way the kernel would: the transport
 // header only survives on the first fragment. splitAt is an offset into the
 // payload and must be a multiple of 8.
-func fragmentIPv4(t testing.TB, wire []byte, splitAt int) (first, later []byte) {
+func fragmentIPv4(t testing.TB, wire []byte, splitAt int) (first, later []byte) { //nolint:unparam // the split point is part of the scenario
 	t.Helper()
 	if splitAt%8 != 0 {
 		t.Fatalf("fragment offset %d is not a multiple of 8", splitAt)
@@ -77,7 +77,7 @@ func ipv4HeaderChecksum(header []byte) uint16 {
 	return ^uint16(sum)
 }
 
-func largePayload(n int) []byte {
+func largePayload(n int) []byte { //nolint:unparam // the size is part of the scenario
 	p := make([]byte, n)
 	for i := range p {
 		p[i] = byte(i)

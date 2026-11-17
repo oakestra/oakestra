@@ -9,7 +9,7 @@ import (
 
 // cachedEntry reaches into a flow's cached entry so the tests below can assert
 // on the state a warm flow carries instead of re-deriving it from the table.
-func cachedEntry(t *testing.T, dp *Datapath, srcPort int) *ConversionEntry {
+func cachedEntry(t *testing.T, dp *Datapath, srcPort int) *ConversionEntry { //nolint:unparam // the port ties the lookup to the flow under test
 	t.Helper()
 	shard := shardOf(srcPort)
 	dp.proxycache.locks[shard].Lock()
