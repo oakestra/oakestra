@@ -7,8 +7,6 @@ import requests
 from clients import job_management, resource_aggregation
 from clients.my_prometheus_client import prometheus_set_metrics
 from oakestra_utils.types.statuses import (
-    DeploymentStatus,
-    NegativeSchedulingStatus,
     PositiveSchedulingStatus,
     convert_to_status,
 )
@@ -37,17 +35,15 @@ def send_aggregated_info_to_sm(my_id, running_timeout, node_scheduled_timeout):
 
 
 def re_deploy_dead_jobs_routine():
-    re_deploy_triggers = [
-        DeploymentStatus.FAILED,
-        DeploymentStatus.DEAD,
-        NegativeSchedulingStatus.NO_WORKER_CAPACITY,
-    ]
     try:
         jobs = job_management.get_jobs_with_failed_instances()
         if jobs is not None:
             for job in jobs:
                 for instance in job.get("instance_list", []):
-                    if convert_to_status(instance.get("status")) in re_deploy_triggers:
+                    if (
+                        convert_to_status(instance.get("status"))
+                        in job_management.RE_DEPLOY_TRIGGERS
+                    ):
                         logger.info("FAILED INSTANCE, ATTEMPTING RE-DEPLOY")
                         threading.Thread(
                             group=None,
@@ -71,7 +67,7 @@ def trigger_undeploy_and_re_deploy(service, instance):
         job_management.delete_job_instance(
             service.get("_id"), instance.get("instance_number"), erase=False
         )
-        job_management.update_status(
+        job_management.update_job_and_instance_status(
             service.get("_id"),
             instance.get("instance_number"),
             PositiveSchedulingStatus.REQUESTED.value,
