@@ -26,6 +26,12 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 venv="$root/.venv/$name"
 cd "$root"
 
+# A venv whose creation failed half-way (e.g. ensurepip missing) has a python but no pip; rebuild it.
+if [ -x "$venv/bin/python" ] && ! "$venv/bin/python" -m pip --version >/dev/null 2>&1; then
+    echo "Removing broken .venv/$name (no pip)"
+    rm -rf "$venv"
+fi
+
 if [ ! -x "$venv/bin/python" ]; then
     base="${OAK_DEBUG_PYTHON:-}"
     if [ -z "$base" ]; then

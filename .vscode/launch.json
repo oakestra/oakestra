@@ -29,20 +29,6 @@
             }
         },
         {
-            "name": "Debug Node Engine With Net Manager",
-            "type": "go",
-            "request": "launch",
-            "mode": "auto",
-            "program": "${workspaceRoot}/node_engine/internal/daemon/nodeengined.go",
-            "console": "integratedTerminal",
-            "asRoot": true,
-            "args": ["-a", "0.0.0.0"],
-            "env": {
-                "PATH": "${env:PATH}:/usr/local/go/bin"
-            },
-            "preLaunchTask": "prep-debug-node-engine-manual-network-env"
-        },
-        {
             "name": "Debug Net Manager",
             "type": "go",
             "request": "launch",
@@ -54,7 +40,8 @@
             "env": {
                 "PATH": "${env:PATH}:/usr/local/go/bin"
             },
-            "preLaunchTask": "prep-debug-net-manager-env"
+            "preLaunchTask": "prep-debug-net-manager-env",
+            "postDebugTask": "stop-node-engine-service"
         },
         {
             "name": "Debug Root Manager",
@@ -391,14 +378,6 @@
                 "Debug Cluster Scheduler",
                 "Debug Cluster Service Manager",
                 "Debug Cluster Manager"
-            ],
-            "stopAll": true
-        },
-        {
-            "name": "Debug Worker (Node Engine + Net Manager)",
-            "configurations": [
-                "Debug Net Manager",
-                "Debug Node Engine With Net Manager"
             ],
             "stopAll": true
         }

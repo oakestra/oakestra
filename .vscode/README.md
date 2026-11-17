@@ -62,10 +62,9 @@ broke the other.
 
 | Profile | Type | Component | Notes |
 |---|---|---|---|
-| **Debug Node Engine** | Go | `node_engine` | Runs the node daemon (`-a 0.0.0.0`); brings up root + cluster and registers the local NodeEngine against the cluster. Runs as root. |
+| **Debug Node Engine** | Go | `node_engine` | Runs the node daemon (`-a 0.0.0.0`); brings up root + cluster and registers the local NodeEngine against the cluster. Runs as root. The preLaunch also builds and installs the NetManager from `net_manager/` and sets `NodeEngine config network auto`, so the NodeEngine starts it as the `netmanager` service. |
 | **Debug Node Engine With Custom Cluster** | Go | `node_engine` | Same, but prompts for the cluster IP (`enterClusterIp`). No preLaunch. |
-| **Debug Node Engine With Net Manager** | Go | `node_engine` | Like **Debug Node Engine**, but also runs `sudo NodeEngine config network manual` so the NodeEngine uses the debugged NetManager's socket (`/etc/netmanager/netmanager.sock`) instead of the `netmanager` service. Undo with `sudo NodeEngine config network auto`. |
-| **Debug Net Manager** | Go | `net_manager` | Runs the NetManager daemon as root. The preLaunch installs the default config into `/etc/netmanager/` if missing and stops the `netmanager` service. Edit `/etc/netmanager/netcfg.json` to change it (e.g. `"Debug": true`). |
+| **Debug Net Manager** | Go | `net_manager` | Runs the NetManager daemon as root. The preLaunch brings up root + cluster, installs the NodeEngine from `node_engine/`, sets `NodeEngine config network manual` (it uses the debugged NetManager's socket), installs the default config into `/etc/netmanager/` if missing and stops the `netmanager` service. Once the NetManager socket is up, a background task starts the `nodeengine` service (logs in `/var/log/oakestra/nodeengine.log`); it is stopped when the debug session ends. Edit `/etc/netmanager/netcfg.json` to change the config (e.g. `"Debug": true`). |
 
 ### Root Orchestrator
 
@@ -118,8 +117,6 @@ Launch several components together (dependencies first; `stopAll` stops the whol
 | **Debug Root Addons Stack** | Marketplace Manager → Root Addons Manager → Root Addons Monitor |
 | **Debug Cluster Addons Stack** | Cluster Addons Manager → Cluster Addons Monitor |
 | **Debug Full Stack (Root + Cluster)** | Root core + Cluster core, including both service managers (9 sessions) |
-| **Debug Worker (Node Engine + Net Manager)** | Net Manager → Node Engine With Net Manager |
-
 ## Tasks reference
 
 You normally don't run these directly — profiles invoke them — but they're available via

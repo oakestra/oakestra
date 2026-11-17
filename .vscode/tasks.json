@@ -139,10 +139,51 @@
         {
             // Points the NodeEngine at the NetManager socket instead of the netmanager service,
             // so it talks to the NetManager started by "Debug Net Manager".
-            // Undo with: sudo NodeEngine config network auto
             "label": "set-node-engine-network-manual",
             "type": "shell",
             "command": "sudo NodeEngine config network manual",
+            "problemMatcher": []
+        },
+        {
+            // The NodeEngine starts the netmanager service itself ("Debug Node Engine").
+            "label": "set-node-engine-network-auto",
+            "type": "shell",
+            "command": "sudo NodeEngine config network auto",
+            "problemMatcher": []
+        },
+        {
+            // Builds the NetManager from this repo and installs it as the netmanager service.
+            "label": "install-net-manager",
+            "type": "shell",
+            "command": "cd ${workspaceRoot}/net_manager/build && ./build.sh && ./install.sh $(dpkg --print-architecture)",
+            "problemMatcher": []
+        },
+        {
+            // Background preLaunch of "Debug Net Manager": starts the nodeengine service once the
+            // debugged NetManager listens on its socket. The debug session starts at "Waiting for".
+            "label": "start-node-engine-after-net-manager",
+            "type": "shell",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/start-node-engine-after-net-manager.sh",
+            "isBackground": true,
+            "presentation": {
+                "panel": "dedicated"
+            },
+            "problemMatcher": {
+                "owner": "oakestra",
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^$",
+                    "endsPattern": "^Waiting for NetManager socket"
+                }
+            }
+        },
+        {
+            "label": "stop-node-engine-service",
+            "type": "shell",
+            "command": "sudo systemctl stop nodeengine",
             "problemMatcher": []
         },
         {
@@ -253,23 +294,20 @@
                 "root-orchestrator-up",
                 "cluster-orchestrator-up",
                 "set-default-cluster-to-node-engine",
-            ],
-            "dependsOrder": "sequence",
-        },
-        {
-            "label": "prep-debug-node-engine-manual-network-env",
-            "dependsOn": [
-                "root-orchestrator-up",
-                "cluster-orchestrator-up",
-                "set-default-cluster-to-node-engine",
-                "set-node-engine-network-manual",
+                "install-net-manager",
+                "set-node-engine-network-auto",
             ],
             "dependsOrder": "sequence",
         },
         {
             "label": "prep-debug-net-manager-env",
             "dependsOn": [
+                "root-orchestrator-up",
+                "cluster-orchestrator-up",
+                "set-default-cluster-to-node-engine",
+                "set-node-engine-network-manual",
                 "install-net-manager-config",
+                "start-node-engine-after-net-manager",
             ],
             "dependsOrder": "sequence",
         },

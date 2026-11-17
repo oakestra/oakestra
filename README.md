@@ -159,5 +159,6 @@ Finally, start the node engine with the following command:
 sudo NodeEngine -a <IP or URL of the cluster orchestrator, default 0.0.0.0> -d
 ```
 
+# 🐞 Debugging
 
-
+VS Code debug profiles are provided for every component (root, cluster, schedulers, service managers, Node Engine, Net Manager). Open the repo in VS Code, pick a profile in *Run and Debug*, and see [.vscode/README.md](.vscode/README.md) for details.
