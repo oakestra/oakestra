@@ -7,5 +7,6 @@
   "Debug": false,
   "PublicIPNetworking": false,
   "MqttCert": "",
-  "MqttKey": ""
+  "MqttKey": "",
+  "MqttCa": ""
 }

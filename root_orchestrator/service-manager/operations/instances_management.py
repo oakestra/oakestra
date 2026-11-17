@@ -15,7 +15,14 @@ def deploy_request(sys_job_id=None, instance_number=None, cluster_id=None):
     return "Instance info added", 200
 
 
-def update_instance_local_addresses(job_id=None, instances=None):
+def update_instance_local_addresses(job_id=None, instances=None, cluster_id=None):
+    """Store the addresses a cluster reports for instances it deployed, and tell the
+    clusters interested in the job.
+
+    Other clusters route the instance's traffic to these addresses. With cluster_id (the
+    verified caller, behind the gateway) a cluster may only report instances the root
+    placed on it.
+    """
     if instances is None or job_id is None:
         return "Invalid input parameters", 400
     for instance in instances:
@@ -24,6 +31,18 @@ def update_instance_local_addresses(job_id=None, instances=None):
         assert instance.get("namespace_ip_v6") is not None
         assert instance.get("host_ip") is not None
         assert instance.get("host_port") is not None
+
+    if cluster_id is not None:
+        job = mongodb_requests.mongo_find_job_by_systemid(job_id)
+        if job is None:
+            return "Job not found", 404
+        placed_here = {
+            str(placed.get("instance_number"))
+            for placed in job.get("instance_list", [])
+            if str(placed.get("cluster_id")) == cluster_id
+        }
+        if any(str(i.get("instance_number")) not in placed_here for i in instances):
+            return "A cluster may only report instances deployed on it", 403
 
     job = mongodb_requests.mongo_update_job_net_status(job_id=job_id, instances=instances)
 

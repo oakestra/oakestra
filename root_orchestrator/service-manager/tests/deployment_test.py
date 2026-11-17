@@ -171,6 +171,83 @@ def test_deploy_completed_cluster_notification():
     mongodb_client.mongo_update_job_net_status.assert_called_with(job_id="123", instances=instances)
 
 
+def _reported_instance(instance_number):
+    return {
+        "instance_number": instance_number,
+        "namespace_ip": "10.18.0.2",
+        "namespace_ip_v6": "fc00::2",
+        "host_ip": "192.168.1.50",
+        "host_port": "50103",
+    }
+
+
+def _job_placed_on(placements):
+    """A job with instances placed on clusters, given as {number: cluster_id}."""
+    job = _get_fake_job("aaa")
+    job["instance_list"] = [
+        {"instance_number": number, "cluster_id": cluster} for number, cluster in placements.items()
+    ]
+    return job
+
+
+def _mock_status_update(job):
+    mongodb_client.mongo_find_job_by_systemid = MagicMock(return_value=job)
+    mongodb_client.mongo_update_job_net_status = MagicMock(return_value=job)
+    mongodb_client.mongo_get_cluster_interested_to_job = MagicMock(
+        return_value=[_get_fake_cluster()]
+    )
+    interfaces.clusters_interface.notify_deployment = MagicMock(return_value=200)
+
+
+def test_cluster_reports_its_own_instances():
+    _mock_status_update(_job_placed_on({0: "cluster-a", 1: "cluster-a"}))
+    instances = [_reported_instance(0), _reported_instance(1)]
+
+    _, code = operations.instances_management.update_instance_local_addresses(
+        job_id="123", instances=instances, cluster_id="cluster-a"
+    )
+
+    assert code == 200
+    mongodb_client.mongo_update_job_net_status.assert_called_with(job_id="123", instances=instances)
+
+
+def test_cluster_cannot_report_another_clusters_instance():
+    # Reporting addresses for an instance on another cluster would redirect its traffic.
+    _mock_status_update(_job_placed_on({0: "cluster-a", 1: "cluster-b"}))
+
+    _, code = operations.instances_management.update_instance_local_addresses(
+        job_id="123",
+        instances=[_reported_instance(0), _reported_instance(1)],
+        cluster_id="cluster-a",
+    )
+
+    assert code == 403
+    mongodb_client.mongo_update_job_net_status.assert_not_called()
+    interfaces.clusters_interface.notify_deployment.assert_not_called()
+
+
+def test_cluster_cannot_report_an_unplaced_instance():
+    _mock_status_update(_job_placed_on({0: "cluster-a"}))
+
+    _, code = operations.instances_management.update_instance_local_addresses(
+        job_id="123", instances=[_reported_instance(7)], cluster_id="cluster-a"
+    )
+
+    assert code == 403
+    mongodb_client.mongo_update_job_net_status.assert_not_called()
+
+
+def test_caller_check_on_unknown_job():
+    _mock_status_update(None)
+
+    _, code = operations.instances_management.update_instance_local_addresses(
+        job_id="123", instances=[_reported_instance(0)], cluster_id="cluster-a"
+    )
+
+    assert code == 404
+    mongodb_client.mongo_update_job_net_status.assert_not_called()
+
+
 def test_undeploy_completed_cluster_notification():
     mongodb_client.mongo_find_job_by_systemid = MagicMock(return_value=_get_fake_job("aaa"))
     cluster = _get_fake_cluster()

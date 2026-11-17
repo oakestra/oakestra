@@ -15,6 +15,7 @@ from net_logging import configure_logging
 from network import routes_interests, subnetwork_management
 from network.utils import sanitize
 from operations import cluster_management, instances_management, service_management
+from utils import client_identity
 
 my_logger = configure_logging()
 app = Flask(__name__)
@@ -65,6 +66,15 @@ jwt = JWTManager(app)
 MY_PORT = os.environ.get("MY_PORT") or 10100
 
 
+def determine_cluster_address(request):
+    # Behind the gateway remote_addr is the proxy, so prefer the advertised address.
+    cluster_address = request.args.get("cluster_address")
+    if cluster_address:
+        return sanitize(cluster_address)
+
+    return sanitize(request.remote_addr)
+
+
 # .............. Cluster Registration ..................#
 # ......................................................#
 
@@ -98,12 +108,12 @@ def register_new_cluster():
 def deregister_cluster_interest(job_name):
     """
     Deregistration of an interest
-    json file structure:{
-        'job_name':string
+    query params:{
+        'cluster_address':string
     }
     """
     logger.info("Incoming Request DELETE /api/net/interest/" + job_name)
-    addr = sanitize(request.remote_addr)
+    addr = determine_cluster_address(request)
     return routes_interests.deregister_interest(addr, job_name)
 
 
@@ -128,11 +138,22 @@ def update_instance_local_deployment_addresses():
     """
 
     logger.info("Incoming Request /api/net/service/net_deploy_status")
+    cluster_id = None
+    if client_identity.GATEWAY_ENABLED:
+        # Other clusters route the instances' traffic to these addresses, so a
+        # cluster may only report its own instances; the gateway forwards its
+        # verified certificate.
+        try:
+            cluster_id = client_identity.caller_cluster_id(request.headers.get("X-Client-Cert"))
+        except client_identity.ClientCertError as e:
+            return {"message": str(e)}, e.status
     data = request.json
     logger.info(data)
 
     return instances_management.update_instance_local_addresses(
-        instances=data.get("instances"), job_id=data.get("job_id")
+        instances=data.get("instances"),
+        job_id=data.get("job_id"),
+        cluster_id=cluster_id,
     )
 
 

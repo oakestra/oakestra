@@ -95,6 +95,7 @@ func HandleRequests(port int) {
 	// main server with all registered routes
 	mainRouter := mux.NewRouter().StrictSlash(true)
 	mainRouter.HandleFunc("/register", register).Methods("POST")
+	mainRouter.HandleFunc("/mqtt/reconnect", reconnectMqtt).Methods("POST")
 	handlers.RegisterAllManagers(&model.WorkerID, model.NetConfig.NodePublicAddress, model.NetConfig.NodePublicPort, mainRouter)
 
 	mainListener := createListener(port)
@@ -173,7 +174,7 @@ func register(writer http.ResponseWriter, request *http.Request) {
 	)
 
 	// initialize mqtt connection to the broker
-	mqtt.InitNetMqttClient(requestStruct.ClientID, model.NetConfig.ClusterUrl, model.NetConfig.ClusterMqttPort, model.NetConfig.MqttCert, model.NetConfig.MqttKey)
+	mqtt.InitNetMqttClient(requestStruct.ClientID, model.NetConfig.ClusterUrl, model.NetConfig.ClusterMqttPort, model.NetConfig.MqttCert, model.NetConfig.MqttKey, model.NetConfig.MqttCa)
 
 	// initialize the proxy tunnel
 	ipstring, _ := network.GetLocalIPandIface()
@@ -201,4 +202,26 @@ func register(writer http.ResponseWriter, request *http.Request) {
 			_ = initServer.Shutdown(context.Background())
 		}()
 	}
+}
+
+/*
+Endpoint: /mqtt/reconnect
+Usage: called by NodeEngine after it renewed the worker certificate. Reconnects to the
+broker with the certificate files read again; the overlay network keeps running.
+Method: POST
+Response: 200, 409 if the node has not registered yet, or 502 if the reconnect failed
+*/
+func reconnectMqtt(writer http.ResponseWriter, request *http.Request) {
+	client := mqtt.GetNetMqttClient()
+	if !client.Initialized() {
+		writer.WriteHeader(http.StatusConflict)
+		return
+	}
+	if err := client.Reconnect(); err != nil {
+		logger.ErrorLogger().Printf("MQTT - %v", err)
+		writer.WriteHeader(http.StatusBadGateway)
+		return
+	}
+	logger.InfoLogger().Printf("MQTT - reconnected with the renewed worker certificate")
+	writer.WriteHeader(http.StatusOK)
 }

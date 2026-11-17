@@ -35,12 +35,14 @@ func (h *ContainerDeyplomentHandler) DeployNetwork(pid int, sname string, instan
 	env := h.env
 
 	cleanup := func(veth *netlink.Veth) {
-		_ = netlink.LinkDel(veth)
+		if veth != nil {
+			_ = netlink.LinkDel(veth)
+		}
 	}
 
 	vethIfce, err := env.createVethsPairAndAttachToBridge(sname, env.mtusize)
 	if err != nil {
-		go cleanup(vethIfce)
+		cleanup(vethIfce)
 		return nil, nil, err
 	}
 
