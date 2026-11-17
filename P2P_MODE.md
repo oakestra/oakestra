@@ -243,8 +243,13 @@ Notes:
     `OnNodeJoin` to POST `/ctrl/nodeleave` / `/ctrl/nodejoin` on the local NodeEngine.
   - creates the registry and the resolver, and starts the mDNS loop.
   - creates the proxy with `EnableDataEncryption(DeriveDataKey(gossip_key))`.
-  - creates the environment on the fixed shared subnet with `Env.SetResolver(resolver)`.
+  - creates the environment on the fixed shared subnet and points its resolver at the p2p
+    registry with `Env.Resolver().UseBackend(...)`, so cold lookups and interests go to the
+    registry instead of MQTT.
   - starts `p2pRouteRefreshLoop` (every 5 s, see [§9.4](#94-keeping-routes-fresh)).
+
+Both modes then run the same `startDatapath` step. It tells the translation table which node it
+runs on, connects the proxy to the resolver, and starts the proxy's read loops.
 
 ---
 
@@ -605,42 +610,47 @@ forwarded a packet by **looking the destination namespace IP up globally** to fi
 a shared subnet, many nodes may host a container at `10.18.0.5`, which would make that lookup
 ambiguous.
 
-The fix ([proxy/proxyCache.go](../oakestra-net/node-net-manager/proxy/proxyCache.go),
-[ProxyTunnel.go](../oakestra-net/node-net-manager/proxy/ProxyTunnel.go)): when the proxy converts a
-ServiceIP to a concrete instance, it records that instance's **node endpoint**
-(`dstNodeIP:dstNodePort`) in the `ConversionEntry`, taken from the table entry it chose.
+The fix ([proxy/Datapath.go](../oakestra-net/node-net-manager/proxy/Datapath.go)): when the
+proxy picks a concrete instance for a ServiceIP, the flow's cached `Route` records that
+instance's **node endpoint** (`DstNode:DstNodePort`), taken from the table entry it chose.
 Forwarding uses that endpoint directly and never re-resolves the namespace IP.
 
-Two related changes keep shared addresses unambiguous inside one node's table:
+The translation table ([TableEntryCache](../oakestra-net/node-net-manager/TableEntryCache/serviceTranslationTable.go))
+keeps shared addresses unambiguous within one node. It knows which node it runs on
+(`SetLocalNode`, set when the datapath starts and whenever the node's address changes):
 
-- **Source translation prefers the local node.** `GetTableEntryByNsIP` uses
-  `SearchByNsIPPreferNode(ip, <own public IP>)`. Otherwise a remote instance with the same
-  namespace IP could have its ServiceIP stamped on our outgoing packets, and replies would go to
-  the wrong node.
-- **De-duplication is per node.** `AddTableQueryEntry` evicts an existing row only if it has the
-  same namespace IP **on the same node**.
+- **Source translation prefers the local node.** The namespace-IP indexes behind
+  `SearchInstanceIPByNsIP` let an entry hosted on this node win over a remote one. Otherwise a
+  remote instance with the same namespace IP could have its instance IP stamped on our outgoing
+  packets, and replies would go to the wrong node.
+- **Eviction is per node.** `ReplaceJobEntries` displaces an existing row only if it has the
+  same namespace IP **on the same node**, and `RemoveByNsip` removes the local instance's row.
 
 ### 9.3 Packet walk-through
 
 A client container on node A calls `10.30.77.4` (the RR ServiceIP of `web`), which runs on node B:
 
-1. The packet hits A's `goProxyTun`. The proxy asks the environment for the ServiceIP.
-2. **Translation table miss** → `env.GetTableEntryByServiceIP` → `resolver.Resolve("10.30.77.4")`
-   reads A's registry replica and returns the table entries for every `web` instance, and the interest
-   is registered.
-3. The proxy picks an instance (round-robin), rewrites the destination to its namespace IP, rewrites
-   the source to the client's own ServiceIP, and records B's endpoint in the conversion entry.
-4. The payload is **sealed** (XChaCha20-Poly1305) and sent over UDP to `B:50103`.
-5. B **opens** it (dropping anything that fails authentication), rewrites addresses back, and
-   delivers it into `web`'s namespace. Replies take the reverse path.
+1. The packet hits A's `goProxyTun`. The proxy's flow cache has no route for this flow yet.
+2. **Translation table miss.** The resolver starts a background lookup through its p2p backend,
+   which reads A's registry replica and installs the table entries for every `web` instance, and
+   registers the interest. The packet waits in a short replay queue instead of being dropped, and
+   is replayed once the lookup finishes.
+3. The proxy picks an instance (round-robin), rewrites the destination to its namespace IP and the
+   source to the client's own instance IP, and caches the route, including B's endpoint, for the
+   rest of the flow.
+4. Packets read in one batch are grouped per destination node. Each group's payloads are
+   **sealed** (XChaCha20-Poly1305) and sent to `B:50103` in one write.
+5. B **opens** each datagram (dropping anything that fails authentication), rewrites addresses
+   back, and delivers it into `web`'s namespace. Replies take the reverse path.
 
 ### 9.4 Keeping routes fresh
 
 In cluster mode the broker pushes table updates to interested nodes. In p2p mode nothing is pushed, and
 a resolved ServiceIP would otherwise stay cached indefinitely. `p2pRouteRefreshLoop` therefore
-runs `Env.RefreshP2PRoutes()` every **5 s**. For each target (every interest, plus every RR
-address already in the table), it re-resolves against the local registry and **replaces** that job's
-rows. A replica moved by failover joins the rotation, and a vanished one drops out, within one
+runs the resolver's `RefreshRoutes` every **5 s**. For each target (every interest, plus every RR
+address already in the table), it re-resolves against the local registry and **replaces** that
+job's rows in one step. Established flows keep the instance they were pinned to as long as it is
+still listed. A replica moved by failover joins the rotation, and a vanished one drops out, within one
 interval after the registry converges. The registry is an in-memory map, so the refresh is cheap.
 
 ---
@@ -907,8 +917,10 @@ in this file. They live under `/etc/oakestra/p2p/`.
 | `bestRandomFit` | `oakestra/scheduler/calculate/schedulers/bestrandomfit/` |
 | Membership, registry, resolver, discovery | `oakestra-net/node-net-manager/p2p/` |
 | NetManager register + p2p routes | `oakestra-net/node-net-manager/server/server.go`, `p2pRoutes.go` |
-| Proxy fix + AEAD | `oakestra-net/node-net-manager/proxy/` |
-| Resolver in the environment, fixed subnet, route refresh | `oakestra-net/node-net-manager/env/EnvironmentManager.go` |
+| Datapath, tunnel, AEAD (`dataEncryption.go`) | `oakestra-net/node-net-manager/proxy/` |
+| p2p resolver backend, route refresh | `oakestra-net/node-net-manager/resolver/backend.go` |
+| Node-aware translation table | `oakestra-net/node-net-manager/TableEntryCache/` |
+| Fixed shared subnet | `oakestra-net/node-net-manager/env/EnvironmentManager.go` |
 | oak CLI p2p detection | `oakestra-cli/oak_cli/utils/api/`, `oakestra-cli/oak_go_cli/internal/{config,api}/` |
 
 ---
@@ -917,8 +929,8 @@ in this file. They live under `/etc/oakestra/p2p/`.
 
 The shared-subnet work applies to **both** modes:
 
-- **Proxy forwarding by table entry.** `ConversionEntry` carries the destination node endpoint, so
-  forwarding no longer needs globally unique namespace IPs.
+- **Proxy forwarding by table entry.** A flow's cached `Route` carries the destination node
+  endpoint, so forwarding no longer needs globally unique namespace IPs.
 - **Fixed shared namespace subnet** (`10.18.0.0`, `fc00::`) on every worker through
   `NewEnvironmentFixedSubnet`. The per-node subnet request is **deprecated** end to end:
   - NetManager: `NewEnvironmentClusterConfigured` delegates to the fixed subnet, and
