@@ -5,6 +5,7 @@ By design, the centralized Root Orchestrator contains
 - a System Manager for user interaction with the system
 - a Database (mongodb) to store data about the participating clusters
 - a Scheduler which calculates task-to-cluster affinity
+- a Root Service Manager (`service-manager/`), the network plugin that assigns service IPs and propagates routes to the clusters
 - some Monitoring solution (first prototype shows read-only Grafana Dashboards which collect metrics from Prometheus instances on each cluster orchestrator)
 
 During implementation, some components could be changed/renamed/replaced/merged.
@@ -37,18 +38,10 @@ E.g.: Exclude network component:
 
 `docker-compose -f docker-compose.yml -f override-no-network.yml up --build`
 
-E.g.: Customize network component version
+E.g.: Use local changes to the network component
 
-- open and edit `override-custom-serivce-manager.yml` with the correct container image
-- run the orchestrator with the override file: `docker-compose -f docker-compose.yml -f override-custom-service-manager.yml up --build`
-
-E.g.: Use local development network component
-
-In case you want to use changes made to the root network component in your deployment,
-you can use the `override-local-service-manager.yml` override file.
-
-- copy the `oakestra-net/root-service-manager/service-manager` folder to the `root_orchestrator` directory
-- run the orchestrator with the override file: `docker-compose -f docker-compose.yml -f override-local-service-manager.yml up --build`
+The Root Service Manager is built from [`service-manager/`](service-manager/README.md) like every other root component,
+so `docker compose -f docker-compose.yml up --build` already includes your local changes. No extra override is needed.
 
 E.g.: Enable IPv6 for container deployments
 

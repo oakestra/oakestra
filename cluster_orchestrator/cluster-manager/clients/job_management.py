@@ -13,6 +13,9 @@ from resource_abstractor_client import candidate_operations, job_operations
 
 logger = logging.getLogger("cluster_manager")
 
+# Instance statuses that make re_deploy_dead_jobs_routine schedule the instance again
+RE_DEPLOY_TRIGGERS = [DeploymentStatus.FAILED, DeploymentStatus.DEAD, *NegativeSchedulingStatus]
+
 
 def mark_inactive_as_failed(running_timeout, node_scheduled_timeout):
     now = datetime.now(timezone.utc).timestamp()
@@ -113,11 +116,11 @@ def update_deployed_instance_worker(job_name, instance_number, status, status_de
 
     job_id = jobs[0].get("_id")
 
-    update_status(job_id, int(instance_number), status, status_detail)
+    update_job_and_instance_status(job_id, int(instance_number), status, status_detail)
     update_instance(job_id, int(instance_number), {"publicip": public_ip})
 
 
-def update_status(job_id, instance_number, status, status_detail=None):
+def update_job_and_instance_status(job_id, instance_number, status, status_detail=None):
     if status == DeploymentStatus.CREATED.value:
         return
 
@@ -148,7 +151,7 @@ def update_deployed_instance_job(job_name, instance_number, service, worker_id):
 
     job_id = jobs[0].get("_id")
     reported_status = service.get("status", DeploymentStatus.UNKNOWN.value)
-    update_status(
+    update_job_and_instance_status(
         job_id,
         int(instance_number),
         reported_status,
@@ -212,13 +215,7 @@ def deploy_job(job, instance_number):
 
 
 def get_jobs_with_failed_instances():
-    query = {
-        "$or": [
-            {"instance_list.status": DeploymentStatus.FAILED.value},
-            {"instance_list.status": DeploymentStatus.DEAD.value},
-            {"instance_list.status": NegativeSchedulingStatus.NO_WORKER_CAPACITY.value},
-        ]
-    }
+    query = {"instance_list.status": {"$in": [status.value for status in RE_DEPLOY_TRIGGERS]}}
     return job_operations.get_jobs(**query)
 
 

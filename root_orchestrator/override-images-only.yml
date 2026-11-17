@@ -12,7 +12,7 @@ services:
     pull_policy: always
 
   root_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
+    image: ghcr.io/oakestra/oakestra/root-service-manager:latest
     pull_policy: always
 
   root_redis:

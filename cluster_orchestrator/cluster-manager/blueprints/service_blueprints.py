@@ -96,14 +96,17 @@ class SchedulingController(MethodView):
             f"Result: {node_id if node_id is not None else data.get('status')}"
         )
         if node_id is None:
-            # scheduling failed
+            # No worker can host the instance right now. Mark the instance itself with the
+            # negative scheduling status, so that re_deploy_dead_jobs_routine schedules it again.
             status = convert_to_status(data.get("status"))
-            job_operations.update_job_status(job_id, status)
+            job_management.update_job_and_instance_status(
+                job_id, int(instance_number), status.value, status_detail="No worker available"
+            )
             return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
 
         # update job instance
         job_management.update_instance_node(job_id, int(instance_number), node_id)
-        job_management.update_status(
+        job_management.update_job_and_instance_status(
             job_id, int(instance_number), PositiveSchedulingStatus.NODE_SCHEDULED.value
         )
 

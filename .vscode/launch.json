@@ -6,7 +6,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceRoot}/go_node_engine/internal/daemon/nodeengined.go",
+            "program": "${workspaceRoot}/node_engine/internal/daemon/nodeengined.go",
             "console": "integratedTerminal",
             "asRoot": true,
             "args": ["-a", "0.0.0.0"],
@@ -20,7 +20,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceRoot}/go_node_engine/internal/daemon/nodeengined.go",
+            "program": "${workspaceRoot}/node_engine/internal/daemon/nodeengined.go",
             "console": "integratedTerminal",
             "asRoot": true,
             "args": ["-a", "${input:enterClusterIp}"],
@@ -29,10 +29,25 @@
             }
         },
         {
+            "name": "Debug Net Manager",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceRoot}/net_manager/NetManager.go",
+            "console": "integratedTerminal",
+            "asRoot": true,
+            "args": [],
+            "env": {
+                "PATH": "${env:PATH}:/usr/local/go/bin"
+            },
+            "preLaunchTask": "prep-debug-net-manager-env",
+            "postDebugTask": "stop-node-engine-service"
+        },
+        {
             "name": "Debug Root Manager",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/.venv/root-manager/bin/python",
             "program": "${workspaceRoot}/root_orchestrator/system-manager-python/system_manager.py",
             "console": "integratedTerminal",
             "env": {
@@ -50,6 +65,25 @@
                 "JWT_GENERATOR_PORT": "10011"
             },
             "preLaunchTask": "prep-debug-root-manager-env"
+        },
+        {
+            "name": "Debug Root Service Manager",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${workspaceRoot}/.venv/root-service-manager/bin/python",
+            "program": "${workspaceRoot}/root_orchestrator/service-manager/service_manager.py",
+            "cwd": "${workspaceRoot}/root_orchestrator/service-manager",
+            "console": "integratedTerminal",
+            "env": {
+                "MY_PORT": "10099",
+                "SYSTEM_MANAGER_URL": "0.0.0.0",
+                "SYSTEM_MANAGER_PORT": "10000",
+                "ROOT_MONGO_URL": "0.0.0.0",
+                "ROOT_MONGO_PORT": "10008",
+                "JWT_GENERATOR_URL": "0.0.0.0",
+                "JWT_GENERATOR_PORT": "10011"
+            },
+            "preLaunchTask": "prep-debug-root-service-manager-env"
         },
         {
             "name": "Debug Root Scheduler",
@@ -74,7 +108,7 @@
             "name": "Debug Root Resource Abstractor",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/.venv/resource-abstractor/bin/python",
             "program": "${workspaceRoot}/resource-abstractor/resource_abstractor.py",
             "console": "integratedTerminal",
             "env": {
@@ -89,7 +123,7 @@
             "name": "Debug JWT Generator",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/.venv/jwt-generator/bin/python",
             "program": "${workspaceRoot}/root_orchestrator/jwt-generator/jwt_generator.py",
             "console": "integratedTerminal",
             "env": {
@@ -102,7 +136,7 @@
             "name": "Debug Root Addons Manager",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/.venv/addons-manager/bin/python",
             "program": "${workspaceRoot}/addons_engine/addons-manager/addons_manager.py",
             "console": "integratedTerminal",
             "env": {
@@ -117,7 +151,7 @@
             "name": "Debug Root Addons Monitor",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/.venv/addons-monitor/bin/python",
             "program": "${workspaceRoot}/addons_engine/addons-monitor/addons_monitor.py",
             "console": "integratedTerminal",
             "env": {
@@ -132,7 +166,7 @@
             "name": "Debug Marketplace Manager",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/.venv/marketplace-manager/bin/python",
             "program": "${workspaceRoot}/addons_marketplace/marketplace-manager/marketplace_manager.py",
             "console": "integratedTerminal",
             "env": {
@@ -146,7 +180,7 @@
             "name": "Debug Cluster Manager",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/.venv/cluster-manager/bin/python",
             "program": "${workspaceRoot}/cluster_orchestrator/cluster-manager/cluster_manager.py",
             "console": "integratedTerminal",
             "env": {
@@ -175,6 +209,29 @@
             "preLaunchTask": "prep-debug-cluster-manager-env"
         },
         {
+            "name": "Debug Cluster Service Manager",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${workspaceRoot}/.venv/cluster-service-manager/bin/python",
+            "program": "${workspaceRoot}/cluster_orchestrator/service-manager/service_manager.py",
+            "cwd": "${workspaceRoot}/cluster_orchestrator/service-manager",
+            "console": "integratedTerminal",
+            "env": {
+                "MY_PORT": "10110",
+                "MQTT_BROKER_URL": "0.0.0.0",
+                "MQTT_BROKER_PORT": "10003",
+                "ROOT_SERVICE_MANAGER_URL": "0.0.0.0",
+                "ROOT_SERVICE_MANAGER_PORT": "10099",
+                "SYSTEM_MANAGER_URL": "0.0.0.0",
+                "SYSTEM_MANAGER_PORT": "10000",
+                "CLUSTER_MONGO_URL": "0.0.0.0",
+                "CLUSTER_MONGO_PORT": "10108",
+                "CLUSTER_NAME": "debug_cluster",
+                "CLUSTER_ADDRESS": "127.0.0.1"
+            },
+            "preLaunchTask": "prep-debug-cluster-service-manager-env"
+        },
+        {
             "name": "Debug Cluster Scheduler",
             "type": "go",
             "request": "launch",
@@ -199,7 +256,7 @@
             "name": "Debug Cluster Resource Abstractor",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/.venv/resource-abstractor/bin/python",
             "program": "${workspaceRoot}/resource-abstractor/resource_abstractor.py",
             "console": "integratedTerminal",
             "env": {
@@ -214,7 +271,7 @@
             "name": "Debug Cluster Addons Manager",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/.venv/addons-manager/bin/python",
             "program": "${workspaceRoot}/addons_engine/addons-manager/addons_manager.py",
             "console": "integratedTerminal",
             "env": {
@@ -229,7 +286,7 @@
             "name": "Debug Cluster Addons Monitor",
             "type": "debugpy",
             "request": "launch",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceRoot}/.venv/addons-monitor/bin/python",
             "program": "${workspaceRoot}/addons_engine/addons-monitor/addons_monitor.py",
             "console": "integratedTerminal",
             "env": {
@@ -277,6 +334,7 @@
                 "Debug JWT Generator",
                 "Debug Root Resource Abstractor",
                 "Debug Root Scheduler",
+                "Debug Root Service Manager",
                 "Debug Root Manager"
             ],
             "stopAll": true
@@ -286,6 +344,7 @@
             "configurations": [
                 "Debug Cluster Resource Abstractor",
                 "Debug Cluster Scheduler",
+                "Debug Cluster Service Manager",
                 "Debug Cluster Manager"
             ],
             "stopAll": true
@@ -313,9 +372,11 @@
                 "Debug JWT Generator",
                 "Debug Root Resource Abstractor",
                 "Debug Root Scheduler",
+                "Debug Root Service Manager",
                 "Debug Root Manager",
                 "Debug Cluster Resource Abstractor",
                 "Debug Cluster Scheduler",
+                "Debug Cluster Service Manager",
                 "Debug Cluster Manager"
             ],
             "stopAll": true
