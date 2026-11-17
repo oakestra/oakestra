@@ -100,3 +100,4 @@ __pycache__/
 
 # .vscode debug
 *__debug_bin*
+scripts/netmanager.service
