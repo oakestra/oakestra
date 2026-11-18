@@ -43,6 +43,7 @@ class ServiceController(MethodView):
         worker_id = str(worker["_id"])
         response = {
             "id": str(worker_id),
-            "MQTT_BROKER_PORT": CONFIG.mqtt_broker_port,
+            # NodeEngine expects a string in the registration response.
+            "MQTT_BROKER_PORT": str(CONFIG.mqtt_broker_port),
         }
         return Response(json_util.dumps(response), mimetype="application/json")
