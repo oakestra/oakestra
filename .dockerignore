@@ -1,0 +1,58 @@
+# Git
+**/.git
+**/.gitignore
+
+# CI
+.github
+
+# JetBrains IDEs
+**/.idea
+
+# VSCode
+**/.vscode
+
+# macOS and Windows
+**/.DS_Store
+**/Thumbs.db
+
+# Environment and log files
+**/.env
+**/*.log
+
+# Python and uv
+**/.venv
+**/__pycache__
+**/*.pyc
+
+# pytest
+**/.pytest_cache
+
+# Generated Python Protobuf/gRPC code
+**/*_pb2.py
+**/*_pb2.pyi
+**/*_pb2_grpc.py
+
+# Node and Angular
+**/node_modules
+**/.angular
+
+# Python and uv build artifacts
+root_orchestrator/system-manager-python/dist
+cluster_orchestrator/cluster-manager/dist
+libraries/oakestra-utils/dist
+libraries/resource-abstractor-client/dist
+
+# addons_engine/addons-dashboard build artifacts
+addons_engine/addons-dashboard/dist
+
+# go_node_engine build artifacts
+go_node_engine/**/NodeEngine*
+go_node_engine/**/nodeengined*
+go_node_engine/third_party/**/dist
+
+# csi/hostpath build artifacts
+csi/hostpath/hostpath-csi
+csi/hostpath/hostpath
+
+# scheduler build artifacts
+scheduler/scheduler
