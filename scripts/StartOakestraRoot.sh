@@ -23,6 +23,15 @@ is_tag() {
     fi
 }
 
+die() {
+    if [[ $# -eq 1 ]]; then
+	echo "❌❌❌ $1" >&2
+    else
+	echo "❌❌❌ A command failed to execute correcty. Exiting." >&2
+    fi
+    exit 1
+}
+
 # Check if docker and docker compose installed 
 if [ ! -x "$(command -v docker)" ]; then
   echo "Docker is not installed. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/engine/install/"
@@ -114,14 +123,16 @@ if [ ! -z "$OAKESTRA_VERSION" ]; then
         echo "🌿 Using branch: $OAKESTRA_VERSION"
         # if main branch, use latest images, if not main branch, build from source
         if [ "$OAKESTRA_VERSION" != "main" ]; then
-            echo "🛠️ Non-main branch specified without a tag. Building from version."
-            git checkout $OAKESTRA_VERSION
-            
             # Check remove / scripts from CURRENT_DIR if present to get to repo root
             cd $CURRENT_DIR
             if [[ "$CURRENT_DIR" == *"/scripts" ]]; then
                 cd ..
             fi
+            echo "🛠️ Non-main branch specified without a tag. Building from version."
+            if ! git checkout $OAKESTRA_VERSION &> /dev/null; then
+                die "Failed to checkout branch $OAKESTRA_VERSION."
+            fi
+
             cd root_orchestrator
             echo "📦 Building images from source..."
             BUILD_FLAG=' --build'
