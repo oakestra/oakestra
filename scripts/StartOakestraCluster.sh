@@ -281,8 +281,8 @@ if [ "$OAKESTRA_VERSION" != "main" ]; then
         fi
         # Create override file with custom service manager version
         echo "services:
-  root_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/root-service-manager:alpha-$ALPHA_TAG" > ~/.oakestra/cluster_orchestrator/override-custom-service-manager-version.yml
+  cluster_service_manager:
+    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:alpha-$ALPHA_TAG" > ~/.oakestra/cluster_orchestrator/override-custom-service-manager-version.yml
         OAK_OVERRIDES="${OAK_OVERRIDES}-f override-custom-service-manager-version.yml " 
 
         OAK_OVERRIDES="${OAK_OVERRIDES}-f ~/.oakestra/cluster_orchestrator/override-custom-service-manager-version.yml "
