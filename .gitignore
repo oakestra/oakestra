@@ -40,6 +40,9 @@ node_modules/
 /libraries/oakestra-utils/dist/
 /libraries/resource-abstractor-client/dist/
 
+# Stale build output from the old library layout (local leftovers only)
+/libraries/**/build/
+
 # addons_engine/addons-dashboard build artifacts
 /addons_engine/addons-dashboard/dist/
 

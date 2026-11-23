@@ -2,29 +2,15 @@ ARG BASE_DIR=/oakestra
 ARG APP_DIR=$BASE_DIR/root_orchestrator/system-manager-python
 ARG LIB_DIR=$BASE_DIR/libraries
 
-# The builder starts from the same image as the runtime stage, not ghcr.io/astral-sh/uv:*:
-# the uv images only ship linux/amd64 and linux/arm64, while we also build linux/arm/v7.
-# uv itself is installed from PyPI, which has armv7 wheels.
-FROM python:3.10-slim-trixie AS builder
+FROM ghcr.io/astral-sh/uv:python3.10-trixie-slim AS builder
 
 ARG BASE_DIR
 ARG APP_DIR
 ARG LIB_DIR
-ARG UV_VERSION=0.13.9
-
-# Compilers and headers for dependencies without prebuilt wheels on every platform
-# (e.g. grpcio, greenlet and cryptography on linux/arm/v7). Only the builder needs them.
-RUN apt-get update \
-    && apt-get --yes install --no-install-recommends \
-      build-essential \
-      libffi-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir "uv==${UV_VERSION}"
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_NO_DEV=1 \
-    UV_PYTHON_DOWNLOADS=never
+    UV_NO_DEV=1
 
 COPY pyproject.toml uv.lock $BASE_DIR/
 

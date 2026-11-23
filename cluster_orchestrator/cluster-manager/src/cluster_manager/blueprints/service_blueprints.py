@@ -6,7 +6,6 @@ from flask import Response, request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from oakestra_utils.types.statuses import (
-    NegativeSchedulingStatus,
     PositiveSchedulingStatus,
     convert_to_status,
 )
@@ -103,19 +102,14 @@ class SchedulingController(MethodView):
             f"Result: {node_id if node_id is not None else data.get('status')}"
         )
         if node_id is None:
-            # No worker can host the instance right now. Mark the instance itself with the
-            # negative scheduling status, so that re_deploy_dead_jobs_routine schedules it again.
-            status = (
-                convert_to_status(data.get("status")) or NegativeSchedulingStatus.NO_WORKER_CAPACITY
-            )
-            job_management.update_job_and_instance_status(
-                job_id, instance_number, status.value, status_detail="No worker available"
-            )
+            # scheduling failed
+            status = convert_to_status(data.get("status"))
+            job_operations.update_job_status(job_id, status)
             return Response(json_util.dumps({"status": "ok"}), mimetype="application/json")
 
         # update job instance
         job_management.update_instance_node(job_id, instance_number, node_id)
-        job_management.update_job_and_instance_status(
+        job_management.update_status(
             job_id, instance_number, PositiveSchedulingStatus.NODE_SCHEDULED.value
         )
 
