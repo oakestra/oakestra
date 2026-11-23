@@ -5,8 +5,6 @@ import re
 import traceback
 
 import paho.mqtt.client as paho_mqtt
-from interfaces.mongodb_requests import mongo_find_node_by_id_and_update_subnetwork
-from interfaces.root_service_manager_requests import root_service_manager_get_subnet
 from network.deployment import deployment_address_update, deployment_status_report
 from network.tablequery import interests, resolution
 
@@ -173,19 +171,26 @@ def _tablequery_handler(client_id, payload):
     mqtt_publish_tablequery_result(client_id, result)
 
 
+# Fixed shared subnet returned to every worker. Must match
+# env.DefaultFixedSubnetV4 / DefaultFixedSubnetV6 in net_manager.
+FIXED_SUBNET_V4 = "10.18.0.0"
+FIXED_SUBNET_V6 = "fc00::"
+
+
 def _subnet_handler(client_id, payload):
+    # DEPRECATED: per-node subnet allocation is retired in favour of a fixed
+    # shared subnet. We keep answering the request (staged deprecate -> no-op -> remove) so
+    # older NetManagers keep working, but we no longer allocate — we return the constant.
     method = payload.get("METHOD")
     if method == "GET":
         try:
-            # associate new subnetwork to the node
-            addr = root_service_manager_get_subnet()
-            if addr is None:
-                logger.error(
-                    "Root service manager responded with an invalid subnetwork: " + str(addr)
-                )
-                return
-            mongo_find_node_by_id_and_update_subnetwork(client_id, addr[0], addr[1])
-            mqtt_publish_subnetwork_result(client_id, {"address": addr[0], "addressv6": addr[1]})
+            logger.info(
+                "[DEPRECATED] subnet request from %s: returning fixed shared subnet",
+                client_id,
+            )
+            mqtt_publish_subnetwork_result(
+                client_id, {"address": FIXED_SUBNET_V4, "addressv6": FIXED_SUBNET_V6}
+            )
         except Exception as e:
             logger.error(f"Error in _subnet_handler: {str(e)}")
             logger.debug(e, exc_info=True)

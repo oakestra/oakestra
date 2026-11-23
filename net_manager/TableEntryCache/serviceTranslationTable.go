@@ -106,7 +106,11 @@ type TableManager struct {
 	// rescanning replicas on a hit. It's atomic rather than rwlock-guarded so
 	// that check doesn't need the lock at all; see Generation.
 	generation atomic.Uint64
-	rwlock     sync.RWMutex
+	// localNode is this node's address. Namespace IPs are only unique per node -
+	// every node allocates them from the same fixed subnet - so wherever a
+	// namespace IP alone has to pick one entry, the entry hosted here wins.
+	localNode netip.Addr
+	rwlock    sync.RWMutex
 }
 
 func NewTableManager() TableManager {
@@ -135,6 +139,26 @@ func AddrFromIP(ip net.IP) (netip.Addr, bool) {
 	return addr.Unmap(), true
 }
 
+// SetLocalNode records this node's address and re-indexes, so namespace IP
+// lookups resolve to the instance hosted here when another node's instance
+// shares its namespace IP.
+func (t *TableManager) SetLocalNode(ip net.IP) {
+	addr, _ := AddrFromIP(ip)
+	t.rwlock.Lock()
+	defer t.rwlock.Unlock()
+	if addr == t.localNode {
+		return
+	}
+	t.localNode = addr
+	t.rebuildIndexesLocked()
+}
+
+// isLocalLocked reports whether entry is hosted on this node. Caller must hold rwlock.
+func (t *TableManager) isLocalLocked(entry *TableEntry) bool {
+	node, ok := AddrFromIP(entry.Nodeip)
+	return ok && t.localNode.IsValid() && node == t.localNode
+}
+
 // rebuildIndexesLocked recomputes all three address indexes from
 // translationTable. Caller must hold rwlock for writing.
 func (t *TableManager) rebuildIndexesLocked() {
@@ -143,11 +167,18 @@ func (t *TableManager) rebuildIndexesLocked() {
 	byNsIPInstance := make(map[netip.Addr]InstanceAddrs, len(t.translationTable))
 	for i, entry := range t.translationTable {
 		instance := InstanceAddrsOf(&t.translationTable[i])
-		if addr, ok := AddrFromIP(entry.Nsip); ok {
-			byNsIP[addr] = entry
-			byNsIPInstance[addr] = instance
-		}
-		if addr, ok := AddrFromIP(entry.Nsipv6); ok {
+		local := t.isLocalLocked(&t.translationTable[i])
+		for _, nsip := range [2]net.IP{entry.Nsip, entry.Nsipv6} {
+			addr, ok := AddrFromIP(nsip)
+			if !ok {
+				continue
+			}
+			// The first entry wins, except that one hosted here displaces a
+			// remote one: these indexes translate a packet's source, which is
+			// always local.
+			if existing, taken := byNsIP[addr]; taken && (!local || t.isLocalLocked(&existing)) {
+				continue
+			}
 			byNsIP[addr] = entry
 			byNsIPInstance[addr] = instance
 		}
@@ -195,14 +226,16 @@ func (t *TableManager) ReplaceJobEntries(jobName string, entries []TableEntry) e
 		prepared = append(prepared, entry)
 	}
 
-	// an incoming entry reusing a namespace IP displaces whoever held it
-	replacedNsIPs := make(map[netip.Addr]struct{}, 2*len(prepared))
+	// an incoming entry reusing a namespace IP displaces whoever held it on the
+	// same node; another node's instance with that namespace IP is unrelated
+	replacedNsIPs := make(map[nodeNsIP]struct{}, 2*len(prepared))
 	for _, entry := range prepared {
+		node, _ := AddrFromIP(entry.Nodeip)
 		if addr, ok := AddrFromIP(entry.Nsip); ok {
-			replacedNsIPs[addr] = struct{}{}
+			replacedNsIPs[nodeNsIP{node, addr}] = struct{}{}
 		}
 		if addr, ok := AddrFromIP(entry.Nsipv6); ok {
-			replacedNsIPs[addr] = struct{}{}
+			replacedNsIPs[nodeNsIP{node, addr}] = struct{}{}
 		}
 	}
 
@@ -221,21 +254,27 @@ func (t *TableManager) ReplaceJobEntries(jobName string, entries []TableEntry) e
 	return nil
 }
 
-func nsIPClaimed(entry TableEntry, claimed map[netip.Addr]struct{}) bool {
+// nodeNsIP identifies a namespace IP on one node, the scope it is unique in.
+type nodeNsIP struct{ node, nsip netip.Addr }
+
+func nsIPClaimed(entry TableEntry, claimed map[nodeNsIP]struct{}) bool {
+	node, _ := AddrFromIP(entry.Nodeip)
 	if addr, ok := AddrFromIP(entry.Nsip); ok {
-		if _, taken := claimed[addr]; taken {
+		if _, taken := claimed[nodeNsIP{node, addr}]; taken {
 			return true
 		}
 	}
 	if addr, ok := AddrFromIP(entry.Nsipv6); ok {
-		if _, taken := claimed[addr]; taken {
+		if _, taken := claimed[nodeNsIP{node, addr}]; taken {
 			return true
 		}
 	}
 	return false
 }
 
-// remove by Namespace IP, which can be either in IPv4 or IPv6 format
+// RemoveByNsip removes the entry for a namespace IP, which can be either in
+// IPv4 or IPv6 format. It tears down a local instance, so when several nodes'
+// instances share the namespace IP, the one hosted here is removed.
 func (t *TableManager) RemoveByNsip(nsip net.IP) error {
 	logger.DebugLogger().Printf("Remove by Nsip tableManager: %v", t)
 
@@ -245,9 +284,15 @@ func (t *TableManager) RemoveByNsip(nsip net.IP) error {
 	found := -1
 	// this will need to be optimised for IPv6, since that will be hell performance wise
 	for i, tableElement := range t.translationTable {
-		if tableElement.Nsip.Equal(nsip) || tableElement.Nsipv6.Equal(nsip) {
+		if !tableElement.Nsip.Equal(nsip) && !tableElement.Nsipv6.Equal(nsip) {
+			continue
+		}
+		if t.isLocalLocked(&t.translationTable[i]) {
 			found = i
 			break
+		}
+		if found < 0 {
+			found = i
 		}
 	}
 
@@ -283,6 +328,13 @@ func (t *TableManager) RemoveByJobName(jobname string) error {
 func (t *TableManager) removeByIndexLocked(index int) {
 	t.translationTable[index] = t.translationTable[len(t.translationTable)-1]
 	t.translationTable = t.translationTable[:len(t.translationTable)-1]
+}
+
+// Snapshot returns a copy of every entry in the table.
+func (t *TableManager) Snapshot() []TableEntry {
+	t.rwlock.RLock()
+	defer t.rwlock.RUnlock()
+	return append([]TableEntry(nil), t.translationTable...)
 }
 
 // SearchByServiceIP looks up entries by ServiceIP via the index and returns

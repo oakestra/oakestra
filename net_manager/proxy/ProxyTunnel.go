@@ -107,6 +107,9 @@ type Tunnel struct {
 	// itself safe for concurrent use, so nothing else needs to hold this
 	// while a packet is actually being written.
 	connectionBufferLock sync.RWMutex
+	// crypt seals payloads before they go on the wire and opens them on
+	// arrival; disabled unless EnableDataEncryption is called (p2p mode).
+	crypt dataCrypt
 }
 
 // packetBufPool holds MTU-sized buffers for Emit's ActionDeliver copies, so
@@ -217,7 +220,8 @@ type outgoingBatch struct {
 	groups     []outgoingBatchGroup
 	liveGroups int
 
-	msgs []ipv4.Message // scratch for sendOverTunnelBatch; see writeMessages
+	msgs   []ipv4.Message // scratch for sendOverTunnelBatch; see writeMessages
+	sealed sealScratch    // scratch for dataCrypt.seal
 }
 
 func newOutgoingBatch(size int) *outgoingBatch {
@@ -316,7 +320,7 @@ func (t *Tunnel) runOutgoingBatch(b *outgoingBatch) error {
 	// on redial, and there's no reason to hold the TUN write on that.
 	for i := 0; i < b.liveGroups; i++ {
 		g := &b.groups[i]
-		t.sendOverTunnelBatch(g.dst, g.bufs, b, 0)
+		t.sendOverTunnelBatch(g.dst, t.crypt.seal(g.bufs, &b.sealed), b, 0)
 	}
 	return nil
 }
@@ -368,11 +372,15 @@ func (t *Tunnel) runIngoingBatch(b *ingoingBatch) error {
 
 	b.deliverable = b.deliverable[:0]
 	for i := 0; i < n; i++ {
-		packet := b.envelopes[i][tunHeaderOffset : tunHeaderOffset+b.sizes[i]]
+		packet, ok := t.crypt.open(b.envelopes[i][tunHeaderOffset : tunHeaderOffset+b.sizes[i]])
+		if !ok {
+			logger.DebugLogger().Println("dropping tunnel datagram that failed data-plane authentication")
+			continue
+		}
 		switch action := t.dp.Handle(Ingoing, packet); action.Kind {
 		case ActionDrop:
 		case ActionDeliver:
-			b.deliverable = append(b.deliverable, b.envelopes[i][:tunHeaderOffset+b.sizes[i]])
+			b.deliverable = append(b.deliverable, b.envelopes[i][:tunHeaderOffset+len(packet)])
 		default:
 			logger.ErrorLogger().Println("ingoing datapath returned an unexpected action:", action.Kind)
 		}
@@ -424,7 +432,8 @@ func (t *Tunnel) evictDeadConn(dst netip.AddrPort, con *tunnelConn) {
 // run on several replay goroutines at once, so it gets its own scratch
 // outgoingBatch rather than sharing runOutgoingBatch's.
 func (t *Tunnel) sendOverTunnel(dst netip.AddrPort, packetBytes []byte, attemptNumber int) {
-	t.sendOverTunnelBatch(dst, [][]byte{packetBytes}, &outgoingBatch{}, attemptNumber)
+	scratch := &outgoingBatch{}
+	t.sendOverTunnelBatch(dst, t.crypt.seal([][]byte{packetBytes}, &scratch.sealed), scratch, attemptNumber)
 }
 
 // sendOverTunnelBatch sends bufs to dst, resolving dst's tunnelConn once for

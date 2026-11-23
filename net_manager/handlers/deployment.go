@@ -94,25 +94,34 @@ func deploymentHandler(requestStruct *ContainerDeployTask) (net.IP, net.IP, erro
 		return nil, nil, err
 	}
 
-	// notify to net-component
-	err = mqtt.NotifyDeploymentStatus(
-		requestStruct.ServiceName,
-		"DEPLOYED",
-		requestStruct.Instancenumber,
-		addr.String(),
-		addrv6.String(),
-		model.NetConfig.NodePublicAddress,
-		model.NetConfig.NodePublicPort,
-	)
-	if err != nil {
-		logger.ErrorLogger().Println("[ERROR]:", err)
-		return nil, nil, err
+	// notify to net-component. In p2p mode there is no cluster MQTT: the NodeEngine
+	// advertises the deployment into the gossip registry instead, so skip.
+	if !model.P2PMode {
+		err = mqtt.NotifyDeploymentStatus(
+			requestStruct.ServiceName,
+			"DEPLOYED",
+			requestStruct.Instancenumber,
+			addr.String(),
+			addrv6.String(),
+			model.NetConfig.NodePublicAddress,
+			model.NetConfig.NodePublicPort,
+		)
+		if err != nil {
+			logger.ErrorLogger().Println("[ERROR]:", err)
+			return nil, nil, err
+		}
 	}
 
 	return addr, addrv6, nil
 }
 
 func updateInternalProxyDataStructures(requestStruct *ContainerDeployTask) {
+	// In p2p mode there is no cluster MQTT: interest + table resolution are handled lazily
+	// by the resolver's p2p backend when traffic first flows (resolver.UseBackend), and the
+	// local service is already advertised into the gossip registry. Skip the MQTT path.
+	if model.P2PMode {
+		return
+	}
 	// Update internal table entry if an interest has not been set already.
 	// Otherwise, do nothing, the net will autonomously update.
 	if !mqtt.MqttIsInterestRegistered(requestStruct.ServiceName) {

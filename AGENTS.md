@@ -168,7 +168,7 @@ It creates a semantic addressing space: an IP address not only names the destina
 |---|---|
 | `10.16.0.0/12` | Container network (all instance IPs) |
 | `10.30.0.0/16` | Service Virtual IPs (require proxy translation) |
-| `10.19.1.0/24` | Default bridge subnetwork on each node |
+| `10.18.0.0/26` | Bridge subnetwork, the same on every node (namespace IPs are unique per node only) |
 
 Port `50103` is reserved and cannot be used by deployed services.
 

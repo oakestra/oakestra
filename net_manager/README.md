@@ -147,9 +147,24 @@ This is a special subnetwork where all the VirtualIP addresses belongs. An addre
 translated to an actual container address and pass trough the proxy. 
 
 ###Bridge Subnetwork:
-`10.19.1.0/24`
+`10.18.0.0/26` (IPv6 `fc00::/120`)
 
 Address where all the containers of this node belong. Each new container will have an address from this space.
+Every node uses the same bridge subnetwork: a namespace IP only has to be unique within its node, because
+the proxy forwards to the node endpoint of the route it picked rather than looking a namespace IP up
+globally. The per-node subnet request (`RequestSubnetworkMqttBlocking`, the cluster `net/subnet` MQTT
+handler and the root `GET /api/net/subnet`) is deprecated; the endpoints still answer, with this fixed
+subnet, so older NetManagers keep working.
 
 ###Prohibited port numbers
 A deployed service can't expose the port 50103
+
+## P2P mode (clusterless workers)
+
+The NetManager can also run **without any root or cluster orchestrator**. When the paired NodeEngine
+registers with `mode=p2p`, the NetManager joins a SWIM gossip mesh (`hashicorp/memberlist`,
+PSK-encrypted, port 50104) and resolves Service IPs from a gossip-replicated service registry
+(`p2p/`) instead of the MQTT table query. The registry plugs into the resolver as a backend
+(`resolver/backend.go`), and tunnel payloads between nodes are encrypted with a key derived from the
+network secret (`proxy/dataEncryption.go`). See [`P2P_MODE.md`](../P2P_MODE.md) for how it works end
+to end.

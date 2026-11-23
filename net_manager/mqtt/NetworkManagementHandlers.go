@@ -39,7 +39,11 @@ func subnetworkAssignmentMqttHandler(_ mqtt.Client, msg mqtt.Message) {
 	subnetworkResponseChannel <- responseStruct
 }
 
-/*Request a subnetwork to the cluster using the mqtt broker*/
+// RequestSubnetworkMqttBlocking requests a subnetwork from the cluster over MQTT.
+//
+// Deprecated: the per-node subnet request is retired in favour of a fixed
+// shared subnet (see env.NewEnvironmentFixedSubnet). No longer called by the NetManager;
+// kept only for backward compatibility during the staged rollout.
 func RequestSubnetworkMqttBlocking() (mqttSubnetworkResponse, error) {
 	subnetworkResponseChannel = make(chan mqttSubnetworkResponse, 1)
 

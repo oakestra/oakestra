@@ -3,7 +3,6 @@ package env
 import (
 	"NetManager/TableEntryCache"
 	"NetManager/logger"
-	"NetManager/mqtt"
 	"NetManager/network"
 	"NetManager/resolver"
 	"errors"
@@ -117,17 +116,26 @@ func NewCustom(proxyname string, customConfig Configuration) *Environment {
 	return result
 }
 
-// NewEnvironmentClusterConfigured Creates a new environment using the default configuration and asking the cluster for a new subnetwork
-func NewEnvironmentClusterConfigured(proxyname string) *Environment {
-	logger.InfoLogger().Println("Asking the cluster for a new subnetwork")
-	subnetwork_response, err := mqtt.RequestSubnetworkMqttBlocking()
-	if err != nil {
-		log.Fatal("Invalid subnetwork received. Can't proceed.")
-	}
-	ipv4_subnet := subnetwork_response.Address
-	ipv6_subnet := subnetwork_response.Address_v6
+// Fixed local subnet shared by every node. Because the proxy resolves the
+// destination node from the ServiceIP table entry, the local namespace subnet
+// no longer needs to be globally unique, so every node can reuse the same one. This lets
+// us drop the per-node subnet request to the cluster/root entirely.
+const (
+	DefaultFixedSubnetV4 = "10.18.0.0"
+	DefaultFixedSubnetV6 = "fc00::"
+)
 
-	logger.InfoLogger().Println("Creating with default config")
+// NewEnvironmentFixedSubnet creates an environment on a fixed local subnet shared by all
+// nodes. Used by both cluster and p2p mode. Empty args fall back to defaults.
+func NewEnvironmentFixedSubnet(proxyname, ipv4Subnet, ipv6Subnet string) *Environment {
+	if ipv4Subnet == "" {
+		ipv4Subnet = DefaultFixedSubnetV4
+	}
+	if ipv6Subnet == "" {
+		ipv6Subnet = DefaultFixedSubnetV6
+	}
+	logger.InfoLogger().Printf("Creating environment on fixed shared subnet %s (v6 %s)", ipv4Subnet, ipv6Subnet)
+
 	mtusize, err := strconv.Atoi(os.Getenv("TUN_MTU_SIZE"))
 	if mtusize < 0 || err != nil {
 		logger.InfoLogger().Printf("Default to mtusize 1450")
@@ -135,9 +143,9 @@ func NewEnvironmentClusterConfigured(proxyname string) *Environment {
 	}
 	config := Configuration{
 		HostBridgeName:             "goProxyBridge",
-		HostBridgeIP:               network.NextIPv4(net.ParseIP(ipv4_subnet), 1).String(),
+		HostBridgeIP:               network.NextIPv4(net.ParseIP(ipv4Subnet), 1).String(),
 		HostBridgeMask:             "/26",
-		HostBridgeIPv6:             network.NextIPv6(net.ParseIP(ipv6_subnet), 1).String(),
+		HostBridgeIPv6:             network.NextIPv6(net.ParseIP(ipv6Subnet), 1).String(),
 		HostBridgeIPv6Prefix:       "/120",
 		HostTunName:                "goProxyTun",
 		ConnectedInternetInterface: "",
@@ -146,12 +154,34 @@ func NewEnvironmentClusterConfigured(proxyname string) *Environment {
 	return NewCustom(proxyname, config)
 }
 
+// NewEnvironmentClusterConfigured is DEPRECATED. The per-node subnet request
+// to the cluster is being retired in favour of the fixed shared subnet. It now delegates
+// to NewEnvironmentFixedSubnet and no longer performs the MQTT subnet request.
+//
+// Deprecated: use NewEnvironmentFixedSubnet.
+func NewEnvironmentClusterConfigured(proxyname string) *Environment {
+	logger.InfoLogger().Println("[DEPRECATED] subnet request skipped; using fixed shared subnet")
+	return NewEnvironmentFixedSubnet(proxyname, DefaultFixedSubnetV4, DefaultFixedSubnetV6)
+}
+
 func (env *Environment) Destroy() {
 	_ = netlink.LinkDel(&netlink.GenericLink{
 		LinkAttrs: netlink.LinkAttrs{
 			Name: env.config.HostBridgeName,
 		},
 	})
+}
+
+// GetDeployedServiceIPs returns the namespace IPs assigned to a locally deployed
+// service instance. Used in p2p mode to fill the registry advertisement.
+func (env *Environment) GetDeployedServiceIPs(sname string, instance int) (net.IP, net.IP, bool) {
+	env.deployedServicesLock.RLock()
+	defer env.deployedServicesLock.RUnlock()
+	s, ok := env.deployedServices[fmt.Sprintf("%s.%d", sname, instance)]
+	if !ok {
+		return nil, nil, false
+	}
+	return s.ip, s.ipv6, true
 }
 
 func (env *Environment) IsServiceDeployed(jobName string) bool {

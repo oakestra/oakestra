@@ -126,8 +126,8 @@ func TestReplaceJobEntriesDisplacesNamespaceIPs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// instance 0 reuses the same namespace IP as `stale`
-	if err := table.ReplaceJobEntries("newjob", []TableEntry{jobEntry("newjob", 0, "10.0.0.2", 50103)}); err != nil {
+	// instance 0 reuses the same namespace IP as `stale`, on the same node
+	if err := table.ReplaceJobEntries("newjob", []TableEntry{jobEntry("newjob", 0, "10.0.0.1", 50103)}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -140,6 +140,22 @@ func TestReplaceJobEntriesDisplacesNamespaceIPs(t *testing.T) {
 	}
 	if len(table.SearchByJobName("oldjob")) != 0 {
 		t.Error("the displaced entry is still in the table")
+	}
+}
+
+// Namespace IPs are only unique per node - every node allocates them from the same
+// fixed subnet - so an entry on another node with the same namespace IP is a
+// different instance, not a stale one.
+func TestReplaceJobEntriesKeepsNamespaceIPsOnOtherNodes(t *testing.T) {
+	table := NewTableManager()
+	if err := table.Add(jobEntry("oldjob", 0, "10.0.0.1", 50103)); err != nil {
+		t.Fatal(err)
+	}
+	if err := table.ReplaceJobEntries("newjob", []TableEntry{jobEntry("newjob", 0, "10.0.0.2", 50103)}); err != nil {
+		t.Fatal(err)
+	}
+	if len(table.SearchByJobName("oldjob")) != 1 {
+		t.Error("an instance on another node was evicted for sharing its namespace IP")
 	}
 }
 

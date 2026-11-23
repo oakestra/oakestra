@@ -12,7 +12,7 @@ from flask_swagger_ui import get_swaggerui_blueprint
 from interfaces.jwt_generator_requests import get_public_key
 from interfaces.mongodb_requests import mongo_init
 from net_logging import configure_logging
-from network import routes_interests, subnetwork_management
+from network import routes_interests
 from network.utils import sanitize
 from operations import cluster_management, instances_management, service_management
 
@@ -237,14 +237,20 @@ def table_query_resolution_by_ip(service_ip):
 # ......................................................#
 
 
+# Fixed shared subnet returned to every cluster/worker. Must match
+# env.DefaultFixedSubnetV4 / DefaultFixedSubnetV6 in net_manager.
+FIXED_SUBNET_V4 = "10.18.0.0"
+FIXED_SUBNET_V6 = "fc00::"
+
+
 @app.route("/api/net/subnet", methods=["GET"])
 def subnet_request():
     """
-    Returns a new subnetwork address
+    DEPRECATED: per-node subnet allocation is retired in favour of a fixed
+    shared subnet. The endpoint is kept (staged deprecate -> no-op -> remove) so older
+    callers keep working, but it no longer allocates — it returns the constant.
     """
-    addr = subnetwork_management.new_subnetwork_addr()
-    addrv6 = subnetwork_management.new_subnetwork_addr_v6()
-    return {"subnet_addr": addr, "subnet_addr_v6": addrv6}
+    return {"subnet_addr": FIXED_SUBNET_V4, "subnet_addr_v6": FIXED_SUBNET_V6}
 
 
 if __name__ == "__main__":

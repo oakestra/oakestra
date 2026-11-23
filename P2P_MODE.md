@@ -90,23 +90,23 @@ It also owns the node's **identity and trust state** ([enroll.go](node_engine/p2
 [tlsauth.go](node_engine/p2p/tlsauth.go)): keypair, self-signed cert, roster, join tokens, and the
 enrollment endpoint.
 
-### NetManager (`oakestra-net/node-net-manager`)
+### NetManager (`oakestra/net_manager`)
 
 The NetManager owns **everything that is gossip or packets**:
 
 - **Membership**: a memberlist instance, keyed with the network PSK
-  ([p2p/membership.go](../oakestra-net/node-net-manager/p2p/membership.go)).
+  ([p2p/membership.go](net_manager/p2p/membership.go)).
 - **Registry**: the replicated map of who hosts what
-  ([p2p/registry.go](../oakestra-net/node-net-manager/p2p/registry.go)).
+  ([p2p/registry.go](net_manager/p2p/registry.go)).
 - **Resolver**: replaces the MQTT table query when the proxy needs to resolve a ServiceIP
-  ([p2p/resolver.go](../oakestra-net/node-net-manager/p2p/resolver.go)).
+  ([p2p/resolver.go](net_manager/p2p/resolver.go)).
 - **Discovery**: mDNS advertise/browse for re-joining after the node ends up alone
-  ([p2p/discovery.go](../oakestra-net/node-net-manager/p2p/discovery.go)).
+  ([p2p/discovery.go](net_manager/p2p/discovery.go)).
 - **Proxy tunnel**: the existing `:50103` UDP overlay, now with AEAD payload encryption and
   table-entry-based forwarding.
 
 It exposes the mesh to the paired NodeEngine through local-only endpoints
-([server/p2pRoutes.go](../oakestra-net/node-net-manager/server/p2pRoutes.go)) and pushes membership
+([server/p2pRoutes.go](net_manager/server/p2pRoutes.go)) and pushes membership
 events back to the NodeEngine.
 
 **Division of labour:** the NetManager knows *who is alive* and *what is advertised*. It never
@@ -129,7 +129,7 @@ Both CLIs detect p2p mode from `/etc/oakestra/conf.json`. On a p2p worker, `oak 
 talk to the **local** control API (`https://127.0.0.1:50105`) over mTLS with the node's identity,
 and skip login. See [§11](#11-using-the-oak-cli).
 
-### Root/cluster service managers (`oakestra-net`)
+### Root/cluster service managers (`root_orchestrator/service-manager`, `cluster_orchestrator/service-manager`)
 
 They are not used in p2p mode. They changed only because of the shared-subnet work that both modes
 now use ([§14](#14-changes-that-also-affect-cluster-mode)).
@@ -233,7 +233,7 @@ Notes:
 
 ### 4.3 NetManager registration
 
-[server/server.go](../oakestra-net/node-net-manager/server/server.go) branches on `mode`:
+[server/server.go](net_manager/server/server.go) branches on `mode`:
 
 - `registerCluster`: unchanged MQTT path, now on the fixed shared subnet.
 - `registerP2P`:
@@ -371,7 +371,7 @@ probes and suspicion. The node name is the `node_uuid`. The registry is attached
 `Delegate`, so it replicates through memberlist's **push/pull anti-entropy** (a full-state exchange
 with a random peer on every push/pull interval and on join).
 
-Events ([membership.go](../oakestra-net/node-net-manager/p2p/membership.go)):
+Events ([membership.go](net_manager/p2p/membership.go)):
 
 | memberlist event | NetManager action | NodeEngine reaction |
 |---|---|---|
@@ -434,7 +434,7 @@ Only coarse **status transitions** are written to it, never telemetry, which kee
 
 ### 7.3 The resolver
 
-`ServiceResolver` ([resolver.go](../oakestra-net/node-net-manager/p2p/resolver.go)) is the p2p
+`ServiceResolver` ([resolver.go](net_manager/p2p/resolver.go)) is the p2p
 replacement for the MQTT table query:
 
 - `Resolve(x)` looks `x` up as a ServiceIP first, then as a job name, and converts the matching entries
@@ -446,7 +446,7 @@ replacement for the MQTT table query:
 
 ### 7.4 NodeEngine ↔ NetManager endpoints
 
-Local only, served by the NetManager ([p2pRoutes.go](../oakestra-net/node-net-manager/server/p2pRoutes.go)).
+Local only, served by the NetManager ([p2pRoutes.go](net_manager/server/p2pRoutes.go)).
 All return `503` until the NetManager is registered in p2p mode.
 
 | Endpoint | Used for |
@@ -610,12 +610,12 @@ forwarded a packet by **looking the destination namespace IP up globally** to fi
 a shared subnet, many nodes may host a container at `10.18.0.5`, which would make that lookup
 ambiguous.
 
-The fix ([proxy/Datapath.go](../oakestra-net/node-net-manager/proxy/Datapath.go)): when the
+The fix ([proxy/Datapath.go](net_manager/proxy/Datapath.go)): when the
 proxy picks a concrete instance for a ServiceIP, the flow's cached `Route` records that
 instance's **node endpoint** (`DstNode:DstNodePort`), taken from the table entry it chose.
 Forwarding uses that endpoint directly and never re-resolves the namespace IP.
 
-The translation table ([TableEntryCache](../oakestra-net/node-net-manager/TableEntryCache/serviceTranslationTable.go))
+The translation table ([TableEntryCache](net_manager/TableEntryCache/serviceTranslationTable.go))
 keeps shared addresses unambiguous within one node. It knows which node it runs on
 (`SetLocalNode`, set when the datapath starts and whenever the node's address changes):
 
@@ -915,12 +915,12 @@ in this file. They live under `/etc/oakestra/p2p/`.
 | Enrollment, identity, mTLS | `oakestra/node_engine/p2p/enroll.go`, `tlsauth.go` |
 | Deployment store | `oakestra/node_engine/internal/store/` |
 | `bestRandomFit` | `oakestra/scheduler/calculate/schedulers/bestrandomfit/` |
-| Membership, registry, resolver, discovery | `oakestra-net/node-net-manager/p2p/` |
-| NetManager register + p2p routes | `oakestra-net/node-net-manager/server/server.go`, `p2pRoutes.go` |
-| Datapath, tunnel, AEAD (`dataEncryption.go`) | `oakestra-net/node-net-manager/proxy/` |
-| p2p resolver backend, route refresh | `oakestra-net/node-net-manager/resolver/backend.go` |
-| Node-aware translation table | `oakestra-net/node-net-manager/TableEntryCache/` |
-| Fixed shared subnet | `oakestra-net/node-net-manager/env/EnvironmentManager.go` |
+| Membership, registry, resolver, discovery | `oakestra/net_manager/p2p/` |
+| NetManager register + p2p routes | `oakestra/net_manager/server/server.go`, `p2pRoutes.go` |
+| Datapath, tunnel, AEAD (`dataEncryption.go`) | `oakestra/net_manager/proxy/` |
+| p2p resolver backend, route refresh | `oakestra/net_manager/resolver/backend.go` |
+| Node-aware translation table | `oakestra/net_manager/TableEntryCache/` |
+| Fixed shared subnet | `oakestra/net_manager/env/EnvironmentManager.go` |
 | oak CLI p2p detection | `oakestra-cli/oak_cli/utils/api/`, `oakestra-cli/oak_go_cli/internal/{config,api}/` |
 
 ---

@@ -125,6 +125,13 @@ func (netmqtt *NetMqttClient) runMqttClient(opts *mqtt.ClientOptions) {
 }
 
 func (netmqtt *NetMqttClient) PublishToBroker(topic string, payload string) error {
+	// Defensive: in p2p mode the MQTT client is never initialised (nil mutex + client).
+	// Callers should skip MQTT in p2p, but guard here so a missed path logs instead of
+	// panicking with a nil-pointer dereference.
+	if netmqtt.mainMqttClient == nil || netmqtt.mqttWriteMutex == nil {
+		logger.DebugLogger().Printf("MQTT not initialised (p2p mode?), dropping publish to %s", topic)
+		return nil
+	}
 	netmqtt.mqttWriteMutex.Lock()
 	logger.DebugLogger().Printf("MQTT - publish to - %s - the payload - %s", topic, payload)
 	token := netmqtt.mainMqttClient.Publish(fmt.Sprintf("nodes/%s/net/%s", netmqtt.clientID, topic), 1, false, payload)
