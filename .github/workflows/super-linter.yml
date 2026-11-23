@@ -2,7 +2,9 @@
 ---
     name: Super-Linter Codestyles Checks
     
-    on: pull_request
+    on:
+      pull_request:
+      merge_group:
     
     permissions: { }
     
@@ -18,7 +20,7 @@
     
         steps:
           - name: Checkout code
-            uses: actions/checkout@v4
+            uses: actions/checkout@v7
             with:
               fetch-depth: 0
     

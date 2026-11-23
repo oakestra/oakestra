@@ -1,0 +1,11 @@
+{
+  "HostTunnelDeviceName": "goProxyTun",
+  "TunnelIP": "10.19.1.254",
+  "ProxySubnetwork": "10.30.0.0",
+  "ProxySubnetworkMask": "255.255.0.0",
+  "TunnelPort": 50103,
+  "MTUsize": 1450,
+  "TunNetIPv6": "fcef::dead:beef",
+  "ProxySubnetworkIPv6": "fcef::",
+  "ProxySubnetworkIPv6Prefix": 21
+}

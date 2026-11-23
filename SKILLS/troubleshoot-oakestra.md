@@ -7,6 +7,10 @@ Oakestra is an edge computing orchestration platform composed of:
 - **Cluster Orchestrator** – manages multiple worker nodes (docker-compose in `cluster_orchestrator/`)
 - **Worker Node** – runs workloads (`NodeEngine` + `NetManager` binaries)
 
+All of it, networking included, lives in the `oakestra/oakestra` repository (the former `oakestra-net` repo was merged into it):
+`root_orchestrator/service-manager/` (root service manager), `cluster_orchestrator/service-manager/` (cluster service manager),
+`node_engine/` (NodeEngine) and `net_manager/` (NetManager). File bug reports for any of them against `oakestra/oakestra`.
+
 Deployments can be:
 - **1-DOC** (single machine): root + cluster on the same host, started via `scripts/StartOakestraFull.sh`
 - **Root only**: started via `scripts/StartOakestraRoot.sh`
@@ -21,7 +25,8 @@ Run the following and interpret the output to understand what is running on this
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null
-systemctl status NodeEngine 2>/dev/null || true
+systemctl status nodeengine 2>/dev/null || true
+systemctl status netmanager 2>/dev/null || true
 which NodeEngine 2>/dev/null || true
 which NetManager 2>/dev/null || true
 ```
@@ -86,14 +91,14 @@ Check that no foreign process is occupying Oakestra's ports before containers st
 
 **Root Orchestrator ports:**
 ```bash
-for port in 10000 50052 10007 10008 10099 6379 10004 11011 10011 80 3000 3100 11101 11102 11103; do
+for port in 10000 50052 10007 10008 10099 6379 10004 11011 10011 80 3000 3100 12345 11101 11102 11103; do
   ss -tlnp "sport = :$port" 2>/dev/null | grep -v "State" | head -1 && echo "  ^ port $port" || true
 done
 ```
 
 **Cluster Orchestrator ports:**
 ```bash
-for port in 10003 10107 10108 10110 10100 10101 10105 11012 6479 10009 3001 3101; do
+for port in 10003 10107 10108 10110 10100 10101 10105 11012 6479 10009 3001 3101 12346; do
   ss -tlnp "sport = :$port" 2>/dev/null | grep -v "State" | head -1 && echo "  ^ port $port" || true
 done
 ```
@@ -117,13 +122,16 @@ For each container, check:
 - `Created` (never started) → dependency failed to start
 
 **Expected containers for Root Orchestrator:**
-`system_manager`, `mongo`, `mongo_net`, `root_service_manager`, `root_redis`, `root_scheduler`, `root_resource_abstractor`, `jwt_generator`, `grafana`, `loki`, `promtail`, `oakestra-frontend-container`
+`system_manager`, `mongo`, `mongo_net`, `root_service_manager`, `root_redis`, `root_scheduler`, `root_resource_abstractor`, `jwt_generator`, `grafana`, `loki`, `alloy`, `oakestra-frontend-container`
 
 Optional root containers (if addons enabled):
-`addons_manager`, `addons_monitor`, `addons_dashboard`, `marketplace_manager`
+`root_addons_manager`, `root_addons_monitor`, `root_addons_dashboard`, `marketplace_manager`
 
 **Expected containers for Cluster Orchestrator:**
-`mqtt`, `cluster_mongo`, `cluster_mongo_net`, `cluster_service_manager`, `cluster_manager`, `cluster_scheduler`, `cluster_resource_abstractor`, `cluster_redis`, `prometheus`, `cluster_grafana`, `cluster_loki`, `cluster_promtail`
+`mqtt`, `cluster_mongo`, `cluster_mongo_net`, `cluster_service_manager`, `cluster_manager`, `cluster_scheduler`, `cluster_resource_abstractor`, `cluster_redis`, `prometheus`, `cluster_grafana`, `cluster_loki`, `cluster_alloy`
+
+Optional cluster containers (if addons enabled):
+`cluster_addons_manager`, `cluster_addons_monitor`, `cluster_addons_dashboard`
 
 ### 2.2 Restart Loop Detection
 
@@ -142,7 +150,7 @@ Pull logs for ALL running or recently exited containers. Focus on errors, traceb
 
 ```bash
 # Get logs for all oakestra containers (last 200 lines each)
-for name in $(docker ps -a --format "{{.Names}}" | grep -E "system_manager|mongo|root_service_manager|root_redis|root_scheduler|root_resource_abstractor|jwt_generator|cluster_manager|cluster_service_manager|cluster_mongo|cluster_redis|cluster_scheduler|cluster_resource_abstractor|mqtt|addons|marketplace|promtail|loki|grafana"); do
+for name in $(docker ps -a --format "{{.Names}}" | grep -E "system_manager|mongo|root_service_manager|root_redis|root_scheduler|root_resource_abstractor|jwt_generator|cluster_manager|cluster_service_manager|cluster_mongo|cluster_redis|cluster_scheduler|cluster_resource_abstractor|mqtt|addons|marketplace|alloy|loki|grafana"); do
   echo "===== LOGS: $name ====="
   docker logs --tail 100 "$name" 2>&1 | grep -iE "error|exception|traceback|failed|refused|timeout|fatal|panic|warn" || echo "(no errors in last 100 lines)"
 done
@@ -169,6 +177,9 @@ docker logs <exited_container_name> 2>&1 | tail -50
 | `CLUSTER_ADDRESS env var is not set` (cluster_manager log) | Missing env var — cluster cannot advertise its address to root |
 | `cluster_address is required` (system_manager log) | Cluster connected via gRPC but sent empty `cluster_address` |
 | `Cluster reachability probe failed` / `cluster not reachable at` (system_manager log) | Root cannot reach `http://CLUSTER_ADDRESS:10100/api/cluster/status` — wrong IP, firewall, or cluster_manager not up |
+| `permission denied` opening `/var/run/docker.sock` (Alloy log) | Alloy cannot discover/read container logs; inspect the socket mount and host permissions |
+| `loki.write` connection refused | The local Loki is not ready, or `LOKI_URL` is wrong for the selected network mode |
+| Service status `NoGpuCapacity` | The SLA asks for `vgpus`/`vram` (setting `vram` alone implies 1 GPU) and no candidate has that many GPUs with at least `vram` MiB free on each. Check the worker's `gpu_vram_free` (free MiB per GPU) and `vgpus` in `cluster_mongo` (`docker exec cluster_mongo mongosh --port 10107 candidates --quiet --eval "db.candidates.find({}, {candidate_name:1, vgpus:1, gpu_vram_free:1}).forEach(printjson)"`); both empty/0 means `nvidia-smi` is missing or failing on the worker (STEP 9.7) |
 
 ---
 
@@ -366,6 +377,9 @@ docker inspect cluster_manager --format '{{.HostConfig.NetworkMode}}' 2>/dev/nul
 
 If `host` network mode is used (via `override-network-host.yml`), container-to-container DNS names don't work — all URLs must use `0.0.0.0` or the actual host IP. Check that environment variables in host-mode containers use IPs, not container names.
 
+Alloy is the exception for its UI: Root binds `127.0.0.1:12345` and Cluster
+binds `127.0.0.1:12346` so the diagnostic server remains local in host mode.
+
 ---
 
 ## STEP 8 — Firewall and Network Configuration
@@ -391,6 +405,9 @@ sudo firewall-cmd --list-all 2>/dev/null
 | 10100 | Cluster manager | Worker → Cluster |
 | 10110 | Cluster service manager | Worker → Cluster |
 | 80 | Dashboard | User → Root |
+
+Alloy UI ports `12345` (Root/1-DOC) and `12346` (Cluster) are bound to
+loopback only.
 
 **Quick fix — open required ports (adjust interface as needed):**
 ```bash
@@ -463,9 +480,9 @@ To change the log path: `sudo NodeEngine config applogs /your/custom/path`
 
 ```bash
 # If running as systemd service
-systemctl status NodeEngine 2>/dev/null
+systemctl status nodeengine 2>/dev/null
 # Systemd journal (startup/crash messages, before the log file is open)
-journalctl -u NodeEngine -n 50 --no-pager 2>/dev/null | grep -iE "error|fail|refused|panic|timeout|mqtt"
+journalctl -u nodeengine -n 50 --no-pager 2>/dev/null | grep -iE "error|fail|refused|panic|timeout|mqtt"
 
 # If running directly
 ps aux | grep -i NodeEngine
@@ -490,8 +507,9 @@ tail -50 /var/log/oakestra/netmanager.log 2>/dev/null || true
 ```
 
 ```bash
-systemctl status NetManager 2>/dev/null
-journalctl -u NetManager -n 50 --no-pager 2>/dev/null | grep -iE "error|fail|refused|panic|timeout"
+# The systemd unit is lowercase: netmanager.service
+systemctl status netmanager 2>/dev/null
+journalctl -u netmanager -n 50 --no-pager 2>/dev/null | grep -iE "error|fail|refused|panic|timeout"
 ps aux | grep -i NetManager
 ```
 
@@ -588,7 +606,7 @@ docker run --rm --gpus all nvidia/cuda:11.0-base nvidia-smi 2>/dev/null || echo 
 # Check GPU configuration script
 ls /usr/local/bin/configure_gpu.sh 2>/dev/null || \
 ls /opt/oakestra/configure_gpu.sh 2>/dev/null || \
-echo "GPU configure script not found (run go_node_engine/build/configure_gpu.sh if GPU is needed)"
+echo "GPU configure script not found (run node_engine/build/configure-gpu.sh if GPU is needed)"
 ```
 
 ---
@@ -609,9 +627,17 @@ curl -s --connect-timeout 3 "http://localhost:3101/ready" 2>/dev/null || echo "C
 # Prometheus (cluster)
 curl -s --connect-timeout 3 "http://localhost:10009/-/healthy" 2>/dev/null || echo "Prometheus not responding on :10009"
 
-# Check promtail can access docker socket
-docker exec promtail ls /var/run/docker.sock 2>/dev/null || echo "WARN: promtail cannot access docker socket (logs won't be collected)"
-docker exec cluster_promtail ls /var/run/docker.sock 2>/dev/null || echo "WARN: cluster_promtail cannot access docker socket"
+# Alloy diagnostic UIs (loopback only)
+curl -fsS --connect-timeout 3 "http://localhost:12345/-/ready" 2>/dev/null || echo "Root/1-DOC Alloy UI not responding on :12345"
+curl -fsS --connect-timeout 3 "http://localhost:12346/-/ready" 2>/dev/null || echo "Cluster Alloy UI not responding on :12346"
+
+# Confirm each Alloy has the read-only Docker socket and persistent state volume
+docker inspect alloy --format '{{range .Mounts}}{{println .Destination "RW=" .RW}}{{end}}' 2>/dev/null || echo "Root/1-DOC Alloy is not running"
+docker inspect cluster_alloy --format '{{range .Mounts}}{{println .Destination "RW=" .RW}}{{end}}' 2>/dev/null || echo "Cluster Alloy is not running"
+
+# Confirm the required labels have reached the local Loki
+curl -s --connect-timeout 3 "http://localhost:3100/loki/api/v1/labels" 2>/dev/null | grep -E 'container|compose_service|cluster_id' || echo "Root Loki labels are missing"
+curl -s --connect-timeout 3 "http://localhost:3101/loki/api/v1/labels" 2>/dev/null | grep -E 'container|compose_service|cluster_id' || echo "Cluster Loki labels are missing"
 ```
 
 ---
@@ -619,6 +645,10 @@ docker exec cluster_promtail ls /var/run/docker.sock 2>/dev/null || echo "WARN: 
 ## STEP 11 — API Smoke Tests
 
 ```bash
+# Alloy diagnostic API
+curl -fsS --connect-timeout 3 "http://localhost:12345/-/ready" 2>/dev/null || echo "FAIL: Root/1-DOC Alloy diagnostic API not responding"
+curl -fsS --connect-timeout 3 "http://localhost:12346/-/ready" 2>/dev/null || echo "FAIL: Cluster Alloy diagnostic API not responding"
+
 # Root System Manager API
 echo "=== System Manager Health ==="
 curl -s --connect-timeout 5 "http://localhost:10000/api/v1/info" 2>/dev/null | python3 -m json.tool 2>/dev/null || echo "FAIL: system_manager API not responding"
@@ -663,11 +693,15 @@ docker exec addons_monitor ls /var/run/docker.sock 2>/dev/null || echo "WARN: ad
 
 ```bash
 # Check which images are using pre-built vs locally built
-docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.CreatedSince}}\t{{.Size}}" | grep -E "system_manager|cluster_manager|root_scheduler|cluster_scheduler|resource_abstractor|jwt_generator|addons"
+docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.CreatedSince}}\t{{.Size}}" | grep -E "system_manager|cluster_manager|service_manager|service-manager|root_scheduler|cluster_scheduler|resource_abstractor|jwt_generator|addons"
 
 # Check for dangling images / build cache issues
 docker images -f "dangling=true" | head -10
 ```
+
+Pre-built service manager images are `ghcr.io/oakestra/oakestra/root-service-manager` and `ghcr.io/oakestra/oakestra/cluster-service-manager`.
+Deployments from before the `oakestra-net` merge pull them from `ghcr.io/oakestra/oakestra-net/...` instead; mixing the two on one
+deployment means the root and cluster run different network plugin versions.
 
 If images are outdated or from a wrong branch, rebuild:
 ```bash
@@ -678,11 +712,11 @@ docker compose build --no-cache system_manager
 docker compose pull
 ```
 
-The shared `libraries/` packages (`oakestra_utils_library`, `resource_abstractor_client`) are built from the repo-local `libraries/` folder via a Buildx named build context — not from a remote git repo, and there is no `LIB_BRANCH` env var. If a build fails on these libraries, check that:
+The shared `libraries/` packages (`oakestra-utils`, `resource-abstractor-client`) are part of the root `uv` workspace and are built from the repo-local `libraries/` folder — not from a remote git repo, and there is no `LIB_BRANCH` env var. If a build fails on these libraries, check that:
 ```bash
-# The libraries build context resolves (declared in docker-compose.yml as additional_contexts):
-ls libraries/oakestra_utils_library libraries/resource_abstractor_client
-# BuildKit/Buildx is enabled (named build contexts require it — default on modern Docker):
+# The shared libraries exist locally:
+ls libraries/oakestra-utils libraries/resource-abstractor-client
+# BuildKit/Buildx is enabled (multi-stage UV builds require Buildx — default on modern Docker):
 docker buildx version
 ```
 
@@ -691,6 +725,11 @@ docker buildx version
 ## STEP 14 — Log Deep Dive for Specific Issues
 
 For containers showing problems, do a deep log analysis:
+
+Grafana, Loki, and Alloy are excluded from centralized log collection by default
+through `oakestra.logging.enabled: "false"`. Inspect their Docker logs directly;
+their absence from Loki does not indicate a collector failure. A Compose
+override can set the label to `"true"` for centralized diagnostics.
 
 ```bash
 # Full logs for a specific container (replace <name>)
@@ -759,7 +798,7 @@ sudo kill -9 <pid>
 ### Fix: Stale containers from previous deployment
 ```bash
 # Stop and remove all oakestra containers
-docker ps -a --format "{{.Names}}" | grep -E "system_manager|mongo|root_|cluster_|jwt_|grafana|loki|promtail|mqtt|addons|marketplace|oakestra" | xargs -r docker rm -f
+docker ps -a --format "{{.Names}}" | grep -E "system_manager|mongo|root_|cluster_|jwt_|grafana|loki|alloy|mqtt|addons|marketplace|oakestra" | xargs -r docker rm -f
 # Then restart
 ```
 

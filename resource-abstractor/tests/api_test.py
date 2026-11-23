@@ -33,6 +33,20 @@ class BlueprintTestCase(unittest.TestCase):
         self.assertEqual(response_data, expected)
         # Add more assertions to check the response data
 
+    @patch("services.hook_service.hooks_db.find_hooks", return_value=[])
+    @patch("api.v1.apps_blueprint.apps_db.update_app")
+    def test_patch_app_filters_by_user_id(self, mock_update_app, _):
+        mock_update_app.return_value = None
+
+        self.client.patch(
+            "/api/v1/applications/65d200f3812caeb85e21ee19?userId=bob",
+            json={"application_name": "app1"},
+        )
+
+        app_id, _, extra_filter = mock_update_app.call_args.args
+        self.assertEqual(app_id, "65d200f3812caeb85e21ee19")
+        self.assertEqual(extra_filter, {"userId": "bob"})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -76,18 +76,18 @@ flowchart LR
 ### NodeEngine (`oakestra/go_node_engine`)
 
 The NodeEngine is the **p2p brain**. In p2p mode the daemon skips the cluster handshake and MQTT
-entirely and instead starts a `p2p.Controller` ([p2p/control.go](go_node_engine/p2p/control.go)), which
+entirely and instead starts a `p2p.Controller` ([p2p/control.go](node_engine/p2p/control.go)), which
 plays four roles at once:
 
 | Role | What it does | Code |
 |---|---|---|
-| **Coordinator** | Receives an SLA, expands it into jobs, shortlists and samples members, assigns each job to a winner | `DeploySLA`, `ScheduleJob` in [coordinator.go](go_node_engine/p2p/coordinator.go) |
+| **Coordinator** | Receives an SLA, expands it into jobs, shortlists and samples members, assigns each job to a winner | `DeploySLA`, `ScheduleJob` in [coordinator.go](node_engine/p2p/coordinator.go) |
 | **Host** | Answers placement probes, re-checks capacity on assign, allocates the instance IP, deploys, persists, advertises | `evaluateBid`, `handleAssign` |
-| **Custodian** | Stores SLA copies for jobs on other nodes; reschedules them if their host dies; retries PENDING jobs; stops its own copy of a duplicated job | [custody.go](go_node_engine/p2p/custody.go), `handleNodeLeave`, `retryPending`, [duplicates.go](go_node_engine/p2p/duplicates.go) |
+| **Custodian** | Stores SLA copies for jobs on other nodes; reschedules them if their host dies; retries PENDING jobs; stops its own copy of a duplicated job | [custody.go](node_engine/p2p/custody.go), `handleNodeLeave`, `retryPending`, [duplicates.go](node_engine/p2p/duplicates.go) |
 | **Observability endpoint** | Network-wide `services ls`, log proxying, capacity sweep, root-API compatibility for `oak` | `servicesHandler`, `logsHandler`, `capacityHandler`, `/api/*` handlers |
 
-It also owns the node's **identity and trust state** ([enroll.go](go_node_engine/p2p/enroll.go),
-[tlsauth.go](go_node_engine/p2p/tlsauth.go)): keypair, self-signed cert, roster, join tokens, and the
+It also owns the node's **identity and trust state** ([enroll.go](node_engine/p2p/enroll.go),
+[tlsauth.go](node_engine/p2p/tlsauth.go)): keypair, self-signed cert, roster, join tokens, and the
 enrollment endpoint.
 
 ### NetManager (`oakestra-net/node-net-manager`)
@@ -120,7 +120,7 @@ CPU/memory fit used by `bestCpuMemFit`, then picks **at random among the candida
 tolerance of the best score**. The randomness spreads load when many coordinators decide at the
 same time on similar data. The shared filtering lives in `schedulers/cpumemfit`/`placement`. The
 NodeEngine imports the module via a `replace scheduler => ../scheduler` directive and adapts it in
-[p2p/scheduling/scheduling.go](go_node_engine/p2p/scheduling/scheduling.go). GPU fit is filtered
+[p2p/scheduling/scheduling.go](node_engine/p2p/scheduling/scheduling.go). GPU fit is filtered
 there first, because the shared scheduler has no GPU dimension.
 
 ### oak CLI (`oakestra-cli`, Python and Go)
@@ -179,7 +179,7 @@ NodeEngine -d --p2p --join 192.168.1.10:50106 --token 3fa9c1.8e2b... --ca-hash s
 NodeEngine -d --p2p
 ```
 
-`--p2p` (or `NodeEngine config mode p2p ...`) runs `applyP2PStartup` ([cmd/mode.go](go_node_engine/cmd/mode.go)),
+`--p2p` (or `NodeEngine config mode p2p ...`) runs `applyP2PStartup` ([cmd/mode.go](node_engine/cmd/mode.go)),
 which:
 
 1. Validates flags: `--join` requires `--token` and `--ca-hash`, and `--init` and `--join` are mutually exclusive.
@@ -191,7 +191,7 @@ which:
 
 ### 4.2 Daemon boot sequence (p2p)
 
-[internal/daemon/nodeengined.go](go_node_engine/internal/daemon/nodeengined.go):
+[internal/daemon/nodeengined.go](node_engine/internal/daemon/nodeengined.go):
 
 ```mermaid
 sequenceDiagram
@@ -224,7 +224,7 @@ Notes:
 - A bare `--p2p` on a node with no credentials **bootstraps a new network**, the same as `--init`.
   This is intentional for single-node use. To join an existing network, pass `--join`.
 - The NetManager receives the gossip PSK and seeds in its `/register` call
-  ([requests/NetManagerRequests.go](go_node_engine/requests/NetManagerRequests.go)). Seeds are
+  ([requests/NetManagerRequests.go](node_engine/requests/NetManagerRequests.go)). Seeds are
   `p2p.bootstrap_peers` plus the seeds returned by enrollment. The `--join` address is the
   *enrollment* endpoint (`:50106`), not a gossip seed. The seed comes back from enrollment as
   `<member-ip>:50104`.
@@ -318,7 +318,7 @@ every identity, each NodeEngine also gossips its own fingerprint: `AnnounceRoste
 registry entry `{job_name: "__roster__", node_uuid, meta: fingerprint}`. That entry rides the
 PSK-authenticated gossip, the same trust base as admission.
 
-The control API ([tlsauth.go](go_node_engine/p2p/tlsauth.go)):
+The control API ([tlsauth.go](node_engine/p2p/tlsauth.go)):
 
 - **Server**: presents the node cert, `ClientAuth: RequireAnyClientCert`, and a custom
   `VerifyPeerCertificate` that accepts a client **iff its fingerprint is trusted**.
@@ -469,7 +469,7 @@ query fills those rows when a service is deployed. In p2p mode the resolver only
 ### 8.1 Entry points
 
 The same SLA JSON is accepted by the root orchestrator and by a p2p worker
-([sla.go](go_node_engine/p2p/sla.go)):
+([sla.go](node_engine/p2p/sla.go)):
 
 - `NodeEngine deploy sla.json [--local]` → `POST /ctrl/deploy {sla, local}`
 - `oak app create sla.json` on a p2p worker → `POST /api/application` (compat layer, same path)
@@ -546,7 +546,7 @@ in-process answer arrives before any peer's.
 
 ### 8.3 Capabilities and the shortlist
 
-Each NodeEngine runs `AnnounceCapabilities` ([capabilities.go](go_node_engine/p2p/capabilities.go))
+Each NodeEngine runs `AnnounceCapabilities` ([capabilities.go](node_engine/p2p/capabilities.go))
 from startup. It advertises one registry entry per node:
 
 ```jsonc
@@ -600,7 +600,7 @@ Runtime status changes afterwards (`DEAD`, `FAILED`, `COMPLETED`) are re-adverti
 | **ServiceIP** (RR and InstanceNumber) | `10.30.<block>.x`, one `/24` per node | Network-wide | RR: coordinator. Instance: host. |
 
 Each node's `/24` block octet is `fnv32a(node_uuid) mod 256`, or `p2p.service_ip_block` if set
-([ipam.go](go_node_engine/p2p/ipam.go)). A node only allocates from its own block, so two
+([ipam.go](node_engine/p2p/ipam.go)). A node only allocates from its own block, so two
 nodes never mint the same ServiceIP unless their blocks collide (see [§15](#15-known-limitations)).
 
 ### 9.2 Why a shared namespace subnet works
@@ -661,7 +661,7 @@ interval after the registry converges. The registry is an in-memory map, so the 
 
 Every job's SLA is stored on **k custodians** (`p2p.replica_factor`, default 3): the host plus
 the top k−1 other live members by **Highest-Random-Weight (rendezvous) hashing** of `(job, node)`
-([custody.go](go_node_engine/p2p/custody.go)). HRW is deterministic, so **every node computes
+([custody.go](node_engine/p2p/custody.go)). HRW is deterministic, so **every node computes
 the same custodian order with no coordination**.
 
 Custody is replicated by direct unicast (`POST /ctrl/custody`) after every successful
@@ -754,7 +754,7 @@ A job can end up running on two nodes:
   the coordinator places the job again.
 
 Duplicates are **resolved deterministically, without coordination**
-([duplicates.go](go_node_engine/p2p/duplicates.go)). Every 15 s each node compares the jobs it
+([duplicates.go](node_engine/p2p/duplicates.go)). Every 15 s each node compares the jobs it
 hosts against the registry. When another node also has a live placement of the same job, every
 node applies the same rule:
 
@@ -908,12 +908,12 @@ in this file. They live under `/etc/oakestra/p2p/`.
 
 | Area | Path |
 |---|---|
-| Config, flags, mode switch | `oakestra/go_node_engine/config/config.go`, `cmd/root.go`, `cmd/mode.go` |
-| p2p CLI | `oakestra/go_node_engine/cmd/p2pcli.go` |
-| Daemon wiring | `oakestra/go_node_engine/internal/daemon/nodeengined.go` |
-| Controller, placement, capabilities, custody, duplicates, SLA, IPAM | `oakestra/go_node_engine/p2p/` |
-| Enrollment, identity, mTLS | `oakestra/go_node_engine/p2p/enroll.go`, `tlsauth.go` |
-| Deployment store | `oakestra/go_node_engine/internal/store/` |
+| Config, flags, mode switch | `oakestra/node_engine/config/config.go`, `cmd/root.go`, `cmd/mode.go` |
+| p2p CLI | `oakestra/node_engine/cmd/p2pcli.go` |
+| Daemon wiring | `oakestra/node_engine/internal/daemon/nodeengined.go` |
+| Controller, placement, capabilities, custody, duplicates, SLA, IPAM | `oakestra/node_engine/p2p/` |
+| Enrollment, identity, mTLS | `oakestra/node_engine/p2p/enroll.go`, `tlsauth.go` |
+| Deployment store | `oakestra/node_engine/internal/store/` |
 | `bestRandomFit` | `oakestra/scheduler/calculate/schedulers/bestrandomfit/` |
 | Membership, registry, resolver, discovery | `oakestra-net/node-net-manager/p2p/` |
 | NetManager register + p2p routes | `oakestra-net/node-net-manager/server/server.go`, `p2pRoutes.go` |

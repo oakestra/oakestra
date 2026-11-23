@@ -8,7 +8,7 @@ services:
     pull_policy: always
 
   cluster_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
+    image: ghcr.io/oakestra/oakestra/cluster-service-manager:latest
     pull_policy: always
 
   cluster_manager:
@@ -37,6 +37,10 @@ services:
 
   cluster_loki:
     image: grafana/loki:2.9.2
+    pull_policy: always
+
+  cluster_alloy:
+    image: grafana/alloy:v1.17.0
     pull_policy: always
 
   cluster_addons_manager:
