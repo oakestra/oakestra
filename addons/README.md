@@ -6,11 +6,27 @@ install and run them and a CLI for publishing them:
 
 | Binary | Image | What it does |
 |---|---|---|
-| `cmd/marketplace` | `marketplace_manager` | The catalog. Keeps track of where addons come from (sources), syncs them and serves one merged list. Runs on root only, port `11102`. |
+| `cmd/marketplace` | `marketplace_manager` | The marketplace manager. Keeps track of where addons come from (sources), syncs them and serves one merged list. Runs on root only, port `11102`. |
 | `cmd/addons` | `addons_manager` | Installs, updates and removes addons and keeps their containers running. Runs on root (`11101`) and on every cluster (`11201`). |
-| `cmd/addonctl` | - | CLI for addon authors and catalog maintainers: `validate` and `build-index`. |
+| `cmd/addonctl` | - | CLI for addon authors and catalog maintainers: `validate`, `diff` and `build-index`, see [addonctl](#addonctl). |
 
 The dashboard (separate repo) talks to both services. The examples below use `curl` instead.
+
+### Terms
+
+| Term | Meaning |
+|---|---|
+| marketplace, catalog | A set of addon definitions published together, usually a git repository with one file per addon. The two words mean the same thing. |
+| official marketplace | The marketplace the Oakestra project maintains, in the `oakestra/community-marketplace` repository. Source `official`. |
+| tap | A marketplace someone else hosts, added on a root by URL. Source `<tap name>`. |
+| index | The single JSON file a marketplace is published as, built with `addonctl build-index`. See [Index format](#index-format). |
+| marketplace manager | The component (`cmd/marketplace`, container `marketplace_manager`) that syncs the indexes of all sources and serves one merged list. One per root. |
+| source | Where the marketplace manager gets addons from: `official`, a tap, or `local`. |
+| local | Addons registered directly on one marketplace manager through its API, with no index behind them. |
+
+The API paths, environment variables and error codes keep the `marketplace` prefix
+(`/api/v1/marketplace/...`, `MARKETPLACE_*`, `marketplace_unavailable`). They belong to the
+marketplace manager.
 
 ## Quick start
 
@@ -26,8 +42,8 @@ TOKEN=$(curl -s -X POST http://localhost:10000/api/auth/login \
   -d '{"username": "Admin", "password": "Admin"}' | jq -r .token)
 ```
 
-Register an addon on the marketplace. A local registration may use an image tag; the marketplace
-resolves it to a digest and stores the pinned reference.
+Register an addon on the marketplace manager. A local registration may use an image tag; the
+marketplace manager resolves it to a digest and stores the pinned reference.
 
 ```bash
 curl -s -X POST http://localhost:11102/api/v1/marketplace/addons \
@@ -79,9 +95,9 @@ curl -s -X DELETE -H "Authorization: Bearer $TOKEN" http://localhost:11101/api/v
 
 ## Writing an addon
 
-An addon is described by a definition: a name, a version, the containers to run and the
-permissions they need. The marketplace accepts JSON. Catalog repositories keep one YAML or JSON
-file per addon. A YAML example with host mounts and a volume:
+An addon is described by a definition: a name, a version, the containers to run and the permissions
+they need. The marketplace manager accepts JSON. Catalog repositories keep one YAML or JSON file per
+addon. A YAML example with host mounts and a volume:
 
 ```yaml
 name: node-metrics
@@ -134,7 +150,7 @@ volumes:
 | `volumes` | no | Named volumes the addon creates: `name`, optional `driver`, `driver_opts`, `labels`. |
 | `networks` | no | Networks the addon creates: `name`, optional `driver`, `enable_ipv6`. |
 | `ui` | no | A page for the dashboard, see [Addons with a dashboard UI](#addons-with-a-dashboard-ui). |
-| `source` | no | Set by the marketplace. Leave it out. |
+| `source` | no | Set by the marketplace manager. Leave it out. |
 
 Each service has:
 
@@ -168,8 +184,8 @@ cd addons
 go run ./cmd/addonctl validate path/to/node-metrics.yaml
 ```
 
-`validate` applies the catalog rules, so tags fail there even though a local registration would
-accept them.
+`validate` applies the catalog rules, so image tags fail there even though a local registration
+would accept them. See [addonctl](#addonctl) for the other commands.
 
 ### Names in Docker
 
@@ -233,7 +249,8 @@ one file named after it (`node-metrics.yaml`), changes go through pull requests,
 `addonctl validate` and `addonctl diff` on them. `diff` fails if a definition changed but its
 version didn't go up, or if installed copies couldn't update to it. After a merge, CI builds
 `index.json` with `addonctl build-index` and publishes it to GitHub Pages, where every Oakestra
-marketplace picks it up on its next sync. See the repository's `CONTRIBUTING.md` to add an addon.
+marketplace manager picks it up on its next sync. See the repository's `CONTRIBUTING.md` to add an
+addon.
 
 ### Your own catalog (tap)
 
@@ -244,9 +261,10 @@ organisation. Build the index from a directory of definition files:
 go run ./cmd/addonctl build-index --source myorg --serial 7 --out index.json ./catalog
 ```
 
-`--source` is the tap name the index is meant for. `--serial` must grow with every publication:
-the marketplace refuses an index whose serial is lower than the last one it accepted. Host
-`index.json` on any https server and add it on the root marketplace:
+`--source` is the tap name the index is meant for. `--serial` must grow with every publication: the
+marketplace manager refuses an index whose serial is lower than the last one it accepted (all flags
+are under [addonctl](#addonctl)). Host `index.json` on any https server and add it on the root
+marketplace manager:
 
 ```bash
 curl -s -X POST http://localhost:11102/api/v1/marketplace/sources \
@@ -260,23 +278,31 @@ loopback addresses).
 
 ### Index format
 
+Marketplace managers don't read catalog repositories. Each catalog is published as one file, the
+index, built with `addonctl build-index`. A static file can be served from anywhere that speaks
+https (GitHub Pages, object storage, a presigned URL) or [imported](#without-internet-access) by
+hand, and the marketplace manager doesn't need git or forge credentials to fetch it. A sync is one
+request with an ETag. The marketplace manager takes an index whole or not at all, so it never
+serves half a sync, and the `serial` lets it refuse an older index, so a stale mirror or a replayed
+file can't bring back versions that were already replaced.
+
 An index is a JSON file with `schema` (always `1`), `source`, `serial`, `generated_at`, `addons`
 (the definitions) and `signatures` (reserved, empty for now). Indexes are not signed yet. What
 protects them today is digest pinning, the serial check and review of the catalog repository.
 
-Indexes are decoded as strictly as single definitions. A field that an older marketplace doesn't
-know makes it reject the whole index and keep serving its last good copy. Catalogs that want to
-carry extra information should put it in `metadata`, which every version accepts, rather than wait
-for a new field.
+Indexes are decoded as strictly as single definitions. A field that an older marketplace manager
+doesn't know makes it reject the whole index and keep serving its last good copy. Catalogs that want
+to carry extra information should put it in `metadata`, which every version accepts, rather than
+wait for a new field.
 
-The marketplace syncs every source every `MARKETPLACE_SYNC_INTERVAL` (6 hours by default) using
-ETags, or right away with `POST /api/v1/marketplace/sources/<name>/sync`. If a fetch fails or the
-index is rejected, the marketplace keeps serving the last good copy and shows the problem in the
-source's `last_error`, next to `last_attempt_at` and `last_synced_at`.
+The marketplace manager syncs every source every `MARKETPLACE_SYNC_INTERVAL` (6 hours by default)
+using ETags, or right away with `POST /api/v1/marketplace/sources/<name>/sync`. If a fetch fails or
+the index is rejected, the marketplace manager keeps serving the last good copy and shows the
+problem in the source's `last_error`, next to `last_attempt_at` and `last_synced_at`.
 
 Fetches are https only (unless `allow_insecure`), limited to 5 MiB and 10 seconds, follow
 redirects only on the same host, and refuse private, loopback and link-local addresses (unless
-`allow_private`), so a tap URL can't point the marketplace at your internal network.
+`allow_private`), so a tap URL can't point the marketplace manager at your internal network.
 
 ### Without internet access
 
@@ -291,6 +317,63 @@ The serial check still applies. An imported file is only as trustworthy as the w
 The images have to be available to the Docker daemon on each machine, preloaded or from a local
 registry.
 
+### addonctl
+
+`addonctl` checks catalog files and builds indexes from them. The marketplace manager only sees a
+catalog once its index is published, and one bad entry makes it reject the whole index and stay on
+the last good copy, so a typo would hold back every other addon in that catalog. It also only sees
+the newest index, so it can't tell when a change breaks installed copies, such as a definition that
+changed without a version bump. `addonctl` runs these checks before publishing. It uses the same
+decoding and validation code as the marketplace manager (`internal/definition`), so a catalog that
+passes locally is accepted on sync, and `diff` compares a catalog with its previous version to catch
+changes that installed copies couldn't follow. The exit codes and the Markdown output of `diff` are
+meant for CI, which is how the official catalog runs it.
+
+Run it from `addons/` with `go run ./cmd/addonctl <command>`, or build it with
+`go build ./cmd/addonctl`. `addonctl help` prints the usage and `addonctl <command> -h` the flags.
+
+A catalog directory holds one definition per file, in YAML (`.yaml`, `.yml`) or JSON (`.json`),
+without a `source` field. If the directory has an `addons/` subdirectory, the files are read from
+there instead. Files are checked as index entries: images must be pinned by digest and every
+permission the services need must be declared.
+
+| Command | What it does |
+|---|---|
+| `validate [--source <name>] <file>...` | Checks the given files. Prints every problem and `N of M files failed validation`. |
+| `build-index --source <name> --serial N --out <file> [--generated-at <time>] [--allow-empty] <dir>` | Checks every file in the catalog and writes the index. |
+| `diff [--source <name>] <base-dir> <head-dir>` | Compares two versions of a catalog, usually the base and head of a pull request. |
+
+Flags:
+
+| Flag | |
+|---|---|
+| `--source` | The catalog the files belong to: `official` or a tap name. Optional for `validate` and `diff` (default `official`), required for `build-index`. |
+| `--serial` | Positive integer, has to go up with every publication. The marketplace manager refuses an index whose serial is lower than the last one it accepted. |
+| `--out` | Where to write the index. It is written to a temporary file first and renamed into place, so a failed run never leaves a half-written index behind. |
+| `--generated-at` | RFC 3339 timestamp for the index's `generated_at`. Without it, `SOURCE_DATE_EPOCH` is used if set, otherwise the current time. Set one of them to get byte-identical indexes from the same files. |
+| `--allow-empty` | Write an index without addons instead of failing. An empty index removes every addon of that source from every marketplace manager that syncs it, so it has to be asked for explicitly. |
+
+`build-index` and `diff` also require each file to be named after its addon (`node-metrics.yaml` for
+`name: node-metrics`). `validate` doesn't check file names. `build-index` reads the index back the
+way the marketplace manager will before writing it, so it fails on an index that marketplace
+managers would reject, for example one over the size limit.
+
+`diff` prints a Markdown table for reviewers to stdout (added, changed, removed addons with
+versions and declared permissions, and **permissions grow** when an update asks for more). It
+fails when:
+
+- a definition changed but its version didn't go up, because installed copies would never be
+  offered the update and their approve would stop working,
+- the addons manager would refuse the update because of a host path conflict,
+- a head file doesn't validate, or two head files define the same addon.
+
+A missing base directory counts as an empty catalog, for the first pull request. Base files that
+fail today's rules are skipped with a warning, so a stricter `addonctl` doesn't block unrelated
+changes.
+
+Exit codes: `0` on success, `1` when files fail validation or `diff` finds problems, `2` for a
+wrong invocation (unknown command, missing or invalid flags).
+
 ## Installing and running addons
 
 ### Install, update and approve
@@ -299,12 +382,12 @@ Install, update and approve all ask the admin to confirm the exact definition th
 flow is the same for all three:
 
 1. Call the endpoint without `accept_definition`.
-2. The addons manager fetches the definition from the marketplace and answers `409` with
+2. The addons manager fetches the definition from the marketplace manager and answers `409` with
    `code: "confirmation_required"`, `definition` (the exact JSON that will be stored),
    `definition_hash` and `permissions`. Show these to the admin.
 3. Call again with `accept_definition` set to the hash.
 
-The marketplace doesn't publish hashes. Only the hash from the `409` counts, so the
+The marketplace manager doesn't publish hashes. Only the hash from the `409` counts, so the
 admin always confirms what the addons manager actually fetched. If the catalog changes between the
 two calls, the hash no longer matches and you get a new `409`.
 
@@ -315,12 +398,13 @@ granted when the old version had that exact path with at least the same access.
 
 `approve` is for an addon that is `failed`, for example after an image couldn't be pulled or with
 `grant signature invalid; re-approve the addon` (see [Grant signing](#grant-signing-and-the-state-volume)).
-It only succeeds if the marketplace still serves the installed version with the same definition.
-A failed addon is deployed again, a running one keeps running. If the marketplace has a newer
-version, update instead. If the definition changed under the same version, remove and reinstall.
+It only succeeds if the marketplace manager still serves the installed version with the same
+definition. A failed addon is deployed again, a running one keeps running. If the marketplace
+manager has a newer version, update instead. If the definition changed under the same version,
+remove and reinstall.
 
 Clusters work the same way: send the requests to the cluster addons manager on port `11201`. It
-reads definitions from the root marketplace.
+reads definitions from the root marketplace manager.
 
 ### Statuses
 
@@ -359,10 +443,10 @@ valid token. Until a service has loaded the public key to check tokens, protecte
 
 Errors are JSON: `{"code": "...", "message": "...", "errors": [...]}`. Branch on `code`, which is
 stable, because a status like `409` has several meanings. `message` is for people and may change.
-Validation errors (`validation_failed`) from the marketplace and for invalid definitions add an
-`errors` array of `{"path", "message"}`, for example `{"path": "services[0].image", ...}`. Request
-bodies are decoded strictly, an unknown field is a `400` on the addons manager and a `422` on the
-marketplace.
+Validation errors (`validation_failed`) from the marketplace manager and for invalid definitions add
+an `errors` array of `{"path", "message"}`, for example `{"path": "services[0].image", ...}`.
+Request bodies are decoded strictly, an unknown field is a `400` on the addons manager and a `422`
+on the marketplace manager.
 
 | `code` | Status | Meaning |
 |---|---|---|
@@ -376,11 +460,11 @@ marketplace.
 | `confirmation_required` | 409 | The definition has to be accepted, or it changed since it was shown. The body carries `definition`, `definition_hash` and `permissions`. |
 | `already_installed` | 409 | The addon is installed already. |
 | `host_path_conflict` | 409 | The host paths overlap with an installed addon. |
-| `no_update_available` | 409 | The marketplace has nothing newer. |
+| `no_update_available` | 409 | The marketplace manager has nothing newer. |
 | `busy` | 409 | The addon is installing, updating or otherwise not settled. |
 | `conflict` | 409 | Any other conflict, for example removing the official or local source, or an addon that changed during the request. |
-| `sync_failed` | 502 | The marketplace couldn't fetch or accept a source's index. |
-| `marketplace_unavailable` | 502 | The addons manager can't reach the marketplace. |
+| `sync_failed` | 502 | The marketplace manager couldn't fetch or accept a source's index. |
+| `marketplace_unavailable` | 502 | The addons manager can't reach the marketplace manager. |
 | `internal_error` | 500 | Unexpected failure, details are in the service log. |
 
 ### Addons manager (root `11101`, cluster `11201`)
@@ -399,7 +483,7 @@ marketplace.
 definition fields, a record has `qualified_name`, `addon_id`, `source`, `status`,
 `status_details`, `update_available`, `latest_version`, `created_at` and `updated_at`.
 
-### Marketplace (root `11102`)
+### Marketplace manager (root `11102`)
 
 Reads need no token: the cluster addons managers read from here and have no user token. Writes
 need an admin token.
@@ -468,7 +552,7 @@ repo.
 Both services read their configuration from environment variables. The compose files in
 `root_orchestrator/` and `cluster_orchestrator/` set the ones that differ from the defaults.
 
-### marketplace
+### marketplace manager
 
 | Variable | Default | |
 |---|---|---|
@@ -487,7 +571,7 @@ Both services read their configuration from environment variables. The compose f
 |---|---|---|
 | `ADDONS_MANAGER_PORT` | `11101` | Listen port. Compose sets `11201` on clusters. |
 | `ADDONS_ENGINE_MONGO_URL`, `ADDONS_ENGINE_MONGO_PORT` | `localhost`, `10007` | MongoDB. Database `addons`, collection `installed`. |
-| `MARKETPLACE_ADDR` | `http://localhost:11102` | The root marketplace. On a cluster this points at the root. |
+| `MARKETPLACE_ADDR` | `http://localhost:11102` | The root marketplace manager. On a cluster this points at the root. |
 | `ORCHESTRATION_PLANE` | `root` | `root` or `cluster`. Used in container names. Only root serves `/ui-addons`. |
 | `RECONCILE_INTERVAL` | `15s` | Go duration or seconds, at least 1s. |
 | `UPDATE_CHECK_INTERVAL` | `10m` | Go duration or seconds, at least 1s. |
@@ -509,7 +593,7 @@ Both services need the root's public key to check tokens. They look for it in th
    `jwt_generator`.
 
 Root uses the jwt_generator. Clusters have none, so the cluster compose file sets
-`JWT_PUBLIC_KEY_URL` to the root marketplace's `/api/v1/marketplace/auth/public-key`.
+`JWT_PUBLIC_KEY_URL` to the root marketplace manager's `/api/v1/marketplace/auth/public-key`.
 
 The jwt_generator creates a new key pair on every restart, so a key loaded from it is fetched again
 when a token fails to verify. Keys from `JWT_PUBLIC_KEY_URL` or `JWT_PUBLIC_KEY` are loaded once
@@ -539,15 +623,15 @@ record, but an admin approved that copy when it was current.
 
 ### What is exposed
 
-- Only the addons manager mounts the Docker socket. The marketplace resolves digests through the
-  registry HTTP API and doesn't need it.
+- Only the addons manager mounts the Docker socket. The marketplace manager resolves digests through
+  the registry HTTP API and doesn't need it.
 - Mongo (10007, 10008, 10107, 10108), Redis (6379, 6479), the resource abstractors (11011, 11012)
   and the jwt_generator (10011) are not published on the host. They have no authentication, and
   the jwt_generator's `POST /create` hands out tokens to anyone. `override-network-host.yml` puts
   them back on the host network, so avoid it where untrusted users or addons can reach the host.
-- The marketplace reads are open because clusters on other hosts read from it. Anyone who can
-  reach port `11102` can see the configured taps (never their tokens) and their addons. Firewall
-  the port if you don't run remote clusters or want the catalog closed.
+- Reads from the marketplace manager are open because clusters on other hosts read from it. Anyone
+  who can reach port `11102` can see the configured taps (never their tokens) and their addons.
+  Firewall the port if you don't run remote clusters or want the catalog closed.
 
 ### Trust
 
