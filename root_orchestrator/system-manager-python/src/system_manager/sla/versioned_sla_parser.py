@@ -2,6 +2,7 @@ import json
 
 from .sla_versions import sla_validator_by_version
 
+
 class SLAFormatError(BaseException):
     message = "The given SLA was not formatted correctly"
 
