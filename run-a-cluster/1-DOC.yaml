@@ -29,7 +29,7 @@ services:
     ports:
       - '80:80'
     restart: unless-stopped
-    container_name: oaekstra-frontend-container
+    container_name: oakestra-frontend-container
     labels: *root-log-labels
     environment:
       - API_ADDRESS=${SYSTEM_MANAGER_URL}:10000
@@ -296,7 +296,7 @@ services:
     ports:
       - "10100:10100"
       - "10101:10101"
-    command: bash -c 'sleep 15; python cluster_manager.py'
+    command: bash -c 'sleep 15; exec python -m cluster_manager.main'
     labels: *cluster-log-labels
     environment:
       - MY_PORT=10100
@@ -539,7 +539,7 @@ volumes:
     driver: local
   loki_data:
     driver: local
-  
+
 
 networks:
   default:

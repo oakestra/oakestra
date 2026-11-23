@@ -28,7 +28,7 @@ SERVICE_NS=ci
 
 # Taken from the library in this checkout so a new rejection reason doesn't
 # need an edit here. The library is stdlib only, so no pip install needed.
-UTILS_LIBRARY="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/libraries/oakestra_utils_library"
+UTILS_LIBRARY="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/libraries/oakestra-utils/src"
 NEGATIVE_SCHEDULING_STATUSES=$(python3 -c '
 import sys
 sys.path.insert(0, sys.argv[1])

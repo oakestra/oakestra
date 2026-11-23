@@ -1,43 +1,73 @@
-FROM python:3.10-slim-bookworm
-LABEL org.opencontainers.image.source=https://github.com/oakestra/oakestra
+ARG BASE_DIR=/oakestra
+ARG APP_DIR=$BASE_DIR/root_orchestrator/system-manager-python
+ARG LIB_DIR=$BASE_DIR/libraries
 
-# The greenlet pip package requires gcc & g++ to work properly. Cryptography requires libffi.
-RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ git libffi-dev
+# The builder starts from the same image as the runtime stage, not ghcr.io/astral-sh/uv:*:
+# the uv images only ship linux/amd64 and linux/arm64, while we also build linux/arm/v7.
+# uv itself is installed from PyPI, which has armv7 wheels.
+FROM python:3.10-slim-trixie AS builder
 
-COPY requirements.txt /
+ARG BASE_DIR
+ARG APP_DIR
+ARG LIB_DIR
+ARG UV_VERSION=0.13.9
 
-# Oakestra shared libraries are pulled from the repo-local libraries/ folder via the
-# "libraries" named build context (see docker-compose.yml / CI), not from a remote git repo.
-# DL3022 is ignored below: "libraries" is a BuildKit named build context, not a FROM stage.
-# hadolint ignore=DL3022
-COPY --from=libraries . /libraries
+# Compilers and headers for dependencies without prebuilt wheels on every platform
+# (e.g. grpcio, greenlet and cryptography on linux/arm/v7). Only the builder needs them.
+RUN apt-get update \
+    && apt-get --yes install --no-install-recommends \
+      build-essential \
+      libffi-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir "uv==${UV_VERSION}"
 
-# Install appropriate requirements
-RUN pip install -r requirements.txt --no-cache-dir \
-    && pip install --no-cache-dir /libraries/resource_abstractor_client /libraries/oakestra_utils_library \
-    && rm /requirements.txt
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_DEV=1 \
+    UV_PYTHON_DOWNLOADS=never
 
-COPY . /
+COPY pyproject.toml uv.lock $BASE_DIR/
 
-RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/clusterRegistration.proto
+WORKDIR $BASE_DIR
+RUN uv sync --frozen --no-install-workspace --package system-manager
 
-# TRUE for verbose logging
-ENV FLASK_DEBUG=FALSE
+COPY libraries/ $LIB_DIR/
+COPY root_orchestrator/system-manager-python/ $APP_DIR/
 
-ENV ROOT_MONGO_URL=localhost
-ENV ROOT_MONGO_PORT=10007
+WORKDIR $APP_DIR
+RUN uv run --no-sync -m grpc_tools.protoc \
+        -Isrc \
+        --python_out=src \
+        --grpc_python_out=src \
+        --pyi_out=src \
+        src/system_manager/proto/cluster_registration.proto \
+    && uv sync --frozen --no-editable
 
-ENV ROOT_SCHEDULER_URL=localhost
-ENV ROOT_SCHEDULER_PORT=7777
+FROM python:3.10-slim-trixie
 
-ENV NET_PLUGIN_URL=localhost
-ENV NET_PLUGIN_PORT=10100
+ARG BASE_DIR
 
-ENV LOG_LEVEL=INFO
+COPY --from=builder $BASE_DIR/.venv $BASE_DIR/.venv
 
-ENV MY_PORT=10000
+# TODO: Let the service create its upload directory under XDG_DATA_HOME itself.
+RUN mkdir -p /files
 
-EXPOSE 10000
-EXPOSE 50052
+RUN apt-get update \
+    && apt-get --yes install --no-install-recommends \
+      libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-CMD gunicorn --bind [::]:${MY_PORT} system_manager:app
+ENV PATH="$BASE_DIR/.venv/bin:$PATH" \
+    FLASK_DEBUG=0 \
+    ROOT_MONGO_URL=localhost \
+    ROOT_MONGO_PORT=10007 \
+    ROOT_SCHEDULER_URL=localhost \
+    ROOT_SCHEDULER_PORT=7777 \
+    NET_PLUGIN_URL=localhost \
+    NET_PLUGIN_PORT=10100 \
+    MY_PORT=10000 \
+    LOG_LEVEL=INFO
+
+LABEL org.opencontainers.image.source="https://github.com/oakestra/oakestra"
+
+CMD gunicorn --bind [::]:${MY_PORT} system_manager.main:app

@@ -1,51 +1,70 @@
-FROM python:3.10-slim-bookworm
-LABEL org.opencontainers.image.source https://github.com/oakestra/oakestra
+ARG BASE_DIR=/oakestra
+ARG APP_DIR=$BASE_DIR/cluster_orchestrator/cluster-manager
+ARG LIB_DIR=$BASE_DIR/libraries
 
-RUN apt-get update -y &&\
-    apt-get install -y \
-        curl \
-        python3-dev \
-        build-essential \
-        git
+# The builder starts from the same image as the runtime stage, not ghcr.io/astral-sh/uv:*:
+# the uv images only ship linux/amd64 and linux/arm64, while we also build linux/arm/v7.
+# uv itself is installed from PyPI, which has armv7 wheels.
+FROM python:3.10-slim-trixie AS builder
 
-COPY requirements.txt /
+ARG BASE_DIR
+ARG APP_DIR
+ARG LIB_DIR
+ARG UV_VERSION=0.13.9
 
-# Oakestra shared libraries are pulled from the repo-local libraries/ folder via the
-# "libraries" named build context (see docker-compose.yml / CI), not from a remote git repo.
-# DL3022 is ignored below: "libraries" is a BuildKit named build context, not a FROM stage.
-# hadolint ignore=DL3022
-COPY --from=libraries . /libraries
+# Compilers and headers for dependencies without prebuilt wheels on every platform
+# (e.g. grpcio, greenlet and cryptography on linux/arm/v7). Only the builder needs them.
+RUN apt-get update \
+    && apt-get --yes install --no-install-recommends \
+      build-essential \
+      libffi-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir "uv==${UV_VERSION}"
 
-# Install appropriate requirements
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir /libraries/oakestra_utils_library /libraries/resource_abstractor_client
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_DEV=1 \
+    UV_PYTHON_DOWNLOADS=never
 
-COPY . /
+COPY pyproject.toml uv.lock $BASE_DIR/
 
-RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/clusterRegistration.proto
+WORKDIR $BASE_DIR
+RUN uv sync --frozen --no-install-workspace --package cluster-manager
 
-# ENV FLASK_APP=scheduler.py
-ENV FLASK_ENV=development
-# TRUE for verbose logging
-ENV FLASK_DEBUG=FALSE
+COPY libraries/ $LIB_DIR/
+COPY cluster_orchestrator/cluster-manager/ $APP_DIR/
 
-ENV SYSTEM_MANAGER_URL=3.120.37.66
-ENV SYSTEM_MANAGER_PORT=10000
-ENV SYSTEM_MANAGER_GRPC_PORT=50052
+WORKDIR $APP_DIR
+RUN uv run --no-sync -m grpc_tools.protoc \
+        -Isrc \
+        --python_out=src \
+        --grpc_python_out=src \
+        --pyi_out=src \
+        src/cluster_manager/proto/cluster_registration.proto \
+    && uv sync --frozen --no-editable
 
-ENV CLUSTER_SERVICE_MANAGER_URL=localhost
-ENV CLUSTER_SERVICE_MANAGER_PORT=10010
+FROM python:3.10-slim-trixie
 
-ENV CLUSTER_MONGO_URL=localhost
-ENV CLUSTER_MONGO_PORT=10007
+ARG BASE_DIR
 
-ENV CLUSTER_SCHEDULER_URL=localhost
-ENV CLUSTER_SCHEDULER_PORT=5555
+COPY --from=builder $BASE_DIR/.venv $BASE_DIR/.venv
 
-ENV MQTT_BROKER_URL=localhost
-ENV MQTT_BROKER_PORT=10003
-ENV MY_PORT=10100
+ENV PATH="$BASE_DIR/.venv/bin:$PATH" \
+    FLASK_DEBUG=0 \
+    SYSTEM_MANAGER_URL=3.120.37.66 \
+    SYSTEM_MANAGER_PORT=10000 \
+    SYSTEM_MANAGER_GRPC_PORT=50052 \
+    CLUSTER_SERVICE_MANAGER_ADDR=localhost \
+    CLUSTER_SERVICE_MANAGER_PORT=10010 \
+    CLUSTER_MONGO_URL=localhost \
+    CLUSTER_MONGO_PORT=10007 \
+    CLUSTER_SCHEDULER_URL=localhost \
+    CLUSTER_SCHEDULER_PORT=5555 \
+    MQTT_BROKER_URL=localhost \
+    MQTT_BROKER_PORT=10003 \
+    MY_PORT=10100 \
+    LOG_LEVEL=INFO
 
-ENV LOG_LEVEL=INFO
+LABEL org.opencontainers.image.source="https://github.com/oakestra/oakestra"
 
-CMD gunicorn --bind [::]:${MY_PORT} cluster_manager:app
+CMD gunicorn --bind [::]:${MY_PORT} cluster_manager.main:app

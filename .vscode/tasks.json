@@ -196,19 +196,20 @@
         },
 
         // -------------------------------------------------------- dependency installs
-        // Each Python component gets its own virtualenv in .venv/<name> (see
-        // .vscode/scripts/ensure-venv.sh): their pinned dependencies conflict, so a shared
-        // interpreter breaks whichever component was installed first.
+        // uv-managed components (system-manager, cluster-manager, shared libraries) share the
+        // root .venv populated by `uv sync`. Every other Python component gets its own
+        // virtualenv in <component-dir>/.venv (see .vscode/scripts/ensure-venv.sh): their pinned
+        // dependencies conflict, and `uv sync` would remove them from the root .venv.
         {
             "label": "install-cluster-manager-dependencies",
             "type": "shell",
-            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh cluster-manager ${command:python.interpreterPath} -r cluster_orchestrator/cluster-manager/requirements.txt ./libraries/oakestra_utils_library ./libraries/resource_abstractor_client",
+            "command": "uv sync --all-packages",
             "problemMatcher": []
         },
         {
             "label": "install-root-manager-dependencies",
             "type": "shell",
-            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh root-manager ${command:python.interpreterPath} -r root_orchestrator/system-manager-python/requirements.txt ./libraries/oakestra_utils_library ./libraries/resource_abstractor_client",
+            "command": "uv sync --all-packages",
             "problemMatcher": []
         },
         {
@@ -220,37 +221,37 @@
         {
             "label": "install-root-service-manager-dependencies",
             "type": "shell",
-            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh root-service-manager ${command:python.interpreterPath} -r root_orchestrator/service-manager/requirements.txt",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh root_orchestrator/service-manager ${command:python.interpreterPath} -r root_orchestrator/service-manager/requirements.txt",
             "problemMatcher": []
         },
         {
             "label": "install-cluster-service-manager-dependencies",
             "type": "shell",
-            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh cluster-service-manager ${command:python.interpreterPath} -r cluster_orchestrator/service-manager/requirements.txt",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh cluster_orchestrator/service-manager ${command:python.interpreterPath} -r cluster_orchestrator/service-manager/requirements.txt",
             "problemMatcher": []
         },
         {
             "label": "install-jwt-generator-dependencies",
             "type": "shell",
-            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh jwt-generator ${command:python.interpreterPath} -r root_orchestrator/jwt-generator/requirements.txt",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh root_orchestrator/jwt-generator ${command:python.interpreterPath} -r root_orchestrator/jwt-generator/requirements.txt",
             "problemMatcher": []
         },
         {
             "label": "install-addons-manager-dependencies",
             "type": "shell",
-            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh addons-manager ${command:python.interpreterPath} -r addons_engine/addons-manager/requirements.txt",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh addons_engine/addons-manager ${command:python.interpreterPath} -r addons_engine/addons-manager/requirements.txt",
             "problemMatcher": []
         },
         {
             "label": "install-addons-monitor-dependencies",
             "type": "shell",
-            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh addons-monitor ${command:python.interpreterPath} -r addons_engine/addons-monitor/requirements.txt",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh addons_engine/addons-monitor ${command:python.interpreterPath} -r addons_engine/addons-monitor/requirements.txt",
             "problemMatcher": []
         },
         {
             "label": "install-marketplace-manager-dependencies",
             "type": "shell",
-            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh marketplace-manager ${command:python.interpreterPath} -r addons_marketplace/marketplace-manager/requirements.txt",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh addons_marketplace/marketplace-manager ${command:python.interpreterPath} -r addons_marketplace/marketplace-manager/requirements.txt",
             "problemMatcher": []
         },
         {
@@ -446,7 +447,7 @@
         {
             "label": "generate-proto-files",
             "type": "shell",
-            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh protos ${command:python.interpreterPath} grpcio-tools~=1.75.1 && ${workspaceRoot}/.venv/protos/bin/python ${workspaceRoot}/scripts/generate_protos.py",
+            "command": "uv sync --all-packages && ${workspaceRoot}/.venv/bin/python ${workspaceRoot}/scripts/generate_protos.py",
             "problemMatcher": []
         },
         {
