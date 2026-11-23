@@ -6,8 +6,6 @@ from typing import Any
 
 import requests
 from oakestra_utils.types.statuses import (
-    DeploymentStatus,
-    NegativeSchedulingStatus,
     PositiveSchedulingStatus,
     convert_to_status,
 )
@@ -43,17 +41,12 @@ def send_aggregated_info_to_sm(
 
 
 def re_deploy_dead_jobs_routine() -> None:
-    re_deploy_triggers = [
-        DeploymentStatus.FAILED,
-        DeploymentStatus.DEAD,
-        NegativeSchedulingStatus.NO_WORKER_CAPACITY,
-    ]
     try:
         jobs = job_management.get_jobs_with_failed_instances()
         for job in jobs:
             instances = job.instance_list if job.instance_list else []
             for instance in instances:
-                if convert_to_status(instance.status) in re_deploy_triggers:
+                if convert_to_status(instance.status) in job_management.RE_DEPLOY_TRIGGERS:
                     logger.info("FAILED INSTANCE, ATTEMPTING RE-DEPLOY")
                     threading.Thread(
                         group=None,
@@ -78,7 +71,7 @@ def trigger_undeploy_and_re_deploy(job: Job, instance: JobInstance):
         job_management.delete_job_instance(
             job.require_id(), instance.require_instance_number(), erase=False
         )
-        job_management.update_status(
+        job_management.update_job_and_instance_status(
             job.require_id(),
             instance.require_instance_number(),
             PositiveSchedulingStatus.REQUESTED.value,
