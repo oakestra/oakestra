@@ -12,7 +12,9 @@ from ..services.instance_management import update_job_status
 logger = logging.getLogger("system_manager")
 
 clustersbp = Blueprint("Clusters", "cluster management", url_prefix="/api/clusters")
-clusterinfo = Blueprint("Clusterinfo", "cluster informations", url_prefix="/api/information")
+clusterinfo = Blueprint(
+    "Clusterinfo", "cluster informations", url_prefix="/api/information"
+)
 
 cluster_info_schema = {
     "type": "object",
@@ -57,19 +59,14 @@ cluster_info_schema = {
 @clustersbp.route("/")
 class ClustersController(MethodView):
     def get(self, *args, **kwargs):
-        clusters = list(
-            map(
-                map_cluster_attributes,
-                candidate_operations.get_candidates(resources="last_modified_timestamp,active"),
-            )
+        candidates = candidate_operations.get_candidates(
+            resources="last_modified_timestamp,active",
         )
 
-        for c in clusters:
-            if "_id" in c:
-                c["_id"] = str(c["_id"])
+        if candidates is None:
+            return abort(500, message="Getting clusters failed")
 
-        if clusters is None:
-            return abort(500, "Getting clusters failed")
+        clusters = list(map(map_cluster_attributes, candidates))
 
         return jsonify(clusters)
 
@@ -77,16 +74,14 @@ class ClustersController(MethodView):
 @clustersbp.route("/active")
 class ActiveClustersController(MethodView):
     def get(self, *args, **kwargs):
-        clusters = list(
-            map(
-                map_cluster_attributes,
-                candidate_operations.get_candidates(
-                    active=True, resources="last_modified_timestamp,active"
-                ),
-            )
+        candidates = candidate_operations.get_candidates(
+            active=True, resources="last_modified_timestamp,active"
         )
-        if clusters is None:
-            return abort(500, "Getting clusters failed")
+
+        if candidates is None:
+            return abort(500, message="Getting clusters failed")
+        
+        clusters = list(map(map_cluster_attributes, candidates))
 
         return jsonify(clusters)
 
@@ -109,7 +104,9 @@ class ClusterController(MethodView):
                 "Cluster update attempted to change IP address, ignoring update to prevent corruption"
             )
             del data["ip"]
-        updated_cluster = candidate_operations.update_candidate_information(cluster_id, data)
+        updated_cluster = candidate_operations.update_candidate_information(
+            cluster_id, data
+        )
         if updated_cluster is None:
             logger.error("Could not update cluster")
             return abort(400, message="Updating cluster failed")
