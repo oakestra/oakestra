@@ -47,7 +47,7 @@ type UnikernelRuntime struct {
 	channelLock *sync.RWMutex
 }
 
-func newUnikernelQemuRuntime(_ virtrt.RuntimeInfo) virtrt.Runtime {
+func newUnikernelQemuRuntime(_ virtrt.RuntimeInfo, _ []string) virtrt.Runtime {
 	var command string
 	var err error
 

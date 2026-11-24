@@ -1,135 +1,137 @@
 # hadolint global ignore=SC3040,DL4006,DL3003
-FROM debian:12.10-slim AS build
+FROM debian:trixie-20261027-slim AS build
 
-ARG GPU_KERNEL_DRIVER=AMDGPU
+ENV PATH="/root/.cargo/bin:${PATH}"
 
-# install dependencies
-RUN <<-EOT bash
+# Install dependencies.
+RUN <<-'EOT' bash
     set -euo pipefail
 
     export DEBIAN_FRONTEND=noninteractive
-    export DEBCONF_NOWARNINGS=yes
+
+    packages=(
+        # common
+        ca-certificates
+        curl
+        git
+
+        # virglrenderer
+        build-essential
+        cmake
+        pkgconf
+        meson
+        libdrm-dev
+        python3-yaml
+
+        # crosvm
+        libwayland-dev
+        libcap-dev
+        libclang-dev
+    )
+
     apt-get update
-    apt-get upgrade --yes
-    apt-get install --yes --no-install-recommends \
-        ca-certificates \
-        curl \
-        git \
-        cmake \
-        meson \
-        pkg-config \
-        nasm \
-        iasl \
-        python3 \
-        python-is-python3 \
-        python3-yaml \
-        build-essential \
-        libepoxy-dev \
-        libdrm-dev \
-        libvulkan-dev \
-        libwayland-dev \
-        libcap-dev \
-        libclang-dev \
-        uuid-dev \
-        mesa-common-dev
+    apt-get install --yes --no-install-recommends "${packages[@]}"
+
+    rm -rf /var/lib/apt/lists/*
 EOT
 
-# install rustup for root user
-RUN <<-EOT bash
+# Install rustup with the exact toolchain and components requested by crosvm's rust-toolchain file.
+RUN <<-'EOT' bash
     set -euo pipefail
 
-    curl --proto '=https' --tlsv1.2 --silent --show-error --fail --location https://sh.rustup.rs \
-        | sh -s -- --profile minimal --default-toolchain 1.81.0 -y
+    curl \
+        --proto '=https' \
+        --tlsv1.2 \
+        --silent \
+        --show-error \
+        --fail \
+        --location https://sh.rustup.rs \
+      | sh -s -- --profile minimal --default-toolchain "1.88.0" -y
+
+    rustup component add --toolchain "1.88.0" \
+        rustfmt \
+        clippy \
+        llvm-tools-preview
+    rustup set auto-install disable
 EOT
 
-# create output directory for build artifacts
+# Build artifacts are installed into this prefix and exported by the final scratch stage.
 RUN mkdir --parents \
-        /opt/oakestra \
-        /opt/oakestra/bin \
-        /opt/oakestra/include \
-        /opt/oakestra/lib \
-        /opt/oakestra/lib/pkgconfig \
-        /opt/oakestra/libexec
+    /opt/oakestra/bin \
+    /opt/oakestra/include \
+    /opt/oakestra/lib \
+    /opt/oakestra/lib/pkgconfig \
+    /opt/oakestra/libexec
 
-# build minigbm (maybe a specific branch or commit should be used)
-# NOTE: minigbm does not have a prefix option separate from destdir, so we manually override it at the end
-RUN <<-EOT bash
+# Build virglrenderer with only the AMDGPU DRM native-context.
+RUN <<-'EOT' bash
     set -euo pipefail
 
-    git clone --depth 1 https://chromium.googlesource.com/chromiumos/platform/minigbm.git /scratch/minigbm
-    cd /scratch/minigbm
-    sed --in-place 's/-Wxor-used-as-pow/-Wno-xor-used-as-pow/g' common.mk
-    make \
-        CPPFLAGS="-DDRV_${GPU_KERNEL_DRIVER}" DRV_${GPU_KERNEL_DRIVER}=1 \
-        OUT=out \
-        DESTDIR=/opt/oakestra \
-        INCLUDEDIR=include \
-        LIBDIR=lib \
-        install
-EOT
+    git clone \
+        --depth 1 \
+        --branch "drm-amdgpu-no-gallium" \
+        https://gitlab.freedesktop.org/axiphi/virglrenderer.git \
+        /scratch/virglrenderer
 
-# build virglrenderer (maybe a specific branch or commit should be used, e.g. "1.1.0")
-RUN <<-EOT bash
-    set -euo pipefail
-
-    git clone --depth 1 https://gitlab.freedesktop.org/virgl/virglrenderer.git /scratch/virglrenderer
     cd /scratch/virglrenderer
-    meson setup \
-        --pkg-config-path /opt/oakestra/lib/pkgconfig \
+
+    meson setup out \
         --prefix /opt/oakestra \
         --includedir include \
         --libdir lib \
         --libexecdir libexec \
-        -D venus=true -D minigbm_allocation=true -D unstable-apis=true \
-        out
-    meson compile -C out
+        --pkg-config-path /opt/oakestra/lib/pkgconfig \
+        -Dvrend=false \
+        -Ddrm-renderers=amdgpu-experimental \
+        -Dunstable-apis=true
+
+    meson compile -C out -j "$(nproc)"
     meson install -C out
 EOT
 
-# the version of the rutabaga_gfx crate that crosvm depends on (v0.1.71) has a bug that makes it not compile:
-# https://github.com/magma-gpu/rutabaga_gfx/issues/15
-#
-# the step below patches bug locally and the crosvm build then uses it instead of the upstream version
-RUN <<-EOT bash
+# Build crosvm with virtio-gpu display support and the virglrenderer backend.
+# The rutabga version is changed to the locally cloned directory above.
+RUN <<-'EOT' bash
     set -euo pipefail
 
-    git clone --depth 1 --recursive --branch v0.1.71 https://github.com/magma-gpu/rutabaga_gfx.git /scratch/rutabaga_gfx
-    cd /scratch/rutabaga_gfx
-    sed -i '/use mesa3d_util::MESA_HANDLE_TYPE_MEM_SHM;/a use mesa3d_util::MESA_HANDLE_TYPE_SIGNAL_SYNC_FD;' \
-        src/virgl_renderer.rs
-EOT
+    git clone \
+        --recursive \
+        --depth 1 \
+        --branch "gpu-displayless-mode" \
+        https://github.com/axiphi/crosvm.git \
+        /scratch/crosvm
 
-# build crosvm (maybe a specific commit should be used)
-# NOTE: libcrosvm_control.so has its SONAME set to exactly "libcrosvm_control.so",
-#       so there's no need to create versioned symlinks
-RUN <<-EOT bash
-    set -euo pipefail
-
-    git clone --depth 1 --recursive https://chromium.googlesource.com/crosvm/crosvm.git /scratch/crosvm
     cd /scratch/crosvm
-    . /root/.cargo/env
 
-	sed -i '/minijail = { path = "third_party\/minijail\/rust\/minijail" }/a rutabaga_gfx = { path = "/scratch/rutabaga_gfx" }' \
-        Cargo.toml
+    # rutabaga_gfx doesn't compile with with the virgl_renderer_unstable feature under version 0.1.80.
+    sed -i 's/rutabaga_gfx = "=0.1.80"/rutabaga_gfx = "=0.1.85"/' Cargo.toml
 
     export LD_LIBRARY_PATH=/opt/oakestra/lib
     export PKG_CONFIG_PATH=/opt/oakestra/lib/pkgconfig
-    export CROSVM_USE_SYSTEM_MINIGBM=1
     export CROSVM_USE_SYSTEM_VIRGLRENDERER=1
-    cargo build --release --package crosvm --package crosvm_control --features 'virgl_renderer'
 
-    install --mode 0755 target/release/crosvm /opt/oakestra/bin
-    install --mode 0644 target/release/build/crosvm_control-*/out/crosvm_control.h /opt/oakestra/include
-    install --mode 0644 target/release/libcrosvm_control.so /opt/oakestra/lib
+    cargo build \
+        --release \
+        --package crosvm \
+        --package crosvm_control \
+        --no-default-features \
+        --features 'balloon,qcow,net,gpu,virgl_renderer'
+
+    install --mode 0755 target/release/crosvm /opt/oakestra/bin/crosvm
+    install --mode 0644 target/release/build/crosvm_control-*/out/crosvm_control.h /opt/oakestra/include/crosvm_control.h
+    install --mode 0644 target/release/libcrosvm_control.so /opt/oakestra/lib/libcrosvm_control.so
 EOT
+
 
 FROM scratch
 
-# copy build artifacts to the otherwise empty root directory, so it can be used with the --output flag of the docker build command
-# NOTE: copying the subdirectories of /opt/oakestra in one COPY instruction does not work correctly for some reason
+# Export-only stage for use with `docker build --output`.
+# The directories are created with separate COPY operations,
+# because merging them into a single COPY does not preserve the desired output layout with this stage.
 COPY --from=build /opt/oakestra/bin /bin
 COPY --from=build /opt/oakestra/include /include
 COPY --from=build /opt/oakestra/lib /lib
 COPY --from=build /opt/oakestra/libexec /libexec
+
 COPY --chown=0:0 --chmod=0755 crosvm-wrapper.sh /bin/crosvm-wrapper.sh
 COPY --chown=0:0 --chmod=0644 crosvm_control.pc /lib/pkgconfig/crosvm_control.pc

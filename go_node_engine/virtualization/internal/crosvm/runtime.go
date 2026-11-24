@@ -7,6 +7,7 @@ import (
 	"go_node_engine/model"
 	"go_node_engine/util/iotools"
 	"go_node_engine/util/taskid"
+	gpuconfig "go_node_engine/virtualization/internal/crosvm/internal/gpu"
 	"go_node_engine/virtualization/internal/crosvm/internal/image"
 	"go_node_engine/virtualization/internal/crosvm/internal/instance"
 	"go_node_engine/virtualization/internal/crosvm/internal/stats"
@@ -43,9 +44,11 @@ type Runtime struct {
 	instances map[string]*instance.Instance
 
 	systemMetricsTracker *stats.SystemMetricsTracker
+
+	gpuConfig *gpuconfig.RuntimeGpuConfig
 }
 
-func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
+func newRuntime(info virtrt.RuntimeInfo, options []string) virtrt.Runtime {
 	systemMetricsTracker, err := stats.NewSystemMetricsTracker()
 	if err != nil {
 		logger.ErrorLogger().Printf("failed to create SystemMetricsTracker: %v", err)
@@ -132,6 +135,8 @@ func newRuntime(info virtrt.RuntimeInfo) virtrt.Runtime {
 		instances: make(map[string]*instance.Instance),
 
 		systemMetricsTracker: systemMetricsTracker,
+
+		gpuConfig: gpuconfig.NewRuntimeGpuConfig(options),
 	}
 }
 
@@ -147,7 +152,7 @@ func (r *Runtime) Deploy(service model.Service, statusChangeNotificationHandler 
 	inst, ok := r.instances[id]
 	if !ok {
 		var err error
-		inst, err = instance.NewInstance(id, service, statusChangeNotificationHandler, r.executablePath, r.runtimeDirPath, r.stateDirPath, r.imageStore)
+		inst, err = instance.NewInstance(id, service, statusChangeNotificationHandler, r.executablePath, r.runtimeDirPath, r.stateDirPath, r.imageStore, r.gpuConfig)
 		if err != nil {
 			return err
 		}

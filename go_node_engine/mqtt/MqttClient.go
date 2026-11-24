@@ -141,7 +141,12 @@ func deployHandler(client mqtt.Client, msg mqtt.Message, runtimeManager *virtual
 	//handle deployment in background
 	go func() {
 		defer model.UntrackInstantiating(service.Sname, service.Instance)
-		runtime := runtimeManager.GetRuntime(model.RuntimeType(service.Runtime))
+
+		runtime := runtimeManager.PeekRuntime(model.RuntimeType(service.Runtime))
+		if runtime == nil {
+			return
+		}
+
 		err = runtime.Deploy(service, ReportServiceStatus)
 		service.Status = model.SERVICE_CREATED
 		if err != nil {
@@ -162,7 +167,11 @@ func deleteHandler(client mqtt.Client, msg mqtt.Message, runtimeManager *virtual
 		return
 	}
 	go func() {
-		runtime := runtimeManager.GetRuntime(model.RuntimeType(service.Runtime))
+		runtime := runtimeManager.PeekRuntime(model.RuntimeType(service.Runtime))
+		if runtime == nil {
+			return
+		}
+
 		err = runtime.Undeploy(service.Sname, service.Instance)
 		if err != nil {
 			logger.ErrorLogger().Printf("Unable to undeploy application: %s", err.Error())
