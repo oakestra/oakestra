@@ -1,11 +1,26 @@
-# Federated login only: users sign in through an external identity provider, password login is off.
+# OIDC login only: users sign in through an OpenID Connect provider (e.g. Oakverse, Keycloak),
+# password login is off and users/roles/organizations are managed by the provider (writes return 403).
 #
 # Required environment variables (exported before `docker compose up`):
-#   FEDERATED_LOGIN_AUTHORIZE_URL   identity provider endpoint that authorizes a user for this cluster
-#   FEDERATED_LOGIN_CLUSTER_ID      id of this cluster at the identity provider
-#   FEDERATED_LOGIN_CLUSTER_SECRET  secret proving the request comes from this cluster
+#   OIDC_ISSUER                  provider issuer URL (its /.well-known/openid-configuration is read)
+#   OIDC_CLIENT_ID               this cluster's client id at the provider
+#   OIDC_CLIENT_SECRET           this cluster's client secret (confidential client)
+#   OIDC_REDIRECT_URIS           comma list of callback URLs registered at the provider, e.g.
+#                                http://192.168.1.10:10000/api/auth/oidc/callback
 # Optional:
-#   FEDERATED_LOGIN_REFRESH_MINUTES lifetime of refresh tokens issued by federated login (default 60)
+#   OIDC_SCOPES                  default "openid profile email offline_access"
+#   OIDC_USERNAME_CLAIM          claim for the username at first login (default preferred_username,
+#                                then email, then sub)
+#   OIDC_ROLES_CLAIM             dot path to the roles list (default roles), e.g.
+#                                resource_access.oakestra.roles
+#   OIDC_ROLE_MAP                provider:OakestraRole,... (e.g. lab-admin:Admin,dev:Application_Provider)
+#   OIDC_PROVIDER_NAME           shown on the login button (default OIDC)
+#   OIDC_ALLOWED_RETURN_HOSTS    extra dashboard hosts allowed as return_to
+#   OIDC_SIGNOUT_FEED_URL        sign-out feed polled every 60 s
+#   OIDC_TOKEN_ENCRYPTION_KEY    key for stored provider refresh tokens (default: derived from
+#                                OIDC_CLIENT_SECRET)
+#   FEDERATED_SESSION_MINUTES    Oakestra access token lifetime (default 15)
+#   FEDERATED_OUTAGE_GRACE_HOURS renewal without the provider confirming the user (default 24)
 #
 # The JWT generator signs any token it is asked for, so this override also stops publishing its port
 # on the host: only containers on the Oakestra network can reach it. Requires Docker Compose >= 2.24.4.
@@ -16,10 +31,20 @@ services:
   system_manager:
     environment:
       - INTERNAL_LOGIN=false
-      - FEDERATED_LOGIN_AUTHORIZE_URL=${FEDERATED_LOGIN_AUTHORIZE_URL:-}
-      - FEDERATED_LOGIN_CLUSTER_ID=${FEDERATED_LOGIN_CLUSTER_ID:-}
-      - FEDERATED_LOGIN_CLUSTER_SECRET=${FEDERATED_LOGIN_CLUSTER_SECRET:-}
-      - FEDERATED_LOGIN_REFRESH_MINUTES=${FEDERATED_LOGIN_REFRESH_MINUTES:-60}
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
+      - OIDC_REDIRECT_URIS=${OIDC_REDIRECT_URIS:-}
+      - OIDC_SCOPES=${OIDC_SCOPES:-}
+      - OIDC_USERNAME_CLAIM=${OIDC_USERNAME_CLAIM:-}
+      - OIDC_ROLES_CLAIM=${OIDC_ROLES_CLAIM:-}
+      - OIDC_ROLE_MAP=${OIDC_ROLE_MAP:-}
+      - OIDC_PROVIDER_NAME=${OIDC_PROVIDER_NAME:-}
+      - OIDC_ALLOWED_RETURN_HOSTS=${OIDC_ALLOWED_RETURN_HOSTS:-}
+      - OIDC_SIGNOUT_FEED_URL=${OIDC_SIGNOUT_FEED_URL:-}
+      - OIDC_TOKEN_ENCRYPTION_KEY=${OIDC_TOKEN_ENCRYPTION_KEY:-}
+      - FEDERATED_SESSION_MINUTES=${FEDERATED_SESSION_MINUTES:-15}
+      - FEDERATED_OUTAGE_GRACE_HOURS=${FEDERATED_OUTAGE_GRACE_HOURS:-24}
 
   jwt_generator:
     ports: !reset []

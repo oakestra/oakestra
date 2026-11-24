@@ -29,3 +29,13 @@ def mongo_init(flask_app):
 
     logger.info("MONGODB - init mongo")
     logger.info(mongo_users)
+
+
+def mongo_init_standalone():
+    """Same collections without a Flask app, for command line tools (e.g. users.emergency)."""
+    global mongo_users, mongo_organization
+    from pymongo import MongoClient
+
+    database = MongoClient(MONGO_ADDR_USERS, serverSelectionTimeoutMS=5000)["users"]
+    mongo_users = database["user"]
+    mongo_organization = database["organization"]

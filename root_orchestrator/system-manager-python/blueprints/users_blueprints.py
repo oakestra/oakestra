@@ -19,7 +19,7 @@ from users.auth import (
     user_change_password_with_reset_request,
     user_create_password_reset_request,
 )
-from users.federated import internal_login_only
+from users.federated import internal_login_only, user_management_only
 from users.user_management import (
     user_add,
     user_delete,
@@ -51,11 +51,13 @@ class UserController(MethodView):
         oragnization_id = get_jwt_organization()
         return jsonify(user_get_by_name(username, oragnization_id))
 
+    @user_management_only
     @jwt_auth_required()
     @require_role(Role.ADMIN)
     def delete(self, username, *args, **kwargs):
         return jsonify(user_delete(username))
 
+    @user_management_only
     @jwt_auth_required()
     @require_role(Role.ADMIN)
     def put(self, username, *args, **kwargs):

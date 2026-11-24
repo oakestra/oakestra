@@ -142,7 +142,7 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 | `override-no-dashboard.yml` | Removes frontend dashboard from root. |
 | `override-no-observe.yml` | Removes Grafana/Loki/Promtail/Prometheus. |
 | `override-mosquitto-auth.yml` | Enables MQTT authentication (workers need credentials). |
-| `override-federated-login.yml` | Federated login only: users sign in through an external identity provider (`POST /api/auth/federated`), password login/registration/reset are disabled, and the JWT generator port 10011 is no longer published on the host. Needs `FEDERATED_LOGIN_AUTHORIZE_URL`, `FEDERATED_LOGIN_CLUSTER_ID`, `FEDERATED_LOGIN_CLUSTER_SECRET` exported and Docker Compose >= 2.24.4. |
+| `override-federated-login.yml` | OIDC login only: the system manager becomes an OIDC client of `OIDC_ISSUER` (`/api/auth/oidc/login`, `/callback`, `/exchange`, `/device`), users are keyed on `iss`+`sub` and their roles come from `OIDC_ROLES_CLAIM`. Password login is off and user/role/organization writes return 403 (`INTERNAL_LOGIN=false`); the JWT generator port 10011 is no longer published. Needs `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REDIRECT_URIS` exported and Docker Compose >= 2.24.4. Emergency Admin: `docker exec system_manager python -m users.emergency`. See `root_orchestrator/README.md`. |
 | `override-images-only.yml` | Forces pre-built images, skips local builds. |
 | `override-local-service-manager.yml` | Builds service manager from local source. |
 | `override-custom-service-manager-version.yml` | Pins `oakestra-net` service manager images to a specific version (e.g. `alpha-v0.4.403`). Useful for testing against a particular `oakestra-net` release. |

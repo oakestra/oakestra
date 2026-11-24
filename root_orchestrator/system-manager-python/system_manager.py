@@ -28,6 +28,7 @@ from proto.clusterRegistration_pb2_grpc import (
 )
 from resource_abstractor_client import candidate_operations
 from sm_logging import configure_logging
+from users import sessions, signout_feed
 from users.federated import log_auth_configuration
 from utils.json_encoder import MongoJSONEncoder
 from utils.network import add_brackets_if_ipv6
@@ -55,6 +56,7 @@ app.config["RESET_TOKEN_EXPIRES"] = timedelta(hours=3)  # for password reset
 app.logger = my_logger
 
 jwt = JWTManager(app)
+jwt.token_in_blocklist_loader(sessions.token_revoked)
 api = Api(app, spec_kwargs={"host": "oakestra.io", "x-internal-id": "1"})
 
 cors = CORS(app, resources={r"/*": {"origins": "*"}})
@@ -67,7 +69,9 @@ socketio = SocketIO(
 )
 mongo_init(app)
 create_admin()
+sessions.ensure_indexes()
 log_auth_configuration()
+signout_feed.start()
 
 MY_PORT = os.environ.get("MY_PORT") or 10000
 MY_PORT_GRPC = os.environ.get("MY_PORT_GRPC") or 50052

@@ -3,7 +3,7 @@ from blueprints.authentication_blueprints import loginbp
 from blueprints.authorization_blueprints import permissionbp
 from blueprints.clusters_blueprints import clusterinfo, clustersbp
 from blueprints.deployment_blueprints import deploybp
-from blueprints.federated_blueprints import federatedbp
+from blueprints.federated_blueprints import federatedbp, signoutbp
 from blueprints.organization_blueprints import organizationblp
 from blueprints.scheduling_blueprints import schedulingbp
 from blueprints.services_blueprints import serviceblp, servicesblp
@@ -15,6 +15,7 @@ blueprints = [
     permissionbp,
     loginbp,
     federatedbp,
+    signoutbp,
     deploybp,
     applicationblp,
     applicationsblp,

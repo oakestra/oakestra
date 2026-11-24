@@ -14,7 +14,8 @@ from roles.securityUtils import (
     require_role,
 )
 from users.auth import user_login, user_register, user_token_refresh
-from users.federated import internal_login_enabled, internal_login_only
+from users.federated import internal_login_enabled, internal_login_only, user_management_only
+from users.oidc import RenewalRefused, renew
 
 from blueprints.jwt_wrapper import BlueprintExt
 
@@ -63,7 +64,7 @@ class UserLoginController(MethodView):
 @loginbp.route("/register")
 class UserRegisterController(Resource):
     @loginbp.arguments(schema=register_schema, location="json", validate=False, unknown=True)
-    @internal_login_only
+    @user_management_only
     @jwt_required()
     @require_role(Role.ADMIN)
     def post(self, *args, **kwargs):
@@ -77,7 +78,14 @@ class UserRegisterController(Resource):
 class TokenRefreshController(Resource):
     @refresh_token_required()
     def post(self):
-        if not internal_login_enabled() and not get_jwt_auth_claims().get("federated"):
+        claims = get_jwt_auth_claims()
+        if claims.get("federated"):
+            # OIDC and emergency sessions are renewed against their server-side session.
+            try:
+                return renew(claims)
+            except RenewalRefused as e:
+                abort(401, message=f"Session ended: {e}. Please sign in again.")
+        if not internal_login_enabled():
             abort(403, {"message": "Password login is disabled on this cluster"})
         identity = get_jwt_auth_identity()
         token = user_token_refresh(identity)

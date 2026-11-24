@@ -22,6 +22,7 @@ grpcio~=1.75.1
 grpcio-tools~=1.75.1
 protobuf>=4.25.2,<7.0.0
 cryptography==44.0.1
+Authlib~=1.6.5
 gunicorn==22.0.0
 # Oakestra shared libraries (resource_abstractor_client, oakestra_utils_library)
 # are installed from the local libraries/ folder, NOT from git. See the Dockerfile

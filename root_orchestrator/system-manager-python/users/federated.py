@@ -1,79 +1,134 @@
 """
-Federated login: users sign in with an external identity provider instead of an Oakestra password.
+Login settings shared by password login, OIDC login and the management lock.
 
-Off unless FEDERATED_LOGIN_AUTHORIZE_URL is set (see override-federated-login.yml). Flow:
-  1. A client (e.g. a dashboard) obtains a token from the identity provider.
-  2. It sends that token to POST /api/auth/federated.
-  3. The system manager asks the provider whether the token's owner may use this cluster:
-       POST <FEDERATED_LOGIN_AUTHORIZE_URL>
-       Authorization: Bearer <provider token>
-       {"cluster_id": <FEDERATED_LOGIN_CLUSTER_ID>,
-        "cluster_secret": <FEDERATED_LOGIN_CLUSTER_SECRET>}
-     and expects 200 {"username": str, "email": str (optional), "roles": [Oakestra role, ...]}.
-  4. The user is created (without password) or updated in the root organization with those roles,
-     and receives regular Oakestra access/refresh tokens.
-
-INTERNAL_LOGIN=false additionally disables password login, registration and password changes.
+OIDC login is off unless OIDC_ISSUER is set (see override-federated-login.yml and users/oidc.py).
+INTERNAL_LOGIN=false turns off password login, registration and password changes, and locks every
+user/role/organization write: the identity provider owns users and roles then.
 """
 
 import logging
 import os
-import re
-from datetime import datetime, timedelta
+from datetime import timedelta
 from functools import wraps
 
-import requests
-from ext_requests import organization_db, user_db
-from roles import securityUtils
+from flask_smorest import abort
 from roles.securityUtils import Role
 
 logger = logging.getLogger("system_manager")
 
-KNOWN_ROLES = {Role.ADMIN, Role.ORGANIZATION_ADMIN, Role.APP_Provider, Role.INF_Provider}
-USERNAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._@+-]{0,127}$")
-DEFAULT_REFRESH_MINUTES = 60
+KNOWN_ROLES = (Role.ADMIN, Role.ORGANIZATION_ADMIN, Role.APP_Provider, Role.INF_Provider)
+MANAGEMENT_LOCKED_MESSAGE = "Users and roles are managed by your identity provider"
+
+DEFAULT_SCOPES = "openid profile email offline_access"
+DEFAULT_SESSION_MINUTES = 15
+DEFAULT_GRACE_HOURS = 24
 
 
-class FederatedLoginError(Exception):
-    def __init__(self, status, message):
-        super().__init__(message)
-        self.status = status
-        self.message = message
-
-
-def _flag(name, default):
+def _env(name, default=""):
     value = os.environ.get(name)
     if value is None or value.strip() == "":
         return default
-    return value.strip().lower() not in ("false", "0", "no", "off")
+    return value.strip()
 
 
-def federated_login_enabled():
-    return os.environ.get("FEDERATED_LOGIN_AUTHORIZE_URL", "").strip() != ""
+def _flag(name, default):
+    value = _env(name)
+    if value == "":
+        return default
+    return value.lower() not in ("false", "0", "no", "off")
+
+
+def _number(name, default, minimum):
+    try:
+        return max(float(_env(name, str(default))), minimum)
+    except ValueError:
+        logger.warning("%s is not a number, using %s", name, default)
+        return default
+
+
+def _list(name):
+    return [v.strip() for v in _env(name).split(",") if v.strip()]
 
 
 def internal_login_enabled():
     return _flag("INTERNAL_LOGIN", True)
 
 
+def oidc_enabled():
+    return _env("OIDC_ISSUER") != ""
+
+
+class OidcSettings:
+    """Snapshot of the OIDC_* environment, read on every use so tests (and restarts) see changes."""
+
+    def __init__(self):
+        self.issuer = _env("OIDC_ISSUER")
+        self.client_id = _env("OIDC_CLIENT_ID")
+        self.client_secret = _env("OIDC_CLIENT_SECRET")
+        self.redirect_uris = _list("OIDC_REDIRECT_URIS")
+        self.scopes = _env("OIDC_SCOPES", DEFAULT_SCOPES)
+        self.username_claim = _env("OIDC_USERNAME_CLAIM", "preferred_username")
+        self.roles_claim = _env("OIDC_ROLES_CLAIM", "roles")
+        self.role_map = parse_role_map(_env("OIDC_ROLE_MAP"))
+        self.provider_name = _env("OIDC_PROVIDER_NAME", "OIDC")
+        self.allowed_return_hosts = [h.lower() for h in _list("OIDC_ALLOWED_RETURN_HOSTS")]
+        self.signout_feed_url = _env("OIDC_SIGNOUT_FEED_URL")
+        self.token_encryption_key = _env("OIDC_TOKEN_ENCRYPTION_KEY")
+        self.session = timedelta(
+            minutes=_number("FEDERATED_SESSION_MINUTES", DEFAULT_SESSION_MINUTES, 1)
+        )
+        self.grace = timedelta(
+            hours=_number("FEDERATED_OUTAGE_GRACE_HOURS", DEFAULT_GRACE_HOURS, 0)
+        )
+
+    def missing(self):
+        required = {
+            "OIDC_CLIENT_ID": self.client_id,
+            "OIDC_CLIENT_SECRET": self.client_secret,
+            "OIDC_REDIRECT_URIS": self.redirect_uris,
+        }
+        return [name for name, value in required.items() if not value]
+
+
+def settings():
+    return OidcSettings()
+
+
+def parse_role_map(value):
+    """'provider:OakestraRole,...' -> {provider: {OakestraRole, ...}}; unknown targets ignored."""
+    mapping = {}
+    for pair in value.split(","):
+        source, sep, target = pair.strip().rpartition(":")
+        if not sep or not source.strip() or target.strip() not in KNOWN_ROLES:
+            if pair.strip():
+                logger.warning("OIDC_ROLE_MAP: ignoring %r", pair.strip())
+            continue
+        mapping.setdefault(source.strip(), set()).add(target.strip())
+    return mapping
+
+
 def login_methods():
-    return {"internal": internal_login_enabled(), "federated": federated_login_enabled()}
-
-
-def refresh_expires():
-    try:
-        minutes = int(os.environ.get("FEDERATED_LOGIN_REFRESH_MINUTES", DEFAULT_REFRESH_MINUTES))
-    except ValueError:
-        minutes = DEFAULT_REFRESH_MINUTES
-    return timedelta(minutes=max(minutes, 1))
+    internal = internal_login_enabled()
+    oidc = oidc_enabled()
+    return {
+        "internal": internal,
+        "oidc": oidc,
+        "provider_name": settings().provider_name if oidc else None,
+        "user_management": internal,
+    }
 
 
 def log_auth_configuration():
     methods = login_methods()
     logger.info("Login methods: %s", methods)
-    if not methods["internal"] and not methods["federated"]:
+    if methods["oidc"]:
+        missing = settings().missing()
+        if missing:
+            logger.critical("OIDC_ISSUER is set but %s missing: OIDC login will fail", missing)
+    if not methods["internal"] and not methods["oidc"]:
         logger.critical(
-            "INTERNAL_LOGIN=false but FEDERATED_LOGIN_AUTHORIZE_URL is not set: nobody can log in"
+            "INTERNAL_LOGIN=false but OIDC_ISSUER is not set: nobody can log in "
+            "(use `python -m users.emergency` for an emergency Admin session)"
         )
 
 
@@ -91,101 +146,13 @@ def internal_login_only(fn):
     return wrapper
 
 
-def authorize_with_provider(provider_token):
-    """Asks the identity provider who the token belongs to and which roles it has here."""
-    url = os.environ.get("FEDERATED_LOGIN_AUTHORIZE_URL", "").strip()
-    body = {
-        "cluster_id": os.environ.get("FEDERATED_LOGIN_CLUSTER_ID", ""),
-        "cluster_secret": os.environ.get("FEDERATED_LOGIN_CLUSTER_SECRET", ""),
-    }
-    try:
-        r = requests.post(
-            url,
-            json=body,
-            headers={"Authorization": "Bearer " + provider_token},
-            timeout=10,
-        )
-    except requests.RequestException as e:
-        logger.error("Federated login: identity provider unreachable: %s", e)
-        raise FederatedLoginError(502, "Identity provider unreachable")
+def user_management_only(fn):
+    """Rejects user/role/organization writes with 403 while the identity provider owns them."""
 
-    if r.status_code == 401:
-        raise FederatedLoginError(401, "Invalid or expired token")
-    if r.status_code in (403, 404):
-        raise FederatedLoginError(403, "You do not have access to this cluster")
-    if r.status_code != 200:
-        logger.error("Federated login: identity provider answered %s", r.status_code)
-        raise FederatedLoginError(502, "Identity provider error")
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not internal_login_enabled():
+            abort(403, message=MANAGEMENT_LOCKED_MESSAGE)
+        return fn(*args, **kwargs)
 
-    try:
-        identity = r.json()
-    except ValueError:
-        raise FederatedLoginError(502, "Identity provider returned an invalid response")
-    if not isinstance(identity, dict):
-        raise FederatedLoginError(502, "Identity provider returned an invalid response")
-
-    username = identity.get("username")
-    if not isinstance(username, str) or not USERNAME_RE.match(username):
-        raise FederatedLoginError(502, "Identity provider returned an invalid username")
-    roles = identity.get("roles")
-    roles = [r for r in roles if r in KNOWN_ROLES] if isinstance(roles, list) else []
-    if not roles:
-        raise FederatedLoginError(403, "You do not have access to this cluster")
-    email = identity.get("email") if isinstance(identity.get("email"), str) else ""
-    return {"username": username, "email": email, "roles": sorted(set(roles))}
-
-
-def provision_user(identity, organization_id):
-    """Creates the federated user on first login and syncs its roles on every login."""
-    user = user_db.mongo_get_user_by_name(identity["username"])
-    if user is None:
-        user_id = str(
-            user_db.mongo_save_user_without_roles(
-                {
-                    "name": identity["username"],
-                    "email": identity["email"],
-                    "password": None,
-                    "federated": True,
-                    "created_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                }
-            )
-        )
-    elif not user.get("federated"):
-        # Never let an external identity take over a local account (e.g. "Admin").
-        raise FederatedLoginError(409, "A local user with this name already exists")
-    else:
-        user_id = str(user["_id"])
-        if identity["email"] and identity["email"] != user.get("email"):
-            user_db.mongo_update_user(user_id, {"email": identity["email"]})
-
-    organization_db.mongo_add_user_role_to_organization(user_id, organization_id, identity["roles"])
-
-
-def federated_login(provider_token):
-    if not federated_login_enabled():
-        raise FederatedLoginError(404, "Federated login is not enabled on this cluster")
-    if not isinstance(provider_token, str) or provider_token.strip() == "":
-        raise FederatedLoginError(400, "Missing token")
-
-    identity = authorize_with_provider(provider_token.strip())
-    organization = organization_db.mongo_get_organization_by_name("root")
-    organization_id = str(organization["_id"])
-    provision_user(identity, organization_id)
-
-    claims = {
-        "user": identity["username"],
-        "roles": identity["roles"],
-        "organization": organization_id,
-        "federated": True,
-    }
-    logger.info("Federated login: %s with roles %s", identity["username"], identity["roles"])
-    return {
-        "token": securityUtils.create_jwt_auth_access_token(
-            identity=identity["username"], additional_claims=claims
-        ),
-        "refresh_token": securityUtils.create_jwt_auth_refresh_token(
-            identity=identity["username"],
-            additional_claims=claims,
-            expires_delta=refresh_expires(),
-        ),
-    }
+    return wrapper

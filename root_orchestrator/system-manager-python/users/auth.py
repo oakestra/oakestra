@@ -75,7 +75,7 @@ def user_login(content):
         if user_struct is not None:
             logging.log(level=logging.ERROR, msg="User not found")
             roles = get_user_roles_from_organization(organization_struct, str(user_struct["_id"]))
-            # Federated users have no password and can only sign in through federated login.
+            # Federated users have no password and can only sign in through OIDC login.
             stored = user_struct.get("password")
             if stored and check_password_hash(stored, password):
                 access_token = securityUtils.create_jwt_auth_access_token(
@@ -116,17 +116,14 @@ def user_token_refresh(username):
 
     if user is None:
         return {}
-    additional_claims = {
-        "user": username,
-        "roles": claims["roles"],
-        "organization": claims["organization"],
-    }
-    if claims.get("federated"):
-        additional_claims["federated"] = True
     return {
         "token": securityUtils.create_jwt_auth_access_token(
             identity=username,
-            additional_claims=additional_claims,
+            additional_claims={
+                "user": username,
+                "roles": claims["roles"],
+                "organization": claims["organization"],
+            },
         )
     }
 

@@ -319,20 +319,26 @@ If MQTT is not healthy, `cluster_manager` and `cluster_service_manager` cannot c
 
 Check if `override-mosquitto-auth.yml` is being used — if so, authentication credentials must be provided; without them, workers cannot connect.
 
-### Login fails with 403 "Password login is disabled on this cluster"
+### Login fails with 403 "Password login is disabled on this cluster" (OIDC login)
 
-The root runs with `override-federated-login.yml`: only federated login works. Check the configuration:
+The root runs with `override-federated-login.yml`: only OIDC login works and user/role/organization writes return 403 `Users and roles are managed by your identity provider` (expected, manage them at the provider). Check the configuration:
 
 ```bash
-curl -s http://localhost:10000/api/auth/methods   # {"internal": false, "federated": true} expected
-docker exec system_manager env | grep -E 'INTERNAL_LOGIN|FEDERATED_LOGIN_(AUTHORIZE_URL|CLUSTER_ID)'
-docker logs system_manager 2>&1 | grep -iE "login methods|federated login"
+curl -s http://localhost:10000/api/auth/methods   # {"internal": false, "oidc": true, ...} expected
+docker exec system_manager env | grep -E 'INTERNAL_LOGIN|OIDC_(ISSUER|CLIENT_ID|REDIRECT_URIS|ROLES_CLAIM)'
+docker exec system_manager python -c "import os,requests; print(requests.get(os.environ['OIDC_ISSUER'].rstrip('/')+'/.well-known/openid-configuration', timeout=5).json()['issuer'])"
+docker logs system_manager 2>&1 | grep -iE "login methods|oidc"
 ```
 
-- `federated: false` while `internal: false` → `FEDERATED_LOGIN_AUTHORIZE_URL` was not exported when the stack started; nobody can log in. Export it and re-run `docker compose up -d`.
-- `Identity provider unreachable` / 502 → the root cannot reach the identity provider URL (DNS, egress firewall).
-- 403 `You do not have access to this cluster` → the identity provider refused the user for this cluster id.
-- Emergency access: restart the root without the override to re-enable password login.
+- `oidc: false` while `internal: false` → `OIDC_ISSUER` was not exported when the stack started; nobody can log in. Export it and re-run `docker compose up -d`, or use the emergency login below.
+- Log `OIDC_ISSUER is set but [...] missing` → export the listed variables.
+- Dashboard shows `#oidc_error=provider_error` → see the system manager log: provider unreachable (DNS/egress from the container), wrong client secret (`invalid_client`), issuer mismatch (the discovery `issuer` must equal `OIDC_ISSUER`), or an ID token that failed validation (clock skew > 60 s, wrong `aud`).
+- `#oidc_error=access_denied` → the user has no Oakestra role in `OIDC_ROLES_CLAIM`. Decode the ID token at the provider and check the path (Keycloak: client roles reach the ID token only with *Add to ID token* on the `client roles` mapper; e.g. `OIDC_ROLES_CLAIM=resource_access.<client>.roles`) and `OIDC_ROLE_MAP`.
+- `#oidc_error=user_conflict` → a local Oakestra user already has that name; local accounts are never taken over. Use another `OIDC_USERNAME_CLAIM` or rename at the provider.
+- `#oidc_error=invalid_request` / plain text "Sign-in failed: invalid_request" → the login took over 10 minutes, was replayed, or the dashboard URL is not an allowed `return_to` host (add it to `OIDC_ALLOWED_RETURN_HOSTS`).
+- The provider says the redirect URI is invalid → the callback in `OIDC_REDIRECT_URIS` for the address you used is not registered at the provider (it must match exactly, including port 10000).
+- Sessions end with 401 "Session ended" → the provider refused the refresh token or the user lost their roles; sign in again. While the provider is down, renewal keeps working for `FEDERATED_OUTAGE_GRACE_HOURS` (default 24). Rotating `OIDC_CLIENT_SECRET` (without `OIDC_TOKEN_ENCRYPTION_KEY`) ends all sessions.
+- Emergency access: `docker exec system_manager python -m users.emergency --minutes 60` (or `oak cluster emergency-login`) prints a one-time code; open `http://<dashboard>/#oidc_code=<code>` within 10 minutes for an Admin session as `emergency-admin`. Restarting the root without the override also re-enables password login.
 
 ---
 

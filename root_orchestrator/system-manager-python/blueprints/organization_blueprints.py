@@ -13,6 +13,7 @@ from organizations.organization_management import (
     update_organization,
 )
 from roles.securityUtils import Role, require_role
+from users.federated import user_management_only
 
 from blueprints.schema_wrapper import SchemaWrapper
 
@@ -38,6 +39,7 @@ organization_schema = {
 
 @organizationblp.route("/<organizationid>")
 class OrganizationControllerDelete(MethodView):
+    @user_management_only
     @jwt_required()
     @require_role(Role.ADMIN)
     def delete(self, organizationid, *args, **kwargs):
@@ -52,6 +54,7 @@ class OrganizationControllerDelete(MethodView):
         except ConnectionError as e:
             abort(404, {"message": e})
 
+    @user_management_only
     @jwt_required()
     @require_role(Role.ADMIN)
     def put(self, organizationid, *args, **kwargs):
@@ -81,6 +84,7 @@ class OrganizationController(MethodView):
     @organizationblp.response(
         200, SchemaWrapper(organization_schema), content_type="application/json"
     )
+    @user_management_only
     @jwt_required()
     @require_role(Role.ADMIN)
     def post(self, *args, **kwargs):
