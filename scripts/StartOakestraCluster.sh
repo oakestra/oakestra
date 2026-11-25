@@ -225,10 +225,11 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
     do
         echo "Download override: $element"
         wget -c https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_VERSION/cluster_orchestrator/$element 2> /dev/null
+        ret=$?
         OAK_OVERRIDES="${OAK_OVERRIDES}-f ${element} " 
     done
     IFS= 
-    if [[ $? -ne 0 ]]; then
+    if [[ $ret -ne 0 ]]; then
         die "Failed to retrieve the override."
     fi
 fi
