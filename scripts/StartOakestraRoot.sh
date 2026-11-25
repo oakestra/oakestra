@@ -34,16 +34,14 @@ die() {
 
 # Check if docker and docker compose installed 
 if [ ! -x "$(command -v docker)" ]; then
-  echo "Docker is not installed. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/engine/install/"
-  exit 1
+  die "Docker is not installed. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/engine/install/"
 fi
 echo Checking docker compose version
 sudo docker compose version
 if [ $? -ne 0 ]; then
     current_os=$(uname)
     if [ "$current_os" = "Darwin" ]; then
-        echo "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
-        exit 1
+        die "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
     else
         echo "Installing Docker Compose plugin"
         if [ ! -x "$(command -v apt-get)" ]; then
@@ -70,8 +68,7 @@ if [ -z "$SYSTEM_MANAGER_URL" ]; then
         export SYSTEM_MANAGER_URL=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
     fi
     if [ $? -ne 0 ]; then
-        echo "Error: Failed to retrieve interface IP."
-        exit 1
+        die "Failed to retrieve interface IP."
     fi
     echo Default node IP: $SYSTEM_MANAGER_URL
 fi
@@ -103,8 +100,7 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
     done
     IFS= 
     if [ $? -ne 0 ]; then
-        echo "Error: Failed to retrieve the override."
-        exit 1
+        die "Failed to retrieve the override."
     fi
 fi
 
