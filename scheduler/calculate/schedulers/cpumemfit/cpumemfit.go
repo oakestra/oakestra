@@ -150,7 +150,10 @@ func (Scheduler) Calculate(job Resources, candidates []Resources) (Resources, er
 	}
 	filtered := filterRequirements(job, candidates)
 	if len(filtered) == 0 {
-		return Resources{}, placement.SchedulingError{NegativeSchedulingStatus: placement.NoActiveClusterWithCapacity}
+		status := placement.NoCapacityStatus(job.BaseResources, candidates, func(c Resources) bool {
+			return meetsAllButGPU(job, c)
+		})
+		return Resources{}, placement.SchedulingError{NegativeSchedulingStatus: status}
 	}
 	slices.SortFunc(filtered, cmpMemCPU)
 	return filtered[len(filtered)-1], nil
@@ -161,8 +164,15 @@ func (Scheduler) Calculate(job Resources, candidates []Resources) (Resources, er
 func filterRequirements(job Resources, candidates []Resources) []Resources {
 	return placement.Filter(candidates, func(c Resources) bool {
 		logger.DebugLogger().Printf("Filtering candidate: %v", c)
-		return placement.MeetsBasicRequirements(job.BaseResources, c.BaseResources) && hasRequiredCSIDrivers(job, c)
+		return meetsAllButGPU(job, c) && placement.MeetsGPURequirements(job.BaseResources, c.BaseResources)
 	})
+}
+
+// meetsAllButGPU is every filter check except the GPU one. Calculate also uses
+// it on its own to tell a GPU shortage apart from other misses, so new filter
+// checks belong here rather than in filterRequirements.
+func meetsAllButGPU(job, c Resources) bool {
+	return placement.MeetsNonGPURequirements(job.BaseResources, c.BaseResources) && hasRequiredCSIDrivers(job, c)
 }
 
 // hasRequiredCSIDrivers reports whether candidate advertises every CSI driver

@@ -19,7 +19,6 @@ import (
 	"os/exec"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -837,84 +836,34 @@ func convertTaskIdToContainerId(taskId string) string {
 	return safeTaskId + "." + hashString
 }
 
-// gpuInfo holds GPU device information for sorting
-type gpuInfo struct {
-	index       int
-	freeMemory  int64 // in MiB
-	totalMemory int64 // in MiB
-}
-
 // selectBestGPUs selects up to 'requested' GPUs based on available memory.
-// Returns GPU indices sorted by most available memory first.
+// Returns GPU indices sorted by most available memory first. It reads the same
+// nvidia-smi snapshot the node reports as gpu_vram_free, so the GPUs picked here
+// are the ones the scheduler's VRAM check counted on.
 func selectBestGPUs(requested int) ([]int, error) {
-	// Get total number of available GPUs
-	totalGPUs, err := gpu.NvsmiDeviceCount()
+	gpus, err := gpu.QueryAll()
 	if err != nil {
-		return nil, fmt.Errorf("failed to query GPU count: %w", err)
+		return nil, fmt.Errorf("failed to query GPUs: %w", err)
 	}
-
-	if totalGPUs == 0 {
+	if len(gpus) == 0 {
 		return nil, fmt.Errorf("no GPUs available")
 	}
 
-	// Cap requested GPUs to available GPUs
 	numGPUs := requested
-	if numGPUs > totalGPUs {
-		logger.WarnLogger().Printf("Requested %d GPUs but only %d available, using %d", requested, totalGPUs, totalGPUs)
-		numGPUs = totalGPUs
+	if numGPUs > len(gpus) {
+		logger.WarnLogger().Printf("Requested %d GPUs but only %d available, using %d", requested, len(gpus), len(gpus))
+		numGPUs = len(gpus)
 	}
 
-	// Query memory info for all GPUs
-	gpuList := make([]gpuInfo, 0, totalGPUs)
-	for i := 0; i < totalGPUs; i++ {
-		// Query free memory (memory.free) and total memory (memory.total)
-		freeMemStr, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.free")
-		if err != nil {
-			logger.WarnLogger().Printf("Failed to query free memory for GPU %d: %v", i, err)
-			continue
-		}
-
-		totalMemStr, err := gpu.NvsmiQuery(fmt.Sprintf("%d", i), "memory.total")
-		if err != nil {
-			logger.WarnLogger().Printf("Failed to query total memory for GPU %d: %v", i, err)
-			continue
-		}
-
-		freeMem, err := strconv.ParseInt(freeMemStr, 10, 64)
-		if err != nil {
-			logger.WarnLogger().Printf("Failed to parse free memory for GPU %d: %v", i, err)
-			continue
-		}
-
-		totalMem, err := strconv.ParseInt(totalMemStr, 10, 64)
-		if err != nil {
-			logger.WarnLogger().Printf("Failed to parse total memory for GPU %d: %v", i, err)
-			continue
-		}
-
-		gpuList = append(gpuList, gpuInfo{
-			index:       i,
-			freeMemory:  freeMem,
-			totalMemory: totalMem,
-		})
-
-		logger.InfoLogger().Printf("GPU %d: %d MiB free / %d MiB total", i, freeMem, totalMem)
+	for _, g := range gpus {
+		logger.InfoLogger().Printf("GPU %d: %.0f MiB free / %.0f MiB total", g.Index, g.MemFree, g.MemTotal)
 	}
 
-	if len(gpuList) == 0 {
-		return nil, fmt.Errorf("failed to query memory for any GPU")
-	}
+	sort.SliceStable(gpus, func(i, j int) bool { return gpus[i].MemFree > gpus[j].MemFree })
 
-	// Sort GPUs by free memory (descending - most free memory first)
-	sort.Slice(gpuList, func(i, j int) bool {
-		return gpuList[i].freeMemory > gpuList[j].freeMemory
-	})
-
-	// Select top N GPUs
 	selected := make([]int, 0, numGPUs)
-	for i := 0; i < numGPUs && i < len(gpuList); i++ {
-		selected = append(selected, gpuList[i].index)
+	for _, g := range gpus[:numGPUs] {
+		selected = append(selected, g.Index)
 	}
-
 	return selected, nil
 }
