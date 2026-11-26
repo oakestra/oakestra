@@ -143,12 +143,7 @@ curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_VERSION/
 curl -sfL https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_VERSION/run-a-cluster/1-DOC.yaml > 1-DOC.yaml
 
 chmod +x downloadConfigFiles.sh
-./downloadConfigFiles.sh run-a-cluster $OAKESTRA_VERSION
-
-if [ $? -ne 0 ]; then
-        echo "Error: Failed to retrieve config files"
-        exit 1
-fi
+./downloadConfigFiles.sh run-a-cluster $OAKESTRA_VERSION || exit 1
 
 #If additional override files provided, download them
 OAK_OVERRIDES=''
