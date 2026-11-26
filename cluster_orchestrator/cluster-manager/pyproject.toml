@@ -22,11 +22,13 @@ dependencies = [
     "werkzeug~=3.1.9",
     "typing-extensions>=4.16.0",
     "pydantic>=2.13.4",
+    "oakestra-logging",
     "oakestra-utils",
     "resource-abstractor-client",
 ]
 
 [tool.uv.sources]
+oakestra-logging = { workspace = true }
 oakestra-utils = { workspace = true }
 resource-abstractor-client = { workspace = true }
 

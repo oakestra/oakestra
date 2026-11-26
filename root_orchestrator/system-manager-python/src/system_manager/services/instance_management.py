@@ -1,6 +1,6 @@
-import logging
 import threading
 
+from oakestra_logging import get_logger
 from oakestra_utils.types.statuses import PositiveSchedulingStatus, Status, convert_to_status
 from resource_abstractor_client import app_operations, candidate_operations, job_operations
 
@@ -11,7 +11,7 @@ from ..ext_requests.net_plugin_requests import (
 )
 from ..ext_requests.scheduler_requests import scheduler_request_deploy
 
-logger = logging.getLogger("system_manager")
+logger = get_logger(__name__)
 
 
 def update_job_status(
@@ -38,7 +38,10 @@ def update_job_status_and_instances(
     instance_list: list[dict],
 ) -> None:
     logger.info(
-        f"Updating Job '{job_id}'s status to '{status}' and assigning a cluster for this job..."
+        "Updating job status and cluster assignment",
+        event_name="job.status.update_started",
+        job_id=job_id,
+        status=status.value,
     )
     updated_job = job_operations.update_job(
         job_id,
@@ -49,18 +52,31 @@ def update_job_status_and_instances(
         },
     )
     if updated_job is None:
-        logger.info(f"Updating job '{job_id}'s status to '{status}' failed")
+        logger.warning(
+            "Updating job status failed",
+            event_name="job.status.update_failed",
+            job_id=job_id,
+            status=status.value,
+        )
 
 
 def request_scale_up_instance(microserviceid: str, username: str) -> None:
     service = job_operations.get_job_by_id(microserviceid)
     if service is None:
-        logging.warning(f"Service {microserviceid} not found")
+        logger.warning(
+            "Service not found",
+            event_name="service.not_found",
+            service_id=microserviceid,
+        )
         return
 
     application = app_operations.get_app_by_id(str(service["applicationID"]), username)
     if application is None:
-        logging.warning(f"Application {service['applicationID']} not found")
+        logger.warning(
+            "Application not found",
+            event_name="application.not_found",
+            application_id=service["applicationID"],
+        )
         return
 
     if microserviceid in application["microservices"]:
@@ -87,12 +103,20 @@ def request_scale_down_instance(microserviceid, username, which_one=-1):
     """
     service = job_operations.get_job_by_id(microserviceid)
     if service is None:
-        logging.warning(f"Service {microserviceid} not found")
+        logger.warning(
+            "Service not found",
+            event_name="service.not_found",
+            service_id=microserviceid,
+        )
         return
 
     application = app_operations.get_app_by_id(str(service["applicationID"]), username)
     if application is None:
-        logging.warning(f"Application {service['applicationID']} not found")
+        logger.warning(
+            "Application not found",
+            event_name="application.not_found",
+            application_id=service["applicationID"],
+        )
         return
 
     if microserviceid in application["microservices"]:

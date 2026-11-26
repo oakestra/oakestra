@@ -1,12 +1,13 @@
-import logging
 import os
 import smtplib
 from email.message import EmailMessage
 
+from oakestra_logging import get_logger
+
 gmail_user = os.environ.get("MAIL_USER", "")
 gmail_password = os.environ.get("MAIL_PASSWORD", "")
 
-logger = logging.getLogger("system_manager")
+logger = get_logger(__name__)
 
 
 class MailFactory:
@@ -23,14 +24,16 @@ class MailFactory:
             msg = self.create_message()
             msg["From"] = gmail_user
             msg["To"] = self.user["email"]
-            logger.info(self.user["email"])
 
             server.send_message(msg)
             server.quit()
-            logger.info("Email sent!")
-        except Exception as e:
-            logger.info(e)
-            logger.info("Something went wrong while sending email...")
+            logger.info("Email sent", event_name="mail.sent", message_type=type(self).__name__)
+        except Exception:
+            logger.exception(
+                "Failed to send email",
+                event_name="mail.send_failed",
+                message_type=type(self).__name__,
+            )
 
     def create_message(self) -> EmailMessage:
         pass

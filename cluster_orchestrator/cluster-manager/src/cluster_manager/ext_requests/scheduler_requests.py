@@ -1,11 +1,10 @@
-import logging
-
 import requests
+from oakestra_logging import get_logger
 
 from ..app_config import SCHEDULER_ADDR
 from ..models.job import Job
 
-logger = logging.getLogger("cluster_manager")
+logger = get_logger(__name__)
 
 
 def scheduler_request_deploy(job: Job, instance_number: int) -> None:
@@ -17,4 +16,9 @@ def scheduler_request_deploy(job: Job, instance_number: int) -> None:
             SCHEDULER_ADDR + "/api/calculate/deploy", json=copied_job.model_dump(by_alias=True)
         )
     except requests.exceptions.RequestException:
-        logger.error("Calling scheduler at /api/calculate/deploy was not successful.")
+        logger.exception(
+            "Scheduler deployment request failed",
+            event_name="scheduler.deploy.request_failed",
+            endpoint=SCHEDULER_ADDR + "/api/calculate/deploy",
+            instance_number=instance_number,
+        )

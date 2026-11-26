@@ -1,9 +1,9 @@
 import json
-import logging
 import re
 from typing import Any
 
 import paho.mqtt.client as paho_mqtt
+from oakestra_logging import get_logger
 from paho.mqtt.client import MQTTMessage
 from resource_abstractor_client import candidate_operations
 from typing_extensions import assert_type
@@ -13,7 +13,7 @@ from ..models.job import Job
 from ..models.mqtt import NodeInformationMessage, NodeJobMessage, NodeJobResourceMessage
 from .job_management import update_deployed_instance_worker, update_instance_resources
 
-logger = logging.getLogger("cluster_manager")
+logger = get_logger(__name__)
 
 _mqtt: paho_mqtt.Client | None = None
 
@@ -24,10 +24,10 @@ def ensure_mqtt() -> paho_mqtt.Client:
     return _mqtt
 
 
-def handle_connect(_client: Any, _userdata: Any, _flags: Any, _rc: Any) -> None:
+def handle_connect(_client: Any, _userdata: Any, _flags: Any, rc: Any) -> None:
     mqtt = ensure_mqtt()
 
-    logger.info("MQTT - Connected to MQTT Broker")
+    logger.info("Connected to MQTT broker", event_name="mqtt.connected", result_code=rc)
     mqtt.subscribe("nodes/+/information")
     mqtt.subscribe("nodes/+/job")
     mqtt.subscribe("nodes/+/jobs/resources")
@@ -35,7 +35,7 @@ def handle_connect(_client: Any, _userdata: Any, _flags: Any, _rc: Any) -> None:
 
 def handle_logging(_client: Any, _userdata: Any, level: str, buf: Any) -> None:
     if level == "MQTT_LOG_ERR":
-        logger.info(f"Error: {buf}")
+        logger.error("MQTT client error", event_name="mqtt.client.error", detail=str(buf))
 
 
 # TODO: add type validation for all message types
@@ -44,7 +44,12 @@ def handle_mqtt_message(_client: Any, _userdata: Any, message: MQTTMessage):
 
     topic = message.topic
     payload_str = payload_bytes.decode()
-    logger.info("MQTT - Received from worker - %s: %s", topic, payload_str)
+    logger.debug(
+        "Received MQTT message from worker",
+        event_name="mqtt.message.received",
+        topic=topic,
+        payload_size=len(payload_bytes),
+    )
 
     re_nodes_information_topic = re.search("^nodes/.*/information$", topic)
     re_job_deployment_topic = re.search("^nodes/.*/job$", topic)
@@ -96,8 +101,8 @@ def handle_node_job_resources_message(client_id: str, payload: Any):
     for resources_entry in message.instance_resources:
         if resources_entry.instance_number is None:
             logger.info(
-                "Missing instance number in %s",
-                resources_entry.model_dump_json(indent=2, by_alias=True),
+                "Missing instance number in worker resource update",
+                event_name="mqtt.resources.instance_number_missing",
             )
             continue
 
@@ -132,10 +137,12 @@ def initialize_mqtt():
                 keyfile=CONFIG.mqtt_cert + "/cluster.key",
                 keyfile_password=CONFIG.cluster_keyfile_password,
             )
-            logger.info("MQTT - TLS configured")
-        except FileNotFoundError as e:
-            logger.error("MQTT - Unable to load certificate files")
-            logger.error(e)
+            logger.info("Configured MQTT TLS", event_name="mqtt.tls.configured")
+        except FileNotFoundError:
+            logger.exception(
+                "Unable to load MQTT certificate files",
+                event_name="mqtt.tls.configuration_failed",
+            )
 
     mqtt.connect(
         CONFIG.mqtt_broker_url.strip("[]"),
