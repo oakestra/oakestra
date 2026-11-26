@@ -243,28 +243,17 @@ Docker Compose still limits the host's `json-file` logs with `max-size: 1m` and 
 
 Grafana alert rules should treat the JSON `level` field as the authoritative severity for Oakestra-owned Python records. `stderr` only identifies a Docker stream; it is not an error level, because tools such as Gunicorn can write normal informational messages there.
 
-For a deployment using the Alloy labels, an initial structured-error expression is:
+The provisioned [Grafana log rule](../../root_orchestrator/config/alerts/grafana-rules.yml)
+is the authoritative query. It trusts Alloy's indexed `level=error|critical` for every
+supported collected format, including Python JSON and MongoDB; it does not require
+`schema_version=1` on that path. Alerts retain `cluster_id` and `compose_service`.
 
-```logql
-sum by (container_name, service) (
-  count_over_time({job="containerlogs"} | json | schema_version=1 | level=~"error|critical" [5m])
-)
-```
-
-The exact stream selector changes with the deployment. Alloy metadata lets alerts group by
-`cluster_id` and `compose_service`. A temporary fallback for lines outside the schema should
-explicitly exclude structured records and match only well-known failure markers; it must not
-double-count JSON errors:
-
-```logql
-count_over_time(
-  {job="containerlogs"}
-  |! "\"schema_version\":1"
-  |~ "(?i)(\\berror\\b|traceback|panic:|fatal|stack.?trace)" [5m]
-)
-```
-
-The fallback is a compatibility measure for process-owned or non-Python output, not a substitute for a structured contract. It should become smaller as Go and other components gain their own standard format.
+A separate compatibility path examines only records without a normalized level, excludes
+schema-v1 records, and recognizes legacy error headers, Python tracebacks, and Go panic or
+stack markers. It does not match arbitrary error words in otherwise informational messages.
+The two paths use LogQL `or` to detect one or more matching records, not to produce an
+additive error count. Observability-service exclusions are defined in the provisioned rule.
+The fallback is not a substitute for a structured contract.
 
 ## Review checklist
 
