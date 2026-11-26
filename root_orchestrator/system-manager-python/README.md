@@ -32,10 +32,10 @@ For how to use the endpoints, look in `gitlab.lrz.de/cm/2020-mehdi-masters-thesi
 The suite needs no running containers. Run it from this directory:
 
 ```bash
-pip install -r requirements.txt -r requirements-test.txt
-pip install ../../libraries/resource_abstractor_client ../../libraries/oakestra_utils_library
-python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/clusterRegistration.proto
-pytest
+uv sync --package system-manager --group test
+uv run --no-sync -m grpc_tools.protoc -Isrc --python_out=src --grpc_python_out=src --pyi_out=src \
+  src/system_manager/proto/cluster_registration.proto
+uv run --no-sync pytest
 ```
 
 - `tests/unit/` tests single modules in isolation.
@@ -47,7 +47,7 @@ pytest
 
   Any HTTP request to an address no fake answers fails the test, so the suite never touches the network.
 - Known production bugs are pinned as `xfail(strict=True)` tests. When you fix one, its test starts passing and fails the run until you remove the marker.
-- `tests/component/test_api_surface.py` compares the public routes, and whether they require a token, against `tests/component/snapshots/api_surface.json`. After an intentional API change, regenerate it with `UPDATE_SNAPSHOTS=1 pytest tests/component/test_api_surface.py` and commit the diff.
+- `tests/component/test_api_surface.py` compares the public routes, and whether they require a token, against `tests/component/snapshots/api_surface.json`. After an intentional API change, regenerate it with `UPDATE_SNAPSHOTS=1 uv run --no-sync pytest tests/component/test_api_surface.py` and commit the diff.
 
 ## Built With
 

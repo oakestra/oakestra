@@ -4,7 +4,7 @@ through the real grpc_stub fixture.
 
 import grpc
 import pytest
-from proto.clusterRegistration_pb2 import CS1Message
+from system_manager.proto.cluster_registration_pb2 import CS1Message
 
 from tests.component.conftest import cs2_message
 

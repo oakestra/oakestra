@@ -1,7 +1,7 @@
 import pathlib
 import unittest
 
-from sla.versioned_sla_parser import SLAFormatError, parse_sla_json
+from system_manager.sla.versioned_sla_parser import SLAFormatError, parse_sla_json
 
 TEST_SLAS_PATH = pathlib.Path(__file__).parents[1] / "service_level_agreements"
 

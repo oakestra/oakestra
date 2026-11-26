@@ -179,18 +179,18 @@ def test_password_reset_request_for_unknown_user_returns_404(client):
 def test_password_reset_mailed_link_carries_the_raw_token(
     client, create_user, fixed_reset_token, monkeypatch
 ):
-    import users.auth
+    from system_manager.users import auth
 
     # Sending fails before anything reaches SMTP (expiry_delta xfail above), so capture
     # the payload where it is handed to the mail factory.
     mailed = []
-    real_factory = users.auth.ResetPasswordMailFactory
+    real_factory = auth.ResetPasswordMailFactory
 
     def recording_factory(user, email):
         mailed.append(email)
         return real_factory(user, email)
 
-    monkeypatch.setattr(users.auth, "ResetPasswordMailFactory", recording_factory)
+    monkeypatch.setattr(auth, "ResetPasswordMailFactory", recording_factory)
     create_user("alice")
 
     client.post("/api/user/", json={"username": "alice", "domain": "example.com"})

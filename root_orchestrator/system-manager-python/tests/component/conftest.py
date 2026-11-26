@@ -2,7 +2,7 @@
 
 The system manager wires itself up at import time (fetches the JWT public key, connects
 to Mongo, creates the admin user, starts the gRPC server), so the environment and the
-fakes have to be in place *before* `import system_manager`. That is why the env vars are
+fakes have to be in place *before* `system_manager.main` is imported. That is why the env vars are
 set at module level here and the import happens inside a session fixture.
 
 Outbound HTTP is intercepted at the transport level with requests-mock, so a test can
@@ -142,8 +142,8 @@ def mongo_client():
 
 @pytest.fixture(scope="session")
 def sm(jwt_generator_app, mongo_client):
-    """The imported system_manager module (Flask app + running gRPC server)."""
-    from ext_requests import mongodb_client
+    """The imported system_manager.main module (Flask app + running gRPC server)."""
+    from system_manager.ext_requests import mongodb_client
 
     def fake_pymongo(app, uri):
         return SimpleNamespace(db=mongo_client[uri.rsplit("/", 1)[-1]])
@@ -152,12 +152,12 @@ def sm(jwt_generator_app, mongo_client):
         m.register_uri(
             ANY, re.compile(re.escape(JWT_GENERATOR)), content=_forward_to(jwt_generator_app)
         )
-        import system_manager
+        from system_manager import main
 
     # Deliberately not TESTING mode: that re-raises view exceptions into the test, while a
     # real client gets a 500. Component tests assert what a client would see.
-    system_manager.app.config["PROPAGATE_EXCEPTIONS"] = False
-    return system_manager
+    main.app.config["PROPAGATE_EXCEPTIONS"] = False
+    return main
 
 
 @pytest.fixture(scope="session")
@@ -172,8 +172,8 @@ def app(sm):
 def seeded_root(sm):
     """The admin user and root organization as create_admin() leaves them. Seeded once:
     create_admin() hashes a password, which is too slow to repeat for every test."""
-    import ext_requests.mongodb_client as db
-    from ext_requests.user_db import create_admin
+    import system_manager.ext_requests.mongodb_client as db
+    from system_manager.ext_requests.user_db import create_admin
 
     create_admin()
     return list(db.mongo_users.find()), list(db.mongo_organization.find())
@@ -182,7 +182,7 @@ def seeded_root(sm):
 @pytest.fixture(autouse=True)
 def mongo(seeded_root):
     """Fresh users/organizations for every test, seeded like a freshly started root."""
-    import ext_requests.mongodb_client as db
+    import system_manager.ext_requests.mongodb_client as db
 
     users, organizations = seeded_root
     db.mongo_users.delete_many({})
@@ -284,7 +284,7 @@ def jwt_generator_down(http):
 def synchronous_threads(monkeypatch):
     """Scale-up hands the scheduler request to a thread; run it inline so assertions
     about outbound calls are deterministic."""
-    from services import instance_management
+    from system_manager.services import instance_management
 
     class InlineThread:
         def __init__(self, group=None, target=None, args=(), kwargs=None, **_):
@@ -300,10 +300,10 @@ def synchronous_threads(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def smtp(monkeypatch):
-    import mail.mail
+    from system_manager.mail import mail
 
     server = MagicMock(name="SMTP_SSL")
-    monkeypatch.setattr(mail.mail.smtplib, "SMTP_SSL", server)
+    monkeypatch.setattr(mail.smtplib, "SMTP_SSL", server)
     return server
 
 
@@ -363,7 +363,7 @@ def make_cluster(http, resource_abstractor):
 
 @pytest.fixture(scope="session")
 def grpc_stub(sm):
-    from proto.clusterRegistration_pb2_grpc import register_clusterStub
+    from system_manager.proto.cluster_registration_pb2_grpc import register_clusterStub
 
     # grpc honours http(s)_proxy, which would route localhost through a proxy on CI
     # runners and dev machines that set one.
@@ -379,7 +379,7 @@ def cs2_message(
     cluster, network_component_port=44444, cluster_info=None, cluster_location="48.1,11.5,1000"
 ):
     """The CS2 step of the registration handshake, as a cluster manager would send it."""
-    from proto.clusterRegistration_pb2 import CS2Message, KeyValue
+    from system_manager.proto.cluster_registration_pb2 import CS2Message, KeyValue
 
     return CS2Message(
         manager_port=cluster.port,

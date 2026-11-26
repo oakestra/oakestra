@@ -1,5 +1,5 @@
 """Component tests for login/register/refresh and the JWT/role enforcement layers -
-blueprints/authentication_blueprints.py, users/auth.py, roles/securityUtils.py.
+blueprints/authentication_blueprints.py, users/auth.py, roles/security_utils.py.
 """
 
 import datetime
@@ -231,7 +231,7 @@ PROTECTED_ROUTES = [
     ("GET", "/api/permission/Admin", "jwt_auth_required"),
 ]
 
-# roles.securityUtils.jwt_auth_required() wraps verify_jwt_in_request() in a bare
+# roles.security_utils.jwt_auth_required() wraps verify_jwt_in_request() in a bare
 # except and always answers 401, unlike flask_jwt_extended's own jwt_required(),
 # which reports malformed/bad-signature/wrong-token-type tokens as 422.
 EXPECTED_STATUS = {

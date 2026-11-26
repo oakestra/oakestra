@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import mongomock
 import pymongo
-from ext_requests import mongodb_client, organization_db, user_db
+from system_manager.ext_requests import mongodb_client, organization_db, user_db
 
 
 @mongomock.patch(servers=(("localhost", 10007),))

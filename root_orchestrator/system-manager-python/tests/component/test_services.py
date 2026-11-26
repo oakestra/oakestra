@@ -85,16 +85,6 @@ def test_add_service_net_plugin_failure_rolls_back(
     assert resource_abstractor.apps[app_id]["microservices"] == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "bug: blueprints/services_blueprints.py ServiceControllerPost.post() calls "
-        "abort(status, result) inside a bare `except Exception`, which catches the "
-        "HTTPException and re-aborts with 400 'SLA not formatted correctly', so the 404 "
-        "(unknown app) and 422 (invalid SLA) from create_services_of_app never reach "
-        "the client"
-    ),
-)
 @pytest.mark.parametrize(
     ("make_sla", "expected_status"),
     [

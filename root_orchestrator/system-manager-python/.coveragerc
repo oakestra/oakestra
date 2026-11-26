@@ -2,7 +2,7 @@
 omit =
     .venv/*
     tests/*
-    proto/*_pb2*.py
+    src/system_manager/proto/*_pb2*.py
 
 [report]
 show_missing = true

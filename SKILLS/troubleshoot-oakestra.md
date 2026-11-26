@@ -174,6 +174,7 @@ docker logs <exited_container_name> 2>&1 | tail -50
 | `Cluster reachability probe failed` / `cluster not reachable at` (system_manager log) | Root cannot reach `http://CLUSTER_ADDRESS:10100/api/cluster/status` — wrong IP, firewall, or cluster_manager not up |
 | `permission denied` opening `/var/run/docker.sock` (Alloy log) | Alloy cannot discover/read container logs; inspect the socket mount and host permissions |
 | `loki.write` connection refused | The local Loki is not ready, or `LOKI_URL` is wrong for the selected network mode |
+| Service status `NoGpuCapacity` | The SLA asks for `vgpus`/`vram` (setting `vram` alone implies 1 GPU) and no candidate has that many GPUs with at least `vram` MiB free on each. Check the worker's `gpu_vram_free` (free MiB per GPU) and `vgpus` in `cluster_mongo` (`docker exec cluster_mongo mongosh --port 10107 candidates --quiet --eval "db.candidates.find({}, {candidate_name:1, vgpus:1, gpu_vram_free:1}).forEach(printjson)"`); both empty/0 means `nvidia-smi` is missing or failing on the worker (STEP 9.7) |
 
 ---
 
@@ -657,11 +658,11 @@ docker compose build --no-cache system_manager
 docker compose pull
 ```
 
-The shared `libraries/` packages (`oakestra_utils_library`, `resource_abstractor_client`) are built from the repo-local `libraries/` folder via a Buildx named build context — not from a remote git repo, and there is no `LIB_BRANCH` env var. If a build fails on these libraries, check that:
+The shared `libraries/` packages (`oakestra-utils`, `resource-abstractor-client`) are part of the root `uv` workspace and are built from the repo-local `libraries/` folder — not from a remote git repo, and there is no `LIB_BRANCH` env var. If a build fails on these libraries, check that:
 ```bash
-# The libraries build context resolves (declared in docker-compose.yml as additional_contexts):
-ls libraries/oakestra_utils_library libraries/resource_abstractor_client
-# BuildKit/Buildx is enabled (named build contexts require it — default on modern Docker):
+# The shared libraries exist locally:
+ls libraries/oakestra-utils libraries/resource-abstractor-client
+# BuildKit/Buildx is enabled (multi-stage UV builds require Buildx — default on modern Docker):
 docker buildx version
 ```
 
