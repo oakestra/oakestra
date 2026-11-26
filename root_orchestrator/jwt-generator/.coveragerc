@@ -1,0 +1,9 @@
+[run]
+omit =
+    .venv/*
+    tests/*
+
+[report]
+show_missing = true
+# Set just below current coverage so a drop fails CI. Bump it when coverage goes up.
+fail_under = 90

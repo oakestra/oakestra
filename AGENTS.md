@@ -192,8 +192,13 @@ export OVERRIDE_FILES="override-no-addons.yml,override-network-host.yml"
 # Sync all uv workspace services (system_manager, cluster_manager, shared libraries)
 uv sync --all-packages
 
-# Run tests for system_manager
-uv run --with pytest pytest root_orchestrator/system-manager-python/src/system_manager/tests/
+# Run tests (no containers needed: external deps are faked, see the service README).
+# system_manager needs its test group and the generated protos.
+(cd root_orchestrator/system-manager-python && uv sync --package system-manager --group test \
+  && uv run --no-sync -m grpc_tools.protoc -Isrc --python_out=src --grpc_python_out=src \
+       --pyi_out=src src/system_manager/proto/cluster_registration.proto \
+  && uv run --no-sync pytest)
+(cd root_orchestrator/jwt-generator && pip install -r requirements.txt -r requirements-test.txt && pytest)
 
 # Run tests for resource-abstractor (non-uv, uses its local venv / pip)
 pytest resource-abstractor/tests/

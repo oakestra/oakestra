@@ -3,10 +3,9 @@ from unittest.mock import MagicMock
 
 import mongomock
 import pymongo
+from system_manager.ext_requests import mongodb_client, organization_db, user_db
+from system_manager.users import user_management
 from werkzeug.security import check_password_hash
-
-from ..ext_requests import mongodb_client, organization_db, user_db
-from ..users import user_management
 
 
 def mockdb():

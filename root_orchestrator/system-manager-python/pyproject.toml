@@ -17,7 +17,6 @@ dependencies = [
     "werkzeug~=3.1.9",
     "markupsafe~=3.0.3",
     "flask-swagger-ui~=5.33.0",
-    "mongomock==4.3.0",
     "cryptography==50.0.1",
     "grpcio~=1.75.1",
     "grpcio-tools~=1.75.1",
@@ -25,6 +24,14 @@ dependencies = [
     "protobuf>=4.25.2,<7.0.0",
     "oakestra-utils",
     "resource-abstractor-client",
+]
+
+[dependency-groups]
+test = [
+    "pytest~=9.0",
+    "pytest-cov~=7.1",
+    "requests-mock~=1.12",
+    "mongomock==4.3.0",
 ]
 
 [tool.uv.sources]

@@ -1,0 +1,95 @@
+name: Root Orchestrator Tests
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    paths:
+      - "root_orchestrator/**"
+      - "libraries/**"
+      - ".github/workflows/root_orchestrator_tests.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Only supersede PR runs; every commit that lands on develop/main should get a result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  system-manager:
+    name: System manager (unit + component)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: root_orchestrator/system-manager-python
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.10"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked --package system-manager --group test
+
+      - name: Generate protobuf files
+        run: >-
+          uv run --no-sync -m grpc_tools.protoc
+          -Isrc --python_out=src --grpc_python_out=src --pyi_out=src
+          src/system_manager/proto/cluster_registration.proto
+
+      # Every external dependency (Mongo, resource-abstractor, scheduler, network plugin,
+      # cluster managers, jwt_generator) is faked in-process, so no containers are needed.
+      - name: Run tests
+        run: >-
+          uv run --no-sync pytest
+          --cov=system_manager --cov-report=term-missing:skip-covered --cov-report=xml
+          --junitxml=test-results.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: system-manager-test-results
+          path: |
+            root_orchestrator/system-manager-python/test-results.xml
+            root_orchestrator/system-manager-python/coverage.xml
+
+  jwt-generator:
+    name: JWT generator
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: root_orchestrator/jwt-generator
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Matches the Dockerfile base image.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: root_orchestrator/jwt-generator/requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-test.txt
+
+      - name: Run tests
+        run: >-
+          pytest
+          --cov=. --cov-report=term-missing:skip-covered --cov-report=xml
+          --junitxml=test-results.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jwt-generator-test-results
+          path: |
+            root_orchestrator/jwt-generator/test-results.xml
+            root_orchestrator/jwt-generator/coverage.xml

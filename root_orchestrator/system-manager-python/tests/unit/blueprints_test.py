@@ -5,11 +5,10 @@ from unittest.mock import patch
 import pytest
 from flask import Flask
 from flask_smorest import Api
+from system_manager.blueprints.applications_blueprints import applicationblp
+from system_manager.blueprints.services_blueprints import serviceblp
 
-from ..blueprints.applications_blueprints import applicationblp
-from ..blueprints.services_blueprints import serviceblp
-
-TEST_SLAS_PATH = pathlib.Path(__file__).parent / "service_level_agreements"
+TEST_SLAS_PATH = pathlib.Path(__file__).parents[1] / "service_level_agreements"
 
 
 @pytest.fixture

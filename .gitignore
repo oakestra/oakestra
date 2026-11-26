@@ -23,6 +23,13 @@ __pycache__/
 # pytest
 .pytest_cache/
 
+# Python test and coverage output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+test-results.xml
+
 # Generated Python Protobuf/gRPC code
 *_pb2.py
 *_pb2.pyi

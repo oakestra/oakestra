@@ -1,8 +1,8 @@
 import pytest
+from system_manager.services.service_management import generate_db_structure
+from system_manager.sla.v2_validator import validate_json_v2
 
-from ..services.service_management import generate_db_structure
-from ..sla.v2_validator import validate_json_v2
-from .utils import (
+from tests.unit.utils import (
     get_fake_sla_app,
     get_fake_sla_service,
     get_first_app,
