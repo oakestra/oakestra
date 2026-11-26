@@ -1,5 +1,6 @@
 import copy
-from unittest.mock import ANY, Mock, patch
+from types import SimpleNamespace
+from unittest.mock import ANY, patch
 
 import pytest
 from resource_abstractor_client import app_operations, job_operations
@@ -20,15 +21,13 @@ resource_abstractor = "http://localhost:11011"
 
 
 @pytest.fixture(autouse=True)
-def net_plugin(monkeypatch):
-    plugin = Mock()
-    monkeypatch.setattr(
-        service_management, "net_inform_service_deploy", plugin.net_inform_service_deploy
-    )
-    monkeypatch.setattr(
-        service_management, "net_inform_service_undeploy", plugin.net_inform_service_undeploy
-    )
-    return plugin
+def net_plugin():
+    """Stand-in for the network plugin, which is not running in the tests."""
+    with (
+        patch.object(service_management, "net_inform_service_deploy") as deploy,
+        patch.object(service_management, "net_inform_service_undeploy") as undeploy,
+    ):
+        yield SimpleNamespace(deploy=deploy, undeploy=undeploy)
 
 
 def test_create_service_with_app(net_plugin):
@@ -62,7 +61,7 @@ def test_create_service_with_app(net_plugin):
             sla_first_app["application_namespace"],
             "Admin",
         )
-        net_plugin.net_inform_service_deploy.assert_called_with(last_service, ANY)
+        net_plugin.deploy.assert_called_with(last_service, ANY)
         assert len(result["microservices"]) == len(sla_first_app["microservices"])
 
 
@@ -140,8 +139,7 @@ def test_create_invalid_service_namespace():
     assert code == 422
 
 
-@pytest.mark.usefixtures("net_deploy_mock", "net_undeploy_mock")
-def test_delete_service():
+def test_delete_service(net_plugin):
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
         new=str(resource_abstractor),
@@ -174,6 +172,7 @@ def test_delete_service():
         # ASSERT
         assert result
         assert not resultNone
+        net_plugin.undeploy.assert_called_once_with(service_to_be_deleted)
         db_app_after_deletion = app_operations.get_app_by_name_and_namespace(
             sla_first_app["application_name"],
             sla_first_app["application_namespace"],
@@ -219,7 +218,6 @@ def test_delete_service():
 #         assert app_after_update["new_field"] == "new"
 
 
-@pytest.mark.usefixtures("net_deploy_mock", "net_undeploy_mock")
 def test_update_service_not_found():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
@@ -255,7 +253,6 @@ def test_update_service_not_found():
         assert code == 501
 
 
-@pytest.mark.usefixtures("net_deploy_mock")
 def test_get_user_services():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
@@ -291,7 +288,6 @@ def test_get_user_services():
         assert resultNone == {"message": "app not found"}
 
 
-@pytest.mark.usefixtures("net_deploy_mock")
 def test_get_services():
     with patch(
         "resource_abstractor_client.client_helper.RESOURCE_ABSTRACTOR_ADDR",
