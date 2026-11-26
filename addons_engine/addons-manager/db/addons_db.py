@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+
+from addon_status import AddonStatusEnum
 from bson.objectid import ObjectId
 
 import db.mongodb_client as db
@@ -8,6 +11,9 @@ def find_addons(filter={}):
 
 
 def find_addon_by_id(addon_id):
+    if not ObjectId.is_valid(addon_id):
+        return None
+
     addon = list(find_addons({"_id": ObjectId(addon_id)}))
     return addon[0] if addon else None
 
@@ -17,8 +23,12 @@ def find_addon_by_marketplace_id(marketplace_id):
     return addon[0] if addon else None
 
 
-def find_active_addons():
-    return find_addons({"status": "enabled"})
+def find_active_addons(with_ui=False):
+    query = {"status": str(AddonStatusEnum.ACTIVE)}
+    if with_ui:
+        query["ui"] = {"$ne": None}
+
+    return find_addons(query)
 
 
 def create_addon(addon):
@@ -29,12 +39,18 @@ def create_addon(addon):
 
 
 def update_addon(addon_id, addon_data):
+    if not ObjectId.is_valid(addon_id):
+        return None
+
     return db.mongo_addons.find_one_and_update(
         {"_id": ObjectId(addon_id)},
-        {"$set": addon_data},
+        {"$set": {**addon_data, "updated_at": datetime.now(timezone.utc)}},
         return_document=True,
     )
 
 
 def delete_addon_by_id(addon_id):
+    if not ObjectId.is_valid(addon_id):
+        return None
+
     return db.mongo_addons.find_one_and_delete({"_id": ObjectId(addon_id)})

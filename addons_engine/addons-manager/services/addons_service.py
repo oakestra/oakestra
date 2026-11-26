@@ -1,35 +1,44 @@
 import logging
 import os
-from enum import Enum
+from datetime import datetime, timezone
 
 import requests
+from addon_status import AddonStatusEnum
 from db import addons_db
 
 MARKETPLACE_ADDR = os.environ.get("MARKETPLACE_ADDR") or "http://localhost:11102"
 MARKETPLACE_API = f"{MARKETPLACE_ADDR}/api/v1/marketplace/addons"
+MARKETPLACE_TIMEOUT_SECONDS = 10
 
 addons_service = None
 
 
-# TODO(ME): reuse this enum in addons_monitor
-class AddonStatusEnum(Enum):
-    INSTALLING = "installing"
-    DISABLING = "disabling"
+class MarketplaceAddonNotFoundError(Exception):
+    pass
 
-    DISABLED = "disabled"
-    FAILED = "failed"
-    ACTIVE = "active"
-    PARTIALLY_ACTIVE = "partially_active"
 
-    def __str__(self):
-        return self.value
+class MarketplaceUnavailableError(Exception):
+    pass
+
+
+class UiAddonNameTakenError(Exception):
+    pass
 
 
 def get_addon_in_marketplace(marketplace_id, check_is_verified=True):
-    response = requests.get(f"{MARKETPLACE_API}/{marketplace_id}")
-    response.raise_for_status()
+    try:
+        response = requests.get(
+            f"{MARKETPLACE_API}/{marketplace_id}", timeout=MARKETPLACE_TIMEOUT_SECONDS
+        )
+        if response.status_code == 404:
+            raise MarketplaceAddonNotFoundError(marketplace_id)
+        response.raise_for_status()
+        marketplace_addon = response.json()
+    except requests.RequestException as e:
+        # Connection errors, timeouts, other error codes and broken JSON all point at the
+        # marketplace, not at a missing addon.
+        raise MarketplaceUnavailableError(str(e)) from e
 
-    marketplace_addon = response.json()
     if check_is_verified and marketplace_addon.get("status") != "approved":
         return None
 
@@ -49,12 +58,27 @@ def install_addon(addon):
         logging.error(f"Addon-{marketplace_id} has no services")
         return None
 
-    addon["name"] = marketplace_addon.get("name")
+    name = marketplace_addon.get("name")
+    # The dashboard reaches a UI as addonui-<name>, so two installed UIs with the same name would
+    # share one DNS alias. Disabled addons have no containers left and don't count.
+    if marketplace_addon.get("ui") and list(
+        addons_db.find_addons(
+            {"name": name, "ui": {"$ne": None}, "status": {"$ne": str(AddonStatusEnum.DISABLED)}}
+        )
+    ):
+        raise UiAddonNameTakenError(name)
+
+    now = datetime.now(timezone.utc)
+
+    addon["name"] = name
     addon["description"] = marketplace_addon.get("description", "")
     addon["services"] = services
     addon["volumes"] = marketplace_addon.get("volumes", [])
     addon["networks"] = marketplace_addon.get("networks", [])
+    addon["ui"] = marketplace_addon.get("ui")
     addon["status"] = str(AddonStatusEnum.INSTALLING)
+    addon["created_at"] = now
+    addon["updated_at"] = now
 
     created_addon = addons_db.create_addon(addon)
 

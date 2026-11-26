@@ -172,6 +172,7 @@ docker logs <exited_container_name> 2>&1 | tail -50
 | `CLUSTER_ADDRESS env var is not set` (cluster_manager log) | Missing env var — cluster cannot advertise its address to root |
 | `cluster_address is required` (system_manager log) | Cluster connected via gRPC but sent empty `cluster_address` |
 | `Cluster reachability probe failed` / `cluster not reachable at` (system_manager log) | Root cannot reach `http://CLUSTER_ADDRESS:10100/api/cluster/status` — wrong IP, firewall, or cluster_manager not up |
+| HTTP 502 on `/addon-assets/<name>/...` (dashboard) | The addon UI container is not running, or is not on the `oakestra` network with the alias `addonui-<name>` - see STEP 12 |
 | `permission denied` opening `/var/run/docker.sock` (Alloy log) | Alloy cannot discover/read container logs; inspect the socket mount and host permissions |
 | `loki.write` connection refused | The local Loki is not ready, or `LOKI_URL` is wrong for the selected network mode |
 | Service status `NoGpuCapacity` | The SLA asks for `vgpus`/`vram` (setting `vram` alone implies 1 GPU) and no candidate has that many GPUs with at least `vram` MiB free on each. Check the worker's `gpu_vram_free` (free MiB per GPU) and `vgpus` in `cluster_mongo` (`docker exec cluster_mongo mongosh --port 10107 candidates --quiet --eval "db.candidates.find({}, {candidate_name:1, vgpus:1, gpu_vram_free:1}).forEach(printjson)"`); both empty/0 means `nvidia-smi` is missing or failing on the worker (STEP 9.7) |
@@ -191,6 +192,9 @@ docker exec root_scheduler env 2>/dev/null | grep -E "MANAGER_URL|RESOURCE_ABSTR
 docker exec root_resource_abstractor env 2>/dev/null | grep -E "MONGO_URL|MONGO_PORT" || echo "root_resource_abstractor not running"
 
 docker exec root_service_manager env 2>/dev/null | grep -E "SYSTEM_MANAGER|ROOT_MONGO|JWT" || echo "root_service_manager not running"
+
+# oaekstra-frontend-container in 1-DOC
+docker exec oakestra-frontend-container env 2>/dev/null | grep -E "API_ADDRESS|ADDONS_MANAGER_ADDRESS|MARKETPLACE_ADDRESS|PRESET_URL" || echo "dashboard not running"
 ```
 
 ```bash
@@ -208,6 +212,7 @@ docker exec cluster_service_manager env 2>/dev/null | grep -E "ROOT_SERVICE_MANA
 - `CLUSTER_ADDRESS` must be non-empty in cluster_manager and must be the **IP/hostname at which the ROOT can reach this cluster manager** (typically the cluster host's default-route IP). It must NOT be `localhost`, `127.0.0.1`, `0.0.0.0`, or a Docker-internal address like `172.17.x.x` / `172.19.x.x` (those are the docker bridge gateway and not routable from the root). In 1-DOC deployments, `CLUSTER_ADDRESS` should equal `SYSTEM_MANAGER_URL`.
 - `REDIS_ADDR` must match `redis://:rootRedis@root_redis:6379` (root) or `redis://:clusterRedis@cluster_redis:6479` (cluster)
 - `CLUSTER_LOCATION` format: `latitude,longitude,radius` (e.g., `48.1,11.6,1000`)
+- `PRESET_URL` on the dashboard is optional. If it's set, the file must exist and be a valid preset, otherwise the dashboard shows a configuration error instead of the login page (see STEP 12)
 
 ---
 
@@ -635,7 +640,46 @@ curl -s --connect-timeout 5 "http://localhost:11102/status" 2>/dev/null || echo 
 
 # Check addons_monitor docker socket access
 docker exec addons_monitor ls /var/run/docker.sock 2>/dev/null || echo "WARN: addons_monitor cannot access docker socket"
+
+echo "=== UI addons ==="
+# Active addons with a dashboard UI. An empty list means none are installed or active yet.
+curl -s --connect-timeout 5 "http://localhost:11101/api/v1/ui-addons" 2>/dev/null || echo "addons_manager not responding"
 ```
+
+Addon UIs and presets need the v2 dashboard (`ghcr.io/oakestra/dashboard-v2`), which only runs with `override-dashboard-v2.yml` (`.yaml` in 1-DOC). The default is v1 (`ghcr.io/oakestra/dashboard`). To see which one is running:
+
+```bash
+# Use oaekstra-frontend-container in 1-DOC.
+docker inspect oakestra-frontend-container --format '{{.Config.Image}}'
+```
+
+The dashboard's nginx fetches each addon UI from `http://addonui-<name>:80/`. The addons monitor sets that alias on the UI container in the `oakestra` network. If an addon UI doesn't load, or `/addon-assets/<name>/mf-manifest.json` returns 502, check the aliases and try the request from the dashboard container (`oakestra-frontend-container` on root, `oaekstra-frontend-container` in 1-DOC):
+
+```bash
+NAME=<addon-name>
+# Aliases of every container on the oakestra network. addonui-$NAME should be among them.
+docker network inspect oakestra --format '{{range .Containers}}{{.Name}} {{end}}' | tr ' ' '\n' | grep . \
+  | xargs -I{} docker inspect {} --format '{{.Name}}: {{json .NetworkSettings.Networks.oakestra.Aliases}}'
+docker exec oakestra-frontend-container wget -qO /dev/null "http://addonui-$NAME/mf-manifest.json" \
+  && echo "OK: addonui-$NAME serves mf-manifest.json" \
+  || echo "FAIL: addonui-$NAME not reachable from the dashboard"
+```
+
+Installing an addon (`POST /api/v1/addons`) can fail with 404 (marketplace doesn't know the addon), 502 (marketplace unreachable, check `marketplace_manager`) or 409 (another non-disabled addon with a UI already uses that name; disable it first).
+
+Addon UIs don't work with `override-network-host.yml`, since the dashboard has no Docker DNS there.
+
+An addon that is `active` and listed in `/api/v1/ui-addons` but never appears in the dashboard may be named like a built-in module (`applications`, `infrastructure`, `users`, `organizations`, `help`). The dashboard ignores those and only logs a warning in the browser console.
+
+`override-no-addons.yml` turns off the addon pages through a dashboard preset, so it's normal that they're missing there. If the dashboard shows a configuration error instead of the login page, or the addon pages are gone without that override, check the preset:
+
+```bash
+# Use oaekstra-frontend-container in 1-DOC. An empty presetUrl means no preset.
+docker exec oakestra-frontend-container cat /usr/share/nginx/html/config.json
+docker exec oakestra-frontend-container cat /usr/share/nginx/html/preset.json
+```
+
+The error page lists what is wrong with the preset. A 404 for `preset.json` means `PRESET_URL=/preset.json` is set but no file is mounted. If `docker compose` rejects `configs.content` in `override-no-addons.yml`, Docker Compose is older than 2.23.1.
 
 ---
 

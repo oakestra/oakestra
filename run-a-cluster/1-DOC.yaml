@@ -33,6 +33,9 @@ services:
     labels: *root-log-labels
     environment:
       - API_ADDRESS=${SYSTEM_MANAGER_URL}:10000
+      # 1-DOC names the addons services without the root_ prefix.
+      - ADDONS_MANAGER_ADDRESS=addons_manager:11101
+      - MARKETPLACE_ADDRESS=marketplace_manager:11102
 
   # System Manager REST API of Root Orchestrator
   system_manager:

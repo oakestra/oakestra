@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import time
 from collections import defaultdict
 from enum import Enum
@@ -14,6 +15,8 @@ MAX_CONTAINER_RETRIES = int(os.environ.get("MAX_CONTAINER_RETRIES", 1))
 CONTAINER_POLL_INTERVAL = int(os.environ.get("CONTAINER_POLL_INTERVAL", 30))
 
 DEFAULT_NETWORK = "oakestra"
+UI_ALIAS_PREFIX = "addonui-"
+UI_ADDON_NAME_PATTERN = re.compile(r"^[a-z0-9-]+$")
 
 ADDONS_ID_LABEL = os.environ.get("ADDONS_ID_LABEL") or "oak.addon.id"
 ADDONS_SERVICE_NAME_LABEL = os.environ.get("ADDONS_SERVICE_NAME_LABEL") or "oak.service.name"
@@ -112,6 +115,7 @@ class AddonsMonitor:
             str(addon.get("_id")),
             all_services,
             runner_engine,
+            ui_service=self._get_ui_service(addon),
         )
 
         new_status = str(AddonStatusEnum.ACTIVE)
@@ -131,7 +135,26 @@ class AddonsMonitor:
 
         return running_services, failed_services
 
-    def run_addon_services(self, addon_id, services, runner_engine):
+    def _get_ui_service(self, addon):
+        """Return (service_name, alias) for the addon's UI service, or None if it has no UI."""
+        ui = addon.get("ui")
+        if not ui or not ui.get("service"):
+            return None
+
+        # Only the root dashboard loads addon UIs. A cluster monitor on the same host shares the
+        # oakestra network, and adding the alias there too would make it ambiguous.
+        if ORCHESTRATION_PLANE != "root":
+            return None
+
+        name = addon.get("name") or ""
+        if not UI_ADDON_NAME_PATTERN.match(name):
+            # Still start the container, it just won't be reachable from the dashboard.
+            logging.warning(f"Addon-{addon.get('_id')}: name {name!r} can't be used as a UI alias")
+            return None
+
+        return ui["service"], f"{UI_ALIAS_PREFIX}{name}"
+
+    def run_addon_services(self, addon_id, services, runner_engine, ui_service=None):
         """Runs the services of an addon.
 
         This function checks if the services for the addon are already running. If they are,
@@ -145,6 +168,8 @@ class AddonsMonitor:
                 includes at least 'service_name' and 'image'.
             project_name (str, optional): The name of the project.
             Defaults to DEFAULT_PROJECT_NAME.
+            ui_service (tuple, optional): (service_name, alias) of the addon's UI service. That
+            service is attached to DEFAULT_NETWORK under the given alias.
 
         Returns:
             tuple: A tuple containing two lists:
@@ -201,8 +226,18 @@ class AddonsMonitor:
             if not service["networks"]:
                 service["networks"].append(DEFAULT_NETWORK)
 
+            aliases = None
+            if ui_service and service["service_name"] == ui_service[0]:
+                # The dashboard can only reach the UI over DEFAULT_NETWORK, so attach it there
+                # even if the addon brings its own networks.
+                if DEFAULT_NETWORK not in service["networks"]:
+                    service["networks"].append(DEFAULT_NETWORK)
+                aliases = {DEFAULT_NETWORK: [ui_service[1]]}
+
             try:
-                container = runner_engine.run_service(service, DEFAULT_PROJECT_NAME)
+                container = runner_engine.run_service(
+                    service, DEFAULT_PROJECT_NAME, aliases=aliases
+                )
                 running_services.append(container)
             except Exception as e:
                 logging.warning("Failed to run container.", exc_info=e)

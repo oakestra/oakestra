@@ -1,15 +1,34 @@
 import os
+from datetime import datetime, timezone
 
 from api.v1.addons_api import addonsblp
+from api.v1.ui_addons_api import uiaddonsblp
+from bson.objectid import ObjectId
 from db.mongodb_client import mongo_init
 from flask import Flask
+from flask.json import JSONEncoder
 from flask_cors import CORS
 from flask_smorest import Api
 from flask_swagger_ui import get_swaggerui_blueprint
 
 ADDONS_MANAGER_PORT = int(os.environ.get("ADDONS_MANAGER_PORT", 11101))
 
+
+class AddonsJSONEncoder(JSONEncoder):
+    def default(self, o):
+        if isinstance(o, ObjectId):
+            return str(o)
+        if isinstance(o, datetime):
+            # pymongo returns naive datetimes because the client isn't tz_aware. We only store
+            # UTC, so add the offset, otherwise browsers parse the value as local time.
+            if o.tzinfo is None:
+                o = o.replace(tzinfo=timezone.utc)
+            return o.isoformat()
+        return super().default(o)
+
+
 app = Flask(__name__)
+app.json_encoder = AddonsJSONEncoder
 
 # Configure CORS with explicit settings
 CORS(
@@ -47,6 +66,7 @@ swaggerui_blueprint = get_swaggerui_blueprint(
 )
 app.register_blueprint(swaggerui_blueprint)
 api.register_blueprint(addonsblp)
+api.register_blueprint(uiaddonsblp)
 
 
 @app.route("/", methods=["GET"])

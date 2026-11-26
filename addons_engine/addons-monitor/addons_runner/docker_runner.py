@@ -16,9 +16,11 @@ class DockerRunner:
         return self._client.networks.list(**kwargs)
 
     def get_network_by_name(self, network_name):
+        # The Docker name filter matches substrings ("oakestra" also matches
+        # "oakestra-dashboard-dev_default"), so check for the exact name.
         networks = self.get_networks(names=[network_name])
 
-        return networks[0] if networks else None
+        return next((network for network in networks if network.name == network_name), None)
 
     def get_volumes(self):
         return self._client.volumes.list()
@@ -75,7 +77,9 @@ class DockerRunner:
 
         return True
 
-    def run_service(self, service, project_name):
+    def run_service(self, service, project_name, aliases=None):
+        """Start a container for the service. aliases maps network names to DNS aliases."""
+        aliases = aliases or {}
         # labels for basic structuring of the containers
         service["labels"] = service.get("labels", {})
         service["labels"]["com.docker.compose.project"] = project_name
@@ -88,6 +92,14 @@ class DockerRunner:
             service_name if service_name.startswith(prefix) else f"{prefix}{service_name}"
         )
         one_network = service["networks"][0]
+        first_aliases = aliases.get(one_network)
+        # containers.run only accepts one network, so its aliases have to be set at create time.
+        # docker-py ignores networking_config unless it is keyed by that same network.
+        networking_config = (
+            {one_network: self._client.api.create_endpoint_config(aliases=first_aliases)}
+            if first_aliases
+            else None
+        )
         image = service.get("image")
 
         created_container = self._client.containers.run(
@@ -95,6 +107,7 @@ class DockerRunner:
             name=container_name,
             command=service.get("command", []),
             network=one_network,
+            networking_config=networking_config,
             ports=service.get("ports", {}),
             environment=service.get("environment", {}),
             labels=service.get("labels", {}),
@@ -110,7 +123,7 @@ class DockerRunner:
                     f"Network {network_name} not found. Will not attach container to network..."
                 )
                 continue
-            network.connect(created_container)
+            network.connect(created_container, aliases=aliases.get(network_name))
 
         return created_container
 

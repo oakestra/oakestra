@@ -59,6 +59,11 @@ services:
 
   dashboard:
     network_mode: host
+    environment:
+      - ADDONS_MANAGER_ADDRESS=127.0.0.1:11101
+      - MARKETPLACE_ADDRESS=127.0.0.1:11102
+      # No Docker DNS in host mode, so addonui-<name> can't be resolved and addon UIs won't
+      # load. The addon manager pages still work.
 
   # Root Scheduler
   root_scheduler:

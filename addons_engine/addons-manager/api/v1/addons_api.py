@@ -1,6 +1,8 @@
-import json
+import logging
 
+from addon_status import AddonStatusEnum
 from db import addons_db
+from flask import jsonify
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from marshmallow import INCLUDE, Schema, fields, validate
@@ -16,7 +18,7 @@ class AddonPOSTSchema(Schema):
 class AddonPATCHSchema(Schema):
     status = fields.String(
         validate=validate.OneOf(
-            [str(status) for status in addons_service.AddonStatusEnum],
+            [str(status) for status in AddonStatusEnum],
         ),
         required=True,
     )
@@ -30,7 +32,7 @@ class AddonFilterSchema(Schema):
 class AllAddonsController(MethodView):
     @addonsblp.arguments(AddonFilterSchema, location="query")
     def get(self, query={}):
-        return json.dumps(list(addons_db.find_addons(query)), default=str), 200
+        return jsonify(list(addons_db.find_addons(query))), 200
 
     @addonsblp.arguments(AddonPOSTSchema, location="json")
     def post(self, addon_data):
@@ -39,12 +41,20 @@ class AllAddonsController(MethodView):
         if exisiting_addon:
             abort(400, message=f"Addon with marketplace-id - {marketplace_id} already exists.")
 
-        result = addons_service.install_addon(addon_data)
+        try:
+            result = addons_service.install_addon(addon_data)
+        except addons_service.MarketplaceAddonNotFoundError:
+            abort(404, message="Marketplace addon not found")
+        except addons_service.MarketplaceUnavailableError as e:
+            logging.warning(f"Marketplace lookup for {marketplace_id} failed: {e}")
+            abort(502, message="Marketplace is unavailable")
+        except addons_service.UiAddonNameTakenError as e:
+            abort(409, message=f"An addon with a UI named {e} is already installed.")
 
         if result is None:
             abort(400, message="Failed to install addon")
 
-        return json.dumps(result, default=str), 201
+        return jsonify(result), 201
 
 
 @addonsblp.route("/<addon_id>")
@@ -54,7 +64,7 @@ class AddonController(MethodView):
         if addon is None:
             abort(404, message="Addon not found")
 
-        return json.dumps(addon, default=str), 200
+        return jsonify(addon), 200
 
     @addonsblp.arguments(AddonPATCHSchema(unknown=INCLUDE), location="json")
     def patch(self, addon_data, *args, **kwargs):
@@ -62,9 +72,9 @@ class AddonController(MethodView):
         result = addons_db.update_addon(addon_id, addon_data)
 
         if result is None:
-            abort(400, message="Failed to update addon")
+            abort(404, message="Addon not found")
 
-        return json.dumps(result, default=str), 200
+        return jsonify(result), 200
 
     def delete(self, addon_id, *args, **kwargs):
         addon = addons_db.find_addon_by_id(addon_id)
@@ -72,14 +82,12 @@ class AddonController(MethodView):
         if addon is None:
             abort(404, message="Addon not found")
 
-        if addon.get("status") != str(addons_service.AddonStatusEnum.DISABLED):
-            result = addons_db.update_addon(
-                addon_id, {"status": str(addons_service.AddonStatusEnum.DISABLING)}
-            )
+        if addon.get("status") != str(AddonStatusEnum.DISABLED):
+            result = addons_db.update_addon(addon_id, {"status": str(AddonStatusEnum.DISABLING)})
 
             if result is None:
                 abort(400, message="Failed to disable addon")
 
-            return json.dumps(result, default=str), 200
+            return jsonify(result), 200
         addons_db.delete_addon_by_id(addon_id)
         return "", 204
