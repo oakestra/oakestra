@@ -305,6 +305,7 @@ services:
       - ./config/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml
       - ./config/alerts/grafana-rules.yml:/etc/grafana/provisioning/alerting/oakestra-rules.yml:ro
       - ./config/alerts/grafana-container-rules.yml:/etc/grafana/provisioning/alerting/oakestra-containers.yml:ro
+      - ./config/alerts/grafana-resource-rules.yml:/etc/grafana/provisioning/alerting/oakestra-resources.yml:ro
       - ./config/alerts/grafana-contact-point.yml:/etc/grafana/provisioning/alerting/oakestra-contact-point.yml:ro
       - ./config/dashboards:/var/lib/grafana/dashboards
     logging: *default-logging
