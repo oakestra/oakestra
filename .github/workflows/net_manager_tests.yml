@@ -1,0 +1,34 @@
+name: Net Manager Test
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+  merge_group:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+
+      - name: Setup Golang
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: net_manager/go.mod
+          cache-dependency-path: net_manager/go.sum
+
+      - name: Install dependencies
+        working-directory: net_manager
+        run: |
+          go mod download
+
+      - name: Run test suite
+        working-directory: net_manager
+        run: |
+           go test -race ./...

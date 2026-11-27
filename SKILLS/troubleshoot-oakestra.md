@@ -7,6 +7,10 @@ Oakestra is an edge computing orchestration platform composed of:
 - **Cluster Orchestrator** – manages multiple worker nodes (docker-compose in `cluster_orchestrator/`)
 - **Worker Node** – runs workloads (`NodeEngine` + `NetManager` binaries)
 
+All of it, networking included, lives in the `oakestra/oakestra` repository (the former `oakestra-net` repo was merged into it):
+`root_orchestrator/service-manager/` (root service manager), `cluster_orchestrator/service-manager/` (cluster service manager),
+`node_engine/` (NodeEngine) and `net_manager/` (NetManager). File bug reports for any of them against `oakestra/oakestra`.
+
 Deployments can be:
 - **1-DOC** (single machine): root + cluster on the same host, started via `scripts/StartOakestraFull.sh`
 - **Root only**: started via `scripts/StartOakestraRoot.sh`
@@ -21,7 +25,8 @@ Run the following and interpret the output to understand what is running on this
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null
-systemctl status NodeEngine 2>/dev/null || true
+systemctl status nodeengine 2>/dev/null || true
+systemctl status netmanager 2>/dev/null || true
 which NodeEngine 2>/dev/null || true
 which NetManager 2>/dev/null || true
 ```
@@ -490,9 +495,9 @@ To change the log path: `sudo NodeEngine config applogs /your/custom/path`
 
 ```bash
 # If running as systemd service
-systemctl status NodeEngine 2>/dev/null
+systemctl status nodeengine 2>/dev/null
 # Systemd journal (startup/crash messages, before the log file is open)
-journalctl -u NodeEngine -n 50 --no-pager 2>/dev/null | grep -iE "error|fail|refused|panic|timeout|mqtt"
+journalctl -u nodeengine -n 50 --no-pager 2>/dev/null | grep -iE "error|fail|refused|panic|timeout|mqtt"
 
 # If running directly
 ps aux | grep -i NodeEngine
@@ -517,8 +522,9 @@ tail -50 /var/log/oakestra/netmanager.log 2>/dev/null || true
 ```
 
 ```bash
-systemctl status NetManager 2>/dev/null
-journalctl -u NetManager -n 50 --no-pager 2>/dev/null | grep -iE "error|fail|refused|panic|timeout"
+# The systemd unit is lowercase: netmanager.service
+systemctl status netmanager 2>/dev/null
+journalctl -u netmanager -n 50 --no-pager 2>/dev/null | grep -iE "error|fail|refused|panic|timeout"
 ps aux | grep -i NetManager
 ```
 
@@ -571,7 +577,7 @@ docker run --rm --gpus all nvidia/cuda:11.0-base nvidia-smi 2>/dev/null || echo 
 # Check GPU configuration script
 ls /usr/local/bin/configure_gpu.sh 2>/dev/null || \
 ls /opt/oakestra/configure_gpu.sh 2>/dev/null || \
-echo "GPU configure script not found (run go_node_engine/build/configure_gpu.sh if GPU is needed)"
+echo "GPU configure script not found (run node_engine/build/configure-gpu.sh if GPU is needed)"
 ```
 
 ---
@@ -658,11 +664,15 @@ docker exec addons_monitor ls /var/run/docker.sock 2>/dev/null || echo "WARN: ad
 
 ```bash
 # Check which images are using pre-built vs locally built
-docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.CreatedSince}}\t{{.Size}}" | grep -E "system_manager|cluster_manager|root_scheduler|cluster_scheduler|resource_abstractor|jwt_generator|addons"
+docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.CreatedSince}}\t{{.Size}}" | grep -E "system_manager|cluster_manager|service_manager|service-manager|root_scheduler|cluster_scheduler|resource_abstractor|jwt_generator|addons"
 
 # Check for dangling images / build cache issues
 docker images -f "dangling=true" | head -10
 ```
+
+Pre-built service manager images are `ghcr.io/oakestra/oakestra/root-service-manager` and `ghcr.io/oakestra/oakestra/cluster-service-manager`.
+Deployments from before the `oakestra-net` merge pull them from `ghcr.io/oakestra/oakestra-net/...` instead; mixing the two on one
+deployment means the root and cluster run different network plugin versions.
 
 If images are outdated or from a wrong branch, rebuild:
 ```bash

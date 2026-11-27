@@ -110,7 +110,7 @@ services:
 
   # Cluster Manager
   root_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
+    image: ghcr.io/oakestra/oakestra/root-service-manager:latest
     pull_policy: always
     container_name: root_service_manager
     hostname: root_service_manager
@@ -263,7 +263,7 @@ services:
 
   # Cluster Manager
   cluster_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
+    image: ghcr.io/oakestra/oakestra/cluster-service-manager:latest
     pull_policy: always
     container_name: cluster_service_manager
     hostname: cluster_service_manager

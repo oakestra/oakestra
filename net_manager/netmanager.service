@@ -1,0 +1,15 @@
+[Unit]
+Description=Oakestra NetManager Service
+After=network.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+User=root
+ExecStart=/bin/NetManager
+StandardOutput=append:/var/log/oakestra/netmanager.log
+StandardError=append:/var/log/oakestra/netmanager.log
+
+[Install]
+WantedBy=multi-user.target

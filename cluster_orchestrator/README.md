@@ -5,6 +5,7 @@ By our design, a Cluster Orchestrator contains:
 - a message broker (MQTT)
 - a scheduler
 - a Cluster Manager
+- a Cluster Service Manager (`service-manager/`), the network plugin that distributes routes to the workers via MQTT
 - a database (mongoDB)
 
 The edge nodes push cpu+memory data to the mqtt-broker.
@@ -90,18 +91,10 @@ It's possible to use the docker override functionality to exclude or customize t
 
 `docker-compose -f docker-compose.yml -f override-no-network.yml up --build`
 
-### Customize network component version
+### Use local changes to the network component
 
-- open and edit `override-custom-serivce-manager.yml` with the correct container image
-- run the orchestrator with the override file: `docker-compose -f docker-compose.yml -f override-custom-service-manager.yml up --build`
-
-### Use local development network component
-
-In case you want to use changes made to the cluster network component in your deployment,
-you can use the `override-local-service-manager.yml` override file.
-
-- copy the `oakestra-net/cluster-service-manager/service-manager` folder to the `cluster_orchestrator` directory
-- run the orchestrator with the override file: `docker-compose -f docker-compose.yml -f override-local-service-manager.yml up --build`
+The Cluster Service Manager is built from [`service-manager/`](service-manager/README.md) like every other cluster component,
+so `docker compose -f docker-compose.yml up --build` already includes your local changes. No extra override is needed.
 
 ### Enable IPv6 for container deployments
 

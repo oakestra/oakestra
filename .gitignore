@@ -45,11 +45,13 @@ Thumbs.db
 # Environment and log files
 .env
 *.log
+*.log.[0-9]*
 
 # Python and uv
 .venv/
 __pycache__/
 *.pyc
+*.egg-info/
 
 # pytest
 .pytest_cache/
@@ -69,13 +71,25 @@ node_modules/
 /libraries/oakestra-utils/dist/
 /libraries/resource-abstractor-client/dist/
 
+# Stale build output from the old library layout (local leftovers only)
+/libraries/**/build/
+
 # addons_engine/addons-dashboard build artifacts
 /addons_engine/addons-dashboard/dist/
 
-# go_node_engine build artifacts
-/go_node_engine/**/NodeEngine*
-/go_node_engine/**/nodeengined*
-/go_node_engine/third_party/**/dist/
+# node_engine build artifacts
+/node_engine/**/NodeEngine*
+/node_engine/**/nodeengined*
+/node_engine/**/bin/
+/node_engine/third_party/**/dist/
+NodeEngine_*
+nodeengined_*
+
+# net_manager build artifacts
+/net_manager/NetManager
+/net_manager/build/bin/
+/scripts/NetManager
+NetManager_*
 
 # csi/hostpath build artifacts
 /csi/hostpath/hostpath-csi
@@ -83,3 +97,11 @@ node_modules/
 
 # scheduler build artifacts
 /scheduler/scheduler
+
+# Go test binaries and coverage output (go test -c / -coverprofile)
+*.test
+*.out
+
+# VSCode debug binaries and generated service files
+*__debug_bin*
+scripts/netmanager.service

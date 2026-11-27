@@ -38,7 +38,12 @@ if [ $? -ne 0 ]; then
         exit 1
 fi
 
-wget -c https://github.com/oakestra/oakestra-net/releases/download/$OAKESTRA_VERSION/NetManager_$ARCH.tar.gz &&
+# NetManager is released from this repo since oakestra-net was merged into it.
+# Older versions only have it on the oakestra-net releases, so fall back to those.
+wget -q -c https://github.com/oakestra/oakestra/releases/download/$OAKESTRA_VERSION/NetManager_$ARCH.tar.gz ||
+    wget -c https://github.com/oakestra/oakestra-net/releases/download/$OAKESTRA_VERSION/NetManager_$ARCH.tar.gz
+
+[ -s NetManager_$ARCH.tar.gz ] &&
     tar -xzf NetManager_$ARCH.tar.gz &&
     chmod +x install.sh &&
     ./install.sh $ARCH

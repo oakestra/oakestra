@@ -45,10 +45,10 @@ libraries/resource-abstractor-client/dist
 # addons_engine/addons-dashboard build artifacts
 addons_engine/addons-dashboard/dist
 
-# go_node_engine build artifacts
-go_node_engine/**/NodeEngine*
-go_node_engine/**/nodeengined*
-go_node_engine/third_party/**/dist
+# node_engine build artifacts
+node_engine/**/NodeEngine*
+node_engine/**/nodeengined*
+node_engine/third_party/**/dist
 
 # csi/hostpath build artifacts
 csi/hostpath/hostpath-csi

@@ -7,7 +7,11 @@ requires-python = ">=3.10.13"
 members = [
     "cluster_orchestrator/cluster-manager",
     "root_orchestrator/system-manager-python",
-    "libraries/*",
+    # Listed explicitly, not as "libraries/*", so that local leftovers from the old library
+    # layout (not part of the repo) are never picked up as broken workspace members.
+    "libraries/oakestra_logging",
+    "libraries/oakestra-utils",
+    "libraries/resource-abstractor-client",
 ]
 
 [tool.ruff]

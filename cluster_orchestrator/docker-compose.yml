@@ -66,9 +66,10 @@ services:
     command: mongod --port 10108
 
 
-  # Cluster Manager
+  # Cluster Service Manager (network plugin)
   cluster_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:latest
+    image: cluster_service_manager
+    build: service-manager/
     container_name: cluster_service_manager
     labels: *cluster-log-labels
     hostname: cluster_service_manager

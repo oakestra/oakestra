@@ -80,9 +80,10 @@ services:
       - GLIBC_TUNABLES=glibc.pthread.rseq=1
     command: mongod --port 10008
 
-  # Root Manager
+  # Root Service Manager (network plugin)
   root_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/root-service-manager:latest
+    image: root_service_manager
+    build: service-manager/
     container_name: root_service_manager
     labels: *root-log-labels
     hostname: root_service_manager
@@ -101,6 +102,7 @@ services:
     depends_on:
       - mongo_rootnet
       - jwt_generator
+    logging: *default-logging
 
   # Redis for the Root Scheduler
   root_redis:

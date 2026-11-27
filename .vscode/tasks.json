@@ -4,7 +4,7 @@
         {
             "label": "root-orchestrator-up",
             "type": "shell",
-            "command": "SYSTEM_MANAGER_URL=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml -f ${workspaceRoot}/root_orchestrator/override-custom-service-manager-version.yml -f ${workspaceRoot}/root_orchestrator/override-network-host.yml up --build -d && sleep 1",
+            "command": "SYSTEM_MANAGER_URL=$(bash ${workspaceRoot}/.vscode/scripts/host-ip.sh) docker compose -f ${workspaceRoot}/root_orchestrator/docker-compose.yml -f ${workspaceRoot}/root_orchestrator/override-network-host.yml up --build -d && bash ${workspaceRoot}/.vscode/scripts/wait-for-host-port.sh 10011 jwt_generator",
             "options": {
                 "env": {
                     "COMPOSE_BAKE":"true",
@@ -19,7 +19,7 @@
         {
             "label": "cluster-orchestrator-up",
             "type": "shell",
-            "command": "HOST_IP=$(ip -o route get to 8.8.8.8 | sed -nE 's/.*src ([0-9.]+).*/\\1/p') && SYSTEM_MANAGER_URL=$HOST_IP CLUSTER_ADDRESS=$HOST_IP docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml -f ${workspaceRoot}/cluster_orchestrator/override-custom-service-manager-version.yml -f ${workspaceRoot}/cluster_orchestrator/override-network-host.yml up --build -d",
+            "command": "HOST_IP=$(bash ${workspaceRoot}/.vscode/scripts/host-ip.sh) && SYSTEM_MANAGER_URL=$HOST_IP CLUSTER_ADDRESS=$HOST_IP docker compose -f ${workspaceRoot}/cluster_orchestrator/docker-compose.yml -f ${workspaceRoot}/cluster_orchestrator/override-network-host.yml up --build -d && bash ${workspaceRoot}/.vscode/scripts/wait-for-host-port.sh 10003 mqtt",
             "options": {
                 "env": {
                     "CLUSTER_LOCATION": "48.13023160559729,11.583724427641824,100",
@@ -119,53 +119,139 @@
             "problemMatcher": []
         },
         {
+            "label": "remove-root-service-manager",
+            "type": "shell",
+            "command": "docker container rm -f root_service_manager",
+            "problemMatcher": []
+        },
+        {
+            "label": "remove-cluster-service-manager",
+            "type": "shell",
+            "command": "docker container rm -f cluster_service_manager",
+            "problemMatcher": []
+        },
+        {
             "label": "set-default-cluster-to-node-engine",
             "type": "shell",
-            "command": "cd ${workspaceRoot}/go_node_engine/build && ./build.sh && ./install.sh $(dpkg --print-architecture) && sudo NodeEngine config cluster 0.0.0.0",
+            "command": "cd ${workspaceRoot}/node_engine/build && ./build.sh && ./install.sh $(dpkg --print-architecture) && sudo NodeEngine config cluster 0.0.0.0",
+            "problemMatcher": []
+        },
+        {
+            // Points the NodeEngine at the NetManager socket instead of the netmanager service,
+            // so it talks to the NetManager started by "Debug Net Manager".
+            "label": "set-node-engine-network-manual",
+            "type": "shell",
+            "command": "sudo NodeEngine config network manual",
+            "problemMatcher": []
+        },
+        {
+            // The NodeEngine starts the netmanager service itself ("Debug Node Engine").
+            "label": "set-node-engine-network-auto",
+            "type": "shell",
+            "command": "sudo NodeEngine config network auto",
+            "problemMatcher": []
+        },
+        {
+            // Builds the NetManager from this repo and installs it as the netmanager service.
+            "label": "install-net-manager",
+            "type": "shell",
+            "command": "cd ${workspaceRoot}/net_manager/build && ./build.sh && ./install.sh $(dpkg --print-architecture)",
+            "problemMatcher": []
+        },
+        {
+            // Background preLaunch of "Debug Net Manager": starts the nodeengine service once the
+            // debugged NetManager listens on its socket. The debug session starts at "Waiting for".
+            "label": "start-node-engine-after-net-manager",
+            "type": "shell",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/start-node-engine-after-net-manager.sh",
+            "isBackground": true,
+            "presentation": {
+                "panel": "dedicated"
+            },
+            "problemMatcher": {
+                "owner": "oakestra",
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^$",
+                    "endsPattern": "^Waiting for NetManager socket"
+                }
+            }
+        },
+        {
+            "label": "stop-node-engine-service",
+            "type": "shell",
+            "command": "sudo systemctl stop nodeengine",
+            "problemMatcher": []
+        },
+        {
+            // Installs the default NetManager config (if missing) and stops the installed
+            // netmanager service, so the debugged NetManager owns the socket and port 50103.
+            "label": "install-net-manager-config",
+            "type": "shell",
+            "command": "sudo mkdir -p /etc/netmanager /var/log/oakestra && ( [ -e /etc/netmanager/netcfg.json ] || sudo cp ${workspaceRoot}/net_manager/config/netcfg.json ${workspaceRoot}/net_manager/config/tuncfg.json /etc/netmanager/ ) && ( sudo systemctl stop netmanager 2>/dev/null || true )",
             "problemMatcher": []
         },
 
         // -------------------------------------------------------- dependency installs
+        // uv-managed components (system-manager, cluster-manager, shared libraries) share the
+        // root .venv populated by `uv sync`. Every other Python component gets its own
+        // virtualenv in <component-dir>/.venv (see .vscode/scripts/ensure-venv.sh): their pinned
+        // dependencies conflict, and `uv sync` would remove them from the root .venv.
         {
             "label": "install-cluster-manager-dependencies",
             "type": "shell",
-            "command": "uv sync --package cluster-manager",
+            "command": "uv sync --all-packages",
             "problemMatcher": []
         },
         {
             "label": "install-root-manager-dependencies",
             "type": "shell",
-            "command": "uv sync --package system-manager",
+            "command": "uv sync --all-packages",
             "problemMatcher": []
         },
         {
             "label": "install-resource-abstractor-dependencies",
             "type": "shell",
-            "command": "python3 -m venv ${workspaceRoot}/resource-abstractor/.venv && ${workspaceRoot}/resource-abstractor/.venv/bin/pip install -r ${workspaceRoot}/resource-abstractor/requirements.txt && ${workspaceRoot}/resource-abstractor/.venv/bin/pip install ${workspaceRoot}/libraries/oakestra_logging",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh resource-abstractor ${command:python.interpreterPath} -r resource-abstractor/requirements.txt libraries/oakestra_logging",
+            "problemMatcher": []
+        },
+        {
+            "label": "install-root-service-manager-dependencies",
+            "type": "shell",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh root_orchestrator/service-manager ${command:python.interpreterPath} -r root_orchestrator/service-manager/requirements.txt",
+            "problemMatcher": []
+        },
+        {
+            "label": "install-cluster-service-manager-dependencies",
+            "type": "shell",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh cluster_orchestrator/service-manager ${command:python.interpreterPath} -r cluster_orchestrator/service-manager/requirements.txt",
             "problemMatcher": []
         },
         {
             "label": "install-jwt-generator-dependencies",
             "type": "shell",
-            "command": "python3 -m venv ${workspaceRoot}/root_orchestrator/jwt-generator/.venv && ${workspaceRoot}/root_orchestrator/jwt-generator/.venv/bin/pip install -r ${workspaceRoot}/root_orchestrator/jwt-generator/requirements.txt && ${workspaceRoot}/root_orchestrator/jwt-generator/.venv/bin/pip install ${workspaceRoot}/libraries/oakestra_logging",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh root_orchestrator/jwt-generator ${command:python.interpreterPath} -r root_orchestrator/jwt-generator/requirements.txt libraries/oakestra_logging",
             "problemMatcher": []
         },
         {
             "label": "install-addons-manager-dependencies",
             "type": "shell",
-            "command": "python3 -m venv ${workspaceRoot}/addons_engine/addons-manager/.venv && ${workspaceRoot}/addons_engine/addons-manager/.venv/bin/pip install -r ${workspaceRoot}/addons_engine/addons-manager/requirements.txt && ${workspaceRoot}/addons_engine/addons-manager/.venv/bin/pip install ${workspaceRoot}/libraries/oakestra_logging",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh addons_engine/addons-manager ${command:python.interpreterPath} -r addons_engine/addons-manager/requirements.txt libraries/oakestra_logging",
             "problemMatcher": []
         },
         {
             "label": "install-addons-monitor-dependencies",
             "type": "shell",
-            "command": "python3 -m venv ${workspaceRoot}/addons_engine/addons-monitor/.venv && ${workspaceRoot}/addons_engine/addons-monitor/.venv/bin/pip install -r ${workspaceRoot}/addons_engine/addons-monitor/requirements.txt && ${workspaceRoot}/addons_engine/addons-monitor/.venv/bin/pip install ${workspaceRoot}/libraries/oakestra_logging",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh addons_engine/addons-monitor ${command:python.interpreterPath} -r addons_engine/addons-monitor/requirements.txt libraries/oakestra_logging",
             "problemMatcher": []
         },
         {
             "label": "install-marketplace-manager-dependencies",
             "type": "shell",
-            "command": "python3 -m venv ${workspaceRoot}/addons_marketplace/marketplace-manager/.venv && ${workspaceRoot}/addons_marketplace/marketplace-manager/.venv/bin/pip install -r ${workspaceRoot}/addons_marketplace/marketplace-manager/requirements.txt && ${workspaceRoot}/addons_marketplace/marketplace-manager/.venv/bin/pip install ${workspaceRoot}/libraries/oakestra_logging",
+            "command": "bash ${workspaceRoot}/.vscode/scripts/ensure-venv.sh addons_marketplace/marketplace-manager ${command:python.interpreterPath} -r addons_marketplace/marketplace-manager/requirements.txt libraries/oakestra_logging",
             "problemMatcher": []
         },
         {
@@ -209,6 +295,39 @@
                 "root-orchestrator-up",
                 "cluster-orchestrator-up",
                 "set-default-cluster-to-node-engine",
+                "install-net-manager",
+                "set-node-engine-network-auto",
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
+            "label": "prep-debug-net-manager-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "cluster-orchestrator-up",
+                "set-default-cluster-to-node-engine",
+                "set-node-engine-network-manual",
+                "install-net-manager-config",
+                "start-node-engine-after-net-manager",
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
+            "label": "prep-debug-root-service-manager-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "remove-root-service-manager",
+                "install-root-service-manager-dependencies"
+            ],
+            "dependsOrder": "sequence",
+        },
+        {
+            "label": "prep-debug-cluster-service-manager-env",
+            "dependsOn": [
+                "root-orchestrator-up",
+                "cluster-orchestrator-up",
+                "remove-cluster-service-manager",
+                "install-cluster-service-manager-dependencies"
             ],
             "dependsOrder": "sequence",
         },
@@ -328,7 +447,7 @@
         {
             "label": "generate-proto-files",
             "type": "shell",
-            "command": "${command:python.interpreterPath} ${workspaceRoot}/scripts/generate_protos.py",
+            "command": "uv sync --all-packages && ${workspaceRoot}/.venv/bin/python ${workspaceRoot}/scripts/generate_protos.py",
             "problemMatcher": []
         },
         {

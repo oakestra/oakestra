@@ -270,25 +270,6 @@ if [ ! -z "$OAKESTRA_VERSION" ]; then
     fi
 fi
 
-# If non-main branch and no override provided, update custom version of service manager to prevent potential issues with network policies in non-main branches
-if [ "$OAKESTRA_VERSION" != "main" ]; then
-    if [[ ! "$OVERRIDE_FILES" == *"override-no-network.yml"* ]] && [[ ! "$OVERRIDE_FILES" == *"override-custom-service-manager-version.yml"* ]] && [[ ! "$OVERRIDE_FILES" == *"override-local-service-manager.yml"* ]]; then
-        echo "🕸️ Setting network to latest alpha release"
-        if is_tag "$OAKESTRA_VERSION"; then
-            ALPHA_TAG=$(echo $OAKESTRA_VERSION | sed 's/alpha-//g')
-        else
-            ALPHA_TAG=$(curl -s https://raw.githubusercontent.com/oakestra/oakestra-net/refs/heads/develop/version.txt)
-        fi
-        # Create override file with custom service manager version
-        echo "services:
-  cluster_service_manager:
-    image: ghcr.io/oakestra/oakestra-net/cluster-service-manager:alpha-$ALPHA_TAG" > ~/.oakestra/cluster_orchestrator/override-custom-service-manager-version.yml
-        OAK_OVERRIDES="${OAK_OVERRIDES}-f override-custom-service-manager-version.yml " 
-
-        OAK_OVERRIDES="${OAK_OVERRIDES}-f ~/.oakestra/cluster_orchestrator/override-custom-service-manager-version.yml "
-    fi
-fi
-
 if sudo docker ps -a | grep oakestra/cluster >/dev/null 2>&1; then
     echo 🚨 Detected some Oakestra cluster containers already running. It is recommended to stop them before starting a new cluster.
     echo Do you wish to continue anyway? \(y/n\)
