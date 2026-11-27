@@ -1,13 +1,12 @@
-import logging
-
 from bson import json_util
 from flask import Response
 from flask.views import MethodView
 from flask_smorest import Blueprint
+from oakestra_logging import get_logger
 
 from ..app_config import CONFIG, RUNTIME_CONFIG
 
-logger = logging.getLogger("cluster_manager")
+logger = get_logger(__name__)
 
 clusterblp = Blueprint(
     "Cluster operations",
@@ -25,7 +24,10 @@ class ClusterStatusController(MethodView):
         content_type="application/json",
     )
     def get(self):
-        logger.debug("Incoming Request GET /api/cluster/status")
+        logger.debug(
+            "Received cluster status request",
+            event_name="cluster.status.requested",
+        )
         response = {
             "cluster_name": CONFIG.cluster_name,
             "cluster_id": RUNTIME_CONFIG.assigned_cluster_id,

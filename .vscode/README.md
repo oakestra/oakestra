@@ -133,9 +133,10 @@ You normally don't run these directly — profiles invoke them — but they're a
 - **`remove-<container>`:** frees a single container's name/port.
 - **`install-<component>-dependencies`:** installs one component's Python deps. For `uv`-managed
   services (`system-manager-python`, `cluster-manager`), dependencies and local shared libraries
-  (`oakestra-utils`, `resource-abstractor-client`) are installed via `uv sync`. For components not
-  yet migrated to `uv` (`resource-abstractor`, `jwt-generator`, `addons_*`), dependencies are
-  installed from `requirements.txt`.
+  (`oakestra-utils`, `resource-abstractor-client`, and `oakestra_logging`) are installed via
+  `uv sync`. For components not yet migrated to `uv` (`resource-abstractor`, `jwt-generator`,
+  `addons_*`), dependencies are installed from `requirements.txt`, followed by the local
+  `oakestra_logging` package.
 - **`serve-addons-dashboard`** (+ `install-addons-dashboard-dependencies`): background
   `ng serve` for the dashboard profile.
 

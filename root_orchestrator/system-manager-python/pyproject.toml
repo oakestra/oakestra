@@ -23,11 +23,13 @@ dependencies = [
     "grpcio-tools~=1.75.1",
     "gunicorn==26.2.0",
     "protobuf>=4.25.2,<7.0.0",
+    "oakestra-logging",
     "oakestra-utils",
     "resource-abstractor-client",
 ]
 
 [tool.uv.sources]
+oakestra-logging = { workspace = true }
 oakestra-utils = { workspace = true }
 resource-abstractor-client = { workspace = true }
 

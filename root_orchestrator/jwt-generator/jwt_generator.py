@@ -5,11 +5,16 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from flask import Flask, jsonify, request
 from flask_jwt_extended import JWTManager, create_access_token, create_refresh_token
+from oakestra_logging import configure_logging, get_logger
+
+configure_logging(os.getenv("OAKESTRA_SERVICE_NAME", "jwt_generator"))
+logger = get_logger(__name__)
 
 private_key = os.getenv("JWT_PRIVATE_KEY")
 public_key = os.getenv("JWT_PUBLIC_KEY")
 
 if not private_key or not public_key:
+    logger.info("Generating ephemeral JWT key pair", event_name="jwt.keys.generated")
     private_key_obj = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
@@ -38,6 +43,7 @@ jwt = JWTManager(app)
 @app.route("/create", methods=["POST"])
 def create_access_token_route():
     if not request.is_json:
+        logger.warning("Access-token request is not JSON", event_name="jwt.request.invalid")
         return jsonify({"msg": "Missing JSON in request"}), 400
 
     identity = request.json.get("identity", None)
@@ -60,6 +66,7 @@ def create_access_token_route():
 @app.route("/refresh", methods=["POST"])
 def create_refresh_token_route():
     if not request.is_json:
+        logger.warning("Refresh-token request is not JSON", event_name="jwt.request.invalid")
         return jsonify({"msg": "Missing JSON in request"}), 400
 
     identity = request.json.get("identity", None)

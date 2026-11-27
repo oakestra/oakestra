@@ -39,14 +39,19 @@ jobs:
       - name: Build Docker images
         working-directory: resource-abstractor
         run: |
-          docker build -t resource_abstractor:test .
+          docker build --build-context libraries=../libraries -t resource_abstractor .
 
       - name: Run containers
         working-directory: root_orchestrator/
         run: |
-          docker compose up root_resource_abstractor -d
+          docker compose up root_resource_abstractor -d --no-build
 
       - name: Run test suite
         working-directory: root_orchestrator/system-manager-python
         run: |
-          uv run --no-sync --with pytest pytest
+          uv run --no-sync --with pytest --with coverage coverage run -m pytest
+
+      - name: Generate report
+        working-directory: root_orchestrator/system-manager-python
+        run: |
+          uv run --no-sync --with coverage coverage html -d tests/coverage

@@ -1,14 +1,13 @@
-import logging
-
 from bson import json_util
 from flask import Response, request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
+from oakestra_logging import get_logger
 from resource_abstractor_client import candidate_operations
 
 from ..app_config import CONFIG
 
-logger = logging.getLogger("cluster_manager")
+logger = get_logger(__name__)
 
 # ........ Functions for job management ...............#
 # ......................................................#
@@ -29,15 +28,25 @@ class ServiceController(MethodView):
         content_type="application/json",
     )
     def post(self):
-        logger.debug("Incoming Request /api/node/register - to register node")
+        logger.debug(
+            "Received worker registration request",
+            event_name="worker.registration.received",
+        )
         data = request.json  # get POST body
         data.get("token")  # registration_token
         # TODO(GB): check and generate tokens
         data["candidate_name"] = data.get("host", "")
-        logger.debug("Candidate Name: " + data.get("candidate_name"))
+        logger.debug(
+            "Prepared worker candidate name",
+            event_name="worker.registration.candidate_prepared",
+            candidate_name=data.get("candidate_name"),
+        )
         worker = candidate_operations.create_candidate(data)
         if worker is None:
-            logger.error("Failed to register node")
+            logger.error(
+                "Worker registration failed",
+                event_name="worker.registration.failed",
+            )
             abort(500, message="Failed to register node")
 
         worker_id = str(worker["_id"])

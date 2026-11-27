@@ -1,11 +1,10 @@
-import logging
-
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required, verify_jwt_in_request
+from oakestra_logging import exception_context, get_logger
 
 from ..ext_requests.jwt_generator_requests import create_access_token, create_refresh_token
 from ..ext_requests.user_db import mongo_get_user_by_name
 
-logger = logging.getLogger("system_manager")
+logger = get_logger(__name__)
 
 
 class Role:
@@ -63,8 +62,12 @@ def jwt_auth_required():
         def decorator(*args, **kwargs):
             try:
                 verify_jwt_in_request()
-            except Exception as e:
-                logger.error(e)
+            except Exception as exc:
+                logger.warning(
+                    "JWT verification failed",
+                    event_name="authentication.token.rejected",
+                    **exception_context(exc),
+                )
                 return {"message": "Missing authentication token"}, 401
             claims = get_jwt()
             if not (claims.get("file_access_token")):

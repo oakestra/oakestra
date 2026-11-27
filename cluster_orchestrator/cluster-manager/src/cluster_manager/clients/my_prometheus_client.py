@@ -1,11 +1,11 @@
-import logging
 from typing import Any
 
+from oakestra_logging import get_logger
 from prometheus_client import Gauge
 
 metrics = {}
 cluster_id: str | None = None
-logger: logging.Logger | None = None
+logger = get_logger(__name__)
 
 
 def add_or_set_metric(name: Any, value: Any) -> None:
@@ -16,18 +16,22 @@ def add_or_set_metric(name: Any, value: Any) -> None:
                 metrics[metrics_name].set(value)
             else:
                 metrics[metrics_name] = Gauge(metrics_name, "")
-        except Exception as e:
-            if not logger:
-                raise RuntimeError("add_or_set_metric was used before logger was initialized")
-            logger.error("Unable to set metric " + metrics_name + " to " + str(value))
-            logger.error(e)
+        except Exception:
+            logger.exception(
+                "Unable to set Prometheus metric",
+                event_name="prometheus.metric.update_failed",
+                metric_name=metrics_name,
+            )
 
 
-def prometheus_init_gauge_metrics(assigned_cluster_id: str, app_logger: logging.Logger) -> None:
-    global cluster_id, logger
-    logger = app_logger
+def prometheus_init_gauge_metrics(assigned_cluster_id: str) -> None:
+    global cluster_id
     cluster_id = assigned_cluster_id
-    print("prometheus gauge metrics initialized.")
+    logger.info(
+        "Initialized Prometheus gauge metrics",
+        event_name="prometheus.metrics.initialized",
+        cluster_id=assigned_cluster_id,
+    )
 
 
 def prometheus_set_metrics(data: dict[Any, Any]) -> None:

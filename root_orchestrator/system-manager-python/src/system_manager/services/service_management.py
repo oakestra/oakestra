@@ -1,5 +1,4 @@
-import logging
-
+from oakestra_logging import get_logger
 from resource_abstractor_client import app_operations, job_operations
 
 from ..ext_requests.net_plugin_requests import (
@@ -9,11 +8,11 @@ from ..ext_requests.net_plugin_requests import (
 from ..sla.versioned_sla_parser import SLAFormatError, parse_sla_json
 from .instance_management import request_scale_down_instance
 
-logger = logging.getLogger("system_manager")
+logger = get_logger(__name__)
 
 
 def insert_job(microservice):
-    logging.log(logging.INFO, "MONGODB - insert job...")
+    logger.info("Inserting service job", event_name="service.job.insert_started")
     # jobname and details generation
     job_name = (
         microservice["app_name"]
@@ -33,20 +32,25 @@ def insert_job(microservice):
     # job insertion
     new_job = job_operations.create_job(job_content)
     if new_job is None:
-        logger.error(f"job not inserted - {job_name}")
+        logger.error("Service job insertion failed", event_name="service.job.insert_failed")
         return None
 
-    logger.info("job {} inserted".format(str(new_job.get("_id"))))
+    logger.info("Job inserted", event_name="job.inserted", job_id=str(new_job.get("_id")))
     return str(new_job.get("_id"))
 
 
 def create_services_of_app(username, data, force=False):
-    logging.log(logging.DEBUG, data)
+    applications = data.get("applications", []) if isinstance(data, dict) else []
+    logger.debug(
+        "Creating application services",
+        event_name="services.create.started",
+        application_count=len(applications) if isinstance(applications, list) else 0,
+    )
     try:
         parse_sla_json(data)
-    except SLAFormatError as e:
-        logging.log(logging.ERROR, e)
-        return {"message": str(e)}, 422
+    except SLAFormatError as exc:
+        # The validator already emitted the structured validation event.
+        return {"message": str(exc)}, 422
 
     app_id = data.get("applications")[0]["applicationID"]
     last_service_id = ""
@@ -62,8 +66,9 @@ def create_services_of_app(username, data, force=False):
         service = generate_db_structure(application, microservice)
         last_service_id = insert_job(service)
         if last_service_id is None:
-            logging.warning(
-                f"service not inserted for app-{app_id}, service-{service['service_name']}"
+            logger.warning(
+                "Service not inserted",
+                event_name="service.job.insert_failed",
             )
             # TODO(ME): add a reason why it failed.
             failed_services.append({"service_name": service["service_name"], "status": 500})
@@ -77,15 +82,16 @@ def create_services_of_app(username, data, force=False):
             # Inform network plugin about the new service
             net_inform_service_deploy(service, str(last_service_id))
             deployed_services.append({"service_name": service["service_name"], "status": 200})
-        except Exception as e:
-            logger.error(
-                f"net_inform_service_deploy failed for service '{service['service_name']}': {e}"
+        except Exception as exc:
+            logger.exception(
+                "Network service deployment notification failed",
+                event_name="service.network.deploy_failed",
             )
             delete_service(username, str(last_service_id))
             failed_services.append(
                 {
                     "service_name": service["service_name"],
-                    "message": f"failed to deploy service: {e}",
+                    "message": f"failed to deploy service: {exc}",
                     "status": 500,
                 }
             )
@@ -99,7 +105,7 @@ def create_services_of_app(username, data, force=False):
 
 
 def delete_job(job_id):
-    logger.info("delete job...")
+    logger.info("Deleting service job", event_name="service.job.delete_started")
     job_operations.delete_job(job_id)
 
 

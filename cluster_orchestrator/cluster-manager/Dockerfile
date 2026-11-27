@@ -49,8 +49,9 @@ ENV PATH="$BASE_DIR/.venv/bin:$PATH" \
     MQTT_BROKER_URL=localhost \
     MQTT_BROKER_PORT=10003 \
     MY_PORT=10100 \
-    LOG_LEVEL=INFO
+    LOG_LEVEL=INFO \
+    OAKESTRA_SERVICE_NAME=cluster_manager
 
 LABEL org.opencontainers.image.source="https://github.com/oakestra/oakestra"
 
-CMD gunicorn --bind [::]:${MY_PORT} cluster_manager.main:app
+CMD gunicorn --bind [::]:${MY_PORT} --logger-class oakestra_logging.gunicorn.StructuredGunicornLogger cluster_manager.main:app
