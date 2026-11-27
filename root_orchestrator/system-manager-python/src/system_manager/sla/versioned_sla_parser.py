@@ -1,8 +1,10 @@
 import json
+import logging
 
 from .sla_versions import sla_validator_by_version
 
 logger = logging.getLogger("system_manager")
+
 
 class SLAFormatError(BaseException):
     message = "The given SLA was not formatted correctly"
@@ -16,8 +18,8 @@ def parse_sla_json(sla):
     json_data = sla
     if not isinstance(sla, dict):
         json_data = json.loads(sla)
-    version = json_data["sla_version"]
-    validator = sla_validator_by_version[version]
+    version = json_data.get("sla_version")
+    validator = sla_validator_by_version.get(version)
     if validator is None:
         message = f"Missing or unknown sla_version: {version}"
         logger.error(message)
@@ -25,6 +27,5 @@ def parse_sla_json(sla):
     validation_result = validator(json_data)
     if validation_result is None or validation_result is True:
         return json_data
-    else:
-        logging.log(logging.ERROR, validation_result)
-        raise SLAFormatError(validation_result)
+    logger.error(validation_result)
+    raise SLAFormatError(validation_result)

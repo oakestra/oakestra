@@ -37,13 +37,13 @@ class SLATestCase(unittest.TestCase):
         aux_test_correct_sla(self, 4)
 
     def test_flawed_1(self):
-        aux_test_flawed_sla(self, 1, KeyError)
+        aux_test_flawed_sla(self, 1, SLAFormatError)
 
     def test_flawed_2(self):
         aux_test_flawed_sla(self, 2, SLAFormatError)
 
     def test_flawed_3(self):
-        aux_test_flawed_sla(self, 3, KeyError)
+        aux_test_flawed_sla(self, 3, SLAFormatError)
 
     def test_flawed_4(self):
         aux_test_flawed_sla(self, 4, SLAFormatError)
