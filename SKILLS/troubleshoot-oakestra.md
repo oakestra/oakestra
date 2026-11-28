@@ -7,6 +7,10 @@ Oakestra is an edge computing orchestration platform composed of:
 - **Cluster Orchestrator** – manages multiple worker nodes (docker-compose in `cluster_orchestrator/`)
 - **Worker Node** – runs workloads (`NodeEngine` + `NetManager` binaries)
 
+All of it, networking included, lives in the `oakestra/oakestra` repository (the former `oakestra-net` repo was merged into it):
+`root_orchestrator/service-manager/` (root service manager), `cluster_orchestrator/service-manager/` (cluster service manager),
+`node_engine/` (NodeEngine) and `net_manager/` (NetManager). File bug reports for any of them against `oakestra/oakestra`.
+
 Deployments can be:
 - **1-DOC** (single machine): root + cluster on the same host, started via `scripts/StartOakestraFull.sh`
 - **Root only**: started via `scripts/StartOakestraRoot.sh`
@@ -21,7 +25,8 @@ Run the following and interpret the output to understand what is running on this
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null
-systemctl status NodeEngine 2>/dev/null || true
+systemctl status nodeengine 2>/dev/null || true
+systemctl status netmanager 2>/dev/null || true
 which NodeEngine 2>/dev/null || true
 which NetManager 2>/dev/null || true
 ```
@@ -156,6 +161,21 @@ For containers that exited:
 docker logs <exited_container_name> 2>&1 | tail -50
 ```
 
+Oakestra-owned Python application records and standard-library logging records emitted after
+configuration use schema-v1 JSON. Gunicorn messages are also structured in current images. Flask
+development-server banners, subprocesses, and dependencies that write directly to stdout or stderr
+may still produce raw lines; Docker only captures those streams. To inspect schema-v1 records:
+
+```bash
+docker logs --tail 200 system_manager 2>&1 | jq -R 'fromjson? | select(.schema_version == 1)'
+docker logs --tail 200 cluster_manager 2>&1 | jq -R 'fromjson? | select(.schema_version == 1)'
+```
+
+Each structured record must contain `timestamp`, `level`, `service`, `logger`, and `message`.
+Error records may contain a single `exception` object; they should not emit a second traceback
+line. If Python application lines are plain text, verify the image version and the
+`OAKESTRA_SERVICE_NAME`/`LOG_LEVEL` environment variables.
+
 **Common error patterns and what they mean:**
 
 | Pattern | Likely Cause |
@@ -192,7 +212,7 @@ Check that critical env vars were correctly injected into each container:
 
 ```bash
 # Root Orchestrator critical vars
-docker exec system_manager env 2>/dev/null | grep -E "ROOT_MONGO|ROOT_SCHEDULER|RESOURCE_ABSTRACTOR|NET_PLUGIN|JWT" || echo "system_manager not running"
+docker exec system_manager env 2>/dev/null | grep -E "ROOT_MONGO|ROOT_SCHEDULER|RESOURCE_ABSTRACTOR|NET_PLUGIN|JWT|OAKESTRA_SERVICE_NAME|LOG_LEVEL" || echo "system_manager not running"
 
 docker exec root_scheduler env 2>/dev/null | grep -E "MANAGER_URL|RESOURCE_ABSTRACTOR|REDIS_ADDR" || echo "root_scheduler not running"
 
@@ -516,9 +536,9 @@ To change the log path: `sudo NodeEngine config applogs /your/custom/path`
 
 ```bash
 # If running as systemd service
-systemctl status NodeEngine 2>/dev/null
+systemctl status nodeengine 2>/dev/null
 # Systemd journal (startup/crash messages, before the log file is open)
-journalctl -u NodeEngine -n 50 --no-pager 2>/dev/null | grep -iE "error|fail|refused|panic|timeout|mqtt"
+journalctl -u nodeengine -n 50 --no-pager 2>/dev/null | grep -iE "error|fail|refused|panic|timeout|mqtt"
 
 # If running directly
 ps aux | grep -i NodeEngine
@@ -543,8 +563,9 @@ tail -50 /var/log/oakestra/netmanager.log 2>/dev/null || true
 ```
 
 ```bash
-systemctl status NetManager 2>/dev/null
-journalctl -u NetManager -n 50 --no-pager 2>/dev/null | grep -iE "error|fail|refused|panic|timeout"
+# The systemd unit is lowercase: netmanager.service
+systemctl status netmanager 2>/dev/null
+journalctl -u netmanager -n 50 --no-pager 2>/dev/null | grep -iE "error|fail|refused|panic|timeout"
 ps aux | grep -i NetManager
 ```
 
@@ -597,7 +618,7 @@ docker run --rm --gpus all nvidia/cuda:11.0-base nvidia-smi 2>/dev/null || echo 
 # Check GPU configuration script
 ls /usr/local/bin/configure_gpu.sh 2>/dev/null || \
 ls /opt/oakestra/configure_gpu.sh 2>/dev/null || \
-echo "GPU configure script not found (run go_node_engine/build/configure_gpu.sh if GPU is needed)"
+echo "GPU configure script not found (run node_engine/build/configure-gpu.sh if GPU is needed)"
 ```
 
 ---
@@ -684,11 +705,15 @@ docker exec addons_monitor ls /var/run/docker.sock 2>/dev/null || echo "WARN: ad
 
 ```bash
 # Check which images are using pre-built vs locally built
-docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.CreatedSince}}\t{{.Size}}" | grep -E "system_manager|cluster_manager|root_scheduler|cluster_scheduler|resource_abstractor|jwt_generator|addons"
+docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.CreatedSince}}\t{{.Size}}" | grep -E "system_manager|cluster_manager|service_manager|service-manager|root_scheduler|cluster_scheduler|resource_abstractor|jwt_generator|addons"
 
 # Check for dangling images / build cache issues
 docker images -f "dangling=true" | head -10
 ```
+
+Pre-built service manager images are `ghcr.io/oakestra/oakestra/root-service-manager` and `ghcr.io/oakestra/oakestra/cluster-service-manager`.
+Deployments from before the `oakestra-net` merge pull them from `ghcr.io/oakestra/oakestra-net/...` instead; mixing the two on one
+deployment means the root and cluster run different network plugin versions.
 
 If images are outdated or from a wrong branch, rebuild:
 ```bash
@@ -699,11 +724,11 @@ docker compose build --no-cache system_manager
 docker compose pull
 ```
 
-The shared `libraries/` packages (`oakestra_utils_library`, `resource_abstractor_client`) are built from the repo-local `libraries/` folder via a Buildx named build context — not from a remote git repo, and there is no `LIB_BRANCH` env var. If a build fails on these libraries, check that:
+The shared `libraries/` packages (`oakestra-utils`, `resource-abstractor-client`, and `oakestra_logging`) are built from the repo-local `libraries/` folder, not from a remote Git repository. The system and cluster managers use the root UV workspace; other consumers use a Buildx named build context. If a build fails on these libraries, check that:
 ```bash
-# The libraries build context resolves (declared in docker-compose.yml as additional_contexts):
-ls libraries/oakestra_utils_library libraries/resource_abstractor_client
-# BuildKit/Buildx is enabled (named build contexts require it — default on modern Docker):
+# The shared libraries exist locally:
+ls libraries/oakestra-utils libraries/resource-abstractor-client libraries/oakestra_logging
+# BuildKit/Buildx is enabled (named contexts require it — default on modern Docker):
 docker buildx version
 ```
 

@@ -55,12 +55,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: go_node_engine/go.mod
-          cache-dependency-path: go_node_engine/go.sum
+          go-version-file: node_engine/go.mod
+          cache-dependency-path: node_engine/go.sum
 
       # Output names match what build/install.sh expects next to itself.
       - name: Build NodeEngine
-        working-directory: go_node_engine
+        working-directory: node_engine
         run: |
           env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-X 'go_node_engine/cmd.Version=${{ github.sha }}'" -o build/NodeEngine_amd64 NodeEngine.go
           env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/nodeengined_amd64 internal/daemon/nodeengined.go
@@ -68,11 +68,12 @@ jobs:
       # The runner already ships containerd as a systemd unit, so install.sh
       # only enables it and installs the binaries and the nodeengine unit.
       - name: Install NodeEngine
-        working-directory: go_node_engine/build
+        working-directory: node_engine/build
         run: sudo bash ./install.sh amd64
 
-      # The overlay network needs NetManager from the oakestra-net repo, which
-      # is out of scope for this basic check.
+      # The overlay network needs NetManager (net_manager/), which is out of
+      # scope for this basic check. The root and cluster service managers are
+      # still built from source by the compose steps above.
       - name: Configure NodeEngine
         run: |
           sudo NodeEngine config cluster "$CLUSTER_ADDRESS"

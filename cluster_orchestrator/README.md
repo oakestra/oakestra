@@ -5,6 +5,7 @@ By our design, a Cluster Orchestrator contains:
 - a message broker (MQTT)
 - a scheduler
 - a Cluster Manager
+- a Cluster Service Manager (`service-manager/`), the network plugin that distributes routes to the workers via MQTT
 - a database (mongoDB)
 
 The edge nodes push cpu+memory data to the mqtt-broker.
@@ -77,9 +78,9 @@ N.b. if you're using docker compose with **sudo** don't forget to use the -E fla
 
 ## Shared Library Dependency
 
-The shared python libraries (`resource_abstractor_client` and `oakestra_utils_library`) are **always built from this repo's local `libraries/` folder** — nothing is fetched from a remote git repo. The Docker build wires them in via a named build context declared in `docker-compose.yml` (`additional_contexts: libraries=../libraries`), so `docker compose up --build` just works.
+The shared python libraries (`resource-abstractor-client` and `oakestra-utils`) are part of the root `uv` workspace and are **always built from this repo's local `libraries/` folder** — nothing is fetched from a remote git repo. The Docker build wires them in via the workspace root build context declared in `docker-compose.yml` (`context: ../`), so `docker compose up --build` just works.
 
-To test local changes to a library, edit the code under `libraries/` and rebuild the image (`docker compose up --build`) — no branch pushing required. This requires Docker BuildKit/Buildx (the default on modern Docker).
+To test local changes to a library, edit the code under `libraries/` and rebuild the image (`docker compose up --build`) — no branch pushing required. Multi-stage UV builds require Docker BuildKit/Buildx (the default on modern Docker).
 
 
 ## Customize deployment
@@ -90,18 +91,10 @@ It's possible to use the docker override functionality to exclude or customize t
 
 `docker-compose -f docker-compose.yml -f override-no-network.yml up --build`
 
-### Customize network component version
+### Use local changes to the network component
 
-- open and edit `override-custom-serivce-manager.yml` with the correct container image
-- run the orchestrator with the override file: `docker-compose -f docker-compose.yml -f override-custom-service-manager.yml up --build`
-
-### Use local development network component
-
-In case you want to use changes made to the cluster network component in your deployment,
-you can use the `override-local-service-manager.yml` override file.
-
-- copy the `oakestra-net/cluster-service-manager/service-manager` folder to the `cluster_orchestrator` directory
-- run the orchestrator with the override file: `docker-compose -f docker-compose.yml -f override-local-service-manager.yml up --build`
+The Cluster Service Manager is built from [`service-manager/`](service-manager/README.md) like every other cluster component,
+so `docker compose -f docker-compose.yml up --build` already includes your local changes. No extra override is needed.
 
 ### Enable IPv6 for container deployments
 

@@ -14,13 +14,11 @@ services:
   cluster_cert_bootstrap:
     image: cluster_manager
     build:
-      context: cluster-manager/
-      additional_contexts:
-        # Oakestra shared libraries are built from the repo-local libraries/ folder.
-        - libraries=../libraries
+      context: ../
+      dockerfile: cluster_orchestrator/cluster-manager/Dockerfile
     container_name: cluster_cert_bootstrap
     entrypoint: ["/bin/sh", "/docker-update-ca-trust.sh"]
-    command: ["python", "bootstrap_certificates.py"]
+    command: ["python", "-m", "cluster_manager.bootstrap_certificates"]
     environment:
       - SYSTEM_MANAGER_URL=${SYSTEM_MANAGER_URL}
       - SYSTEM_MANAGER_PORT=${SYSTEM_MANAGER_GATEWAY_HTTPS_PORT:-443}
@@ -68,7 +66,7 @@ services:
 
   cluster_manager:
     entrypoint: ["/bin/sh", "/docker-update-ca-trust.sh"]
-    command: ["sh", "-c", "exec gunicorn --bind [::]:$$MY_PORT cluster_manager:app"]
+    command: ["sh", "-c", "exec gunicorn --bind [::]:$$MY_PORT --logger-class oakestra_logging.gunicorn.StructuredGunicornLogger cluster_manager.main:app"]
     volumes:
       - ${CLUSTER_CERT_PATH:-./config/certs}:/certs
       - ./config/docker-update-ca-trust.sh:/docker-update-ca-trust.sh:ro

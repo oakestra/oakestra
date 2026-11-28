@@ -1,0 +1,173 @@
+from flask import jsonify, request
+from flask.views import MethodView
+from flask_smorest import Blueprint, abort
+from oakestra_logging import get_logger
+from oakestra_utils.types.statuses import convert_to_status
+from resource_abstractor_client import candidate_operations
+
+from ..ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
+from ..services.instance_management import update_job_status
+from ..utils.certificates import ClientCertError, client_cert_cluster_id, current_ca_cert_pem
+from ..utils.gateway import GATEWAY_ENABLED
+
+logger = get_logger(__name__)
+
+clustersbp = Blueprint("Clusters", "cluster management", url_prefix="/api/clusters")
+clusterinfo = Blueprint("Clusterinfo", "cluster informations", url_prefix="/api/information")
+
+cluster_info_schema = {
+    "type": "object",
+    "properties": {
+        "cpu_percent": {"type": "string"},
+        "cpu_cores": {"type": "string"},
+        "gpu_cores": {"type": "string"},
+        "gpu_percent": {"type": "string"},
+        "cumulative_memory_in_mb": {"type": "string"},
+        "number_of_nodes": {"type": "string"},
+        "virtualization": {"type": "array", "items": {"type": "string"}},
+        "csi_drivers": {"type": "array", "items": {"type": "string"}},
+        "more": {"type": "object"},
+        "worker_groups": {"type": "string"},
+        "supported_addons": {"type": "array", "items": {"type": "string"}},
+        "jobs": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "_id": {"type": "string"},
+                    "status": {"type": "string"},
+                    "instance_list": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "instance_number": {"type": "string"},
+                                "status": {"type": "string"},
+                                "status_detail": {"type": "string"},
+                                "publicip": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
+}
+
+
+@clustersbp.route("/")
+class ClustersController(MethodView):
+    def get(self, *args, **kwargs):
+        clusters = list(
+            map(
+                map_cluster_attributes,
+                candidate_operations.get_candidates(resources="last_modified_timestamp,active"),
+            )
+        )
+
+        for c in clusters:
+            if "_id" in c:
+                c["_id"] = str(c["_id"])
+
+        if clusters is None:
+            return abort(500, "Getting clusters failed")
+
+        return jsonify(clusters)
+
+
+@clustersbp.route("/active")
+class ActiveClustersController(MethodView):
+    def get(self, *args, **kwargs):
+        clusters = list(
+            map(
+                map_cluster_attributes,
+                candidate_operations.get_candidates(
+                    active=True, resources="last_modified_timestamp,active"
+                ),
+            )
+        )
+        if clusters is None:
+            return abort(500, "Getting clusters failed")
+
+        return jsonify(clusters)
+
+
+@clusterinfo.route("/<clusterid>")
+class ClusterController(MethodView):
+    @clusterinfo.arguments(
+        schema=cluster_info_schema, location="json", validate=False, unknown=True
+    )
+    def post(self, *args, **kwargs):
+        cluster_id = kwargs["clusterid"]
+        if GATEWAY_ENABLED:
+            # A cluster may only report for itself; the gateway forwards its verified cert.
+            try:
+                caller_id = client_cert_cluster_id(request.headers.get("X-Client-Cert"))
+            except ClientCertError as e:
+                abort(e.status, message=str(e))
+            if caller_id != cluster_id:
+                abort(403, message="A cluster may only update its own information")
+        data = request.json
+        jobs = data.get("jobs")
+        logger.debug(
+            "Received cluster update",
+            event_name="cluster.update.received",
+            cluster_id=cluster_id,
+        )
+        del data["jobs"]
+        # Prevent the IP address from being overwritten by cluster updates
+        # The IP is set during initial registration and should not change
+        if "ip" in data:
+            logger.warning(
+                "Cluster update attempted to change IP address",
+                event_name="cluster.update.ip_change_ignored",
+                cluster_id=cluster_id,
+            )
+            del data["ip"]
+        updated_cluster = candidate_operations.update_candidate_information(cluster_id, data)
+        if updated_cluster is None:
+            logger.error(
+                "Could not update cluster",
+                event_name="cluster.update.failed",
+                cluster_id=cluster_id,
+            )
+            return abort(400, message="Updating cluster failed")
+
+        # TODO(MH): fire an event to react to the cluster update
+        # and move this logic somewhere else.
+        for j in jobs:
+            result = update_job_status(
+                job_id=j.get("_id"),
+                status=convert_to_status(j.get("status")),
+                status_detail=j.get("status_detail"),
+                instances=j.get("instance_list"),
+            )
+            if result is None:
+                # cluster has outdated jobs, ask to undeploy
+                cluster_request_to_delete_job_by_ip(j.get("_id"), -1, cluster_id)
+
+        if GATEWAY_ENABLED:
+            # Clusters compare this with the issuer of their client cert and renew it
+            # themselves after a root CA rotation.
+            try:
+                return {"message": "ok", "root_ca": current_ca_cert_pem()}
+            except (OSError, ValueError):
+                logger.exception(
+                    "Could not read the root CA for the cluster update response",
+                    event_name="cluster.update.root_ca_read_failed",
+                    cluster_id=cluster_id,
+                )
+        return "ok"
+
+
+# Map candidate attributes to cluster attributes for compatibility with ext tools
+# Deprecation note: this mapping should be removed when ext tools are updated to use
+def map_cluster_attributes(x):
+    x["cluster_name"] = x.get("candidate_name", "Unknown Cluster")
+    x["cluster_location"] = x.get("candidate_location", "Unknown Location")
+
+    x["aggregated_cpu_percent"] = x.get("cpu_percent", 0)
+    x["memory_in_mb"] = x.get("memory", 0)
+    x["total_cpu_cores"] = x.get("vcpus", 0)
+    x["total_gpu_cores"] = x.get("vgpus", 0)
+    return x

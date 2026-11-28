@@ -6,7 +6,7 @@ services:
 
   system_manager:
     entrypoint: ["/bin/sh", "/docker-update-ca-trust.sh"]
-    command: ["sh", "-c", "exec gunicorn --bind [::]:$$MY_PORT system_manager:app"]
+    command: ["sh", "-c", "exec gunicorn --bind [::]:$$MY_PORT --logger-class oakestra_logging.gunicorn.StructuredGunicornLogger system_manager.main:app"]
     volumes:
       - ${ROOT_CERT_PATH:-./config/certs}:/certs
       - ./config/docker-update-ca-trust.sh:/docker-update-ca-trust.sh:ro

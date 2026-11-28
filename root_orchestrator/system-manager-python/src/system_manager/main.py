@@ -1,0 +1,388 @@
+import logging
+import os
+import socket
+import threading
+import time
+from concurrent import futures
+from datetime import timedelta
+from pathlib import Path
+
+import grpc
+import requests
+from flask import Flask, flash, request
+from flask_cors import CORS
+from flask_jwt_extended import JWTManager
+from flask_smorest import Api
+from flask_socketio import SocketIO
+from flask_swagger_ui import get_swaggerui_blueprint
+from google.protobuf.json_format import MessageToDict
+from oakestra_logging import configure_logging, get_logger
+from resource_abstractor_client import candidate_operations
+from werkzeug.utils import redirect, secure_filename
+
+from .blueprints import blueprints
+from .ext_requests.cluster_requests import get_cluster_session
+from .ext_requests.jwt_generator_requests import get_public_key
+from .ext_requests.mongodb_client import mongo_init
+from .ext_requests.net_plugin_requests import net_register_cluster
+from .ext_requests.user_db import create_admin
+from .proto.cluster_registration_pb2 import SC1Message, SC2Message
+from .proto.cluster_registration_pb2_grpc import (
+    add_register_clusterServicer_to_server,
+    register_clusterServicer,
+)
+from .utils.certificates import (
+    ClientCertError,
+    client_cert_cluster_id,
+    ensure_ca_files,
+    ensure_server_files,
+)
+from .utils.gateway import GATEWAY_ENABLED
+from .utils.json_encoder import MongoJSONProvider
+from .utils.network import add_brackets_if_ipv6
+
+configure_logging(os.getenv("OAKESTRA_SERVICE_NAME", "system_manager"))
+logger = get_logger(__name__)
+stdlib_logger = logging.getLogger("system_manager")
+
+UPLOAD_FOLDER = "files"
+ALLOWED_EXTENSIONS = {"txt", "json", "yml"}
+
+app = Flask(__name__)
+
+app.config["OPENAPI_VERSION"] = "3.0.2"
+app.config["API_TITLE"] = "Oakestra root api"
+app.config["API_VERSION"] = "v1"
+# Behind the gateway only /api/* reaches system_manager, so the spec moves under /api.
+DOCS_URL_PREFIX = "/api/docs" if GATEWAY_ENABLED else "/docs"
+app.config["OPENAPI_URL_PREFIX"] = DOCS_URL_PREFIX
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config["JWT_ALGORITHM"] = "RS256"
+app.config["JWT_PUBLIC_KEY"] = get_public_key()
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=10)
+app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
+app.config["RESET_TOKEN_EXPIRES"] = timedelta(hours=3)  # for password reset
+app.logger = stdlib_logger
+
+jwt = JWTManager(app)
+api = Api(app, spec_kwargs={"host": "oakestra.io", "x-internal-id": "1"})
+
+cors = CORS(app, resources={r"/*": {"origins": "*"}})
+socketio = SocketIO(
+    app,
+    async_mode="eventlet",
+    logger=True,
+    engineio_logger=True,
+    cors_allowed_origins="*",
+)
+mongo_init(app)
+# Has to come after mongo_init: PyMongo(app) installs its own provider, which turns
+# ObjectIds into {"$oid": ...} and would break clients expecting plain strings.
+app.json = MongoJSONProvider(app)
+create_admin()
+
+
+if GATEWAY_ENABLED:
+    from .blueprints.certificates_blueprints import (
+        CRL_REFRESH_INTERVAL_HOURS,
+        ROTATION_CHECK_INTERVAL_SECONDS,
+        complete_expired_ca_rotation,
+        refresh_root_crl,
+        renew_server_cert_if_expiring,
+        roll_back_interrupted_ca_rotation,
+        warn_if_root_ca_expiring,
+        write_root_crl_from_db,
+    )
+
+    # Internal CA, server cert and CRL are only needed for the gateway's mTLS.
+    ROOT_PUBLIC_ADDRESS = os.environ.get("ROOT_PUBLIC_ADDRESS") or ""
+    _server_common_name = ROOT_PUBLIC_ADDRESS or "localhost"
+    _server_alt_names = [_server_common_name, "localhost", "system_manager"]
+    ensure_ca_files()
+    roll_back_interrupted_ca_rotation()
+    ensure_server_files(
+        common_name=_server_common_name,
+        alt_names=list(dict.fromkeys(_server_alt_names)),
+        valid_days=365,
+    )
+    # Re-sign the CRL on every start so an expired or stale one never survives a restart.
+    if not write_root_crl_from_db():
+        raise RuntimeError("Failed to write the CRL — check CA key permissions and logs")
+    warn_if_root_ca_expiring()
+    renew_server_cert_if_expiring()
+
+    def _refresh_crl_periodically():
+        # The CRL expires 30 days after it is signed, so re-sign it regularly; the
+        # first run also makes an already-running Kong drop a stale in-memory CRL.
+        delay = 60
+        while True:
+            time.sleep(delay)
+            delay = CRL_REFRESH_INTERVAL_HOURS * 3600
+            try:
+                refresh_root_crl()
+                warn_if_root_ca_expiring()
+                renew_server_cert_if_expiring()
+            except Exception:
+                logger.exception(
+                    "Periodic CRL refresh failed", event_name="certificates.crl.refresh_failed"
+                )
+
+    threading.Thread(target=_refresh_crl_periodically, daemon=True).start()
+
+    def _end_expired_ca_rotation_periodically():
+        while True:
+            try:
+                complete_expired_ca_rotation()
+            except Exception:
+                logger.exception(
+                    "Checking the CA rotation grace period failed",
+                    event_name="certificates.ca_rotation.check_failed",
+                )
+            time.sleep(ROTATION_CHECK_INTERVAL_SECONDS)
+
+    threading.Thread(target=_end_expired_ca_rotation_periodically, daemon=True).start()
+
+MY_PORT = os.environ.get("MY_PORT") or 10000
+MY_PORT_GRPC = os.environ.get("MY_PORT_GRPC") or 50052
+
+cluster_gauges_for_prometheus = []
+
+# Register apis
+for bp in blueprints:
+    api.register_blueprint(bp)
+
+api.spec.components.security_scheme(
+    "bearerAuth", {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+)
+api.spec.options["security"] = [{"bearerAuth": []}]
+
+# Swagger docs
+SWAGGER_URL = "/api/docs"
+API_URL = DOCS_URL_PREFIX + "/openapi.json"
+swaggerui_blueprint = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={"app_name": "Oakestra root orchestrator"},
+)
+app.register_blueprint(swaggerui_blueprint)
+
+
+# .............. Register clusters via gRPC ............#
+# ......................................................#
+
+
+CLUSTER_REACHABILITY_TIMEOUT = 3
+CLUSTER_REACHABILITY_TOTAL_WINDOW = 30  # seconds
+
+
+def _is_cluster_reachable(cluster_address, cluster_port):
+    """Probe GET /api/cluster/status on the cluster_manager.
+
+    Returns True only if the cluster is reachable and responds with HTTP 2xx.
+    The cluster MUST be reachable at the address it advertised, otherwise the
+    root has no way to dispatch jobs to it.
+
+    Retries for up to CLUSTER_REACHABILITY_TOTAL_WINDOW seconds because the
+    cluster_manager's gunicorn worker may still be inside load_wsgi when the
+    gRPC handshake reaches the root (the registration call happens at module
+    import time, before the worker enters the accept loop).
+    """
+    if GATEWAY_ENABLED:
+        # Behind the gateway the advertised port is the cluster gateway's TLS listener.
+        scheme, probe = "https", get_cluster_session().get
+    else:
+        scheme, probe = "http", requests.get
+    url = f"{scheme}://{add_brackets_if_ipv6(cluster_address)}:{cluster_port}/api/cluster/status"
+    deadline = time.monotonic() + CLUSTER_REACHABILITY_TOTAL_WINDOW
+    last_exc = None
+    while True:
+        try:
+            resp = probe(url, timeout=CLUSTER_REACHABILITY_TIMEOUT)
+            resp.raise_for_status()
+            return True
+        except requests.RequestException as exc:
+            last_exc = exc
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(2)
+    logger.error(
+        "Cluster reachability probe failed",
+        event_name="cluster.reachability.failed",
+        endpoint=url,
+        exc_info=last_exc,
+    )
+    return False
+
+
+def _registering_cluster_id(context) -> str:
+    """The id in the client certificate the external gateway verified and forwarded."""
+    metadata = dict(context.invocation_metadata())
+    try:
+        return client_cert_cluster_id(metadata.get("x-client-cert"))
+    except ClientCertError as e:
+        status = (
+            grpc.StatusCode.UNAUTHENTICATED
+            if e.status == 401
+            else grpc.StatusCode.PERMISSION_DENIED
+        )
+        context.abort(status, str(e))
+
+
+class ClusterRegistrationServicer(register_clusterServicer):
+    def handle_init_greeting(self, request, context):
+        logger.info(
+            "Cluster Manager connected over gRPC",
+            event_name="cluster.registration.connected",
+            peer=context.peer(),
+        )
+        return SC1Message(hello_cluster_manager="please send your cluster info")
+
+    def handle_init_final(self, request, context):
+        logger.info(
+            "Received cluster registration details",
+            event_name="cluster.registration.received",
+            peer=context.peer(),
+        )
+        message = MessageToDict(request, preserving_proto_field_name=True)
+
+        cluster_address = message.get("cluster_address", "").strip()
+        if not cluster_address:
+            logger.error(
+                "Cluster did not advertise a cluster address",
+                event_name="cluster.registration.address_missing",
+            )
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "cluster_address is required",
+            )
+
+        # Behind the gateway the cluster's id was chosen when its registration token was
+        # minted and is carried by its client certificate; the cluster registers under it.
+        cluster_id = _registering_cluster_id(context) if GATEWAY_ENABLED else None
+
+        cluster_port = str(message["manager_port"])
+        logger.info(
+            "Validating advertised cluster endpoint",
+            event_name="cluster.registration.validating",
+            cluster_name=message.get("cluster_name"),
+            cluster_address=cluster_address,
+            cluster_port=cluster_port,
+        )
+
+        if not _is_cluster_reachable(cluster_address, cluster_port):
+            logger.error(
+                "Cluster endpoint is not reachable; refusing registration",
+                event_name="cluster.registration.endpoint_unreachable",
+                cluster_name=message.get("cluster_name"),
+                cluster_address=cluster_address,
+                cluster_port=cluster_port,
+            )
+            context.abort(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                f"cluster not reachable at {cluster_address}:{cluster_port}",
+            )
+
+        cluster_data = {
+            "ip": cluster_address,
+            "port": cluster_port,
+            "candidate_location": message["cluster_location"],
+            "candidate_name": message["cluster_name"],
+        }
+        if cluster_id:
+            cluster_data["_id"] = cluster_id
+
+        logger.info(
+            "Creating registered cluster",
+            event_name="cluster.registration.creating",
+            cluster_name=cluster_data["candidate_name"],
+            cluster_address=cluster_data["ip"],
+            cluster_port=cluster_data["port"],
+        )
+        cluster = candidate_operations.create_candidate(cluster_data)
+        if cluster is None:
+            logger.error(
+                "Creating cluster failed",
+                event_name="cluster.registration.create_failed",
+                cluster_name=cluster_data["candidate_name"],
+            )
+            context.abort(grpc.StatusCode.INTERNAL, "failed to persist cluster")
+
+        cid = str(cluster["_id"])
+
+        net_register_cluster(
+            cluster_id=cid,
+            cluster_address=cluster_address,
+            cluster_port=request.network_component_port,
+        )
+
+        return SC2Message(id=cid)
+
+
+def serve():
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    add_register_clusterServicer_to_server(ClusterRegistrationServicer(), server)
+    server.add_insecure_port("0.0.0.0:" + str(MY_PORT_GRPC))
+    server.start()
+    server.wait_for_termination()
+
+
+# ................. Finish gRPC handling ...............#
+# ......................................................#
+
+
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+# Used to upload file from the frontend
+@app.route("/frontend/uploader", methods=["GET", "POST"])
+def upload_file():
+    if request.method == "POST":
+        if "file" not in request.files:
+            flash("No file part")
+            return redirect(request.url)
+        file = request.files["file"]
+        if file.filename == "":
+            flash("No selected file")
+            return redirect(request.url)
+        if not allowed_file(file.filename):
+            return "Not a valid file", 400
+        if file:
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
+            response = {"path": str(Path(filename).absolute())}
+            return response
+    return """
+    <!doctype html>
+    <h1>Not a valid request</h1>
+    """
+
+
+def start_flask_server():
+    eventlet.wsgi.server(
+        eventlet.listen(("::", int(MY_PORT)), family=socket.AF_INET6), app, log=stdlib_logger
+    )
+
+
+def start_grpc_server():
+    logger.info("Starting gRPC server", event_name="grpc.server.started", port=MY_PORT_GRPC)
+    serve()
+
+
+grpc_thread = threading.Thread(target=start_grpc_server, daemon=True)
+grpc_thread.start()
+
+if __name__ == "__main__":
+    import eventlet
+
+    flask_thread = threading.Thread(target=start_flask_server, daemon=True)
+
+    flask_thread.start()
+
+    # Don't join threads - let them run as daemons
+    # Only join if we want to block indefinitely
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
