@@ -69,7 +69,7 @@ func (h *UnikernelDeyplomentHandler) DeployNetwork(pid int, sname string, instan
 
 	cleanup = func(veth *netlink.Veth) {
 		_ = netlink.LinkDel(veth)
-		ns.Close()
+		_ = ns.Close()
 		err = netns.DeleteNamed(sname)
 		if err != nil {
 			logger.DebugLogger().Printf("Unable to delete namespace: %v", err)

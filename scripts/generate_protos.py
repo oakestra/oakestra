@@ -1,40 +1,44 @@
-#!/usr/bin/env python3
 """Generate protobuf Python bindings for all .proto files in the repo."""
 
 import subprocess
-import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-PROTO_DIRS = [
-    REPO_ROOT / "cluster_orchestrator" / "cluster-manager" / "proto",
-    REPO_ROOT / "root_orchestrator" / "system-manager-python" / "proto",
+SERVICES = [
+    (
+        REPO_ROOT / "cluster_orchestrator" / "cluster-manager",
+        "src/cluster_manager/proto/cluster_registration.proto",
+    ),
+    (
+        REPO_ROOT / "root_orchestrator" / "system-manager-python",
+        "src/system_manager/proto/cluster_registration.proto",
+    ),
 ]
 
 
-def generate(proto_dir: Path) -> None:
-    proto_files = list(proto_dir.glob("*.proto"))
-    if not proto_files:
+def generate(service_dir: Path, proto_rel_path: str) -> None:
+    proto_file = service_dir / proto_rel_path
+    if not proto_file.exists():
         return
-    service_root = proto_dir.parent
-    print(f"Generating protobuf files in {proto_dir.relative_to(REPO_ROOT)}")
+    print(f"Generating protobuf files for {proto_file.relative_to(REPO_ROOT)}")
     subprocess.run(
         [
-            sys.executable,
+            "uv",
+            "run",
             "-m",
             "grpc_tools.protoc",
-            "-I.",
-            "--python_out=.",
-            "--pyi_out=.",
-            "--grpc_python_out=.",
-            *[str(Path(proto_dir.name) / f.name) for f in proto_files],
+            "-Isrc",
+            "--python_out=src",
+            "--pyi_out=src",
+            "--grpc_python_out=src",
+            proto_rel_path,
         ],
         check=True,
-        cwd=service_root,
+        cwd=service_dir,
     )
 
 
 if __name__ == "__main__":
-    for proto_dir in PROTO_DIRS:
-        generate(proto_dir)
+    for service_dir, proto_rel_path in SERVICES:
+        generate(service_dir, proto_rel_path)

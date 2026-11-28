@@ -23,6 +23,15 @@ is_tag() {
     fi
 }
 
+die() {
+    if [[ $# -eq 1 ]]; then
+	echo "❌❌❌ $1" >&2
+    else
+	echo "❌❌❌ A command failed to execute correcty. Exiting." >&2
+    fi
+    exit 1
+}
+
 if [ ! -z "$CLUSTER_LOCATION" ]; then
     cluster_location=$CLUSTER_LOCATION
 fi
@@ -55,16 +64,14 @@ detect_default_ip() {
 
 # Check if docker and docker compose installed 
 if [ ! -x "$(command -v docker)" ]; then
-  echo "Docker is not installed. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/engine/install/"
-  exit 1
+  die "Docker is not installed. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/engine/install/"
 fi
 echo Checking docker compose version
 sudo docker compose version
 if [ $? -ne 0 ]; then
     current_os=$(uname)
     if [ "$current_os" = "Darwin" ]; then
-        echo "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
-        exit 1
+        die "Docker compose v2 or higher is required. Please refer to the official Docker documentation for installation instructions specific to your OS: https://docs.docker.com/compose/migrate/"
     else
         echo "Installing Docker Compose plugin"
         if [ ! -x "$(command -v apt-get)" ]; then
@@ -87,8 +94,7 @@ if [ -z "$cluster_location" ]; then
         if [ "$(uname)" = "Darwin" ]; then
             # Install jq on macOS using Homebrew
             if ! command -v brew &> /dev/null; then
-            echo "Homebrew is not installed. Please install Homebrew and re-run the script."
-            exit 1
+                die "Homebrew is not installed. Please install Homebrew and re-run the script."
             fi
             brew install jq
         else
@@ -100,8 +106,7 @@ if [ -z "$cluster_location" ]; then
         echo "jq is already installed."
     fi
     if [ $? -ne 0 ]; then
-        echo "Error: Failed to install jq. Please install it manually."
-        exit 1
+        die "Failed to install jq. Please install it manually."
     fi
 
     # Fetch a URL with retries. Many users have hit transient failures from
@@ -182,23 +187,19 @@ if [ ! -z "$system_manager_url_input" ]; then
 fi
 
 if [ -z "$CLUSTER_NAME" ]; then
-    echo ❌❌❌ Cluster Name is required
-    exit 1
+    die "Cluster Name is required"
 fi
 
 if [ -z "$CLUSTER_LOCATION" ]; then
-     echo ❌❌❌ Cluster Location is required
-    exit 1
+    die "Cluster Location is required"
 fi
 
 if [ -z "$CLUSTER_ADDRESS" ]; then
-     echo ❌❌❌ Cluster Address is required and could not be auto-detected
-    exit 1
+    die "Cluster Address is required and could not be auto-detected"
 fi
 
 if [ -z "$SYSTEM_MANAGER_URL" ]; then
-     echo ❌❌❌ Root Orchestrator URL is required
-    exit 1
+    die "Root Orchestrator URL is required"
 fi
 
 rm -rf ~/.oakestra/cluster_orchestrator 2> /dev/null
@@ -224,12 +225,12 @@ if [ ! -z "$OVERRIDE_FILES" ]; then
     do
         echo "Download override: $element"
         wget -c https://raw.githubusercontent.com/oakestra/oakestra/$OAKESTRA_VERSION/cluster_orchestrator/$element 2> /dev/null
+        ret=$?
         OAK_OVERRIDES="${OAK_OVERRIDES}-f ${element} " 
     done
     IFS= 
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to retrieve the override."
-        exit 1
+    if [[ $ret -ne 0 ]]; then
+        die "Failed to retrieve the override."
     fi
 fi
 
@@ -248,14 +249,16 @@ if [ ! -z "$OAKESTRA_VERSION" ]; then
         echo "🌿 Using branch: $OAKESTRA_VERSION"
         # if main branch, use latest images, if not main branch, build from source
         if [ "$OAKESTRA_VERSION" != "main" ]; then
-            echo "🛠️ Non-main branch specified without a tag. Building from version."
-            git checkout $OAKESTRA_VERSION
-            
             # Check remove / scripts from CURRENT_DIR if present to get to repo root
             cd $CURRENT_DIR
             if [[ "$CURRENT_DIR" == *"/scripts" ]]; then
                 cd ..
             fi
+            echo "🛠️ Non-main branch specified without a tag. Building from version."
+            if ! git checkout $OAKESTRA_VERSION &> /dev/null; then
+                die "Failed to checkout branch $OAKESTRA_VERSION."
+            fi
+
             cd cluster_orchestrator
             echo "📦 Building images from source..."
             BUILD_FLAG=' --build'
@@ -275,6 +278,59 @@ if sudo docker ps -a | grep oakestra/cluster >/dev/null 2>&1; then
       echo Exiting without starting Oakestra Cluster.
       exit 0
     fi
+fi
+
+# When override-gateway.yml is in use, cluster↔root and worker↔cluster traffic is mTLS.
+# The cert bundle is either pre-provisioned or bootstrapped automatically with a
+# one-time registration token (CLUSTER_REGISTRATION_TOKEN, minted at the root via
+# POST /api/tokens/cluster):
+#   ca.crt           — root CA (trust anchor for both directions)
+#   cluster.crt/key  — cluster client identity (signed by root CA)
+#   cluster_ca.crt   — cluster intermediate CA cert (signed by root CA)
+#   cluster_ca.key   — cluster intermediate CA private key (signs worker certs)
+if [[ "$OVERRIDE_FILES" == *"override-gateway.yml"* ]]; then
+    CERT_DIR="${CLUSTER_CERT_PATH:-config/certs}"
+
+    certs_present=true
+    for f in ca.crt cluster.crt cluster.key cluster_ca.crt cluster_ca.key; do
+        if [ ! -f "$CERT_DIR/$f" ]; then
+            certs_present=false
+        fi
+    done
+    if [ "$certs_present" = true ]; then
+        for f in cluster.key cluster_ca.key; do
+            perms=$(stat -c '%a' "$CERT_DIR/$f" 2>/dev/null || stat -f '%A' "$CERT_DIR/$f")
+            if [ "$perms" != "600" ] && [ "$perms" != "400" ]; then
+                echo "⚠️  $CERT_DIR/$f has permissions $perms (recommend 600)"
+            fi
+        done
+    elif [ -z "$CLUSTER_REGISTRATION_TOKEN" ]; then
+        echo ❌❌❌ Cluster certificate bundle not found and CLUSTER_REGISTRATION_TOKEN is not set.
+        echo "    Either provision the certs into $CERT_DIR/ manually, or mint a"
+        echo "    one-time token at the root (POST /api/tokens/cluster) and re-run with:"
+        echo "    CLUSTER_REGISTRATION_TOKEN=<token> $0"
+        exit 1
+    else
+        echo 🔑 Bootstrapping cluster certificates with the provided registration token...
+    fi
+    # The cluster gateway's public-facing TLS cert is a separate certificate
+    # system from the internal mTLS CA and must be provided (BYO) — there is no
+    # auto-generated fallback.
+    for f in public/fullchain.pem public/privkey.pem; do
+        if [ ! -f "$CERT_DIR/$f" ]; then
+            echo ❌❌❌ Missing BYO public gateway certificate: "$CERT_DIR/$f"
+            echo "    Provide a publicly trusted cert (e.g. Let's Encrypt) as"
+            echo "    $CERT_DIR/public/fullchain.pem and privkey.pem."
+            echo "    If it is privately issued, also set ROOT_GATEWAY_TRUST to the CA bundle as a path"
+            echo "    inside the containers, e.g. /certs/<file> (put the file in $CERT_DIR)."
+            exit 1
+        fi
+    done
+    if [ ! -z "$CLUSTER_CERT_PATH" ]; then
+        export CLUSTER_CERT_PATH
+    fi
+    export CLUSTER_REGISTRATION_TOKEN
+    export ROOT_GATEWAY_TRUST
 fi
 
 command_exec="sudo -E docker compose -f ${COMPOSE_FILE} ${OAK_OVERRIDES} up ${BUILD_FLAG} -d"

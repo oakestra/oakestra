@@ -15,7 +15,8 @@ Each debug profile has a `preLaunchTask` that, before your breakpoints go live:
    the locally-debugged process can take over its port. Everything the component depends on
    keeps running from its Docker container.
 3. **Installs that component's dependencies** (Python profiles only), via
-   `install-*-dependencies`, into the component's own virtualenv at `.venv/<component>`
+   `install-*-dependencies`: `uv sync` into the root `.venv` for uv-managed components, or
+   the component's own virtualenv at `<component-dir>/.venv` for the rest
    (see [Python environments](#python-environments)). The profile then runs with that
    virtualenv's interpreter, so there's nothing to `pip install` by hand.
 
@@ -38,23 +39,27 @@ cluster) and fails with an explanation if it never does.
 
 ## Python environments
 
-Every Python component gets its **own virtualenv** under `.venv/` at the repo root
-(`.venv/root-manager`, `.venv/cluster-service-manager`, ...), created and kept up to date by
-[`scripts/ensure-venv.sh`](scripts/ensure-venv.sh). One shared interpreter does not work:
-the components pin incompatible versions (e.g. the Cluster Manager needs Flask 2.1 /
-Werkzeug 2.0, the Cluster Service Manager Flask 3.1 / Werkzeug 3.1), so installing one
-broke the other.
+The **uv-managed** components (`system-manager-python`, `cluster-manager` and the shared
+`libraries/`) all run from the root `.venv`, which their install tasks populate with
+`uv sync --all-packages`.
 
-- **First launch** of a profile creates its virtualenv and installs its requirements (plus the
-  local `libraries/` packages where needed). Later launches skip the install unless the
-  requirements file changed.
-- **Python version:** the virtualenv is created with, in order, `$OAK_DEBUG_PYTHON`,
+Every **other** Python component (resource abstractor, JWT generator, addons, marketplace,
+root/cluster service managers) gets its **own virtualenv** at `<component-dir>/.venv`
+(`resource-abstractor/.venv`, `cluster_orchestrator/service-manager/.venv`, ...), created and
+kept up to date by [`scripts/ensure-venv.sh`](scripts/ensure-venv.sh). One shared interpreter
+does not work: the components pin incompatible versions, and `uv sync` removes any package from
+the root `.venv` that `uv.lock` doesn't track.
+
+- **First launch** of a profile creates its virtualenv and installs its requirements. Later
+  launches skip the install unless the requirements file changed.
+- **Python version:** a per-component virtualenv is created with, in order, `$OAK_DEBUG_PYTHON`,
   `python3.10` if it is on your `PATH` (the version the Docker images use), or the interpreter
-  selected in VS Code. Some pins (e.g. `eventlet==0.33.3` in the Cluster Manager) don't work on
+  selected in VS Code. Some pinned dependencies don't work on
   newer Pythons, so install 3.10 if you can (`brew install python@3.10`, `uv python install 3.10`, ...).
-- **Rebuild** a virtualenv by deleting its folder, e.g. `rm -rf .venv/cluster-manager`.
+- **Rebuild** a virtualenv by deleting its folder, e.g. `rm -rf resource-abstractor/.venv`.
   Do this after switching Python versions.
-- `.venv/` is git-ignored. Protobuf generation uses its own small `.venv/protos`.
+- `.venv/` is git-ignored. Protobuf generation runs from the root `.venv` (`grpcio-tools` is a
+  uv workspace dependency).
 
 ## Profiles
 
@@ -126,9 +131,12 @@ You normally don't run these directly — profiles invoke them — but they're a
   `cleanup-debug-env`, `remove-containers`, `remove-volumes`.
 - **`prep-debug-<component>-env`:** the full pre-launch sequence for one profile.
 - **`remove-<container>`:** frees a single container's name/port.
-- **`install-<component>-dependencies`:** creates/updates one component's virtualenv in
-  `.venv/<component>`. The cluster/root manager installers also `pip install` the local
-  shared libraries from [../libraries/](../libraries/).
+- **`install-<component>-dependencies`:** installs one component's Python deps. For `uv`-managed
+  services (`system-manager-python`, `cluster-manager`), dependencies and local shared libraries
+  (`oakestra-utils`, `resource-abstractor-client`, and `oakestra_logging`) are installed via
+  `uv sync`. For components not yet migrated to `uv` (`resource-abstractor`, `jwt-generator`,
+  `addons_*`), dependencies are installed from `requirements.txt`, followed by the local
+  `oakestra_logging` package.
 - **`serve-addons-dashboard`** (+ `install-addons-dashboard-dependencies`): background
   `ng serve` for the dashboard profile.
 
@@ -148,6 +156,12 @@ You normally don't run these directly — profiles invoke them — but they're a
 - **Angular readiness pattern:** `serve-addons-dashboard` waits for Angular's esbuild
   "bundle generation complete" / "Local: http" line before attaching. If your Angular
   version prints a different ready message, update the task's `endsPattern`.
-- **Shared libraries are local.** Python components that use them get
-  [../libraries/](../libraries/) on `PYTHONPATH` (managers) or pip-installed (via the
-  install tasks) — nothing is fetched from a remote git repo.
+- **Shared libraries and UV workspace.** `system-manager-python`, `cluster-manager`, and the shared
+  libraries under `libraries/` are managed via the root `uv` workspace. Running `uv sync` installs
+  them into `.venv` in editable mode.
+- **Local virtualenv isolation:** Docker container builds and CI workflows are fully isolated
+  and unaffected. However, when running uv-managed and non-uv-managed modules locally and
+  uncontainerized at the same time, sharing a single virtual environment can cause dependency
+  conflicts, and `uv sync` will uninstall unmanaged packages. We recommend setting up secondary
+  virtual environments in each non-uv module's subdirectory (e.g., `resource-abstractor/.venv`,
+  `addons_engine/.venv`) when running them locally without Docker.

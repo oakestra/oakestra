@@ -34,7 +34,7 @@ func jobEntry(job string, instance int, nodeip string, nodeport int) TableEntry 
 	}
 }
 
-func jobEntries(job string, n int, nodeip string, nodeport int) []TableEntry {
+func jobEntries(job string, n int, nodeip string, nodeport int) []TableEntry { //nolint:unparam // reads better with the job named at the call site
 	entries := make([]TableEntry, 0, n)
 	for i := range n {
 		entries = append(entries, jobEntry(job, i, nodeip, nodeport))

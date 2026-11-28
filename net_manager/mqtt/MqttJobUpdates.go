@@ -4,10 +4,11 @@ import (
 	"NetManager/events"
 	"NetManager/utils"
 	"encoding/json"
-	"github.com/eclipse/paho.mqtt.golang"
 	"log"
 	"sync"
 	"time"
+
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 var runningHandlers = utils.NewSlice[string]()

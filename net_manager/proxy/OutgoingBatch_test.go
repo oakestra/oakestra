@@ -267,12 +267,12 @@ func TestNewTunnelConnPicksAddressFamily(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen v4: %v", err)
 	}
-	defer v4Listener.Close()
+	t.Cleanup(func() { _ = v4Listener.Close() })
 	v6Listener, err := net.ListenUDP("udp6", &net.UDPAddr{IP: net.ParseIP("::1"), Port: 0})
 	if err != nil {
 		t.Fatalf("listen v6: %v", err)
 	}
-	defer v6Listener.Close()
+	t.Cleanup(func() { _ = v6Listener.Close() })
 
 	v4Dst := netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), uint16(v4Listener.LocalAddr().(*net.UDPAddr).Port))
 	v6Dst := netip.AddrPortFrom(netip.MustParseAddr("::1"), uint16(v6Listener.LocalAddr().(*net.UDPAddr).Port))

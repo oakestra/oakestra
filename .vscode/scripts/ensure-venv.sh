@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
-# Creates (if needed) a per-component virtualenv under <repo>/.venv/<name> and installs
-# the given pip arguments into it. Used by the VS Code debug profiles, so each Python
+# Creates (if needed) a per-component virtualenv at <repo>/<component-dir>/.venv and installs
+# the given pip arguments into it. Only for components not managed by the uv workspace: the
+# root .venv belongs to `uv sync`, which removes anything it does not track. Used by the VS Code debug profiles, so each Python
 # component gets its own dependencies: the components pin incompatible versions
 # (e.g. Flask 2.x vs 3.x), so a single shared interpreter breaks whichever ran first.
 #
-# Usage: ensure-venv.sh <name> <fallback-python> <pip install args...>
-#   Paths in the pip args are relative to the repository root.
+# Usage: ensure-venv.sh <component-dir> <fallback-python> <pip install args...>
+#   <component-dir> and paths in the pip args are relative to the repository root.
 #
 # The base interpreter is, in order: $OAK_DEBUG_PYTHON, python3.10 (the version the
 # Docker images use), then <fallback-python> (the interpreter selected in VS Code).
 # The install is skipped when the requirement files and arguments are unchanged.
-# Delete .venv/<name> to rebuild a virtualenv from scratch.
+# Delete <component-dir>/.venv to rebuild a virtualenv from scratch.
 set -euo pipefail
 
 if [ "$#" -lt 3 ]; then
-    echo "Usage: $0 <name> <fallback-python> <pip install args...>" >&2
+    echo "Usage: $0 <component-dir> <fallback-python> <pip install args...>" >&2
     exit 2
 fi
 
@@ -23,12 +24,12 @@ fallback="$2"
 shift 2
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-venv="$root/.venv/$name"
+venv="$root/$name/.venv"
 cd "$root"
 
 # A venv whose creation failed half-way (e.g. ensurepip missing) has a python but no pip; rebuild it.
 if [ -x "$venv/bin/python" ] && ! "$venv/bin/python" -m pip --version >/dev/null 2>&1; then
-    echo "Removing broken .venv/$name (no pip)"
+    echo "Removing broken $name/.venv (no pip)"
     rm -rf "$venv"
 fi
 
@@ -41,10 +42,10 @@ if [ ! -x "$venv/bin/python" ]; then
         base="$fallback"
     fi
     version="$("$base" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
-    echo "Creating .venv/$name with $base (Python $version)"
+    echo "Creating $name/.venv with $base (Python $version)"
     if [ "$version" != "3.10" ]; then
         echo "Note: the Oakestra images run Python 3.10. Some pinned dependencies may not install on $version." >&2
-        echo "      Install python3.10 or set OAK_DEBUG_PYTHON, then delete .venv/$name to rebuild it." >&2
+        echo "      Install python3.10 or set OAK_DEBUG_PYTHON, then delete $name/.venv to rebuild it." >&2
     fi
     "$base" -m venv "$venv"
 fi
@@ -69,10 +70,10 @@ stamp="$venv/.oak-requirements"
 want="$("$venv/bin/python" -c "$fingerprint_py" "$@")"
 
 if [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$want" ]; then
-    echo ".venv/$name: dependencies up to date"
+    echo "$name/.venv: dependencies up to date"
     exit 0
 fi
 
-echo "Installing dependencies into .venv/$name"
+echo "Installing dependencies into $name/.venv"
 "$venv/bin/python" -m pip install --disable-pip-version-check "$@"
 echo "$want" > "$stamp"

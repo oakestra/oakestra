@@ -51,7 +51,8 @@ func GetLocalIPandIface() (string, string) {
 
 func NameUniqueHash(name string, size int) string {
 	shaHashFunc := sha1.New()
-	fmt.Fprintf(shaHashFunc, "%s,%s", time.Now().String(), name)
+	// writing to a hash never fails
+	_, _ = fmt.Fprintf(shaHashFunc, "%s,%s", time.Now().String(), name)
 	hashed := shaHashFunc.Sum(nil)
 	for size > len(hashed) {
 		hashed = append(hashed, hashed...)
@@ -134,7 +135,11 @@ func GetOutboundIP() net.IP {
 	if err != nil {
 		log.Fatalf("Unable to dial DNS: %s", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			logger.ErrorLogger().Printf("%v", err.Error())
+		}
+	}()
 
 	if model.NetConfig.PublicIPNetworking {
 		// get public ip (nat ip)

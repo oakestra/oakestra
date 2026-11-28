@@ -61,7 +61,7 @@ func l4ChecksumField(p *Packet) []byte {
 // shapes explicitly is what makes this target worth anything under a plain
 // `go test`, which runs the corpus without fuzzing.
 
-func tcpHeader(checksum uint16) []byte {
+func tcpHeader(checksum uint16) []byte { //nolint:unparam // the checksum is what the seeds assert on
 	h := make([]byte, tcpHeaderMinLen)
 	binary.BigEndian.PutUint16(h[0:2], 40000)
 	binary.BigEndian.PutUint16(h[2:4], 443)

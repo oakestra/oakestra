@@ -408,22 +408,22 @@ func TestUDPTunnelSocketDualStackReceive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	defer conn.Close()
+	t.Cleanup(func() { _ = conn.Close() })
 	port := conn.LocalAddr().(*net.UDPAddr).Port
 
 	sock := newUDPTunnelSocket(conn)
-	defer sock.Close()
+	t.Cleanup(func() { _ = sock.Close() })
 
 	v4, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: port})
 	if err != nil {
 		t.Fatalf("dial v4: %v", err)
 	}
-	defer v4.Close()
+	t.Cleanup(func() { _ = v4.Close() })
 	v6, err := net.DialUDP("udp6", nil, &net.UDPAddr{IP: net.ParseIP("::1"), Port: port})
 	if err != nil {
 		t.Fatalf("dial v6: %v", err)
 	}
-	defer v6.Close()
+	t.Cleanup(func() { _ = v6.Close() })
 
 	if _, err := v4.Write([]byte("hello-v4")); err != nil {
 		t.Fatalf("write v4: %v", err)

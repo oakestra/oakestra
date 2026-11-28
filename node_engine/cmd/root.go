@@ -23,10 +23,12 @@ var (
 
 		},
 	}
-	clusterAddress string
-	clusterPort    int
-	clusterSSL     bool
-	detatched      bool
+	clusterAddress      string
+	clusterPort         int
+	clusterSSL          bool
+	clusterToken        string
+	clusterGatewayTrust string
+	detatched           bool
 	// Addons
 	imageBuilder        bool
 	flopsLearnerSupport bool
@@ -45,6 +47,9 @@ func Execute() error {
 func init() {
 	rootCmd.Flags().StringVarP(&clusterAddress, "clusterAddr", "a", "", "Custom address of the cluster orchestrator without port")
 	rootCmd.Flags().IntVarP(&clusterPort, "clusterPort", "p", 10100, "Port of the cluster orchestrator")
+	rootCmd.Flags().BoolVarP(&clusterSSL, "clusterSSL", "s", false, "Perform cluster orchestrator handshake over HTTPS")
+	rootCmd.Flags().StringVar(&clusterToken, "token", "", "One-time registration token; the daemon redeems it for worker certificates on first start")
+	rootCmd.Flags().StringVar(&clusterGatewayTrust, "gateway-trust", "system", "How to verify the cluster gateway's server certificate: 'system' (OS trust store, for a publicly trusted cert), a path to a CA bundle, or 'insecure'")
 	rootCmd.Flags().BoolVarP(&detatched, "detatch", "d", false, "Run the NodeEngine in the background (daemon mode)")
 	// Addons
 	rootCmd.Flags().BoolVar(&imageBuilder, "image-builder", false, "Checks if the host has QEMU (apt's qemu-user-static) installed for building multi-platform images.")
@@ -83,9 +88,28 @@ func nodeEngineDaemonManager() error {
 		}
 	}
 
-	if certFile != "" || keyFile != "" {
-		// set Mqtt auth parameters
-		err := setMqttAuth()
+	if workerCertFile != "" || workerKeyFile != "" || clusterCaFile != "" {
+		// set worker mTLS material
+		err := setWorkerAuth()
+		if err != nil {
+			return err
+		}
+	}
+
+	if clusterToken != "" {
+		// one-time registration token: the daemon redeems it for worker
+		// certificates on startup (implies an SSL handshake)
+		err := configToken(clusterToken)
+		if err != nil {
+			return err
+		}
+	}
+
+	if clusterSSL || clusterToken != "" {
+		// Record how to verify the cluster gateway's server cert. Defaults to
+		// "system" because the gateway presents a separate, publicly trusted
+		// certificate (not the internal mTLS CA).
+		err := configGatewayTrust(clusterGatewayTrust)
 		if err != nil {
 			return err
 		}

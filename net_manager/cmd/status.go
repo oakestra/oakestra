@@ -22,10 +22,9 @@ var (
 	}
 )
 
-func statusNetManager() error {
+func statusNetManager() {
 	execCommandWithOutput("systemctl", "status", "netmanager", "--no-pager")
 	execCommandWithOutput("bash", "-c", "cat /var/log/oakestra/netmanager.log | grep STARTUP_CONFIG | tail -n 1")
-	return nil
 }
 
 func execCommandWithOutput(command string, args ...string) {

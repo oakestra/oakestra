@@ -1,6 +1,6 @@
 #!/bin/bash
 
-virtualenv --clear -p python3.8 .venv
+python3 -m venv --clear .venv
 source .venv/bin/activate
 
 .venv/bin/pip install -r requirements.txt
