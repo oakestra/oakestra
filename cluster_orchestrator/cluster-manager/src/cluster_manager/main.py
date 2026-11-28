@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import socket
-import sys
 import threading
 import time
 
@@ -392,7 +391,7 @@ def _register_in_background():
             "Cluster registration failed; exiting worker for restart",
             event_name="cluster.registration.unrecoverable",
         )
-        sys.exit(1)
+        os._exit(1)
 
 
 def _refresh_crl_periodically():
