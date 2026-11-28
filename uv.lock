@@ -293,6 +293,7 @@ version = "0.0.0"
 source = { editable = "cluster_orchestrator/cluster-manager" }
 dependencies = [
     { name = "apscheduler" },
+    { name = "cryptography" },
     { name = "eventlet" },
     { name = "flask" },
     { name = "flask-cors" },
@@ -320,6 +321,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "apscheduler", specifier = ">=3.11.3" },
+    { name = "cryptography", specifier = "==50.0.1" },
     { name = "eventlet", specifier = "~=0.41.2" },
     { name = "flask", specifier = "~=3.1.3" },
     { name = "flask-cors", specifier = "~=6.0.5" },

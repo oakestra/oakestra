@@ -38,6 +38,22 @@ def require_role(required_role):
     return decorator
 
 
+def require_any_role(*required_roles):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            current_user = get_jwt_auth_identity()
+            organization_id = get_jwt_organization()
+            user = mongo_get_user_by_name(current_user, organization_id)
+            if user and any(user_has_role(user, role) for role in required_roles):
+                return func(*args, **kwargs)
+            else:
+                return not_authorized
+
+        return wrapper
+
+    return decorator
+
+
 def identity_is_username():
     def decorator(func):
         def wrapper(*args, **kwargs):

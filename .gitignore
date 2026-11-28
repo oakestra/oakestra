@@ -85,6 +85,11 @@ node_modules/
 NodeEngine_*
 nodeengined_*
 
+# Certificates (default paths)
+root_orchestrator/config/certs
+cluster_orchestrator/config/certs
+node_engine/certs
+
 # net_manager build artifacts
 /net_manager/NetManager
 /net_manager/build/bin/

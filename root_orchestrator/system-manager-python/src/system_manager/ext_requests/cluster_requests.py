@@ -1,3 +1,5 @@
+import os
+
 import requests
 from oakestra_logging import get_logger
 from resource_abstractor_client import candidate_operations, job_operations
@@ -8,13 +10,84 @@ from ..utils.network import sanitize
 logger = get_logger(__name__)
 
 
+ROOT_CERT_FILE = os.environ.get("ROOT_CERT_FILE")
+ROOT_KEY_FILE = os.environ.get("ROOT_KEY_FILE")
+ROOT_CA_FILE = os.environ.get("ROOT_CA_FILE")
+
+# What to verify the cluster gateway's *server* cert against:
+#   ""       -> the internal root CA (default; works with the fallback gateway cert)
+#   "system" -> the system trust store (clusters using BYO public certs)
+#   <path>   -> a custom CA bundle
+CLUSTER_GATEWAY_TRUST = os.environ.get("CLUSTER_GATEWAY_TRUST", "")
+
+
+def _mtls_enabled() -> bool:
+    return all(
+        path and os.path.isfile(path) for path in (ROOT_CERT_FILE, ROOT_KEY_FILE, ROOT_CA_FILE)
+    )
+
+
+def _gateway_verify():
+    if CLUSTER_GATEWAY_TRUST == "system":
+        return True
+    return CLUSTER_GATEWAY_TRUST or ROOT_CA_FILE
+
+
+def _build_session() -> requests.Session:
+    session = requests.Session()
+    if _mtls_enabled():
+        session.cert = (ROOT_CERT_FILE, ROOT_KEY_FILE)
+        session.verify = _gateway_verify()
+    return session
+
+
+_session = None
+
+
+def get_cluster_session() -> requests.Session:
+    # Built lazily: system_manager generates the cert files after this module is imported.
+    global _session
+    if _session is None:
+        _session = _build_session()
+    return _session
+
+
+def _cluster_request(method: str, url: str, **kwargs) -> requests.Response:
+    """Send a request to a cluster: over the mTLS session behind the gateway, plainly otherwise."""
+    if _mtls_enabled():
+        return getattr(get_cluster_session(), method)(url, **kwargs)
+    return getattr(requests, method)(url, **kwargs)
+
+
+def _cluster_base(cluster) -> str:
+    scheme = "https" if _mtls_enabled() else "http"
+    return (
+        scheme + "://" + sanitize(cluster.get("ip"), request=True) + ":" + str(cluster.get("port"))
+    )
+
+
+def cluster_push_worker_token(cluster, token_hash, expiry_date_iso):
+    """Deliver a one-time worker registration token hash to a cluster.
+
+    Goes through the cluster's external gateway over mTLS (the route is
+    guarded by the gateway's client-certificate check). Returns the response;
+    raises requests.exceptions.RequestException on connection errors.
+    """
+    cluster_addr = _cluster_base(cluster) + "/api/certs/worker-token"
+    return get_cluster_session().post(
+        cluster_addr,
+        json={"token_hash": token_hash, "expiry_date": expiry_date_iso},
+        timeout=10,
+    )
+
+
 def cluster_request_status(cluster_id):
     request_logger = logger.bind(cluster_id=cluster_id, operation="status")
     cluster = candidate_operations.get_candidate_by_id(cluster_id)
     try:
-        cluster_addr = "http://" + cluster.get("ip") + ":" + str(cluster.get("port")) + "/status"
+        cluster_addr = _cluster_base(cluster) + "/status"
         request_logger = request_logger.bind(cluster_addr=cluster_addr)
-        requests.get(cluster_addr, timeout=5)
+        _cluster_request("get", cluster_addr, timeout=5)
     except requests.exceptions.RequestException:
         request_logger.exception(
             "Cluster status request failed",
@@ -45,14 +118,7 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
             event_name="cluster.deploy.preparing",
         )
         cluster_addr = (
-            "http://"
-            + sanitize(cluster.get("ip"), request=True)
-            + ":"
-            + str(cluster.get("port"))
-            + "/api/service/"
-            + str(job_id)
-            + "/"
-            + str(instance_number)
+            _cluster_base(cluster) + "/api/service/" + str(job_id) + "/" + str(instance_number)
         )
         request_logger = request_logger.bind(cluster_addr=cluster_addr)
         job["_id"] = str(job["_id"])
@@ -60,7 +126,7 @@ def cluster_request_to_deploy(cluster_id, job_id, instance_number):
             "Sending cluster deployment request",
             event_name="cluster.deploy.requested",
         )
-        requests.post(cluster_addr, json=job, timeout=10)
+        _cluster_request("post", cluster_addr, json=job, timeout=10)
     except Exception:
         request_logger.exception(
             "Cluster deployment request failed",
@@ -78,21 +144,14 @@ def cluster_request_to_delete_job(job_id, instance_number):
     request_logger = request_logger.bind(cluster_id=cluster.get("_id"))
     try:
         cluster_addr = (
-            "http://"
-            + sanitize(cluster.get("ip"), request=True)
-            + ":"
-            + str(cluster.get("port"))
-            + "/api/service/"
-            + str(job_id)
-            + "/"
-            + str(instance_number)
+            _cluster_base(cluster) + "/api/service/" + str(job_id) + "/" + str(instance_number)
         )
         request_logger = request_logger.bind(cluster_addr=cluster_addr)
         request_logger.info(
             "Sending cluster deletion request",
             event_name="cluster.delete.requested",
         )
-        requests.delete(cluster_addr, timeout=10)
+        _cluster_request("delete", cluster_addr, timeout=10)
     except Exception:
         request_logger.exception(
             "Cluster deletion request failed",
@@ -114,21 +173,14 @@ def cluster_request_to_delete_job_by_ip(job_id, instance_number, cluster_id):
             return
 
         cluster_addr = (
-            "http://"
-            + sanitize(cluster.get("ip"), request=True)
-            + ":"
-            + str(cluster.get("port"))
-            + "/api/service/"
-            + str(job_id)
-            + "/"
-            + str(instance_number)
+            _cluster_base(cluster) + "/api/service/" + str(job_id) + "/" + str(instance_number)
         )
         request_logger = request_logger.bind(cluster_addr=cluster_addr)
         request_logger.info(
             "Sending deletion request to cluster",
             event_name="cluster.delete.requested",
         )
-        requests.delete(cluster_addr, timeout=10)
+        _cluster_request("delete", cluster_addr, timeout=10)
     except Exception:
         request_logger.exception(
             "Cluster deletion request failed",

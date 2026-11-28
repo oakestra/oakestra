@@ -60,6 +60,9 @@ class EnvironmentConfig:
     log_level: str | None
     aggregation_interval: int | None  # default 15
     node_scheduled_timeout: int | None  # default 15
+    # Ports advertised to the root; set by override-gateway.yml to the cluster gateway's.
+    cluster_port: int | None  # default: port
+    cluster_service_manager_gateway_port: int | None  # default: cluster_service_manager_port
 
     @classmethod
     def load(cls) -> "EnvironmentConfig":
@@ -82,6 +85,10 @@ class EnvironmentConfig:
             log_level=_load_optional_env_str("LOG_LEVEL"),
             aggregation_interval=_load_optional_env_int("AGGREGATION_INTERVAL"),
             node_scheduled_timeout=_load_optional_env_int("NODE_SCHEDULED_TIMEOUT"),
+            cluster_port=_load_optional_env_int("CLUSTER_PORT"),
+            cluster_service_manager_gateway_port=_load_optional_env_int(
+                "CLUSTER_SERVICE_MANAGER_GATEWAY_PORT"
+            ),
         )
 
 
@@ -94,6 +101,12 @@ SERVICE_MANAGER_ADDR = _build_http_url(
 )
 SYSTEM_MANAGER_GRPC_ADDR = CONFIG.system_manager_url + ":" + str(CONFIG.system_manager_grpc_port)
 SYSTEM_MANAGER_ADDR = _build_http_url(CONFIG.system_manager_url, CONFIG.system_manager_port)
+
+# Ports communicated to the root: different if the cluster is behind the gateway.
+ADVERTISED_PORT = CONFIG.cluster_port or CONFIG.port
+ADVERTISED_SERVICE_MANAGER_PORT = (
+    CONFIG.cluster_service_manager_gateway_port or CONFIG.cluster_service_manager_port
+)
 
 
 @dataclass

@@ -9,6 +9,7 @@ from oakestra_utils.types.statuses import (
 )
 from resource_abstractor_client import job_operations
 
+from .. import gateway_config
 from ..clients import job_management
 from ..clients.job_management import deploy_job
 from ..clients.mqtt_client import mqtt_publish_edge_deploy
@@ -35,6 +36,15 @@ schedulingblp = Blueprint(
 )
 
 
+def _require_root_caller():
+    """Behind the gateway, only the root may deploy and undeploy services."""
+    if gateway_config.GATEWAY_ENABLED:
+        # Certificate APIs only exist behind the gateway.
+        from .certificates_blueprints import require_root_caller
+
+        require_root_caller()
+
+
 @serviceblp.route("/<job_id>/<instance_number>")
 class ServiceController(MethodView):
     @serviceblp.response(
@@ -43,6 +53,7 @@ class ServiceController(MethodView):
         content_type="application/json",
     )
     def post(self, job_id, instance_number):
+        _require_root_caller()
         job_obj = request.json  # contains job_id and job_description
         job = Job.model_validate(job_obj)
         instance_number = int(instance_number)
@@ -76,6 +87,7 @@ class ServiceController(MethodView):
         find service in db and ask corresponding worker to delete task,
         instance_number -1 undeploy all known instances
         """
+        _require_root_caller()
         logger.info(
             "Received service deletion request",
             event_name="service.delete.received",

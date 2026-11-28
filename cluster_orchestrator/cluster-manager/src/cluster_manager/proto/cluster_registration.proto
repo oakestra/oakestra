@@ -26,6 +26,7 @@ message CS2Message {
   repeated KeyValue cluster_info = 4 [deprecated = true];
   string cluster_location = 5;
   string cluster_address = 6;
+  string token = 7;
 }
 
 message KeyValue {

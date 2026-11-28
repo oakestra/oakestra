@@ -7,6 +7,8 @@ from resource_abstractor_client import candidate_operations
 
 from ..ext_requests.cluster_requests import cluster_request_to_delete_job_by_ip
 from ..services.instance_management import update_job_status
+from ..utils.certificates import ClientCertError, client_cert_cluster_id, current_ca_cert_pem
+from ..utils.gateway import GATEWAY_ENABLED
 
 logger = get_logger(__name__)
 
@@ -96,8 +98,16 @@ class ClusterController(MethodView):
         schema=cluster_info_schema, location="json", validate=False, unknown=True
     )
     def post(self, *args, **kwargs):
-        data = request.json
         cluster_id = kwargs["clusterid"]
+        if GATEWAY_ENABLED:
+            # A cluster may only report for itself; the gateway forwards its verified cert.
+            try:
+                caller_id = client_cert_cluster_id(request.headers.get("X-Client-Cert"))
+            except ClientCertError as e:
+                abort(e.status, message=str(e))
+            if caller_id != cluster_id:
+                abort(403, message="A cluster may only update its own information")
+        data = request.json
         jobs = data.get("jobs")
         logger.debug(
             "Received cluster update",
@@ -136,6 +146,17 @@ class ClusterController(MethodView):
                 # cluster has outdated jobs, ask to undeploy
                 cluster_request_to_delete_job_by_ip(j.get("_id"), -1, cluster_id)
 
+        if GATEWAY_ENABLED:
+            # Clusters compare this with the issuer of their client cert and renew it
+            # themselves after a root CA rotation.
+            try:
+                return {"message": "ok", "root_ca": current_ca_cert_pem()}
+            except (OSError, ValueError):
+                logger.exception(
+                    "Could not read the root CA for the cluster update response",
+                    event_name="cluster.update.root_ca_read_failed",
+                    cluster_id=cluster_id,
+                )
         return "ok"
 
 

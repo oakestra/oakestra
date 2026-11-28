@@ -5,6 +5,7 @@ from flask_smorest import Blueprint, abort
 from oakestra_logging import get_logger
 from resource_abstractor_client import candidate_operations
 
+from .. import gateway_config
 from ..app_config import CONFIG
 
 logger = get_logger(__name__)
@@ -33,8 +34,14 @@ class ServiceController(MethodView):
             event_name="worker.registration.received",
         )
         data = request.json  # get POST body
-        data.get("token")  # registration_token
-        # TODO(GB): check and generate tokens
+        # The worker's id is never the caller's to choose.
+        data.pop("_id", None)
+        if gateway_config.GATEWAY_ENABLED:
+            # Certificate APIs only exist behind the gateway.
+            from .certificates_blueprints import verified_worker
+
+            # Behind the gateway the id was chosen when the worker's certificate was issued.
+            _, data["_id"] = verified_worker(request.headers.get("X-Client-Cert"))
         data["candidate_name"] = data.get("host", "")
         logger.debug(
             "Prepared worker candidate name",

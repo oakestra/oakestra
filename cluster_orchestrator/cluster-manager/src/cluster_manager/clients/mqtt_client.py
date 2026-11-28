@@ -8,6 +8,7 @@ from paho.mqtt.client import MQTTMessage
 from resource_abstractor_client import candidate_operations
 from typing_extensions import assert_type
 
+from .. import gateway_config
 from ..app_config import CONFIG
 from ..models.job import Job
 from ..models.mqtt import NodeInformationMessage, NodeJobMessage, NodeJobResourceMessage
@@ -70,6 +71,20 @@ def handle_mqtt_message(_client: Any, _userdata: Any, message: MQTTMessage):
 
 
 def handle_node_information_message(client_id: str, payload: Any):
+    worker_cert = payload.pop("worker_cert", None)
+    if worker_cert and gateway_config.GATEWAY_ENABLED:
+        # Certificate APIs only exist behind the gateway.
+        from .worker_cert_renewal import check_worker_cert
+
+        try:
+            check_worker_cert(client_id, worker_cert, ensure_mqtt().publish)
+        except Exception:
+            logger.exception(
+                "Worker certificate check failed",
+                event_name="mqtt.worker_cert.check_failed",
+                worker_id=client_id,
+            )
+
     message = NodeInformationMessage.model_validate(payload)
 
     updated = candidate_operations.update_candidate_information(
@@ -131,10 +146,11 @@ def initialize_mqtt():
     mqtt.max_queued_messages_set(1000)
     if CONFIG.mqtt_cert:
         try:
+            # MQTT cert/key files are set by the gateway override
             mqtt.tls_set(
                 ca_certs=CONFIG.mqtt_cert + "/ca.crt",
-                certfile=CONFIG.mqtt_cert + "/cluster.crt",
-                keyfile=CONFIG.mqtt_cert + "/cluster.key",
+                certfile=gateway_config.MQTT_CERT_FILE or CONFIG.mqtt_cert + "/cluster.crt",
+                keyfile=gateway_config.MQTT_KEY_FILE or CONFIG.mqtt_cert + "/cluster.key",
                 keyfile_password=CONFIG.cluster_keyfile_password,
             )
             logger.info("Configured MQTT TLS", event_name="mqtt.tls.configured")

@@ -19,3 +19,17 @@ def network_notify_deployment(job: Job) -> None:
             event_name="network.deployment.notification_failed",
             job_id=job.id,
         )
+
+
+def network_notify_cluster_id(cluster_id: str) -> None:
+    try:
+        requests.post(
+            SERVICE_MANAGER_ADDR + "/api/net/cluster/id",
+            json={"cluster_id": cluster_id},
+        )
+    except requests.exceptions.RequestException:
+        logger.exception(
+            "Service Manager cluster id notification failed",
+            event_name="network.cluster_id.notification_failed",
+            cluster_id=cluster_id,
+        )

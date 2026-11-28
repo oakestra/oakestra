@@ -31,7 +31,6 @@ services:
       - mongo_root
       - root_scheduler
       - root_resource_abstractor
-      - root_service_manager
       - jwt_generator
     environment:
       - OAKESTRA_SERVICE_NAME=system_manager
