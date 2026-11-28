@@ -30,13 +30,12 @@ def _get_fake_cluster():
 def test_interest_register():
     fake_cluster = _get_fake_cluster()
     fake_job = _get_fake_job("aaa")
-    mongodb_client.mongo_get_cluster_by_ip = MagicMock(return_value=fake_cluster)
     mongodb_client.mongo_find_job_by_name = MagicMock(return_value=fake_job)
     mongodb_client.mongo_find_job_by_ip = MagicMock(return_value=fake_job)
     mongodb_client.mongo_register_cluster_job_interest = MagicMock()
 
     result, code = operations.instances_management.get_service_instances(
-        name="aaa", cluster_ip="123", cluster_name=fake_cluster["cluster_id"]
+        name="aaa", cluster_id=fake_cluster["cluster_id"]
     )
 
     assert code == 200

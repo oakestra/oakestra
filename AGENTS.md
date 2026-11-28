@@ -217,6 +217,8 @@ Set `"Debug": true` to enable verbose logging to `/var/log/oakestra/netmanager.l
 | `JWT_GENERATOR_URL` | `localhost` | jwt_generator host (for RS256 public key) |
 | `JWT_GENERATOR_PORT` | `10011` | jwt_generator port |
 | `MY_PORT` | `10100` | Port this service listens on |
+| `GATEWAY_ENABLED` | unset | Set by `override-gateway.yml`. Cluster calls then carry the cluster's verified client cert (`X-Client-Cert`), and `net_deploy_status` only accepts instances placed on the calling cluster |
+| `ROOT_CA_FILE` | — | Root CA bundle; behind the gateway, a cluster cert must be signed directly by it |
 
 #### Cluster service manager
 
@@ -230,6 +232,7 @@ Set `"Debug": true` to enable verbose logging to `/var/log/oakestra/netmanager.l
 | `ROOT_SERVICE_MANAGER_PORT` | `5000` | root service manager port |
 | `MQTT_CERT` | — | Path to TLS certs dir (only when using MQTT auth override) |
 | `MY_PORT` | `10200` | Port this service listens on |
+| `GATEWAY_ENABLED` | unset | Set by `override-gateway.yml`. Calls to the root then use mTLS (`CLUSTER_CERT_FILE`, `CLUSTER_KEY_FILE`, `ROOT_CA_FILE`) and MQTT uses TLS (`MQTT_CERT`). The service won't start if any of these is missing |
 
 ---
 

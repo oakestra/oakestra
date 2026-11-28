@@ -6,7 +6,10 @@ import traceback
 
 import paho.mqtt.client as paho_mqtt
 from interfaces.mongodb_requests import mongo_find_node_by_id_and_update_subnetwork
-from interfaces.root_service_manager_requests import root_service_manager_get_subnet
+from interfaces.root_service_manager_requests import (
+    GATEWAY_ENABLED,
+    root_service_manager_get_subnet,
+)
 from network.deployment import deployment_address_update, deployment_status_report
 from network.tablequery import interests, resolution
 
@@ -73,14 +76,22 @@ def mqtt_init(flask_app):
         try:
             mqtt.tls_set(
                 ca_certs=os.environ.get("MQTT_CERT") + "/ca.crt",
-                certfile=os.environ.get("MQTT_CERT") + "/cluster_net.crt",
-                keyfile=os.environ.get("MQTT_CERT") + "/cluster_net.key",
+                # The gateway override points these at the cluster identity.
+                certfile=os.environ.get("MQTT_CERT_FILE")
+                or os.environ.get("MQTT_CERT") + "/cluster_net.crt",
+                keyfile=os.environ.get("MQTT_KEY_FILE")
+                or os.environ.get("MQTT_CERT") + "/cluster_net.key",
                 keyfile_password=os.environ.get("CLUSTER_SERVICE_KEYFILE_PASSWORD"),
             )
             logger.info("MQTT - TLS configured")
         except FileNotFoundError as e:
             logger.error("MQTT - Unable to load certificate files")
             logger.error(e)
+            # The gateway's broker only accepts TLS.
+            if GATEWAY_ENABLED:
+                raise
+    elif GATEWAY_ENABLED:
+        raise RuntimeError("GATEWAY_ENABLED is set but MQTT_CERT is not")
 
     mqtt.connect(
         os.environ.get("MQTT_BROKER_URL").strip("[]"),
@@ -169,7 +180,7 @@ def _tablequery_handler(client_id, payload):
         "instance_list": resolution.format_instance_response(instances, siplist),
         "query_key": query_key,
     }
-    logger.debug("Tablequery Result: ", result)
+    logger.debug("Tablequery Result: %s", result)
     mqtt_publish_tablequery_result(client_id, result)
 
 

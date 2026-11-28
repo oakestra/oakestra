@@ -10,6 +10,7 @@ type NetConfiguration struct {
 	PublicIPNetworking bool
 	MqttCert           string
 	MqttKey            string
+	MqttCa             string
 }
 
 var NetConfig NetConfiguration

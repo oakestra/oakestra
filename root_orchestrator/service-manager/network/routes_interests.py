@@ -2,11 +2,7 @@ from interfaces import clusters_interface, mongodb_requests
 from operations import cluster_management
 
 
-def deregister_interest(cluster_address, job_name):
-    cluster = mongodb_requests.mongo_get_cluster_by_ip(cluster_address)
-    if cluster is None:
-        return "Cluster not registered", 404
-    cluster_id = cluster.get("cluster_id")
+def deregister_interest(cluster_id, job_name):
     if cluster_id is None or job_name is None:
         return "Invalid input arguments", 400
     mongodb_requests.mongo_remove_cluster_job_interest(cluster_id, job_name)

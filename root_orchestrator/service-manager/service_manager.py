@@ -13,8 +13,8 @@ from interfaces.jwt_generator_requests import get_public_key
 from interfaces.mongodb_requests import mongo_init
 from net_logging import configure_logging
 from network import routes_interests, subnetwork_management
-from network.utils import sanitize
 from operations import cluster_management, instances_management, service_management
+from utils import client_identity
 
 my_logger = configure_logging()
 app = Flask(__name__)
@@ -65,6 +65,17 @@ jwt = JWTManager(app)
 MY_PORT = os.environ.get("MY_PORT") or 10100
 
 
+def identify_calling_cluster(request):
+    try:
+        cluster_id = client_identity.request_cluster_id(request)
+    except client_identity.ClientCertError as e:
+        return None, ({"message": str(e)}, e.status)
+    cluster = cluster_management.identify_cluster(cluster_id, request.args.get("cluster_address"))
+    if cluster is None:
+        return None, ("Cluster not registered", 404)
+    return cluster, None
+
+
 # .............. Cluster Registration ..................#
 # ......................................................#
 
@@ -98,13 +109,16 @@ def register_new_cluster():
 def deregister_cluster_interest(job_name):
     """
     Deregistration of an interest
-    json file structure:{
-        'job_name':string
+    query params:{
+        'cluster_id':string
+        'cluster_address':string
     }
     """
     logger.info("Incoming Request DELETE /api/net/interest/" + job_name)
-    addr = sanitize(request.remote_addr)
-    return routes_interests.deregister_interest(addr, job_name)
+    cluster, error = identify_calling_cluster(request)
+    if error:
+        return error
+    return routes_interests.deregister_interest(cluster["cluster_id"], job_name)
 
 
 # ......... Deployment Endpoints .......................#
@@ -128,11 +142,18 @@ def update_instance_local_deployment_addresses():
     """
 
     logger.info("Incoming Request /api/net/service/net_deploy_status")
+    cluster, error = identify_calling_cluster(request)
+    if error:
+        return error
     data = request.json
     logger.info(data)
 
+    # Other clusters route the instances' traffic to these addresses, so behind the
+    # gateway, where the id is verified, a cluster may only report its own instances.
     return instances_management.update_instance_local_addresses(
-        instances=data.get("instances"), job_id=data.get("job_id")
+        instances=data.get("instances"),
+        job_id=data.get("job_id"),
+        cluster_id=cluster["cluster_id"] if client_identity.GATEWAY_ENABLED else None,
     )
 
 
@@ -212,10 +233,12 @@ def table_query_resolution_by_jobname(service_name):
     """
     service_name = service_name.replace("_", ".")
     logger.info("Incoming Request /api/net/service/" + str(service_name) + "/instances")
+    cluster, error = identify_calling_cluster(request)
+    if error:
+        return error
     return instances_management.get_service_instances(
         name=service_name,
-        cluster_ip=request.args.get("cluster_address"),
-        cluster_name=request.args.get("cluster_name"),
+        cluster_id=cluster["cluster_id"],
     )
 
 
@@ -226,10 +249,12 @@ def table_query_resolution_by_ip(service_ip):
     """
     service_ip = service_ip.replace("_", ".")
     logger.info("Incoming Request /api/net/service/ip/" + str(service_ip) + "/instances")
+    cluster, error = identify_calling_cluster(request)
+    if error:
+        return error
     return instances_management.get_service_instances(
         ip=service_ip,
-        cluster_ip=request.args.get("cluster_address"),
-        cluster_name=request.args.get("cluster_name"),
+        cluster_id=cluster["cluster_id"],
     )
 
 

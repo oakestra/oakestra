@@ -4,7 +4,7 @@ import socket
 
 from flask import Flask, request
 from flask_socketio import SocketIO
-from interfaces.mongodb_requests import mongo_init
+from interfaces.mongodb_requests import mongo_init, mongo_set_cluster_id
 from interfaces.mqtt_client import mqtt_init
 from net_logging import configure_logging
 from operations.instances_management import instance_updates
@@ -26,6 +26,27 @@ mongo_init(app)
 mqtt_init(app)
 
 logger = logging.getLogger("cluster_service_manager")
+
+
+# ............. Cluster Endpoints ............#
+# ...........................................................#
+
+
+@app.route("/api/net/cluster/id", methods=["POST"])
+def set_cluster_id():
+    """
+    The id the root assigned to this cluster, sent by the cluster manager on registration
+    receives {
+                cluster_id: string
+             }
+    """
+
+    logger.info("Incoming Request /api/net/cluster/id")
+    cluster_id = request.json.get("cluster_id")
+    if not cluster_id:
+        return "Invalid cluster id", 400
+    mongo_set_cluster_id(str(cluster_id))
+    return "Cluster id set", 200
 
 
 # ............. Deployment Endpoints ............#
